@@ -1,4 +1,4 @@
-23624889647127756
+23626608954187171
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -96431,6 +96431,13 @@ FPC-SMD_KH-FG1.0-H2.0-8PIN
 0
 10
 10
+components_footprints
+FPC-SMD_P0.50-16P_FGS-XJ-H2.0
+
+
+0
+18
+18
 components_footprints
 IDC-TH_8P-P2.54-H-R2-C4-S2.54
 
