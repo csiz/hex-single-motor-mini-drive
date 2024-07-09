@@ -1,4 +1,4 @@
-23626608954187171
+23631772256743345
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -96418,6 +96418,13 @@ FD6288T TSSOP-20_L6.5-W4.4-P0.65-LS6.4-BL
 20
 20
 components_footprints
+FPC-SMD_6P-P0.50_L3.8-W5.0
+
+
+0
+8
+8
+components_footprints
 FPC-SMD_AFC01-S12FCA-00
 
 
@@ -96480,6 +96487,20 @@ MICRO-USB-SMD_MICRONJ5P-1.0-1.25
 0
 9
 9
+components_footprints
+PinHeader_1x02_P2.00mm_Vertical
+Through hole straight pin header, 1x02, 2.00mm pitch, single row
+Through hole pin header THT 1x02 2.00mm single row
+0
+2
+2
+components_footprints
+PinHeader_1x08_P1.00mm_Vertical
+Through hole straight pin header, 1x08, 1.00mm pitch, single row
+Through hole pin header THT 1x08 1.00mm single row
+0
+8
+8
 components_footprints
 PinHeader_1x08_P1.27mm_Vertical
 Through hole straight pin header, 1x08, 1.27mm pitch, single row
