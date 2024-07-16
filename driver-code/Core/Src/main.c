@@ -120,7 +120,17 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  TIM3->CCR1 = TIM3->ARR * 128 / 256;
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
+
+
+  // RED LED.
+  TIM3->CCR2 = TIM3->ARR; // TODO: Hmm, red led isn't working?
+  // Green LED.
+  TIM2->CCR4 = TIM2->ARR  * 0x40 / 0x100;
+  // Blue LED.
+  TIM3->CCR1 = TIM3->ARR * 0x80 / 0x100;
+
 
   /* USER CODE END 2 */
 
@@ -511,7 +521,7 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_OC2REF;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
