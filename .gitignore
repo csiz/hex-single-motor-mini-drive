@@ -3,3 +3,4 @@
 /circuits/production/backups/*
 circuits/fp-info-cache
 circuits/~hex-mini-drive.kicad_sch.lck
+/driver-code/Debug

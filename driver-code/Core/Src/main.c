@@ -119,6 +119,9 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  TIM3->CCR1 = TIM3->ARR * 128 / 256;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
