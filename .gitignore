@@ -1,8 +1,8 @@
 /circuits/hex-mini-drive-backups/*
 /circuits/fp-info-cache
 /circuits/production/backups/*
-circuits/fp-info-cache
-circuits/~hex-mini-drive.kicad_sch.lck
+/circuits/fp-info-cache
+/circuits/~hex-mini-drive.kicad_sch.lck
 /driver-code/Debug/*
-
-driver-code/hex-mini-drive Debug.launch
+/driver-code/hex-mini-drive Debug.launch
+/driver-code/Release/*
