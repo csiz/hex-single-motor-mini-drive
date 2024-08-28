@@ -6,3 +6,5 @@
 /driver-code/Debug/*
 /driver-code/hex-mini-drive Debug.launch
 /driver-code/Release/*
+/driver-code/.cproject
+/driver-code/.mxproject
