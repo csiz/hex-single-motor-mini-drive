@@ -55,7 +55,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern TIM_HandleTypeDef htim1;
+
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -71,7 +71,6 @@ void NMI_Handler(void)
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
-  HAL_RCC_NMI_IRQHandler();
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
    while (1)
   {
@@ -207,7 +206,6 @@ void TIM1_UP_IRQHandler(void)
   /* USER CODE BEGIN TIM1_UP_IRQn 0 */
 
   /* USER CODE END TIM1_UP_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_UP_IRQn 1 */
 
   /* USER CODE END TIM1_UP_IRQn 1 */
@@ -221,7 +219,6 @@ void TIM1_TRG_COM_IRQHandler(void)
   /* USER CODE BEGIN TIM1_TRG_COM_IRQn 0 */
 
   /* USER CODE END TIM1_TRG_COM_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_TRG_COM_IRQn 1 */
 
   /* USER CODE END TIM1_TRG_COM_IRQn 1 */
