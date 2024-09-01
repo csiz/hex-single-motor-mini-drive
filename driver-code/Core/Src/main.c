@@ -1,34 +1,27 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
 
-// Fix for next design:
-// [ ] There's a conflic between i2c and timer 3 channel 2. Choose a different GPIO for the red LED.
+Hex mini FOC drive for small BLDC motors with hall sensors (and/or I2C magnetic rotary encoder AS5600).
 
-/* I2C1 and TIM3_CH2 remapped
-Description
-When the following conditions are met:
-• I2C1 and TIM3 are clocked.
-• I/O port pin PB5 is configured as an alternate function output
-there is a conflict between the TIM3_CH2 signal and the I2C1 SMBA signal (even if SMBA is not used).
-In these cases the I/O port pin PB5 is set to 1 by default if the I/O alternate function output is selected and I2C1 is
-clocked. TIM3_CH2 cannot be used in output mode.
-Workaround
-To avoid this conflict, TIM3_CH2 can only be used in input mode.
+Fix for next design
+-------------------
+[ ] There's a conflict between i2c and timer 3 channel 2. Choose a different GPIO for the red LED.
+	I2C1 and TIM3_CH2 remapped
+	Description
+	When the following conditions are met:
+	• I2C1 and TIM3 are clocked.
+	• I/O port pin PB5 is configured as an alternate function output
+	there is a conflict between the TIM3_CH2 signal and the I2C1 SMBA signal (even if SMBA is not used).
+	In these cases the I/O port pin PB5 is set to 1 by default if the I/O alternate function output is selected and I2C1 is
+	clocked. TIM3_CH2 cannot be used in output mode.
+	Workaround
+	To avoid this conflict, TIM3_CH2 can only be used in input mode.
+
+[ ] Double sided board.
+[ ] Think about connectors better, drop USB (the esp32 will have USB-C).
+[ ] Drop voltage regulator and rely on master board for 3.3V; filter it though.
+[ ] Look for thinner IDC connector, and definitely SMD version for easier routing, use of space behind connector.
+
 */
 
 
@@ -130,20 +123,26 @@ int main(void)
   LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH1);
   LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH2);
 
-  // Green LED.
-  TIM2->CCR4 = TIM2->ARR * 0x10 / 0xFF;
-  // Blue LED.
-  TIM3->CCR1 = TIM3->ARR * 0x10 / 0xFF;
-  // RED LED.
-  TIM3->CCR2 = TIM3->ARR  * 0xF0 / 0xFF;
+
+
+//  TODO: set dead time for the motor phases pwm.
 
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+  while (1) {
+	  uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
+	  uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
+
+	  // Green LED.
+	  TIM2->CCR4 = (gpio_A_inputs & (1<<0)) ? 0 : TIM2->ARR * 0x40 / 0xFF;
+	  // Blue LED.
+	  TIM3->CCR1 = (gpio_A_inputs & (1<<1)) ? 0 : TIM3->ARR * 0x60 / 0xFF;
+	  // RED LED.
+	  TIM3->CCR2 = (gpio_B_inputs & (1<<10)) ? 0 : TIM3->ARR  * 0x80 / 0xFF;
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -469,11 +468,13 @@ static void MX_TIM2_Init(void)
   PB10   ------> TIM2_CH3
   */
   GPIO_InitStruct.Pin = LL_GPIO_PIN_0|LL_GPIO_PIN_1;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_FLOATING;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
   LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   GPIO_InitStruct.Pin = LL_GPIO_PIN_10;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_FLOATING;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
   LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN TIM2_Init 1 */

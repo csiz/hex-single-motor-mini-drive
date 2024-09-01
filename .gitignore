@@ -8,3 +8,6 @@
 /driver-code/Release/*
 /driver-code/.cproject
 /driver-code/.mxproject
+/driver-code/.vscode
+/driver-code/.settings
+driver-code/hex-mini-drive.launch
