@@ -27,10 +27,13 @@ Fix for next design
 
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
+#include "app_main.hpp"
 
 /* USER CODE END Includes */
 
@@ -116,33 +119,14 @@ int main(void)
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
 
-  LL_TIM_EnableCounter(TIM2);
-  LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH4);
-
-  LL_TIM_EnableCounter(TIM3);
-  LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH1);
-  LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH2);
-
-
-
-//  TODO: set dead time for the motor phases pwm.
-
+  app_init();
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-	  uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
-	  uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
-
-	  // Green LED.
-	  TIM2->CCR4 = (gpio_A_inputs & (1<<0)) ? 0 : TIM2->ARR * 0x40 / 0xFF;
-	  // Blue LED.
-	  TIM3->CCR1 = (gpio_A_inputs & (1<<1)) ? 0 : TIM3->ARR * 0x60 / 0xFF;
-	  // RED LED.
-	  TIM3->CCR2 = (gpio_B_inputs & (1<<10)) ? 0 : TIM3->ARR  * 0xF0 / 0xFF;
-
+	  app_tick();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
