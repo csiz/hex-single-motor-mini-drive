@@ -10,4 +10,11 @@
 /driver-code/.mxproject
 /driver-code/.vscode
 /driver-code/.settings
-driver-code/hex-mini-drive.launch
+/driver-code/hex-mini-drive.launch
+/driver-code/build/*
+/driver-code/CMakeFiles/*
+/driver-code/CMakeCache.txt
+/driver-code/compile_commands.json
+/driver-code/cmake_install.cmake
+/driver-code/build.ninja
+/driver-code/cmake/stm32cubemx/*

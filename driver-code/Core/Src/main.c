@@ -141,7 +141,7 @@ int main(void)
 	  // Blue LED.
 	  TIM3->CCR1 = (gpio_A_inputs & (1<<1)) ? 0 : TIM3->ARR * 0x60 / 0xFF;
 	  // RED LED.
-	  TIM3->CCR2 = (gpio_B_inputs & (1<<10)) ? 0 : TIM3->ARR  * 0x80 / 0xFF;
+	  TIM3->CCR2 = (gpio_B_inputs & (1<<10)) ? 0 : TIM3->ARR  * 0xF0 / 0xFF;
 
     /* USER CODE END WHILE */
 
