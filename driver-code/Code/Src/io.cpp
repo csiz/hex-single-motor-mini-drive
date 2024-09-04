@@ -28,11 +28,20 @@ void initialise_LED_channels(){
 	LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH2);
 }
 
+void set_RED_LED(uint8_t r){
+    LL_TIM_OC_SetCompareCH2(TIM3, LL_TIM_GetAutoReload(TIM3)  * r / 0xFF);
+}
+
+void set_GREEN_LED(uint8_t g){
+    LL_TIM_OC_SetCompareCH4(TIM2, LL_TIM_GetAutoReload(TIM2) * g / 0xFF);
+}
+
+void set_BLUE_LED(uint8_t b){
+    LL_TIM_OC_SetCompareCH1(TIM3, LL_TIM_GetAutoReload(TIM3) * b / 0xFF);
+}
+
 void set_LED_RGB_colours(uint8_t r, uint8_t g, uint8_t b){
-	// RED LED.
-	TIM3->CCR2 = TIM3->ARR  * r / 0xFF;
-	// Green LED.
-	TIM2->CCR4 = TIM2->ARR * g / 0xFF;
-	// Blue LED.
-	TIM3->CCR1 = TIM3->ARR * b / 0xFF;
+    set_RED_LED(r);
+    set_GREEN_LED(g);
+    set_BLUE_LED(b);
 }

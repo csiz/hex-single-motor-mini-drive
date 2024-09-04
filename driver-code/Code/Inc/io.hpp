@@ -13,4 +13,7 @@ extern volatile bool hall_1, hall_2, hall_3;
 
 void read_hall_sensors();
 void initialise_LED_channels();
+void set_RED_LED(uint8_t r);
+void set_GREEN_LED(uint8_t g);
+void set_BLUE_LED(uint8_t b);
 void set_LED_RGB_colours(uint8_t r, uint8_t g, uint8_t b);

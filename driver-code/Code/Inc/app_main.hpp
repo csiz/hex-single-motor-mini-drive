@@ -4,8 +4,8 @@
 extern "C" {
 #endif
 
-    void app_init();
-    void app_tick();
+void app_init();
+void app_tick();
 
 #ifdef __cplusplus
 }
