@@ -9,15 +9,7 @@
 #include <stm32f103xb.h>
 #include <stm32f1xx_ll_gpio.h>
 
-// Raw Sensor Values
-// -----------------
 
-// Hall sensor states.
-extern volatile bool hall_1, hall_2, hall_3;
-// Flag for when the ADC has updated the current readouts.
-extern volatile bool adc_current_updated;
-// Raw ADC readouts for motor phase currents and reference voltage.
-extern volatile uint16_t adc_current_readouts[4];
 
 // Computer Sensor Values
 // -----------------------
@@ -51,7 +43,6 @@ void calculate_motor_phase_currents();
 // --------------
 
 void init_motor_position();
-void read_motor_hall_sensors();
 
 
 // LED functions
