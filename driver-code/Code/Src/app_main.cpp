@@ -116,6 +116,10 @@ void app_init() {
     init_motor_position();
 }
 
+
+uint32_t main_loop_update_number = 0;
+float main_loop_update_rate = 0.0f;
+
 float adc_update_rate = 0.0f;
 float tim1_update_rate = 0.0f;
 float tim2_update_rate = 0.0f;
@@ -124,6 +128,10 @@ float tim2_cc1_rate = 0.0f;
 void app_tick() {
     uint32_t milliseconds = HAL_GetTick();
     float seconds = milliseconds / 1000.f;
+    
+    main_loop_update_number += 1;
+    main_loop_update_rate = main_loop_update_number / seconds;
+
     adc_update_rate = adc_update_number / seconds;
     tim1_update_rate = tim1_update_number / seconds;
     tim2_update_rate = tim2_update_number / seconds;
