@@ -25,7 +25,11 @@ void app_init() {
     LL_ADC_Enable(ADC2);
     HAL_Delay(1);
 
-    // TODO: calibrate the ADC?
+    // Calibrate the ADCs.
+    LL_ADC_StartCalibration(ADC1);
+    while (LL_ADC_IsCalibrationOnGoing(ADC1)) {}
+    LL_ADC_StartCalibration(ADC2);
+    while (LL_ADC_IsCalibrationOnGoing(ADC2)) {}
 
     // Start ADC conversions from the external trigger in TIM1.
     LL_ADC_INJ_StartConversionExtTrig(ADC1, LL_ADC_INJ_TRIG_EXT_RISING);
