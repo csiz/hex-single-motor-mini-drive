@@ -1,7 +1,7 @@
 #MicroXplorer Configuration settings - do not modify
 ADC1.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_TEMPSENSOR
 ADC1.Channel-1\#ChannelInjectedConversion=ADC_CHANNEL_2
-ADC1.Channel-2\#ChannelInjectedConversion=ADC_CHANNEL_3
+ADC1.Channel-2\#ChannelInjectedConversion=ADC_CHANNEL_4
 ADC1.ContinuousConvMode=ENABLE
 ADC1.EnableInjectedConversion=ENABLE
 ADC1.ExternalTrigInjecConv=ADC_EXTERNALTRIGINJECCONV_T1_CC4
@@ -21,7 +21,7 @@ ADC1.SamplingTime-1\#ChannelInjectedConversion=ADC_SAMPLETIME_7CYCLES_5
 ADC1.SamplingTime-2\#ChannelInjectedConversion=ADC_SAMPLETIME_7CYCLES_5
 ADC1.master=1
 ADC2.Channel-1\#ChannelRegularConversion=ADC_CHANNEL_6
-ADC2.Channel-2\#ChannelInjectedConversion=ADC_CHANNEL_4
+ADC2.Channel-2\#ChannelInjectedConversion=ADC_CHANNEL_3
 ADC2.Channel-3\#ChannelInjectedConversion=ADC_CHANNEL_5
 ADC2.ContinuousConvMode=ENABLE
 ADC2.EnableInjectedConversion=ENABLE
