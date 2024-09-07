@@ -5,6 +5,12 @@
 #include "io.hpp"
 #include "interrupts.hpp"
 
+// TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
+// TODO: also need to set a minium on time for MOSFET driving, too little 
+// won't spin the motor at all.
+
+
+
 void app_init() {
     // ### Setup ADC for reading motor phase currents.
     //
@@ -39,6 +45,10 @@ void app_init() {
     // ### Setup TIM1 for motor control.
     //
     // TIM1 is used to generate the PWM signals for the motor phases, and to trigger the ADC.
+    // 
+    // Note that we don't need to set dead-time at this point; the gate driver FD6288T&Q has a 
+    // built-in dead-time of 100-300ns. The MOSFETs AO4266E have turn on rise time of 8ns and 
+    // turn off fall time of 22ns so we should be covered.
 
     // Enable TIM1 update interrupt; occuring every PWM cycle.
     LL_TIM_EnableIT_UPDATE(TIM1);
@@ -72,13 +82,6 @@ void app_init() {
     // Don't allow TIM1 commutations to be triggered by TIM2 hall sensor toggles.
     LL_TIM_CC_SetUpdate(TIM1, LL_TIM_CCUPDATESOURCE_COMG_ONLY);
     
-
-    //  TODO: set dead time for the motor phases pwm; or check if the gate driver chip has built in dead time (i think it does).
-
-
-    // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
-    // TODO: also need to set a minium on time for MOSFET driving, too little 
-    // won't spin the motor at all.
 
     // Reinitialize the timers; reset the counters and update registers. Because the timers
     // are setup with preload registers the values we write to them are stored in shadow registers

@@ -5,23 +5,32 @@ Current control, FOC driver board for 3 phase BLDC motors with hall effect senso
 
 Maximum recommended limits: 20V, 3A(continuous), 10A(instant).
 
+TODO for next circuit
+---------------------
+
+The AO4266E switching parameter uses Rgen = 3ohm, I think this is their recommended gate resistance.
+[ ] Measure gate turn on characteristics of existing circuit...
+[ ] Maybe switch to a oscillation damping gate resistor of 3ohm.
+
 Need to implement in the circuit
 --------------------------------
 
-[ ] Measure power line voltage.
-[ ] Pick voltage boost capacitor and resistor pair.
-[ ] Pick gate oscillation damping resistor for the inputs to the power MOSFET.
-[ ] Crystal oscilator. Need to improve motor control timing and UART, USB. Also, we need it to get to 72MHz!
-	[ ] Pick matching caps.
-	[ ] Connect and verify!
-[ ] Get micro USB for the convenience. Will also need to add 3V3 power regulator and ferrite bead for input filtering.
-	[ ] Special note for STM32F103 line to add pull up resistor for D+ line.
-	[ ] Connect and verify!
-[ ] Debugging connection with the trace line.
-[ ] UART connection to main board.
-[ ] I2C header? And some power line holes as alternative connector to be friendly to hobbyist use. Also for the magnetic encoder.
-[ ] Add a status LED.
-[ ] How to connect leftover pins?
+[v] Measure power line voltage.
+[v] Pick voltage boost capacitor and resistor pair.
+[v] Pick gate oscillation damping resistor for the inputs to the power MOSFET.
+[v] Crystal oscilator. Need to improve motor control timing and UART, USB. Also, we need it to get to 72MHz!
+	[v] Pick matching caps.
+	[v] Connect and verify!
+[v] Get micro USB for the convenience. Will also need to add 3V3 power regulator and ferrite bead for input filtering.
+	[v] Special note for STM32F103 line to add pull up resistor for D+ line.
+	[v] Connect and verify!
+[v] Debugging connection with the trace line.
+[v] UART connection to main board.
+[v] I2C header? And some power line holes as alternative connector to be friendly to hobbyist use. Also for the magnetic encoder.
+[v] Add a status LED.
+[v] How to connect leftover pins?
+
+
 
 
 Notes
