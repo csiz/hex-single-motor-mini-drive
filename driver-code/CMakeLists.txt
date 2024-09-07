@@ -49,6 +49,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     "Code/Src/app_main.cpp"
     "Code/Src/io.cpp"
+    "Code/Src/interrupts.cpp"
 )
 
 # Add include paths

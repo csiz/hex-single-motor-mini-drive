@@ -22,6 +22,7 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "interrupts.hpp"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -204,7 +205,7 @@ void SysTick_Handler(void)
 void DMA1_Channel1_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
-
+  dma_interrupt_handler();
   /* USER CODE END DMA1_Channel1_IRQn 0 */
 
   /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
@@ -218,7 +219,7 @@ void DMA1_Channel1_IRQHandler(void)
 void ADC1_2_IRQHandler(void)
 {
   /* USER CODE BEGIN ADC1_2_IRQn 0 */
-
+  adc_interrupt_handler();
   /* USER CODE END ADC1_2_IRQn 0 */
 
   /* USER CODE BEGIN ADC1_2_IRQn 1 */
@@ -232,7 +233,7 @@ void ADC1_2_IRQHandler(void)
 void TIM1_UP_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_IRQn 0 */
-
+  tim1_update_interrupt_handler();
   /* USER CODE END TIM1_UP_IRQn 0 */
   /* USER CODE BEGIN TIM1_UP_IRQn 1 */
 
@@ -245,7 +246,7 @@ void TIM1_UP_IRQHandler(void)
 void TIM1_TRG_COM_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_TRG_COM_IRQn 0 */
-
+  tim1_trigger_and_commutation_interrupt_handler();
   /* USER CODE END TIM1_TRG_COM_IRQn 0 */
   /* USER CODE BEGIN TIM1_TRG_COM_IRQn 1 */
 
@@ -258,7 +259,7 @@ void TIM1_TRG_COM_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
-
+  tim2_global_handler();
   /* USER CODE END TIM2_IRQn 0 */
   /* USER CODE BEGIN TIM2_IRQn 1 */
 

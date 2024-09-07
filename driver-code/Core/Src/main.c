@@ -257,7 +257,7 @@ static void MX_ADC1_Init(void)
   ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_CONTINUOUS;
   ADC_REG_InitStruct.DMATransfer = LL_ADC_REG_DMA_TRANSFER_UNLIMITED;
   LL_ADC_REG_Init(ADC1, &ADC_REG_InitStruct);
-  ADC_INJ_InitStruct.TriggerSource = LL_ADC_INJ_TRIG_EXT_TIM1_TRGO;
+  ADC_INJ_InitStruct.TriggerSource = LL_ADC_INJ_TRIG_EXT_TIM1_CH4;
   ADC_INJ_InitStruct.SequencerLength = LL_ADC_INJ_SEQ_SCAN_ENABLE_2RANKS;
   ADC_INJ_InitStruct.SequencerDiscont = LL_ADC_INJ_SEQ_DISCONT_DISABLE;
   ADC_INJ_InitStruct.TrigAuto = LL_ADC_INJ_TRIG_INDEPENDENT;
@@ -509,7 +509,7 @@ static void MX_TIM1_Init(void)
   LL_TIM_SetSlaveMode(TIM1, LL_TIM_SLAVEMODE_DISABLED);
   LL_TIM_DisableIT_TRIG(TIM1);
   LL_TIM_DisableDMAReq_TRIG(TIM1);
-  LL_TIM_SetTriggerOutput(TIM1, LL_TIM_TRGO_UPDATE);
+  LL_TIM_SetTriggerOutput(TIM1, LL_TIM_TRGO_RESET);
   LL_TIM_DisableMasterSlaveMode(TIM1);
   TIM_BDTRInitStruct.OSSRState = LL_TIM_OSSR_DISABLE;
   TIM_BDTRInitStruct.OSSIState = LL_TIM_OSSI_DISABLE;
@@ -597,7 +597,7 @@ static void MX_TIM2_Init(void)
   TIM_InitStruct.Autoreload = 65535;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   LL_TIM_Init(TIM2, &TIM_InitStruct);
-  LL_TIM_DisableARRPreload(TIM2);
+  LL_TIM_EnableARRPreload(TIM2);
   LL_TIM_SetClockSource(TIM2, LL_TIM_CLOCKSOURCE_INTERNAL);
   LL_TIM_OC_EnablePreload(TIM2, LL_TIM_CHANNEL_CH4);
   TIM_OC_InitStruct.OCMode = LL_TIM_OCMODE_PWM1;
@@ -616,7 +616,7 @@ static void MX_TIM2_Init(void)
   LL_TIM_SetTriggerInput(TIM2, LL_TIM_TS_TI1F_ED);
   LL_TIM_SetSlaveMode(TIM2, LL_TIM_SLAVEMODE_RESET);
   TIM_OC_InitStruct.OCMode = LL_TIM_OCMODE_PWM2;
-  TIM_OC_InitStruct.CompareValue = 4;
+  TIM_OC_InitStruct.CompareValue = 1;
   TIM_OC_InitStruct.OCPolarity = LL_TIM_OCPOLARITY_HIGH;
   TIM_OC_InitStruct.OCNPolarity = LL_TIM_OCPOLARITY_HIGH;
   TIM_OC_InitStruct.OCIdleState = LL_TIM_OCIDLESTATE_LOW;
@@ -850,6 +850,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+  show_error();
   while (1)
   {
   }

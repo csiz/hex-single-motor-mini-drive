@@ -6,6 +6,7 @@ extern "C" {
 
 void app_init();
 void app_tick();
+void show_error();
 
 #ifdef __cplusplus
 }
