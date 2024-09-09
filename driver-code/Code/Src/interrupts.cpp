@@ -12,3 +12,8 @@ volatile size_t adc_current_readout_index = 0;
 volatile uint16_t adc_current_readouts[ADC_CURRENT_READ_COUNT][4] = {0};
 
 volatile bool hall_1 = false, hall_2 = false, hall_3 = false;
+
+volatile uint8_t motor_electric_angle = 0;
+volatile uint8_t motor_electric_phase = 0;
+volatile bool hall_sensor_valid = false;
+volatile uint8_t hall_state = 0;

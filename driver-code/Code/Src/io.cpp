@@ -29,9 +29,9 @@ void calculate_motor_phase_currents(){
         adc_current_readouts_sum[3] / ADC_CURRENT_READ_COUNT
     };
     
-    const int32_t readout_u = adc_current_readouts_average[0] - adc_current_readouts_average[3];
-    const int32_t readout_v = adc_current_readouts_average[1] - adc_current_readouts_average[3];
-    const int32_t readout_w = adc_current_readouts_average[2] - adc_current_readouts_average[3];
+    const int32_t readout_diff_u = adc_current_readouts_average[0] - adc_current_readouts_average[3];
+    const int32_t readout_diff_v = adc_current_readouts_average[1] - adc_current_readouts_average[3];
+    const int32_t readout_diff_w = adc_current_readouts_average[2] - adc_current_readouts_average[3];
 
 
     // The amplifier voltage output is specified by the formula:
@@ -41,10 +41,11 @@ void calculate_motor_phase_currents(){
     // Where:
     //     Vout = adc_current_readout / adc_max_value * adc_voltage_reference;
 
-    current_u = readout_u * readout_to_current;
-    current_v = readout_v * readout_to_current;
-    current_w = readout_w * readout_to_current;
+    current_u = readout_diff_u * readout_diff_to_current;
+    current_v = readout_diff_v * readout_diff_to_current;
+    current_w = readout_diff_w * readout_diff_to_current;
 }
+
 
 void enable_LED_channels(){
 	// Green LED.

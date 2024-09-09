@@ -1,3 +1,6 @@
+#include <stdlib.h>
+#include <math.h>
+
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
 
@@ -9,6 +12,15 @@
 // TODO: also need to set a minium on time for MOSFET driving, too little 
 // won't spin the motor at all.
 
+// Motor voltage fraction for the 6-step commutation.
+const float motor_voltage_table[6][3] = {
+    {0.5, 1.0, 0.0},
+    {0.0, 1.0, 0.5},
+    {0.0, 0.5, 1.0},
+    {0.5, 0.0, 1.0},
+    {1.0, 0.0, 0.5},
+    {1.0, 0.5, 0.0}
+};
 
 
 void app_init() {
@@ -21,7 +33,11 @@ void app_init() {
     
     // Use the TIM1 channel 4 to generate an event a short time after the update event.
     // This event is used to trigger the ADC to read the current from the motor phases.
-    LL_TIM_OC_SetCompareCH4(TIM1, 4);
+    // 
+    // Delay the ADC sampling time by 16/72MHz = 222ns; the ADC will sample for 7.5 cycles
+    // (and convert for 12.5); then finally sample W and the reference. 7.5/12MHz = 625ns.
+    // The ADC sample time is 7.5*6 = 45 ticks of TIM1.
+    LL_TIM_OC_SetCompareCH4(TIM1, 16);
 
     // Enable the ADC interrupt for the end of the injected sequence which reads motor current.
     LL_ADC_EnableIT_JEOS(ADC1);
@@ -142,7 +158,46 @@ void app_tick() {
 
     calculate_motor_phase_currents();
 
-    set_LED_RGB_colours(hall_1 ? 0xF0 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
+    const float overcurrent_threshold = 2.0;
+    const bool overcurrent = abs(current_u) > overcurrent_threshold || 
+                             abs(current_v) > overcurrent_threshold || 
+                             abs(current_w) > overcurrent_threshold;
+    if (overcurrent) {
+        disable_motor_u_output();
+        disable_motor_v_output();
+        disable_motor_w_output();
+    } else {
+        const float pwm_fraction = 0.2;
+        // Use the hall sensor state to determine the motor position and commutation.
+        if (hall_sensor_valid) {
+            const float voltage_phase_u = motor_voltage_table[motor_electric_phase][0];
+            const float voltage_phase_v = motor_voltage_table[motor_electric_phase][1];
+            const float voltage_phase_w = motor_voltage_table[motor_electric_phase][2];
+
+            if (voltage_phase_u == 0.5) {
+                disable_motor_u_output();
+            } else {
+                enable_motor_u_output();
+                set_motor_u_pwm_duty_cycle(voltage_phase_u * pwm_fraction * max_pwm_duty);
+            }
+
+            if (voltage_phase_v == 0.5) {
+                disable_motor_v_output();
+            } else {
+                enable_motor_v_output();
+                set_motor_v_pwm_duty_cycle(voltage_phase_v * pwm_fraction * max_pwm_duty);
+            }
+
+            if (voltage_phase_w == 0.5) {
+                disable_motor_w_output();
+            } else {
+                enable_motor_w_output();
+                set_motor_w_pwm_duty_cycle(voltage_phase_w * pwm_fraction * max_pwm_duty);
+            }
+        }
+    }
+
+    set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
 }
 
 void show_error(){

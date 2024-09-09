@@ -1,0 +1,23 @@
+Motor model parameters
+----------------------
+
+[ ] rotor inertial mass
+[ ] phase inductance L
+[ ] phase resistance R
+[ ] motor Kv constant
+[ ] hysterisis angle alpha 
+	https://www.ijerd.com/paper/vol12-issue5/Version-1/K1257683.pdf
+	Apparently the phase delay between the motor flux and stator flux is constant and
+	depends on the hysterisis loop characteristic of the rotor construction.
+[ ] hysterisis friction torque
+	The hysterisis torque is also constant
+[ ] static friction torque (fixed torque at standstill)
+[ ] dynamic friction torque (fixed torque when rotating)
+[ ] resistance friction torque (this one is proportional to rotation speed)
+[ ] battery internal resistance
+[ ] mosfet resistance
+[ ] mosfet reverse diode voltage drop
+[ ] hall sensor toggle flux
+
+
+During the energised phase the motor

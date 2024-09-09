@@ -33,11 +33,54 @@ const uint16_t adc_max_value = 0xFFF;
 // The formula that determines the current from the ADC readout: 
 //   Vout = (Iload * Rsense * GAIN) + Vref
 //   Vout = adc_current_readout / adc_max_value * adc_voltage_reference.
-const float readout_to_current = adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
+// The minus sign is because of the way the INA4181 is wired up...
+const float readout_diff_to_current = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
 // Compute motor phase currents using latest ADC readouts; clearing the adc_current_updated flag.
 void calculate_motor_phase_currents();
 
+static inline void set_motor_u_pwm_duty_cycle(uint16_t duty_cycle){
+    LL_TIM_OC_SetCompareCH1(TIM1, duty_cycle);
+}
+
+static inline void disable_motor_u_output(){
+    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH1);
+    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH1N);
+}
+
+static inline void enable_motor_u_output(){
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1);
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1N);
+}
+
+static inline void set_motor_v_pwm_duty_cycle(uint16_t duty_cycle){
+    LL_TIM_OC_SetCompareCH2(TIM1, duty_cycle);
+}
+
+static inline void disable_motor_v_output(){
+    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH2);
+    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH2N);
+}
+
+static inline void enable_motor_v_output(){
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH2);
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH2N);
+}
+
+
+static inline void set_motor_w_pwm_duty_cycle(uint16_t duty_cycle){
+    LL_TIM_OC_SetCompareCH3(TIM1, duty_cycle);
+}
+
+static inline void disable_motor_w_output(){
+    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH3);
+    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH3N);
+}
+
+static inline void enable_motor_w_output(){
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3);
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3N);
+}
 
 // Motor position
 // --------------
