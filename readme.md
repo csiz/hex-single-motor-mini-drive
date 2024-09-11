@@ -37,6 +37,7 @@ Notes
 -----
 
 High voltage limit set by bridge driver (FD6288T) at 20V, with absolute maximum at 25V.
+The INA4181 current sense amplifier also works up to 26V on the input.
 
 Continuous current limit set by 1.5A FDC connector from motor to board. Limit is fixed by cable 
 that is attached to the motor, can probably be exceeded up to 5A (TODO test connector current!).
