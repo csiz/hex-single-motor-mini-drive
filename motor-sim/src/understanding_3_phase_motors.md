@@ -5,47 +5,402 @@ theme: dashboard
 
 ```js
 import {md, note, link} from "./components/utils.js"
+import * as THREE from "three";
+import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { ArcballControls } from 'three/addons/controls/ArcballControls.js';
 ```
 
 ```js
+const π = Math.PI;
 
+function normalized_angle(angle) {
+  return (angle + 2 * π) % (2 * π);
+}
+
+
+function interval_contains_angle(low, high, angle) {
+  if (low < high) {
+    return low <= angle && angle <= high;
+  } else {
+    return low <= angle || angle <= high;
+  }
+}
+
+/* Get the bounds for the hall sensor toggling angles.
+
+Assuming angle φ is in the range [0, 2π], if the U phase is at 0, then V is at 4π/6 and W is at 8π/6.
+The hall sensors are placed between the phase poles at 2π/6, 6π/6 and 10π/6.
+
+*/
+function hall_bounds(hall_toggle_angle) {
+  return {
+    hall_1_low: normalized_angle(2 * π / 6 - hall_toggle_angle),
+    hall_1_high: normalized_angle(2 * π / 6 + hall_toggle_angle),
+    hall_2_low: normalized_angle(6 * π / 6 - hall_toggle_angle),
+    hall_2_high: normalized_angle(6 * π / 6 + hall_toggle_angle),
+    hall_3_low: normalized_angle(10 * π / 6 - hall_toggle_angle),
+    hall_3_high: normalized_angle(10 * π / 6 + hall_toggle_angle),
+  };
+}
+
+// Hall sensor toggle angle (with respect to rotor angle).
+const hall_toggle_angle = 80 * π / 180;
+
+const initial_parameters = {
+  R: 1.3, // phase resistance
+  L: 0.0001, // phase inductance
+  Kv: 1.0, // motor Kv constant
+  τ_static: 0.001, // static friction torque
+  τ_dynamic: 0.0001, // dynamic friction torque
+  R_bat: 1.0, // battery internal resistance
+  R_mosfet: 0.013, // mosfet resistance
+  R_shunt: 0.010, // shunt resistance
+  V_diode: 0.72, // mosfet reverse diode voltage drop
+  I_rotor: 0.00000025, // (Kg*m^2) rotor moment of inertia
+  ...hall_bounds(hall_toggle_angle), // hall sensor toggle angle bounds
+}
+
+const initial_state = {
+  t: 0.0, // simulation time
+  φ: 0.0, // motor angle
+  ω: 0.0, // motor speed
+  Iu: 0.0, // motor current phase U
+  Iv: 0.0, // motor current phase V
+  Iw: 0.0, // motor current phase W
+  Vu: 0.0, // motor voltage at phase U ouput (after mosfet and shunt)
+  Vv: 0.0, // motor voltage at phase V
+  Vw: 0.0, // motor voltage at phase W
+}
+
+
+/* Inputs to the physical system for a freewheeling motor.
+
+For this simulator, inputs means everything that affects the system that is independent
+of the differential equations that describe the internal state of the system. This includes
+the motor controller algorithm and the external load torque.
+*/
+function freewheeling_inputs(state, parameters, outputs) {
+  return {
+    U: "floating", // driver connection state for phase U
+    V: "floating", // driver connection state for phase V
+    W: "floating", // driver connection state for phase W
+    τ_load: 0.0, // external load torque 
+  }
+}
+
+/* Outputs of the physical system (effects).
+
+For this simulator, outputs means all the descriptors of the system that are dependent only on the
+current internal state of the system. Notably they don't depend directly on time and therefore don't
+need to be included in the ODE solver. This includes the motor torque, power, angular acceleration,
+and the hall sensor states.
+*/
+function dependent_outputs(state, parameters) {
+  const {R, L, Kv, τ_static, τ_dynamic, R_bat, R_mosfet, R_shunt, V_diode, I_rotor, hall_1_low, hall_1_high, hall_2_low, hall_2_high, hall_3_low, hall_3_high} = parameters;
+  const {t, φ, ω, Iu, Iv, Iw, Vu, Vv, Vw} = state;
+
+
+  const τ = 0.0; // rotor torque due to motor magnetic field
+  const P = τ * ω; // motor power
+  const α = 0.0; // motor angular acceleration
+  const hall_1 = interval_contains_angle(hall_1_low, hall_1_high, φ);
+  const hall_2 = interval_contains_angle(hall_2_low, hall_2_high, φ);
+  const hall_3 = interval_contains_angle(hall_3_low, hall_3_high, φ);
+  return {τ, P, α, hall_1, hall_2, hall_3};
+
+}
+```
+
+```js
+function state_differential(state, parameters, inputs, step_size) {
+  const {R, L, Kv, τ_static, τ_dynamic, R_bat, R_mosfet, R_shunt, V_diode, I_rotor} = parameters;
+  const {t, φ, ω, Iu, Iv, Iw, Vu, Vv, Vw} = state;
+  const {U, V, W, τ_load} = inputs;
+  const {τ, α} = dependent_outputs(state, parameters);
+
+  const dφ = ω;
+
+  const τ_applied = τ + τ_load;
+  const static_sign = (ω == 0.0) ? -Math.sign(τ_applied) : -Math.sign(ω);
+  const τ_friction = -ω * τ_dynamic + static_sign * τ_static;
+  const τ_total = τ_applied + τ_friction;
+  const τ_stopping = -ω/step_size * I_rotor; // Torque needed to stop the rotor in 1 step.
+  const frozen = ω == 0.0 && Math.abs(τ_applied) <= τ_static;
+  const stopping = -Math.sign(ω) * τ_total > -Math.sign(ω)*τ_stopping;
+
+  // We need to prevent static friction from overshooting when the motor is stopped or stopping in 1 step.
+  const dω = ((frozen || stopping) ? τ_stopping : τ_total) / I_rotor;
+  const dIu = (Vu - Iu * R - L * α) / L;
+  const dIv = (Vv - Iv * R - L * α) / L;
+  const dIw = (Vw - Iw * R - L * α) / L;
+  const dVu = -Kv * ω * Math.sin(φ) - Iu * R - L * α;
+  const dVv = -Kv * ω * Math.sin(φ - 2 * Math.PI / 3) - Iv * R - L * α;
+  const dVw = -Kv * ω * Math.sin(φ + 2 * Math.PI / 3) - Iw * R - L * α;
+  const dt = 1.0;
+
+  return {t: dt, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, Vu: dVu, Vv: dVv, Vw: dVw};
+}
+
+
+
+function euler_step(state, parameters, inputs, dt) {
+  const dstate = state_differential(state, parameters, inputs, dt);
+  return _.mapValues(state, (value, key) => value + dstate[key] * dt);
+}
+
+function runge_kuta_step(state, parameters, inputs, dt) {
+  const k1 = state_differential(state, parameters, inputs, dt);
+  const k2 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2);
+  const k3 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2);
+  const k4 = state_differential(euler_step(state, parameters, inputs, dt), parameters, inputs, dt);
+  return _.mapValues(state, (value, key) => value + (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) * dt / 6);
+}
+
+```
+
+```js
+function* simulate(state, parameters, update_inputs, dt, max_stored_steps) {
+  let outputs = dependent_outputs(state, parameters);
+  let inputs = update_inputs(state, parameters, outputs);
+  let states = [{...state, ...outputs, ...inputs}];
+  for (let i = 0; true; i++) {
+    state = runge_kuta_step(state, parameters, inputs, dt);
+    outputs = dependent_outputs(state, parameters);
+    inputs = update_inputs(state, parameters, outputs);
+
+    // Normalize the motor angle to [0, 2π]
+    state.φ = normalized_angle(state.φ);
+
+    states.push({...state, ...outputs, ...inputs});
+    if (states.length > max_stored_steps) {
+      states.shift();
+    }
+    yield states
+  }
+}
+```
+
+```js
+const τ_slider = Inputs.range([-0.005, +0.005], {step: 0.0001, value: 0.0, label: "Load torque"});
+
+display(τ_slider);
+
+function inputs_from_load_torque_slider(state, parameters, outputs) {
+  return {
+    U: "floating", // driver connection state for phase U
+    V: "floating", // driver connection state for phase V
+    W: "floating", // driver connection state for phase W
+    τ_load: τ_slider.value, // external load torque
+  }
+}
+
+
+let slider_simulation = simulate(initial_state, initial_parameters, inputs_from_load_torque_slider, 0.0001, 500);
+```
+
+
+```js
+const manager = new THREE.LoadingManager();
+
+const loader = new ThreeMFLoader(manager);
+
+const model_file_url = await FileAttachment("./data/motor_model.3mf").url();
+
+```
+
+```js
+let motor_model = new Promise((resolve, reject) => {
+  
+  // Load a 3mf file
+  loader.load(model_file_url, (object) => {
+    object.traverse( function (child) {
+      child.castShadow = true;
+    });
+    resolve(object);
+  }
+  );
+});
+```
+
+```js
+const camera = function(width, height) {
+  const fov = 90;
+  const aspect = width / height;
+  const near = 1;
+  const far = 5000;
+  const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+  camera.position.z = 0;
+  camera.position.y = -100;
+  camera.position.x = 0;
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+  return camera;
+}(640, 640);
+
+
+const scene = function(){
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf0f0f0);
+
+  const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x8d8d8d, 3 );
+  hemiLight.position.set( 0, 100, 0 );
+  scene.add( hemiLight );
+
+  const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
+  dirLight.position.set( - 0, 40, 50 );
+  dirLight.castShadow = true;
+  dirLight.shadow.camera.top = 50;
+  dirLight.shadow.camera.bottom = - 25;
+  dirLight.shadow.camera.left = - 25;
+  dirLight.shadow.camera.right = 25;
+  dirLight.shadow.camera.near = 0.1;
+  dirLight.shadow.camera.far = 200;
+  dirLight.shadow.mapSize.set( 1024, 1024 );
+  scene.add( dirLight );
+
+  // scene.add( new THREE.CameraHelper( dirLight.shadow.camera ) );
+
+  const ground = new THREE.Mesh( 
+    new THREE.PlaneGeometry( 1000, 1000 ), 
+    new THREE.MeshPhongMaterial( { color: 0xcbcbcb, depthWrite: false } ) 
+    );
+  ground.rotation.x = 0.0;//- Math.PI / 2;
+  ground.position.z = -80;
+  ground.receiveShadow = true;
+  scene.add( ground );
+
+  
+  scene.add(motor_model);
+  return scene;
+}();
+
+
+
+function* render_scene(width, height, invalidation) {
+  const renderer = new THREE.WebGLRenderer({antialias: true});
+  
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const controls = {
+    "arcball": () => {
+        let controls = new ArcballControls( camera, renderer.domElement, scene );
+        controls.setGizmosVisible(true);
+        return controls;
+    },
+    "orbit": () => {
+        let controls = new OrbitControls( camera, renderer.domElement );
+        controls.minDistance = 50;
+        controls.maxDistance = 200;
+        controls.enablePan = true;
+        controls.target.set( 0, 0, 0 );
+        // controls.maxPolarAngle = 0; // Math.PI / 2;
+        // controls.minPolarAngle = 0; // -Math.PI / 2;
+        controls.maxAzimuthAngle = 0; // Math.PI / 2;
+        controls.minAzimuthAngle = 0; // -Math.PI / 2;
+        return controls;
+    }
+  }["arcball"]();
+  
+
+
+  invalidation.then(() => {
+    controls.dispose();
+    renderer.dispose()
+  });
+
+  while (true) {
+    // motor_model.rotation.x += 0.01;
+    motor_model.rotation.y += 0.01;
+    controls.update();
+    renderer.render(scene, camera);
+    yield renderer.domElement;
+  }
+}
+```
+
+```js
+const rendering_element = render_scene(640, 640, invalidation);
+```
+
+```js
+display(rendering_element);
+```
+
+```js
+const motor_sketch_html = await FileAttachment("./data/motor_sketch.html").html();
+const motor_sketch_svg = d3.select(motor_sketch_html).select("svg");
+
+
+display(motor_sketch_svg.attr("width", 640).attr("height", 640).node());
+
+```
+
+
+```js
+display(Plot.plot({
+  // y: {domain: [-π, 3 * π]},
+  marks: [
+    Plot.lineY(slider_simulation, {x: "t", y: "ω", stroke: "red"}),
+    Plot.lineY(slider_simulation, {x: "t", y: "φ", stroke: "blue"}),
+    Plot.lineY(slider_simulation, {x: "t", y: "τ_load"}),
+  ]
+}));
+```
+
+
+```js
 const phi = d3.ticks(0, 2 * Math.PI, 1000);
 const phases = phi.map(t => {
-  const u = Math.sin(t);
-  const v = Math.sin(t + 2 * Math.PI / 3);
-  const w = Math.sin(t + 4 * Math.PI / 3);
+  const u = Math.sin(t) * 0.5 + 0.5;
+  const v = Math.sin(t + 2 * Math.PI / 3) * 0.5 + 0.5;
+  const w = Math.sin(t + 4 * Math.PI / 3) * 0.5 + 0.5;
 
   const max = Math.max(u, v, w);
   const min = Math.min(u, v, w);
-  const max_adj = 1 - max;
-  const min_adj = -1 - min;
-  const adj = max_adj/2 + min_adj/2;
+  const max_adj = max;
+  const min_adj = min;
+  const adj = - min_adj;
 
   const adj_u = u + adj;
   const adj_v = v + adj;
   const adj_w = w + adj;
-  return {u, v, w, adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w};
+  return {u, v, w, adj: -adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w};
 });
 
 
-display(Plot.plot({marks: [
-  Plot.lineY(phases, {x: phi, y: "u", stroke: 'red', label: 'U'}),
-  Plot.lineY(phases, {x: phi, y: "v", stroke: 'green', label: 'V'}),
-  Plot.lineY(phases, {x: phi, y: "w", stroke: 'blue', label: 'W'}),
-  Plot.gridX({interval: Math.PI / 3, stroke: 'black', strokeWidth : 2}),
-]}))
+display(Plot.plot({
+  y: {domain: [0, 1.0]},
+  marks: [
+    Plot.lineY(phases, {x: phi, y: "u", stroke: 'red', label: 'U'}),
+    Plot.lineY(phases, {x: phi, y: "v", stroke: 'green', label: 'V'}),
+    Plot.lineY(phases, {x: phi, y: "w", stroke: 'blue', label: 'W'}),
+    Plot.lineY(phases, {x: phi, y: "max_adj", stroke: 'black', label: 'Max', strokeDasharray: '5 10', strokeWidth: 3}),
+    Plot.lineY(phases, {x: phi, y: "min_adj", stroke: 'black', label: 'Min', strokeDasharray: '5 10', strokeWidth: 3}),
 
-display(Plot.plot({marks: [
-  Plot.lineY(phases, {x: phi, y: "adj", stroke: 'black', label: 'Adjustment'}),
-  Plot.lineY(phases, {x: phi, y: "max_adj", stroke: 'black', label: 'Max', strokeDasharray: '2'}),
-  Plot.lineY(phases, {x: phi, y: "min_adj", stroke: 'black', label: 'Min', strokeDasharray: '2'}),
-  Plot.lineY(phases, {x: phi, y: "adj_u", stroke: 'red', label: 'U'}),
-  Plot.lineY(phases, {x: phi, y: "adj_v", stroke: 'green', label: 'V'}),
-  Plot.lineY(phases, {x: phi, y: "adj_w", stroke: 'blue', label: 'W'}),
-  Plot.gridX({interval: Math.PI / 3, stroke: 'black', strokeWidth : 2}),
-]}))
+    Plot.gridX({interval: Math.PI / 3, stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ]
+}))
+
+display(Plot.plot({
+  y: {domain: [0, 1.0]},
+  marks: [
+    Plot.lineY(phases, {x: phi, y: "adj", stroke: 'black', label: 'Adjustment'}),
+    Plot.lineY(phases, {x: phi, y: "adj_u", stroke: 'red', label: 'U'}),
+    Plot.lineY(phases, {x: phi, y: "adj_v", stroke: 'green', label: 'V'}),
+    Plot.lineY(phases, {x: phi, y: "adj_w", stroke: 'blue', label: 'W'}),
+    Plot.gridX({interval: Math.PI / 3, stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ]
+}))
 
 ```
+
+
 
 
 Motor model parameters
@@ -68,13 +423,15 @@ Motor model parameters
 * [ ] battery internal resistance
 * [ ] mosfet resistance
 * [ ] mosfet reverse diode voltage drop
-* [ ] hall sensor toggle flux
+* [ ] hall sensor toggle angle (the hall sensor senses positive magnetic field, so it
+toggles at almost 90 degrees difference from the rotor angle; the field is null at 90 degrees).
 * [ ] rotor mass (so we can measure axial deflection when motor is )
 * [ ] rotor axial restoration force constant
 
 
 
 Measured/datasheet characteristics:
+* Rotor moment of inertia for 10g shell of 5mm radius: 0.00000025 Kg*m^2.
 * Forward diode voltage Vds = 0.72V (up to 1V); body-diode can withstand 4A continuous current.
 * Continuous drain current 8.5A (at high ambient temperature 70C).
 * Drain source ON resistance 18mΩ.
@@ -83,6 +440,7 @@ Measured/datasheet characteristics:
 * Driver turn on propagation delay ~300ns.
 * Driver turn off propagation delay ~100ns.
 * Driver automatic deadtime ~200ns.
+* Phase inductance 0.1mH (0.2mH across 2 phases).
 
 References:
 * https://www.controleng.com/articles/understanding-the-effect-of-pwm-when-controlling-a-brushless-dc-motor/

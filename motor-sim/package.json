@@ -11,7 +11,8 @@
   "dependencies": {
     "@observablehq/framework": "^1.11.0",
     "d3-dsv": "^3.0.1",
-    "d3-time-format": "^4.1.0"
+    "d3-time-format": "^4.1.0",
+    "three": "^0.168.0"
   },
   "devDependencies": {
     "rimraf": "^5.0.5"
