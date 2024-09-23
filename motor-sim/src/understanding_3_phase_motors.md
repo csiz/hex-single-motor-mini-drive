@@ -5,11 +5,10 @@ theme: dashboard
 
 ```js
 import {md, note, link} from "./components/utils.js"
-import * as THREE from "three";
-import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { ArcballControls } from 'three/addons/controls/ArcballControls.js';
+import {create_scene, render_scene, load_motor} from "./components/visuals.js"
+const model_file_url = await FileAttachment("./data/motor_model.3mf").href;
 ```
+
 
 ```js
 const π = Math.PI;
@@ -52,7 +51,7 @@ const initial_parameters = {
   L: 0.0001, // phase inductance
   Kv: 1.0, // motor Kv constant
   τ_static: 0.001, // static friction torque
-  τ_dynamic: 0.0001, // dynamic friction torque
+  τ_dynamic: 0.00001, // dynamic friction torque
   R_bat: 1.0, // battery internal resistance
   R_mosfet: 0.013, // mosfet resistance
   R_shunt: 0.010, // shunt resistance
@@ -100,14 +99,16 @@ function dependent_outputs(state, parameters) {
   const {R, L, Kv, τ_static, τ_dynamic, R_bat, R_mosfet, R_shunt, V_diode, I_rotor, hall_1_low, hall_1_high, hall_2_low, hall_2_high, hall_3_low, hall_3_high} = parameters;
   const {t, φ, ω, Iu, Iv, Iw, Vu, Vv, Vw} = state;
 
+  const hall_1 = interval_contains_angle(hall_1_low, hall_1_high, φ);
+  const hall_2 = interval_contains_angle(hall_2_low, hall_2_high, φ);
+  const hall_3 = interval_contains_angle(hall_3_low, hall_3_high, φ);
 
   const τ = 0.0; // rotor torque due to motor magnetic field
   const P = τ * ω; // motor power
   const α = 0.0; // motor angular acceleration
-  const hall_1 = interval_contains_angle(hall_1_low, hall_1_high, φ);
-  const hall_2 = interval_contains_angle(hall_2_low, hall_2_high, φ);
-  const hall_3 = interval_contains_angle(hall_3_low, hall_3_high, φ);
-  return {τ, P, α, hall_1, hall_2, hall_3};
+
+
+  return {hall_1, hall_2, hall_3, τ, P, α};
 
 }
 ```
@@ -126,11 +127,12 @@ function state_differential(state, parameters, inputs, step_size) {
   const τ_friction = -ω * τ_dynamic + static_sign * τ_static;
   const τ_total = τ_applied + τ_friction;
   const τ_stopping = -ω/step_size * I_rotor; // Torque needed to stop the rotor in 1 step.
-  const frozen = ω == 0.0 && Math.abs(τ_applied) <= τ_static;
+  const frozen = (ω == 0.0) && Math.abs(τ_applied) <= τ_static;
   const stopping = -Math.sign(ω) * τ_total > -Math.sign(ω)*τ_stopping;
+  const τ_final = (frozen || stopping) ? τ_stopping : τ_total;
 
   // We need to prevent static friction from overshooting when the motor is stopped or stopping in 1 step.
-  const dω = ((frozen || stopping) ? τ_stopping : τ_total) / I_rotor;
+  const dω = τ_final / I_rotor;
   const dIu = (Vu - Iu * R - L * α) / L;
   const dIv = (Vv - Iv * R - L * α) / L;
   const dIw = (Vw - Iw * R - L * α) / L;
@@ -176,9 +178,15 @@ function* simulate(state, parameters, update_inputs, dt, max_stored_steps) {
     if (states.length > max_stored_steps) {
       states.shift();
     }
-    yield states
+    yield states;
   }
 }
+```
+
+```js
+const motor = load_motor(model_file_url);
+const scene = create_scene(await motor);
+const rendering_element = render_scene(640, 640, invalidation, scene, () => {});
 ```
 
 ```js
@@ -187,6 +195,8 @@ const τ_slider = Inputs.range([-0.005, +0.005], {step: 0.0001, value: 0.0, labe
 display(τ_slider);
 
 function inputs_from_load_torque_slider(state, parameters, outputs) {
+  motor.rotor.rotation.y = state.φ;
+
   return {
     U: "floating", // driver connection state for phase U
     V: "floating", // driver connection state for phase V
@@ -200,144 +210,11 @@ let slider_simulation = simulate(initial_state, initial_parameters, inputs_from_
 ```
 
 
-```js
-const manager = new THREE.LoadingManager();
-
-const loader = new ThreeMFLoader(manager);
-
-const model_file_url = await FileAttachment("./data/motor_model.3mf").url();
-
-```
-
-```js
-let motor_model = new Promise((resolve, reject) => {
-  
-  // Load a 3mf file
-  loader.load(model_file_url, (object) => {
-    object.traverse( function (child) {
-      child.castShadow = true;
-    });
-    resolve(object);
-  }
-  );
-});
-```
-
-```js
-const camera = function(width, height) {
-  const fov = 90;
-  const aspect = width / height;
-  const near = 1;
-  const far = 5000;
-  const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-  camera.position.z = 0;
-  camera.position.y = -100;
-  camera.position.x = 0;
-  camera.lookAt(0, 0, 0);
-  camera.updateProjectionMatrix();
-  return camera;
-}(640, 640);
-
-
-const scene = function(){
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf0f0f0);
-
-  const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x8d8d8d, 3 );
-  hemiLight.position.set( 0, 100, 0 );
-  scene.add( hemiLight );
-
-  const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
-  dirLight.position.set( - 0, 40, 50 );
-  dirLight.castShadow = true;
-  dirLight.shadow.camera.top = 50;
-  dirLight.shadow.camera.bottom = - 25;
-  dirLight.shadow.camera.left = - 25;
-  dirLight.shadow.camera.right = 25;
-  dirLight.shadow.camera.near = 0.1;
-  dirLight.shadow.camera.far = 200;
-  dirLight.shadow.mapSize.set( 1024, 1024 );
-  scene.add( dirLight );
-
-  // scene.add( new THREE.CameraHelper( dirLight.shadow.camera ) );
-
-  const ground = new THREE.Mesh( 
-    new THREE.PlaneGeometry( 1000, 1000 ), 
-    new THREE.MeshPhongMaterial( { color: 0xcbcbcb, depthWrite: false } ) 
-    );
-  ground.rotation.x = 0.0;//- Math.PI / 2;
-  ground.position.z = -80;
-  ground.receiveShadow = true;
-  scene.add( ground );
-
-  
-  scene.add(motor_model);
-  return scene;
-}();
-
-
-
-function* render_scene(width, height, invalidation) {
-  const renderer = new THREE.WebGLRenderer({antialias: true});
-  
-  renderer.setSize(width, height);
-  renderer.setPixelRatio(devicePixelRatio);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  const controls = {
-    "arcball": () => {
-        let controls = new ArcballControls( camera, renderer.domElement, scene );
-        controls.setGizmosVisible(true);
-        return controls;
-    },
-    "orbit": () => {
-        let controls = new OrbitControls( camera, renderer.domElement );
-        controls.minDistance = 50;
-        controls.maxDistance = 200;
-        controls.enablePan = true;
-        controls.target.set( 0, 0, 0 );
-        // controls.maxPolarAngle = 0; // Math.PI / 2;
-        // controls.minPolarAngle = 0; // -Math.PI / 2;
-        controls.maxAzimuthAngle = 0; // Math.PI / 2;
-        controls.minAzimuthAngle = 0; // -Math.PI / 2;
-        return controls;
-    }
-  }["arcball"]();
-  
-
-
-  invalidation.then(() => {
-    controls.dispose();
-    renderer.dispose()
-  });
-
-  while (true) {
-    // motor_model.rotation.x += 0.01;
-    motor_model.rotation.y += 0.01;
-    controls.update();
-    renderer.render(scene, camera);
-    yield renderer.domElement;
-  }
-}
-```
-
-```js
-const rendering_element = render_scene(640, 640, invalidation);
-```
 
 ```js
 display(rendering_element);
 ```
 
-```js
-const motor_sketch_html = await FileAttachment("./data/motor_sketch.html").html();
-const motor_sketch_svg = d3.select(motor_sketch_html).select("svg");
-
-
-display(motor_sketch_svg.attr("width", 640).attr("height", 640).node());
-
-```
 
 
 ```js
