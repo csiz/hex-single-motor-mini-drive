@@ -3,10 +3,24 @@ title: Understanding 3-phase motor control
 theme: dashboard
 ---
 
+
 ```js
 import {md, note, link} from "./components/utils.js"
-import {create_scene, render_scene, load_motor} from "./components/visuals.js"
+import {create_scene, render_scene, load_motor, load_texture} from "./components/visuals.js"
+import * as THREE from "three";
+```
+
+```js
+// Observable framework wants us to load files explicitly from the notebooks.
 const model_file_url = await FileAttachment("./data/motor_model.3mf").href;
+const wood_texture_url = await FileAttachment("./data/textures/laminate_floor_diff_1k.jpg").href;
+const wood_displacement_url = await FileAttachment("./data/textures/laminate_floor_disp_1k.png").href;
+
+const motor = load_motor(model_file_url);
+const wood = {
+  texture: await load_texture(wood_texture_url, 8), 
+  displacement: await load_texture(wood_displacement_url, 8),
+};
 ```
 
 
@@ -184,8 +198,7 @@ function* simulate(state, parameters, update_inputs, dt, max_stored_steps) {
 ```
 
 ```js
-const motor = load_motor(model_file_url);
-const scene = create_scene(await motor);
+const scene = create_scene(motor, wood);
 const rendering_element = render_scene(640, 640, invalidation, scene, () => {});
 ```
 
@@ -195,7 +208,13 @@ const τ_slider = Inputs.range([-0.005, +0.005], {step: 0.0001, value: 0.0, labe
 display(τ_slider);
 
 function inputs_from_load_torque_slider(state, parameters, outputs) {
-  motor.rotor.rotation.y = state.φ;
+  motor.rotor.rotation.y = normalized_angle(state.φ - π / 2);
+  motor.red_led.material.emissiveIntensity = outputs.hall_1 ? 10.0 : 0.0;
+  motor.green_led.material.emissiveIntensity = outputs.hall_2 ? 8.0 : 0.0;
+  motor.blue_led.material.emissiveIntensity = outputs.hall_3 ? 12.0 : 0.0;
+  motor.coil_U.material.emissiveIntensity = 0.20 * (Math.sin(state.φ)+1.0)*0.5;
+  motor.coil_V.material.emissiveIntensity = 0.20 * (Math.sin(state.φ - 2 * Math.PI / 3)+1.0)*0.5;
+  motor.coil_W.material.emissiveIntensity = 0.15 * (Math.sin(state.φ + 2 * Math.PI / 3)+1.0)*0.5;
 
   return {
     U: "floating", // driver connection state for phase U
@@ -208,8 +227,6 @@ function inputs_from_load_torque_slider(state, parameters, outputs) {
 
 let slider_simulation = simulate(initial_state, initial_parameters, inputs_from_load_torque_slider, 0.0001, 500);
 ```
-
-
 
 ```js
 display(rendering_element);
