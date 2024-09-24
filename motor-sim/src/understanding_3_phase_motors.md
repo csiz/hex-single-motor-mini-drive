@@ -116,7 +116,7 @@ function measurable_outputs(state, parameters) {
 ```
 
 ```js
-function state_differential(state, parameters, inputs, step_size) {
+function compute_state(state, parameters, inputs, step_size) {
   const {R, L, Kv, τ_static, τ_dynamic, R_bat, R_mosfet, R_shunt, V_diode, I_rotor} = parameters;
   const {t, φ, ω, Iu, Iv, Iw, Vu, Vv, Vw} = state;
   const {U, V, W, τ_load} = inputs;
@@ -155,16 +155,15 @@ function state_differential(state, parameters, inputs, step_size) {
 
 
 
-function euler_step(state, parameters, inputs, dt) {
-  const dstate = state_differential(state, parameters, inputs, dt).diff;
-  return _.mapValues(state, (value, key) => value + dstate[key] * dt);
+function euler_step(state, diff, dt) {
+  return _.mapValues(state, (value, key) => value + diff[key] * dt);
 }
 
-function runge_kuta_step(state, parameters, inputs, dt) {
-  const k1 = state_differential(state, parameters, inputs, dt).diff;
-  const k2 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2).diff;
-  const k3 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2).diff;
-  const k4 = state_differential(euler_step(state, parameters, inputs, dt), parameters, inputs, dt).diff;
+function runge_kuta_step(state, diff, dt, parameters, inputs) {
+  const k1 = diff;
+  const k2 = compute_state(euler_step(state, k1, dt / 2), parameters, inputs, dt / 2).diff;
+  const k3 = compute_state(euler_step(state, k2, dt / 2), parameters, inputs, dt / 2).diff;
+  const k4 = compute_state(euler_step(state, k3, dt), parameters, inputs, dt).diff;
   return _.mapValues(state, (value, key) => value + (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) * dt / 6);
 }
 
@@ -172,21 +171,26 @@ function runge_kuta_step(state, parameters, inputs, dt) {
 
 ```js
 function * simulate(state, parameters, update_inputs, dt, max_stored_steps) {
-  let outputs = measurable_outputs(state, parameters);
-  let inputs = update_inputs(state, parameters, outputs);
-  let states = [{...state, ...outputs, ...inputs}];
+
+  let states = [];
   for (let i = 0; true; i++) {
-    state = runge_kuta_step(state, parameters, inputs, dt);
-    outputs = measurable_outputs(state, parameters);
-    inputs = update_inputs(state, parameters, outputs);
+    
+    const outputs = measurable_outputs(state, parameters);
+    const inputs = update_inputs(state, parameters, outputs);
+    const {diff, info} = compute_state(state, parameters, inputs, dt);
 
-    // Normalize the motor angle to [0, 2π]
-    state.φ = normalized_angle(state.φ);
-
-    states.push({...state, ...outputs, ...inputs});
+    states.push({...state, ...outputs, ...inputs, ...info});
     if (states.length > max_stored_steps) {
       states.shift();
     }
+
+    const new_state = runge_kuta_step(state, diff, dt, parameters, inputs);
+
+    // Normalize the motor angle to [0, 2π]
+    new_state.φ = normalized_angle(new_state.φ);
+
+    state = new_state;
+
     yield states;
   }
 }
