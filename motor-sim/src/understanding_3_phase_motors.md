@@ -6,7 +6,7 @@ theme: dashboard
 
 ```js
 import {md, note, link} from "./components/utils.js"
-import {create_scene, render_scene, load_motor, load_texture} from "./components/visuals.js"
+import {create_scene, setup_rendering, load_motor, load_texture} from "./components/visuals.js"
 import * as THREE from "three";
 ```
 
@@ -102,14 +102,8 @@ function freewheeling_inputs(state, parameters, outputs) {
   }
 }
 
-/* Outputs of the physical system (effects).
-
-For this simulator, outputs means all the descriptors of the system that are dependent only on the
-current internal state of the system. Notably they don't depend directly on time and therefore don't
-need to be included in the ODE solver. This includes the motor torque, power, angular acceleration,
-and the hall sensor states.
-*/
-function dependent_outputs(state, parameters) {
+/* Outputs of the physical system that can be read by the driver sensors. */
+function measurable_outputs(state, parameters) {
   const {R, L, Kv, τ_static, τ_dynamic, R_bat, R_mosfet, R_shunt, V_diode, I_rotor, hall_1_low, hall_1_high, hall_2_low, hall_2_high, hall_3_low, hall_3_high} = parameters;
   const {t, φ, ω, Iu, Iv, Iw, Vu, Vv, Vw} = state;
 
@@ -117,13 +111,7 @@ function dependent_outputs(state, parameters) {
   const hall_2 = interval_contains_angle(hall_2_low, hall_2_high, φ);
   const hall_3 = interval_contains_angle(hall_3_low, hall_3_high, φ);
 
-  const τ = 0.0; // rotor torque due to motor magnetic field
-  const P = τ * ω; // motor power
-  const α = 0.0; // motor angular acceleration
-
-
-  return {hall_1, hall_2, hall_3, τ, P, α};
-
+  return {hall_1, hall_2, hall_3};
 }
 ```
 
@@ -132,7 +120,11 @@ function state_differential(state, parameters, inputs, step_size) {
   const {R, L, Kv, τ_static, τ_dynamic, R_bat, R_mosfet, R_shunt, V_diode, I_rotor} = parameters;
   const {t, φ, ω, Iu, Iv, Iw, Vu, Vv, Vw} = state;
   const {U, V, W, τ_load} = inputs;
-  const {τ, α} = dependent_outputs(state, parameters);
+
+  const τ = 0.0; // rotor torque due to motor magnetic field
+  const P = τ * ω; // motor power
+  const α = 0.0; // motor angular acceleration
+  
 
   const dφ = ω;
 
@@ -155,34 +147,37 @@ function state_differential(state, parameters, inputs, step_size) {
   const dVw = -Kv * ω * Math.sin(φ + 2 * Math.PI / 3) - Iw * R - L * α;
   const dt = 1.0;
 
-  return {t: dt, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, Vu: dVu, Vv: dVv, Vw: dVw};
+  return {
+    diff: {t: dt, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, Vu: dVu, Vv: dVv, Vw: dVw},
+    info: {τ, P, α, τ_applied, τ_friction, τ_total, τ_stopping, frozen, stopping, τ_final},
+  };
 }
 
 
 
 function euler_step(state, parameters, inputs, dt) {
-  const dstate = state_differential(state, parameters, inputs, dt);
+  const dstate = state_differential(state, parameters, inputs, dt).diff;
   return _.mapValues(state, (value, key) => value + dstate[key] * dt);
 }
 
 function runge_kuta_step(state, parameters, inputs, dt) {
-  const k1 = state_differential(state, parameters, inputs, dt);
-  const k2 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2);
-  const k3 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2);
-  const k4 = state_differential(euler_step(state, parameters, inputs, dt), parameters, inputs, dt);
+  const k1 = state_differential(state, parameters, inputs, dt).diff;
+  const k2 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2).diff;
+  const k3 = state_differential(euler_step(state, parameters, inputs, dt / 2), parameters, inputs, dt / 2).diff;
+  const k4 = state_differential(euler_step(state, parameters, inputs, dt), parameters, inputs, dt).diff;
   return _.mapValues(state, (value, key) => value + (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) * dt / 6);
 }
 
 ```
 
 ```js
-function* simulate(state, parameters, update_inputs, dt, max_stored_steps) {
-  let outputs = dependent_outputs(state, parameters);
+function * simulate(state, parameters, update_inputs, dt, max_stored_steps) {
+  let outputs = measurable_outputs(state, parameters);
   let inputs = update_inputs(state, parameters, outputs);
   let states = [{...state, ...outputs, ...inputs}];
   for (let i = 0; true; i++) {
     state = runge_kuta_step(state, parameters, inputs, dt);
-    outputs = dependent_outputs(state, parameters);
+    outputs = measurable_outputs(state, parameters);
     inputs = update_inputs(state, parameters, outputs);
 
     // Normalize the motor angle to [0, 2π]
@@ -198,26 +193,11 @@ function* simulate(state, parameters, update_inputs, dt, max_stored_steps) {
 ```
 
 ```js
-const scene = create_scene(motor, wood);
-const rendering_element = render_scene(640, 640, invalidation, scene, (outline_pass) => {
-  // outline_pass.selectedObjects = [motor.coil_U, motor.coil_V, motor.coil_W];
-});
-```
-
-```js
 const τ_slider = Inputs.range([-0.005, +0.005], {step: 0.0001, value: 0.0, label: "Load torque"});
 
 display(τ_slider);
 
 function inputs_from_load_torque_slider(state, parameters, outputs) {
-  motor.rotor.rotation.y = normalized_angle(state.φ - π / 2);
-  motor.red_led.material.emissiveIntensity = outputs.hall_1 ? 10.0 : 0.0;
-  motor.green_led.material.emissiveIntensity = outputs.hall_2 ? 8.0 : 0.0;
-  motor.blue_led.material.emissiveIntensity = outputs.hall_3 ? 12.0 : 0.0;
-  motor.coil_U.material.emissiveIntensity = 0.20 * (Math.sin(state.φ)+1.0)*0.5;
-  motor.coil_V.material.emissiveIntensity = 0.20 * (Math.sin(state.φ - 2 * Math.PI / 3)+1.0)*0.5;
-  motor.coil_W.material.emissiveIntensity = 0.15 * (Math.sin(state.φ + 2 * Math.PI / 3)+1.0)*0.5;
-
   return {
     U: "floating", // driver connection state for phase U
     V: "floating", // driver connection state for phase V
@@ -225,24 +205,44 @@ function inputs_from_load_torque_slider(state, parameters, outputs) {
     τ_load: τ_slider.value, // external load torque
   }
 }
-
-
-let slider_simulation = simulate(initial_state, initial_parameters, inputs_from_load_torque_slider, 0.0001, 500);
 ```
+
 
 ```js
-display(rendering_element);
-```
+const torque_slider_demo = function * () {
+  const scene = create_scene(motor, wood);
+  const rendering = setup_rendering(640, 640, invalidation, scene);
 
+  display(rendering.canvas);
+
+  for (const simulation of simulate(initial_state, initial_parameters, inputs_from_load_torque_slider, 0.0001, 500)) {
+
+    // Update the scene with the current state of the simulation.
+    const state = _.last(simulation);
+
+    motor.rotor.rotation.y = normalized_angle(state.φ - π / 2);
+    motor.red_led.material.emissiveIntensity = state.hall_1 ? 10.0 : 0.0;
+    motor.green_led.material.emissiveIntensity = state.hall_2 ? 8.0 : 0.0;
+    motor.blue_led.material.emissiveIntensity = state.hall_3 ? 12.0 : 0.0;
+    motor.coil_U.material.emissiveIntensity = 0.20 * (Math.sin(state.φ)+1.0)*0.5;
+    motor.coil_V.material.emissiveIntensity = 0.20 * (Math.sin(state.φ - 2 * Math.PI / 3)+1.0)*0.5;
+    motor.coil_W.material.emissiveIntensity = 0.15 * (Math.sin(state.φ + 2 * Math.PI / 3)+1.0)*0.5;
+
+    rendering.render();
+
+    yield simulation;
+  }
+}();
+```
 
 
 ```js
 display(Plot.plot({
   // y: {domain: [-π, 3 * π]},
   marks: [
-    Plot.lineY(slider_simulation, {x: "t", y: "ω", stroke: "red"}),
-    Plot.lineY(slider_simulation, {x: "t", y: "φ", stroke: "blue"}),
-    Plot.lineY(slider_simulation, {x: "t", y: "τ_load"}),
+    Plot.lineY(torque_slider_demo, {x: "t", y: "ω", stroke: "red"}),
+    Plot.lineY(torque_slider_demo, {x: "t", y: "φ", stroke: "blue"}),
+    Plot.lineY(torque_slider_demo, {x: "t", y: "τ_load"}),
   ]
 }));
 ```

@@ -15,6 +15,7 @@ import { ClearPass } from 'three/addons/postprocessing/ClearPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 
+
 function create_mixing_pass(added_texture) {
   const vertexShader = `
     varying vec2 vUv;
@@ -242,7 +243,7 @@ export function create_scene(motor, wood){
 
 
 
-export function* render_scene(width, height, invalidation, scene, update) {
+export function setup_rendering(width, height, invalidation, scene) {
   const camera = create_camera(width, height);
 
   const renderer = new THREE.WebGLRenderer();
@@ -339,6 +340,8 @@ export function* render_scene(width, height, invalidation, scene, update) {
 
 
   invalidation.then(() => {
+    composer.dispose();
+    bloom_composer.dispose();
     controls.dispose();
     renderer.dispose();
   });
@@ -349,6 +352,8 @@ export function* render_scene(width, height, invalidation, scene, update) {
   }
 
   function render(){
+    compute_highlights();
+
     const materials = {};
     const lights = {};
     const saved_background = scene.background;
@@ -380,11 +385,9 @@ export function* render_scene(width, height, invalidation, scene, update) {
     composer.render();
   }
 
-  while (true) {
-    compute_highlights();
-    update(outline_pass);
-    controls.update();
-    render();
-    yield renderer.domElement;
-  }
+
+  return {
+    canvas: renderer.domElement,
+    render,
+  };
 }
