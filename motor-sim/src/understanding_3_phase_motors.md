@@ -18,7 +18,7 @@ const wood_displacement_url = await FileAttachment("./data/textures/laminate_flo
 
 const motor = load_motor(model_file_url);
 const wood = {
-  texture: await load_texture(wood_texture_url, 8), 
+  texture: await load_texture(wood_texture_url, 8, THREE.SRGBColorSpace), 
   displacement: await load_texture(wood_displacement_url, 8),
 };
 ```
@@ -199,7 +199,9 @@ function* simulate(state, parameters, update_inputs, dt, max_stored_steps) {
 
 ```js
 const scene = create_scene(motor, wood);
-const rendering_element = render_scene(640, 640, invalidation, scene, () => {});
+const rendering_element = render_scene(640, 640, invalidation, scene, (outline_pass) => {
+  // outline_pass.selectedObjects = [motor.coil_U, motor.coil_V, motor.coil_W];
+});
 ```
 
 ```js

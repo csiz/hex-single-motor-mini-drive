@@ -12,6 +12,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { ClearPass } from 'three/addons/postprocessing/ClearPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 
 function create_mixing_pass(added_texture) {
@@ -135,7 +136,11 @@ export function load_motor(model_file_url){
   return new Promise((resolve, reject) => {
     function on_load(object){
       object.traverse( function (child) {
-        child.castShadow = true;
+        if ( child instanceof THREE.Mesh ) {
+          child.geometry.computeBoundingSphere();
+          child.receiveShadow = true;
+          child.castShadow = true;
+        }
       });
       resolve(group_motor_model(object));
     }
@@ -153,12 +158,13 @@ export function load_motor(model_file_url){
   });
 }
 
-export function load_texture(texture_file_url, repeat = 1.0){
+export function load_texture(texture_file_url, repeat = 1.0, color_space = THREE.NoColorSpace){
   return new Promise((resolve, reject) => {
     function on_load(texture){
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set( repeat, repeat );
+      texture.colorSpace = color_space;
       resolve(texture);
     }
     function on_error(error){
@@ -172,7 +178,7 @@ function create_camera(width, height) {
   const fov = 90;
   const aspect = width / height;
   const near = 1;
-  const far = 5000;
+  const far = 1000;
   const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
   camera.position.z = 0;
   camera.position.y = -100;
@@ -188,36 +194,49 @@ function create_camera(width, height) {
 export function create_scene(motor, wood){
   const scene = new THREE.Scene();
 
-  const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x8d8d8d, 3);
-  hemiLight.position.set( 0, -100, 100 );
-  scene.add( hemiLight );
+  scene.background = new THREE.Color(0xf6f6f6);
 
-  const dirLight = new THREE.DirectionalLight( 0xffffff, 2);
-  dirLight.position.set( 0, -40, 0 );
-  dirLight.castShadow = true;
-  dirLight.shadow.camera.top = 50;
-  dirLight.shadow.camera.bottom = - 25;
-  dirLight.shadow.camera.left = - 25;
-  dirLight.shadow.camera.right = 25;
-  dirLight.shadow.camera.near = 0.1;
-  dirLight.shadow.camera.far = 200;
-  dirLight.shadow.mapSize.set( 1024, 1024 );
-  scene.add( dirLight );
+  const sky = new Sky();
+  sky.scale.setScalar( 450000 );
+  sky.material.uniforms.up.value.set(0, 0, 1);
+  sky.material.uniforms.sunPosition.value.set(0, -200, 120)
+  sky.material.uniforms.rayleigh.value = 1.0;
+  sky.material.uniforms.turbidity.value = 0.5;
+  sky.material.uniforms.mieCoefficient.value = 0.005;
+  sky.material.uniforms.mieDirectionalG.value = 0.99;
+
+  scene.add( sky );
+
+  const hemi_light = new THREE.HemisphereLight( 0xffffff, 0xa0a0a0, 3);
+  hemi_light.position.set( 0, -100, 100 );
+  scene.add( hemi_light );
+
+  const light = new THREE.PointLight( 0xffffff, 2, 0, 0.1);
+  light.position.set( 0, -200, 120 );
+  light.castShadow = true;
+  //Set up shadow properties for the light
+  light.shadow.mapSize.width = 512; // default
+  light.shadow.mapSize.height = 512; // default
+  light.shadow.camera.near = 0.5; // default
+  light.shadow.camera.far = 1000; // default
+
+  scene.add( light );
 
   // scene.add( new THREE.CameraHelper( dirLight.shadow.camera ) );
 
   const ground = new THREE.Mesh( 
     new THREE.PlaneGeometry( 4000, 4000 ), 
-    new THREE.MeshPhongMaterial( { color: 0xababab, map: wood.texture, bumpMap: wood.displacement } ) 
+    new THREE.MeshPhongMaterial( { map: wood.texture, bumpMap: wood.displacement } ) 
     );
-  ground.rotation.x = 0.0;//- Math.PI / 2;
-  ground.position.z = -100;
+  ground.rotation.x = 0.0;
+  ground.rotation.z = Math.PI / 2;
+  ground.position.z = -150;
   ground.receiveShadow = true;
   scene.add( ground );
 
-  
   scene.add(motor.stator);
   scene.add(motor.rotor);
+
   return scene;
 };
 
@@ -227,21 +246,53 @@ export function* render_scene(width, height, invalidation, scene, update) {
   const camera = create_camera(width, height);
 
   const renderer = new THREE.WebGLRenderer();
-  
+  renderer.domElement.addEventListener( 'pointermove', on_move );
+
   renderer.setSize(width, height);
   renderer.setPixelRatio(devicePixelRatio);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  // renderer.toneMapping = THREE.ReinhardToneMappi
+  // renderer.toneMapping = THREE.ReinhardToneMapping;
   // renderer.toneMappingExposure = Math.pow( 1.0, 4.0 );
+  renderer.localClippingEnabled = true;
 
   const render_pass = new RenderPass(scene, camera);
   const clear_pass = new ClearPass();
   const output_pass = new OutputPass();
-  // const anti_aliasing_pass = new ShaderPass(FXAAShader);
-  // anti_aliasing_pass.material.uniforms.resolution.value.x = 1 / width;
-  // anti_aliasing_pass.material.uniforms.resolution.value.y = 1 / height;
   const anti_aliasing_pass = new SMAAPass(width, height);
+
+  const outline_pass = new OutlinePass( new THREE.Vector2( window.innerWidth, window.innerHeight ), scene, camera );
+  outline_pass.edgeStrength = 4;
+  outline_pass.edgeGlow = 1.0;
+  outline_pass.edgeThickness = 2;
+  outline_pass.pulsePeriod = 0;
+  outline_pass.visibleEdgeColor.set(0xffffff);
+  outline_pass.hiddenEdgeColor.set(0xffffff);
+
+  const mouse = new THREE.Vector2();
+  const raycaster = new THREE.Raycaster();
+
+  function on_move( event ) {
+
+    if ( event.isPrimary === false ) return;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.set(
+      ( (event.clientX - rect.left) / width ) * 2 - 1,
+      - ( (event.clientY - rect.top) / height ) * 2 + 1,
+    );
+
+    compute_highlights();
+  }
+
+  function compute_highlights(){
+    raycaster.setFromCamera( mouse, camera );
+
+    const intersects = raycaster.intersectObject( scene, true );
+    
+    outline_pass.selectedObjects = intersects.length > 0 ? [intersects[0].object] : [];
+
+  }
 
 
   const bloom_params = {
@@ -270,6 +321,7 @@ export function* render_scene(width, height, invalidation, scene, update) {
   composer.addPass(render_pass);
   // composer.addPass(clear_pass);
   composer.addPass(mix_pass);
+  composer.addPass(outline_pass);
   composer.addPass(output_pass);
   composer.addPass(anti_aliasing_pass);
 
@@ -277,7 +329,7 @@ export function* render_scene(width, height, invalidation, scene, update) {
   const controls = new OrbitControls( camera, renderer.domElement );
   controls.minDistance = 50;
   controls.maxDistance = 200;
-  controls.enablePan = true;
+  controls.enablePan = false;
   controls.target.set( 0, 0, 0 );
 
   controls.maxPolarAngle = Math.PI * (3 / 4);
@@ -292,12 +344,14 @@ export function* render_scene(width, height, invalidation, scene, update) {
   });
   
   function is_emissive(material){
+    if (material.emissive === undefined) return false;
     return (material.emissive.r > 0 || material.emissive.g > 0 || material.emissive.b > 0) && material.emissiveIntensity > 0;
   }
 
   function render(){
     const materials = {};
     const lights = {};
+    const saved_background = scene.background;
     
     scene.traverse( (obj) => {
       if ((obj instanceof THREE.Mesh) && !is_emissive(obj.material)){
@@ -322,13 +376,13 @@ export function* render_scene(width, height, invalidation, scene, update) {
         delete lights[obj.uuid];
       }
     });
-    scene.background = new THREE.Color(0xf0f0f0);
+    scene.background = saved_background;
     composer.render();
-
   }
 
   while (true) {
-    update();
+    compute_highlights();
+    update(outline_pass);
     controls.update();
     render();
     yield renderer.domElement;
