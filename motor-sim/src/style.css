@@ -1,0 +1,93 @@
+@import url("observablehq:default.css");
+@import url("observablehq:theme-air.css");
+@import url("observablehq:theme-wide.css");
+@import url("observablehq:theme-alt.css");
+
+.tight {
+  padding: 4px 8px 4px 4px;
+  margin: 4px 0px 4px 0px;
+}
+
+p,
+table,
+figure,
+figcaption,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.katex-display {
+  max-width: 800px;
+}
+
+blockquote,
+ol,
+ul {
+  max-width: 640px;
+}
+
+li {
+  padding: 0.25rem 0;
+}
+
+.tooltip {
+  position: relative;
+  display: inline-block;
+  border-bottom: 1px dotted black;
+}
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  width: 720px;
+  background-color: black;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 0;
+  
+  /* Position the tooltip */
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  left: 50%;
+  margin-left: -240px;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+}
+
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: left;
+  font-family: var(--sans-serif);
+  margin: 1rem 0 2rem 0;
+  text-wrap: balance;
+  text-align: left;
+}
+
+.hero h1 {
+  padding: 0.5rem 5vw;
+  max-width: none;
+  font-size: 6vh;
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(30deg, var(--theme-foreground-focus), currentColor);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero h2 {
+  margin: 0;
+  max-width: 34em;
+  font-size: 4vh;
+  font-style: initial;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--theme-foreground-muted);
+}

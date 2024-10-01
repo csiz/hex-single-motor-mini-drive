@@ -65,18 +65,23 @@ function group_motor_model(object) {
   let coil_V = new THREE.Group();
   let coil_W = new THREE.Group();
 
+  let hall_sensors = new THREE.Group();
+  let pin1 = new THREE.Group();
+  let pin2 = new THREE.Group();
+  let pin3 = new THREE.Group();
+
   const motor_body_to_group = {
     "Blue LED": blue_led,
     "Coil U": coil_U,
     "Coil V": coil_V,
     "Coil W": coil_W,
     "Green LED": green_led,
-    "Hall sensor": stator,
+    "Hall sensor": hall_sensors,
     "Magnetic North": rotor,
     "Magnetic South": rotor,
-    "Pin 1": stator,
-    "Pin 2": stator,
-    "Pin 3": stator,
+    "Pin 1": pin1,
+    "Pin 2": pin2,
+    "Pin 3": pin3,
     "Red LED": red_led,
     "Rotor axel": rotor,
     "Rotor case": rotor,
@@ -89,7 +94,7 @@ function group_motor_model(object) {
     motor_body_to_group[child.name].add(child);
   });
 
-  const get_mesh = (group) => group.children[0].children[0];
+  const get_mesh = (group, index=0) => group.children[index].children[0];
   const get_color = (mesh) => {
     const colors = _.range(0, mesh.geometry.attributes.color.count).map(i => {
       let color = new THREE.Color()
@@ -100,36 +105,69 @@ function group_motor_model(object) {
     return new THREE.Color(_.meanBy(colors, c => c.r), _.meanBy(colors, c => c.g), _.meanBy(colors, c => c.b));
   };
 
-  const blue_led_mesh = get_mesh(blue_led);
-  const red_led_mesh = get_mesh(red_led);
-  const green_led_mesh = get_mesh(green_led);
-  const coil_U_mesh = get_mesh(coil_U);
-  const coil_V_mesh = get_mesh(coil_V);
-  const coil_W_mesh = get_mesh(coil_W);
+  red_led = get_mesh(red_led);
+  green_led = get_mesh(green_led);
+  blue_led = get_mesh(blue_led);
+  coil_U = get_mesh(coil_U);
+  coil_V = get_mesh(coil_V);
+  coil_W = get_mesh(coil_W);
 
-  blue_led_mesh.material.emissive = get_color(blue_led_mesh);
-  red_led_mesh.material.emissive = get_color(red_led_mesh);
-  green_led_mesh.material.emissive = get_color(green_led_mesh);
-  coil_U_mesh.material.emissive = get_color(coil_U_mesh);
-  coil_V_mesh.material.emissive = get_color(coil_V_mesh);
-  coil_W_mesh.material.emissive = get_color(coil_W_mesh);
+  red_led.material.emissive = get_color(red_led);
+  green_led.material.emissive = get_color(green_led);
+  blue_led.material.emissive = get_color(blue_led);
+  
+  coil_U.material.emissive = get_color(coil_U);
+  coil_V.material.emissive = get_color(coil_V);
+  coil_W.material.emissive = get_color(coil_W);
+  
+  const hall_1 = new THREE.Group();
+  const hall_2 = new THREE.Group();
+  const hall_3 = new THREE.Group();
 
-  stator.add(blue_led);
-  stator.add(red_led);
-  stator.add(green_led);
+  hall_3.add(get_mesh(hall_sensors, 2));
+  hall_3.add(get_mesh(pin1, 2));
+  hall_3.add(get_mesh(pin2, 2));
+  hall_3.add(get_mesh(pin3, 2));
+  hall_3.add(blue_led);
+  
+  hall_2.add(get_mesh(hall_sensors, 1));
+  hall_2.add(get_mesh(pin1, 1));
+  hall_2.add(get_mesh(pin2, 1));
+  hall_2.add(get_mesh(pin3, 1));
+  hall_2.add(green_led);
+
+  hall_1.add(get_mesh(hall_sensors, 0));
+  hall_1.add(get_mesh(pin1, 0));
+  hall_1.add(get_mesh(pin2, 0));
+  hall_1.add(get_mesh(pin3, 0));
+  hall_1.add(red_led);
+
+
+
   stator.add(coil_U);
   stator.add(coil_V);
   stator.add(coil_W);
+  stator.add(hall_1);
+  stator.add(hall_2);
+  stator.add(hall_3);
+
+  const motor = new THREE.Group();
+  motor.add(stator);
+  motor.add(rotor);
 
   return {
+    motor,
     stator,
     rotor,
-    blue_led: blue_led_mesh,
-    red_led: red_led_mesh,
-    green_led: green_led_mesh,
-    coil_U: coil_U_mesh,
-    coil_V: coil_V_mesh,
-    coil_W: coil_W_mesh,
+    blue_led,
+    red_led,
+    green_led,
+    coil_U,
+    coil_V,
+    coil_W,
+    hall_1,
+    hall_2,
+    hall_3,
   };
 }
 
@@ -181,15 +219,19 @@ function create_camera(width, height) {
   const near = 1;
   const far = 1000;
   const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+  reset_camera_position(camera);
+  return camera;
+}
+
+function reset_camera_position(camera){
   camera.position.z = 0;
   camera.position.y = -100;
   camera.position.x = 0;
   camera.up.set( 0, 0, 1 );
-
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
-  return camera;
 }
+
 
 
 export function create_scene(motor, wood){
@@ -235,19 +277,23 @@ export function create_scene(motor, wood){
   ground.receiveShadow = true;
   scene.add( ground );
 
-  scene.add(motor.stator);
-  scene.add(motor.rotor);
+  scene.add(motor.motor);
 
   return scene;
 };
 
+export function top_selection(intersected_objects){
+  return intersected_objects.length > 0 ? [intersected_objects[0]] : [];
+}
 
+export function do_nothing(objects){}
 
-export function setup_rendering(width, height, invalidation, scene) {
+export function setup_rendering(width, height, invalidation, scene, highlight = top_selection, on_selection = do_nothing){
   const camera = create_camera(width, height);
 
   const renderer = new THREE.WebGLRenderer();
   renderer.domElement.addEventListener( 'pointermove', on_move );
+  renderer.domElement.addEventListener( 'pointerdown', on_click );
 
   renderer.setSize(width, height);
   renderer.setPixelRatio(devicePixelRatio);
@@ -283,18 +329,24 @@ export function setup_rendering(width, height, invalidation, scene) {
       - ( (event.clientY - rect.top) / height ) * 2 + 1,
     );
 
-    compute_highlights();
+    compute_highlight();
   }
 
-  function compute_highlights(){
+  function on_click( event ) {
+    if ( event.isPrimary === false ) return;
+    on_move( event );
+    on_selection(outline_pass.selectedObjects);
+  }
+
+  function compute_highlight(){
     raycaster.setFromCamera( mouse, camera );
 
     const intersects = raycaster.intersectObject( scene, true );
+
+    const selected = highlight(intersects.map(i => i.object));
     
-    outline_pass.selectedObjects = intersects.length > 0 ? [intersects[0].object] : [];
-
+    outline_pass.selectedObjects = selected;
   }
-
 
   const bloom_params = {
     threshold: 0.0,
@@ -331,6 +383,7 @@ export function setup_rendering(width, height, invalidation, scene) {
   controls.minDistance = 50;
   controls.maxDistance = 200;
   controls.enablePan = false;
+  controls.enableZoom = false;
   controls.target.set( 0, 0, 0 );
 
   controls.maxPolarAngle = Math.PI * (3 / 4);
@@ -338,6 +391,10 @@ export function setup_rendering(width, height, invalidation, scene) {
   controls.minDistance = 50;
   controls.maxDistance = 200;
 
+  function reset_camera(){
+    reset_camera_position(camera);
+    controls.update();
+  }
 
   invalidation.then(() => {
     composer.dispose();
@@ -352,7 +409,7 @@ export function setup_rendering(width, height, invalidation, scene) {
   }
 
   function render(){
-    compute_highlights();
+    compute_highlight();
 
     const materials = {};
     const lights = {};
@@ -389,5 +446,7 @@ export function setup_rendering(width, height, invalidation, scene) {
   return {
     canvas: renderer.domElement,
     render,
+    camera,
+    reset_camera,
   };
 }
