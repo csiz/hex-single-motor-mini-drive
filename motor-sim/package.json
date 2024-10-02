@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@observablehq/framework": "^1.11.0",
+    "circular-buffer": "^1.0.3",
     "d3-dsv": "^3.0.1",
     "d3-time-format": "^4.1.0",
     "three": "^0.168.0"

@@ -88,9 +88,9 @@ m_I = N I \hat{S}
 \\[2em]
 \tag{eq p-6}
 \begin{split}
-\tau_{em} &= \overrightarrow{B_m} \times \overrightarrow{m_I} \\
-&= I (N \overrightarrow{B_m} \times \hat{S}) \\
-&= I (\overrightarrow{\Psi_m} \times \hat{\theta}) \\
+\tau_{em} &= \overrightarrow{m_I}\times \overrightarrow{B_m}  \\
+&= N I (\hat{S} \times \overrightarrow{B_m}) \\
+&= I (\hat{\theta} \times \overrightarrow{\Psi_m}) \\
 &= I \Psi_m sin(\theta)
 \end{split}
 \end{gather}
@@ -131,21 +131,26 @@ The motor electrical and mechanical dynamics can be described by the following e
 \\[3em]
 
 \tag{eq m-3}
+\begin{split}
 \frac{d}{dt}\Bigg(\begin{bmatrix}cos(\theta) \\ cos(\theta - 2\pi/3) \\ cos(\theta + 2\pi/3)\end{bmatrix}\Bigg)
-= \frac{d\theta}{dt} \begin{bmatrix}-sin(\theta) \\ -sin(\theta - 2\pi/3) \\ -sin(\theta + 2\pi/3)\end{bmatrix}
-\text{with } \frac{d\theta}{dt} &= \omega
+&= \frac{d\theta}{dt} \begin{bmatrix}-sin(\theta) \\ -sin(\theta - 2\pi/3) \\ -sin(\theta + 2\pi/3)\end{bmatrix}
+\\[2em]
+\omega &= \frac{d\theta}{dt}
+\\[2em]
+\frac{d \overrightarrow{COS_{3ph}(\theta)}}{dt} &= -\omega \overrightarrow{SIN_{3ph}(\theta)}
+\end{split}
 
 \\[3em]
 
 \tag{eq m-4}
-\frac{1}{L_{phase}} \Bigg( \begin{bmatrix}V_a \\ V_b \\ V_c\end{bmatrix} - R_{phase} \begin{bmatrix}I_a \\ I_b \\ I_c\end{bmatrix} - \Psi_m \begin{bmatrix}-sin(\theta) \\ -sin(\theta - 2\pi/3) \\ -sin(\theta + 2\pi/3)\end{bmatrix} \Bigg)
+\frac{\overrightarrow{V} - R_{phase} \overrightarrow{I} + \omega \Psi_m \overrightarrow{SIN_{3ph}(\theta)}}{L_{phase}} 
 
-= \frac{d}{dt}\Bigg(&\begin{bmatrix}I_a \\ I_b \\ I_c\end{bmatrix}\Bigg)
+&= \frac{d\overrightarrow{I}}{dt}
 
 \\[3em]
 
 \tag{eq m-5}
-\tau_{em} = \Psi_m \begin{bmatrix}sin(\theta) \\ sin(\theta - 2\pi/3) \\ sin(\theta + 2\pi/3) \end{bmatrix}^T
+\tau_{em} = -\Psi_m \begin{bmatrix}sin(\theta) \\ sin(\theta - 2\pi/3) \\ sin(\theta + 2\pi/3) \end{bmatrix}^T
 \bullet &\begin{bmatrix}I_a \\ I_b \\ I_c\end{bmatrix}
 
 \\[3em]
@@ -188,6 +193,113 @@ of pole pairs. For this motor, we have 1 pole pair per phase, so the coordinates
 * ${tex`\tau_{load}`} is the load torque on the rotor.
 * ${tex`\tau_{friction}`} is the friction torque on the rotor.
 * ${tex`\tau_{dynamic} = k_{\tau_{dynamic}} \omega`} is the dynamic friction torque on the rotor.
+
+
+Radial Forces
+-------------
+
+The rotor will experience forces pushing it away from its axis of rotation when the magnetic
+fields of the stator and rotor align. These axial forces will cause the motor to wobble and
+they are the part of the noise produced by the motor. Unfortunately the radial change in 
+magnetic field is hard to compute, but since the effect is important, we will do our best to 
+estimate it. Let's assume the magnetic flux loses all of its strength when the air gap
+increases by ${tex`r_{max}`}. Initially the potential energy of the magnetic moment is
+${tex`U = -\overrightarrow{m_I} \bullet \overrightarrow{Bm}`} and at distance ${tex`r_{max}`}
+the potential energy is ${tex`U = 0`}. Let's further assume the magnetic field is locally linear,
+therefore if the magnet travels a distance ${tex`dr`} it will convert the potential energy
+${tex`dU = \overrightarrow{m_I} \bullet \overrightarrow{Bm} \frac{dr}{r_{max}}`} into kinetic energy.
+The force on the rotor is ${tex`F = m \frac{d\nu}{dt} = -\frac{dU}{dr}`}. In our crude approximation
+we don't want to track the rotor position ${tex`r`}, let's make the term dissapear by computing the
+power ${tex`P = F \nu = F \frac{dr}{dt} = -\frac{dU}{dt}`}. We can replace ${tex`dr`} with ${tex`\nu dt`}
+and obtain:
+
+```tex
+\begin{gather}
+\tag{eq m-8}
+\begin{split}
+P_{radial} = -\frac{dU}{dt} &= -\overrightarrow{m_I} \bullet \Big(\frac{\nu}{r_{max}}\frac{dt \overrightarrow{Bm}}{dt}\Big)
+\\[1.5em]
+&= -\frac{\nu}{r_{max}} \overrightarrow{m_I} \bullet \overrightarrow{Bm} 
+\\[1.5em]
+&= -\frac{\nu}{r_{max}} \overrightarrow{I} \bullet \overrightarrow{\Psi_m} 
+\\[1.5em]
+&= -\frac{\nu}{r_{max}} I \Psi_m cos(\theta)
+\end{split}
+\end{gather}
+```
+
+```tex
+\begin{gather}
+\tag{eq m-9}
+\begin{split}
+\frac{d\nu}{dt} &= \frac{F}{m}
+\\[1.5em]
+&= -\frac{1}{m} \frac{dU}{dr}
+\\[1.5em]
+&= -\frac{1}{m} \frac{\overrightarrow{I} \bullet \overrightarrow{\Psi_m}}{r_{max}}
+\\[1.5em]
+&= -\frac{I \Psi_m cos(\theta)}{mr_{max}}
+\end{split}
+\end{gather}
+```
+
+Inspecting the power equation we can also obtain the radial back emf term:
+
+```tex
+\begin{gather}
+\tag{eq m-10}
+\begin{split}
+V_{radial} I &= -P = -\frac{\nu}{r_{max}} I \Psi_m cos(\theta)
+\\[1.5em]
+V_{radial} &= -\frac{\nu}{r_{max}} \Psi_m cos(\theta)
+\end{split}
+\end{gather}
+```
+
+Equations with Radial Displacement
+==================================
+
+We can now gather all the equations we need to simulate the motor dynamics including the noisy
+radial displacement, which are a symptom of innefficiencies in the motor driver. Include the
+radial back emf in the electrical differential equation ${tex`\text{(eq m-4)}`}. We can copy
+the torque equation ${tex`\text{(eq m-5)}`} and the rotor dynamics ${tex`\text{(eq m-7)}`}.
+Finally add the partial axial dynamics for scalar axial velocity ${tex`\nu`}. I predict we
+should be able to hear the motor commutation noise if we play back ${tex`\nu`} as audio.
+
+```tex
+\begin{gather}
+\tag{eq m-11}
+\frac{d\overrightarrow{I}}{dt}
+=
+\frac{1}{L_{phase}} \Big(\overrightarrow{V} - R_{phase} \overrightarrow{I} + \omega \Psi_m \overrightarrow{SIN_{3ph}(\theta)} + \frac{\nu}{r_{max}} \Psi_m \overrightarrow{COS_{3ph}(\theta)} \Big)
+
+\\[3em]
+
+\tag{eq m-12}
+\tau_{em} = -\Psi_m \overrightarrow{SIN_{3ph}(\theta)} \bullet \overrightarrow{I}
+
+\\[3em]
+
+\tag{eq m-13}
+\frac{d\omega}{dt} = \frac{1}{J} (\tau_{em} + \tau_{load} - \tau_{friction} - k_{\tau_{dynamic}} \omega)
+
+\\[3em]
+
+\tag{eq m-14}
+\frac{d\nu}{dt} = -\frac{\overrightarrow{I} \bullet \Big(\Psi_m \overrightarrow{COS_{3ph}(\theta)}\Big)}{mr_{max}}
+
+\end{gather}
+
+
+
+```
+
+
+Electrical Connections
+======================
+
+The motor is connected in a Y/star configuration. Each phase is connected to a half-bridge between
+two N-channel MOSFETs.
 
 Phase to Phase Voltages
 -----------------------

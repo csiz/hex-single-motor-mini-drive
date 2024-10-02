@@ -15,6 +15,7 @@ import { ClearPass } from 'three/addons/postprocessing/ClearPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 
+import {html} from "htl";
 
 function create_mixing_pass(added_texture) {
   const vertexShader = `
@@ -293,7 +294,6 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
 
   const renderer = new THREE.WebGLRenderer();
   renderer.domElement.addEventListener( 'pointermove', on_move );
-  renderer.domElement.addEventListener( 'pointerdown', on_click );
 
   renderer.setSize(width, height);
   renderer.setPixelRatio(devicePixelRatio);
@@ -330,11 +330,6 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
     );
 
     compute_highlight();
-  }
-
-  function on_click( event ) {
-    if ( event.isPrimary === false ) return;
-    on_move( event );
     on_selection(outline_pass.selectedObjects);
   }
 
@@ -443,8 +438,11 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
   }
 
 
+  const div = html`<div class="layered">${renderer.domElement}</div>`;
+
   return {
     canvas: renderer.domElement,
+    div,
     render,
     camera,
     reset_camera,
