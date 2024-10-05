@@ -70,7 +70,8 @@ const initial_parameters = {
   Ψ_m: RPM_Kv_to_Ke(1200), // motor Ke constant (also the magnetic flux linkage)
   τ_static: 0.001, // static friction torque
   τ_dynamic: 0.00001, // dynamic friction torque
-  R_bat: 1.0, // battery internal resistance
+  V_bat: 12.0, // battery voltage
+  // R_bat: 1.0, // battery internal resistance
   R_mosfet: 0.013, // mosfet resistance
   R_shunt: 0.010, // shunt resistance
   V_diode: 0.72, // mosfet reverse diode voltage drop
@@ -90,6 +91,12 @@ const initial_state = {
   𝜈: 0.0, // rotor radial velocity
 }
 
+const phase_switches = {
+  0: "floating",
+  1: "on-high",
+  2: "on-low",
+};
+
 
 /* Inputs to the physical system for a freewheeling motor.
 
@@ -99,9 +106,9 @@ the motor controller algorithm and the external load torque.
 */
 function freewheeling_inputs(state, parameters, outputs) {
   return {
-    U: "floating", // driver connection state for phase U
-    V: "floating", // driver connection state for phase V
-    W: "floating", // driver connection state for phase W
+    U_switch: 0, // driver connection state for phase U
+    V_switch: 0, // driver connection state for phase V
+    W_switch: 0, // driver connection state for phase W
     τ_load: 0.0, // external load torque 
   }
 }
@@ -120,30 +127,122 @@ function measurable_outputs(state, parameters) {
 ```
 
 ```js
-function compute_state(state, parameters, inputs, dt) {
-  const {R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, R_bat, R_mosfet, R_shunt, V_diode, J_rotor, M_rotor, r_max} = parameters;
+
+const phase_states = {
+  0: "neutral",
+  1: "high-conducting",
+  2: "high-diode",
+  3: "low-diode",
+  4: "low-conducting",
+};
+
+const I_ε = 0.0001;
+
+function compute_half_bridge_state(A_switch, Ia, Vreverse, Va, Vmin, Vmax) {
+  return (
+    (A_switch == 1) ? 1 : // high conducting
+    (A_switch == 2) ? 4 : // low conducting
+    ( // A must be floating, we won't double check.
+      (Ia > +I_ε) ? 2 : // high diode
+      (Ia < -I_ε) ? 3 : // low diode
+      (Va - Vmin > Vreverse) ? 2 : // high diode
+      (Va - Vmax < -Vreverse) ? 3 : // low diode
+      0 // neutral
+    )
+  );
+}
+
+const mosfet_r_vector = [
+  0.00, // neutral
+  +1.0, // high-conducting
+  0.00, // high-diode
+  0.00, // low-diode
+  -1.0, // low-conducting
+];
+
+const mosfet_diode_vector = [
+  0.00, // neutral
+  0.00, // high-conducting
+  +1.0, // high-diode
+  -1.0, // low-diode
+  0.00, // low-conducting
+];
+
+const vcc_matrix = [
+  [0.00, 0.00, 0.00, 0.00, 0.00], // neutral A
+  [0.00, 0.00, 0.00, +1.0, +1.0], // high-conducting A
+  [0.00, 0.00, 0.00, +1.0, +1.0], // high-diode A
+  [0.00, -1.0, -1.0, 0.00, 0.00], // low-diode A
+  [0.00, -1.0, -1.0, 0.00, 0.00], // low-conducting A
+];
+
+function compute_state(state, parameters, inputs, outputs, dt) {
+  const {R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, V_bat, R_mosfet, R_shunt, V_diode, J_rotor, M_rotor, r_max} = parameters;
   const {t, φ, ω, Iu, Iv, Iw, 𝜈} = state;
-  const {U, V, W, τ_load} = inputs;
+  const {U_switch, V_switch, W_switch, τ_load} = inputs;
 
   const dφ = ω;
-
-  const V_Ru = (R_phase + R_shunt) * Iu;
-  const V_Rv = (R_phase + R_shunt) * Iv;
-  const V_Rw = (R_phase + R_shunt) * Iw;
 
   const Vu_rotational_emf = Ψ_m * ω * Math.sin(φ);
   const Vv_rotational_emf = Ψ_m * ω * Math.sin(φ - 2 * Math.PI / 3);
   const Vw_rotational_emf = Ψ_m * ω * Math.sin(φ + 2 * Math.PI / 3);
 
   const Vu_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ);
-  const Vv_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ - 2 * Math.PI / 3)
+  const Vv_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ - 2 * Math.PI / 3);
   const Vw_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ + 2 * Math.PI / 3);
 
-  const dIu = 1.0 / L_phase * (-V_Ru + Vu_rotational_emf);
-  const dIv = 1.0 / L_phase * (-V_Rv + Vv_rotational_emf);
-  const dIw = 1.0 / L_phase * (-V_Rw + Vw_rotational_emf);
+  const Vu_emf = Vu_rotational_emf; // + Vu_radial_emf;
+  const Vv_emf = Vv_rotational_emf; // + Vv_radial_emf;
+  const Vw_emf = Vw_rotational_emf; // + Vw_radial_emf;
 
-  // Calculate rotor torque due to motor magnetic field.
+  const Vreverse = V_bat + 2 * V_diode;
+  const Vmin = Math.min(Vu_emf, Vv_emf, Vw_emf);
+  const Vmax = Math.max(Vu_emf, Vv_emf, Vw_emf);
+
+  const U_state = compute_half_bridge_state(U_switch, Iu, Vreverse, Vu_emf, Vmin, Vmax);
+  const V_state = compute_half_bridge_state(V_switch, Iv, Vreverse, Vv_emf, Vmin, Vmax);
+  const W_state = compute_half_bridge_state(W_switch, Iw, Vreverse, Vw_emf, Vmin, Vmax);
+
+  const V_Ru = (R_phase + R_shunt) * Iu;
+  const V_Rv = (R_phase + R_shunt) * Iv;
+  const V_Rw = (R_phase + R_shunt) * Iw;
+
+  const VCC_uv = vcc_matrix[U_state][V_state] * V_bat;
+  const VCC_vw = vcc_matrix[V_state][W_state] * V_bat;
+  const VCC_wu = vcc_matrix[W_state][U_state] * V_bat;
+
+  const VCC_u = (VCC_uv - VCC_wu) / 3.0;
+  const VCC_v = (VCC_vw - VCC_uv) / 3.0;
+  const VCC_w = (VCC_wu - VCC_vw) / 3.0;
+
+  // The current convention is that its positive coming out of the motor terminals.
+  const V_Mu = R_mosfet * mosfet_r_vector[U_state] * Iu + V_diode * mosfet_diode_vector[U_state];
+  const V_Mv = R_mosfet * mosfet_r_vector[V_state] * Iv + V_diode * mosfet_diode_vector[V_state];
+  const V_Mw = R_mosfet * mosfet_r_vector[W_state] * Iw + V_diode * mosfet_diode_vector[W_state];
+
+  const V_u = Vu_emf - V_Ru - VCC_u - V_Mu;
+  const V_v = Vv_emf - V_Rv - VCC_v - V_Mv;
+  const V_w = Vw_emf - V_Rw - VCC_w - V_Mw;
+
+  const V_uv = V_u - V_v;
+  const V_vw = V_v - V_w;
+  const V_wu = V_w - V_u;
+
+  const UV_conducting = U_state && V_state;
+  const VW_conducting = V_state && W_state;
+  const WU_conducting = W_state && U_state;
+
+  const dIuv = UV_conducting ? V_uv / (2 * L_phase) : 0.0;
+  const dIvw = VW_conducting ? V_vw / (2 * L_phase) : 0.0;
+  const dIwu = WU_conducting ? V_wu / (2 * L_phase) : 0.0;
+
+  const dIu = (UV_conducting && WU_conducting) ? (dIuv - dIwu) / 3.0 : UV_conducting ? dIuv / 2.0 : WU_conducting ? -dIwu / 2.0 : -Iu/dt;
+  const dIv = (VW_conducting && UV_conducting) ? (dIvw - dIuv) / 3.0 : VW_conducting ? dIvw / 2.0 : UV_conducting ? -dIuv / 2.0 : -Iv/dt;
+  const dIw = (WU_conducting && VW_conducting) ? (dIwu - dIvw) / 3.0 : WU_conducting ? dIwu / 2.0 : VW_conducting ? -dIvw / 2.0 : -Iw/dt;
+
+
+  // Calculate rotor torque due to motor magnetic field. The contributions
+  // of the 3 phase windings add up linearly.
   const τ = - (
     Ψ_m * Iu * Math.sin(φ) +
     Ψ_m * Iv * Math.sin(φ - 2 * Math.PI / 3) +
@@ -155,21 +254,24 @@ function compute_state(state, parameters, inputs, dt) {
   const static_sign = (ω == 0.0) ? -Math.sign(τ_applied) : -Math.sign(ω);
   const τ_friction = -ω * τ_dynamic + static_sign * τ_static;
   const τ_total = τ_applied + τ_friction;
-  const τ_stopping = -ω/dt * J_rotor; // Torque needed to stop the rotor in 1 step.
   const frozen = (ω == 0.0) && Math.abs(τ_applied) <= τ_static;
-  const stopping = -Math.sign(ω) * τ_total > -Math.sign(ω)*τ_stopping;
-  const τ_final = (frozen || stopping) ? τ_stopping : τ_total;
+
+  const dω_computed = τ_total / J_rotor;
+
+  // Delta needed to stop the rotor in 1 step.
+  const dω_stopping = -ω/dt;
+  const stopping = -Math.sign(ω) * dω_computed > -Math.sign(ω)*dω_stopping;
 
   // We need to prevent static friction from overshooting when the motor is stopped or stopping in 1 step.
-  const dω = τ_final / J_rotor;
+  const dω = (frozen || stopping) ? dω_stopping : (τ_total / J_rotor);
 
   const d𝜈 = 0.0;
 
   return {
     diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, 𝜈: d𝜈},
     info: {
-      τ, τ_applied, τ_friction, τ_total, τ_stopping, frozen, stopping, τ_final,
-      V_Ru, V_Rv, V_Rw, 
+      τ, τ_applied, τ_friction, τ_total, frozen, stopping,
+      V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_u, V_v, V_w, VCC_u, VCC_v, VCC_w,
       Vu_rotational_emf, Vv_rotational_emf, Vw_rotational_emf,
       Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,  
     },
@@ -186,11 +288,11 @@ function euler_step(state, diff, dt) {
   return _.mapValues(state, (value, key) => value + diff[key] * dt);
 }
 
-function runge_kuta_step(state, diff, dt, parameters, inputs) {
+function runge_kuta_step(state, diff, dt, parameters, inputs, outputs) {
   const k1 = diff;
-  const k2 = compute_state(euler_step(state, k1, dt / 2), parameters, inputs, dt / 2).diff;
-  const k3 = compute_state(euler_step(state, k2, dt / 2), parameters, inputs, dt / 2).diff;
-  const k4 = compute_state(euler_step(state, k3, dt), parameters, inputs, dt).diff;
+  const k2 = compute_state(euler_step(state, k1, dt / 2), parameters, inputs, outputs, dt / 2).diff;
+  const k3 = compute_state(euler_step(state, k2, dt / 2), parameters, inputs, outputs, dt / 2).diff;
+  const k4 = compute_state(euler_step(state, k3, dt), parameters, inputs, outputs, dt).diff;
 
   return _.mapValues(state, (value, key) => value + (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) * dt / 6);
 }
@@ -215,9 +317,15 @@ function * simulate({
   let states = new CircularBuffer(max_stored_steps);
 
   for (let step = 0; true; step++) {
+    
     let outputs = measurable_outputs(state, parameters);
+
     let inputs = update_inputs(state, parameters, outputs, update_memory);
-    let {diff, info} = compute_state(state, parameters, inputs, dt);
+    // Let the input function update some parameters, so we can add buttons 
+    // and sliders to an ongoing simulation.
+    const updated_parameters = {...parameters, ...inputs};
+
+    let {diff, info} = compute_state(state, updated_parameters, inputs, outputs, dt);
 
     const full_state = {step, ...state, ...outputs, ...inputs, ...info};
 
@@ -231,13 +339,13 @@ function * simulate({
 ```
 
 ```js
-const load_torque_slider = Inputs.range([-0.05, +0.05], {step: 0.001, value: 0.0, label: "Load Torque"});
+const load_torque_slider = Inputs.range([-0.1, +0.1], {step: 0.001, value: 0.0, label: "Load Torque"});
 
 function inputs_for_main_example(state, parameters, outputs, update_memory) {
   return {
-    U: "floating", // driver connection state for phase U
-    V: "floating", // driver connection state for phase V
-    W: "floating", // driver connection state for phase W
+    U_switch: 0, // driver connection state for phase U
+    V_switch: 0, // driver connection state for phase V
+    W_switch: 0, // driver connection state for phase W
     τ_load: load_torque_slider.value, // external load torque
   }
 }
@@ -356,7 +464,7 @@ const torque_slider_demo = function * () {
       <div>${reset_inputs}</div>
       <div>${load_torque_slider}</div>
     </div>
-    <div class="card tight" style="display: flex; align-items: center;">
+    <!-- <div class="card tight" style="display: flex; align-items: center;">
       <label style="min-width: 120px; margin-right: 6.5px;">Time</label>
       <div>${
         Plot.plot({
@@ -366,7 +474,7 @@ const torque_slider_demo = function * () {
         })
       }
       </div>
-    </div>
+    </div> -->
     ${sparkline(torque_slider_demo, {label: "Motor Speed", y: "ω"})}
     ${sparkline(torque_slider_demo, {label: "Motor Angle", y: "φ"}, {domain: [-π, π]})}
     ${sparkline(torque_slider_demo, {label: "Load Torque", y: "τ_load"})}
@@ -376,7 +484,7 @@ const torque_slider_demo = function * () {
         {label: "Current Iv", y: "Iv", stroke: "#aa0"},
         {label: "Current Iw", y: "Iw", stroke: "#0aa"},
       ], 
-      {domain: [-4.0, 4.0], height: 120},
+      {domain: [-6.0, 6.0], height: 120},
     )}
     ${sparkline(
       torque_slider_demo, [
@@ -384,8 +492,25 @@ const torque_slider_demo = function * () {
         {label: "EMF Vv", y: "Vv_rotational_emf", stroke: "#aa0"},
         {label: "EMF Vw", y: "Vw_rotational_emf", stroke: "#0aa"},
       ], 
-      {domain: [-4.0, 4.0], height: 120},
+      {domain: [-24.0, 24.0], height: 120},
     )}
+    ${sparkline(
+      torque_slider_demo, [
+        {label: "VCC Vu", y: "VCC_u", stroke: "#a0a"},
+        {label: "VCC Vv", y: "VCC_v", stroke: "#aa0"},
+        {label: "VCC Vw", y: "VCC_w", stroke: "#0aa"},
+      ], 
+      {domain: [-12.0, 12.0], height: 120},
+    )}
+    ${sparkline(
+      torque_slider_demo, [
+        {label: "MOSFET Vu", y: "V_Mu", stroke: "#a0a"},
+        {label: "MOSFET Vv", y: "V_Mv", stroke: "#aa0"},
+        {label: "MOSFET Vw", y: "V_Mw", stroke: "#0aa"},
+      ], 
+      {domain: [-1.0, 1.0], height: 120},
+    )}
+
   </div>
 </div>
 
