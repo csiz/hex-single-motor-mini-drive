@@ -67,8 +67,8 @@ function RPM_Kv_to_Ke(RPM_Kv){
 const initial_parameters = {
   R_phase: 1.3, // phase resistance
   L_phase: 0.0001, // phase inductance
-  Ψ_m: RPM_Kv_to_Ke(1200), // motor Ke constant (also the magnetic flux linkage)
-  τ_static: 0.001, // static friction torque
+  Ψ_m: RPM_Kv_to_Ke(1000), // motor Ke constant (also the magnetic flux linkage)
+  τ_static: 0.0001, // static friction torque
   τ_dynamic: 0.00001, // dynamic friction torque
   V_bat: 12.0, // battery voltage
   // R_bat: 1.0, // battery internal resistance
@@ -109,7 +109,8 @@ function freewheeling_inputs(state, parameters, outputs) {
     U_switch: 0, // driver connection state for phase U
     V_switch: 0, // driver connection state for phase V
     W_switch: 0, // driver connection state for phase W
-    τ_load: 0.0, // external load torque 
+    τ_load: 0.0, // external load torque
+    yield_every_n_steps: 10000,
   }
 }
 
@@ -231,14 +232,15 @@ function compute_state(state, parameters, inputs, outputs, dt) {
   const UV_conducting = U_state && V_state;
   const VW_conducting = V_state && W_state;
   const WU_conducting = W_state && U_state;
+  const UVW_conducting = U_state && V_state && W_state;
 
   const dIuv = UV_conducting ? V_uv / (2 * L_phase) : 0.0;
   const dIvw = VW_conducting ? V_vw / (2 * L_phase) : 0.0;
   const dIwu = WU_conducting ? V_wu / (2 * L_phase) : 0.0;
 
-  const dIu = (UV_conducting && WU_conducting) ? (dIuv - dIwu) / 3.0 : UV_conducting ? dIuv / 2.0 : WU_conducting ? -dIwu / 2.0 : -Iu/dt;
-  const dIv = (VW_conducting && UV_conducting) ? (dIvw - dIuv) / 3.0 : VW_conducting ? dIvw / 2.0 : UV_conducting ? -dIuv / 2.0 : -Iv/dt;
-  const dIw = (WU_conducting && VW_conducting) ? (dIwu - dIvw) / 3.0 : WU_conducting ? dIwu / 2.0 : VW_conducting ? -dIvw / 2.0 : -Iw/dt;
+  const dIu = UVW_conducting ? (dIuv - dIwu) / 3.0 : UV_conducting ? dIuv / 2.0 : WU_conducting ? -dIwu / 2.0 : -Iu/dt;
+  const dIv = UVW_conducting ? (dIvw - dIuv) / 3.0 : VW_conducting ? dIvw / 2.0 : UV_conducting ? -dIuv / 2.0 : -Iv/dt;
+  const dIw = UVW_conducting ? (dIwu - dIvw) / 3.0 : WU_conducting ? dIwu / 2.0 : VW_conducting ? -dIvw / 2.0 : -Iw/dt;
 
 
   // Calculate rotor torque due to motor magnetic field. The contributions
@@ -273,7 +275,8 @@ function compute_state(state, parameters, inputs, outputs, dt) {
       τ, τ_applied, τ_friction, τ_total, frozen, stopping,
       V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_u, V_v, V_w, VCC_u, VCC_v, VCC_w,
       Vu_rotational_emf, Vv_rotational_emf, Vw_rotational_emf,
-      Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,  
+      Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,
+      rpm: ω * 30 / π,
     },
   };
 }
@@ -308,8 +311,6 @@ function * simulate({
   dt=null,
   state_update=runge_kuta_step,
   max_stored_steps=1000,
-  store_every_n_steps=1000,
-  yield_every_n_steps=10000,
 } = {}) {
   
   let state = {...start_state};
@@ -331,14 +332,26 @@ function * simulate({
 
     state = postprocess_state(state_update(state, diff, dt, parameters, inputs));
 
-    if (step % store_every_n_steps == 0) states.push(full_state);
+    if (step % Math.ceil(inputs.yield_every_n_steps / 10) == 0) states.push(full_state);
 
-    if (step % yield_every_n_steps == 0) yield states.toarray();
+    if (step % Math.ceil(inputs.yield_every_n_steps) == 0) yield states.toarray();
   }
 }
 ```
 
 ```js
+const simulation_frequency = 72_000_000; // 72 MHz
+const simulation_dt = 1.0 / simulation_frequency;
+const simulation_stored_steps = 1000;
+
+function reality_slowdown_factor(steps_per_frame) {
+  return (1.0 / (60 * steps_per_frame * simulation_dt)).toFixed(0);
+}
+
+const step_speed_slider = Inputs.range([10, 10_000], {value: 10_000, transform: Math.log, format: x => x.toFixed(0), label: "Steps per frame"});
+d3.select(step_speed_slider).style("display", "inline-flex");
+const step_speed = Generators.input(step_speed_slider);
+
 const load_torque_slider = Inputs.range([-0.1, +0.1], {step: 0.001, value: 0.0, label: "Load Torque"});
 
 function inputs_for_main_example(state, parameters, outputs, update_memory) {
@@ -347,6 +360,7 @@ function inputs_for_main_example(state, parameters, outputs, update_memory) {
     V_switch: 0, // driver connection state for phase V
     W_switch: 0, // driver connection state for phase W
     τ_load: load_torque_slider.value, // external load torque
+    yield_every_n_steps: step_speed_slider.value,
   }
 }
 
@@ -421,16 +435,27 @@ const scene = create_scene(motor, wood);
 const rendering = setup_rendering(640, 640, invalidation, scene, get_object_with_description, show_description_slowly);
 const reset_camera = Inputs.button("Look straight at motor", {reduce: () => rendering.reset_camera(), label: "Reset Camera"});
 
-const torque_slider_demo = function * () {
-  const simulation_frequency = 72_000_000; // 72 MHz
-  const sim_tick = 1.0 / simulation_frequency;
+const sim_control = Inputs.button(
+  [
+    ["Pause", () => "paused"], 
+    ["Resume", () => "running"],
+  ],
+  {value: "running", label: "Simulation control"}
+);
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+const torque_slider_demo = async function * () {
 
   const simulation_options = {
     start_state: initial_state,
     parameters: initial_parameters,
     update_inputs: inputs_for_main_example,
     update_memory: {},
-    dt: sim_tick,
+    dt: simulation_dt,
+    max_stored_steps: simulation_stored_steps,
   };
 
   for (const simulation_history of simulate(simulation_options)) {
@@ -449,6 +474,11 @@ const torque_slider_demo = function * () {
     rendering.render();
 
     yield simulation_history;
+
+    while(sim_control.value == "paused") {
+      rendering.render();
+      await wait(0);
+    }
   }
 }();
 ```
@@ -462,6 +492,8 @@ const torque_slider_demo = function * () {
     <div class="card tight">
       <div>${reset_camera}</div>
       <div>${reset_inputs}</div>
+      <div>${sim_control}</div>
+      <div>${step_speed_slider}<span style="margin: 1em">Slowdown: ${reality_slowdown_factor(step_speed)}x</span></div>
       <div>${load_torque_slider}</div>
     </div>
     <!-- <div class="card tight" style="display: flex; align-items: center;">
@@ -475,7 +507,7 @@ const torque_slider_demo = function * () {
       }
       </div>
     </div> -->
-    ${sparkline(torque_slider_demo, {label: "Motor Speed", y: "ω"})}
+    ${sparkline(torque_slider_demo, {label: "Motor Speed (RPM)", y: "rpm"}, {domain: [-15_000, 15_000]})}
     ${sparkline(torque_slider_demo, {label: "Motor Angle", y: "φ"}, {domain: [-π, π]})}
     ${sparkline(torque_slider_demo, {label: "Load Torque", y: "τ_load"})}
     ${sparkline(
