@@ -12,7 +12,9 @@
     "@observablehq/framework": "^1.11.0",
     "circular-buffer": "^1.0.3",
     "d3-dsv": "^3.0.1",
+    "d3-selection": "^3.0.0",
     "d3-time-format": "^4.1.0",
+    "lodash": "^4.17.21",
     "three": "^0.168.0"
   },
   "devDependencies": {

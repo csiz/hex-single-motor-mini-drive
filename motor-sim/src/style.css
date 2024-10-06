@@ -94,6 +94,7 @@ li {
 
 .layered {
   display: grid;
+  position: relative;
 }
 
 .layered > * {

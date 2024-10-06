@@ -1,5 +1,6 @@
 import {FileAttachment} from "npm:@observablehq/stdlib";
-import _ from "npm:lodash";
+import _ from "lodash";
+import {select} from "d3-selection";
 
 import * as THREE from "three";
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
@@ -14,6 +15,8 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { ClearPass } from 'three/addons/postprocessing/ClearPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import Stats from 'three/addons/libs/stats.module.js';
+
 
 import {html} from "htl";
 
@@ -293,7 +296,11 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
   const camera = create_camera(width, height);
 
   const renderer = new THREE.WebGLRenderer();
+
   renderer.domElement.addEventListener( 'pointermove', on_move );
+
+  const stats = new Stats();
+  select(stats.dom).style("position", "absolute").style("top", "0px").style("right", "0px");
 
   renderer.setSize(width, height);
   renderer.setPixelRatio(devicePixelRatio);
@@ -435,13 +442,16 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
     });
     scene.background = saved_background;
     composer.render();
+
+    stats.update();
   }
 
 
-  const div = html`<div class="layered">${renderer.domElement}</div>`;
+  const div = html`<div class="layered">${renderer.domElement}${stats.dom}</div>`;
 
   return {
     canvas: renderer.domElement,
+    stats: stats.dom,
     div,
     render,
     camera,

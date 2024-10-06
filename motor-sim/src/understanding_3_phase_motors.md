@@ -177,7 +177,7 @@ const vcc_matrix = [
   [0.00, -1.0, -1.0, 0.00, 0.00], // low-conducting A
 ];
 
-function compute_state(state, parameters, inputs, outputs, dt) {
+function compute_state_diff(state, parameters, inputs, outputs, dt) {
   const {R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, V_bat, R_mosfet, R_shunt, V_diode, J_rotor, M_rotor, r_max} = parameters;
   const {t, φ, ω, Iu, Iv, Iw, 𝜈} = state;
   const {U_switch, V_switch, W_switch, τ_load} = inputs;
@@ -282,8 +282,8 @@ function compute_state(state, parameters, inputs, outputs, dt) {
 }
 
 function postprocess_state(state) {
-  const {φ} = state;
-  return {...state, φ: normalized_angle(φ)};
+  state.φ = normalized_angle(state.φ);
+  return state;
 }
 
 
@@ -293,9 +293,9 @@ function euler_step(state, diff, dt) {
 
 function runge_kuta_step(state, diff, dt, parameters, inputs, outputs) {
   const k1 = diff;
-  const k2 = compute_state(euler_step(state, k1, dt / 2), parameters, inputs, outputs, dt / 2).diff;
-  const k3 = compute_state(euler_step(state, k2, dt / 2), parameters, inputs, outputs, dt / 2).diff;
-  const k4 = compute_state(euler_step(state, k3, dt), parameters, inputs, outputs, dt).diff;
+  const k2 = compute_state_diff(euler_step(state, k1, dt / 2), parameters, inputs, outputs, dt / 2).diff;
+  const k3 = compute_state_diff(euler_step(state, k2, dt / 2), parameters, inputs, outputs, dt / 2).diff;
+  const k4 = compute_state_diff(euler_step(state, k3, dt), parameters, inputs, outputs, dt).diff;
 
   return _.mapValues(state, (value, key) => value + (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) * dt / 6);
 }
@@ -303,74 +303,82 @@ function runge_kuta_step(state, diff, dt, parameters, inputs, outputs) {
 ```
 
 ```js
-function * simulate({
-  start_state=null, 
-  parameters=null, 
-  update_inputs=null, 
-  update_memory=null, 
-  dt=null,
-  state_update=runge_kuta_step,
-  max_stored_steps=1000,
-} = {}) {
+const default_simulation_options = {
+  start_state: initial_state,
+  parameters: initial_parameters,
+  update_inputs: freewheeling_inputs,
+  update_memory: {},
+  dt: 1.0 / 72_000_000,
+  state_update: runge_kuta_step,
+  max_stored_steps: 500,
+  steps_number: 10_000,
+  store_period: 1000,
+};
+
+class Simulation {
+  constructor(options={}) {
+    this.options = {...default_simulation_options, ...options};
+    const {start_state,  max_stored_steps} = this.options;
+
+    this.state = {...start_state};
+    this.history_buffer = new CircularBuffer(max_stored_steps);
+    this.step = 0;
+
+    // Initialize the outputs and inputs and other derivatives, but do not advance state.
+    this.compute_step();
+
+
+  }
+
+  get history() {
+    return this.history_buffer.toarray();
+  }
   
-  let state = {...start_state};
-  
-  let states = new CircularBuffer(max_stored_steps);
+  compute_step() {
+    const {parameters, update_inputs, update_memory, state_update, dt, steps_number, store_period} = this.options;
 
-  for (let step = 0; true; step++) {
-    
-    let outputs = measurable_outputs(state, parameters);
+    const {state} = this;
 
-    let inputs = update_inputs(state, parameters, outputs, update_memory);
-    // Let the input function update some parameters, so we can add buttons 
-    // and sliders to an ongoing simulation.
-    const updated_parameters = {...parameters, ...inputs};
+    const outputs = this.outputs = measurable_outputs(state, parameters);
 
-    let {diff, info} = compute_state(state, updated_parameters, inputs, outputs, dt);
+    const inputs = this.inputs = update_inputs(state, parameters, outputs, update_memory);
 
-    const full_state = {step, ...state, ...outputs, ...inputs, ...info};
+    const diff_info = compute_state_diff(state, parameters, inputs, outputs, dt);
 
-    state = postprocess_state(state_update(state, diff, dt, parameters, inputs));
+    const diff = this.diff = diff_info.diff;
+    this.info = diff_info.info;
 
-    if (step % Math.ceil(inputs.yield_every_n_steps / 10) == 0) states.push(full_state);
+    return postprocess_state(state_update(state, diff, dt, parameters, inputs));
+  }
 
-    if (step % Math.ceil(inputs.yield_every_n_steps) == 0) yield states.toarray();
+  flattened_state() {
+    return {step: this.step, ...this.state, ...this.outputs, ...this.inputs, ...this.info};
+  }
+
+  simulate_steps() {
+    const {parameters, update_inputs, update_memory, state_update, dt, steps_number, store_period} = this.options;
+
+    for (let i = 0; true; i++){
+
+      this.state = this.compute_step();
+
+      this.step += 1;
+
+      const {step} = this;
+
+      if (step % store_period == 0) {
+        this.history_buffer.push(this.flattened_state());
+      }
+
+      if (i >= steps_number) {
+        return this.flattened_state();
+      }
+    }
   }
 }
 ```
 
-```js
-const simulation_frequency = 72_000_000; // 72 MHz
-const simulation_dt = 1.0 / simulation_frequency;
-const simulation_stored_steps = 1000;
 
-function reality_slowdown_factor(steps_per_frame) {
-  return (1.0 / (60 * steps_per_frame * simulation_dt)).toFixed(0);
-}
-
-const step_speed_slider = Inputs.range([10, 10_000], {value: 10_000, transform: Math.log, format: x => x.toFixed(0), label: "Steps per frame"});
-d3.select(step_speed_slider).style("display", "inline-flex");
-const step_speed = Generators.input(step_speed_slider);
-
-const load_torque_slider = Inputs.range([-0.1, +0.1], {step: 0.001, value: 0.0, label: "Load Torque"});
-
-function inputs_for_main_example(state, parameters, outputs, update_memory) {
-  return {
-    U_switch: 0, // driver connection state for phase U
-    V_switch: 0, // driver connection state for phase V
-    W_switch: 0, // driver connection state for phase W
-    τ_load: load_torque_slider.value, // external load torque
-    yield_every_n_steps: step_speed_slider.value,
-  }
-}
-
-const reset_inputs = Inputs.button("Reset inputs", {
-  reduce: () => {
-    load_torque_slider.value = 0;
-  },
-  label: "Set Freewheeling"}
-);
-```
 
 
 ```js
@@ -429,16 +437,47 @@ function show_description(objects) {
 const show_description_slowly = _.throttle(show_description, 500, {leading: false});
 ```
 
-
 ```js
+const simulation_frequency = 72_000_000; // 72 MHz
+const simulation_dt = 1.0 / simulation_frequency;
+const simulation_stored_steps = 400;
+
+function reality_slowdown_factor(steps_per_frame) {
+  return (1.0 / (60 * steps_per_frame * simulation_dt)).toFixed(0);
+}
+
+const step_number_slider = Inputs.range([1, 20_000], {value: 10_000, transform: Math.log, format: x => x.toFixed(0), label: "Steps per frame"});
+d3.select(step_number_slider).style("display", "inline-flex");
+const step_number = Generators.input(step_number_slider);
+
+const store_period_slider = Inputs.range([1, 10_000], {value: 1_000, transform: Math.log, format: x => x.toFixed(0), label: "Store period"});
+
+const load_torque_slider = Inputs.range([-0.1, +0.1], {step: 0.001, value: 0.0, label: "Load Torque"});
+
+function main_example_inputs(state, parameters, outputs, update_memory) {
+  return {
+    U_switch: 0, // driver connection state for phase U
+    V_switch: 0, // driver connection state for phase V
+    W_switch: 0, // driver connection state for phase W
+    τ_load: load_torque_slider.value, // external load torque
+    yield_every_n_steps: step_number_slider.value,
+  }
+}
+
+function main_example_reset() {
+  load_torque_slider.value = 0;
+}
+
+
 const scene = create_scene(motor, wood);
 const rendering = setup_rendering(640, 640, invalidation, scene, get_object_with_description, show_description_slowly);
-const reset_camera = Inputs.button("Look straight at motor", {reduce: () => rendering.reset_camera(), label: "Reset Camera"});
 
 const sim_control = Inputs.button(
   [
-    ["Pause", () => "paused"], 
-    ["Resume", () => "running"],
+    ["Pause", (sim_state) => "paused"], 
+    ["Resume", (sim_state) => "running"],
+    [html`<div style="min-width: 7em;">Look at motor</div>`, (sim_state) => {rendering.reset_camera(); return sim_state;}],
+    [html`<div style="min-width: 6em;">Reset inputs</div>`, (sim_state) => {main_example_reset(); return sim_state;}],
   ],
   {value: "running", label: "Simulation control"}
 );
@@ -452,28 +491,34 @@ const torque_slider_demo = async function * () {
   const simulation_options = {
     start_state: initial_state,
     parameters: initial_parameters,
-    update_inputs: inputs_for_main_example,
+    update_inputs: main_example_inputs,
     update_memory: {},
     dt: simulation_dt,
     max_stored_steps: simulation_stored_steps,
   };
 
-  for (const simulation_history of simulate(simulation_options)) {
+  let simulation = new Simulation(simulation_options);
 
-    // Update the scene with the current state of the simulation.
-    const state = _.last(simulation_history);
+  while(true) {
+    if (sim_control.value == "running") {
 
-    motor.rotor.rotation.y = normalized_angle(state.φ - π / 2);
-    motor.red_led.material.emissiveIntensity = state.hall_1 ? 10.0 : 0.0;
-    motor.green_led.material.emissiveIntensity = state.hall_2 ? 8.0 : 0.0;
-    motor.blue_led.material.emissiveIntensity = state.hall_3 ? 12.0 : 0.0;
-    motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(state.Iu / 6.0);
-    motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(state.Iv / 6.0);
-    motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(state.Iw / 6.0);
+      simulation.options.steps_number = Math.ceil(step_number_slider.value);
+      simulation.options.store_period = Math.ceil(store_period_slider.value);
 
+      const state = simulation.simulate_steps();
+
+      motor.rotor.rotation.y = normalized_angle(state.φ - π / 2);
+      motor.red_led.material.emissiveIntensity = state.hall_1 ? 10.0 : 0.0;
+      motor.green_led.material.emissiveIntensity = state.hall_2 ? 8.0 : 0.0;
+      motor.blue_led.material.emissiveIntensity = state.hall_3 ? 12.0 : 0.0;
+      motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(state.Iu / 6.0);
+      motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(state.Iv / 6.0);
+      motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(state.Iw / 6.0);
+    }
+    
     rendering.render();
 
-    yield simulation_history;
+    yield simulation.history;
 
     while(sim_control.value == "paused") {
       rendering.render();
@@ -490,10 +535,9 @@ const torque_slider_demo = async function * () {
   </div>
   <div class="card">
     <div class="card tight">
-      <div>${reset_camera}</div>
-      <div>${reset_inputs}</div>
       <div>${sim_control}</div>
-      <div>${step_speed_slider}<span style="margin: 1em">Slowdown: ${reality_slowdown_factor(step_speed)}x</span></div>
+      <div>${step_number_slider}<span style="margin: 1em">Slowdown: ${reality_slowdown_factor(step_number)}x</span></div>
+      <div>${store_period_slider}</div>
       <div>${load_torque_slider}</div>
     </div>
     <!-- <div class="card tight" style="display: flex; align-items: center;">
