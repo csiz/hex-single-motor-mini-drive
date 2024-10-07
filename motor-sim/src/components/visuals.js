@@ -15,10 +15,10 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { ClearPass } from 'three/addons/postprocessing/ClearPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
-import Stats from 'three/addons/libs/stats.module.js';
-
 
 import {html} from "htl";
+
+import { FPS_counter } from "./utils.js";
 
 function create_mixing_pass(added_texture) {
   const vertexShader = `
@@ -296,11 +296,10 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
   const camera = create_camera(width, height);
 
   const renderer = new THREE.WebGLRenderer();
+  
+  const fps_counter = new FPS_counter();
 
   renderer.domElement.addEventListener( 'pointermove', on_move );
-
-  const stats = new Stats();
-  select(stats.dom).style("position", "absolute").style("top", "0px").style("right", "0px");
 
   renderer.setSize(width, height);
   renderer.setPixelRatio(devicePixelRatio);
@@ -443,15 +442,15 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
     scene.background = saved_background;
     composer.render();
 
-    stats.update();
+    fps_counter.update();
   }
 
 
-  const div = html`<div class="layered">${renderer.domElement}${stats.dom}</div>`;
+  const div = html`<div class="layered">${renderer.domElement}</div>`;
 
   return {
     canvas: renderer.domElement,
-    stats: stats.dom,
+    fps_counter,
     div,
     render,
     camera,

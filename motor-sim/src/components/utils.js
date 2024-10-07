@@ -13,6 +13,22 @@ export function link (url) {
 	return html`<a href="${url}" target="_blank">${url}</a>`;
 }
 
+export class FPS_counter {
+  constructor() {
+    this.last_time = Date.now();
+    this.fps = 0.0;
+  }
+
+  update() {
+    const now = Date.now();
+    const wall_dt = now - this.last_time;
+    this.last_time = now;
+    this.fps = 0.9 * this.fps + 0.1 * (1000.0 / wall_dt);
+  }
+}
+
+
+
 const default_sparkline_plot = {label: "<sparkline>", x: "t", y: null, stroke: "black", fill: "none"};
 const default_sparkline_options = {domain: null, height: 60};
 

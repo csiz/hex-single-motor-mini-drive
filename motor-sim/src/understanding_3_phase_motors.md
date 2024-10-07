@@ -8,6 +8,7 @@ import {md, note, link, sparkline} from "./components/utils.js"
 import {create_scene, setup_rendering, load_motor, load_texture} from "./components/visuals.js"
 import * as THREE from "three";
 import CircularBuffer from "circular-buffer";
+import {formatSI} from "format-si-prefix";
 ```
 
 ```js
@@ -438,16 +439,12 @@ const show_description_slowly = _.throttle(show_description, 500, {leading: fals
 ```
 
 ```js
-const simulation_frequency = 72_000_000; // 72 MHz
-const simulation_dt = 1.0 / simulation_frequency;
 const simulation_stored_steps = 400;
 
-function reality_slowdown_factor(steps_per_frame) {
-  return (1.0 / (60 * steps_per_frame * simulation_dt)).toFixed(0);
-}
+const frequency_slider = Inputs.range([10_000, 100_000_000], {value: 72_000_000, transform: Math.log, format: x => x.toFixed(0), label: "Frequency (Hz)"});
+const frequency = Generators.input(frequency_slider);
 
 const step_number_slider = Inputs.range([1, 20_000], {value: 10_000, transform: Math.log, format: x => x.toFixed(0), label: "Steps per frame"});
-d3.select(step_number_slider).style("display", "inline-flex");
 const step_number = Generators.input(step_number_slider);
 
 const store_period_slider = Inputs.range([1, 10_000], {value: 1_000, transform: Math.log, format: x => x.toFixed(0), label: "Store period"});
@@ -464,13 +461,23 @@ function main_example_inputs(state, parameters, outputs, update_memory) {
   }
 }
 
+function update_input(input, value) {
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
+}
+
 function main_example_reset() {
-  load_torque_slider.value = 0;
+  update_input(frequency_slider, 72_000_000);
+  update_input(store_period_slider, 1_000);
+  update_input(step_number_slider, 10_000);
+  update_input(load_torque_slider, 0);
 }
 
 
 const scene = create_scene(motor, wood);
 const rendering = setup_rendering(640, 640, invalidation, scene, get_object_with_description, show_description_slowly);
+
+
 
 const sim_control = Inputs.button(
   [
@@ -482,50 +489,61 @@ const sim_control = Inputs.button(
   {value: "running", label: "Simulation control"}
 );
 
-function wait(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
-const torque_slider_demo = async function * () {
+let main_example_simulation = new Simulation({
+  start_state: initial_state,
+  parameters: initial_parameters,
+  update_inputs: main_example_inputs,
+  update_memory: {},
+  dt: 1.0 / frequency_slider.value,
+  max_stored_steps: simulation_stored_steps,
+});
 
-  const simulation_options = {
-    start_state: initial_state,
-    parameters: initial_parameters,
-    update_inputs: main_example_inputs,
-    update_memory: {},
-    dt: simulation_dt,
-    max_stored_steps: simulation_stored_steps,
-  };
+let reality_slowdown_factor = Mutable(tex`\infty`);
 
-  let simulation = new Simulation(simulation_options);
+let main_example = Mutable(main_example_simulation.history);
 
-  while(true) {
-    if (sim_control.value == "running") {
+let main_example_fps = Mutable(0.0);
 
-      simulation.options.steps_number = Math.ceil(step_number_slider.value);
-      simulation.options.store_period = Math.ceil(store_period_slider.value);
+const main_example_update = function () {
+  let simulation = main_example_simulation;
+  
+  if (sim_control.value == "running") {
 
-      const state = simulation.simulate_steps();
+    simulation.options.steps_number = Math.ceil(step_number_slider.value);
+    simulation.options.store_period = Math.ceil(store_period_slider.value);
+    simulation.options.dt = 1.0 / frequency_slider.value;
 
-      motor.rotor.rotation.y = normalized_angle(state.φ - π / 2);
-      motor.red_led.material.emissiveIntensity = state.hall_1 ? 10.0 : 0.0;
-      motor.green_led.material.emissiveIntensity = state.hall_2 ? 8.0 : 0.0;
-      motor.blue_led.material.emissiveIntensity = state.hall_3 ? 12.0 : 0.0;
-      motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(state.Iu / 6.0);
-      motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(state.Iv / 6.0);
-      motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(state.Iw / 6.0);
-    }
-    
-    rendering.render();
+    simulation.simulate_steps();
 
-    yield simulation.history;
+    const state = simulation.flattened_state();
 
-    while(sim_control.value == "paused") {
-      rendering.render();
-      await wait(0);
-    }
+    main_example.value = simulation.history;
+
+    motor.rotor.rotation.y = normalized_angle(state.φ - π / 2);
+    motor.red_led.material.emissiveIntensity = state.hall_1 ? 10.0 : 0.0;
+    motor.green_led.material.emissiveIntensity = state.hall_2 ? 8.0 : 0.0;
+    motor.blue_led.material.emissiveIntensity = state.hall_3 ? 12.0 : 0.0;
+    motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(state.Iu / 6.0);
+    motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(state.Iv / 6.0);
+    motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(state.Iw / 6.0);
   }
-}();
+  
+  rendering.render();
+
+  const fps = rendering.fps_counter.fps;
+  main_example_fps.value = rendering.fps_counter.fps.toFixed(1);
+  reality_slowdown_factor.value = (
+    sim_control.value == "paused" ? tex`\infty` : 
+    formatSI(1.0 / (fps * simulation.options.steps_number * simulation.options.dt))
+  );
+}
+```
+
+```js
+now
+
+main_example_update();
 ```
 
 <div class="grid" style="grid-template-columns: 1fr 1fr;">
@@ -536,7 +554,14 @@ const torque_slider_demo = async function * () {
   <div class="card">
     <div class="card tight">
       <div>${sim_control}</div>
-      <div>${step_number_slider}<span style="margin: 1em">Slowdown: ${reality_slowdown_factor(step_number)}x</span></div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr">
+        <span>FPS: ${main_example_fps}</span>
+        <span>Slowdown: ${reality_slowdown_factor}</span>
+        <span>Speed: ${formatSI(frequency)}Hz</span>
+        <span>${tex`\delta t`}: ${formatSI(1.0 / frequency)}s</span>
+      </div>
+      <div>${frequency_slider}</div>
+      <div>${step_number_slider}</div>
       <div>${store_period_slider}</div>
       <div>${load_torque_slider}</div>
     </div>
@@ -545,17 +570,17 @@ const torque_slider_demo = async function * () {
       <div>${
         Plot.plot({
           marks: [
-            Plot.tickX(_.filter(torque_slider_demo, ({step}) => (step % 500) == 0), {x: "t"})
+            Plot.tickX(_.filter(main_example, ({step}) => (step % 500) == 0), {x: "t"})
           ]
         })
       }
       </div>
     </div> -->
-    ${sparkline(torque_slider_demo, {label: "Motor Speed (RPM)", y: "rpm"}, {domain: [-15_000, 15_000]})}
-    ${sparkline(torque_slider_demo, {label: "Motor Angle", y: "φ"}, {domain: [-π, π]})}
-    ${sparkline(torque_slider_demo, {label: "Load Torque", y: "τ_load"})}
+    ${sparkline(main_example, {label: "Motor Speed (RPM)", y: "rpm"}, {domain: [-15_000, 15_000]})}
+    ${sparkline(main_example, {label: "Motor Angle", y: "φ"}, {domain: [-π, π]})}
+    ${sparkline(main_example, {label: "Load Torque", y: "τ_load"})}
     ${sparkline(
-      torque_slider_demo, [
+      main_example, [
         {label: "Current Iu", y: "Iu", stroke: "#a0a"},
         {label: "Current Iv", y: "Iv", stroke: "#aa0"},
         {label: "Current Iw", y: "Iw", stroke: "#0aa"},
@@ -563,7 +588,7 @@ const torque_slider_demo = async function * () {
       {domain: [-6.0, 6.0], height: 120},
     )}
     ${sparkline(
-      torque_slider_demo, [
+      main_example, [
         {label: "EMF Vu", y: "Vu_rotational_emf", stroke: "#a0a"},
         {label: "EMF Vv", y: "Vv_rotational_emf", stroke: "#aa0"},
         {label: "EMF Vw", y: "Vw_rotational_emf", stroke: "#0aa"},
@@ -571,7 +596,7 @@ const torque_slider_demo = async function * () {
       {domain: [-24.0, 24.0], height: 120},
     )}
     ${sparkline(
-      torque_slider_demo, [
+      main_example, [
         {label: "VCC Vu", y: "VCC_u", stroke: "#a0a"},
         {label: "VCC Vv", y: "VCC_v", stroke: "#aa0"},
         {label: "VCC Vw", y: "VCC_w", stroke: "#0aa"},
@@ -579,7 +604,7 @@ const torque_slider_demo = async function * () {
       {domain: [-12.0, 12.0], height: 120},
     )}
     ${sparkline(
-      torque_slider_demo, [
+      main_example, [
         {label: "MOSFET Vu", y: "V_Mu", stroke: "#a0a"},
         {label: "MOSFET Vv", y: "V_Mv", stroke: "#aa0"},
         {label: "MOSFET Vw", y: "V_Mw", stroke: "#0aa"},
