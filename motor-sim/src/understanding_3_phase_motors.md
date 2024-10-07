@@ -2,6 +2,18 @@
 title: Understanding 3-phase motor control
 ---
 
+<div class="grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="card">
+    <figure>${live_simulation}</figure>
+    <p>${highlight_description}</p>
+  </div>
+  <div class="card">
+    <div class="card tight">${simulation_interface}</div>
+    <div class="card tight">${simulation_info}</div>
+    <span>${simulation_plots}</span>
+  </div>
+</div>
+
 
 ```js
 import * as THREE from "three";
@@ -46,22 +58,21 @@ const descriptions = new Map([
 
 const highlight_description = ThrottledMutable(500, descriptions.get("<no selection>"));
 
+/* Get the most specific object group with a description from those intersected by the mouse cursor. */
 function get_object_with_description(intersected_objects) {
   if (intersected_objects.length == 0) return [];
   let object = intersected_objects[0];
+  // Walk the object hierarchy to find the first object with a description.
   while (!descriptions.has(object)) {
+    // We reached the top without finding a description, don't highlight anything.
     if (object.parent == null) return [];
     object = object.parent;
   }
   return [object];
 }
 
-function get_description(objects) {
-  return objects.length > 0 ? descriptions.get(objects[0]) : descriptions.get("<no selection>");
-}
-
 function show_description(objects) {
-  highlight_description.value = get_description(objects);
+  highlight_description.value = descriptions.get(_.get(objects, "[0]", "<no selection>"));
 }
 
 const frequency_slider = Inputs.range([10_000, 100_000_000], {
@@ -219,17 +230,4 @@ const simulation_interface = html`<span>
   <div>${load_torque_slider}</div>
 </span>`;
 ```
-
-
-<div class="grid" style="grid-template-columns: 1fr 1fr;">
-  <div class="card">
-    <figure>${live_simulation}</figure>
-    <p>${highlight_description}</p>
-  </div>
-  <div class="card">
-    <div class="card tight">${simulation_interface}</div>
-    <div class="card tight">${simulation_info}</div>
-    <span>${simulation_plots}</span>
-  </div>
-</div>
 

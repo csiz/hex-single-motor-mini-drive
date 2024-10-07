@@ -3,14 +3,17 @@ import {html} from "htl";
 import {Generators} from "observablehq:stdlib";
 import _ from "lodash";
 
+/* Create a tooltip element. */
 export function note (text) {
 	return html`<div class="tooltip">*<span class="tooltiptext">${text}</span></div>`;
 }
 
+/* Create a link element. */
 export function link (url) {
 	return html`<a href="${url}" target="_blank">${url}</a>`;
 }
 
+/* Track update frequency compared to wall time. */
 export class TimingStats {
   constructor() {
     this.last_time = Date.now();
@@ -18,6 +21,7 @@ export class TimingStats {
     this.gamma = 0.9;
   }
 
+  /* Update the FPS tracker after each frame is done rendereing. */
   update() {
     const now = Date.now();
     const wall_dt = now - this.last_time;
@@ -26,7 +30,7 @@ export class TimingStats {
   };
 }
 
-
+/* Implement Framework's Mutable generator, but throttled to a max update rate. */
 export function ThrottledMutable(delay, value) {
   let change = (v) => {value = v};
   

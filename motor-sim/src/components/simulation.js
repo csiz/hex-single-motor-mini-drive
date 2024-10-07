@@ -5,11 +5,12 @@ import { TimingStats } from "./utils.js";
 
 export const π = Math.PI;
 
+/* Normalize angle values to the range [-π, π]. */
 export function normalized_angle(angle) {
   return (angle + 3 * π) % (2 * π) - π;
 }
 
-
+/* Check whether the angle is inside the interval; assuming normalized angles. */
 export function interval_contains_angle(low, high, angle) {
   if (low < high) {
     return low <= angle && angle <= high;
@@ -35,13 +36,18 @@ export function hall_bounds(hall_toggle_angle) {
   };
 }
 
-// Hall sensor toggle angle (with respect to rotor angle).
+/* Hall sensor toggle angle (with respect to rotor angle). */
 export const hall_toggle_angle = 80 * π / 180;
 
+/* Convert from RPM/Volts constant to the motor electric constant. 
+
+The motor constant represents back emf / angular rotation (in radians/second). 
+*/
 export function RPM_Kv_to_Ke(RPM_Kv){
   return 60.0 / (RPM_Kv * 2.0 * π);
 }
 
+/* Initial parameters governing our motor physics. */
 export const initial_parameters = {
   R_phase: 1.3, // phase resistance
   L_phase: 0.0001, // phase inductance
@@ -59,6 +65,7 @@ export const initial_parameters = {
   ...hall_bounds(hall_toggle_angle), // hall sensor toggle angle bounds
 }
 
+/* The initial state of the differentiable state equation for the motor. */
 export const initial_state = {
   t: 0.0, // simulation time
   φ: 0.0, // motor angle
@@ -69,6 +76,7 @@ export const initial_state = {
   𝜈: 0.0, // rotor radial velocity
 }
 
+/* Convention for marking the commanded state of each half-bridge. */
 export const phase_switches = {
   0: "floating",
   1: "on-high",
@@ -104,16 +112,24 @@ export function measurable_outputs(state, parameters) {
   return {hall_1, hall_2, hall_3};
 }
 
+/* Convention for the currently conducting state of each half-bridge. */
 const phase_states = {
-  0: "neutral",
-  1: "high-conducting",
-  2: "high-diode",
-  3: "low-diode",
-  4: "low-conducting",
+  0: "neutral", // No current flowing.
+  1: "high-conducting", // Current flowing through the high side; turned on.
+  2: "high-diode", // Current flowing through the high side reverse diode.
+  3: "low-diode", // Current flowing through the low side reverse diode.
+  4: "low-conducting", // Current flowing through the low side; turned on.
 };
 
+/* Smallest current that we'll zero out in a single step. */
 const I_ε = 0.0001;
 
+/* Compute the state of a half-bridge.
+
+If there's current through the winding, the winding will raise its voltage to keep the current flowing.
+However if there's no current, then we must overcome the reverse diode voltage drop and any other circuit
+element to get any current started.
+*/
 function compute_half_bridge_state(A_switch, Ia, Vreverse, Va, Vmin, Vmax) {
   return (
     (A_switch == 1) ? 1 : // high conducting
@@ -128,6 +144,7 @@ function compute_half_bridge_state(A_switch, Ia, Vreverse, Va, Vmin, Vmax) {
   );
 }
 
+/* Signed contribution of the mosfet resistance for the phase given the half-bridge state. */
 const mosfet_r_vector = [
   0.00, // neutral
   +1.0, // high-conducting
@@ -136,6 +153,7 @@ const mosfet_r_vector = [
   -1.0, // low-conducting
 ];
 
+/* Signed contribution of the mosfet reverse diode voltage per half-bridge state. */
 const mosfet_diode_vector = [
   0.00, // neutral
   0.00, // high-conducting
@@ -144,6 +162,7 @@ const mosfet_diode_vector = [
   0.00, // low-conducting
 ];
 
+/* Sign of upstream voltage contribution given the state of the phase to phase connection. */
 const vcc_matrix = [
   [0.00, 0.00, 0.00, 0.00, 0.00], // neutral A
   [0.00, 0.00, 0.00, +1.0, +1.0], // high-conducting A
@@ -152,9 +171,13 @@ const vcc_matrix = [
   [0.00, -1.0, -1.0, 0.00, 0.00], // low-conducting A
 ];
 
-export function compute_state_diff(state, parameters, inputs, outputs, dt) {
+/* Compute the differential equations at the current state. 
+
+Store other info we compute along the way so we can display it in pretty plots. 
+*/
+function compute_state_diff(state, parameters, inputs, outputs, dt) {
   const {R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, V_bat, R_mosfet, R_shunt, V_diode, J_rotor, M_rotor, r_max} = parameters;
-  const {t, φ, ω, Iu, Iv, Iw, 𝜈} = state;
+  const {φ, ω, Iu, Iv, Iw, 𝜈} = state;
   const {U_switch, V_switch, W_switch, τ_load} = inputs;
 
   const dφ = ω;
@@ -256,17 +279,23 @@ export function compute_state_diff(state, parameters, inputs, outputs, dt) {
   };
 }
 
-export function postprocess_state(state) {
+/* Post process the state after updating from the differential equations.
+
+It's mostly to normalize angles back to the range [-π, π]. We might also want to zero out
+very small values.
+*/
+function postprocess_state(state) {
   state.φ = normalized_angle(state.φ);
   return state;
 }
 
-
-export function euler_step(state, diff, dt) {
+/* Update the state using a simple Euler step `f(x+dx) = f(x) + df(x)/dt * dt`. */
+function euler_step(state, diff, dt) {
   return _.mapValues(state, (value, key) => value + diff[key] * dt);
 }
 
-export function runge_kuta_step(state, diff, dt, parameters, inputs, outputs) {
+/* Update the state using the Runge Kuta algorithm, which samples the differential at multiple nearby points. */
+function runge_kuta_step(state, diff, dt, parameters, inputs, outputs) {
   const k1 = diff;
   const k2 = compute_state_diff(euler_step(state, k1, dt / 2), parameters, inputs, outputs, dt / 2).diff;
   const k3 = compute_state_diff(euler_step(state, k2, dt / 2), parameters, inputs, outputs, dt / 2).diff;
@@ -275,6 +304,7 @@ export function runge_kuta_step(state, diff, dt, parameters, inputs, outputs) {
   return _.mapValues(state, (value, key) => value + (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) * dt / 6);
 }
 
+/* Options to simulate a motor similar to the physical hardware. */
 export const default_simulation_options = {
   start_state: initial_state,
   parameters: initial_parameters,
@@ -287,6 +317,8 @@ export const default_simulation_options = {
   store_period: 2_000,
 };
 
+
+/* Simulation of a 3-phase permanent magnet brushless motor. */
 export class Simulation {
   constructor(options={}) {
     this.options = {...default_simulation_options, ...options};
