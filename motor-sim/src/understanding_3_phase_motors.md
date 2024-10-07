@@ -27,6 +27,19 @@ import {sparkline} from "./components/plots.js"
 
 const {motor, scene} = await create_scene();
 
+function get_coil_color(coil) {
+  const hsl_color = {};
+  coil.material.emissive.getHSL(hsl_color);
+  const {h, s, l} = hsl_color;
+
+  return new THREE.Color().setHSL(h, 1.0, 0.3).getStyle();
+}
+
+const color_u = get_coil_color(motor.coil_U);
+const color_v = get_coil_color(motor.coil_V);
+const color_w = get_coil_color(motor.coil_W);
+
+
 const descriptions = new Map([
   ["<no selection>", html`
     We simulate a 3 phase motor with 1 winding per phase and 2 pole permanent magnet rotor
@@ -154,33 +167,33 @@ function draw_sparklines(history){
     ${sparkline(history, {label: "Load Torque", y: "τ_load"})}
     ${sparkline(
       history, [
-        {label: "Current Iu", y: "Iu", stroke: "#a0a"},
-        {label: "Current Iv", y: "Iv", stroke: "#aa0"},
-        {label: "Current Iw", y: "Iw", stroke: "#0aa"},
+        {label: "Current Iu", y: "Iu", stroke: color_u},
+        {label: "Current Iv", y: "Iv", stroke: color_v},
+        {label: "Current Iw", y: "Iw", stroke: color_w},
       ], 
       {domain: [-6.0, 6.0], height: 120},
     )}
     ${sparkline(
       history, [
-        {label: "EMF Vu", y: "Vu_rotational_emf", stroke: "#a0a"},
-        {label: "EMF Vv", y: "Vv_rotational_emf", stroke: "#aa0"},
-        {label: "EMF Vw", y: "Vw_rotational_emf", stroke: "#0aa"},
+        {label: "EMF Vu", y: "Vu_rotational_emf", stroke: color_u},
+        {label: "EMF Vv", y: "Vv_rotational_emf", stroke: color_v},
+        {label: "EMF Vw", y: "Vw_rotational_emf", stroke: color_w},
       ], 
       {domain: [-24.0, 24.0], height: 120},
     )}
     ${sparkline(
       history, [
-        {label: "VCC Vu", y: "VCC_u", stroke: "#a0a"},
-        {label: "VCC Vv", y: "VCC_v", stroke: "#aa0"},
-        {label: "VCC Vw", y: "VCC_w", stroke: "#0aa"},
+        {label: "VCC Vu", y: "VCC_u", stroke: color_u},
+        {label: "VCC Vv", y: "VCC_v", stroke: color_v},
+        {label: "VCC Vw", y: "VCC_w", stroke: color_w},
       ], 
       {domain: [-12.0, 12.0], height: 120},
     )}
     ${sparkline(
       history, [
-        {label: "MOSFET Vu", y: "V_Mu", stroke: "#a0a"},
-        {label: "MOSFET Vv", y: "V_Mv", stroke: "#aa0"},
-        {label: "MOSFET Vw", y: "V_Mw", stroke: "#0aa"},
+        {label: "MOSFET Vu", y: "V_Mu", stroke: color_u},
+        {label: "MOSFET Vv", y: "V_Mv", stroke: color_v},
+        {label: "MOSFET Vw", y: "V_Mw", stroke: color_w},
       ], 
       {domain: [-1.0, 1.0], height: 120},
     )}
