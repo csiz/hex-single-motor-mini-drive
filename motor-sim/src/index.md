@@ -3,7 +3,7 @@ toc: false
 ---
 
 ```js
-import {md, note, link} from "./components/utils.js"
+import {note, link} from "./components/utils.js"
 ```
 
 <div class="hero">

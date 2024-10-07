@@ -1,9 +1,7 @@
 import {html} from "htl";
-import {require} from "d3-require";
-import {md as md_loader} from "npm:@observablehq/stdlib/src/md.js";
-import * as Plot from "npm:@observablehq/plot";
 
-export const md = await md_loader(require);
+import {Generators} from "observablehq:stdlib";
+import _ from "lodash";
 
 export function note (text) {
 	return html`<div class="tooltip">*<span class="tooltiptext">${text}</span></div>`;
@@ -13,48 +11,36 @@ export function link (url) {
 	return html`<a href="${url}" target="_blank">${url}</a>`;
 }
 
-export class FPS_counter {
+export class TimingStats {
   constructor() {
     this.last_time = Date.now();
     this.fps = 0.0;
+    this.gamma = 0.9;
   }
 
   update() {
     const now = Date.now();
     const wall_dt = now - this.last_time;
     this.last_time = now;
-    this.fps = 0.9 * this.fps + 0.1 * (1000.0 / wall_dt);
-  }
+    this.fps = this.gamma * this.fps + (1.0-this.gamma) * (1000.0 / wall_dt);
+  };
 }
 
 
-
-const default_sparkline_plot = {label: "<sparkline>", x: "t", y: null, stroke: "black", fill: "none"};
-const default_sparkline_options = {domain: null, height: 60};
-
-export function sparkline(data, plots=default_sparkline_plot, options=default_sparkline_options){
-  const {domain, height} = Object.assign({}, default_sparkline_options, options);
+export function ThrottledMutable(delay, value) {
+  let change = (v) => {value = v};
   
-  if (!Array.isArray(plots)) plots = [plots];
-  
-  plots.map((plot) => Object.assign({}, default_sparkline_plot, plot));
-
-  const plot = Plot.plot({
-    height,
-    axis: null,
-    y: domain == null ? undefined : {domain},
-    marks:[
-      plots.map(({x, y, stroke, fill}) => Plot.lineY(data, {x, y, stroke, fill})),
-      Plot.ruleY([0], {stroke: "gray", strokeDasharray: "8,2"}),
-    ],
-  });
-
-  return html`
-    <div class="card tight" style="display: flex; align-items: center;">
-      <div style="display: flex; flex-direction: column;">
-        ${plots.map(({label, stroke}) => html`<label style="min-width: 120px; margin-right: 6.5px; color: ${stroke};">${label}</label>`)}
-      </div>
-      <div>${plot}</div>
-    </div>
-  `;
+  return Object.defineProperty(
+    Generators.observe((notify) => {
+      change = notify;
+      if (value !== undefined) notify(value);
+    }),
+    "value",
+    {
+      get: () => value,
+      set: _.throttle((x) => {change((value = x)); return x;}, delay),
+    }
+  );
 }
+
+

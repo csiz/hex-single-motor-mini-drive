@@ -1,11 +1,9 @@
-import {FileAttachment} from "npm:@observablehq/stdlib";
 import _ from "lodash";
-import {select} from "d3-selection";
+import {html} from "htl";
 
 import * as THREE from "three";
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -16,9 +14,15 @@ import { ClearPass } from 'three/addons/postprocessing/ClearPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 
-import {html} from "htl";
 
-import { FPS_counter } from "./utils.js";
+import {TimingStats} from "./utils.js";
+import {FileAttachment} from "observablehq:stdlib";
+
+const [model_file_url, wood_texture_url, wood_displacement_url] = await Promise.all([
+  FileAttachment("../data/motor_model.3mf").url(),
+  FileAttachment("../data/textures/laminate_floor_diff_1k.jpg").url(),
+  FileAttachment("../data/textures/laminate_floor_disp_1k.png").url(),
+]);
 
 function create_mixing_pass(added_texture) {
   const vertexShader = `
@@ -147,7 +151,6 @@ function group_motor_model(object) {
   hall_1.add(red_led);
 
 
-
   stator.add(coil_U);
   stator.add(coil_V);
   stator.add(coil_W);
@@ -189,7 +192,7 @@ export function load_motor(model_file_url){
     }
 
     function on_progress(xhr) {
-      console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+      console.info((xhr.loaded / xhr.total * 100) + '% loaded');
     }
 
     function on_error(error) {
@@ -237,8 +240,13 @@ function reset_camera_position(camera){
 }
 
 
+export async function create_scene(){
+  const [motor, wood_texture, wood_displacement] = await Promise.all([
+    load_motor(model_file_url),
+    load_texture(wood_texture_url, 8, THREE.SRGBColorSpace),
+    load_texture(wood_displacement_url, 8),
+  ]);
 
-export function create_scene(motor, wood){
   const scene = new THREE.Scene();
 
   scene.background = new THREE.Color(0xf6f6f6);
@@ -273,7 +281,7 @@ export function create_scene(motor, wood){
 
   const ground = new THREE.Mesh( 
     new THREE.PlaneGeometry( 4000, 4000 ), 
-    new THREE.MeshPhongMaterial( { map: wood.texture, bumpMap: wood.displacement } ) 
+    new THREE.MeshPhongMaterial( { map: wood_texture, bumpMap: wood_displacement } ) 
     );
   ground.rotation.x = 0.0;
   ground.rotation.z = Math.PI / 2;
@@ -283,7 +291,7 @@ export function create_scene(motor, wood){
 
   scene.add(motor.motor);
 
-  return scene;
+  return {motor, scene};
 };
 
 export function top_selection(intersected_objects){
@@ -292,12 +300,20 @@ export function top_selection(intersected_objects){
 
 export function do_nothing(objects){}
 
-export function setup_rendering(width, height, invalidation, scene, highlight = top_selection, on_selection = do_nothing){
+export const default_rendering_options = {
+  width: 640, height: 640,
+  highlight_filter: top_selection,
+  on_selection: do_nothing,
+};
+
+export function setup_rendering(scene, invalidation, options={}){
+  const {width, height, highlight_filter, on_selection} = {...default_rendering_options, ...options};
+
   const camera = create_camera(width, height);
 
   const renderer = new THREE.WebGLRenderer();
   
-  const fps_counter = new FPS_counter();
+  const stats = new TimingStats();
 
   renderer.domElement.addEventListener( 'pointermove', on_move );
 
@@ -331,8 +347,8 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
 
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.set(
-      ( (event.clientX - rect.left) / width ) * 2 - 1,
-      - ( (event.clientY - rect.top) / height ) * 2 + 1,
+      ( (event.clientX - rect.left) / (rect.right - rect.left) ) * 2 - 1,
+      - ( (event.clientY - rect.top) / (rect.bottom - rect.top) ) * 2 + 1,
     );
 
     compute_highlight();
@@ -344,7 +360,7 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
 
     const intersects = raycaster.intersectObject( scene, true );
 
-    const selected = highlight(intersects.map(i => i.object));
+    const selected = highlight_filter(intersects.map(i => i.object));
     
     outline_pass.selectedObjects = selected;
   }
@@ -398,6 +414,7 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
   }
 
   invalidation.then(() => {
+    renderer.domElement.removeEventListener( 'pointermove', on_move );
     composer.dispose();
     bloom_composer.dispose();
     controls.dispose();
@@ -442,7 +459,7 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
     scene.background = saved_background;
     composer.render();
 
-    fps_counter.update();
+    stats.update();
   }
 
 
@@ -450,7 +467,7 @@ export function setup_rendering(width, height, invalidation, scene, highlight = 
 
   return {
     canvas: renderer.domElement,
-    fps_counter,
+    stats,
     div,
     render,
     camera,
