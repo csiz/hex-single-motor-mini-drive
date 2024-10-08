@@ -52,21 +52,23 @@ export function RPM_Kv_to_Ke(RPM_Kv){
 export const initial_parameters = {
   R_phase: 1.3, // phase resistance
   L_phase: 0.000_1, // phase inductance
-  Ψ_m: RPM_Kv_to_Ke(1000), // motor Ke constant (also the magnetic flux linkage)
+  Ψ_m: RPM_Kv_to_Ke(600), // ~0.01V*s motor Ke constant (also the magnetic flux linkage)
   τ_static: 0.0001, // static friction torque
   τ_dynamic: 0.00001, // dynamic friction torque
   V_bat: 12.0, // battery voltage
   R_bat: 1.0, // battery internal resistance
   L_bat: 0.000_001, // 1μH inductance of wire leads up to the battery
-  R_disconnect: 10_000.0, // 10kΩ battery disconnected resistance (keep relatively low for numerical stability)
+  R_disconnect: 1_000.0, // 1kΩ battery disconnected resistance (keep relatively low for numerical stability)
   L_disconnect: 0.001, // 1mH inductance to prevent the simulation from blowing up
   C_near: 0.000_050, // 50μF capacitance near the motor mosfets
   R_shunt: 0.010, // shunt resistance
   R_mosfet: 0.013, // mosfet resistance
   V_diode: 0.72, // mosfet reverse diode voltage drop
   J_rotor: 0.00000025, // (Kg*m^2) rotor moment of inertia
-  M_rotor: 0.0005, // (Kg) rotor mass
+  M_rotor: 0.000_1, // (Kg) rotor mass
   r_max: 0.001, // (m) rotor radial displacement for magnetic field dropoff
+  r_elasticity: 100_000.0, // (N/m) radial displacement spring constant
+  r_friction: 0.1,  // radial friction
   ...hall_bounds(hall_toggle_angle), // hall sensor toggle angle bounds
 }
 
@@ -81,6 +83,7 @@ export const initial_state = {
   Iu: 0.0, // motor current phase U
   Iv: 0.0, // motor current phase V
   Iw: 0.0, // motor current phase W
+  r: 0.0, // radial displacement of the rotor
   𝜈: 0.0, // rotor radial velocity
   I: 0.0, // current flowing into the battery (charging it when positive), or the terminal current when battery disconnected
   V: 0.0, // voltage presented to the battery by the capacitor bank near the motor connections (effectively the motor voltage).
@@ -199,6 +202,18 @@ const vcc_matrix = [
   [0.00, -1.0, -1.0, 0.00, 0.00], // low_conducting A
 ];
 
+
+function add_without_zero_crossing_friction(dt, x, dx_applied, dx_friction){
+  const friction_overpowers = Math.abs(dx_friction) >= Math.abs(dx_applied);
+  const dx = dx_applied + dx_friction;
+  const sign_change_in_a_step = Math.sign(x) != Math.sign(x + dx*dt);
+  return (friction_overpowers && sign_change_in_a_step) ? -x/dt : dx;
+}
+
+function sign_first_nonzero(x, applied) {
+  return Math.sign(x == 0 ? applied : x);
+}
+
 /* Compute the differential equations at the current state. 
 
 Store other info we compute along the way so we can display it in pretty plots.
@@ -211,14 +226,17 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
     R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, 
     V_bat, R_bat, L_bat, C_near, R_disconnect, L_disconnect,
     R_shunt, R_mosfet, V_diode, J_rotor, 
-    M_rotor, r_max,
+    M_rotor, r_max, r_friction, r_elasticity,
   } = parameters;
-  const {φ, ω, Iu, Iv, Iw, 𝜈, I, V} = state;
+  const {φ, ω, Iu, Iv, Iw, r, 𝜈, I, V} = state;
   const {U_switch, V_switch, W_switch, τ_load, battery_connected} = inputs;
 
   // Differential of the rotor angle is the rotor rotation.
   const dφ = ω;
   
+  // Alias the driving voltage (we can either simulate a capacitor bank or straight to battery).
+  const VCC = V;
+
   // Calculate the induced emf from the rotating magnetic field of the permanent magnet.
   const Vu_rotational_emf = Ψ_m * ω * Math.sin(φ);
   const Vv_rotational_emf = Ψ_m * ω * Math.sin(φ - 2 * Math.PI / 3);
@@ -234,13 +252,13 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const Vw_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ + 2 * Math.PI / 3);
   
   // Total emf contributions from the moving permanent magnet field.
-  const Vu_emf = Vu_rotational_emf; // + Vu_radial_emf;
-  const Vv_emf = Vv_rotational_emf; // + Vv_radial_emf;
-  const Vw_emf = Vw_rotational_emf; // + Vw_radial_emf;
+  const Vu_emf = Vu_rotational_emf + Vu_radial_emf;
+  const Vv_emf = Vv_rotational_emf + Vv_radial_emf;
+  const Vw_emf = Vw_rotational_emf + Vw_radial_emf;
 
   // Calculate the reverse voltage needed to start flowing current against the
   // battery and the reverse diodes of 2 mosfets.
-  const Vreverse = V_bat + 2 * V_diode;
+  const Vreverse = VCC + 2 * V_diode;
   // Get the minimum and maximum voltages of the 3 phases. We'll compare it
   // to the reverse voltage to determine the state of the half-bridges when no
   // current is flowing.
@@ -278,9 +296,6 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const V_Rv = (R_phase + R_shunt) * Iv;
   const V_Rw = (R_phase + R_shunt) * Iw;
 
-  // Alias the driving voltage (we can either simulate a capacitor bank or straight to battery).
-  const VCC = V;
-
   // Calculate the voltage drop from the 3 phase connections to the battery as 
   // pairs of conducting phases.
   const VCC_uv = vcc_matrix[U_state][V_state] * VCC;
@@ -311,41 +326,48 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const dIvw = VW_conducting ? V_vw / (2 * L_phase) : 0.0;
   const dIwu = WU_conducting ? V_wu / (2 * L_phase) : 0.0;
 
-  // Do the same trick for 
+  // Do the same trick for currents.
   const {U: dIu, V: dIv, W: dIw} = triple_duo_or_none(dIuv, dIvw, dIwu, -Iu/dt, -Iv/dt, -Iw/dt);
 
   // Calculate rotor torque due to motor magnetic field. The contributions
   // of the 3 phase windings add up linearly.
-  const τ_emf = - (
-    Ψ_m * Iu * Math.sin(φ) +
-    Ψ_m * Iv * Math.sin(φ - 2 * Math.PI / 3) +
-    Ψ_m * Iw * Math.sin(φ + 2 * Math.PI / 3)
+  const τ_emf = - Ψ_m * (
+    Iu * Math.sin(φ) +
+    Iv * Math.sin(φ - 2 * Math.PI / 3) +
+    Iw * Math.sin(φ + 2 * Math.PI / 3)
   );
 
   // Get the total torque applied to the rotor before friction.
   const τ_applied = τ_emf + τ_load;
-  // Calculate the sign of the static friction torque. It will oppose the applied
-  // torque when the rotor is standing still.
-  const static_sign = (ω == 0.0) ? -Math.sign(τ_applied) : -Math.sign(ω);
+
   // Calculate maximum friction contribution.
-  const τ_friction = -ω * τ_dynamic + static_sign * τ_static;
-  // Calculate the total torque applied to the rotor assuming that the applied
-  // torque is greater than friction.
+  const τ_friction = -ω * τ_dynamic - sign_first_nonzero(ω, τ_applied) * τ_static;
+
+  // Calculate the total torque applied to the rotor, for bookkeeping.
   const τ_total = τ_applied + τ_friction;
-  // Check if applied torque is enough to start rotating the rotor.
-  const frozen = (ω == 0.0) && Math.abs(τ_applied) <= τ_static;
-  // Compute the delta assuming the rotor is not frozen.
-  const dω_computed = τ_total / J_rotor;
-  // Delta needed to stop the rotor in 1 step.
-  const dω_stopping = -ω/dt;
-  // Check if the rotor would stop and reverse direction in 1 step.
-  const stopping = -Math.sign(ω) * dω_computed > -Math.sign(ω)*dω_stopping;
-  // We need to prevent static friction from overshooting when the motor is stopped or stopping in 1 step.
-  const dω = (frozen || stopping) ? dω_stopping : (τ_total / J_rotor);
 
-  // TODO: enable radial velocity changes.
-  const d𝜈 = 0.0;
+  // We need to calculate the applied acceleration and the friction acceleration separately.
+  const dω_applied = τ_applied / J_rotor;
+  const dω_friction = τ_friction / J_rotor;
 
+  // Add the acceleration contributions together without allowing friction to cause a zero crossing.
+  const dω = add_without_zero_crossing_friction(dt, ω, dω_applied, dω_friction);
+  
+  const dr = 𝜈;
+
+  const F_emf = - Ψ_m / r_max * (
+    Iu * Math.cos(φ) +
+    Iv * Math.cos(φ - 2 * Math.PI / 3) +
+    Iw * Math.cos(φ + 2 * Math.PI / 3)
+  );
+  
+  const F_elasticity = -r_elasticity * r;
+
+  const d𝜈_applied = (F_emf + F_elasticity) / M_rotor;
+  const d𝜈_friction = -sign_first_nonzero(𝜈, d𝜈_applied) * r_friction / M_rotor;
+  const d𝜈 = add_without_zero_crossing_friction(dt, 𝜈, d𝜈_applied, d𝜈_friction);
+
+  
   // Calculate the current flowing out of the motor terminals.
   const I_motor = (
     bridge_current_sign[U_state] * Iu + 
@@ -370,13 +392,14 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const W_status = bridge_current_sign[W_state];
 
   return {
-    diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, 𝜈: d𝜈, V: dV, I: dI},
+    diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, r: dr, 𝜈: d𝜈, V: dV, I: dI},
     info: {
-      τ_emf, τ_applied, τ_friction, τ_total, frozen, stopping,
+      τ_emf, τ_applied, τ_friction, τ_total,
       V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_u, V_v, V_w, VCC_u, VCC_v, VCC_w,
       V_terminal, I_near_cap, I_motor,
       Vu_rotational_emf, Vv_rotational_emf, Vw_rotational_emf,
       Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,
+      Vu_emf, Vv_emf, Vw_emf,
       U_status, V_status, W_status,
       rpm: ω * 30 / π,
     },

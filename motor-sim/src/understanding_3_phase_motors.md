@@ -108,7 +108,7 @@ const store_period_slider = Inputs.range([1, 10_000], {
   label: "Store period",
 });
 
-const load_torque_slider = Inputs.range([0.0, 0.25], {
+const load_torque_slider = Inputs.range([0.0, 0.1], {
   step: 0.001, 
   transform: Math.log1p,
   format: x => x.toFixed(3),
@@ -185,10 +185,10 @@ function update_input(input, value) {
 }
 
 function reset() {
-  update_input(frequency_slider, 72_000_000); // 72 MHz
-  update_input(store_period_slider, 2_000);
-  update_input(steps_number_slider, 4_000);
-  update_input(load_torque_slider, +0.02);
+  update_input(frequency_slider, 12_000_000); // We want to simulate 72 MHz!
+  update_input(store_period_slider, 1_000);
+  update_input(steps_number_slider, 1_000);
+  update_input(load_torque_slider, +0.01);
   update_input(driver_state_selection, "Connect and Idle");
 }
 
@@ -212,17 +212,19 @@ const simulation_control = Inputs.button(
     ["Resume", () => { simulation.running = true; }],
     [html`<div style="min-width: 7em;">Look at motor</div>`, () => { rendering.reset_camera(); }],
     [html`<div style="min-width: 6em;">Reset inputs</div>`, () => { reset(); }],
+
   ],
   {value: "running", label: "Simulation control"}
 );
 
 function draw_sparklines(history){
   return html`<span>
-    ${sparkline(history, {label: "Motor Speed (RPM)", y: "rpm"}, {least_domain: [-5_000, 5_000]})}
+    ${sparkline(history, {label: `Motor Speed (RPM): ${formatSI(_.last(history).rpm)}`, y: "rpm"}, {least_domain: [-6_000, 6_000]})}
     ${sparkline(history, {label: "Motor Angle", y: "φ"}, {least_domain: [-π, π]})}
-    ${sparkline(history, {label: "Load Torque", y: "τ_load"})}
+    ${sparkline(history, {label: "Torque applied", y: "τ_applied"}, {least_domain: [-0.1, 0.1]})}
     ${sparkline(history, {label: "Battery Current", y: "I"}, {least_domain: [-2.0, +2.0]})}
     ${sparkline(history, {label: "Capacitor Voltage", y: "V"}, {least_domain: [-12.0, +12.0]})}
+    ${sparkline(history, {label: "Radial displacement velocity (noise)", y: "𝜈"}, {least_domain: [-0.1, +0.1]})}
     ${sparkline(
       history, [
         {label: "Current Iu", y: "Iu", stroke: color_u},
@@ -233,40 +235,57 @@ function draw_sparklines(history){
     )}
     ${sparkline(
       history, [
-        {label: "EMF Vu", y: "Vu_rotational_emf", stroke: color_u},
-        {label: "EMF Vv", y: "Vv_rotational_emf", stroke: color_v},
-        {label: "EMF Vw", y: "Vw_rotational_emf", stroke: color_w},
+        {label: "EMF Vu", y: "Vu_emf", stroke: color_u},
+        {label: "EMF Vv", y: "Vv_emf", stroke: color_v},
+        {label: "EMF Vw", y: "Vw_emf", stroke: color_w},
       ], 
       {least_domain: [-12.0, 12.0], height: 120},
     )}
     ${sparkline(
       history, [
-        {label: "VCC Vu", y: "VCC_u", stroke: color_u},
-        {label: "VCC Vv", y: "VCC_v", stroke: color_v},
-        {label: "VCC Vw", y: "VCC_w", stroke: color_w},
+        {label: "EMF rot Vu", y: "Vu_rotational_emf", stroke: color_u},
+        {label: "EMF rot Vv", y: "Vv_rotational_emf", stroke: color_v},
+        {label: "EMF rot Vw", y: "Vw_rotational_emf", stroke: color_w},
       ], 
       {least_domain: [-12.0, 12.0], height: 120},
     )}
     ${sparkline(
       history, [
-        {label: "MOSFET Vu", y: "V_Mu", stroke: color_u},
-        {label: "MOSFET Vv", y: "V_Mv", stroke: color_v},
-        {label: "MOSFET Vw", y: "V_Mw", stroke: color_w},
+        {label: "EMF rad Vu", y: "Vu_radial_emf", stroke: color_u},
+        {label: "EMF rad Vv", y: "Vv_radial_emf", stroke: color_v},
+        {label: "EMF rad Vw", y: "Vw_radial_emf", stroke: color_w},
       ], 
-      {least_domain: [-1.0, 1.0], height: 120},
+      {least_domain: [-12.0, 12.0], height: 120},
     )}
-    ${sparkline(
-      history, [
-        {label: "U status", y: "U_status", stroke: color_u},
-        {label: "V status", y: "V_status", stroke: color_v},
-        {label: "W status", y: "W_status", stroke: color_w},
-      ], 
-      {least_domain: [-1.0, 1.0], height: 120},
-    )}
-    
   </span>`;
 }
 
+// Add all possible graphs with a checkbox system?
+// ${sparkline(history, {label: "Radial displacement", y: "r"}, {least_domain: [-0.001, +0.001]})}
+// ${sparkline(
+//   history, [
+//     {label: "VCC Vu", y: "VCC_u", stroke: color_u},
+//     {label: "VCC Vv", y: "VCC_v", stroke: color_v},
+//     {label: "VCC Vw", y: "VCC_w", stroke: color_w},
+//   ], 
+//   {least_domain: [-12.0, 12.0], height: 120},
+// )}
+// ${sparkline(
+//   history, [
+//     {label: "MOSFET Vu", y: "V_Mu", stroke: color_u},
+//     {label: "MOSFET Vv", y: "V_Mv", stroke: color_v},
+//     {label: "MOSFET Vw", y: "V_Mw", stroke: color_w},
+//   ], 
+//   {least_domain: [-1.0, 1.0], height: 120},
+// )}
+// ${sparkline(
+//   history, [
+//     {label: "U status", y: "U_status", stroke: color_u},
+//     {label: "V status", y: "V_status", stroke: color_v},
+//     {label: "W status", y: "W_status", stroke: color_w},
+//   ], 
+//   {least_domain: [-1.0, 1.0], height: 120},
+// )}
 
 let simulation_plots = ThrottledMutable(1000.0/60.0);
 
