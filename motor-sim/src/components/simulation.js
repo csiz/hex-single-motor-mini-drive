@@ -2,6 +2,7 @@ import CircularBuffer from "circular-buffer";
 import _ from "lodash";
 
 import { TimingStats } from "./utils.js";
+import { float } from "three/webgpu";
 
 export const π = Math.PI;
 
@@ -55,7 +56,10 @@ export const initial_parameters = {
   τ_static: 0.0001, // static friction torque
   τ_dynamic: 0.00001, // dynamic friction torque
   V_bat: 12.0, // battery voltage
-  // R_bat: 1.0, // battery internal resistance
+  R_bat: 1.0, // battery internal resistance
+  R_disconnect: 1_000_000.0, // 1MΩ battery disconnected resistance
+  L_bat: 0.000_001, // 1μH inductance of wire leads up to the battery
+  C_near: 0.000_050, // 50μF capacitance near the motor mosfets
   R_mosfet: 0.013, // mosfet resistance
   R_shunt: 0.010, // shunt resistance
   V_diode: 0.72, // mosfet reverse diode voltage drop
@@ -64,6 +68,9 @@ export const initial_parameters = {
   r_max: 0.001, // (m) rotor radial displacement for magnetic field dropoff
   ...hall_bounds(hall_toggle_angle), // hall sensor toggle angle bounds
 }
+
+/* Smallest current that we'll zero out in a single step. */
+const I_ε = 0.000_001;
 
 /* The initial state of the differentiable state equation for the motor. */
 export const initial_state = {
@@ -74,13 +81,18 @@ export const initial_state = {
   Iv: 0.0, // motor current phase V
   Iw: 0.0, // motor current phase W
   𝜈: 0.0, // rotor radial velocity
+  I_bat: 0.0, // battery current
+  V_near_cap: 0.0, // voltage of the near capacitor
 }
 
 /* Convention for marking the commanded state of each half-bridge. */
 export const phase_switches = {
   0: "floating",
-  1: "on-high",
-  2: "on-low",
+  1: "on_high",
+  2: "on_low",
+  floating: 0,
+  on_high: 1,
+  on_low: 2,
 };
 
 
@@ -90,21 +102,24 @@ For this simulator, inputs means everything that affects the system that is inde
 of the differential equations that describe the internal state of the system. This includes
 the motor controller algorithm and the external load torque.
 */
-export function freewheeling_inputs(state, parameters, outputs) {
-  return {
-    U_switch: 0, // driver connection state for phase U
-    V_switch: 0, // driver connection state for phase V
-    W_switch: 0, // driver connection state for phase W
-    τ_load: 0.0, // external load torque
-    yield_every_n_steps: 10000,
-  }
-}
+const freewheeling_inputs = {
+  U_switch: 0, // driver connection state for phase U
+  V_switch: 0, // driver connection state for phase V
+  W_switch: 0, // driver connection state for phase W
+  τ_load: 0.0, // external load torque
+  battery_connected: false,
+};
 
-/* Outputs of the physical system that can be read by the driver sensors. */
+
+/* Outputs of the physical system (for example the state of the driver sensors. */
 export function measurable_outputs(state, parameters) {
+  // Get salient parameters.
   const {hall_1_low, hall_1_high, hall_2_low, hall_2_high, hall_3_low, hall_3_high} = parameters;
   const {φ} = state;
 
+  // The hall sensors mostly see the permanent magnet field, and they have a triggering point
+  // based on the strength of the field. In practice, the rotor north pole must be within a
+  // certain angle to the sensor to trigger it.
   const hall_1 = interval_contains_angle(hall_1_low, hall_1_high, φ);
   const hall_2 = interval_contains_angle(hall_2_low, hall_2_high, φ);
   const hall_3 = interval_contains_angle(hall_3_low, hall_3_high, φ);
@@ -115,14 +130,17 @@ export function measurable_outputs(state, parameters) {
 /* Convention for the currently conducting state of each half-bridge. */
 const phase_states = {
   0: "neutral", // No current flowing.
-  1: "high-conducting", // Current flowing through the high side; turned on.
-  2: "high-diode", // Current flowing through the high side reverse diode.
-  3: "low-diode", // Current flowing through the low side reverse diode.
-  4: "low-conducting", // Current flowing through the low side; turned on.
+  1: "high_conducting", // Current flowing through the high side; turned on.
+  2: "high_diode", // Current flowing through the high side reverse diode.
+  3: "low_diode", // Current flowing through the low side reverse diode.
+  4: "low_conducting", // Current flowing through the low side; turned on.
+  neutral: 0,
+  high_conducting: 1,
+  high_diode: 2,
+  low_diode: 3,
+  low_conducting: 4,
 };
 
-/* Smallest current that we'll zero out in a single step. */
-const I_ε = 0.0001;
 
 /* Compute the state of a half-bridge.
 
@@ -145,132 +163,188 @@ function compute_half_bridge_state(A_switch, Ia, Vreverse, Va, Vmin, Vmax) {
 }
 
 /* Signed contribution of the mosfet resistance for the phase given the half-bridge state. */
-const mosfet_r_vector = [
+const bridge_r_vector = [
   0.00, // neutral
-  +1.0, // high-conducting
-  0.00, // high-diode
-  0.00, // low-diode
-  -1.0, // low-conducting
+  +1.0, // high_conducting
+  0.00, // high_diode
+  0.00, // low_diode
+  -1.0, // low_conducting
 ];
 
 /* Signed contribution of the mosfet reverse diode voltage per half-bridge state. */
-const mosfet_diode_vector = [
+const bridge_diode_vector = [
   0.00, // neutral
-  0.00, // high-conducting
-  +1.0, // high-diode
-  -1.0, // low-diode
-  0.00, // low-conducting
+  0.00, // high_conducting
+  +1.0, // high_diode
+  -1.0, // low_diode
+  0.00, // low_conducting
+];
+
+/* Sign of the upstream current coming out of the motor (positive when the motor is charging the battery). */
+const bridge_current_vector = [
+  0.00, // neutral
+  +1.0, // high_conducting
+  +1.0, // high_diode
+  -1.0, // low_diode
+  -1.0, // low_conducting
 ];
 
 /* Sign of upstream voltage contribution given the state of the phase to phase connection. */
 const vcc_matrix = [
   [0.00, 0.00, 0.00, 0.00, 0.00], // neutral A
-  [0.00, 0.00, 0.00, +1.0, +1.0], // high-conducting A
-  [0.00, 0.00, 0.00, +1.0, +1.0], // high-diode A
-  [0.00, -1.0, -1.0, 0.00, 0.00], // low-diode A
-  [0.00, -1.0, -1.0, 0.00, 0.00], // low-conducting A
+  [0.00, 0.00, 0.00, +1.0, +1.0], // high_conducting A
+  [0.00, 0.00, 0.00, +1.0, +1.0], // high_diode A
+  [0.00, -1.0, -1.0, 0.00, 0.00], // low_diode A
+  [0.00, -1.0, -1.0, 0.00, 0.00], // low_conducting A
 ];
 
 /* Compute the differential equations at the current state. 
 
-Store other info we compute along the way so we can display it in pretty plots. 
+Store other info we compute along the way so we can display it in pretty plots.
+
+We need the dt resolution in order to handle values close to 0 (motor stopping, current going to 0).
 */
-function compute_state_diff(state, parameters, inputs, outputs, dt) {
+function compute_state_diff(state, dt, parameters, inputs, outputs) {
+  // Get salient parameters.
   const {R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, V_bat, R_mosfet, R_shunt, V_diode, J_rotor, M_rotor, r_max} = parameters;
   const {φ, ω, Iu, Iv, Iw, 𝜈} = state;
   const {U_switch, V_switch, W_switch, τ_load} = inputs;
 
+  // Differential of the rotor angle is the rotor rotation.
   const dφ = ω;
-
+  
+  // Calculate the induced emf from the rotating magnetic field of the permanent magnet.
   const Vu_rotational_emf = Ψ_m * ω * Math.sin(φ);
   const Vv_rotational_emf = Ψ_m * ω * Math.sin(φ - 2 * Math.PI / 3);
   const Vw_rotational_emf = Ψ_m * ω * Math.sin(φ + 2 * Math.PI / 3);
 
+  // Calculate the induced emf from the axial displacement of the magnet. Because magnetic
+  // fields drop off quickly with distance, small displacements will have a large effect.
+  // The distance in this case is the spacing between the rotor and the stator core; aka
+  // the air gap. The air gap is quite tiny in high performance motors; we won't see the
+  // displacements, but we will hear them as motor noise.
   const Vu_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ);
   const Vv_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ - 2 * Math.PI / 3);
   const Vw_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ + 2 * Math.PI / 3);
-
+  
+  // Total emf contributions from the moving permanent magnet field.
   const Vu_emf = Vu_rotational_emf; // + Vu_radial_emf;
   const Vv_emf = Vv_rotational_emf; // + Vv_radial_emf;
   const Vw_emf = Vw_rotational_emf; // + Vw_radial_emf;
 
+  // Calculate the reverse voltage needed to start flowing current against the
+  // battery and the reverse diodes of 2 mosfets.
   const Vreverse = V_bat + 2 * V_diode;
+  // Get the minimum and maximum voltages of the 3 phases. We'll compare it
+  // to the reverse voltage to determine the state of the half-bridges when no
+  // current is flowing.
   const Vmin = Math.min(Vu_emf, Vv_emf, Vw_emf);
   const Vmax = Math.max(Vu_emf, Vv_emf, Vw_emf);
 
+  // Compute the state of the half-bridges to determine which way the mosfet connections
+  // are conducting for each motor phase.
   const U_state = compute_half_bridge_state(U_switch, Iu, Vreverse, Vu_emf, Vmin, Vmax);
   const V_state = compute_half_bridge_state(V_switch, Iv, Vreverse, Vv_emf, Vmin, Vmax);
   const W_state = compute_half_bridge_state(W_switch, Iw, Vreverse, Vw_emf, Vmin, Vmax);
 
-  const V_Ru = (R_phase + R_shunt) * Iu;
-  const V_Rv = (R_phase + R_shunt) * Iv;
-  const V_Rw = (R_phase + R_shunt) * Iw;
-
-  const VCC_uv = vcc_matrix[U_state][V_state] * V_bat;
-  const VCC_vw = vcc_matrix[V_state][W_state] * V_bat;
-  const VCC_wu = vcc_matrix[W_state][U_state] * V_bat;
-
-  const VCC_u = (VCC_uv - VCC_wu) / 3.0;
-  const VCC_v = (VCC_vw - VCC_uv) / 3.0;
-  const VCC_w = (VCC_wu - VCC_vw) / 3.0;
-
-  // The current convention is that its positive coming out of the motor terminals.
-  const V_Mu = R_mosfet * mosfet_r_vector[U_state] * Iu + V_diode * mosfet_diode_vector[U_state];
-  const V_Mv = R_mosfet * mosfet_r_vector[V_state] * Iv + V_diode * mosfet_diode_vector[V_state];
-  const V_Mw = R_mosfet * mosfet_r_vector[W_state] * Iw + V_diode * mosfet_diode_vector[W_state];
-
-  const V_u = Vu_emf - V_Ru - VCC_u - V_Mu;
-  const V_v = Vv_emf - V_Rv - VCC_v - V_Mv;
-  const V_w = Vw_emf - V_Rw - VCC_w - V_Mw;
-
-  const V_uv = V_u - V_v;
-  const V_vw = V_v - V_w;
-  const V_wu = V_w - V_u;
-
+  // Get the phase to phase conducting states.
   const UV_conducting = U_state && V_state;
   const VW_conducting = V_state && W_state;
   const WU_conducting = W_state && U_state;
   const UVW_conducting = U_state && V_state && W_state;
 
+  // In the 3 phase space of the motor the voltages sum up to 0 and we consider the tie
+  // point of our Y configured motor to also be at 0V. Thus we can compute the phase voltages
+  // as the voltage difference between the phase terminal (after the shunt) and the neutral point.
+  // However just 2 phases are connected sometimes and the extra unconnected phase shouldn't contribute
+  // even if it has a voltage (because it's not enough to overcome the reverse diodes). Because of the
+  // symmetry of all 3 phases, the neutral point is still 0V.
+  function triple_duo_or_none(UV, VW, WU, U_zero, V_zero, W_zero){
+    return {
+      U: UVW_conducting ? (UV - WU) / 3.0 : UV_conducting ? UV / 2.0 : WU_conducting ? -WU / 2.0 : U_zero,
+      V: UVW_conducting ? (VW - UV) / 3.0 : VW_conducting ? VW / 2.0 : UV_conducting ? -UV / 2.0 : V_zero,
+      W: UVW_conducting ? (WU - VW) / 3.0 : WU_conducting ? WU / 2.0 : VW_conducting ? -VW / 2.0 : W_zero,
+    }
+  }
+
+  // Calculate the voltage drop from the passive resistors on each phase.
+  const V_Ru = (R_phase + R_shunt) * Iu;
+  const V_Rv = (R_phase + R_shunt) * Iv;
+  const V_Rw = (R_phase + R_shunt) * Iw;
+
+  // Calculate the voltage drop from the 3 phase connections to the battery as 
+  // pairs of conducting phases.
+  const VCC_uv = vcc_matrix[U_state][V_state] * V_bat;
+  const VCC_vw = vcc_matrix[V_state][W_state] * V_bat;
+  const VCC_wu = vcc_matrix[W_state][U_state] * V_bat;
+
+  // Get the driving voltage seen by each phase.
+  const {U: VCC_u, V: VCC_v, W: VCC_w} = triple_duo_or_none(VCC_uv, VCC_vw, VCC_wu, 0.0, 0.0, 0.0);
+
+  // Get the mosfet voltage drop for each half-bridge, so we can compute power loss and heating.
+  // The current convention is that its positive coming out of the motor terminals.
+  const V_Mu = R_mosfet * bridge_r_vector[U_state] * Iu + V_diode * bridge_diode_vector[U_state];
+  const V_Mv = R_mosfet * bridge_r_vector[V_state] * Iv + V_diode * bridge_diode_vector[V_state];
+  const V_Mw = R_mosfet * bridge_r_vector[W_state] * Iw + V_diode * bridge_diode_vector[W_state];
+
+  // Add up all voltage contributions for each phase.
+  const V_u = Vu_emf - V_Ru - VCC_u - V_Mu;
+  const V_v = Vv_emf - V_Rv - VCC_v - V_Mv;
+  const V_w = Vw_emf - V_Rw - VCC_w - V_Mw;
+
+  // Calculate the phase to phase voltages too.
+  const V_uv = V_u - V_v;
+  const V_vw = V_v - V_w;
+  const V_wu = V_w - V_u;
+
+  // Calculate the current change through each pair of phases.
   const dIuv = UV_conducting ? V_uv / (2 * L_phase) : 0.0;
   const dIvw = VW_conducting ? V_vw / (2 * L_phase) : 0.0;
   const dIwu = WU_conducting ? V_wu / (2 * L_phase) : 0.0;
 
-  const dIu = UVW_conducting ? (dIuv - dIwu) / 3.0 : UV_conducting ? dIuv / 2.0 : WU_conducting ? -dIwu / 2.0 : -Iu/dt;
-  const dIv = UVW_conducting ? (dIvw - dIuv) / 3.0 : VW_conducting ? dIvw / 2.0 : UV_conducting ? -dIuv / 2.0 : -Iv/dt;
-  const dIw = UVW_conducting ? (dIwu - dIvw) / 3.0 : WU_conducting ? dIwu / 2.0 : VW_conducting ? -dIvw / 2.0 : -Iw/dt;
-
+  // Do the same trick for 
+  const {U: dIu, V: dIv, W: dIw} = triple_duo_or_none(dIuv, dIvw, dIwu, -Iu/dt, -Iv/dt, -Iw/dt);
 
   // Calculate rotor torque due to motor magnetic field. The contributions
   // of the 3 phase windings add up linearly.
-  const τ = - (
+  const τ_emf = - (
     Ψ_m * Iu * Math.sin(φ) +
     Ψ_m * Iv * Math.sin(φ - 2 * Math.PI / 3) +
     Ψ_m * Iw * Math.sin(φ + 2 * Math.PI / 3)
   );
 
-
-  const τ_applied = τ + τ_load;
+  // Get the total torque applied to the rotor before friction.
+  const τ_applied = τ_emf + τ_load;
+  // Calculate the sign of the static friction torque. It will oppose the applied
+  // torque when the rotor is standing still.
   const static_sign = (ω == 0.0) ? -Math.sign(τ_applied) : -Math.sign(ω);
+  // Calculate maximum friction contribution.
   const τ_friction = -ω * τ_dynamic + static_sign * τ_static;
+  // Calculate the total torque applied to the rotor assuming that the applied
+  // torque is greater than friction.
   const τ_total = τ_applied + τ_friction;
+  // Check if applied torque is enough to start rotating the rotor.
   const frozen = (ω == 0.0) && Math.abs(τ_applied) <= τ_static;
-
+  // Compute the delta assuming the rotor is not frozen.
   const dω_computed = τ_total / J_rotor;
-
   // Delta needed to stop the rotor in 1 step.
   const dω_stopping = -ω/dt;
+  // Check if the rotor would stop and reverse direction in 1 step.
   const stopping = -Math.sign(ω) * dω_computed > -Math.sign(ω)*dω_stopping;
-
   // We need to prevent static friction from overshooting when the motor is stopped or stopping in 1 step.
   const dω = (frozen || stopping) ? dω_stopping : (τ_total / J_rotor);
 
+  // TODO: enable radial velocity changes.
   const d𝜈 = 0.0;
+
+  // Calculate the current flowing out of the motor terminals.
+  const I_motor = bridge_current_vector[U_state] * Iu + bridge_current_vector[V_state] * Iv + bridge_current_vector[W_state] * Iw;
+
 
   return {
     diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, 𝜈: d𝜈},
     info: {
-      τ, τ_applied, τ_friction, τ_total, frozen, stopping,
+      τ_emf, τ_applied, τ_friction, τ_total, frozen, stopping,
       V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_u, V_v, V_w, VCC_u, VCC_v, VCC_w,
       Vu_rotational_emf, Vv_rotational_emf, Vw_rotational_emf,
       Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,
@@ -297,9 +371,9 @@ function euler_step(state, diff, dt) {
 /* Update the state using the Runge Kuta algorithm, which samples the differential at multiple nearby points. */
 function runge_kuta_step(state, diff, dt, parameters, inputs, outputs) {
   const k1 = diff;
-  const k2 = compute_state_diff(euler_step(state, k1, dt / 2), parameters, inputs, outputs, dt / 2).diff;
-  const k3 = compute_state_diff(euler_step(state, k2, dt / 2), parameters, inputs, outputs, dt / 2).diff;
-  const k4 = compute_state_diff(euler_step(state, k3, dt), parameters, inputs, outputs, dt).diff;
+  const k2 = compute_state_diff(euler_step(state, k1, dt / 2), dt / 2, parameters, inputs, outputs).diff;
+  const k3 = compute_state_diff(euler_step(state, k2, dt / 2), dt / 2, parameters, inputs, outputs).diff;
+  const k4 = compute_state_diff(euler_step(state, k3, dt), dt, parameters, inputs, outputs).diff;
 
   return _.mapValues(state, (value, key) => value + (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) * dt / 6);
 }
@@ -324,8 +398,11 @@ export class Simulation {
     this.options = {...default_simulation_options, ...options};
     const {start_state,  max_stored_steps} = this.options;
 
+    // Initialize the state of the motor with a copy of the start state.
     this.state = {...start_state};
+    // Store data in a circular buffer because copying this array does actually slow down the simulation.
     this.history_buffer = new CircularBuffer(max_stored_steps);
+    // Start the simulation at step 0.
     this.step = 0;
 
     // Initialize the outputs and inputs and other derivatives, but do not advance state.
@@ -334,9 +411,11 @@ export class Simulation {
     // Fill the history buffer with copies of the initial state; it makes graphs start uniformly.
     for (let i = 0; i < max_stored_steps; i++) this.history_buffer.push(this.flattened_state());
 
+    // Compute runtime statistics.
     this.stats = new TimingStats();
     // Simulation slowdown compared to wall clock time.
     this.slowdown = 1.0;
+    // Simulation running status.
     this.running = true;
   }
 
@@ -344,27 +423,34 @@ export class Simulation {
     return this.history_buffer.toarray();
   }
   
+  /* Advance the simulation by a single step. */
   compute_step() {
-    const {parameters, update_inputs, update_memory, state_update, dt, steps_number, store_period} = this.options;
-
+    // Get salient options.
+    const {parameters, update_inputs, update_memory, state_update, dt} = this.options;
+    
+    // Get the current state.
     const {state} = this;
 
+    // Calculate sensor values.
     const outputs = this.outputs = measurable_outputs(state, parameters);
-
+    // Calculate the motor driver inputs (driving algorithm) and external influences (load torque, battery connected).
     const inputs = this.inputs = update_inputs(state, parameters, outputs, update_memory);
+    // Calculate the differential equations at the current state.
+    const computation = compute_state_diff(state, dt, parameters, inputs, outputs);
 
-    const diff_info = compute_state_diff(state, parameters, inputs, outputs, dt);
+    const diff = this.diff = computation.diff;
+    this.info = computation.info;
 
-    const diff = this.diff = diff_info.diff;
-    this.info = diff_info.info;
-
-    return postprocess_state(state_update(state, diff, dt, parameters, inputs));
+    // Update the state using the differential equations.
+    return postprocess_state(state_update(state, diff, dt, parameters, inputs, outputs));
   }
 
+  /* Get a complete copy of the state at the current simulation step. */
   flattened_state() {
     return {step: this.step, ...this.state, ...this.outputs, ...this.inputs, ...this.info};
   }
 
+  /* Advance the simulation for a batch of steps and compute statistics. */
   update() {
     const {steps_number, store_period} = this.options;
 
@@ -386,6 +472,7 @@ export class Simulation {
     this.running = true;
   }
 
+  /* Display the current simulation state. */
   update_graphics(motor) {
     const state = this.flattened_state();
     const {φ, Iu, Iv, Iw, hall_1, hall_2, hall_3} = state;

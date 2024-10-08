@@ -108,9 +108,11 @@ const store_period_slider = Inputs.range([1, 10_000], {
   label: "Store period",
 });
 
-const load_torque_slider = Inputs.range([-0.1, +0.1], {
+const load_torque_slider = Inputs.range([0.0, 0.25], {
   step: 0.001, 
-  value: 0.0, 
+  transform: Math.log1p,
+  format: x => x.toFixed(3),
+  invert: Math.expm1,
   label: "Load Torque",
 });
 
@@ -133,7 +135,7 @@ function reset() {
   update_input(frequency_slider, 72_000_000); // 72 MHz
   update_input(store_period_slider, 2_000);
   update_input(steps_number_slider, 4_000);
-  update_input(load_torque_slider, +0.1);
+  update_input(load_torque_slider, +0.02);
 }
 
 reset();
@@ -162,8 +164,8 @@ const simulation_control = Inputs.button(
 
 function draw_sparklines(history){
   return html`<span>
-    ${sparkline(history, {label: "Motor Speed (RPM)", y: "rpm"}, {domain: [-15_000, 15_000]})}
-    ${sparkline(history, {label: "Motor Angle", y: "φ"}, {domain: [-π, π]})}
+    ${sparkline(history, {label: "Motor Speed (RPM)", y: "rpm"}, {least_domain: [-5_000, 5_000]})}
+    ${sparkline(history, {label: "Motor Angle", y: "φ"}, {least_domain: [-π, π]})}
     ${sparkline(history, {label: "Load Torque", y: "τ_load"})}
     ${sparkline(
       history, [
@@ -171,7 +173,7 @@ function draw_sparklines(history){
         {label: "Current Iv", y: "Iv", stroke: color_v},
         {label: "Current Iw", y: "Iw", stroke: color_w},
       ], 
-      {domain: [-6.0, 6.0], height: 120},
+      {least_domain: [-2.0, 2.0], height: 120},
     )}
     ${sparkline(
       history, [
@@ -179,7 +181,7 @@ function draw_sparklines(history){
         {label: "EMF Vv", y: "Vv_rotational_emf", stroke: color_v},
         {label: "EMF Vw", y: "Vw_rotational_emf", stroke: color_w},
       ], 
-      {domain: [-24.0, 24.0], height: 120},
+      {least_domain: [-12.0, 12.0], height: 120},
     )}
     ${sparkline(
       history, [
@@ -187,7 +189,7 @@ function draw_sparklines(history){
         {label: "VCC Vv", y: "VCC_v", stroke: color_v},
         {label: "VCC Vw", y: "VCC_w", stroke: color_w},
       ], 
-      {domain: [-12.0, 12.0], height: 120},
+      {least_domain: [-12.0, 12.0], height: 120},
     )}
     ${sparkline(
       history, [
@@ -195,7 +197,7 @@ function draw_sparklines(history){
         {label: "MOSFET Vv", y: "V_Mv", stroke: color_v},
         {label: "MOSFET Vw", y: "V_Mw", stroke: color_w},
       ], 
-      {domain: [-1.0, 1.0], height: 120},
+      {least_domain: [-1.0, 1.0], height: 120},
     )}
   </span>`;
 }
