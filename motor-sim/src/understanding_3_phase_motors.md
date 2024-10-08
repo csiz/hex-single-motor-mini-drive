@@ -116,13 +116,66 @@ const load_torque_slider = Inputs.range([0.0, 0.25], {
   label: "Load Torque",
 });
 
+const driver_state_selection = Inputs.radio(["Disconnect Battery", "Connect and Idle", "Break", "Drive -", "Drive +"],{label: "Driver control"});
+
+function get_sixstep_hall_code(hall_1, hall_2, hall_3){
+  return hall_3 << 2 | hall_2 << 1 | hall_1;
+}
+
+const sixstep_phase_map = {
+  0b000: "no_magnet",
+  0b100: 0,
+  0b110: 1,
+  0b010: 2,
+  0b011: 3,
+  0b001: 4,
+  0b101: 5,
+  0b111: "too_much_magnet",
+};
+
+const sixstep_switching_neg_map = {
+  no_magnet: [0, 0, 0],
+  too_much_magnet: [0, 0, 0],
+  0: [0, 1, 2],
+  1: [1, 0, 2],
+  2: [1, 2, 0],
+  3: [0, 2, 1],
+  4: [2, 0, 1],
+  5: [2, 1, 0],
+};
+
+const sixstep_switching_pos_map = {
+  no_magnet: [0, 0, 0],
+  too_much_magnet: [0, 0, 0],
+  0: [0, 2, 1],
+  1: [2, 0, 1],
+  2: [2, 1, 0],
+  3: [0, 1, 2],
+  4: [1, 0, 2],
+  5: [1, 2, 0],
+};
+
+function sixstep_commutation(outputs, positive=true){
+  const {hall_1, hall_2, hall_3} = outputs;
+  const sixstep_phase = sixstep_phase_map[get_sixstep_hall_code(hall_1, hall_2, hall_3)];
+  return (positive ? sixstep_switching_pos_map : sixstep_switching_neg_map)[sixstep_phase];
+}
 
 function interactive_inputs(state, parameters, outputs, update_memory) {
+  const [U_switch, V_switch, W_switch] = {
+    "Disconnect Battery": ()=>[0, 0, 0],
+    "Connect and Idle": ()=>[0, 0, 0],
+    "Break": ()=>[2, 2, 2],
+    "Drive -": ()=>sixstep_commutation(outputs, false),
+    "Drive +": ()=>sixstep_commutation(outputs, true),
+  }[driver_state_selection.value]();
+
   return {
-    U_switch: 0, // driver connection state for phase U
-    V_switch: 0, // driver connection state for phase V
-    W_switch: 0, // driver connection state for phase W
+    U_switch, // driver connection state for phase U
+    V_switch, // driver connection state for phase V
+    W_switch, // driver connection state for phase W
     τ_load: load_torque_slider.value, // external load torque
+    battery_connected: driver_state_selection.value != "Disconnect Battery", // whether the battery is connected
   }
 }
 
@@ -136,6 +189,7 @@ function reset() {
   update_input(store_period_slider, 2_000);
   update_input(steps_number_slider, 4_000);
   update_input(load_torque_slider, +0.02);
+  update_input(driver_state_selection, "Connect and Idle");
 }
 
 reset();
@@ -167,6 +221,8 @@ function draw_sparklines(history){
     ${sparkline(history, {label: "Motor Speed (RPM)", y: "rpm"}, {least_domain: [-5_000, 5_000]})}
     ${sparkline(history, {label: "Motor Angle", y: "φ"}, {least_domain: [-π, π]})}
     ${sparkline(history, {label: "Load Torque", y: "τ_load"})}
+    ${sparkline(history, {label: "Battery Current", y: "I"}, {least_domain: [-2.0, +2.0]})}
+    ${sparkline(history, {label: "Capacitor Voltage", y: "V"}, {least_domain: [-12.0, +12.0]})}
     ${sparkline(
       history, [
         {label: "Current Iu", y: "Iu", stroke: color_u},
@@ -199,6 +255,15 @@ function draw_sparklines(history){
       ], 
       {least_domain: [-1.0, 1.0], height: 120},
     )}
+    ${sparkline(
+      history, [
+        {label: "U status", y: "U_status", stroke: color_u},
+        {label: "V status", y: "V_status", stroke: color_v},
+        {label: "W status", y: "W_status", stroke: color_w},
+      ], 
+      {least_domain: [-1.0, 1.0], height: 120},
+    )}
+    
   </span>`;
 }
 
@@ -243,6 +308,7 @@ const simulation_interface = html`<span>
   <div>${steps_number_slider}</div>
   <div>${store_period_slider}</div>
   <div>${load_torque_slider}</div>
+  <div>${driver_state_selection}</div>
 </span>`;
 ```
 

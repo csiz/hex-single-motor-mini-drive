@@ -51,17 +51,18 @@ export function RPM_Kv_to_Ke(RPM_Kv){
 /* Initial parameters governing our motor physics. */
 export const initial_parameters = {
   R_phase: 1.3, // phase resistance
-  L_phase: 0.0001, // phase inductance
+  L_phase: 0.000_1, // phase inductance
   Ψ_m: RPM_Kv_to_Ke(1000), // motor Ke constant (also the magnetic flux linkage)
   τ_static: 0.0001, // static friction torque
   τ_dynamic: 0.00001, // dynamic friction torque
   V_bat: 12.0, // battery voltage
   R_bat: 1.0, // battery internal resistance
-  R_disconnect: 1_000_000.0, // 1MΩ battery disconnected resistance
   L_bat: 0.000_001, // 1μH inductance of wire leads up to the battery
+  R_disconnect: 10_000.0, // 10kΩ battery disconnected resistance (keep relatively low for numerical stability)
+  L_disconnect: 0.001, // 1mH inductance to prevent the simulation from blowing up
   C_near: 0.000_050, // 50μF capacitance near the motor mosfets
-  R_mosfet: 0.013, // mosfet resistance
   R_shunt: 0.010, // shunt resistance
+  R_mosfet: 0.013, // mosfet resistance
   V_diode: 0.72, // mosfet reverse diode voltage drop
   J_rotor: 0.00000025, // (Kg*m^2) rotor moment of inertia
   M_rotor: 0.0005, // (Kg) rotor mass
@@ -81,8 +82,8 @@ export const initial_state = {
   Iv: 0.0, // motor current phase V
   Iw: 0.0, // motor current phase W
   𝜈: 0.0, // rotor radial velocity
-  I_bat: 0.0, // battery current
-  V_near_cap: 0.0, // voltage of the near capacitor
+  I: 0.0, // current flowing into the battery (charging it when positive), or the terminal current when battery disconnected
+  V: 0.0, // voltage presented to the battery by the capacitor bank near the motor connections (effectively the motor voltage).
 }
 
 /* Convention for marking the commanded state of each half-bridge. */
@@ -107,7 +108,7 @@ const freewheeling_inputs = {
   V_switch: 0, // driver connection state for phase V
   W_switch: 0, // driver connection state for phase W
   τ_load: 0.0, // external load torque
-  battery_connected: false,
+  battery_connected: false, // whether the battery is plugged in (instantly)
 };
 
 
@@ -163,7 +164,7 @@ function compute_half_bridge_state(A_switch, Ia, Vreverse, Va, Vmin, Vmax) {
 }
 
 /* Signed contribution of the mosfet resistance for the phase given the half-bridge state. */
-const bridge_r_vector = [
+const bridge_r_sign = [
   0.00, // neutral
   +1.0, // high_conducting
   0.00, // high_diode
@@ -172,7 +173,7 @@ const bridge_r_vector = [
 ];
 
 /* Signed contribution of the mosfet reverse diode voltage per half-bridge state. */
-const bridge_diode_vector = [
+const bridge_diode_sign = [
   0.00, // neutral
   0.00, // high_conducting
   +1.0, // high_diode
@@ -181,7 +182,7 @@ const bridge_diode_vector = [
 ];
 
 /* Sign of the upstream current coming out of the motor (positive when the motor is charging the battery). */
-const bridge_current_vector = [
+const bridge_current_sign = [
   0.00, // neutral
   +1.0, // high_conducting
   +1.0, // high_diode
@@ -206,9 +207,14 @@ We need the dt resolution in order to handle values close to 0 (motor stopping, 
 */
 function compute_state_diff(state, dt, parameters, inputs, outputs) {
   // Get salient parameters.
-  const {R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, V_bat, R_mosfet, R_shunt, V_diode, J_rotor, M_rotor, r_max} = parameters;
-  const {φ, ω, Iu, Iv, Iw, 𝜈} = state;
-  const {U_switch, V_switch, W_switch, τ_load} = inputs;
+  const {
+    R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, 
+    V_bat, R_bat, L_bat, C_near, R_disconnect, L_disconnect,
+    R_shunt, R_mosfet, V_diode, J_rotor, 
+    M_rotor, r_max,
+  } = parameters;
+  const {φ, ω, Iu, Iv, Iw, 𝜈, I, V} = state;
+  const {U_switch, V_switch, W_switch, τ_load, battery_connected} = inputs;
 
   // Differential of the rotor angle is the rotor rotation.
   const dφ = ω;
@@ -272,20 +278,23 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const V_Rv = (R_phase + R_shunt) * Iv;
   const V_Rw = (R_phase + R_shunt) * Iw;
 
+  // Alias the driving voltage (we can either simulate a capacitor bank or straight to battery).
+  const VCC = V;
+
   // Calculate the voltage drop from the 3 phase connections to the battery as 
   // pairs of conducting phases.
-  const VCC_uv = vcc_matrix[U_state][V_state] * V_bat;
-  const VCC_vw = vcc_matrix[V_state][W_state] * V_bat;
-  const VCC_wu = vcc_matrix[W_state][U_state] * V_bat;
+  const VCC_uv = vcc_matrix[U_state][V_state] * VCC;
+  const VCC_vw = vcc_matrix[V_state][W_state] * VCC;
+  const VCC_wu = vcc_matrix[W_state][U_state] * VCC;
 
   // Get the driving voltage seen by each phase.
   const {U: VCC_u, V: VCC_v, W: VCC_w} = triple_duo_or_none(VCC_uv, VCC_vw, VCC_wu, 0.0, 0.0, 0.0);
 
   // Get the mosfet voltage drop for each half-bridge, so we can compute power loss and heating.
   // The current convention is that its positive coming out of the motor terminals.
-  const V_Mu = R_mosfet * bridge_r_vector[U_state] * Iu + V_diode * bridge_diode_vector[U_state];
-  const V_Mv = R_mosfet * bridge_r_vector[V_state] * Iv + V_diode * bridge_diode_vector[V_state];
-  const V_Mw = R_mosfet * bridge_r_vector[W_state] * Iw + V_diode * bridge_diode_vector[W_state];
+  const V_Mu = R_mosfet * bridge_r_sign[U_state] * Iu + V_diode * bridge_diode_sign[U_state];
+  const V_Mv = R_mosfet * bridge_r_sign[V_state] * Iv + V_diode * bridge_diode_sign[V_state];
+  const V_Mw = R_mosfet * bridge_r_sign[W_state] * Iw + V_diode * bridge_diode_sign[W_state];
 
   // Add up all voltage contributions for each phase.
   const V_u = Vu_emf - V_Ru - VCC_u - V_Mu;
@@ -338,16 +347,37 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const d𝜈 = 0.0;
 
   // Calculate the current flowing out of the motor terminals.
-  const I_motor = bridge_current_vector[U_state] * Iu + bridge_current_vector[V_state] * Iv + bridge_current_vector[W_state] * Iw;
+  const I_motor = (
+    bridge_current_sign[U_state] * Iu + 
+    bridge_current_sign[V_state] * Iv + 
+    bridge_current_sign[W_state] * Iw);
 
+  // The current flowing out of the motor goes either to the near capacitor or the battery.
+  const I_near_cap = I_motor - I;
+  // Compute the rate of charge of the capacitor bank.
+  const dV = I_near_cap / C_near;
+  // Get the battery connection parameters.
+  const V_terminal = battery_connected ? (V_bat + I * R_bat) : (0.0 + I * R_disconnect);
+  // To prevent the simulation from blowing up, we need to use a higher inductance to limit 
+  // the magnitude of the current delta.
+  const L_terminal = battery_connected ? L_bat : L_disconnect;
+  // Compute the rate of change of the current on the power line. Whether connected or 
+  // disconneted, current must flow. If it's suddenly disconnected, that means sparkies!
+  const dI = (V - V_terminal) / L_terminal;
+
+  const U_status = bridge_current_sign[U_state];
+  const V_status = bridge_current_sign[V_state];
+  const W_status = bridge_current_sign[W_state];
 
   return {
-    diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, 𝜈: d𝜈},
+    diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, 𝜈: d𝜈, V: dV, I: dI},
     info: {
       τ_emf, τ_applied, τ_friction, τ_total, frozen, stopping,
       V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_u, V_v, V_w, VCC_u, VCC_v, VCC_w,
+      V_terminal, I_near_cap, I_motor,
       Vu_rotational_emf, Vv_rotational_emf, Vw_rotational_emf,
       Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,
+      U_status, V_status, W_status,
       rpm: ω * 30 / π,
     },
   };
