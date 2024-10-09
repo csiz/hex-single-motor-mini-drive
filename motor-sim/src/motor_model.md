@@ -205,9 +205,9 @@ magnetic field is hard to compute, but since the effect is important, we will do
 estimate it. Let's assume the magnetic flux loses all of its strength when the air gap
 increases by ${tex`r_{max}`}. Initially the potential energy of the magnetic moment is
 ${tex`U = -\overrightarrow{m_I} \bullet \overrightarrow{Bm}`} and at distance ${tex`r_{max}`}
-the potential energy is ${tex`U = 0`}. Let's further assume the magnetic field is locally linear,
-therefore if the magnet travels a distance ${tex`dr`} it will convert the potential energy
-${tex`dU = \overrightarrow{m_I} \bullet \overrightarrow{Bm} \frac{dr}{r_{max}}`} into kinetic energy.
+the potential energy is ${tex`U = 0`}. Let's further assume the magnetic field is locally
+linearly dependent on distance therefore if the magnet travels a distance ${tex`dr`} it will convert 
+the potential energy ${tex`dU = \overrightarrow{m_I} \bullet \overrightarrow{Bm} \frac{dr}{r_{max}}`} into kinetic energy.
 The force on the rotor is ${tex`F = m \frac{d\nu}{dt} = -\frac{dU}{dr}`}. In our crude approximation
 we don't want to track the rotor position ${tex`r`}, let's make the term dissapear by computing the
 power ${tex`P = F \nu = F \frac{dr}{dt} = -\frac{dU}{dt}`}. We can replace ${tex`dr`} with ${tex`\nu dt`}

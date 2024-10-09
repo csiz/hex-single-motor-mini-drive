@@ -38,7 +38,8 @@ function get_coil_color(coil) {
 const color_u = get_coil_color(motor.coil_U);
 const color_v = get_coil_color(motor.coil_V);
 const color_w = get_coil_color(motor.coil_W);
-
+const color_x = "steelblue";
+const color_y = "lightcoral";
 
 const descriptions = new Map([
   ["<no selection>", html`
@@ -88,6 +89,26 @@ function show_description(objects) {
   highlight_description.value = descriptions.get(_.get(objects, "[0]", "<no selection>"));
 }
 
+const interactive_inputs_map = {
+  "Disconnect Battery": ()=>[0, 0, 0],
+  "Connect and Idle": ()=>[0, 0, 0],
+  "Break": ()=>[2, 2, 2],
+  "Drive -": (state, parameters, outputs, update_memory)=>sixstep_commutation(outputs, false),
+  "Drive +": (state, parameters, outputs, update_memory)=>sixstep_commutation(outputs, true),
+  "Drive U +": ()=>[1, 2, 2],
+  "Drive V +": ()=>[2, 1, 2],
+  "Drive W +": ()=>[2, 2, 1],
+  "Drive U -": ()=>[2, 1, 1],
+  "Drive V -": ()=>[1, 2, 1],
+  "Drive W -": ()=>[1, 1, 2],
+  "Drive UV +": ()=>[1, 2, 0],
+  "Drive VW +": ()=>[0, 1, 2],
+  "Drive WU +": ()=>[2, 0, 1],
+  "Drive UV -": ()=>[2, 1, 0],
+  "Drive VW -": ()=>[0, 2, 1],
+  "Drive WU -": ()=>[1, 0, 2],
+};
+
 const frequency_slider = Inputs.range([10_000, 100_000_000], {
   transform: Math.log, 
   format: x => x.toFixed(0), 
@@ -108,15 +129,13 @@ const store_period_slider = Inputs.range([1, 10_000], {
   label: "Store period",
 });
 
-const load_torque_slider = Inputs.range([0.0, 0.1], {
-  step: 0.001, 
-  transform: Math.log1p,
-  format: x => x.toFixed(3),
-  invert: Math.expm1,
+const load_torque_slider = Inputs.range([0.000_1, 0.1], {
+  transform: Math.log,
+  format: x => x.toFixed(4),
   label: "Load Torque",
 });
 
-const driver_state_selection = Inputs.radio(["Disconnect Battery", "Connect and Idle", "Break", "Drive -", "Drive +"],{label: "Driver control"});
+const driver_state_selection = Inputs.radio(Object.keys(interactive_inputs_map), {label: "Driver control"});
 
 function get_sixstep_hall_code(hall_1, hall_2, hall_3){
   return hall_3 << 2 | hall_2 << 1 | hall_1;
@@ -161,14 +180,10 @@ function sixstep_commutation(outputs, positive=true){
   return (positive ? sixstep_switching_pos_map : sixstep_switching_neg_map)[sixstep_phase];
 }
 
+
+
 function interactive_inputs(state, parameters, outputs, update_memory) {
-  const [U_switch, V_switch, W_switch] = {
-    "Disconnect Battery": ()=>[0, 0, 0],
-    "Connect and Idle": ()=>[0, 0, 0],
-    "Break": ()=>[2, 2, 2],
-    "Drive -": ()=>sixstep_commutation(outputs, false),
-    "Drive +": ()=>sixstep_commutation(outputs, true),
-  }[driver_state_selection.value]();
+  const [U_switch, V_switch, W_switch] = interactive_inputs_map[driver_state_selection.value](state, parameters, outputs, update_memory);
 
   return {
     U_switch, // driver connection state for phase U
@@ -185,10 +200,10 @@ function update_input(input, value) {
 }
 
 function reset() {
-  update_input(frequency_slider, 12_000_000); // We want to simulate 72 MHz!
-  update_input(store_period_slider, 1_000);
-  update_input(steps_number_slider, 1_000);
-  update_input(load_torque_slider, +0.01);
+  update_input(frequency_slider, 1_000_000); // We want to simulate 72 MHz!
+  update_input(steps_number_slider, 20_000);
+  update_input(store_period_slider, 250);
+  update_input(load_torque_slider, +0.0001);
   update_input(driver_state_selection, "Connect and Idle");
 }
 
@@ -206,25 +221,72 @@ let simulation = new Simulation({
   dt: 1.0 / frequency_slider.value,
 });
 
+const sound_scaling = {
+  r: 1.0 / 0.002,
+  rv: 1.0 / 1.0,
+}
+
 const simulation_control = Inputs.button(
   [
     ["Pause", () => { simulation.running = false; }], 
     ["Resume", () => { simulation.running = true; }],
     [html`<div style="min-width: 7em;">Look at motor</div>`, () => { rendering.reset_camera(); }],
     [html`<div style="min-width: 6em;">Reset inputs</div>`, () => { reset(); }],
+    ["Play🎵", () => {
+      const audio_context = new AudioContext({sampleRate: simulation.options.sound_sample_rate});
 
+      // Create an empty three-second stereo buffer at the sample rate of the AudioContext.
+      const noise_buffer = audio_context.createBuffer(
+        2,
+        simulation.options.sound_buffer_size,
+        simulation.options.sound_sample_rate,
+      );
+
+      const left_channel = noise_buffer.getChannelData(0);
+      const right_channel = noise_buffer.getChannelData(1);
+
+      const scaling = 1.0 / 0.002;
+
+      simulation.sounds.forEach(({rx_v, ry_v, rx, ry}, i) => {
+        left_channel[i] = scaling * rx;
+        right_channel[i] = scaling * ry;
+      });
+
+      // Create a buffer source.
+      const noise = audio_context.createBufferSource();
+      noise.buffer = noise_buffer;
+
+      // Connect to output.
+      noise.connect(audio_context.destination);
+
+      // Start the noise.
+      noise.start();
+    }],
   ],
   {value: "running", label: "Simulation control"}
 );
 
 function draw_sparklines(history){
   return html`<span>
-    ${sparkline(history, {label: `Motor Speed (RPM): ${formatSI(_.last(history).rpm)}`, y: "rpm"}, {least_domain: [-6_000, 6_000]})}
+    ${sparkline(history, {label: `Motor Speed (RPM)`, y: "rpm"}, {least_domain: [-6_000, 6_000]})}
     ${sparkline(history, {label: "Motor Angle", y: "φ"}, {least_domain: [-π, π]})}
     ${sparkline(history, {label: "Torque applied", y: "τ_applied"}, {least_domain: [-0.1, 0.1]})}
     ${sparkline(history, {label: "Battery Current", y: "I"}, {least_domain: [-2.0, +2.0]})}
     ${sparkline(history, {label: "Capacitor Voltage", y: "V"}, {least_domain: [-12.0, +12.0]})}
-    ${sparkline(history, {label: "Radial displacement velocity (noise)", y: "𝜈"}, {least_domain: [-0.1, +0.1]})}
+    ${sparkline(
+      history, [
+        {label: html`Radial ${tex`\nu_x`}`, y: "rx_v", stroke: color_x},
+        {label: html`Radial ${tex`\nu_y`}`, y: "ry_v", stroke: color_y},
+      ],
+      {least_domain: [-0.1, +0.1]},
+    )}
+    ${sparkline(
+      history, [
+        {label: html`Radial ${tex`x`}`, y: "rx", stroke: color_x},
+        {label: html`Radial ${tex`y`}`, y: "ry", stroke: color_y},
+      ],
+      {least_domain: [-0.000_100, +0.000_100]},
+    )}
     ${sparkline(
       history, [
         {label: "Current Iu", y: "Iu", stroke: color_u},
@@ -313,6 +375,11 @@ function * simulate_live () {
       <span>Slowdown: ${simulation.running ? formatSI(simulation.slowdown) : tex`\infty`}</span>
       <span>Speed: ${formatSI(1.0 / simulation.options.dt)}Hz</span>
       <span>${tex`\delta t`}: ${formatSI(simulation.options.dt)}s</span>
+
+      <span>Speed: ${formatSI(_.last(simulation.history).rpm)}RPM</span>
+      <span>Radial: ${formatSI(_.last(simulation.history).r)}m</span>
+      <span>Radial ${tex`\nu`}: ${formatSI(_.last(simulation.history).rv)}m/s</span>
+      <span>🎵 buffer: ${formatSI(simulation.sound_buffer.size() / simulation.options.sound_sample_rate)}s</span>
     </span>`;
 
     yield rendering.div;

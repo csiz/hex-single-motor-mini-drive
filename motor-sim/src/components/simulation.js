@@ -5,6 +5,13 @@ import { TimingStats } from "./utils.js";
 import { float } from "three/webgpu";
 
 export const π = Math.PI;
+const cos_0 = 1.0;
+const cos_2π_3 = -0.5;
+const cos_4π_3 = -0.5;
+
+const sin_0 = 0.0;
+const sin_2π_3 = 0.86602540378;
+const sin_4π_3 = -0.86602540378;
 
 /* Normalize angle values to the range [-π, π]. */
 export function normalized_angle(angle) {
@@ -38,7 +45,7 @@ export function hall_bounds(hall_toggle_angle) {
 }
 
 /* Hall sensor toggle angle (with respect to rotor angle). */
-export const hall_toggle_angle = 80 * π / 180;
+export const hall_toggle_angle = 85 * π / 180;
 
 /* Convert from RPM/Volts constant to the motor electric constant. 
 
@@ -53,9 +60,9 @@ export const initial_parameters = {
   R_phase: 1.3, // phase resistance
   L_phase: 0.000_1, // phase inductance
   Ψ_m: RPM_Kv_to_Ke(600), // ~0.01V*s motor Ke constant (also the magnetic flux linkage)
-  τ_static: 0.0001, // static friction torque
+  τ_static: 0.0002, // static friction torque
   τ_dynamic: 0.00001, // dynamic friction torque
-  V_bat: 12.0, // battery voltage
+  V_bat: 8.0, // battery voltage
   R_bat: 1.0, // battery internal resistance
   L_bat: 0.000_001, // 1μH inductance of wire leads up to the battery
   R_disconnect: 1_000.0, // 1kΩ battery disconnected resistance (keep relatively low for numerical stability)
@@ -64,11 +71,16 @@ export const initial_parameters = {
   R_shunt: 0.010, // shunt resistance
   R_mosfet: 0.013, // mosfet resistance
   V_diode: 0.72, // mosfet reverse diode voltage drop
-  J_rotor: 0.00000025, // (Kg*m^2) rotor moment of inertia
-  M_rotor: 0.000_1, // (Kg) rotor mass
-  r_max: 0.001, // (m) rotor radial displacement for magnetic field dropoff
-  r_elasticity: 100_000.0, // (N/m) radial displacement spring constant
-  r_friction: 0.1,  // radial friction
+  J_rotor: 0.000_000_25, // (Kg*m^2) rotor moment of inertia
+  M_rotor: 0.008, // (Kg) rotor mass
+  r_max: 0.001, // (m) Rotor radial displacement for full magnetic field dropoff
+  /* (N/m) Radial displacement spring constant. Tapping the rotor makes ~600Hz 
+  from which the stiffness can be estimated from a simple mass-spring oscilator at
+  frequency `f = 1/2π * sqrt(r_elasticity / M_rotor)`. */
+  r_elasticity: 100_000.0,
+  /* (N) Radial friction. We'll only use a bit of static friction for radial displacement
+  and let the dynamic friction be entirely due to emf interactions. */
+  r_friction: 0.1,
   ...hall_bounds(hall_toggle_angle), // hall sensor toggle angle bounds
 }
 
@@ -83,8 +95,10 @@ export const initial_state = {
   Iu: 0.0, // motor current phase U
   Iv: 0.0, // motor current phase V
   Iw: 0.0, // motor current phase W
-  r: 0.0, // radial displacement of the rotor
-  𝜈: 0.0, // rotor radial velocity
+  rx: 0.0, // radial displacement of the rotor in x direction
+  ry: 0.0, // radial displacement of the rotor in y direction
+  rx_v: 0.0, // rotor radial velocity
+  ry_v: 0.0, // rotor radial velocity
   I: 0.0, // current flowing into the battery (charging it when positive), or the terminal current when battery disconnected
   V: 0.0, // voltage presented to the battery by the capacitor bank near the motor connections (effectively the motor voltage).
 }
@@ -228,7 +242,7 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
     R_shunt, R_mosfet, V_diode, J_rotor, 
     M_rotor, r_max, r_friction, r_elasticity,
   } = parameters;
-  const {φ, ω, Iu, Iv, Iw, r, 𝜈, I, V} = state;
+  const {φ, ω, Iu, Iv, Iw, rx, ry, rx_v, ry_v, I, V} = state;
   const {U_switch, V_switch, W_switch, τ_load, battery_connected} = inputs;
 
   // Differential of the rotor angle is the rotor rotation.
@@ -237,19 +251,31 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   // Alias the driving voltage (we can either simulate a capacitor bank or straight to battery).
   const VCC = V;
 
+  const φ_rv = Math.atan2(ry_v, rx_v);
+  const rv = Math.hypot(rx_v, ry_v);
+
+  const r = Math.hypot(rx, ry);
+
+  // TODO: The magnetic field strength should drop off with the square of the distance. (and then scaled down again by r_max for dimenional consistency).
+  // That also changes the derivative that leads to the radial emf...
+  const Ψ = Ψ_m * Math.max(1.0 - r/r_max, 0.0);
+
+  // TODO: use some fourrier shenanigans to get a sound snippet from the current graph picture.
+  // Definitely need to do fourier analysis on these graphs.
+
   // Calculate the induced emf from the rotating magnetic field of the permanent magnet.
-  const Vu_rotational_emf = Ψ_m * ω * Math.sin(φ);
-  const Vv_rotational_emf = Ψ_m * ω * Math.sin(φ - 2 * Math.PI / 3);
-  const Vw_rotational_emf = Ψ_m * ω * Math.sin(φ + 2 * Math.PI / 3);
+  const Vu_rotational_emf = Ψ * ω * Math.sin(φ);
+  const Vv_rotational_emf = Ψ * ω * Math.sin(φ - 2 * π / 3);
+  const Vw_rotational_emf = Ψ * ω * Math.sin(φ + 2 * π / 3);
 
   // Calculate the induced emf from the axial displacement of the magnet. Because magnetic
   // fields drop off quickly with distance, small displacements will have a large effect.
   // The distance in this case is the spacing between the rotor and the stator core; aka
   // the air gap. The air gap is quite tiny in high performance motors; we won't see the
   // displacements, but we will hear them as motor noise.
-  const Vu_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ);
-  const Vv_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ - 2 * Math.PI / 3);
-  const Vw_radial_emf = Ψ_m * 𝜈 / r_max * Math.cos(φ + 2 * Math.PI / 3);
+  const Vu_radial_emf = rv * Math.cos(φ_rv)             / r_max * Ψ * Math.cos(φ);
+  const Vv_radial_emf = rv * Math.cos(φ_rv - 2 * π / 3) / r_max * Ψ * Math.cos(φ - 2 * π / 3);
+  const Vw_radial_emf = rv * Math.cos(φ_rv + 2 * π / 3) / r_max * Ψ * Math.cos(φ + 2 * π / 3);
   
   // Total emf contributions from the moving permanent magnet field.
   const Vu_emf = Vu_rotational_emf + Vu_radial_emf;
@@ -331,10 +357,10 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
 
   // Calculate rotor torque due to motor magnetic field. The contributions
   // of the 3 phase windings add up linearly.
-  const τ_emf = - Ψ_m * (
+  const τ_emf = - Ψ * (
     Iu * Math.sin(φ) +
-    Iv * Math.sin(φ - 2 * Math.PI / 3) +
-    Iw * Math.sin(φ + 2 * Math.PI / 3)
+    Iv * Math.sin(φ - 2 * π / 3) +
+    Iw * Math.sin(φ + 2 * π / 3)
   );
 
   // Get the total torque applied to the rotor before friction.
@@ -353,20 +379,34 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   // Add the acceleration contributions together without allowing friction to cause a zero crossing.
   const dω = add_without_zero_crossing_friction(dt, ω, dω_applied, dω_friction);
   
-  const dr = 𝜈;
+  const drx = rx_v;
+  const dry = ry_v;
 
-  const F_emf = - Ψ_m / r_max * (
-    Iu * Math.cos(φ) +
-    Iv * Math.cos(φ - 2 * Math.PI / 3) +
-    Iw * Math.cos(φ + 2 * Math.PI / 3)
+  const Fx_emf = - Ψ / r_max * (
+    Iu * cos_0 * Math.cos(φ) +
+    Iv * cos_2π_3 * Math.cos(φ - 2 * π / 3) +
+    Iw * cos_4π_3 * Math.cos(φ + 2 * π / 3)
   );
-  
-  const F_elasticity = -r_elasticity * r;
 
-  const d𝜈_applied = (F_emf + F_elasticity) / M_rotor;
-  const d𝜈_friction = -sign_first_nonzero(𝜈, d𝜈_applied) * r_friction / M_rotor;
-  const d𝜈 = add_without_zero_crossing_friction(dt, 𝜈, d𝜈_applied, d𝜈_friction);
+  const Fy_emf = - Ψ / r_max * (
+    // Iu * sin_0 * Math.cos(φ) +
+    Iv * sin_2π_3 * Math.cos(φ - 2 * π / 3) +
+    Iw * sin_4π_3 * Math.cos(φ + 2 * π / 3)
+  );
 
+  const Fx_elasticity = -r_elasticity * rx;
+  const Fy_elasticity = -r_elasticity * ry;
+
+  const drx_v_applied = (Fx_emf + Fx_elasticity) / M_rotor;
+  const dry_v_applied = (Fy_emf + Fy_elasticity) / M_rotor;
+
+  const φ_rv_applied = (rv != 0.0 ? φ_rv : Math.atan2(dry_v_applied, drx_v_applied));
+
+  const drx_v_friction = - r_friction * Math.cos(φ_rv_applied) / M_rotor;
+  const dry_v_friction = - r_friction * Math.sin(φ_rv_applied) / M_rotor;
+
+  const drx_v = add_without_zero_crossing_friction(dt, rx_v, drx_v_applied, drx_v_friction);
+  const dry_v = add_without_zero_crossing_friction(dt, ry_v, dry_v_applied, dry_v_friction);
   
   // Calculate the current flowing out of the motor terminals.
   const I_motor = (
@@ -392,7 +432,7 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const W_status = bridge_current_sign[W_state];
 
   return {
-    diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, r: dr, 𝜈: d𝜈, V: dV, I: dI},
+    diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, rx: drx, ry: dry, rx_v: drx_v, ry_v: dry_v, V: dV, I: dI},
     info: {
       τ_emf, τ_applied, τ_friction, τ_total,
       V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_u, V_v, V_w, VCC_u, VCC_v, VCC_w,
@@ -401,7 +441,7 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
       Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,
       Vu_emf, Vv_emf, Vw_emf,
       U_status, V_status, W_status,
-      rpm: ω * 30 / π,
+      rpm: ω * 30 / π, r, rv, φ_rv,
     },
   };
 }
@@ -442,6 +482,13 @@ export const default_simulation_options = {
   max_stored_steps: 400,
   steps_number: 4_000,
   store_period: 2_000,
+  /* Clock speed of driving microcontroller, used to update the PWM counter. */
+  processor_frequency: 72_000_000,
+  /* Sound sample rate, used to record variables to play as noise. */
+  sound_sample_rate: 48_000,
+  /* How much sound recording to keep; this buffer is much larger than plot
+  data history, but we'll keep fewer variables to save memory. */
+  sound_buffer_size: 48_000 * 3.0,
 };
 
 
@@ -449,17 +496,19 @@ export const default_simulation_options = {
 export class Simulation {
   constructor(options={}) {
     this.options = {...default_simulation_options, ...options};
-    const {start_state,  max_stored_steps} = this.options;
+    const {start_state,  max_stored_steps, sound_buffer_size} = this.options;
 
     // Initialize the state of the motor with a copy of the start state.
     this.state = {...start_state};
     // Store data in a circular buffer because copying this array does actually slow down the simulation.
     this.history_buffer = new CircularBuffer(max_stored_steps);
+    // Store sound data in a circular buffer.
+    this.sound_buffer = new CircularBuffer(sound_buffer_size);
     // Start the simulation at step 0.
     this.step = 0;
 
     // Initialize the outputs and inputs and other derivatives, but do not advance state.
-    this.compute_step();
+    this.compute_next_state();
 
     // Fill the history buffer with copies of the initial state; it makes graphs start uniformly.
     for (let i = 0; i < max_stored_steps; i++) this.history_buffer.push(this.flattened_state());
@@ -475,9 +524,13 @@ export class Simulation {
   get history() {
     return this.history_buffer.toarray();
   }
+
+  get sounds() {
+    return this.sound_buffer.toarray();
+  }
   
   /* Advance the simulation by a single step. */
-  compute_step() {
+  compute_next_state() {
     // Get salient options.
     const {parameters, update_inputs, update_memory, state_update, dt} = this.options;
     
@@ -503,21 +556,30 @@ export class Simulation {
     return {step: this.step, ...this.state, ...this.outputs, ...this.inputs, ...this.info};
   }
 
+  sound_state() {
+    const {rx_v, ry_v, rx, ry, φ, Iu, Iv, Iw} = this.state;
+    return {rx_v, ry_v, rx ,ry, φ, Iu, Iv, Iw};
+  }
+
   /* Advance the simulation for a batch of steps and compute statistics. */
   update() {
-    const {steps_number, store_period} = this.options;
+    const {steps_number, store_period, dt, sound_sample_rate} = this.options;
 
     for (let i = 0; i <steps_number; i++){
 
-      this.state = this.compute_step();
+      this.state = this.compute_next_state();
 
-      this.step += 1;
-
-      const {step} = this;
-
-      if (step % store_period == 0) {
+      if (this.step % store_period == 0) {
         this.history_buffer.push(this.flattened_state());
       }
+
+      const sound_period = Math.max(1, Math.round(1.0/(sound_sample_rate * dt)));
+
+      if (this.step % sound_period == 0) {
+        this.sound_buffer.push(this.sound_state());
+      }
+
+      this.step += 1;
     }
 
     this.stats.update();
@@ -528,9 +590,12 @@ export class Simulation {
   /* Display the current simulation state. */
   update_graphics(motor) {
     const state = this.flattened_state();
-    const {φ, Iu, Iv, Iw, hall_1, hall_2, hall_3} = state;
+    const {φ, Iu, Iv, Iw, hall_1, hall_2, hall_3, rx, ry} = state;
     
     motor.rotor.rotation.y = normalized_angle(φ - π / 2);
+    const position_scaling = 5_000.0;
+    motor.rotor.position.z = position_scaling * rx;
+    motor.rotor.position.x = position_scaling * ry;
     motor.red_led.material.emissiveIntensity = hall_1 ? 10.0 : 0.0;
     motor.green_led.material.emissiveIntensity = hall_2 ? 8.0 : 0.0;
     motor.blue_led.material.emissiveIntensity = hall_3 ? 12.0 : 0.0;
