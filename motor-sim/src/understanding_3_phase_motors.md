@@ -200,7 +200,7 @@ function update_input(input, value) {
 }
 
 function reset() {
-  update_input(frequency_slider, 1_000_000); // We want to simulate 72 MHz!
+  update_input(frequency_slider, 12_000_000); // We want to simulate 72 MHz!
   update_input(steps_number_slider, 20_000);
   update_input(store_period_slider, 250);
   update_input(load_torque_slider, +0.0001);

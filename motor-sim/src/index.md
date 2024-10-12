@@ -15,27 +15,22 @@ import {note, link} from "./components/utils.js"
 Motor model parameters
 ----------------------
 
-* [ ] rotor inertial mass
-* [ ] phase inductance L
-* [ ] phase resistance R
-* [ ] motor Kv constant
-* [ ] hysterisis angle alpha ${note(html`
-	Apparently the phase delay between the motor flux and stator flux is constant and
-	depends on the hysterisis loop characteristic of the rotor construction.
-	${link("https://www.ijerd.com/paper/vol12-issue5/Version-1/K1257683.pdf")}
-`)}
-* [ ] hysterisis friction torque
-	the hysterisis torque is also constant
-* [ ] static friction torque (fixed torque at standstill)
-* [ ] dynamic friction torque (fixed torque when rotating)
-* [ ] resistance friction torque (this one is proportional to rotation speed)
-* [ ] battery internal resistance
-* [ ] mosfet resistance
-* [ ] mosfet reverse diode voltage drop
-* [ ] hall sensor toggle angle (the hall sensor senses positive magnetic field, so it
+* [✓] rotor inertial mass
+* [✓] phase inductance L
+* [✓] phase resistance R
+* [✓] motor Kv constant
+* [ ] hysterisis modeling?
+* [✓] static friction torque (fixed torque at standstill)
+* [✓] dynamic friction torque (fixed torque when rotating)
+* [✓] resistance friction torque (this one is proportional to rotation speed)
+* [✓] battery internal resistance
+* [✓] mosfet resistance
+* [✓] mosfet reverse diode voltage drop
+* [✓] hall sensor toggle angle (the hall sensor senses positive magnetic field, so it
 toggles at almost 90 degrees difference from the rotor angle; the field is null at 90 degrees).
-* [ ] rotor mass (so we can measure axial deflection when motor is )
-* [ ] rotor axial restoration force constant
+* [✓] rotor mass (so we can measure axial deflection when motor is )
+* [✓] rotor axial restoration force constant
+* [ ] cogging torque ripple
 
 
 
