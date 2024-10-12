@@ -2,7 +2,6 @@ import CircularBuffer from "circular-buffer";
 import _ from "lodash";
 
 import { TimingStats } from "./utils.js";
-import { float } from "three/webgpu";
 
 export const π = Math.PI;
 const cos_0 = 1.0;
@@ -17,6 +16,7 @@ const sin_4π_3 = -0.86602540378;
 export function normalized_angle(angle) {
   return (angle + 3 * π) % (2 * π) - π;
 }
+
 
 /* Check whether the angle is inside the interval; assuming normalized angles. */
 export function interval_contains_angle(low, high, angle) {
@@ -585,22 +585,5 @@ export class Simulation {
     this.stats.update();
     this.slowdown = 1.0 / (Math.max(0.1, this.stats.fps) * this.options.dt * this.options.steps_number);
     this.running = true;
-  }
-
-  /* Display the current simulation state. */
-  update_graphics(motor) {
-    const state = this.flattened_state();
-    const {φ, Iu, Iv, Iw, hall_1, hall_2, hall_3, rx, ry} = state;
-    
-    motor.rotor.rotation.y = normalized_angle(φ - π / 2);
-    const position_scaling = 5_000.0;
-    motor.rotor.position.z = position_scaling * rx;
-    motor.rotor.position.x = position_scaling * ry;
-    motor.red_led.material.emissiveIntensity = hall_1 ? 10.0 : 0.0;
-    motor.green_led.material.emissiveIntensity = hall_2 ? 8.0 : 0.0;
-    motor.blue_led.material.emissiveIntensity = hall_3 ? 12.0 : 0.0;
-    motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(Iu / 6.0);
-    motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(Iv / 6.0);
-    motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(Iw / 6.0);
   }
 }
