@@ -5,12 +5,13 @@ title: Understanding 3-phase motor control
 <div class="grid" style="grid-template-columns: 1fr 1fr;">
   <div class="card">
     <figure>${live_simulation}</figure>
-    <p>${highlight_description}</p>
+    <div class="card tight">${simulation_info}</div>
+    <div class="card tight">${simulation_interface}</div>
+    <div class="card tight">${simulation_plots_interface}</div>
   </div>
   <div class="card">
-    <div class="card tight">${simulation_interface}</div>
-    <div class="card tight">${simulation_info}</div>
-    <span>${simulation_plots}</span>
+    <div class="card tight" style="min-height: 5rem;">${highlight_description}</div>
+    <div class="card tight">${simulation_plots}</div>
   </div>
 </div>
 
@@ -18,9 +19,9 @@ title: Understanding 3-phase motor control
 ```js
 import * as THREE from "three";
 import {formatSI} from "format-si-prefix";
-import {min, max} from "d3-array";
 import tex from "npm:@observablehq/tex";
 import * as Plot from "@observablehq/plot";
+import _ from "lodash";
 
 import {html} from "htl";
 const htf = html.fragment;
@@ -48,24 +49,24 @@ const color_y = "lightcoral";
 
 
 function update_motor_visuals(state) {
-  const {φ, Iu, Iv, Iw, hall_1, hall_2, hall_3, rx, ry} = state;
+  const {φ, I_u, I_v, I_w, hall_1, hall_2, hall_3, rx, ry} = state;
   
   motor.rotor.rotation.y = normalized_angle(φ - π / 2);
-  const position_scaling = 5_000.0;
+  const position_scaling = 50_000.0;
   motor.rotor.position.z = position_scaling * rx;
   motor.rotor.position.x = position_scaling * ry;
   motor.red_led.material.emissiveIntensity = hall_1 ? 10.0 : 0.0;
   motor.green_led.material.emissiveIntensity = hall_2 ? 8.0 : 0.0;
   motor.blue_led.material.emissiveIntensity = hall_3 ? 12.0 : 0.0;
-  motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(Iu / 6.0);
-  motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(Iv / 6.0);
-  motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(Iw / 6.0);
+  motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(I_u / 6.0);
+  motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(I_v / 6.0);
+  motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(I_w / 6.0);
 }
 
 const descriptions = new Map([
   ["<no selection>", html`
     We simulate a 3 phase motor with 1 winding per phase and 2 pole permanent magnet rotor
-    (to simplify the illustration).`],
+    (to simplify the illustration). However around the model to find out more.`],
   [motor.stator, html`
     The stator is the stationary part of the motor. The coils wounded around the stator slots
     generate a magnetic field when current flows through them. The stator is made of magnetic
@@ -111,7 +112,7 @@ const show_description = _.throttle((objects) => {
 
 
 
-const frequency_slider = Inputs.range([10_000, 100_000_000], {
+const frequency_slider = Inputs.range([1_125_000, 72_000_000], {
   transform: Math.log, 
   format: x => x.toFixed(0), 
   label: "Frequency (Hz)",
@@ -131,7 +132,7 @@ const store_period_slider = Inputs.range([1, 10_000], {
 
 
 
-const load_torque_slider = Inputs.range([0.000_1, 0.1], {
+const load_torque_slider = Inputs.range([0.000_1, 0.02], {
   transform: Math.log,
   format: x => x.toFixed(4),
   label: "Load Torque",
@@ -223,9 +224,9 @@ function update_input(input, value) {
 
 function reset() {
   update_input(frequency_slider, 12_000_000); // We want to simulate 72 MHz!
-  update_input(steps_number_slider, 250);
+  update_input(steps_number_slider, 2500);
   update_input(store_period_slider, 250);
-  update_input(load_torque_slider, +0.0001);
+  update_input(load_torque_slider, +0.01);
   update_input(load_torque_angle, 0.0);
   update_input(load_torque_selection, "Move +");
   update_input(driver_state_selection, "Connect and Idle");
@@ -267,8 +268,16 @@ const sound_scaling = {
 
 const simulation_control = Inputs.button(
   [
-    ["Pause", () => { simulation.running = false; }], 
-    ["Resume", () => { simulation.running = true; }],
+    ["Pause", () => { simulation.running = () => false; }], 
+    ["Resume", () => { simulation.running = () => true; }],
+    ["Step", () => { 
+      let stepped = false; 
+      simulation.running = () => { 
+        if (stepped) return false;
+        stepped = true; 
+        return true; 
+      };
+    }],
     [html`<div style="min-width: 7em;">Look at motor</div>`, () => { rendering.reset_camera(); }],
     [html`<div style="min-width: 6em;">Reset inputs</div>`, () => { reset(); }],
     ["Play🎵", () => {
@@ -284,11 +293,18 @@ const simulation_control = Inputs.button(
       const left_channel = noise_buffer.getChannelData(0);
       const right_channel = noise_buffer.getChannelData(1);
 
-      const scaling = 1.0 / 0.002;
+      const scaling_r = 1.0 / 0.000_100;
+      const scaling_rv = 1.0 / 0.100;
 
-      simulation.sounds.forEach(({rx_v, ry_v, rx, ry}, i) => {
-        left_channel[i] = scaling * rx;
-        right_channel[i] = scaling * ry;
+      simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, r_v}, i) => {
+        // left_channel[i] = scaling_r * rx + sound_scaling.rv * rx_v;
+        // right_channel[i] = scaling_r * ry + sound_scaling.rv * ry_v;
+
+        left_channel[i] = scaling_r * rx;
+        // right_channel[i] = scaling_r * ry;
+
+        left_channel[i] = sound_scaling.rv * rx_v;
+        // right_channel[i] = sound_scaling.rv * ry_v;
       });
 
       // Create a buffer source.
@@ -302,7 +318,7 @@ const simulation_control = Inputs.button(
       noise.start();
     }],
   ],
-  {value: "running", label: "Simulation control"}
+  {label: "Simulation control"}
 );
 
 
@@ -318,153 +334,247 @@ const simulation_interface = htf`<span>
   <div>${driver_state_selection}</div>
 </span>`;
 
+const number_of_plot_points = 400;
+
 let simulation_info = Mutable(300);
 
 const show_simulation_info = _.throttle((simulation, rendering) => {
+  const plot_duration = simulation.options.dt * simulation.options.store_period * number_of_plot_points;
+
   simulation_info.value = htf`<span style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr">
     <span>FPS: ${rendering.stats.fps.toFixed(1)}</span>
     <span>Slowdown: ${simulation.running ? formatSI(simulation.slowdown) : tex`\infty`}</span>
     <span>Speed: ${formatSI(1.0 / simulation.options.dt)}Hz</span>
     <span>${tex`\delta t`}: ${formatSI(simulation.options.dt)}s</span>
 
-    <span>Speed: ${formatSI(_.last(simulation.history).rpm)}RPM</span>
-    <span>Radial: ${formatSI(_.last(simulation.history).r)}m</span>
-    <span>Radial ${tex`\nu`}: ${formatSI(_.last(simulation.history).rv)}m/s</span>
+    <span>Plot window: ${formatSI(plot_duration)}s</span>
+    <span>Window freq: ${formatSI(1.0 / plot_duration)}Hz</span>
+    <span>Buffer: ${formatSI(simulation.history_buffer.size() * simulation.options.store_period * simulation.options.dt)}s</span>
     <span>🎵 buffer: ${formatSI(simulation.sound_buffer.size() / simulation.options.sound_sample_rate)}s</span>
   </span>`;
 }, 100);
 
 
+const plot_labels_map = {
+  "Latest Value": (values) => values.map((row) => _.last(row)),
+  "Root Mean Square": (values) => values.map((row) => Math.hypot(...row) / Math.sqrt(row.length)),
+  "Hide": (values) => values.map(() => undefined),
+};
 
-const default_sparkline_plot = {label: "<sparkline>", x: "t", y: null, stroke: "black", fill: "none"};
-const default_sparkline_options = {least_domain: null, height: 60};
+const plot_labels_choice = Inputs.radio(Object.keys(plot_labels_map), {label: "Show numbers", value: "Root Mean Square"});
 
-function sparkline(data, plots={}, options={}){
-  const {least_domain, height} = Object.assign({}, default_sparkline_options, options);
+const default_sparkline_plot = {label: "<sparkline>", y: [], stroke: "black"};
+const default_sparkline_options = {x: "t", least_domain: null, symmetric_domain: true, height: 60, units: ""};
+
+function sparkline(data, title, lines={}, options={}){
+  const {x, least_domain, symmetric_domain, height, units} = Object.assign({}, default_sparkline_options, options);
   
-  if (!Array.isArray(plots)) plots = [plots];
-  
-  plots.map((plot) => Object.assign({}, default_sparkline_plot, plot));
+  if (!Array.isArray(lines)) lines = [lines];
 
-  const min_domain = min(data.map((item) => min(plots.map(({y}) => item[y]))));
-  const max_domain = max(data.map((item) => max(plots.map(({y}) => item[y]))));
+  lines.map((line) => Object.assign({}, default_sparkline_plot, line));
 
-  const domain = least_domain ? [
-    Math.min(min_domain, -max_domain, least_domain[0]),
-    Math.max(max_domain, -min_domain, least_domain[1]),
-  ] : [
+  const values = lines.map(({y}) => {
+    if (typeof y === "string") return data.map((item) => item[y]);
+    if (typeof y === "function") return data.map((item) => y(item));
+    return y;
+  });
+
+  const min_value = Math.min(...values.map(row => Math.min(...row)));
+  const max_value = Math.max(...values.map(row => Math.max(...row)));
+
+  const min_domain = least_domain ? Math.min(least_domain[0], min_value) : min_value;
+  const max_domain = least_domain ? Math.max(least_domain[1], max_value) : max_value;
+
+  const domain = symmetric_domain ? [
     Math.min(min_domain, -max_domain),
     Math.max(max_domain, -min_domain),
+  ] : [
+    min_domain,
+    max_domain,
   ];
+
+  
+  const selected_values = plot_labels_map[plot_labels_choice.value](values);
+
+  const sub_labels = lines.map(({label, stroke}, i) => {
+    const v = selected_values[i];
+    const formatted_v = v === undefined ?  "" : `${v > 0.0 ? "+" : v < 0.0 ? "-" : ""}${formatSI(Math.abs(v))}${units}`;
+    return htf`<div style="color: ${stroke};">${tex`${label}`} <span style="font-family: monospace; float: right;">${formatted_v}</span></div>`
+  });
+  
+  const labels = htf`<div style="display: flex: flex-direction: column; min-width: 150px; margin-right: 6.5px;">
+    <div style="font-weight: bold;">${title}</div>
+    ${sub_labels}
+  </div>`;
 
   const plot = Plot.plot({
     height,
     axis: null,
+    figure: true,
     y: {domain},
     marks:[
-      plots.map(({x, y, stroke, fill}) => Plot.lineY(data, {x, y, stroke, fill})),
-      Plot.ruleY([0], {stroke: "gray", strokeDasharray: "8,2"}),
+      lines.map(({stroke}, i) => Plot.lineY(data, {x, y: values[i], stroke})),
+      Plot.ruleY([0], {stroke: "gray", strokeDasharray: "8,2", curve: "linear"}),
     ],
   });
 
-  return htf`<div class="card tight" style="display: flex; align-items: center;">
-    <div style="display: flex; flex-direction: column;">
-      ${plots.map(({label, stroke}) => htf`<label style="min-width: 120px; margin-right: 6.5px; color: ${stroke};">${label}</label>`)}
-    </div>
-    <div>${plot}</div>
+  return htf`<div style="margin: 10px 0px; padding: 5px 0px; box-shadow: 3px 3px 5px rgb(0 0 0 / .2); display: flex; flex-direction: row;">
+    ${labels}
+    ${plot}
   </div>`;
 }
 
+const simulation_plots_map = {
+  "Rotational Frequency": [{label: `freq`, y: (item) => item.ω / (2 * π)}, {least_domain: [-1_000, 1_000], units: "Hz"}],
+  "Motor Speed": [{label: `RPM`, y: "rpm"}, {least_domain: [-6_000, 6_000]}],
+  "Motor Angle": [{label: "φ", y: "φ"}, {least_domain: [-π, π], units: "rad"}],
+  "Torque": [
+    [
+      {label: `τ_{total}`, y: "τ_total"},
+      {label: `τ_{emf}`, y: "τ_emf", stroke: color_x},
+      {label: `τ_{friction}`, y: "τ_friction", stroke: color_y},
+    ],
+    {least_domain: [-0.010, +0.010], units: "Nm"},
+  ],
+  "Battery Current": [{label: "I_{bat}", y: "I"}, {least_domain: [-2.0, +2.0], units: "A"}],
+  "Capacitor Voltage": [{label: "V_{near}", y: "V"}, {least_domain: [-12.0, +12.0], units: "V"}],
+  "Radial Velocity": [
+    [
+      {label: `\nu_x`, y: "rx_v", stroke: color_x},
+      {label: `\nu_y`, y: "ry_v", stroke: color_y},
+    ],
+    {least_domain: [-0.010, +0.010], units: "m/s"},
+  ],
+  "Radial displacement": [{label: "r", y: "r"}, {least_domain: [-0.000_010, +0.000_010], units: "m"}],
+  "Radial Position": [
+    [
+      {label: "x", y: "rx", stroke: color_x},
+      {label: "y", y: "ry", stroke: color_y},
+    ],
+    {least_domain: [-0.000_010, +0.000_010], units: "m"},
+  ],
+  "Currents": [
+    [
+      {label: "I_U", y: "I_u", stroke: color_u},
+      {label: "I_V", y: "I_v", stroke: color_v},
+      {label: "I_W", y: "I_w", stroke: color_w},
+    ], 
+    {least_domain: [-2.0, 2.0], height: 120, units: "A"},
+  ],
+  "Total EMF": [
+    [
+      {label: "V_U", y: "V_u_emf", stroke: color_u},
+      {label: "V_V", y: "V_v_emf", stroke: color_v},
+      {label: "V_W", y: "V_w_emf", stroke: color_w},
+    ], 
+    {least_domain: [-12.0, 12.0], height: 120, units: "V"},
+  ],
+  "Rotational EMF": [
+    [
+      {label: "V_U", y: "V_u_rotational_emf", stroke: color_u},
+      {label: "V_V", y: "V_v_rotational_emf", stroke: color_v},
+      {label: "V_W", y: "V_w_rotational_emf", stroke: color_w},
+    ], 
+    {least_domain: [-12.0, 12.0], height: 120, units: "V"},
+  ],
+  "Radial EMF": [
+    [
+      {label: "V_U", y: "V_u_radial_emf", stroke: color_u},
+      {label: "V_V", y: "V_v_radial_emf", stroke: color_v},
+      {label: "V_W", y: "V_w_radial_emf", stroke: color_w},
+    ], 
+    {least_domain: [-12.0, 12.0], height: 120, units: "V"},
+  ],
+  "VCC per phase": [
+    [
+      {label: "V_U", y: "VCC_u", stroke: color_u},
+      {label: "V_V", y: "VCC_v", stroke: color_v},
+      {label: "V_W", y: "VCC_w", stroke: color_w},
+    ], 
+    {least_domain: [-12.0, 12.0], height: 120, units: "V"},
+  ],
+  "Phase to phase inductor voltage": [
+    [
+      {label: "V_{UV}", y: "V_Luv", stroke: color_u},
+      {label: "V_{VW}", y: "V_Lvw", stroke: color_v},
+      {label: "V_{WU}", y: "V_Lwu", stroke: color_w},
+    ], 
+    {least_domain: [-12.0, 12.0], height: 120, units: "V"},
+  ],
+  "Phase to phase current change": [
+    [
+      {label: "dI_{UV}", y: "dI_uv", stroke: color_u},
+      {label: "dI_{VW}", y: "dI_vw", stroke: color_v},
+      {label: "dI_{WU}", y: "dI_wu", stroke: color_w},
+    ], 
+    {least_domain: [-10_000.0, +10_000.0], height: 120, units: "A/s"},
+  ],
+  "MOSFET voltage drop": [
+    [
+      {label: "V_U", y: "V_Mu", stroke: color_u},
+      {label: "V_V", y: "V_Mv", stroke: color_v},
+      {label: "V_W", y: "V_Mw", stroke: color_w},
+    ], 
+    {least_domain: [-1.0, 1.0], height: 120, units: "V"},
+  ],
+  "Switching direction": [
+    [
+      {label: "U", y: "U_direction", stroke: color_u},
+      {label: "V", y: "V_direction", stroke: color_v},
+      {label: "W", y: "W_direction", stroke: color_w},
+    ], 
+    {least_domain: [-1.0, 1.0], height: 120},
+  ],
+};
+
+const default_simulation_plots = ["Currents", "Motor Speed", "Motor Angle", "Torque", "Total EMF", "Rotational EMF", "Radial EMF", "Radial Position", "Radial Velocity"];
+
+const simulation_plots_selection = Inputs.checkbox(Object.keys(simulation_plots_map), {label: "Plots", value: default_simulation_plots});
+
+const simulation_plots_preselections = Inputs.button(
+  [
+    ["Show Default", (value) => { 
+      if (!value) value = simulation_plots_selection.value;
+      simulation_plots_selection.value = default_simulation_plots;
+      return value;
+    }],
+    ["Show All", (value) => {
+      if (!value) value = simulation_plots_selection.value;
+      simulation_plots_selection.value = Object.keys(simulation_plots_map); 
+      return value;
+    }],
+    ["Hide Plots", (value) => {
+      if (!value) value = simulation_plots_selection.value;
+      simulation_plots_selection.value = []; 
+      return value;
+    }],
+    ["User Selection", (value) => { if (value) simulation_plots_selection.value = value; return undefined;}],
+  ],
+  {label: "Plot selections"}
+);
+
+const simulation_plots_interface = htf`<span>
+  <div>${simulation_plots_selection}</div>
+  <div>${simulation_plots_preselections}</div>
+  <div>${plot_labels_choice}</div>
+</span>`;
 
 const simulation_plots = Mutable();
 
 const show_simulation_plots = _.throttle((history) => {
 
-  simulation_plots.value = htf`<span>
-    ${sparkline(history, {label: `Motor Speed (RPM)`, y: "rpm"}, {least_domain: [-6_000, 6_000]})}
-    ${sparkline(history, {label: "Motor Angle", y: "φ"}, {least_domain: [-π, π]})}
-    ${sparkline(history, {label: "Torque applied", y: "τ_applied"}, {least_domain: [-0.1, 0.1]})}
-    ${sparkline(history, {label: "Battery Current", y: "I"}, {least_domain: [-2.0, +2.0]})}
-    ${sparkline(history, {label: "Capacitor Voltage", y: "V"}, {least_domain: [-12.0, +12.0]})}
-    ${sparkline(
-      history, [
-        {label: htf`Radial ${tex`\nu_x`}`, y: "rx_v", stroke: color_x},
-        {label: htf`Radial ${tex`\nu_y`}`, y: "ry_v", stroke: color_y},
-      ],
-      {least_domain: [-0.1, +0.1]},
-    )}
-    ${sparkline(
-      history, [
-        {label: htf`Radial ${tex`x`}`, y: "rx", stroke: color_x},
-        {label: htf`Radial ${tex`y`}`, y: "ry", stroke: color_y},
-      ],
-      {least_domain: [-0.000_100, +0.000_100]},
-    )}
-    ${sparkline(
-      history, [
-        {label: "Current Iu", y: "Iu", stroke: color_u},
-        {label: "Current Iv", y: "Iv", stroke: color_v},
-        {label: "Current Iw", y: "Iw", stroke: color_w},
-      ], 
-      {least_domain: [-2.0, 2.0], height: 120},
-    )}
-    ${sparkline(
-      history, [
-        {label: "EMF Vu", y: "Vu_emf", stroke: color_u},
-        {label: "EMF Vv", y: "Vv_emf", stroke: color_v},
-        {label: "EMF Vw", y: "Vw_emf", stroke: color_w},
-      ], 
-      {least_domain: [-12.0, 12.0], height: 120},
-    )}
-    ${sparkline(
-      history, [
-        {label: "EMF rot Vu", y: "Vu_rotational_emf", stroke: color_u},
-        {label: "EMF rot Vv", y: "Vv_rotational_emf", stroke: color_v},
-        {label: "EMF rot Vw", y: "Vw_rotational_emf", stroke: color_w},
-      ], 
-      {least_domain: [-12.0, 12.0], height: 120},
-    )}
-    ${sparkline(
-      history, [
-        {label: "EMF rad Vu", y: "Vu_radial_emf", stroke: color_u},
-        {label: "EMF rad Vv", y: "Vv_radial_emf", stroke: color_v},
-        {label: "EMF rad Vw", y: "Vw_radial_emf", stroke: color_w},
-      ], 
-      {least_domain: [-12.0, 12.0], height: 120},
-    )}
-    ${sparkline(history, {label: "Radial displacement", y: "r"}, {least_domain: [-0.001, +0.001]})}
-    ${sparkline(
-      history, [
-        {label: "VCC Vu", y: "VCC_u", stroke: color_u},
-        {label: "VCC Vv", y: "VCC_v", stroke: color_v},
-        {label: "VCC Vw", y: "VCC_w", stroke: color_w},
-      ], 
-      {least_domain: [-12.0, 12.0], height: 120},
-    )}
-    ${sparkline(
-      history, [
-        {label: "MOSFET Vu", y: "V_Mu", stroke: color_u},
-        {label: "MOSFET Vv", y: "V_Mv", stroke: color_v},
-        {label: "MOSFET Vw", y: "V_Mw", stroke: color_w},
-      ], 
-      {least_domain: [-1.0, 1.0], height: 120},
-    )}
-    ${sparkline(
-      history, [
-        {label: "U status", y: "U_status", stroke: color_u},
-        {label: "V status", y: "V_status", stroke: color_v},
-        {label: "W status", y: "W_status", stroke: color_w},
-      ], 
-      {least_domain: [-1.0, 1.0], height: 120},
-    )}
-  </span>`;
-}, 1000.0/30);
+  simulation_plots.value = simulation_plots_selection.value.map((title) => {
+    const [lines, options] = simulation_plots_map[title];
+    return sparkline(history, title, lines, options);
+  });
+  
+}, 1000.0/60);
 
 
 
 function * simulate_live () {
   while(true){
-    if (simulation.running) {
+    if (simulation.running()) {
 
       simulation.options.steps_number = Math.ceil(steps_number_slider.value);
       simulation.options.store_period = Math.ceil(store_period_slider.value);
@@ -472,7 +582,7 @@ function * simulate_live () {
 
       simulation.update();
 
-      show_simulation_plots(simulation.history);
+      show_simulation_plots(_.takeRight(simulation.history, number_of_plot_points));
 
       update_motor_visuals(simulation.flattened_state());
     }
@@ -489,7 +599,5 @@ function * simulate_live () {
 
 ```js
 const live_simulation = simulate_live();
-
-// Add all possible graphs with a checkbox system?
 ```
 

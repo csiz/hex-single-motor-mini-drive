@@ -4,6 +4,11 @@ import _ from "lodash";
 import { TimingStats } from "./utils.js";
 
 export const π = Math.PI;
+const sin = Math.sin;
+const cos = Math.cos;
+const atan2 = Math.atan2;
+const hypot = Math.hypot;
+
 const cos_0 = 1.0;
 const cos_2π_3 = -0.5;
 const cos_4π_3 = -0.5;
@@ -61,40 +66,45 @@ export const initial_parameters = {
   L_phase: 0.000_1, // phase inductance
   Ψ_m: RPM_Kv_to_Ke(600), // ~0.01V*s motor Ke constant (also the magnetic flux linkage)
   τ_static: 0.0002, // static friction torque
-  τ_dynamic: 0.00001, // dynamic friction torque
+  τ_dynamic: 0.000005, // dynamic friction torque
   V_bat: 8.0, // battery voltage
   R_bat: 1.0, // battery internal resistance
-  L_bat: 0.000_001, // 1μH inductance of wire leads up to the battery
-  R_disconnect: 1_000.0, // 1kΩ battery disconnected resistance (keep relatively low for numerical stability)
-  L_disconnect: 0.001, // 1mH inductance to prevent the simulation from blowing up
+  /* 1μH inductance of wire leads up to the battery. */
+  L_bat: 0.000_001,
+  /* 100kΩ resistance of the battery disconnect switch. */
+  R_disconnect: 10_000.0,
+  L_disconnect: 0.001, // 1mH disconnection inductance to prevent the simulation from blowing up
   C_near: 0.000_050, // 50μF capacitance near the motor mosfets
   R_shunt: 0.010, // shunt resistance
   R_mosfet: 0.013, // mosfet resistance
   V_diode: 0.72, // mosfet reverse diode voltage drop
   J_rotor: 0.000_000_25, // (Kg*m^2) rotor moment of inertia
-  M_rotor: 0.008, // (Kg) rotor mass
-  r_max: 0.001, // (m) Rotor radial displacement for full magnetic field dropoff
-  /* (N/m) Radial displacement spring constant. Tapping the rotor makes ~600Hz 
+  M_rotor: 0.002, // (Kg) rotor mass
+  r_gap: 0.000_300, // (m) Rotor magnet to stator core effective air gap.
+  /* (N/m) Radial displacement spring constant. Tapping the rotor makes a ~14kHz tone (Maybe, I dunno`).
   from which the stiffness can be estimated from a simple mass-spring oscilator at
   frequency `f = 1/2π * sqrt(r_elasticity / M_rotor)`. */
-  r_elasticity: 100_000.0,
+  r_elasticity: 15_000_000.0,
   /* (N) Radial friction. We'll only use a bit of static friction for radial displacement
   and let the dynamic friction be entirely due to emf interactions. */
-  r_friction: 0.1,
+  r_friction: 0.02,
   ...hall_bounds(hall_toggle_angle), // hall sensor toggle angle bounds
 }
 
 /* Smallest current that we'll zero out in a single step. */
 const I_ε = 0.000_001;
+const ω_ε = 0.000_001;
+const v_ε = 0.000_001;
+const r_ε = 0.000_000_100;
 
 /* The initial state of the differentiable state equation for the motor. */
 export const initial_state = {
   t: 0.0, // simulation time
   φ: 0.0, // motor angle
   ω: 0.0, // motor speed
-  Iu: 0.0, // motor current phase U
-  Iv: 0.0, // motor current phase V
-  Iw: 0.0, // motor current phase W
+  I_u: 0.0, // motor current phase U
+  I_v: 0.0, // motor current phase V
+  I_w: 0.0, // motor current phase W
   rx: 0.0, // radial displacement of the rotor in x direction
   ry: 0.0, // radial displacement of the rotor in y direction
   rx_v: 0.0, // rotor radial velocity
@@ -146,7 +156,7 @@ export function measurable_outputs(state, parameters) {
 }
 
 /* Convention for the currently conducting state of each half-bridge. */
-const phase_states = {
+export const phase_states = {
   0: "neutral", // No current flowing.
   1: "high_conducting", // Current flowing through the high side; turned on.
   2: "high_diode", // Current flowing through the high side reverse diode.
@@ -199,7 +209,7 @@ const bridge_diode_sign = [
 ];
 
 /* Sign of the upstream current coming out of the motor (positive when the motor is charging the battery). */
-const bridge_current_sign = [
+const bridge_direction = [
   0.00, // neutral
   +1.0, // high_conducting
   +1.0, // high_diode
@@ -216,6 +226,10 @@ const vcc_matrix = [
   [0.00, -1.0, -1.0, 0.00, 0.00], // low_conducting A
 ];
 
+
+function avoid_zero_crossing(dt, x, dx){
+  return x != 0.0 && Math.sign(x) != Math.sign(x + dx*dt) ? -x/dt : dx;
+}
 
 function add_without_zero_crossing_friction(dt, x, dx_applied, dx_friction){
   const friction_overpowers = Math.abs(dx_friction) >= Math.abs(dx_applied);
@@ -240,9 +254,9 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
     R_phase, L_phase, Ψ_m, τ_static, τ_dynamic, 
     V_bat, R_bat, L_bat, C_near, R_disconnect, L_disconnect,
     R_shunt, R_mosfet, V_diode, J_rotor, 
-    M_rotor, r_max, r_friction, r_elasticity,
+    M_rotor, r_gap, r_friction, r_elasticity,
   } = parameters;
-  const {φ, ω, Iu, Iv, Iw, rx, ry, rx_v, ry_v, I, V} = state;
+  const {φ, ω, I_u, I_v, I_w, rx, ry, rx_v, ry_v, I, V} = state;
   const {U_switch, V_switch, W_switch, τ_load, battery_connected} = inputs;
 
   // Differential of the rotor angle is the rotor rotation.
@@ -251,36 +265,36 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   // Alias the driving voltage (we can either simulate a capacitor bank or straight to battery).
   const VCC = V;
 
-  const φ_rv = Math.atan2(ry_v, rx_v);
-  const rv = Math.hypot(rx_v, ry_v);
+  const φ_rv = atan2(ry_v, rx_v);
+  const rv = hypot(rx_v, ry_v);
 
-  const r = Math.hypot(rx, ry);
+  const r = hypot(rx, ry);
 
-  // TODO: The magnetic field strength should drop off with the square of the distance. (and then scaled down again by r_max for dimenional consistency).
-  // That also changes the derivative that leads to the radial emf...
-  const Ψ = Ψ_m * Math.max(1.0 - r/r_max, 0.0);
+  // Calculate the magnetic flux linkage of the motor. Radial displacement degrades the 
+  // linkage because of the increased air gap.
+  const Ψ = Ψ_m * 1.0 / (1.0 + r/r_gap);
 
   // TODO: use some fourrier shenanigans to get a sound snippet from the current graph picture.
   // Definitely need to do fourier analysis on these graphs.
 
   // Calculate the induced emf from the rotating magnetic field of the permanent magnet.
-  const Vu_rotational_emf = Ψ * ω * Math.sin(φ);
-  const Vv_rotational_emf = Ψ * ω * Math.sin(φ - 2 * π / 3);
-  const Vw_rotational_emf = Ψ * ω * Math.sin(φ + 2 * π / 3);
+  const V_u_rotational_emf = Ψ * ω * sin(φ);
+  const V_v_rotational_emf = Ψ * ω * sin(φ - 2 * π / 3);
+  const V_w_rotational_emf = Ψ * ω * sin(φ + 2 * π / 3);
 
   // Calculate the induced emf from the axial displacement of the magnet. Because magnetic
   // fields drop off quickly with distance, small displacements will have a large effect.
   // The distance in this case is the spacing between the rotor and the stator core; aka
   // the air gap. The air gap is quite tiny in high performance motors; we won't see the
   // displacements, but we will hear them as motor noise.
-  const Vu_radial_emf = rv * Math.cos(φ_rv)             / r_max * Ψ * Math.cos(φ);
-  const Vv_radial_emf = rv * Math.cos(φ_rv - 2 * π / 3) / r_max * Ψ * Math.cos(φ - 2 * π / 3);
-  const Vw_radial_emf = rv * Math.cos(φ_rv + 2 * π / 3) / r_max * Ψ * Math.cos(φ + 2 * π / 3);
+  const V_u_radial_emf = rv * cos(φ_rv)             / (r + r_gap) * Ψ * cos(φ);
+  const V_v_radial_emf = rv * cos(φ_rv - 2 * π / 3) / (r + r_gap) * Ψ * cos(φ - 2 * π / 3);
+  const V_w_radial_emf = rv * cos(φ_rv + 2 * π / 3) / (r + r_gap) * Ψ * cos(φ + 2 * π / 3);
   
   // Total emf contributions from the moving permanent magnet field.
-  const Vu_emf = Vu_rotational_emf + Vu_radial_emf;
-  const Vv_emf = Vv_rotational_emf + Vv_radial_emf;
-  const Vw_emf = Vw_rotational_emf + Vw_radial_emf;
+  const V_u_emf = V_u_rotational_emf + V_u_radial_emf;
+  const V_v_emf = V_v_rotational_emf + V_v_radial_emf;
+  const V_w_emf = V_w_rotational_emf + V_w_radial_emf;
 
   // Calculate the reverse voltage needed to start flowing current against the
   // battery and the reverse diodes of 2 mosfets.
@@ -288,15 +302,19 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   // Get the minimum and maximum voltages of the 3 phases. We'll compare it
   // to the reverse voltage to determine the state of the half-bridges when no
   // current is flowing.
-  const Vmin = Math.min(Vu_emf, Vv_emf, Vw_emf);
-  const Vmax = Math.max(Vu_emf, Vv_emf, Vw_emf);
+  const Vmin = Math.min(V_u_emf, V_v_emf, V_w_emf);
+  const Vmax = Math.max(V_u_emf, V_v_emf, V_w_emf);
 
   // Compute the state of the half-bridges to determine which way the mosfet connections
   // are conducting for each motor phase.
-  const U_state = compute_half_bridge_state(U_switch, Iu, Vreverse, Vu_emf, Vmin, Vmax);
-  const V_state = compute_half_bridge_state(V_switch, Iv, Vreverse, Vv_emf, Vmin, Vmax);
-  const W_state = compute_half_bridge_state(W_switch, Iw, Vreverse, Vw_emf, Vmin, Vmax);
+  const U_state = compute_half_bridge_state(U_switch, I_u, Vreverse, V_u_emf, Vmin, Vmax);
+  const V_state = compute_half_bridge_state(V_switch, I_v, Vreverse, V_v_emf, Vmin, Vmax);
+  const W_state = compute_half_bridge_state(W_switch, I_w, Vreverse, V_w_emf, Vmin, Vmax);
 
+  const U_direction = bridge_direction[U_state];
+  const V_direction = bridge_direction[V_state];
+  const W_direction = bridge_direction[W_state];
+  
   // Get the phase to phase conducting states.
   const UV_conducting = U_state && V_state;
   const VW_conducting = V_state && W_state;
@@ -318,9 +336,9 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   }
 
   // Calculate the voltage drop from the passive resistors on each phase.
-  const V_Ru = (R_phase + R_shunt) * Iu;
-  const V_Rv = (R_phase + R_shunt) * Iv;
-  const V_Rw = (R_phase + R_shunt) * Iw;
+  const V_Ru = (R_phase + R_shunt) * I_u;
+  const V_Rv = (R_phase + R_shunt) * I_v;
+  const V_Rw = (R_phase + R_shunt) * I_w;
 
   // Calculate the voltage drop from the 3 phase connections to the battery as 
   // pairs of conducting phases.
@@ -333,34 +351,41 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
 
   // Get the mosfet voltage drop for each half-bridge, so we can compute power loss and heating.
   // The current convention is that its positive coming out of the motor terminals.
-  const V_Mu = R_mosfet * bridge_r_sign[U_state] * Iu + V_diode * bridge_diode_sign[U_state];
-  const V_Mv = R_mosfet * bridge_r_sign[V_state] * Iv + V_diode * bridge_diode_sign[V_state];
-  const V_Mw = R_mosfet * bridge_r_sign[W_state] * Iw + V_diode * bridge_diode_sign[W_state];
+  const V_Mu = R_mosfet * bridge_r_sign[U_state] * I_u + V_diode * bridge_diode_sign[U_state];
+  const V_Mv = R_mosfet * bridge_r_sign[V_state] * I_v + V_diode * bridge_diode_sign[V_state];
+  const V_Mw = R_mosfet * bridge_r_sign[W_state] * I_w + V_diode * bridge_diode_sign[W_state];
 
   // Add up all voltage contributions for each phase.
-  const V_u = Vu_emf - V_Ru - VCC_u - V_Mu;
-  const V_v = Vv_emf - V_Rv - VCC_v - V_Mv;
-  const V_w = Vw_emf - V_Rw - VCC_w - V_Mw;
+  const V_Lu = V_u_emf - V_Ru - V_Mu - VCC_u;
+  const V_Lv = V_v_emf - V_Rv - V_Mv - VCC_v;
+  const V_Lw = V_w_emf - V_Rw - V_Mw - VCC_w;
 
-  // Calculate the phase to phase voltages too.
-  const V_uv = V_u - V_v;
-  const V_vw = V_v - V_w;
-  const V_wu = V_w - V_u;
+  // Calculate the phase to phase voltages as simple differences.
+  const V_Luv = V_Lu - V_Lv;
+  const V_Lvw = V_Lv - V_Lw;
+  const V_Lwu = V_Lw - V_Lu;
+
+  // Calculate the current shared by each pair of phases; with currents
+  // we must avoid double counting current flowing in and out of a terminal.
+  const I_uv = (I_u - I_v) * 0.5;
+  const I_vw = (I_v - I_w) * 0.5;
+  const I_wu = (I_w - I_u) * 0.5;
+
 
   // Calculate the current change through each pair of phases.
-  const dIuv = UV_conducting ? V_uv / (2 * L_phase) : 0.0;
-  const dIvw = VW_conducting ? V_vw / (2 * L_phase) : 0.0;
-  const dIwu = WU_conducting ? V_wu / (2 * L_phase) : 0.0;
+  const dI_uv = avoid_zero_crossing(dt, I_uv, V_Luv / (2 * L_phase));
+  const dI_vw = avoid_zero_crossing(dt, I_vw, V_Lvw / (2 * L_phase));
+  const dI_wu = avoid_zero_crossing(dt, I_wu, V_Lwu / (2 * L_phase));
 
-  // Do the same trick for currents.
-  const {U: dIu, V: dIv, W: dIw} = triple_duo_or_none(dIuv, dIvw, dIwu, -Iu/dt, -Iv/dt, -Iw/dt);
+  // Do the same trick for currents; we avoided double counting, but now we must compensate when using our trick.
+  const {U: dI_u, V: dI_v, W: dI_w} = triple_duo_or_none(2 * dI_uv, 2 * dI_vw, 2 * dI_wu, -I_u/dt, -I_v/dt, -I_w/dt);
 
   // Calculate rotor torque due to motor magnetic field. The contributions
   // of the 3 phase windings add up linearly.
   const τ_emf = - Ψ * (
-    Iu * Math.sin(φ) +
-    Iv * Math.sin(φ - 2 * π / 3) +
-    Iw * Math.sin(φ + 2 * π / 3)
+    I_u * sin(φ) +
+    I_v * sin(φ - 2 * π / 3) +
+    I_w * sin(φ + 2 * π / 3)
   );
 
   // Get the total torque applied to the rotor before friction.
@@ -382,16 +407,16 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const drx = rx_v;
   const dry = ry_v;
 
-  const Fx_emf = - Ψ / r_max * (
-    Iu * cos_0 * Math.cos(φ) +
-    Iv * cos_2π_3 * Math.cos(φ - 2 * π / 3) +
-    Iw * cos_4π_3 * Math.cos(φ + 2 * π / 3)
+  const Fx_emf = - Ψ / (r + r_gap) * (
+    I_u * cos_0 * cos(φ) +
+    I_v * cos_2π_3 * cos(φ - 2 * π / 3) +
+    I_w * cos_4π_3 * cos(φ + 2 * π / 3)
   );
 
-  const Fy_emf = - Ψ / r_max * (
-    // Iu * sin_0 * Math.cos(φ) +
-    Iv * sin_2π_3 * Math.cos(φ - 2 * π / 3) +
-    Iw * sin_4π_3 * Math.cos(φ + 2 * π / 3)
+  const Fy_emf = - Ψ / (r + r_gap) * (
+    // I_u * sin_0 * cos(φ) +
+    I_v * sin_2π_3 * cos(φ - 2 * π / 3) +
+    I_w * sin_4π_3 * cos(φ + 2 * π / 3)
   );
 
   const Fx_elasticity = -r_elasticity * rx;
@@ -400,19 +425,17 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const drx_v_applied = (Fx_emf + Fx_elasticity) / M_rotor;
   const dry_v_applied = (Fy_emf + Fy_elasticity) / M_rotor;
 
-  const φ_rv_applied = (rv != 0.0 ? φ_rv : Math.atan2(dry_v_applied, drx_v_applied));
+  const φ_rv_applied = (rv != 0.0 ? φ_rv : atan2(dry_v_applied, drx_v_applied));
 
-  const drx_v_friction = - r_friction * Math.cos(φ_rv_applied) / M_rotor;
-  const dry_v_friction = - r_friction * Math.sin(φ_rv_applied) / M_rotor;
+  const drx_v_friction = - r_friction * cos(φ_rv_applied) / M_rotor;
+  const dry_v_friction = - r_friction * sin(φ_rv_applied) / M_rotor;
 
   const drx_v = add_without_zero_crossing_friction(dt, rx_v, drx_v_applied, drx_v_friction);
   const dry_v = add_without_zero_crossing_friction(dt, ry_v, dry_v_applied, dry_v_friction);
   
-  // Calculate the current flowing out of the motor terminals.
-  const I_motor = (
-    bridge_current_sign[U_state] * Iu + 
-    bridge_current_sign[V_state] * Iv + 
-    bridge_current_sign[W_state] * Iw);
+  // Calculate the current flowing out of the motor terminals. Beware that we're double counting 
+  // current coming out and into a terminal.
+  const I_motor = 0.5 * (U_direction * I_u + V_direction * I_v + W_direction * I_w); 
 
   // The current flowing out of the motor goes either to the near capacitor or the battery.
   const I_near_cap = I_motor - I;
@@ -425,22 +448,21 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const L_terminal = battery_connected ? L_bat : L_disconnect;
   // Compute the rate of change of the current on the power line. Whether connected or 
   // disconneted, current must flow. If it's suddenly disconnected, that means sparkies!
-  const dI = (V - V_terminal) / L_terminal;
+  const dI = avoid_zero_crossing(dt, I, (V - V_terminal) / L_terminal);
 
-  const U_status = bridge_current_sign[U_state];
-  const V_status = bridge_current_sign[V_state];
-  const W_status = bridge_current_sign[W_state];
+
 
   return {
-    diff: {t: 1.0, φ: dφ, ω: dω, Iu: dIu, Iv: dIv, Iw: dIw, rx: drx, ry: dry, rx_v: drx_v, ry_v: dry_v, V: dV, I: dI},
+    diff: {t: 1.0, φ: dφ, ω: dω, I_u: dI_u, I_v: dI_v, I_w: dI_w, rx: drx, ry: dry, rx_v: drx_v, ry_v: dry_v, V: dV, I: dI},
     info: {
       τ_emf, τ_applied, τ_friction, τ_total,
-      V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_u, V_v, V_w, VCC_u, VCC_v, VCC_w,
+      V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_Lu, V_Lv, V_Lw, VCC_u, VCC_v, VCC_w,
+      V_Luv, V_Lvw, V_Lwu, dI_uv, dI_vw, dI_wu,
       V_terminal, I_near_cap, I_motor,
-      Vu_rotational_emf, Vv_rotational_emf, Vw_rotational_emf,
-      Vu_radial_emf, Vv_radial_emf, Vw_radial_emf,
-      Vu_emf, Vv_emf, Vw_emf,
-      U_status, V_status, W_status,
+      V_u_rotational_emf, V_v_rotational_emf, V_w_rotational_emf,
+      V_u_radial_emf, V_v_radial_emf, V_w_radial_emf,
+      V_u_emf, V_v_emf, V_w_emf,
+      U_direction, V_direction, W_direction,
       rpm: ω * 30 / π, r, rv, φ_rv,
     },
   };
@@ -453,6 +475,18 @@ very small values.
 */
 function postprocess_state(state) {
   state.φ = normalized_angle(state.φ);
+  state.I_u = Math.abs(state.I_u) < I_ε ? 0.0 : state.I_u;
+  state.I_v = Math.abs(state.I_v) < I_ε ? 0.0 : state.I_v;
+  state.I_w = Math.abs(state.I_w) < I_ε ? 0.0 : state.I_w;
+  state.ω = Math.abs(state.ω) < ω_ε ? 0.0 : state.ω;
+  if (Math.abs(state.rx_v) < v_ε) {
+    state.rx_v = 0.0;
+    state.rx = Math.abs(state.rx) < r_ε ? 0.0 : state.rx;
+  }
+  if (Math.abs(state.ry_v) < v_ε) {
+    state.ry_v = 0.0;
+    state.ry = Math.abs(state.ry) < r_ε ? 0.0 : state.ry;
+  }
   return state;
 }
 
@@ -479,7 +513,7 @@ export const default_simulation_options = {
   update_memory: {},
   dt: 1.0 / 72_000_000,
   state_update: runge_kuta_step,
-  max_stored_steps: 400,
+  max_stored_steps: 10_000,
   steps_number: 4_000,
   store_period: 2_000,
   /* Clock speed of driving microcontroller, used to update the PWM counter. */
@@ -488,7 +522,7 @@ export const default_simulation_options = {
   sound_sample_rate: 48_000,
   /* How much sound recording to keep; this buffer is much larger than plot
   data history, but we'll keep fewer variables to save memory. */
-  sound_buffer_size: 48_000 * 3.0,
+  sound_buffer_size: 48_000 * 1.0,
 };
 
 
@@ -510,15 +544,12 @@ export class Simulation {
     // Initialize the outputs and inputs and other derivatives, but do not advance state.
     this.compute_next_state();
 
-    // Fill the history buffer with copies of the initial state; it makes graphs start uniformly.
-    for (let i = 0; i < max_stored_steps; i++) this.history_buffer.push(this.flattened_state());
-
     // Compute runtime statistics.
     this.stats = new TimingStats();
     // Simulation slowdown compared to wall clock time.
     this.slowdown = 1.0;
     // Simulation running status.
-    this.running = true;
+    this.running = () => true;
   }
 
   get history() {
@@ -557,8 +588,8 @@ export class Simulation {
   }
 
   sound_state() {
-    const {rx_v, ry_v, rx, ry, φ, Iu, Iv, Iw} = this.state;
-    return {rx_v, ry_v, rx ,ry, φ, Iu, Iv, Iw};
+    const {rx_v, ry_v, rx, ry, φ, I_u, I_v, I_w} = this.state;
+    return {rx_v, ry_v, rx ,ry, φ, I_u, I_v, I_w};
   }
 
   /* Advance the simulation for a batch of steps and compute statistics. */
@@ -576,7 +607,7 @@ export class Simulation {
       const sound_period = Math.max(1, Math.round(1.0/(sound_sample_rate * dt)));
 
       if (this.step % sound_period == 0) {
-        this.sound_buffer.push(this.sound_state());
+        this.sound_buffer.push(this.flattened_state());
       }
 
       this.step += 1;
@@ -584,6 +615,5 @@ export class Simulation {
 
     this.stats.update();
     this.slowdown = 1.0 / (Math.max(0.1, this.stats.fps) * this.options.dt * this.options.steps_number);
-    this.running = true;
   }
 }
