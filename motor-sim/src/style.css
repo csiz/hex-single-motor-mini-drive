@@ -32,6 +32,11 @@ li {
   padding: 0.25rem 0;
 }
 
+form > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
 .tooltip {
   position: relative;
   display: inline-block;

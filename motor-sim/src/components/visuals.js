@@ -192,7 +192,7 @@ export function load_motor(model_file_url){
     }
 
     function on_progress(xhr) {
-      console.info((xhr.loaded / xhr.total * 100) + '% loaded');
+      console.info(`Loading 3D motor model: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
     }
 
     function on_error(error) {
@@ -213,10 +213,13 @@ export function load_texture(texture_file_url, repeat = 1.0, color_space = THREE
       texture.colorSpace = color_space;
       resolve(texture);
     }
+    function on_progress(xhr) {
+      console.info(`Loading 3D textures: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
+    }
     function on_error(error){
       reject(error);
     }
-    texture_loader.load(texture_file_url, on_load, undefined, on_error);
+    texture_loader.load(texture_file_url, on_load, on_progress, on_error);
   });
 }
 
@@ -298,16 +301,14 @@ export function top_selection(intersected_objects){
   return intersected_objects.length > 0 ? [intersected_objects[0]] : [];
 }
 
-export function do_nothing(objects){}
 
 export const default_rendering_options = {
   width: 640, height: 640,
   highlight_filter: top_selection,
-  on_selection: do_nothing,
 };
 
 export function setup_rendering(scene, invalidation, options={}){
-  const {width, height, highlight_filter, on_selection} = {...default_rendering_options, ...options};
+  const {width, height} = {...default_rendering_options, ...options};
 
   const camera = create_camera(width, height);
 
@@ -350,12 +351,9 @@ export function setup_rendering(scene, invalidation, options={}){
       ( (event.clientX - rect.left) / (rect.right - rect.left) ) * 2 - 1,
       - ( (event.clientY - rect.top) / (rect.bottom - rect.top) ) * 2 + 1,
     );
-
-    compute_highlight();
-    on_selection(outline_pass.selectedObjects);
   }
 
-  function compute_highlight(){
+  function compute_highlight(highlight_filter){
     raycaster.setFromCamera( mouse, camera );
 
     const intersects = raycaster.intersectObject( scene, true );
@@ -426,8 +424,9 @@ export function setup_rendering(scene, invalidation, options={}){
     return (material.emissive.r > 0 || material.emissive.g > 0 || material.emissive.b > 0) && material.emissiveIntensity > 0;
   }
 
-  function render(){
-    compute_highlight();
+  function render(options={}){
+    const {highlight_filter} = {...default_rendering_options, ...options};
+    compute_highlight(highlight_filter);
 
     const materials = {};
     const lights = {};

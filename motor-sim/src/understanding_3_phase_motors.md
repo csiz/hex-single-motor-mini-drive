@@ -23,15 +23,23 @@ import tex from "npm:@observablehq/tex";
 import * as Plot from "@observablehq/plot";
 import _ from "lodash";
 
+import {select} from "d3-selection";
+
 import {html} from "htl";
 const htf = html.fragment;
 
 import {note, link} from "./components/utils.js"
 import {Simulation, initial_state, initial_parameters, π, normalized_angle} from "./components/simulation.js"
+import {sixstep_commutation} from "./components/driver_algorithms.js"
 import {create_scene, setup_rendering} from "./components/visuals.js"
 
 
+
+// Configure 3D visuals
+// --------------------
+
 const {motor, scene} = await create_scene();
+
 
 function get_coil_color(coil) {
   const hsl_color = {};
@@ -52,7 +60,7 @@ function update_motor_visuals(state) {
   const {φ, I_u, I_v, I_w, hall_1, hall_2, hall_3, rx, ry} = state;
   
   motor.rotor.rotation.y = normalized_angle(φ - π / 2);
-  const position_scaling = 50_000.0;
+  const position_scaling = 100_000.0;
   motor.rotor.position.z = position_scaling * rx;
   motor.rotor.position.x = position_scaling * ry;
   motor.red_led.material.emissiveIntensity = hall_1 ? 10.0 : 0.0;
@@ -63,6 +71,7 @@ function update_motor_visuals(state) {
   motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(I_w / 6.0);
 }
 
+/* Descriptions of the 3D model components for mouseover tooltips. */
 const descriptions = new Map([
   ["<no selection>", html`
     We simulate a 3 phase motor with 1 winding per phase and 2 pole permanent magnet rotor
@@ -90,341 +99,174 @@ const descriptions = new Map([
     The hall sensor 3 is placed between the W and U phase poles. It senses the north magnetic field.`],
 ]);
 
+const highlight_description = Mutable(descriptions.get("<no selection>"));
 
 /* Get the most specific object group with a description from those intersected by the mouse cursor. */
-function get_object_with_description(intersected_objects) {
+const show_object_with_description = _.throttle((intersected_objects) => {
   if (intersected_objects.length == 0) return [];
   let object = intersected_objects[0];
   // Walk the object hierarchy to find the first object with a description.
   while (!descriptions.has(object)) {
     // We reached the top without finding a description, don't highlight anything.
-    if (object.parent == null) return [];
+    if (object.parent == null) {
+      highlight_description.value = descriptions.get("<no selection>");
+      return [];
+    }
     object = object.parent;
   }
+
+  highlight_description.value = descriptions.get(object);
   return [object];
-}
-
-const highlight_description = Mutable(descriptions.get("<no selection>"));
-
-const show_description = _.throttle((objects) => {
-  highlight_description.value = descriptions.get(_.get(objects, "[0]", "<no selection>"));
-}, 500);
+}, 100);
 
 
+// Simulation information
+// ----------------------
 
-const frequency_slider = Inputs.range([1_125_000, 72_000_000], {
-  transform: Math.log, 
-  format: x => x.toFixed(0), 
-  label: "Frequency (Hz)",
-});
-
-const steps_number_slider = Inputs.range([1, 20_000], {
-  transform: Math.log, 
-  format: x => x.toFixed(0), 
-  label: "Steps per frame",
-});
-
-const store_period_slider = Inputs.range([1, 10_000], {
-  transform: Math.log, 
-  format: x => x.toFixed(0), 
-  label: "Store period",
-});
-
-
-
-const load_torque_slider = Inputs.range([0.000_1, 0.02], {
-  transform: Math.log,
-  format: x => x.toFixed(4),
-  label: "Load Torque",
-});
-const load_torque_angle = Inputs.range([-180, +180], {
-  format: x => x.toFixed(0),
-  label: "Load Torque Angle",
-});
-
-const load_torque_map = {
-  "Free": ()=>0.0,
-  "Move +": ()=>load_torque_slider.value,
-  "Move -": ()=>-load_torque_slider.value,
-  "Towards Angle": (φ)=>load_torque_slider.value * normalized_angle(load_torque_angle.value / 180 * π - φ) / (π / 2),
-};
-const load_torque_selection = Inputs.radio(Object.keys(load_torque_map), {label: "Load Torque Mode"}); 
-
-
-function get_sixstep_hall_code(hall_1, hall_2, hall_3){
-  return hall_3 << 2 | hall_2 << 1 | hall_1;
-}
-
-const sixstep_phase_map = {
-  0b000: "no_magnet",
-  0b100: 0,
-  0b110: 1,
-  0b010: 2,
-  0b011: 3,
-  0b001: 4,
-  0b101: 5,
-  0b111: "too_much_magnet",
-};
-
-const sixstep_switching_neg_map = {
-  no_magnet: [0, 0, 0],
-  too_much_magnet: [0, 0, 0],
-  0: [0, 1, 2],
-  1: [1, 0, 2],
-  2: [1, 2, 0],
-  3: [0, 2, 1],
-  4: [2, 0, 1],
-  5: [2, 1, 0],
-};
-
-const sixstep_switching_pos_map = {
-  no_magnet: [0, 0, 0],
-  too_much_magnet: [0, 0, 0],
-  0: [0, 2, 1],
-  1: [2, 0, 1],
-  2: [2, 1, 0],
-  3: [0, 1, 2],
-  4: [1, 0, 2],
-  5: [1, 2, 0],
-};
-
-function sixstep_commutation(outputs, positive=true){
-  const {hall_1, hall_2, hall_3} = outputs;
-  const sixstep_phase = sixstep_phase_map[get_sixstep_hall_code(hall_1, hall_2, hall_3)];
-  return (positive ? sixstep_switching_pos_map : sixstep_switching_neg_map)[sixstep_phase];
-}
-
-const driver_state_map = {
-  "Disconnect Battery": ()=>[0, 0, 0],
-  "Connect and Idle": ()=>[0, 0, 0],
-  "Break": ()=>[2, 2, 2],
-  "Drive -": (state, parameters, outputs, update_memory)=>sixstep_commutation(outputs, false),
-  "Drive +": (state, parameters, outputs, update_memory)=>sixstep_commutation(outputs, true),
-  "Drive U +": ()=>[1, 2, 2],
-  "Drive V +": ()=>[2, 1, 2],
-  "Drive W +": ()=>[2, 2, 1],
-  "Drive U -": ()=>[2, 1, 1],
-  "Drive V -": ()=>[1, 2, 1],
-  "Drive W -": ()=>[1, 1, 2],
-  "Drive UV +": ()=>[1, 2, 0],
-  "Drive VW +": ()=>[0, 1, 2],
-  "Drive WU +": ()=>[2, 0, 1],
-  "Drive UV -": ()=>[2, 1, 0],
-  "Drive VW -": ()=>[0, 2, 1],
-  "Drive WU -": ()=>[1, 0, 2],
-};
-
-const driver_state_selection = Inputs.radio(Object.keys(driver_state_map), {label: "Driver control"});
-
-
-function update_input(input, value) {
-  input.value = value;
-  input.dispatchEvent(new Event("input"));
-}
-
-function reset() {
-  update_input(frequency_slider, 12_000_000); // We want to simulate 72 MHz!
-  update_input(steps_number_slider, 2500);
-  update_input(store_period_slider, 250);
-  update_input(load_torque_slider, +0.01);
-  update_input(load_torque_angle, 0.0);
-  update_input(load_torque_selection, "Move +");
-  update_input(driver_state_selection, "Connect and Idle");
-}
-
-reset();
-
-
-function interactive_inputs(state, parameters, outputs, update_memory) {
-  const {φ} = state;
-  const [U_switch, V_switch, W_switch] = driver_state_map[driver_state_selection.value](state, parameters, outputs, update_memory);
-
-  const τ_load = load_torque_map[load_torque_selection.value](φ);
-
-  return {
-    U_switch, // driver connection state for phase U
-    V_switch, // driver connection state for phase V
-    W_switch, // driver connection state for phase W
-    τ_load, // external load torque
-    battery_connected: driver_state_selection.value != "Disconnect Battery", // whether the battery is connected
-  }
-}
-
-const rendering = setup_rendering(scene, invalidation, {highlight_filter: get_object_with_description, on_selection: show_description});
-
-let simulation = new Simulation({
-  start_state: initial_state,
-  parameters: initial_parameters,
-  update_inputs: interactive_inputs,
-  update_memory: {},
-  dt: 1.0 / frequency_slider.value,
-});
-
-const sound_scaling = {
-  r: 1.0 / 0.002,
-  rv: 1.0 / 1.0,
-}
-
-
-const simulation_control = Inputs.button(
-  [
-    ["Pause", () => { simulation.running = () => false; }], 
-    ["Resume", () => { simulation.running = () => true; }],
-    ["Step", () => { 
-      let stepped = false; 
-      simulation.running = () => { 
-        if (stepped) return false;
-        stepped = true; 
-        return true; 
-      };
-    }],
-    [html`<div style="min-width: 7em;">Look at motor</div>`, () => { rendering.reset_camera(); }],
-    [html`<div style="min-width: 6em;">Reset inputs</div>`, () => { reset(); }],
-    ["Play🎵", () => {
-      const audio_context = new AudioContext({sampleRate: simulation.options.sound_sample_rate});
-
-      // Create an empty three-second stereo buffer at the sample rate of the AudioContext.
-      const noise_buffer = audio_context.createBuffer(
-        2,
-        simulation.options.sound_buffer_size,
-        simulation.options.sound_sample_rate,
-      );
-
-      const left_channel = noise_buffer.getChannelData(0);
-      const right_channel = noise_buffer.getChannelData(1);
-
-      const scaling_r = 1.0 / 0.000_100;
-      const scaling_rv = 1.0 / 0.100;
-
-      simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, r_v}, i) => {
-        // left_channel[i] = scaling_r * rx + sound_scaling.rv * rx_v;
-        // right_channel[i] = scaling_r * ry + sound_scaling.rv * ry_v;
-
-        left_channel[i] = scaling_r * rx;
-        // right_channel[i] = scaling_r * ry;
-
-        left_channel[i] = sound_scaling.rv * rx_v;
-        // right_channel[i] = sound_scaling.rv * ry_v;
-      });
-
-      // Create a buffer source.
-      const noise = audio_context.createBufferSource();
-      noise.buffer = noise_buffer;
-
-      // Connect to output.
-      noise.connect(audio_context.destination);
-
-      // Start the noise.
-      noise.start();
-    }],
-  ],
-  {label: "Simulation control"}
-);
-
-
-
-const simulation_interface = htf`<span>
-  <div>${simulation_control}</div>
-  <div>${frequency_slider}</div>
-  <div>${steps_number_slider}</div>
-  <div>${store_period_slider}</div>
-  <div>${load_torque_selection}</div>
-  <div>${load_torque_slider}</div>
-  <div>${load_torque_angle}</div>
-  <div>${driver_state_selection}</div>
-</span>`;
-
-const number_of_plot_points = 400;
-
-let simulation_info = Mutable(300);
+let simulation_info = Mutable();
 
 const show_simulation_info = _.throttle((simulation, rendering) => {
-  const plot_duration = simulation.options.dt * simulation.options.store_period * number_of_plot_points;
+  const {fps} = rendering.stats;
+  const {slowdown, history_buffer, sound_buffer} = simulation;
+  const {dt, store_period, steps_number, sound_sample_rate, max_stored_steps} = simulation.options;
+
+  const plot_duration = dt * store_period * max_stored_steps;
 
   simulation_info.value = htf`<span style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr">
-    <span>FPS: ${rendering.stats.fps.toFixed(1)}</span>
-    <span>Slowdown: ${simulation.running ? formatSI(simulation.slowdown) : tex`\infty`}</span>
-    <span>Speed: ${formatSI(1.0 / simulation.options.dt)}Hz</span>
-    <span>${tex`\delta t`}: ${formatSI(simulation.options.dt)}s</span>
+    <span>FPS: ${fps.toFixed(1)}</span>
+    <span>Slowdown: ${formatSI(slowdown)}</span>
+    <span>Speed: ${formatSI(1.0 / dt)}Hz</span>
+    <span>${tex`\delta t`}: ${formatSI(dt)}s</span>
 
     <span>Plot window: ${formatSI(plot_duration)}s</span>
     <span>Window freq: ${formatSI(1.0 / plot_duration)}Hz</span>
-    <span>Buffer: ${formatSI(simulation.history_buffer.size() * simulation.options.store_period * simulation.options.dt)}s</span>
-    <span>🎵 buffer: ${formatSI(simulation.sound_buffer.size() / simulation.options.sound_sample_rate)}s</span>
+    <span>Buffer: ${formatSI(history_buffer.size() * store_period * dt)}s</span>
+    <span>🎵 buffer: ${formatSI(sound_buffer.size() / sound_sample_rate)}s</span>
   </span>`;
 }, 100);
 
 
-const plot_labels_map = {
-  "Latest Value": (values) => values.map((row) => _.last(row)),
-  "Root Mean Square": (values) => values.map((row) => Math.hypot(...row) / Math.sqrt(row.length)),
-  "Hide": (values) => values.map(() => undefined),
-};
 
-const plot_labels_choice = Inputs.radio(Object.keys(plot_labels_map), {label: "Show numbers", value: "Root Mean Square"});
+// Live simulation controls
+// ------------------------
 
-const default_sparkline_plot = {label: "<sparkline>", y: [], stroke: "black"};
-const default_sparkline_options = {x: "t", least_domain: null, symmetric_domain: true, height: 60, units: ""};
-
-function sparkline(data, title, lines={}, options={}){
-  const {x, least_domain, symmetric_domain, height, units} = Object.assign({}, default_sparkline_options, options);
-  
-  if (!Array.isArray(lines)) lines = [lines];
-
-  lines.map((line) => Object.assign({}, default_sparkline_plot, line));
-
-  const values = lines.map(({y}) => {
-    if (typeof y === "string") return data.map((item) => item[y]);
-    if (typeof y === "function") return data.map((item) => y(item));
-    return y;
-  });
-
-  const min_value = Math.min(...values.map(row => Math.min(...row)));
-  const max_value = Math.max(...values.map(row => Math.max(...row)));
-
-  const min_domain = least_domain ? Math.min(least_domain[0], min_value) : min_value;
-  const max_domain = least_domain ? Math.max(least_domain[1], max_value) : max_value;
-
-  const domain = symmetric_domain ? [
-    Math.min(min_domain, -max_domain),
-    Math.max(max_domain, -min_domain),
-  ] : [
-    min_domain,
-    max_domain,
-  ];
-
-  
-  const selected_values = plot_labels_map[plot_labels_choice.value](values);
-
-  const sub_labels = lines.map(({label, stroke}, i) => {
-    const v = selected_values[i];
-    const formatted_v = v === undefined ?  "" : `${v > 0.0 ? "+" : v < 0.0 ? "-" : ""}${formatSI(Math.abs(v))}${units}`;
-    return htf`<div style="color: ${stroke};">${tex`${label}`} <span style="font-family: monospace; float: right;">${formatted_v}</span></div>`
-  });
-  
-  const labels = htf`<div style="display: flex: flex-direction: column; min-width: 150px; margin-right: 6.5px;">
-    <div style="font-weight: bold;">${title}</div>
-    ${sub_labels}
-  </div>`;
-
-  const plot = Plot.plot({
-    height,
-    axis: null,
-    figure: true,
-    y: {domain},
-    marks:[
-      lines.map(({stroke}, i) => Plot.lineY(data, {x, y: values[i], stroke})),
-      Plot.ruleY([0], {stroke: "gray", strokeDasharray: "8,2", curve: "linear"}),
-    ],
-  });
-
-  return htf`<div style="margin: 10px 0px; padding: 5px 0px; box-shadow: 3px 3px 5px rgb(0 0 0 / .2); display: flex; flex-direction: row;">
-    ${labels}
-    ${plot}
-  </div>`;
+/* Use passive buttons for the controls to let the update loop pull their value. */
+function consume_button(controls, task_map, if_consumed=()=>{}){
+  if(controls.value) {
+    controls.value = task_map[controls.value]();
+    if_consumed();
+  }
 }
 
-const simulation_plots_map = {
+
+const simulation_controls = Inputs.button(
+  [
+    ["Play", () => "Play"], 
+    ["Pause", () => "Pause"],
+    ["Step", () => "Step"],
+    ["Restart", () => "Restart"],
+  ],
+  {label: "Simulation controls", value: "Play"}
+);
+
+const audio_video_controls = Inputs.button(
+  [
+    ["Look at motor", () => "Look at motor"],
+    ["Reset inputs", () => "Reset inputs"],
+    ["Play 🎵", () => "Play 🎵"],
+  ],
+  {label: "Controls"}
+);
+
+const timing_sliders = Inputs.form({
+  frequency: Inputs.range([1_125_000, 72_000_000], {
+    transform: Math.log, 
+    format: x => x.toFixed(0), 
+    label: "Frequency (Hz)",
+    value: 12_000_000,
+  }),
+  steps_number: Inputs.range([1, 10_000], {
+    transform: Math.log, 
+    format: x => x.toFixed(0), 
+    label: "Steps per frame",
+    value: 2500,
+  }),
+  store_period: Inputs.range([1, 10_000], {
+    transform: Math.log, 
+    format: x => x.toFixed(0), 
+    label: "Store period",
+    value: 250,
+  }),
+});
+
+const timing_sliders_defaults = timing_sliders.value;
+
+
+const load_mode_map = {
+  "↻ Move +": (load_torque) => +load_torque,
+  "↺ Move -": (load_torque) => -load_torque,
+  "Towards Angle": (load_torque, target_angle, φ) => load_torque * normalized_angle(target_angle / 180 * π - φ) / (π / 2),
+  "Unloaded": () => 0.0,
+};
+
+const driver_mode_map = {
+  "Disconnect Battery": ()=>[0, 0, 0],
+  "Connect and Idle": ()=>[0, 0, 0],
+  "Break Lo": ()=>[2, 2, 2],
+  "Break Hi": ()=>[1, 1, 1],
+  "↺ Drive -": (state, parameters, outputs, update_memory)=>sixstep_commutation(outputs, false),
+  "↻ Drive +": (state, parameters, outputs, update_memory)=>sixstep_commutation(outputs, true),
+  "⇓ Drive U +": ()=>[1, 2, 2],
+  "⇖ Drive V +": ()=>[2, 1, 2],
+  "⇗ Drive W +": ()=>[2, 2, 1],
+  "⇑ Drive U -": ()=>[2, 1, 1],
+  "⇘ Drive V -": ()=>[1, 2, 1],
+  "⇙ Drive W -": ()=>[1, 1, 2],
+  "↘ Drive UV +": ()=>[1, 2, 0],
+  "← Drive VW +": ()=>[0, 1, 2],
+  "↗ Drive WU +": ()=>[2, 0, 1],
+  "↖ Drive UV -": ()=>[2, 1, 0],
+  "→ Drive VW -": ()=>[0, 2, 1],
+  "↙ Drive WU -": ()=>[1, 0, 2],
+};
+
+const interactive_sliders = Inputs.form({
+  load_torque: Inputs.range([0.000_1, 0.02], {
+    transform: Math.log,
+    format: x => x.toFixed(4),
+    label: "Load Torque",
+    value: 0.01,
+  }),
+  target_angle: Inputs.range([0, +360], {
+    format: x => x.toFixed(0),
+    label: "Target Angle",
+    value: 0.0,
+  }),
+  load_mode: Inputs.radio(Object.keys(load_mode_map), {
+    label: "Load Torque Mode", 
+    value: "Unloaded"
+  }),
+  driver_mode: Inputs.radio(Object.keys(driver_mode_map), {
+    label: "Driver control", 
+    value: "Connect and Idle",
+  }),
+});
+
+const interactive_sliders_defaults = interactive_sliders.value;
+
+
+const simulation_interface = Inputs.form([
+  simulation_controls,
+  audio_video_controls,
+  timing_sliders,
+  interactive_sliders,
+]);
+
+
+// Plotting options
+// ----------------
+
+const plot_selection_map = {
   "Rotational Frequency": [{label: `freq`, y: (item) => item.ω / (2 * π)}, {least_domain: [-1_000, 1_000], units: "Hz"}],
   "Motor Speed": [{label: `RPM`, y: "rpm"}, {least_domain: [-6_000, 6_000]}],
   "Motor Angle": [{label: "φ", y: "φ"}, {least_domain: [-π, π], units: "rad"}],
@@ -438,6 +280,7 @@ const simulation_plots_map = {
   ],
   "Battery Current": [{label: "I_{bat}", y: "I"}, {least_domain: [-2.0, +2.0], units: "A"}],
   "Capacitor Voltage": [{label: "V_{near}", y: "V"}, {least_domain: [-12.0, +12.0], units: "V"}],
+  "Radial Angle": [{label: "φ_{rv}", y: "φ_rv"}, {least_domain: [-π, π], units: "rad"}],
   "Radial Velocity": [
     [
       {label: `\nu_x`, y: "rx_v", stroke: color_x},
@@ -493,21 +336,13 @@ const simulation_plots_map = {
     ], 
     {least_domain: [-12.0, 12.0], height: 120, units: "V"},
   ],
-  "Phase to phase inductor voltage": [
+  "Switching direction": [
     [
-      {label: "V_{UV}", y: "V_Luv", stroke: color_u},
-      {label: "V_{VW}", y: "V_Lvw", stroke: color_v},
-      {label: "V_{WU}", y: "V_Lwu", stroke: color_w},
+      {label: "U", y: "U_direction", stroke: color_u},
+      {label: "V", y: "V_direction", stroke: color_v},
+      {label: "W", y: "W_direction", stroke: color_w},
     ], 
-    {least_domain: [-12.0, 12.0], height: 120, units: "V"},
-  ],
-  "Phase to phase current change": [
-    [
-      {label: "dI_{UV}", y: "dI_uv", stroke: color_u},
-      {label: "dI_{VW}", y: "dI_vw", stroke: color_v},
-      {label: "dI_{WU}", y: "dI_wu", stroke: color_w},
-    ], 
-    {least_domain: [-10_000.0, +10_000.0], height: 120, units: "A/s"},
+    {least_domain: [-1.0, 1.0], height: 120},
   ],
   "MOSFET voltage drop": [
     [
@@ -517,77 +352,298 @@ const simulation_plots_map = {
     ], 
     {least_domain: [-1.0, 1.0], height: 120, units: "V"},
   ],
-  "Switching direction": [
+  "Phase to phase inductor voltage": [
     [
-      {label: "U", y: "U_direction", stroke: color_u},
-      {label: "V", y: "V_direction", stroke: color_v},
-      {label: "W", y: "W_direction", stroke: color_w},
+      {label: "V_{UV}", y: "V_Luv", stroke: color_u},
+      {label: "V_{VW}", y: "V_Lvw", stroke: color_v},
+      {label: "V_{WU}", y: "V_Lwu", stroke: color_w},
     ], 
-    {least_domain: [-1.0, 1.0], height: 120},
+    {least_domain: [-12.0, 12.0], height: 120, units: "V"},
   ],
 };
 
-const default_simulation_plots = ["Currents", "Motor Speed", "Motor Angle", "Torque", "Total EMF", "Rotational EMF", "Radial EMF", "Radial Position", "Radial Velocity"];
+const plot_selection_defaults = [
+  "Currents", 
+  "Motor Speed", 
+  "Motor Angle", 
+  "Torque", 
+  "Total EMF", 
+  "Rotational EMF", 
+  "Radial EMF", 
+  "Radial Angle", 
+  "Radial Position", 
+  "Radial Velocity",
+];
 
-const simulation_plots_selection = Inputs.checkbox(Object.keys(simulation_plots_map), {label: "Plots", value: default_simulation_plots});
 
-const simulation_plots_preselections = Inputs.button(
+const plot_shown_value_map = {
+  "Latest Value": (row) => _.last(row),
+  "Root Mean Square": (row) => Math.hypot(...row) / Math.sqrt(row.length),
+  "Hide": (row) => undefined,
+};
+
+
+const plot_shown_value_choice = Inputs.radio(Object.keys(plot_shown_value_map), {
+  label: "Show numbers", 
+  value: "Root Mean Square",
+});
+
+const plot_selection = Inputs.checkbox(Object.keys(plot_selection_map), {
+  label: "Plots", 
+  value: plot_selection_defaults,
+});
+
+let plot_selection_by_user = plot_selection_defaults;
+
+function plot_save_and_switch(new_selection){
+  return () => {
+    plot_selection_by_user = plot_selection.value;
+    plot_selection.value = new_selection;
+  };
+}
+
+function plot_reset_selection(){
+  plot_selection_by_user = plot_selection.value;
+  plot_selection.value = plot_selection_defaults;
+}
+
+function plot_restore_selection(){
+  const old_selection = plot_selection.value;
+  plot_selection.value = plot_selection_by_user;
+  plot_selection_by_user = old_selection;
+}
+
+const plot_preselections = Inputs.button(
   [
-    ["Show Default", (value) => { 
-      if (!value) value = simulation_plots_selection.value;
-      simulation_plots_selection.value = default_simulation_plots;
-      return value;
-    }],
-    ["Show All", (value) => {
-      if (!value) value = simulation_plots_selection.value;
-      simulation_plots_selection.value = Object.keys(simulation_plots_map); 
-      return value;
-    }],
-    ["Hide Plots", (value) => {
-      if (!value) value = simulation_plots_selection.value;
-      simulation_plots_selection.value = []; 
-      return value;
-    }],
-    ["User Selection", (value) => { if (value) simulation_plots_selection.value = value; return undefined;}],
+    ["Show Default", () => "Show Default"],
+    ["Show All", () => "Show All"],
+    ["Hide Plots", () => "Hide Plots"],
+    ["User Selection", () => "User Selection"],
+    ["Reset Selection", () => "Reset Selection"],
   ],
-  {label: "Plot selections"}
+  {label: "Plot selections"},
 );
 
-const simulation_plots_interface = htf`<span>
-  <div>${simulation_plots_selection}</div>
-  <div>${simulation_plots_preselections}</div>
-  <div>${plot_labels_choice}</div>
-</span>`;
+
+const simulation_plots_interface = Inputs.form({
+  preselections: plot_preselections,
+  selection: plot_selection,
+  shown_value_choice: plot_shown_value_choice,
+});
+
+
+
+// Simulation plots
+// ----------------
+
+const default_sparkline_plot = {label: "<sparkline>", y: [], stroke: "black"};
+const default_sparkline_options = {x: "t", least_domain: null, symmetric_domain: true, height: 60, units: "", title: "", shown_value: (row) => undefined};
+
+function sparkline(data, lines={}, options={}){
+  const {x, least_domain, symmetric_domain, height, units, shown_value, title} = Object.assign({}, default_sparkline_options, options);
+  
+  if (!Array.isArray(lines)) lines = [lines];
+
+  lines.map((line) => Object.assign({}, default_sparkline_plot, line));
+
+  const values = lines.map(({y}) => {
+    if (typeof y === "string") return data.map((item) => item[y]);
+    if (typeof y === "function") return data.map((item) => y(item));
+    return y;
+  });
+
+  const min_value = Math.min(...values.map(row => Math.min(...row)));
+  const max_value = Math.max(...values.map(row => Math.max(...row)));
+
+  const min_domain = least_domain ? Math.min(least_domain[0], min_value) : min_value;
+  const max_domain = least_domain ? Math.max(least_domain[1], max_value) : max_value;
+
+  const domain = symmetric_domain ? [
+    Math.min(min_domain, -max_domain),
+    Math.max(max_domain, -min_domain),
+  ] : [
+    min_domain,
+    max_domain,
+  ];
+
+  
+  const selected_values = values.map(shown_value);
+
+  const sub_labels = lines.map(({label, stroke}, i) => {
+    const v = selected_values[i];
+    const formatted_v = v === undefined ?  "" : `${v > 0.0 ? "+" : v < 0.0 ? "-" : ""}${formatSI(Math.abs(v))}${units}`;
+    return htf`<div style="color: ${stroke};">${tex`${label}`} <span style="font-family: monospace; float: right;">${formatted_v}</span></div>`
+  });
+  
+  const labels = htf`<div style="display: flex: flex-direction: column; min-width: 150px; margin-right: 6.5px;">
+    <div style="font-weight: bold;">${title}</div>
+    ${sub_labels}
+  </div>`;
+
+  const plot = Plot.plot({
+    height,
+    axis: null,
+    figure: true,
+    y: {domain},
+    marks:[
+      lines.map(({stroke}, i) => Plot.lineY(data, {x, y: values[i], stroke})),
+      Plot.ruleY([0], {stroke: "gray", strokeDasharray: "8,2", curve: "linear"}),
+    ],
+  });
+
+  return htf`<div style="margin: 10px 0px; padding: 5px 0px; box-shadow: 3px 3px 5px rgb(0 0 0 / .2); display: flex; flex-direction: row;">
+    ${labels}
+    ${plot}
+  </div>`;
+}
 
 const simulation_plots = Mutable();
 
-const show_simulation_plots = _.throttle((history) => {
+const show_simulation_plots = _.throttle((history, selected_plots, shown_value) => {
 
-  simulation_plots.value = simulation_plots_selection.value.map((title) => {
-    const [lines, options] = simulation_plots_map[title];
-    return sparkline(history, title, lines, options);
+  simulation_plots.value = selected_plots.map((title) => {
+    const [lines, options] = plot_selection_map[title];
+    return sparkline(history, lines, {...options, title, shown_value});
   });
   
 }, 1000.0/60);
 
 
+// Simulations sounds
+// ------------------
+
+const sound_scaling = {
+  r: 1.0 / 0.002,
+  rv: 1.0 / 1.0,
+}
+
+function play_simulation_sound(simulation){
+  const audio_context = new AudioContext({sampleRate: simulation.options.sound_sample_rate});
+  // Create an empty three-second stereo buffer at the sample rate of the AudioContext.
+  const noise_buffer = audio_context.createBuffer(
+    2,
+    simulation.options.sound_buffer_size,
+    simulation.options.sound_sample_rate,
+  );
+
+  const left_channel = noise_buffer.getChannelData(0);
+  const right_channel = noise_buffer.getChannelData(1);
+
+  const scaling_r = 1.0 / 0.000_100;
+  const scaling_rv = 1.0 / 0.100;
+
+  simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, r_v, φ_rv}, i) => {
+    // left_channel[i] = scaling_r * rx + sound_scaling.rv * rx_v;
+    // right_channel[i] = scaling_r * ry + sound_scaling.rv * ry_v;
+
+    // left_channel[i] = scaling_r * rx;
+    // right_channel[i] = scaling_r * ry;
+
+    // left_channel[i] = sound_scaling.rv * rx_v;
+    // right_channel[i] = sound_scaling.rv * ry_v;
+
+    left_channel[i] = 0.1 * φ_rv / π;
+  });
+
+  // Create a buffer source.
+  const noise = audio_context.createBufferSource();
+  noise.buffer = noise_buffer;
+
+  // Connect to output.
+  noise.connect(audio_context.destination);
+
+  // Start the noise.
+  noise.start();
+}
+
+
+// Start the simulation
+// --------------------
+
+function interactive_inputs(state, parameters, outputs, update_memory) {
+  const {driver_mode, load_mode, load_torque, target_angle} = interactive_sliders.value;
+
+  const {φ} = state;
+  const driver_function = driver_mode_map[driver_mode];
+  const [U_switch, V_switch, W_switch] = driver_function(state, parameters, outputs, update_memory);
+
+  const τ_load = load_mode_map[load_mode](load_torque, target_angle, φ);
+
+  return {
+    U_switch, // driver connection state for phase U
+    V_switch, // driver connection state for phase V
+    W_switch, // driver connection state for phase W
+    τ_load, // external load torque
+    battery_connected: driver_mode != "Disconnect Battery", // whether the battery is connected
+  }
+}
+
+function setup_simulation(){
+  return new Simulation({
+    start_state: initial_state,
+    parameters: initial_parameters,
+    update_inputs: interactive_inputs,
+    update_memory: {},
+    max_stored_steps: 400,
+  });
+}
+
+let simulation = setup_simulation();
+
+function show_visuals(){
+  const selection = plot_selection.value;
+  const shown_value = plot_shown_value_map[plot_shown_value_choice.value];
+
+  show_simulation_plots(simulation.history, selection, shown_value);
+
+  update_motor_visuals(simulation.flattened_state());
+}
+
+function update_and_show(){
+  const {frequency, steps_number, store_period} = timing_sliders.value;
+
+  simulation.options.steps_number = Math.ceil(steps_number);
+  simulation.options.store_period = Math.ceil(store_period);
+  simulation.options.dt = 1.0 / frequency;
+
+  simulation.update();
+
+  show_visuals();
+}
+
+const rendering = setup_rendering(scene, invalidation);
 
 function * simulate_live () {
   while(true){
-    if (simulation.running()) {
+    consume_button(audio_video_controls, {
+      "Look at motor": () => { rendering.reset_camera(); },
+      "Reset inputs": () => { 
+        timing_sliders.value = timing_sliders_defaults; 
+        interactive_sliders.value = interactive_sliders_defaults;
+      },
+      "Play 🎵": () => { play_simulation_sound(simulation); },
+    });
 
-      simulation.options.steps_number = Math.ceil(steps_number_slider.value);
-      simulation.options.store_period = Math.ceil(store_period_slider.value);
-      simulation.options.dt = 1.0 / frequency_slider.value;
+    consume_button(plot_preselections, {
+      "Show Default": plot_save_and_switch(plot_selection_defaults),
+      "Show All": plot_save_and_switch(Object.keys(plot_selection_map)),
+      "Hide Plots": plot_save_and_switch([]),
+      "User Selection": plot_restore_selection,
+      "Reset Selection": plot_reset_selection,
+    }, show_visuals);
 
-      simulation.update();
-
-      show_simulation_plots(_.takeRight(simulation.history, number_of_plot_points));
-
-      update_motor_visuals(simulation.flattened_state());
-    }
+    consume_button(simulation_controls, {
+      "Play": () => { update_and_show(); return "Play"; },
+      "Pause": () => "Pause",
+      "Step": () => { update_and_show(); return "Pause"; },
+      "Restart": () => {
+        simulation = setup_simulation();
+        update_and_show();
+        return "Play";
+      },
+    });
     
-    rendering.render();
+    rendering.render({highlight_filter: show_object_with_description});
 
     show_simulation_info(simulation, rendering);
 

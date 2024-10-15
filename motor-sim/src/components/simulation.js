@@ -56,15 +56,15 @@ export const hall_toggle_angle = 85 * π / 180;
 
 The motor constant represents back emf / angular rotation (in radians/second). 
 */
-export function RPM_Kv_to_Ke(RPM_Kv){
-  return 60.0 / (RPM_Kv * 2.0 * π);
+export function RPM_Kv_to_Ke(RPM_Kv, N_pole_pairs=2){
+  return 60.0 / (N_pole_pairs * RPM_Kv * 2.0 * π);
 }
 
 /* Initial parameters governing our motor physics. */
 export const initial_parameters = {
   R_phase: 1.3, // phase resistance
   L_phase: 0.000_1, // phase inductance
-  Ψ_m: RPM_Kv_to_Ke(600), // ~0.01V*s motor Ke constant (also the magnetic flux linkage)
+  Ψ_m: RPM_Kv_to_Ke(1500), // ~0.01V*s motor Ke constant (also the magnetic flux linkage)
   τ_static: 0.0002, // static friction torque
   τ_dynamic: 0.000005, // dynamic friction torque
   V_bat: 8.0, // battery voltage
@@ -81,10 +81,10 @@ export const initial_parameters = {
   J_rotor: 0.000_000_25, // (Kg*m^2) rotor moment of inertia
   M_rotor: 0.002, // (Kg) rotor mass
   r_gap: 0.000_300, // (m) Rotor magnet to stator core effective air gap.
-  /* (N/m) Radial displacement spring constant. Tapping the rotor makes a ~14kHz tone (Maybe, I dunno`).
+  /* (N/m) Radial displacement spring constant. Tapping the rotor makes a ~10kHz tone (Maybe, I dunno`).
   from which the stiffness can be estimated from a simple mass-spring oscilator at
   frequency `f = 1/2π * sqrt(r_elasticity / M_rotor)`. */
-  r_elasticity: 15_000_000.0,
+  r_elasticity: 8_000_000.0,
   /* (N) Radial friction. We'll only use a bit of static friction for radial displacement
   and let the dynamic friction be entirely due to emf interactions. */
   r_friction: 0.02,
@@ -457,7 +457,7 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
     info: {
       τ_emf, τ_applied, τ_friction, τ_total,
       V_Ru, V_Rv, V_Rw, V_Mu, V_Mv, V_Mw, V_Lu, V_Lv, V_Lw, VCC_u, VCC_v, VCC_w,
-      V_Luv, V_Lvw, V_Lwu, dI_uv, dI_vw, dI_wu,
+      V_Luv, V_Lvw, V_Lwu,
       V_terminal, I_near_cap, I_motor,
       V_u_rotational_emf, V_v_rotational_emf, V_w_rotational_emf,
       V_u_radial_emf, V_v_radial_emf, V_w_radial_emf,
@@ -478,6 +478,7 @@ function postprocess_state(state) {
   state.I_u = Math.abs(state.I_u) < I_ε ? 0.0 : state.I_u;
   state.I_v = Math.abs(state.I_v) < I_ε ? 0.0 : state.I_v;
   state.I_w = Math.abs(state.I_w) < I_ε ? 0.0 : state.I_w;
+  state.I = Math.abs(state.I) < I_ε ? 0.0 : state.I;
   state.ω = Math.abs(state.ω) < ω_ε ? 0.0 : state.ω;
   if (Math.abs(state.rx_v) < v_ε) {
     state.rx_v = 0.0;
@@ -513,7 +514,7 @@ export const default_simulation_options = {
   update_memory: {},
   dt: 1.0 / 72_000_000,
   state_update: runge_kuta_step,
-  max_stored_steps: 10_000,
+  max_stored_steps: 400,
   steps_number: 4_000,
   store_period: 2_000,
   /* Clock speed of driving microcontroller, used to update the PWM counter. */
@@ -548,8 +549,6 @@ export class Simulation {
     this.stats = new TimingStats();
     // Simulation slowdown compared to wall clock time.
     this.slowdown = 1.0;
-    // Simulation running status.
-    this.running = () => true;
   }
 
   get history() {
@@ -585,11 +584,6 @@ export class Simulation {
   /* Get a complete copy of the state at the current simulation step. */
   flattened_state() {
     return {step: this.step, ...this.state, ...this.outputs, ...this.inputs, ...this.info};
-  }
-
-  sound_state() {
-    const {rx_v, ry_v, rx, ry, φ, I_u, I_v, I_w} = this.state;
-    return {rx_v, ry_v, rx ,ry, φ, I_u, I_v, I_w};
   }
 
   /* Advance the simulation for a batch of steps and compute statistics. */
