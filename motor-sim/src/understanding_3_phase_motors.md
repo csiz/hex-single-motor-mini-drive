@@ -29,7 +29,7 @@ import {html} from "htl";
 const htf = html.fragment;
 
 import {note, link} from "./components/utils.js"
-import {Simulation, initial_state, initial_parameters, π, normalized_angle} from "./components/simulation.js"
+import {Simulation, initial_state, initial_parameters, π, normalized_angle, phase_switches_values} from "./components/simulation.js"
 import {sixstep_commutation} from "./components/driver_algorithms.js"
 import {create_scene, setup_rendering} from "./components/visuals.js"
 
@@ -41,7 +41,7 @@ import {create_scene, setup_rendering} from "./components/visuals.js"
 const {motor, scene} = await create_scene();
 
 
-function get_coil_color(coil) {
+function get_emissive_color(coil) {
   const hsl_color = {};
   coil.material.emissive.getHSL(hsl_color);
   const {h, s, l} = hsl_color;
@@ -49,9 +49,12 @@ function get_coil_color(coil) {
   return new THREE.Color().setHSL(h, 1.0, 0.3).getStyle();
 }
 
-const color_u = get_coil_color(motor.coil_U);
-const color_v = get_coil_color(motor.coil_V);
-const color_w = get_coil_color(motor.coil_W);
+const color_u = get_emissive_color(motor.coil_U);
+const color_v = get_emissive_color(motor.coil_V);
+const color_w = get_emissive_color(motor.coil_W);
+const color_uv = get_emissive_color(motor.red_led);
+const color_vw = get_emissive_color(motor.green_led);
+const color_wu = get_emissive_color(motor.blue_led);
 const color_x = "steelblue";
 const color_y = "lightcoral";
 
@@ -267,9 +270,18 @@ const simulation_interface = Inputs.form([
 // ----------------
 
 const plot_selection_map = {
-  "Rotational Frequency": [{label: `freq`, y: (item) => item.ω / (2 * π)}, {least_domain: [-1_000, 1_000], units: "Hz"}],
-  "Motor Speed": [{label: `RPM`, y: "rpm"}, {least_domain: [-6_000, 6_000]}],
-  "Motor Angle": [{label: "φ", y: "φ"}, {least_domain: [-π, π], units: "rad"}],
+  "Rotational Frequency": [
+    {label: `freq`, y: (item) => item.ω / (2 * π)}, 
+    {least_domain: [-1_000, 1_000], units: "Hz"}
+  ],
+  "Motor Speed": [
+    {label: `RPM`, y: "rpm"}, 
+    {least_domain: [-6_000, 6_000]}
+  ],
+  "Motor Angle": [
+    {label: "φ", y: "φ"}, 
+    {least_domain: [-π, π], units: "rad"}
+  ],
   "Torque": [
     [
       {label: `τ_{total}`, y: "τ_total"},
@@ -278,9 +290,18 @@ const plot_selection_map = {
     ],
     {least_domain: [-0.010, +0.010], units: "Nm"},
   ],
-  "Battery Current": [{label: "I_{bat}", y: "I"}, {least_domain: [-2.0, +2.0], units: "A"}],
-  "Capacitor Voltage": [{label: "V_{near}", y: "V"}, {least_domain: [-12.0, +12.0], units: "V"}],
-  "Radial Angle": [{label: "φ_{rv}", y: "φ_rv"}, {least_domain: [-π, π], units: "rad"}],
+  "Battery Current": [
+    {label: "I_{bat}", y: "I"}, 
+    {least_domain: [-2.0, +2.0], units: "A"}
+  ],
+  "Capacitor Voltage": [
+    {label: "V_{near}", y: "V"},
+    {least_domain: [0.0, +12.0], units: "V", symmetric_domain: false}
+  ],
+  "Radial Angle": [
+    {label: "φ_{rv}", y: "φ_rv"}, 
+    {least_domain: [-π, π], units: "rad"}
+  ],
   "Radial Velocity": [
     [
       {label: `\nu_x`, y: "rx_v", stroke: color_x},
@@ -288,7 +309,9 @@ const plot_selection_map = {
     ],
     {least_domain: [-0.010, +0.010], units: "m/s"},
   ],
-  "Radial displacement": [{label: "r", y: "r"}, {least_domain: [-0.000_010, +0.000_010], units: "m"}],
+  "Radial displacement": [
+    {label: "r", y: "r"}, 
+    {least_domain: [0.0, +0.000_010], units: "m", symmetric_domain: false}],
   "Radial Position": [
     [
       {label: "x", y: "rx", stroke: color_x},
@@ -336,7 +359,23 @@ const plot_selection_map = {
     ], 
     {least_domain: [-12.0, 12.0], height: 120, units: "V"},
   ],
-  "Switching direction": [
+  "Hall sensors": [
+    [
+      {label: "H1", y: "hall_1", stroke: color_uv},
+      {label: "H2", y: "hall_2", stroke: color_vw},
+      {label: "H3", y: "hall_3", stroke: color_wu},
+    ], 
+    {least_domain: [0, 1.0], height: 120, symmetric_domain: false},
+  ],
+  "Command direction": [
+    [
+      {label: "U", y: (state) => phase_switches_values[state.U_switch], stroke: color_u},
+      {label: "V", y: (state) => phase_switches_values[state.V_switch] , stroke: color_v},
+      {label: "W", y: (state) => phase_switches_values[state.W_switch], stroke: color_w},
+    ], 
+    {least_domain: [-1.0, 1.0], height: 120},
+  ],
+  "Bridge direction": [
     [
       {label: "U", y: "U_direction", stroke: color_u},
       {label: "V", y: "V_direction", stroke: color_v},

@@ -123,6 +123,12 @@ export const phase_switches = {
   on_low: 2,
 };
 
+/* Values for plotting purposes. */
+export const phase_switches_values = {
+  0: 0,
+  1: +1,
+  2: -1,
+};
 
 /* Inputs to the physical system for a freewheeling motor.
 
