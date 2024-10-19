@@ -29,16 +29,18 @@ import {html} from "htl";
 const htf = html.fragment;
 
 import {note, link} from "./components/utils.js"
-import {Simulation, initial_state, initial_parameters, π, normalized_angle, phase_switches_values} from "./components/simulation.js"
+import {Simulation, initial_state, initial_parameters, π, normalized_angle, phase_switches_values, default_simulation_options} from "./components/simulation.js"
 import {sixstep_commutation} from "./components/driver_algorithms.js"
 import {create_scene, setup_rendering} from "./components/visuals.js"
 
 
+const wave_sample_size = default_simulation_options.wave_buffer_size;
+const speed_of_sound = 343.0; // m/s
 
 // Configure 3D visuals
 // --------------------
 
-const {motor, scene} = await create_scene();
+const {motor, scene, sound_wave, sound_wave_update} = await create_scene({wave_sample_size});
 
 
 function get_emissive_color(coil) {
@@ -59,19 +61,47 @@ const color_x = "steelblue";
 const color_y = "lightcoral";
 
 
-function update_motor_visuals(state) {
-  const {φ, I_u, I_v, I_w, hall_1, hall_2, hall_3, rx, ry} = state;
+
+function update_motor_visuals(simulation, {displacement_emphasis, max_sound, visuals_selection}) {
+  const visuals_set = new Set(visuals_selection);
+
+  const {φ, I_u, I_v, I_w, hall_1, hall_2, hall_3, rx, ry} = simulation.flattened_state();
+  const scale = 1000.0; // Model coordinates is in mm so we have 1000mm per meter.
   
+  // Set rotor angle to match the electrical angle in our 1 pole per phase simulation.
   motor.rotor.rotation.y = normalized_angle(φ - π / 2);
-  const position_scaling = 100_000.0;
-  motor.rotor.position.z = position_scaling * rx;
-  motor.rotor.position.x = position_scaling * ry;
+  
+  // Emphasise radial displacement by scaling it up; 1um shows as 1mm in the scene.
+  const radial_scaling = displacement_emphasis * scale;
+  const scaled_rx = radial_scaling * rx;
+  const scaled_ry = radial_scaling * ry;
+  
+  const show_displacement = visuals_set.has("Displacement");
+  motor.rotor.position.z = show_displacement ? scaled_rx : 0.0;
+  motor.rotor.position.x = show_displacement ? scaled_ry : 0.0;
+
+  // Set the hall colours based on the hall sensor states. The different colours appear
+  // at different intensities, adjusted them slightly to make them seem even (to myself).
   motor.red_led.material.emissiveIntensity = hall_1 ? 10.0 : 0.0;
   motor.green_led.material.emissiveIntensity = hall_2 ? 8.0 : 0.0;
   motor.blue_led.material.emissiveIntensity = hall_3 ? 12.0 : 0.0;
+
   motor.coil_U.material.emissiveIntensity = 0.20 * Math.abs(I_u / 6.0);
   motor.coil_V.material.emissiveIntensity = 0.20 * Math.abs(I_v / 6.0);
   motor.coil_W.material.emissiveIntensity = 0.15 * Math.abs(I_w / 6.0);
+
+  const show_visual_sound = visuals_set.has("Visual Sound");
+  if (show_visual_sound) {
+    sound_wave.visible = true;
+    
+    const sound_distance = speed_of_sound * displacement_emphasis * simulation.options.wave_buffer_size / simulation.options.wave_sample_rate;
+    sound_wave_update(
+      simulation.waves.map(({rv, φ_rv, rx, ry}) => ({x: scaled_rx, y: scaled_ry, v: rv, φ: φ_rv})),
+      sound_distance,
+      max_sound);
+  } else {
+    sound_wave.visible = false;
+  }
 }
 
 /* Descriptions of the 3D model components for mouseover tooltips. */
@@ -233,7 +263,30 @@ const driver_mode_map = {
   "↙ Drive WU -": ()=>[1, 0, 2],
 };
 
+const visuals_selection_list = [
+  "Displacement",
+  "Visual Sound",
+];
+
+const default_visuals_selection = visuals_selection_list;
+
 const interactive_sliders = Inputs.form({
+  displacement_emphasis: Inputs.range([1.0, 10_000.0], {
+    format: x => x.toFixed(0),
+    label: "Displacement Exaggeration",
+    transform: Math.log,
+    value: 100.0,
+  }),
+  max_sound: Inputs.range([0.010, 10.0], {
+    format: x => x.toFixed(2),
+    label: "Visual Sound Base",
+    transform: Math.log,
+    value: 1.0, // 1m/s velocity of the rotor sound sourc will blow up the visuals
+  }),
+  visuals_selection: Inputs.checkbox(visuals_selection_list, {
+    label: "Show visuals",
+    value: default_visuals_selection,
+  }),
   load_torque: Inputs.range([0.000_1, 0.02], {
     transform: Math.log,
     format: x => x.toFixed(4),
@@ -299,7 +352,10 @@ const plot_selection_map = {
     {least_domain: [0.0, +12.0], units: "V", symmetric_domain: false}
   ],
   "Radial Angle": [
-    {label: "φ_{rv}", y: "φ_rv"}, 
+    [
+      {label: "φ_{rv}", y: "φ_rv", stroke: color_x},
+      {label: "φ_{r}", y: "φ_r", stroke: color_y},
+    ],
     {least_domain: [-π, π], units: "rad"}
   ],
   "Radial Velocity": [
@@ -421,7 +477,6 @@ const plot_shown_value_map = {
   "Hide": (row) => undefined,
 };
 
-
 const plot_shown_value_choice = Inputs.radio(Object.keys(plot_shown_value_map), {
   label: "Show numbers", 
   value: "Root Mean Square",
@@ -431,26 +486,6 @@ const plot_selection = Inputs.checkbox(Object.keys(plot_selection_map), {
   label: "Plots", 
   value: plot_selection_defaults,
 });
-
-let plot_selection_by_user = plot_selection_defaults;
-
-function plot_save_and_switch(new_selection){
-  return () => {
-    plot_selection_by_user = plot_selection.value;
-    plot_selection.value = new_selection;
-  };
-}
-
-function plot_reset_selection(){
-  plot_selection_by_user = plot_selection.value;
-  plot_selection.value = plot_selection_defaults;
-}
-
-function plot_restore_selection(){
-  const old_selection = plot_selection.value;
-  plot_selection.value = plot_selection_by_user;
-  plot_selection_by_user = old_selection;
-}
 
 const plot_preselections = Inputs.button(
   [
@@ -464,13 +499,33 @@ const plot_preselections = Inputs.button(
 );
 
 
-const simulation_plots_interface = Inputs.form({
-  preselections: plot_preselections,
-  selection: plot_selection,
-  shown_value_choice: plot_shown_value_choice,
-});
+const simulation_plots_interface = Inputs.form([
+  plot_preselections,
+  plot_selection,
+  plot_shown_value_choice,
+]);
 
+const simulation_plots_interface_defaults = simulation_plots_interface.value;
 
+let plot_selection_by_user = plot_selection_defaults;
+
+function plot_save_and_switch(new_selection){
+  return () => {
+    plot_selection_by_user = plot_selection.value;
+    plot_selection.value = new_selection;
+  };
+}
+
+function plot_restore_selection(){
+  const old_selection = plot_selection.value;
+  plot_selection.value = plot_selection_by_user;
+  plot_selection_by_user = old_selection;
+}
+
+function plot_reset_selection(){
+  plot_selection_by_user = plot_selection.value;
+  simulation_plots_interface.value = simulation_plots_interface_defaults;
+}
 
 // Simulation plots
 // ----------------
@@ -568,10 +623,10 @@ function play_simulation_sound(simulation){
   const left_channel = noise_buffer.getChannelData(0);
   const right_channel = noise_buffer.getChannelData(1);
 
-  const scaling_r = 1.0 / 0.000_100;
+  const scaling_r = 1.0 / 0.000_010;
   const scaling_rv = 1.0 / 0.100;
 
-  simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, r_v, φ_rv}, i) => {
+  simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, r_v, φ_rv, φ_r}, i) => {
     // left_channel[i] = scaling_r * rx + sound_scaling.rv * rx_v;
     // right_channel[i] = scaling_r * ry + sound_scaling.rv * ry_v;
 
@@ -581,7 +636,8 @@ function play_simulation_sound(simulation){
     // left_channel[i] = sound_scaling.rv * rx_v;
     // right_channel[i] = sound_scaling.rv * ry_v;
 
-    left_channel[i] = 0.1 * φ_rv / π;
+    // left_channel[i] = 0.1 * φ_rv / π;
+    right_channel[i] = 0.1 * φ_r / π;
   });
 
   // Create a buffer source.
@@ -623,7 +679,7 @@ function setup_simulation(){
     parameters: initial_parameters,
     update_inputs: interactive_inputs,
     update_memory: {},
-    max_stored_steps: 400,
+    wave_buffer_size: wave_sample_size,
   });
 }
 
@@ -635,7 +691,7 @@ function show_visuals(){
 
   show_simulation_plots(simulation.history, selection, shown_value);
 
-  update_motor_visuals(simulation.flattened_state());
+  update_motor_visuals(simulation, interactive_sliders.value);
 }
 
 function update_and_show(){

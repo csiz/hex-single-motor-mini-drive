@@ -79,6 +79,15 @@ export const initial_parameters = {
   R_mosfet: 0.013, // mosfet resistance
   V_diode: 0.72, // mosfet reverse diode voltage drop
   J_rotor: 0.000_000_25, // (Kg*m^2) rotor moment of inertia
+  /* (Kg) Rotor vibration mass when modelling the rotor body as a spring-mass oscillator.
+
+  In multi pole motors (all practical motors), the opposing poles of the same phase balance
+  the magnetic forces on the rotor so it stretches the rotor instead of moving it. The rotor
+  turns from a circle to an oval, squashed by the magnetic forces of the stator.
+
+  The total weighted mass of the rotor is 8g, but I chose a smaller value in the simulation
+  to match the frequency at which the rotor resonates when tapped.
+  */
   M_rotor: 0.002, // (Kg) rotor mass
   r_gap: 0.000_300, // (m) Rotor magnet to stator core effective air gap.
   /* (N/m) Radial displacement spring constant. Tapping the rotor makes a ~10kHz tone (Maybe, I dunno`).
@@ -275,6 +284,7 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const rv = hypot(rx_v, ry_v);
 
   const r = hypot(rx, ry);
+  const φ_r = atan2(ry, rx);
 
   // Calculate the magnetic flux linkage of the motor. Radial displacement degrades the 
   // linkage because of the increased air gap.
@@ -469,7 +479,7 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
       V_u_radial_emf, V_v_radial_emf, V_w_radial_emf,
       V_u_emf, V_v_emf, V_w_emf,
       U_direction, V_direction, W_direction,
-      rpm: ω * 30 / π, r, rv, φ_rv,
+      rpm: ω * 60 / (2*π), r, φ_r, rv, φ_rv,
     },
   };
 }
@@ -524,12 +534,15 @@ export const default_simulation_options = {
   steps_number: 4_000,
   store_period: 2_000,
   /* Clock speed of driving microcontroller, used to update the PWM counter. */
-  processor_frequency: 72_000_000,
+  processor_frequency: 72_000_000.0,
   /* Sound sample rate, used to record variables to play as noise. */
-  sound_sample_rate: 48_000,
+  sound_sample_rate: 48_000.0,
   /* How much sound recording to keep; this buffer is much larger than plot
   data history, but we'll keep fewer variables to save memory. */
-  sound_buffer_size: 48_000 * 1.0,
+  sound_buffer_size: Math.floor(48_000 * 1.0),
+
+  wave_sample_rate: 48_000.0 * 50.0,
+  wave_buffer_size: 16_384,
 };
 
 
@@ -545,6 +558,10 @@ export class Simulation {
     this.history_buffer = new CircularBuffer(max_stored_steps);
     // Store sound data in a circular buffer.
     this.sound_buffer = new CircularBuffer(sound_buffer_size);
+
+    // Store wave data in a circular buffer.
+    this.wave_buffer = new CircularBuffer(this.options.wave_buffer_size);
+
     // Start the simulation at step 0.
     this.step = 0;
 
@@ -563,6 +580,16 @@ export class Simulation {
 
   get sounds() {
     return this.sound_buffer.toarray();
+  }
+
+  get waves() {
+    return this.wave_buffer.toarray();
+  }
+
+  wave_state() {
+    const {rv, φ_rv} = this.info;
+    const {rx, ry} = this.state;
+    return {rv, φ_rv, rx, ry};
   }
   
   /* Advance the simulation by a single step. */
@@ -608,6 +635,11 @@ export class Simulation {
 
       if (this.step % sound_period == 0) {
         this.sound_buffer.push(this.flattened_state());
+      }
+
+      const wave_period = Math.max(1, Math.round(1.0/(this.options.wave_sample_rate * dt)));
+      if (this.step % wave_period == 0) {
+        this.wave_buffer.enq(this.wave_state());
       }
 
       this.step += 1;

@@ -18,6 +18,8 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import {TimingStats} from "./utils.js";
 import {FileAttachment} from "observablehq:stdlib";
 
+const π = Math.PI;
+
 const [model_file_url, wood_texture_url, wood_displacement_url] = await Promise.all([
   FileAttachment("../data/motor_model.3mf").url(),
   FileAttachment("../data/textures/laminate_floor_diff_1k.jpg").url(),
@@ -48,7 +50,7 @@ function create_mixing_pass(added_texture) {
       },
       vertexShader, 
       fragmentShader,
-      defines: {}
+      defines: {},
     } ), 'base_texture'
   );
   mix_pass.needsSwap = true;
@@ -56,12 +58,123 @@ function create_mixing_pass(added_texture) {
   return mix_pass;
 }
 
+export function create_sound_wave({sample_size, max_sound_distance, start_radius, color}) {
+  const max_radius = start_radius + max_sound_distance;
+
+  const vertexShader = `
+    varying vec3 vPosition;
+    void main() {
+      vPosition = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+    }
+  `;
+
+  // 16384 samples is about 350us of audio at 48kHz, and sound travels a distance of 12cm during this time (at 343 m/s).
+  // uniform float sound_samples[SAMPLE_SIZE];
+
+  const fragmentShader = `
+    varying vec3 vPosition;
+
+    uniform vec3 color;
+    uniform float sound_distance;
+    uniform float start_radius;
+
+    uniform sampler2D sound_samples;
+    const float angular_spread = PI / 3.0;
+    const float diff_scale = PI / angular_spread;
+
+    float directional_cos(float angle_a, float angle_b) {
+      float diff = angle_a - angle_b;
+      float norm_diff = mod(diff + 3.0 * PI, 2.0 * PI) - PI;
+      float scaled_diff = min(max(norm_diff * diff_scale, -PI*0.5), PI*0.5);
+      return cos(scaled_diff);
+    }
+
+    void main() {
+      float dist = distance(vPosition.xy, vec2(0.0)) - start_radius;
+      
+      if (dist < 0.0 || dist > sound_distance) {
+        gl_FragColor = vec4(0.0);
+      } else {
+        float angle = atan(vPosition.x, vPosition.y);
+        vec2 dist_uv = vec2(dist / sound_distance, 0.0);
+        vec4 sound_sample = texture2D(sound_samples, dist_uv).rgba;
+        float sound_angle = (sound_sample.g - 0.5) * 2.0 * PI;
+
+        gl_FragColor = vec4(color, sound_sample.r * directional_cos(angle, sound_angle));
+      }
+    }
+  `;
+
+  const sound_data = new Uint8Array(sample_size * 4);
+  const sound_samples_texture = new THREE.DataTexture(sound_data, sample_size, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+  sound_samples_texture.needsUpdate = true;
+  
+  const sound_wave_material = new THREE.ShaderMaterial( {
+    uniforms: {
+      color: { value: color },
+      sound_distance: { value: max_sound_distance },
+      start_radius: { value: start_radius },
+      sound_samples: { value: sound_samples_texture },
+    },
+    vertexShader,
+    fragmentShader,
+    defines: {PI: Math.PI},
+    transparent: true,
+    side: THREE.DoubleSide,
+    // flatShading: true,
+  });
+
+  // Hack emissive properties onto this to add it to the bloom pass.
+  sound_wave_material.emissive = new THREE.Color(0xffffff);
+  sound_wave_material.emissiveIntensity = 1.0;
+
+
+  const sound_wave_update = (sound_samples, sound_distance, max_sound) => {
+    const max_log_sound = Math.log1p(max_sound);
+  
+    const log_clip = function(x) {
+      return Math.min(Math.log1p(Math.max(x, 0.0)) / max_log_sound, 1.0);
+    };
+  
+    const uniform_angle = function (angle) {
+      return (angle / (2 * π)) + 0.5;
+    };
+
+    sound_samples.forEach(({v, φ, x, y}, i) => {
+      const sample_i = 4*i;
+
+      const intensity = log_clip(v);
+      const angle = uniform_angle(φ);
+      
+      sound_data[sample_i + 0 /* r */] = Math.floor(intensity * 255);
+      sound_data[sample_i + 1 /* g */] = Math.floor(angle * 255);
+
+      sound_data[sample_i + 2 /* b */] = Math.floor(x * 255);
+      sound_data[sample_i + 3 /* a */] = Math.floor(y * 255);
+    });
+    sound_wave_material.uniforms.sound_distance.value = sound_distance;
+    sound_samples_texture.needsUpdate = true;
+  };
+  
+  
+  const sound_wave = new THREE.Mesh(new THREE.CircleGeometry( max_radius, 64 ), sound_wave_material);
+  
+  sound_wave.position.z = 0;
+  sound_wave.position.y = 0;
+  sound_wave.position.x = 0;
+  sound_wave.rotation.x = Math.PI / 2;
+  
+  return {sound_wave, sound_wave_update};
+}
+
+
 const manager = new THREE.LoadingManager();
 
 const loader = new ThreeMFLoader(manager);
 const texture_loader = new THREE.TextureLoader(manager);
 
-function group_motor_model(object) {
+function get_motor_model_components(object) {
   let stator = new THREE.Group();
   let rotor = new THREE.Group();
   
@@ -188,7 +301,7 @@ export function load_motor(model_file_url){
           child.castShadow = true;
         }
       });
-      resolve(group_motor_model(object));
+      resolve(get_motor_model_components(object));
     }
 
     function on_progress(xhr) {
@@ -243,7 +356,7 @@ function reset_camera_position(camera){
 }
 
 
-export async function create_scene(){
+export async function create_scene({wave_sample_size}){
   const [motor, wood_texture, wood_displacement] = await Promise.all([
     load_motor(model_file_url),
     load_texture(wood_texture_url, 8, THREE.SRGBColorSpace),
@@ -294,7 +407,16 @@ export async function create_scene(){
 
   scene.add(motor.motor);
 
-  return {motor, scene};
+  const {sound_wave, sound_wave_update} = create_sound_wave({
+    start_radius: 55.0,
+    sample_size: wave_sample_size,
+    max_sound_distance: 500.0,
+    color: new THREE.Color("orange"),
+  });
+  
+  scene.add(sound_wave);
+
+  return {motor, scene, sound_wave, sound_wave_update};
 };
 
 export function top_selection(intersected_objects){
@@ -396,18 +518,17 @@ export function setup_rendering(scene, invalidation, options={}){
 
   const controls = new OrbitControls( camera, renderer.domElement );
   controls.minDistance = 50;
-  controls.maxDistance = 200;
-  controls.enablePan = false;
-  controls.enableZoom = false;
-  controls.target.set( 0, 0, 0 );
-
+  controls.maxDistance = 500;
+  controls.enablePan = true;
+  controls.enableZoom = true;
   controls.maxPolarAngle = Math.PI * (3 / 4);
   controls.minPolarAngle = Math.PI * (1 / 4);
-  controls.minDistance = 50;
-  controls.maxDistance = 200;
+  controls.target.set( 0, 0, 0 );
+
 
   function reset_camera(){
     reset_camera_position(camera);
+    controls.target.set( 0, 0, 0 );
     controls.update();
   }
 
@@ -426,36 +547,52 @@ export function setup_rendering(scene, invalidation, options={}){
 
   function render(options={}){
     const {highlight_filter} = {...default_rendering_options, ...options};
+
+    controls.update();
+
+    // Get the mouseover item to highlight if any.
     compute_highlight(highlight_filter);
 
+
+    // Darken the scene and render the bloom pass for emissive materials.
     const materials = {};
     const lights = {};
     const saved_background = scene.background;
     
     scene.traverse( (obj) => {
+      // Darken every non-emissive material.
       if ((obj instanceof THREE.Mesh) && !is_emissive(obj.material)){
         materials[obj.uuid] = obj.material;
         obj.material = dark_material;
       }
-
+      // Turn off all lights.
       if ((obj instanceof THREE.Light)){
         lights[obj.uuid] = {intensity: obj.intensity};
         obj.intensity = 0;
       }
     } );
+    // Darken the background.
     scene.background = new THREE.Color(0x000000);
+    // Render the glowing emissive objects.
     bloom_composer.render();
+
+    // Restore the scene.
     scene.traverse( (obj) =>{
+      // Recover materials to their original state.
       if (materials[obj.uuid]){
         obj.material = materials[obj.uuid];
         delete materials[obj.uuid];
       }
+      // Recover lights to their original state.
       if (lights[obj.uuid]){
         obj.intensity = lights[obj.uuid].intensity;
         delete lights[obj.uuid];
       }
     });
+    // Recover the background.
     scene.background = saved_background;
+    
+    // Render the whole scene using the composer to mix the normal scene and the bloom pass.
     composer.render();
 
     stats.update();
