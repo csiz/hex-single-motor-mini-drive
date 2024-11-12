@@ -11,6 +11,9 @@ TODO for next circuit
 The AO4266E switching parameter uses Rgen = 3ohm, I think this is their recommended gate resistance.
 [ ] Measure gate turn on characteristics of existing circuit...
 [ ] Maybe switch to a oscillation damping gate resistor of 3ohm.
+[ ] Definitely need to think about daisy chaining these, maybe use a signal buffer/transciever with an enable pin,
+and/or mosfet switch for the chip power on.
+
 
 Need to implement in the circuit
 --------------------------------

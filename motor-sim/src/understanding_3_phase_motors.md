@@ -60,7 +60,13 @@ const color_wu = get_emissive_color(motor.blue_led);
 const color_x = "steelblue";
 const color_y = "lightcoral";
 
-
+function get_sound_normalizer(max_sound) {
+  const max_log_sound = Math.log1p(max_sound);
+  
+  return function(x) {
+    return Math.min(Math.log1p(Math.max(x, 0.0)) / max_log_sound, 1.0);
+  };
+}
 
 function update_motor_visuals(simulation, {displacement_emphasis, max_sound, visuals_selection}) {
   const visuals_set = new Set(visuals_selection);
@@ -95,10 +101,11 @@ function update_motor_visuals(simulation, {displacement_emphasis, max_sound, vis
     sound_wave.visible = true;
     
     const sound_distance = speed_of_sound * displacement_emphasis * simulation.options.wave_buffer_size / simulation.options.wave_sample_rate;
+    const normalize_sound = get_sound_normalizer(max_sound);
+
     sound_wave_update(
-      simulation.waves.map(({rv, φ_rv, rx, ry}) => ({x: scaled_rx, y: scaled_ry, v: rv, φ: φ_rv})),
-      sound_distance,
-      max_sound);
+      simulation.waves.map(({rv, φ_rv, rx, ry}) => ({x: scaled_rx, y: scaled_ry, v: normalize_sound(rv), φ: φ_rv})),
+      sound_distance);
   } else {
     sound_wave.visible = false;
   }
@@ -304,7 +311,7 @@ const interactive_sliders = Inputs.form({
   }),
   driver_mode: Inputs.radio(Object.keys(driver_mode_map), {
     label: "Driver control", 
-    value: "Connect and Idle",
+    value: "↻ Drive +",
   }),
 });
 
@@ -611,7 +618,7 @@ const sound_scaling = {
   rv: 1.0 / 1.0,
 }
 
-function play_simulation_sound(simulation){
+function play_simulation_sound(simulation, max_sound){
   const audio_context = new AudioContext({sampleRate: simulation.options.sound_sample_rate});
   // Create an empty three-second stereo buffer at the sample rate of the AudioContext.
   const noise_buffer = audio_context.createBuffer(
@@ -623,21 +630,29 @@ function play_simulation_sound(simulation){
   const left_channel = noise_buffer.getChannelData(0);
   const right_channel = noise_buffer.getChannelData(1);
 
-  const scaling_r = 1.0 / 0.000_010;
-  const scaling_rv = 1.0 / 0.100;
+  const normalize_sound = get_sound_normalizer(max_sound);
+  const angular_spread = π / 3.0;
+  const diff_scale = π / angular_spread;
 
-  simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, r_v, φ_rv, φ_r}, i) => {
-    // left_channel[i] = scaling_r * rx + sound_scaling.rv * rx_v;
-    // right_channel[i] = scaling_r * ry + sound_scaling.rv * ry_v;
+  function normed_diff(a, b) {
+    return (a - b + 3.0 * π) % (2.0 * π) - π;
+  }
 
-    // left_channel[i] = scaling_r * rx;
-    // right_channel[i] = scaling_r * ry;
+  function capped_cos(angle) {
+    return Math.cos(Math.min(Math.max(angle, -π*0.5), π*0.5));
+  }
 
-    // left_channel[i] = sound_scaling.rv * rx_v;
-    // right_channel[i] = sound_scaling.rv * ry_v;
+  function directional_scaled_cos(angle_a, angle_b) {
+    const diff_pos = normed_diff(angle_a, angle_b);
+    const diff_cos_is_negative = (diff_pos > π*0.5 || diff_pos < -π*0.5)
+    return diff_cos_is_negative ? -capped_cos(normed_diff(angle_a, angle_b + π) * diff_scale) : capped_cos(diff_pos * diff_scale);
+  }
 
-    // left_channel[i] = 0.1 * φ_rv / π;
-    right_channel[i] = 0.1 * φ_r / π;
+  simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, rv, φ_rv, φ_r}, i) => {
+    const intensity = normalize_sound(rv);
+
+    left_channel[i] = directional_scaled_cos(φ_rv, 0.0) * intensity;
+    right_channel[i] = directional_scaled_cos(φ_rv, π * 0.5) * intensity;
   });
 
   // Create a buffer source.
@@ -716,7 +731,7 @@ function * simulate_live () {
         timing_sliders.value = timing_sliders_defaults; 
         interactive_sliders.value = interactive_sliders_defaults;
       },
-      "Play 🎵": () => { play_simulation_sound(simulation); },
+      "Play 🎵": () => { play_simulation_sound(simulation, interactive_sliders.value.max_sound); },
     });
 
     consume_button(plot_preselections, {

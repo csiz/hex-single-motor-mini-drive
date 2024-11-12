@@ -130,12 +130,8 @@ export function create_sound_wave({sample_size, max_sound_distance, start_radius
   sound_wave_material.emissiveIntensity = 1.0;
 
 
-  const sound_wave_update = (sound_samples, sound_distance, max_sound) => {
-    const max_log_sound = Math.log1p(max_sound);
-  
-    const log_clip = function(x) {
-      return Math.min(Math.log1p(Math.max(x, 0.0)) / max_log_sound, 1.0);
-    };
+  const sound_wave_update = (sound_samples, sound_distance) => {
+
   
     const uniform_angle = function (angle) {
       return (angle / (2 * π)) + 0.5;
@@ -144,7 +140,7 @@ export function create_sound_wave({sample_size, max_sound_distance, start_radius
     sound_samples.forEach(({v, φ, x, y}, i) => {
       const sample_i = 4*i;
 
-      const intensity = log_clip(v);
+      const intensity = v;
       const angle = uniform_angle(φ);
       
       sound_data[sample_i + 0 /* r */] = Math.floor(intensity * 255);

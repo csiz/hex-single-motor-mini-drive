@@ -11,6 +11,7 @@ import {note, link} from "./components/utils.js"
 3 Phase Permanent Magnet Motor
 =============================
 
+Check [the simulator page for now](/understanding_3_phase_motors).
 
 Motor model parameters
 ----------------------
@@ -19,7 +20,6 @@ Motor model parameters
 * [✓] phase inductance L
 * [✓] phase resistance R
 * [✓] motor Kv constant
-* [ ] hysterisis modeling?
 * [✓] static friction torque (fixed torque at standstill)
 * [✓] dynamic friction torque (fixed torque when rotating)
 * [✓] resistance friction torque (this one is proportional to rotation speed)
@@ -30,7 +30,9 @@ Motor model parameters
 toggles at almost 90 degrees difference from the rotor angle; the field is null at 90 degrees).
 * [✓] rotor mass (so we can measure axial deflection when motor is )
 * [✓] rotor axial restoration force constant
+* [ ] hysterisis modeling?
 * [ ] cogging torque ripple
+* [ ] do we want to model iron losses? https://uk.mathworks.com/help/sps/ref/pmsm.html
 
 
 
