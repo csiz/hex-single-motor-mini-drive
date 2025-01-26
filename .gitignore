@@ -1,3 +1,5 @@
+.vscode/*
+
 /circuits/hex-mini-drive-backups/*
 /circuits/fp-info-cache
 /circuits/production/backups/*
@@ -18,3 +20,4 @@
 /driver-code/cmake_install.cmake
 /driver-code/build.ninja
 /driver-code/cmake/stm32cubemx/*
+/motor-sim/src/.observablehq/*
