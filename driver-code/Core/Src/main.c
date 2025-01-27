@@ -28,6 +28,7 @@ Fix for next design
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -53,8 +54,6 @@ Fix for next design
 
 /* Private variables ---------------------------------------------------------*/
 
-PCD_HandleTypeDef hpcd_USB_FS;
-
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -70,7 +69,6 @@ static void MX_CRC_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM3_Init(void);
-static void MX_USB_PCD_Init(void);
 static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -118,8 +116,8 @@ int main(void)
   MX_TIM2_Init();
   MX_SPI2_Init();
   MX_TIM3_Init();
-  MX_USB_PCD_Init();
   MX_ADC2_Init();
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
 
   app_init();
@@ -755,37 +753,6 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE BEGIN USART1_Init 2 */
 
   /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief USB Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USB_PCD_Init(void)
-{
-
-  /* USER CODE BEGIN USB_Init 0 */
-
-  /* USER CODE END USB_Init 0 */
-
-  /* USER CODE BEGIN USB_Init 1 */
-
-  /* USER CODE END USB_Init 1 */
-  hpcd_USB_FS.Instance = USB;
-  hpcd_USB_FS.Init.dev_endpoints = 8;
-  hpcd_USB_FS.Init.speed = PCD_SPEED_FULL;
-  hpcd_USB_FS.Init.low_power_enable = DISABLE;
-  hpcd_USB_FS.Init.lpm_enable = DISABLE;
-  hpcd_USB_FS.Init.battery_charging_enable = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_FS) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USB_Init 2 */
-
-  /* USER CODE END USB_Init 2 */
 
 }
 
