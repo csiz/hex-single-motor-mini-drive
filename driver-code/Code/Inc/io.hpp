@@ -34,10 +34,10 @@ const uint16_t adc_max_value = 0xFFF;
 //   Vout = (Iload * Rsense * GAIN) + Vref
 //   Vout = adc_current_readout / adc_max_value * adc_voltage_reference.
 // The minus sign is because of the way the INA4181 is wired up...
-const float readout_diff_to_current = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
+const float current_conversion = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
 // Compute motor phase currents using latest ADC readouts; clearing the adc_current_updated flag.
-void calculate_motor_phase_currents();
+void update_motor_phase_currents();
 
 static inline void set_motor_u_pwm_duty_cycle(uint16_t duty_cycle){
     LL_TIM_OC_SetCompareCH1(TIM1, duty_cycle);

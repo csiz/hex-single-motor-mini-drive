@@ -337,6 +337,8 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
   const WU_conducting = W_state && U_state;
   const UVW_conducting = U_state && V_state && W_state;
 
+  // TODO: rename the function, it converts the phase to phase voltages to phase voltages relative to the neutral point.
+
   // In the 3 phase space of the motor the voltages sum up to 0 and we consider the tie
   // point of our Y configured motor to also be at 0V. Thus we can compute the phase voltages
   // as the voltage difference between the phase terminal (after the shunt) and the neutral point.
@@ -448,6 +450,8 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
 
   const drx_v = add_without_zero_crossing_friction(dt, rx_v, drx_v_applied, drx_v_friction);
   const dry_v = add_without_zero_crossing_friction(dt, ry_v, dry_v_applied, dry_v_friction);
+
+  const drv = hypot(drx_v, dry_v);
   
   // Calculate the current flowing out of the motor terminals. Beware that we're double counting 
   // current coming out and into a terminal.
@@ -479,7 +483,7 @@ function compute_state_diff(state, dt, parameters, inputs, outputs) {
       V_u_radial_emf, V_v_radial_emf, V_w_radial_emf,
       V_u_emf, V_v_emf, V_w_emf,
       U_direction, V_direction, W_direction,
-      rpm: ω * 60 / (2*π), r, φ_r, rv, φ_rv,
+      rpm: ω * 60 / (2*π), r, φ_r, rv, φ_rv, drv,
     },
   };
 }

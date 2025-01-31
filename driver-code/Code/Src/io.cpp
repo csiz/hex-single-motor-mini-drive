@@ -12,27 +12,13 @@ void init_motor_position(){
     read_motor_hall_sensors();
 }
 
-void calculate_motor_phase_currents(){
-    // Average over all current readouts in memory.
-    uint32_t adc_current_readouts_sum[4] = {0, 0, 0, 0};
-    for (uint8_t i = 0; i < ADC_CURRENT_READ_COUNT; i++) {
-        volatile uint16_t * adc_current_readouts_row = adc_current_readouts[i];
-        for (uint8_t j = 0; j < 4; j++) {
-            adc_current_readouts_sum[j] += adc_current_readouts_row[j];
-        }
-    }
+void update_motor_phase_currents(){
+    // Read the latest current values from the ADC circular buffer.
+    const uint16_t* adc_readout = adc_current_readouts[adc_current_readouts_head];
 
-    const uint32_t adc_current_readouts_average[4] = {
-        adc_current_readouts_sum[0] / ADC_CURRENT_READ_COUNT,
-        adc_current_readouts_sum[1] / ADC_CURRENT_READ_COUNT,
-        adc_current_readouts_sum[2] / ADC_CURRENT_READ_COUNT,
-        adc_current_readouts_sum[3] / ADC_CURRENT_READ_COUNT
-    };
-    
-    const int32_t readout_diff_u = adc_current_readouts_average[0] - adc_current_readouts_average[3];
-    const int32_t readout_diff_v = adc_current_readouts_average[1] - adc_current_readouts_average[3];
-    const int32_t readout_diff_w = adc_current_readouts_average[2] - adc_current_readouts_average[3];
-
+    const int32_t readout_diff_u = adc_readout[0] - adc_readout[3];
+    const int32_t readout_diff_v = adc_readout[1] - adc_readout[3];
+    const int32_t readout_diff_w = adc_readout[2] - adc_readout[3];
 
     // The amplifier voltage output is specified by the formula:
     //     Vout = (Iload * Rsense * GAIN) + Vref
@@ -41,10 +27,11 @@ void calculate_motor_phase_currents(){
     // Where:
     //     Vout = adc_current_readout / adc_max_value * adc_voltage_reference;
 
-    current_u = readout_diff_u * readout_diff_to_current;
-    current_v = readout_diff_v * readout_diff_to_current;
-    current_w = readout_diff_w * readout_diff_to_current;
+    current_u = readout_diff_u * current_conversion;
+    current_v = readout_diff_v * current_conversion;
+    current_w = readout_diff_w * current_conversion;
 }
+
 
 
 void enable_LED_channels(){

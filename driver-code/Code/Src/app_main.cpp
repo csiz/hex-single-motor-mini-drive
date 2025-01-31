@@ -3,6 +3,7 @@
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
+#include <usbd_cdc_if.h>
 
 #include "app_main.hpp"
 #include "io.hpp"
@@ -156,7 +157,7 @@ void app_tick() {
     tim2_update_rate = tim2_update_number / seconds;
     tim2_cc1_rate = tim2_cc1_number / seconds;
 
-    calculate_motor_phase_currents();
+    update_motor_phase_currents();
 
     const float overcurrent_threshold = 2.0;
     const bool overcurrent = abs(current_u) > overcurrent_threshold || 
@@ -196,9 +197,41 @@ void app_tick() {
             }
         }
     }
+    
 
     set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
+
+    const size_t n = 20;
+
+    const size_t data_size = 20 + 4 + 2*4*n;
+
+    uint8_t data[data_size] = "measurements 123456:";
+    size_t offset = 20;
+
+    data[offset] = (adc_update_number >> 24) & 0xFF;
+    data[offset + 1] = (adc_update_number >> 16) & 0xFF;
+    data[offset + 2] = (adc_update_number >> 8) & 0xFF;
+    data[offset + 3] = adc_update_number & 0xFF;
+    offset += 4;
+
+    size_t start_index = (adc_current_readouts_head + (HISTORY_SIZE - n) + 1) % HISTORY_SIZE;
+
+    for (size_t j = 0; j < n; j++) {
+        size_t row_index = (start_index + j) % HISTORY_SIZE;
+        
+        for (size_t i = 0; i < 4; i++) {
+            uint16_t value = adc_current_readouts[row_index][i];
+            data[offset] = (value >> 8) & 0xFF;
+            data[offset + 1] = value & 0xFF;
+
+            offset += 2;
+        }
+    }
+
+    // Send by USB
+    CDC_Transmit_FS(data, data_size);
 }
+
 
 void show_error(){
     set_RED_LED(0xFF);

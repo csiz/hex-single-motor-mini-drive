@@ -3,17 +3,136 @@
 // Try really hard to keep interrupts fast. Use short inline functions that only rely 
 // on chip primitives; don't use division, multiplication, or floating point operations.
 
-volatile uint32_t adc_update_number = 0;
-volatile uint32_t tim1_update_number = 0;
-volatile uint32_t tim2_update_number = 0;
-volatile uint32_t tim2_cc1_number = 0;
+uint32_t adc_update_number = 0;
+uint32_t tim1_update_number = 0;
+uint32_t tim2_update_number = 0;
+uint32_t tim2_cc1_number = 0;
 
-volatile size_t adc_current_readout_index = 0;
-volatile uint16_t adc_current_readouts[ADC_CURRENT_READ_COUNT][4] = {0};
+size_t adc_current_readouts_head = 0;
+uint16_t adc_current_readouts[HISTORY_SIZE][4] = {0};
 
-volatile bool hall_1 = false, hall_2 = false, hall_3 = false;
+bool hall_1 = false, hall_2 = false, hall_3 = false;
 
-volatile uint8_t motor_electric_angle = 0;
-volatile uint8_t motor_electric_phase = 0;
-volatile bool hall_sensor_valid = false;
-volatile uint8_t hall_state = 0;
+uint8_t motor_electric_angle = 0;
+uint8_t motor_electric_phase = 0;
+bool hall_sensor_valid = false;
+uint8_t hall_state = 0;
+
+
+// Interrupt handlers
+// ------------------
+
+void adc_interrupt_handler(){
+    const bool injected_conversions_complete = LL_ADC_IsActiveFlag_JEOS(ADC1);
+    if (injected_conversions_complete) {
+        // Alias the the readouts for the next index.
+        const size_t new_head = (adc_current_readouts_head + 1) % HISTORY_SIZE;
+
+        uint16_t * adc_reading = adc_current_readouts[new_head];
+        
+        adc_reading[0] = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+        adc_reading[1] = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+        adc_reading[2] = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
+        adc_reading[3] = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
+
+        // Update the circular buffer.
+        adc_current_readouts_head = new_head;
+
+        adc_update_number += 1;
+        LL_ADC_ClearFlag_JEOS(ADC1);
+    } else {
+        Error_Handler();
+    }
+}
+
+void dma_interrupt_handler() {
+
+}
+
+// Timer 1 is update every motor PWM cycle; at ~ 70KHz.
+void tim1_update_interrupt_handler(){
+    if(LL_TIM_IsActiveFlag_UPDATE(TIM1)){
+        LL_TIM_ClearFlag_UPDATE(TIM1);
+        tim1_update_number += 1;
+    } else {
+        Error_Handler();
+    }
+}
+
+void tim1_trigger_and_commutation_interrupt_handler() {
+    // We shouldn't trigger this, but including for documentation.
+    Error_Handler();
+}
+
+
+
+
+void read_motor_hall_sensors(){
+	uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
+	uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
+
+	// Hall sensors are active low.
+	hall_1 = !(gpio_A_inputs & (1<<0));
+	hall_2 = !(gpio_A_inputs & (1<<1));
+	hall_3 = !(gpio_B_inputs & (1<<10));
+
+    hall_state = (hall_1 << 2) | (hall_2 << 1) | hall_3;
+
+    switch (hall_state) {
+        case 0b000: // no hall sensors; either it's not ready or no magnet
+            hall_sensor_valid = false;
+            break;
+        case 0b100: // hall 1 active; 0 degrees
+            motor_electric_angle = 0;
+            motor_electric_phase = 0;
+            hall_sensor_valid = true;
+            break;
+        case 0b110: // hall 1 and hall 2 active; 60 degrees
+            motor_electric_angle = 43;
+            motor_electric_phase = 1;
+            hall_sensor_valid = true;
+            break;
+        case 0b010: // hall 2 active; 120 degrees
+            motor_electric_angle = 85;
+            motor_electric_phase = 2;
+            hall_sensor_valid = true;
+            break;
+        case 0b011: // hall 2 and hall 3 active; 180 degrees
+            motor_electric_angle = 128;
+            motor_electric_phase = 3;
+            hall_sensor_valid = true;
+            break;
+        case 0b001: // hall 3 active; 240 degrees
+            motor_electric_angle = 171;
+            motor_electric_phase = 4;
+            hall_sensor_valid = true;
+            break;
+        case 0b101: // hall 1 and hall 3 active; 300 degrees
+            motor_electric_angle = 213;
+            motor_electric_phase = 5;
+            hall_sensor_valid = true;
+            break;
+        case 0b111: // all hall sensors active; this would be quite unusual
+            hall_sensor_valid = false;
+            Error_Handler();
+            break;
+    }
+}
+
+void tim2_global_handler(){
+    // The TIM2 updates at a frequency of about 1KHz. Our motor might rotate slower than this
+    // so we have to count updates between hall sensor triggers.
+    if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
+        tim2_update_number += 1;
+        LL_TIM_ClearFlag_UPDATE(TIM2);
+
+    // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
+    } else if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
+        read_motor_hall_sensors();
+
+        tim2_cc1_number += 1;
+        LL_TIM_ClearFlag_CC1(TIM2);
+    } else {
+        Error_Handler();
+    }
+}
