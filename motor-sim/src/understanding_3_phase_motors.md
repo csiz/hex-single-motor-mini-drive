@@ -358,29 +358,25 @@ const plot_selection_map = {
     {label: "V_{near}", y: "V"},
     {least_domain: [0.0, +12.0], units: "V", symmetric_domain: false}
   ],
-  "Radial Angle": [
-    [
-      {label: "φ_{rv}", y: "φ_rv", stroke: color_x},
-      {label: "φ_{r}", y: "φ_r", stroke: color_y},
-    ],
+  "Radial Displacement Angle": [
+    {label: "φ_{r}", y: "φ_r"},
+    {least_domain: [-π, π], units: "rad"}
+  ],
+  "Radial Displacement": [
+    {label: "r", y: "r"}, 
+    {least_domain: [0.0, +0.000_005], units: "m", symmetric_domain: false},
+  ],
+  "Radial Velocity Angle": [
+    {label: "φ_{rv}", y: "φ_rv"},
     {least_domain: [-π, π], units: "rad"}
   ],
   "Radial Velocity": [
-    [
-      {label: `\nu_x`, y: "rx_v", stroke: color_x},
-      {label: `\nu_y`, y: "ry_v", stroke: color_y},
-    ],
+    {label: `ṙ`, y: "rv"},
     {least_domain: [-0.010, +0.010], units: "m/s"},
   ],
-  "Radial displacement": [
-    {label: "r", y: "r"}, 
-    {least_domain: [0.0, +0.000_010], units: "m", symmetric_domain: false}],
-  "Radial Position": [
-    [
-      {label: "x", y: "rx", stroke: color_x},
-      {label: "y", y: "ry", stroke: color_y},
-    ],
-    {least_domain: [-0.000_010, +0.000_010], units: "m"},
+  "Radial Acceleration": [
+    {label: `r̈`, y: "drv"},
+    {least_domain: [-1_000, +1_000], units: "m/s²"},
   ],
   "Currents": [
     [
@@ -472,8 +468,9 @@ const plot_selection_defaults = [
   "Total EMF", 
   "Rotational EMF", 
   "Radial EMF", 
-  "Radial Angle", 
-  "Radial Position", 
+  "Radial Displacement Angle", 
+  "Radial Displacement", 
+  "Radial Velocity Angle",
   "Radial Velocity",
 ];
 
@@ -618,6 +615,7 @@ const sound_scaling = {
   rv: 1.0 / 1.0,
 }
 
+// TODO: ground the sound generation to physics! and rename the sound normalizer to also something more common
 function play_simulation_sound(simulation, max_sound){
   const audio_context = new AudioContext({sampleRate: simulation.options.sound_sample_rate});
   // Create an empty three-second stereo buffer at the sample rate of the AudioContext.
@@ -648,8 +646,8 @@ function play_simulation_sound(simulation, max_sound){
     return diff_cos_is_negative ? -capped_cos(normed_diff(angle_a, angle_b + π) * diff_scale) : capped_cos(diff_pos * diff_scale);
   }
 
-  simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, rv, φ_rv, φ_r}, i) => {
-    const intensity = normalize_sound(rv);
+  simulation.sounds.forEach(({rx_v, ry_v, rx, ry, r, rv, φ_rv, φ_r, drv}, i) => {
+    const intensity = normalize_sound(drv);
 
     left_channel[i] = directional_scaled_cos(φ_rv, 0.0) * intensity;
     right_channel[i] = directional_scaled_cos(φ_rv, π * 0.5) * intensity;
