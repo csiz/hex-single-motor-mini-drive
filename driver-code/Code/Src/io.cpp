@@ -1,8 +1,11 @@
 #include <stm32f1xx_ll_tim.h>
 
+#include <usbd_cdc_if.h>
+
 #include "io.hpp"
 #include "interrupts.hpp"
 
+#include "app_main.hpp"
 
 float current_u = 0.0, current_v = 0.0, current_w = 0.0;
 
@@ -13,12 +16,12 @@ void init_motor_position(){
 }
 
 void update_motor_phase_currents(){
-    // Read the latest current values from the ADC circular buffer.
-    const uint16_t* adc_readout = adc_current_readouts[adc_current_readouts_head];
+    // Get the latest readout.
+    const ADC_Readout readout = adc_readouts[(adc_readouts_index-1+ADC_HISTORY_SIZE)%ADC_HISTORY_SIZE];
 
-    const int32_t readout_diff_u = adc_readout[0] - adc_readout[3];
-    const int32_t readout_diff_v = adc_readout[1] - adc_readout[3];
-    const int32_t readout_diff_w = adc_readout[2] - adc_readout[3];
+    const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
+    const int32_t readout_diff_v = readout.v_readout - readout.ref_readout;
+    const int32_t readout_diff_w = readout.w_readout - readout.ref_readout;
 
     // The amplifier voltage output is specified by the formula:
     //     Vout = (Iload * Rsense * GAIN) + Vref

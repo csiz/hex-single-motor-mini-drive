@@ -30,6 +30,7 @@
 #include "usbd_cdc.h"
 
 /* USER CODE BEGIN INCLUDE */
+#include <stdbool.h>
 
 /* USER CODE END INCLUDE */
 
@@ -48,8 +49,8 @@
   * @{
   */
 /* Define size for the receive and transmit buffer over CDC */
-#define APP_RX_DATA_SIZE  256
-#define APP_TX_DATA_SIZE  256
+#define APP_RX_DATA_SIZE  1024
+#define APP_TX_DATA_SIZE  1024
 /* USER CODE BEGIN EXPORTED_DEFINES */
 
 /* USER CODE END EXPORTED_DEFINES */
@@ -64,7 +65,14 @@
   */
 
 /* USER CODE BEGIN EXPORTED_TYPES */
-
+ typedef struct USB_COM_FIFO_TYPE
+ {
+   uint8_t* data;  // Will point to the Cube-generated Tx or Rx buffer
+   int head;
+   int tail;
+   int extra;
+   int size;
+ } USB_COM_FIFO;
 /* USER CODE END EXPORTED_TYPES */
 
 /**
@@ -94,6 +102,8 @@ extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
 
+extern volatile bool usb_com_ready;
+
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**
@@ -108,7 +118,10 @@ extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
-
+int usb_com_queue_send(uint8_t* buf, uint16_t len);
+int usb_com_recv (uint8_t* buf, uint16_t len);
+void usb_com_send();
+void usb_com_init();
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**

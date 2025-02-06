@@ -13,6 +13,9 @@ The AO4266E switching parameter uses Rgen = 3ohm, I think this is their recommen
 [ ] Maybe switch to a oscillation damping gate resistor of 3ohm.
 [ ] Definitely need to think about daisy chaining these, maybe use a signal buffer/transciever with an enable pin,
 and/or mosfet switch for the chip power on.
+[ ] Oppsies I flipped the sign of the V phase current measurement lines.
+[ ] The boost gate should maybe be connected to the driver side of the shunt resistor. At the moment we're measuring current used to charge the high gate.
+[ ] There's a summing option for the current measurments. Try outputing U, V, U+V, U+V+W using the 4th spare output.
 
 
 Need to implement in the circuit

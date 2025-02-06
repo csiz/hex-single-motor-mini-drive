@@ -33,7 +33,8 @@ Fix for next design
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "FreeRTOS.h"
+#include "task.h"
 #include "app_main.hpp"
 
 /* USER CODE END Includes */
@@ -867,7 +868,7 @@ void StartDefaultTask(void *argument)
   for(;;)
   {
     app_tick();
-    osDelay(1);
+    vTaskDelay(0);
   }
   /* USER CODE END 5 */
 }

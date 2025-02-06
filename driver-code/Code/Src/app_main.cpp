@@ -8,6 +8,8 @@
 #include "app_main.hpp"
 #include "io.hpp"
 #include "interrupts.hpp"
+#include "utils.hpp"
+
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
 // TODO: also need to set a minium on time for MOSFET driving, too little 
@@ -25,6 +27,8 @@ const float motor_voltage_table[6][3] = {
 
 
 void app_init() {
+    interrupt_init();
+
     // ### Setup ADC for reading motor phase currents.
     //
     // We use the ADC1 and ADC2 in simulatenous mode to read the motor phase currents
@@ -129,7 +133,6 @@ void app_init() {
     // Enable TIM2 channels 1 as the hall sensor timer between commutations.
     LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
 
-
     // Enable LED outputs: TIM2_CH4, TIM3_CH1, TIM3_CH2.
     enable_LED_channels();
 
@@ -145,6 +148,26 @@ float tim1_update_rate = 0.0f;
 float tim2_update_rate = 0.0f;
 float tim2_cc1_rate = 0.0f;
 
+uint32_t adc_updates_to_send = 0;
+uint32_t adc_updates_index = 0;
+size_t usb_misses = 0;
+
+
+void write_adc_readout(uint8_t* buffer, const ADC_Readout& readout) {
+    size_t offset = 0;
+    write_uint32(buffer + offset, ADC_READOUT);
+    offset += 4;
+    write_uint32(buffer + offset, readout.readout_number / ADC_SKIP_SIZE);
+    offset += 4;
+    write_uint16(buffer + offset, readout.u_readout);
+    offset += 2;
+    write_uint16(buffer + offset, readout.v_readout);
+    offset += 2;
+    write_uint16(buffer + offset, readout.w_readout);
+    offset += 2;
+    write_uint16(buffer + offset, readout.ref_readout);
+}
+
 void app_tick() {
     uint32_t milliseconds = HAL_GetTick();
     float seconds = milliseconds / 1000.f;
@@ -156,6 +179,10 @@ void app_tick() {
     tim1_update_rate = tim1_update_number / seconds;
     tim2_update_rate = tim2_update_number / seconds;
     tim2_cc1_rate = tim2_cc1_number / seconds;
+
+    // Overwrite history only when we're not sending data.
+    bool overwrite_adc_history = adc_updates_to_send == 0;
+    move_adc_readouts(overwrite_adc_history);
 
     update_motor_phase_currents();
 
@@ -201,35 +228,39 @@ void app_tick() {
 
     set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
 
-    const size_t n = 20;
 
-    const size_t data_size = 20 + 4 + 2*4*n;
+    uint8_t usb_command[8] = {0};
 
-    uint8_t data[data_size] = "measurements 123456:";
-    size_t offset = 20;
+    size_t bytes_received = usb_com_recv(usb_command, 8);
+    if (bytes_received == 8) {
+        uint32_t command = usb_command[3] | (usb_command[2] << 8) | (usb_command[1] << 16) | (usb_command[0] << 24);
+        uint32_t data = usb_command[7] | (usb_command[6] << 8) | (usb_command[5] << 16) | (usb_command[4] << 24);
 
-    data[offset] = (adc_update_number >> 24) & 0xFF;
-    data[offset + 1] = (adc_update_number >> 16) & 0xFF;
-    data[offset + 2] = (adc_update_number >> 8) & 0xFF;
-    data[offset + 3] = adc_update_number & 0xFF;
-    offset += 4;
-
-    size_t start_index = (adc_current_readouts_head + (HISTORY_SIZE - n) + 1) % HISTORY_SIZE;
-
-    for (size_t j = 0; j < n; j++) {
-        size_t row_index = (start_index + j) % HISTORY_SIZE;
-        
-        for (size_t i = 0; i < 4; i++) {
-            uint16_t value = adc_current_readouts[row_index][i];
-            data[offset] = (value >> 8) & 0xFF;
-            data[offset + 1] = value & 0xFF;
-
-            offset += 2;
+        switch (command) {
+            case GET_ADC_READOUTS:
+                adc_updates_to_send = ADC_HISTORY_SIZE;
+                UNUSED(data);
+                break;
         }
     }
 
-    // Send by USB
-    CDC_Transmit_FS(data, data_size);
+    while (adc_updates_to_send > 0) {
+        const ADC_Readout readout = adc_readouts[adc_readouts_index];
+
+        // Send the readout to the host.
+        uint8_t readout_data[16] = {0};
+        write_adc_readout(readout_data, readout);
+
+        if(usb_com_queue_send(readout_data, 16) == 0){
+            adc_updates_to_send -= 1;
+            adc_readouts_index = (adc_readouts_index + 1) % ADC_HISTORY_SIZE;
+        }else {
+            break;
+        }
+    }
+
+    // Send USB data from the buffer.
+    usb_com_send();
 }
 
 

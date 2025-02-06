@@ -4,6 +4,9 @@
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
 
+#include <FreeRTOS.h>
+#include <queue.h>
+
 #include "main.h"
 
 
@@ -12,9 +15,28 @@ extern uint32_t tim1_update_number;
 extern uint32_t tim2_update_number;
 extern uint32_t tim2_cc1_number;
 
-#define HISTORY_SIZE 512
-extern uint16_t adc_current_readouts[HISTORY_SIZE][4];
-extern size_t adc_current_readouts_head;
+struct ADC_Readout{
+    uint32_t readout_number;
+    uint16_t u_readout;
+    uint16_t v_readout;
+    uint16_t w_readout;
+    uint16_t ref_readout;
+};
+#define ADC_HISTORY_SIZE 512
+#define ADC_QUEUE_SIZE 32
+#define ADC_SKIP_SIZE 4
+#define ADC_ITEMSIZE sizeof(struct ADC_Readout)
+
+
+extern struct ADC_Readout latest_readout;
+
+extern QueueHandle_t adc_queue;
+extern StaticQueue_t adc_queue_storage;
+extern uint8_t adc_queue_buffer[ADC_QUEUE_SIZE * ADC_ITEMSIZE];
+
+extern struct ADC_Readout adc_readouts[ADC_HISTORY_SIZE];
+extern size_t adc_readouts_index;
+extern uint32_t adc_processed_number;
 
 extern bool hall_1, hall_2, hall_3;
 
@@ -31,13 +53,14 @@ extern uint8_t hall_state;
 extern "C" {
 #endif
 
-
+void interrupt_init();
 void adc_interrupt_handler();
 void dma_interrupt_handler();
 void tim1_update_interrupt_handler();
 void tim1_trigger_and_commutation_interrupt_handler();
 void read_motor_hall_sensors();
 void tim2_global_handler();
+size_t move_adc_readouts(bool overwrite);
 
 #ifdef __cplusplus
 }

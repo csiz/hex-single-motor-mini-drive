@@ -4,6 +4,9 @@
 extern "C" {
 #endif
 
+#define ADC_READOUT 0x80202020
+#define GET_ADC_READOUTS 0x80202021
+
 void app_init();
 void app_tick();
 void show_error();

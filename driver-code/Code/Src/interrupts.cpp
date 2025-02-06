@@ -8,8 +8,14 @@ uint32_t tim1_update_number = 0;
 uint32_t tim2_update_number = 0;
 uint32_t tim2_cc1_number = 0;
 
-size_t adc_current_readouts_head = 0;
-uint16_t adc_current_readouts[HISTORY_SIZE][4] = {0};
+QueueHandle_t adc_queue = {};
+StaticQueue_t adc_queue_storage = {};
+uint8_t adc_queue_buffer[ADC_QUEUE_SIZE * ADC_ITEMSIZE] = {0};
+ADC_Readout adc_readouts[ADC_HISTORY_SIZE] = {0};
+size_t adc_readouts_index = 0;
+uint32_t adc_processed_number = 0;
+ADC_Readout latest_readout = {0};
+
 
 bool hall_1 = false, hall_2 = false, hall_3 = false;
 
@@ -22,27 +28,53 @@ uint8_t hall_state = 0;
 // Interrupt handlers
 // ------------------
 
+void interrupt_init(){
+    adc_queue = xQueueCreateStatic(ADC_QUEUE_SIZE, ADC_ITEMSIZE, adc_queue_buffer, &adc_queue_storage);
+}
+
 void adc_interrupt_handler(){
     const bool injected_conversions_complete = LL_ADC_IsActiveFlag_JEOS(ADC1);
     if (injected_conversions_complete) {
-        // Alias the the readouts for the next index.
-        const size_t new_head = (adc_current_readouts_head + 1) % HISTORY_SIZE;
+        ADC_Readout readout;
+        readout.readout_number = adc_update_number;
 
-        uint16_t * adc_reading = adc_current_readouts[new_head];
-        
-        adc_reading[0] = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
-        adc_reading[1] = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
-        adc_reading[2] = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
-        adc_reading[3] = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
+        readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+        readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+        readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
+        readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
 
-        // Update the circular buffer.
-        adc_current_readouts_head = new_head;
+        latest_readout.readout_number = readout.readout_number;
+        latest_readout.u_readout = (latest_readout.u_readout * 12 + readout.u_readout * 4)/16;
+        latest_readout.v_readout = (latest_readout.v_readout * 12 + readout.v_readout * 4)/16;
+        latest_readout.w_readout = (latest_readout.w_readout * 12 + readout.w_readout * 4)/16;
+        latest_readout.ref_readout = (latest_readout.ref_readout * 12 + readout.ref_readout * 4)/16;
+
+        if ((adc_update_number % ADC_SKIP_SIZE) == 0) xQueueSendToBackFromISR(adc_queue, &latest_readout, NULL);
 
         adc_update_number += 1;
         LL_ADC_ClearFlag_JEOS(ADC1);
     } else {
         Error_Handler();
     }
+}
+
+size_t move_adc_readouts(bool overwrite){
+    ADC_Readout readout;
+    size_t values_read = 0;
+    
+    for (size_t i = 0; i < ADC_QUEUE_SIZE; i++) {
+        if (xQueueReceive(adc_queue, &readout, 0) == pdFALSE) break;
+        values_read += 1;
+
+        if (overwrite) {
+            adc_readouts[adc_readouts_index] = readout;
+            adc_readouts_index = (adc_readouts_index + 1) % ADC_HISTORY_SIZE;
+        }
+    }
+
+    adc_processed_number += values_read;
+    
+    return values_read;
 }
 
 void dma_interrupt_handler() {

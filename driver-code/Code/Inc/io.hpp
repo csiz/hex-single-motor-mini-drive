@@ -36,7 +36,7 @@ const uint16_t adc_max_value = 0xFFF;
 // The minus sign is because of the way the INA4181 is wired up...
 const float current_conversion = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
-// Compute motor phase currents using latest ADC readouts; clearing the adc_current_updated flag.
+// Compute motor phase currents using latest ADC readouts.
 void update_motor_phase_currents();
 
 static inline void set_motor_u_pwm_duty_cycle(uint16_t duty_cycle){

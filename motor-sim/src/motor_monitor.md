@@ -1,92 +1,187 @@
 ---
 title: Motor monitor
-theme: dashboard
 ---
-
 
 ```js
 const port = view(Inputs.button("Connect", {
   value: null, 
-  reduce: open_port,
+  reduce: async function(prev_port){
+    if (prev_port) {
+      console.log("Forgetting previous port");
+      await (await prev_port).forget();
+    }
+    try {
+      const port = await navigator.serial.requestPort();
+      await port.open({baudRate: 115200, bufferSize: 16});
+      return port;
+    } catch (error) {
+      console.error("Error requesting port:", error);
+      return null;
+    }
+  },
 }));
 ```
 
 ```js
-const data = port != null ? data_stream(parse_with_delimiter(read_from(port), "measurements 123456:")) : null;
+const data = (function(){
+  if(port && port.readable) {
+    try {
+      return stream_adc_readouts(port);
+    } catch (error) {
+      console.error("Error reading from port:", error);
+    }
+  }
+
+  return [];
+})();
 ```
 
-```js
-console.log(data);
 
-display(data);
+```js
+
+
+const ref_readout_mean = d3.mean(data, (d) => d.ref_readout);
+
+const computed_data = data.map((d) => {
+  const readout_number = d.readout_number;
+  let u_readout = (d.u_readout - d.ref_readout);
+  u_readout = u_readout > 0 ? u_readout * 0.6 : u_readout;
+  let v_readout = -(d.v_readout - d.ref_readout);
+  v_readout = v_readout > 0 ? v_readout * 0.9 : v_readout * 0.5;
+  let w_readout = d.w_readout - d.ref_readout;
+  w_readout = w_readout > 0 ? w_readout * 1.0 : w_readout;
+  const ref_readout = d.ref_readout - ref_readout_mean;
+
+  return {readout_number, u_readout, v_readout, w_readout, ref_readout};
+});
+
+display(computed_data);
 
 display(Plot.plot({
   marks: [
-    Plot.lineY(data, {x: "adc_update_number", y: "adc_value_0", stroke: 'black', label: 'adc 0'}),
-  ]
+    Plot.lineY(computed_data, {x: "readout_number", y: 'u_readout', stroke: 'steelblue', label: 'adc 0'}),
+    Plot.lineY(computed_data, {x: "readout_number", y: 'v_readout', stroke: 'orangered', label: 'adc 1'}),
+    Plot.lineY(computed_data, {x: "readout_number", y: 'w_readout', stroke: 'purple', label: 'adc 2'}),
+    Plot.lineY(computed_data, {x: "readout_number", y: (d) => d.u_readout + d.v_readout + d.w_readout, stroke: 'black', label: 'sum'}),
+    Plot.lineY(computed_data, {x: "readout_number", y: 'ref_readout', stroke: 'gray', label: 'ref'}),
+    Plot.gridY({interval: 100, stroke: 'black', strokeWidth : 1}),
+  ],
+  width: 1200,
 }));
 ```
 
+
+
 ```js
-async function * data_stream(messages, max_entries = 400) {
+const ADC_READOUT = 0x80202020;
+const GET_ADC_READOUTS = 0x80202021;
+// Uint8Array from uint32
+function uint32_to_bytes(value) {
+  let buffer = new Uint8Array(4);
+  let view = new DataView(buffer.buffer);
+  view.setUint32(0, value);
+  return buffer;
+}
+```
+
+```js
+
+
+async function * stream_adc_readouts(port) {
+  const n = 1024;
+  const max_missed_messages = 1;
+  const timeout = 50;
+
   let data = [];
-  const n = 20;
+
+  await request_adc_readings(port, n);
+
+  let messages = parse_with_delimiter(read_from(port, timeout), uint32_to_bytes(ADC_READOUT));
+
 
   for await (const message of messages) {
-    if (message.buffer.byteLength != 4 + 8 * n) continue;
+    if (message.buffer.byteLength != 12) continue;
     
     let data_view = new DataView(message.buffer);
     
     let offset = 0;
-    let adc_update_number = data_view.getUint32(0);
+    let readout_number = data_view.getUint32(0);
     offset += 4;
 
-    let message_data = [];
 
-    for (let i = 0; i < n; i++) {
-      let adc_value_0 = data_view.getUint16(offset);
-      offset += 2;
-      let adc_value_1 = data_view.getUint16(offset);
-      offset += 2;
-      let adc_value_2 = data_view.getUint16(offset);
-      offset += 2;
-      let adc_value_3 = data_view.getUint16(offset);
-      offset += 2;
+    let u_readout = data_view.getUint16(offset);
+    offset += 2;
+    let v_readout = data_view.getUint16(offset);
+    offset += 2;
+    let w_readout = data_view.getUint16(offset);
+    offset += 2;
+    let ref_readout = data_view.getUint16(offset);
+    offset += 2;
 
-      message_data.push({adc_update_number: adc_update_number - n + i + 1, adc_value_0, adc_value_1, adc_value_2, adc_value_3});
 
+    data.push({
+      readout_number,
+      u_readout,
+      v_readout,
+      w_readout,
+      ref_readout,
+    });
+
+    if (data.length > 2) {
+      if ((data[data.length - 1].readout_number - data[data.length - 2].readout_number) > max_missed_messages){
+        data = data.slice(-1);
+      }
     }
 
-    data.push(...message_data);
-    data = data.slice(-max_entries);
+    if (data.length % 64 === 0) yield data;
 
-    yield data;
+    if (data.length >= n) {
+      yield data;
+      break;
+    }
   }
+
+  yield data;
 }
 ```
 
 
 ```js
-async function open_port(){
-  let port = await navigator.serial.requestPort();
-  await port.open({baudRate: 115200, bufferSize: 512});
-  return port;
+
+
+async function request_adc_readings(port, n){
+  let writer = port.writable.getWriter();
+  let buffer = new Uint8Array(8);
+  let view = new DataView(buffer.buffer);
+  view.setUint32(0, GET_ADC_READOUTS);
+  view.setUint32(4, n);
+  await writer.write(buffer);
+  writer.releaseLock();
 }
 
-async function * read_from(port){
-  while (port.readable) {
-    const reader = port.readable.getReader();
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        yield value;
-      }
-    } catch (error) {
-      // Handle error, maybe, maybe not?
-    } finally {
-      reader.releaseLock();
+function timeout_promise(promise, timeout) {
+  return new Promise((resolve, reject) => {
+    let timer = setTimeout(() => {
+      reject(new Error("Timeout"));
+    }, timeout);
+    promise.then(resolve, reject).finally(() => {
+      clearTimeout(timer);
+    });
+  });
+}
+
+async function * read_from(port, timeout) {
+  const reader = port.readable.getReader();
+  try {
+    while (true) {
+      const { value, done } = await timeout_promise(reader.read(), timeout);
+      if (done) break;
+      yield value;
     }
+  } catch (error) {
+    console.error("Error reading from port:", error);
+  } finally {
+    reader.releaseLock();
   }
 }
 

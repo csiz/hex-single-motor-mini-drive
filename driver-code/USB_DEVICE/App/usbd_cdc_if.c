@@ -22,6 +22,8 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
+#include "FreeRTOS.h"
+#include "task.h"
 
 /* USER CODE END INCLUDE */
 
@@ -31,7 +33,10 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+// Circular FIFO to store outgoing data until it can be sent over USB
+USB_COM_FIFO usb_com_tx_fifo;
+// Circular FIFO to store incoming data from the host over USB
+USB_COM_FIFO usb_com_rx_fifo;
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -110,6 +115,10 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
 
+#define RX_BUFFER_MAX_WRITE_INDEX (APP_RX_DATA_SIZE - CDC_DATA_FS_MAX_PACKET_SIZE)
+
+volatile bool usb_com_ready = false;
+
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**
@@ -150,9 +159,10 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 static int8_t CDC_Init_FS(void)
 {
   /* USER CODE BEGIN 3 */
-  /* Set Application Buffers */
+  usb_com_init();
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  usb_com_ready = true;
   return (USBD_OK);
   /* USER CODE END 3 */
 }
@@ -164,6 +174,8 @@ static int8_t CDC_Init_FS(void)
 static int8_t CDC_DeInit_FS(void)
 {
   /* USER CODE BEGIN 4 */
+  usb_com_ready = false;
+  usb_com_init();
   return (USBD_OK);
   /* USER CODE END 4 */
 }
@@ -259,7 +271,18 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+  // Update the write index for the next incoming packet
+  usb_com_rx_fifo.head += *Len;
+  usb_com_rx_fifo.size += *Len;
+  // Is the new value too close to the end of the FIFO ?
+  if (usb_com_rx_fifo.head >= RX_BUFFER_MAX_WRITE_INDEX) {
+    // Solution : wrap-around (and save the last head as extra)
+    usb_com_rx_fifo.extra = usb_com_rx_fifo.head;
+    usb_com_rx_fifo.head = 0;
+  }
+  // Tell the driver where to write the next incoming packet.
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &usb_com_rx_fifo.data[usb_com_rx_fifo.head]);
+  // Receive the next packet
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
   /* USER CODE END 6 */
@@ -292,6 +315,110 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
+
+int usb_com_recv (uint8_t* buf, uint16_t len) {
+  // FIFO is empty, nothing to read.
+  if (usb_com_rx_fifo.size == 0) return 0;
+
+  // Limit the FIFO read to the available data
+  if (len > usb_com_rx_fifo.size) len = usb_com_rx_fifo.size;
+
+  for (int i = 0; i < len; i++){
+    *buf = usb_com_rx_fifo.data[usb_com_rx_fifo.tail];
+    buf++;
+    usb_com_rx_fifo.tail++;    // Update read index
+    // Check for wrap-around and reset tail to the beginning.
+    if (usb_com_rx_fifo.tail == usb_com_rx_fifo.extra) usb_com_rx_fifo.tail = 0;
+  }
+
+  usb_com_rx_fifo.size -= len;
+
+  return len;
+}
+
+int usb_com_queue_send (uint8_t* buf, uint16_t len) {
+  // Check if the USB is ready.
+  if (!usb_com_ready) return -1;
+
+  // Calculate available capacity.
+  const int cap = APP_TX_DATA_SIZE - usb_com_tx_fifo.size; 
+
+  // Check if there is enough room in the FIFO
+  if (cap < len) return -1; // Error: not enough room in the FIFO.
+
+  // Get the space available at the tail of the FIFO.
+  int tail = APP_TX_DATA_SIZE - usb_com_tx_fifo.head;
+
+  if (tail >= len) {
+    // Copy the whole buffer into the tail of the FIFO.
+    memcpy (&usb_com_tx_fifo.data[usb_com_tx_fifo.head], buf, len);
+
+    // Update the head index
+    usb_com_tx_fifo.head += len;
+
+    // Check if we've reached the end and wrap around to the beginning.
+    if (usb_com_tx_fifo.head == APP_TX_DATA_SIZE) usb_com_tx_fifo.head = 0;
+
+  } else {
+    // Wrap around case. We split the input buffer in two parts.
+
+    // Copy the head of buffer to the tail of the FIFO.
+    memcpy (&usb_com_tx_fifo.data[usb_com_tx_fifo.head], buf, tail);
+    // Copy the tail of buffer to the head of the FIFO.
+    memcpy (usb_com_tx_fifo.data, &buf[tail], len - tail);
+    // Update the head index.
+    usb_com_tx_fifo.head = len - tail;
+  }
+
+  usb_com_tx_fifo.size += len;
+
+  // Success!
+  return 0;
+}
+
+void usb_com_send(){
+  // Check if the USB is ready.
+  if (!usb_com_ready) return;
+
+  // Get the CDC handle.
+  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+
+  // Test if the USB CDC is ready to transmit
+  if (hcdc->TxState != 0) return;
+
+  // Update the FIFO to reflect the completion of the last transmission
+  usb_com_tx_fifo.tail = (usb_com_tx_fifo.tail + usb_com_tx_fifo.extra) % APP_TX_DATA_SIZE;
+  usb_com_tx_fifo.size -= usb_com_tx_fifo.extra;
+  usb_com_tx_fifo.extra = 0;
+
+  // Return if nothing to send.
+  if (usb_com_tx_fifo.size == 0) return;
+
+  const bool wrap_around = usb_com_tx_fifo.tail > usb_com_tx_fifo.head;
+
+  // Only send the tail if data wraps around.
+  const int n_sent = wrap_around ? APP_TX_DATA_SIZE - usb_com_tx_fifo.tail : usb_com_tx_fifo.size;
+
+  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, &usb_com_tx_fifo.data[usb_com_tx_fifo.tail], n_sent);
+  USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+  
+  // Remember how much data we've sent.
+  usb_com_tx_fifo.extra = n_sent;
+}
+
+void usb_com_init(){
+  // Circular FIFO initializations :
+  usb_com_tx_fifo.data = UserTxBufferFS;  // Use the buffer generated by Cube
+  usb_com_tx_fifo.head = 0;
+  usb_com_tx_fifo.tail = 0;
+  usb_com_tx_fifo.size = 0;
+  usb_com_tx_fifo.extra = 0;
+  usb_com_rx_fifo.data = UserRxBufferFS;  // Use the buffer generated by Cube
+  usb_com_rx_fifo.head = 0;
+  usb_com_rx_fifo.tail = 0;
+  usb_com_rx_fifo.size = 0;
+  usb_com_rx_fifo.extra = 0;
+}
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
 /**
