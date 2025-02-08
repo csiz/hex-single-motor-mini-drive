@@ -16,6 +16,23 @@ and/or mosfet switch for the chip power on.
 [ ] Oppsies I flipped the sign of the V phase current measurement lines.
 [ ] The boost gate should maybe be connected to the driver side of the shunt resistor. At the moment we're measuring current used to charge the high gate.
 [ ] There's a summing option for the current measurments. Try outputing U, V, U+V, U+V+W using the 4th spare output.
+[ ] There's a conflict between i2c and timer 3 channel 2. Choose a different GPIO for the red LED.
+	I2C1 and TIM3_CH2 remapped
+	Description
+	When the following conditions are met:
+	• I2C1 and TIM3 are clocked.
+	• I/O port pin PB5 is configured as an alternate function output
+	there is a conflict between the TIM3_CH2 signal and the I2C1 SMBA signal (even if SMBA is not used).
+	In these cases the I/O port pin PB5 is set to 1 by default if the I/O alternate function output is selected and I2C1 is
+	clocked. TIM3_CH2 cannot be used in output mode.
+	Workaround
+	To avoid this conflict, TIM3_CH2 can only be used in input mode.
+
+[ ] Double sided board.
+[ ] Think about connectors better, drop USB (the esp32 will have USB-C).
+[ ] Drop voltage regulator and rely on master board for 3.3V; filter it though.
+[ ] Look for thinner IDC connector, and definitely SMD version for easier routing, use of space behind connector.
+
 
 
 Need to implement in the circuit
