@@ -9,33 +9,30 @@
 
 #include "main.h"
 
-
 extern uint32_t adc_update_number;
 extern uint32_t tim1_update_number;
 extern uint32_t tim2_update_number;
 extern uint32_t tim2_cc1_number;
 
-struct ADC_Readout{
+struct UpdateReadout{
     uint32_t readout_number;
+    uint32_t pwm_commands;
     uint16_t u_readout;
     uint16_t v_readout;
     uint16_t w_readout;
     uint16_t ref_readout;
 };
-#define ADC_HISTORY_SIZE 512
+#define HISTORY_SIZE 384
 #define ADC_QUEUE_SIZE 32
-#define ADC_SKIP_SIZE 4
-#define ADC_ITEMSIZE sizeof(struct ADC_Readout)
+#define ADC_ITEMSIZE sizeof(struct UpdateReadout)
 
-
-extern struct ADC_Readout latest_readout;
 
 extern QueueHandle_t adc_queue;
 extern StaticQueue_t adc_queue_storage;
 extern uint8_t adc_queue_buffer[ADC_QUEUE_SIZE * ADC_ITEMSIZE];
 
-extern struct ADC_Readout adc_readouts[ADC_HISTORY_SIZE];
-extern size_t adc_readouts_index;
+extern struct UpdateReadout adc_readouts[HISTORY_SIZE];
+extern uint32_t adc_readouts_index;
 extern uint32_t adc_processed_number;
 
 extern bool hall_1, hall_2, hall_3;

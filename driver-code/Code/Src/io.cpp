@@ -17,7 +17,7 @@ void init_motor_position(){
 
 void update_motor_phase_currents(){
     // Get the latest readout.
-    const ADC_Readout readout = adc_readouts[(adc_readouts_index-1+ADC_HISTORY_SIZE)%ADC_HISTORY_SIZE];
+    const UpdateReadout readout = adc_readouts[(adc_readouts_index-1+HISTORY_SIZE)%HISTORY_SIZE];
 
     const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
     const int32_t readout_diff_v = readout.v_readout - readout.ref_readout;

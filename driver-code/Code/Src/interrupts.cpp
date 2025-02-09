@@ -1,4 +1,6 @@
 #include "interrupts.hpp"
+#include "app_main.hpp"
+#include "motor_control.hpp"
 
 // Try really hard to keep interrupts fast. Use short inline functions that only rely 
 // on chip primitives; don't use division, multiplication, or floating point operations.
@@ -11,10 +13,9 @@ uint32_t tim2_cc1_number = 0;
 QueueHandle_t adc_queue = {};
 StaticQueue_t adc_queue_storage = {};
 uint8_t adc_queue_buffer[ADC_QUEUE_SIZE * ADC_ITEMSIZE] = {0};
-ADC_Readout adc_readouts[ADC_HISTORY_SIZE] = {0};
-size_t adc_readouts_index = 0;
+UpdateReadout adc_readouts[HISTORY_SIZE] = {0};
+uint32_t adc_readouts_index = 0;
 uint32_t adc_processed_number = 0;
-ADC_Readout latest_readout = {0};
 
 
 bool hall_1 = false, hall_2 = false, hall_3 = false;
@@ -35,21 +36,22 @@ void interrupt_init(){
 void adc_interrupt_handler(){
     const bool injected_conversions_complete = LL_ADC_IsActiveFlag_JEOS(ADC1);
     if (injected_conversions_complete) {
-        ADC_Readout readout;
+        UpdateReadout readout;
         readout.readout_number = adc_update_number;
 
+        // U and W phases are measured at the same time, followed by V and the reference voltage.
+        // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
+        // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
+        // 16ticks after the update event (PWM counter resets). This is a delay of 16/72MHz = 222ns.
+        
         readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
-        readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
-        readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
+        // Note: in the v0 board the V phase shunt is connected in reverse to the current sense amplifier.
+        readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
+
+        readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
         readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
 
-        latest_readout.readout_number = readout.readout_number;
-        latest_readout.u_readout = (latest_readout.u_readout * 12 + readout.u_readout * 4)/16;
-        latest_readout.v_readout = (latest_readout.v_readout * 12 + readout.v_readout * 4)/16;
-        latest_readout.w_readout = (latest_readout.w_readout * 12 + readout.w_readout * 4)/16;
-        latest_readout.ref_readout = (latest_readout.ref_readout * 12 + readout.ref_readout * 4)/16;
-
-        if ((adc_update_number % ADC_SKIP_SIZE) == 0) xQueueSendToBackFromISR(adc_queue, &latest_readout, NULL);
+        xQueueSendToBackFromISR(adc_queue, &readout, NULL);
 
         adc_update_number += 1;
         LL_ADC_ClearFlag_JEOS(ADC1);
@@ -59,7 +61,7 @@ void adc_interrupt_handler(){
 }
 
 size_t move_adc_readouts(bool overwrite){
-    ADC_Readout readout;
+    UpdateReadout readout;
     size_t values_read = 0;
     
     for (size_t i = 0; i < ADC_QUEUE_SIZE; i++) {
@@ -68,7 +70,7 @@ size_t move_adc_readouts(bool overwrite){
 
         if (overwrite) {
             adc_readouts[adc_readouts_index] = readout;
-            adc_readouts_index = (adc_readouts_index + 1) % ADC_HISTORY_SIZE;
+            adc_readouts_index = (adc_readouts_index + 1) % HISTORY_SIZE;
         }
     }
 
@@ -84,8 +86,15 @@ void dma_interrupt_handler() {
 // Timer 1 is update every motor PWM cycle; at ~ 70KHz.
 void tim1_update_interrupt_handler(){
     if(LL_TIM_IsActiveFlag_UPDATE(TIM1)){
-        LL_TIM_ClearFlag_UPDATE(TIM1);
+        // Note, this updates on both up and down counting, get direction with: LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP;
+        
+        // Update motor state once per up and down cycle.
+        if (motor_register_update_needed and LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_DOWN) {
+            update_motor_control_registers();
+        }
         tim1_update_number += 1;
+
+        LL_TIM_ClearFlag_UPDATE(TIM1);
     } else {
         Error_Handler();
     }

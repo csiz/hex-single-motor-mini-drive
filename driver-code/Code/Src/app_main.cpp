@@ -9,25 +9,41 @@
 #include "io.hpp"
 #include "interrupts.hpp"
 #include "utils.hpp"
+#include "motor_control.hpp"
+
+const uint32_t ADC_READOUT = 0x80202020;
+const uint32_t GET_ADC_READOUTS = 0x80202021;
+
+
+
+uint32_t main_loop_update_number = 0;
+
+
+float main_loop_update_rate = 0.0f;
+float adc_update_rate = 0.0f;
+float tim1_update_rate = 0.0f;
+float tim2_update_rate = 0.0f;
+float tim2_cc1_rate = 0.0f;
+
+uint32_t adc_updates_to_send = 0;
+uint32_t adc_updates_index = 0;
+size_t usb_misses = 0;
+
+
 
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
 // TODO: also need to set a minium on time for MOSFET driving, too little 
 // won't spin the motor at all.
 
-// Motor voltage fraction for the 6-step commutation.
-const float motor_voltage_table[6][3] = {
-    {0.5, 1.0, 0.0},
-    {0.0, 1.0, 0.5},
-    {0.0, 0.5, 1.0},
-    {0.5, 0.0, 1.0},
-    {1.0, 0.0, 0.5},
-    {1.0, 0.5, 0.0}
-};
+
 
 
 void app_init() {
     interrupt_init();
+
+    // Setup PWM settings.
+    LL_TIM_SetAutoReload(TIM1, PWM_AUTORELOAD); // 72MHz / 1536 / 2 = 23.4KHz
 
     // ### Setup ADC for reading motor phase currents.
     //
@@ -35,14 +51,20 @@ void app_init() {
     // a short time after we turn on the mosfets during each PWM cycle (the motors
     // are driven by TIM1). When the ADC is triggered in injected mode both ADC modules 
     // read the current for U and V phases first then W and reference voltage second.
-    
+    // 
+    // The ADC sample time is 20cycles, so the total sampling period is 20/12MHz = 1.67us.
+    // 
     // Use the TIM1 channel 4 to generate an event a short time after the update event.
     // This event is used to trigger the ADC to read the current from the motor phases.
     // 
     // Delay the ADC sampling time by 16/72MHz = 222ns; the ADC will sample for 7.5 cycles
     // (and convert for 12.5); then finally sample W and the reference. 7.5/12MHz = 625ns.
-    // The ADC sample time is 7.5*6 = 45 ticks of TIM1.
-    LL_TIM_OC_SetCompareCH4(TIM1, 16);
+    // For reference, the ADC sample time is 20*72MHz/12MHz = 120 ticks of TIM1.
+
+    // When counting down, this is triggered 14cycles before the counter reaches 0, measuring 
+    // current symmetrically around 0 for the 2 consecutive readings.
+    LL_TIM_OC_SetCompareCH4(TIM1, 84); 
+
 
     // Enable the ADC interrupt for the end of the injected sequence which reads motor current.
     LL_ADC_EnableIT_JEOS(ADC1);
@@ -140,24 +162,12 @@ void app_init() {
 }
 
 
-uint32_t main_loop_update_number = 0;
-float main_loop_update_rate = 0.0f;
 
-float adc_update_rate = 0.0f;
-float tim1_update_rate = 0.0f;
-float tim2_update_rate = 0.0f;
-float tim2_cc1_rate = 0.0f;
-
-uint32_t adc_updates_to_send = 0;
-uint32_t adc_updates_index = 0;
-size_t usb_misses = 0;
-
-
-void write_adc_readout(uint8_t* buffer, const ADC_Readout& readout) {
+void write_adc_readout(uint8_t* buffer, const UpdateReadout& readout) {
     size_t offset = 0;
     write_uint32(buffer + offset, ADC_READOUT);
     offset += 4;
-    write_uint32(buffer + offset, readout.readout_number / ADC_SKIP_SIZE);
+    write_uint32(buffer + offset, readout.readout_number);
     offset += 4;
     write_uint16(buffer + offset, readout.u_readout);
     offset += 2;
@@ -186,48 +196,9 @@ void app_tick() {
 
     update_motor_phase_currents();
 
-    const float overcurrent_threshold = 2.0;
-    const bool overcurrent = abs(current_u) > overcurrent_threshold || 
-                             abs(current_v) > overcurrent_threshold || 
-                             abs(current_w) > overcurrent_threshold;
-    if (overcurrent) {
-        disable_motor_u_output();
-        disable_motor_v_output();
-        disable_motor_w_output();
-    } else {
-        const float pwm_fraction = 0.2;
-        // Use the hall sensor state to determine the motor position and commutation.
-        if (hall_sensor_valid) {
-            const float voltage_phase_u = motor_voltage_table[motor_electric_phase][0];
-            const float voltage_phase_v = motor_voltage_table[motor_electric_phase][1];
-            const float voltage_phase_w = motor_voltage_table[motor_electric_phase][2];
-
-            if (voltage_phase_u == 0.5) {
-                disable_motor_u_output();
-            } else {
-                enable_motor_u_output();
-                set_motor_u_pwm_duty_cycle(voltage_phase_u * pwm_fraction * max_pwm_duty);
-            }
-
-            if (voltage_phase_v == 0.5) {
-                disable_motor_v_output();
-            } else {
-                enable_motor_v_output();
-                set_motor_v_pwm_duty_cycle(voltage_phase_v * pwm_fraction * max_pwm_duty);
-            }
-
-            if (voltage_phase_w == 0.5) {
-                disable_motor_w_output();
-            } else {
-                enable_motor_w_output();
-                set_motor_w_pwm_duty_cycle(voltage_phase_w * pwm_fraction * max_pwm_duty);
-            }
-        }
-    }
-    
+    update_motor_control();
 
     set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
-
 
     uint8_t usb_command[8] = {0};
 
@@ -238,14 +209,14 @@ void app_tick() {
 
         switch (command) {
             case GET_ADC_READOUTS:
-                adc_updates_to_send = ADC_HISTORY_SIZE;
+                adc_updates_to_send = HISTORY_SIZE;
                 UNUSED(data);
                 break;
         }
     }
 
     while (adc_updates_to_send > 0) {
-        const ADC_Readout readout = adc_readouts[adc_readouts_index];
+        const UpdateReadout readout = adc_readouts[adc_readouts_index];
 
         // Send the readout to the host.
         uint8_t readout_data[16] = {0};
@@ -253,7 +224,7 @@ void app_tick() {
 
         if(usb_com_queue_send(readout_data, 16) == 0){
             adc_updates_to_send -= 1;
-            adc_readouts_index = (adc_readouts_index + 1) % ADC_HISTORY_SIZE;
+            adc_readouts_index = (adc_readouts_index + 1) % HISTORY_SIZE;
         }else {
             break;
         }

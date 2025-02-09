@@ -2,72 +2,110 @@
 title: Motor monitor
 ---
 
+Connect to COM port and read motor driver data.
+
 ```js
-const port = view(Inputs.button("Connect", {
-  value: null, 
-  reduce: async function(prev_port){
-    if (prev_port) {
-      console.log("Forgetting previous port");
-      await (await prev_port).forget();
-    }
-    try {
-      const port = await navigator.serial.requestPort();
-      await port.open({baudRate: 115200, bufferSize: 16});
-      return port;
-    } catch (error) {
-      console.error("Error requesting port:", error);
-      return null;
-    }
-  },
-}));
+const port = view(Inputs.button(
+  [
+    ["Connect", async function(prev_port){
+      prev_port = await prev_port;
+      if (prev_port) {
+        console.log("Forgetting previous port");
+        await prev_port.forget();
+      }
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({baudRate: 115200, bufferSize: 16});
+        return port;
+      } catch (error) {
+        console.error("Error requesting port:", error);
+        return undefined;
+      }
+    }],
+    ["Disconnect", async function(prev_port){
+      prev_port = await prev_port;
+      if (prev_port) {
+        console.log("Forgetting previous port");
+        await prev_port.forget();
+      }
+      return undefined;
+    }],
+  ],
+  {label: "Connect to COM", value: undefined},
+));
+```
+
+
+```js
+const data_stream = function(){
+  if(port && port.readable) {
+    return view(Inputs.button(
+      [
+        ["Read ADC", function(){
+          try {
+            return stream_adc_readouts(port);
+          } catch (error) {
+            console.error("Error reading from port:", error);
+          }
+        }],
+      ],
+      {label: "Send commands", value: undefined},
+    ));
+  }
+  
+  return undefined;
+}();
 ```
 
 ```js
-const data = (function(){
-  if(port && port.readable) {
-    try {
-      return stream_adc_readouts(port);
-    } catch (error) {
-      console.error("Error reading from port:", error);
-    }
+const data = async function*(){
+  if (data_stream) {
+    yield* data_stream;
   }
 
-  return [];
-})();
+  return undefined;
+}();
+
 ```
 
+Motor driver phase currents
+----------------------------
 
 ```js
+const currents_plots = function(){
+  if (!data) {
+    return display(html`Not connected...`);
+  }
+
+  const ref_readout_mean = d3.mean(data, (d) => d.ref_readout);
+
+  const computed_data = data.map((d) => {
+    const readout_number = d.readout_number;
+    let u_readout = +(d.u_readout - d.ref_readout);
+    u_readout = u_readout > 0 ? u_readout * 1.0 : u_readout * 1.0;
+    let v_readout = -(d.v_readout - d.ref_readout);
+    v_readout = v_readout > 0 ? v_readout * 1.0 : v_readout * 1.0;
+    let w_readout = +(d.w_readout - d.ref_readout);
+    w_readout = w_readout > 0 ? w_readout * 1.0 : w_readout * 1.0;
+    const ref_readout = d.ref_readout - ref_readout_mean;
+
+    return {readout_number, u_readout, v_readout, w_readout, ref_readout};
+  });
 
 
-const ref_readout_mean = d3.mean(data, (d) => d.ref_readout);
+  return display(Plot.plot({
+    marks: [
+      Plot.lineY(computed_data, {x: "readout_number", y: 'u_readout', stroke: 'steelblue', label: 'adc 0', curve: 'step'}),
+      Plot.lineY(computed_data, {x: "readout_number", y: 'v_readout', stroke: 'orangered', label: 'adc 1', curve: 'step'}),
+      Plot.lineY(computed_data, {x: "readout_number", y: 'w_readout', stroke: 'purple', label: 'adc 2', curve: 'step'}),
+      Plot.lineY(computed_data, {x: "readout_number", y: (d) => d.u_readout + d.v_readout + d.w_readout, stroke: 'black', label: 'sum', curve: 'step'}),
+      Plot.lineY(computed_data, {x: "readout_number", y: 'ref_readout', stroke: 'gray', label: 'ref', curve: 'step'}),
+      Plot.gridY({interval: 100, stroke: 'black', strokeWidth : 1}),
+    ],
+    width: 1200,
+  }));
 
-const computed_data = data.map((d) => {
-  const readout_number = d.readout_number;
-  let u_readout = (d.u_readout - d.ref_readout);
-  u_readout = u_readout > 0 ? u_readout * 0.6 : u_readout;
-  let v_readout = -(d.v_readout - d.ref_readout);
-  v_readout = v_readout > 0 ? v_readout * 0.9 : v_readout * 0.5;
-  let w_readout = d.w_readout - d.ref_readout;
-  w_readout = w_readout > 0 ? w_readout * 1.0 : w_readout;
-  const ref_readout = d.ref_readout - ref_readout_mean;
-
-  return {readout_number, u_readout, v_readout, w_readout, ref_readout};
-});
-
-display(computed_data);
-
-display(Plot.plot({
-  marks: [
-    Plot.lineY(computed_data, {x: "readout_number", y: 'u_readout', stroke: 'steelblue', label: 'adc 0'}),
-    Plot.lineY(computed_data, {x: "readout_number", y: 'v_readout', stroke: 'orangered', label: 'adc 1'}),
-    Plot.lineY(computed_data, {x: "readout_number", y: 'w_readout', stroke: 'purple', label: 'adc 2'}),
-    Plot.lineY(computed_data, {x: "readout_number", y: (d) => d.u_readout + d.v_readout + d.w_readout, stroke: 'black', label: 'sum'}),
-    Plot.lineY(computed_data, {x: "readout_number", y: 'ref_readout', stroke: 'gray', label: 'ref'}),
-    Plot.gridY({interval: 100, stroke: 'black', strokeWidth : 1}),
-  ],
-  width: 1200,
-}));
+}();
 ```
 
 
@@ -88,13 +126,12 @@ function uint32_to_bytes(value) {
 
 
 async function * stream_adc_readouts(port) {
-  const n = 1024;
   const max_missed_messages = 1;
-  const timeout = 50;
+  const timeout = 200;
 
   let data = [];
 
-  await request_adc_readings(port, n);
+  await request_adc_readings(port);
 
   let messages = parse_with_delimiter(read_from(port, timeout), uint32_to_bytes(ADC_READOUT));
 
@@ -134,11 +171,6 @@ async function * stream_adc_readouts(port) {
     }
 
     if (data.length % 64 === 0) yield data;
-
-    if (data.length >= n) {
-      yield data;
-      break;
-    }
   }
 
   yield data;
@@ -149,12 +181,12 @@ async function * stream_adc_readouts(port) {
 ```js
 
 
-async function request_adc_readings(port, n){
+async function request_adc_readings(port){
   let writer = port.writable.getWriter();
   let buffer = new Uint8Array(8);
   let view = new DataView(buffer.buffer);
   view.setUint32(0, GET_ADC_READOUTS);
-  view.setUint32(4, n);
+  view.setUint32(4, 0);
   await writer.write(buffer);
   writer.releaseLock();
 }
@@ -224,5 +256,10 @@ async function * parse_with_delimiter(message_generator, delimiter){
       buffer = buffer.slice(delimiterIndex + delimiter.length);
     }
   }
+  yield buffer;
 }
+```
+
+```js
+import {html} from "htl";
 ```
