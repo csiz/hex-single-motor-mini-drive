@@ -1,18 +1,15 @@
-#include <stdlib.h>
-#include <math.h>
+#include "app_main.hpp"
+#include "utils.hpp"
+#include "io.hpp"
+#include "motor_control.hpp"
+#include "data.hpp"
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
 #include <usbd_cdc_if.h>
 
-#include "app_main.hpp"
-#include "io.hpp"
-#include "interrupts.hpp"
-#include "utils.hpp"
-#include "motor_control.hpp"
-
-const uint32_t ADC_READOUT = 0x80202020;
-const uint32_t GET_ADC_READOUTS = 0x80202021;
+#include <stdlib.h>
+#include <math.h>
 
 
 
@@ -27,9 +24,6 @@ float tim2_cc1_rate = 0.0f;
 
 uint32_t adc_updates_to_send = 0;
 uint32_t adc_updates_index = 0;
-size_t usb_misses = 0;
-
-
 
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
@@ -40,7 +34,7 @@ size_t usb_misses = 0;
 
 
 void app_init() {
-    interrupt_init();
+    data_init();
 
     // Setup PWM settings.
     LL_TIM_SetAutoReload(TIM1, PWM_AUTORELOAD); // 72MHz / 1536 / 2 = 23.4KHz
@@ -158,7 +152,8 @@ void app_init() {
     // Enable LED outputs: TIM2_CH4, TIM3_CH1, TIM3_CH2.
     enable_LED_channels();
 
-    init_motor_position();
+    // Get initial hall sensor state.
+    read_motor_hall_sensors();
 }
 
 
@@ -237,4 +232,5 @@ void app_tick() {
 
 void show_error(){
     set_RED_LED(0xFF);
+    Error_Handler();
 }
