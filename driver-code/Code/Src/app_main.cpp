@@ -29,16 +29,8 @@ float tim2_cc1_rate = 0.0f;
 // won't spin the motor at all.
 
 
-
-
-void app_init() {
-    data_init();
-
-    // Setup PWM settings.
-    LL_TIM_SetAutoReload(TIM1, PWM_AUTORELOAD); // 72MHz / 1536 / 2 = 23.4KHz
-
-    // ### Setup ADC for reading motor phase currents.
-    //
+// Setup ADC for reading motor phase currents.
+void adc_init(){
     // We use the ADC1 and ADC2 in simulatenous mode to read the motor phase currents
     // a short time after we turn on the mosfets during each PWM cycle (the motors
     // are driven by TIM1). When the ADC is triggered in injected mode both ADC modules 
@@ -75,10 +67,11 @@ void app_init() {
     // Start ADC conversions from the external trigger in TIM1.
     LL_ADC_INJ_StartConversionExtTrig(ADC1, LL_ADC_INJ_TRIG_EXT_RISING);
     LL_ADC_INJ_StartConversionExtTrig(ADC2, LL_ADC_INJ_TRIG_EXT_RISING);
+}
 
-    
-    // ### Setup TIM1 for motor control.
-    //
+// Select which interrupts to handle.
+void interrupts_init(){
+
     // TIM1 is used to generate the PWM signals for the motor phases, and to trigger the ADC.
     // 
     // Note that we don't need to set dead-time at this point; the gate driver FD6288T&Q has a 
@@ -117,7 +110,10 @@ void app_init() {
     // Don't allow TIM1 commutations to be triggered by TIM2 hall sensor toggles.
     LL_TIM_CC_SetUpdate(TIM1, LL_TIM_CCUPDATESOURCE_COMG_ONLY);
     
+}
 
+void enable_timers(){
+       
     // Reinitialize the timers; reset the counters and update registers. Because the timers
     // are setup with preload registers the values we write to them are stored in shadow registers
     // and only applied when the update event occurs (to any individual PWM cycle consistent). We
@@ -146,6 +142,22 @@ void app_init() {
 
     // Enable TIM2 channels 1 as the hall sensor timer between commutations.
     LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
+}
+
+void app_init() {
+    // Setup PWM settings.
+    LL_TIM_SetAutoReload(TIM1, PWM_AUTORELOAD); // 72MHz / 1536 / 2 = 23.4KHz
+
+    // Set which interrupts to handle.
+    interrupts_init();
+    
+    // Setup the ADC for reading motor phase currents, temperature and voltage.
+    // This function will run an initial calibration of the chip's ADCs (takes a few ms).
+    adc_init();
+    
+    // Enable the timers: TIM1, TIM2, TIM3;
+    // and ouputs: TIM1_CH1, TIM1_CH1N, TIM1_CH2, TIM1_CH2N, TIM1_CH3, TIM1_CH3N, TIM1_CH4, TIM2_CH1.
+    enable_timers();
 
     // Enable LED outputs: TIM2_CH4, TIM3_CH1, TIM3_CH2.
     enable_LED_channels();
@@ -173,58 +185,53 @@ void write_state_readout(uint8_t* buffer, const UpdateReadout& readout) {
     write_uint16(buffer + offset, readout.ref_readout);
 }
 
-void app_tick() {
-    uint32_t milliseconds = HAL_GetTick();
-    float seconds = milliseconds / 1000.f;
-    
-    main_loop_update_number += 1;
-    main_loop_update_rate = main_loop_update_number / seconds;
-
-    adc_update_rate = adc_update_number / seconds;
-    tim1_update_rate = tim1_update_number / seconds;
-    tim2_update_rate = tim2_update_number / seconds;
-    tim2_cc1_rate = tim2_cc1_number / seconds;
-
-    // Overwrite history only when we're not sending data.
-    bool overwrite_adc_history = state_updates_to_send == 0;
-    move_state_readouts(overwrite_adc_history);
-
-    update_motor_phase_currents();
-
-    if (driver_state == DriverState::DRIVE) {
-        update_motor_control();
-        motor_register_update_needed = true;
-    }
-
-    set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
-
+void usb_tick(){
+    // Receive data
+    // ------------
     uint8_t usb_command[8] = {0};
 
     size_t bytes_received = usb_com_recv(usb_command, 8);
+
+    // Check if we have received a full command; or any data at all.
     if (bytes_received == 8) {
-        uint32_t command = usb_command[3] | (usb_command[2] << 8) | (usb_command[1] << 16) | (usb_command[0] << 24);
-        uint32_t data = usb_command[7] | (usb_command[6] << 8) | (usb_command[5] << 16) | (usb_command[4] << 24);
+        // The first number is the command code, the second is the data; if any.
+        const uint32_t command = read_uint32(&usb_command[0]);
+        const uint32_t data = read_uint32(&usb_command[4]);
+
         UNUSED(data);
 
         switch (command) {
+            // Send the whole history buffer over USB.
             case GET_STATE_READOUTS:
                 state_updates_to_send = HISTORY_SIZE;
                 break;
+            // Turn off the motor driver.
             case SET_STATE_OFF:
                 driver_state = DriverState::OFF;
                 motor_register_update_needed = true;
                 break;
+                
+            // Measure the motor phase currents.
             case SET_STATE_MEASURE_CURRENT:
                 state_updates_to_send = 0;
                 driver_state = DriverState::MEASURE_CURRENT;
+                enable_motor_u_output();
+                enable_motor_v_output();
+                enable_motor_w_output();
                 motor_register_update_needed = true;
                 break;
+
+            // Drive the motor.
             case SET_STATE_DRIVE:
                 driver_state = DriverState::DRIVE;
                 break;
         }
     }
 
+    // Send data
+    // ---------
+
+    // Queue the state readouts on the USB buffer.
     while (state_updates_to_send > 0) {
         const UpdateReadout readout = state_readouts[state_readouts_index];
 
@@ -242,6 +249,36 @@ void app_tick() {
 
     // Send USB data from the buffer.
     usb_com_send();
+}
+
+void app_tick() {
+    // Update timing information.
+    uint32_t milliseconds = HAL_GetTick();
+    float seconds = milliseconds / 1000.f;
+    
+    main_loop_update_number += 1;
+    main_loop_update_rate = main_loop_update_number / seconds;
+
+    adc_update_rate = adc_update_number / seconds;
+    tim1_update_rate = tim1_update_number / seconds;
+    tim2_update_rate = tim2_update_number / seconds;
+    tim2_cc1_rate = tim2_cc1_number / seconds;
+
+    // Process the latest ADC readouts.
+    calculate_motor_phase_currents();
+
+    // Show the current hall sensor state on the LEDs.
+    set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
+
+    // Update motor control registers only if actively driving.
+    // Note: The registers need to be left unchanged whilst running in the calibration modes.
+    if (driver_state == DriverState::DRIVE) {
+        update_motor_control();
+        motor_register_update_needed = true;
+    }
+
+    // Handle USB communication.
+    usb_tick();
 }
 
 

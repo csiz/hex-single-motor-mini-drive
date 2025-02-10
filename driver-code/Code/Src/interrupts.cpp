@@ -20,24 +20,28 @@
 void adc_interrupt_handler(){
     const bool injected_conversions_complete = LL_ADC_IsActiveFlag_JEOS(ADC1);
     if (injected_conversions_complete) {
-        UpdateReadout readout;
-        readout.readout_number = adc_update_number;
+        state_readout.readout_number = adc_update_number;
 
         // U and W phases are measured at the same time, followed by V and the reference voltage.
         // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
         // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
         // 16ticks after the update event (PWM counter resets). This is a delay of 16/72MHz = 222ns.
         
-        readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+        state_readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
         // Note: in the v0 board the V phase shunt is connected in reverse to the current sense amplifier.
-        readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
+        state_readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
 
-        readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
-        readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
+        state_readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+        state_readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
 
-        readout.pwm_commands = motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
+        state_readout.pwm_commands = motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
 
-        xQueueSendToBackFromISR(state_queue, &readout, NULL);
+        // Only write to the history buffer if we're not sending updates. Sending data over USB
+        // uses too much time and we'll miss ADC updates so recording more data is unreliable.
+        if (state_updates_to_send == 0) {
+            state_readouts[state_readouts_index] = state_readout;
+            state_readouts_index = (state_readouts_index + 1) % HISTORY_SIZE;
+        }
 
         adc_update_number += 1;
         LL_ADC_ClearFlag_JEOS(ADC1);

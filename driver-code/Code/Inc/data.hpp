@@ -1,7 +1,10 @@
 #pragma once
 
-#include <FreeRTOS.h>
-#include <queue.h>
+#include <cstdint>
+#include <cstddef>
+
+// Interface command codes
+// -----------------------
 
 const uint32_t STATE_READOUT = 0x80202020;
 const uint32_t GET_STATE_READOUTS = 0x80202021;
@@ -9,12 +12,13 @@ const uint32_t SET_STATE_OFF = 0x80202030;
 const uint32_t SET_STATE_MEASURE_CURRENT = 0x80202031;
 const uint32_t SET_STATE_DRIVE = 0x80202032;
 
-void data_init();
-
 extern uint32_t adc_update_number;
 extern uint32_t tim1_update_number;
 extern uint32_t tim2_update_number;
 extern uint32_t tim2_cc1_number;
+
+// Electrical state
+// ----------------
 
 struct UpdateReadout{
     uint32_t readout_number;
@@ -24,25 +28,15 @@ struct UpdateReadout{
     uint16_t w_readout;
     uint16_t ref_readout;
 };
-#define HISTORY_SIZE 384
-#define STATE_QUEUE_SIZE 32
-#define STATE_ITEMSIZE sizeof(struct UpdateReadout)
 
+extern UpdateReadout state_readout;
+const size_t HISTORY_SIZE = 420;
+extern UpdateReadout state_readouts[HISTORY_SIZE];
+extern size_t state_readouts_index;
+extern uint32_t state_updates_to_send;
 
-
-extern QueueHandle_t state_queue;
-extern StaticQueue_t state_queue_storage;
-extern uint8_t state_queue_buffer[STATE_QUEUE_SIZE * STATE_ITEMSIZE];
-
-extern struct UpdateReadout state_readouts[HISTORY_SIZE];
-extern uint32_t state_readouts_index;
-extern uint32_t state_processed_number;
-
-size_t move_state_readouts(bool overwrite);
-
-extern volatile uint32_t state_updates_to_send;
-extern volatile uint32_t state_updates_index;
-
+// Hall sensors
+// ------------
 
 extern bool hall_1, hall_2, hall_3;
 
@@ -54,15 +48,12 @@ extern uint8_t motor_electric_phase;
 extern bool hall_sensor_valid;
 extern uint8_t hall_state;
 
-void read_motor_hall_sensors();
-
-
-// Computed motor phase currents.
-extern float current_u, current_v, current_w;
-
 
 // Motor Currents
 // --------------
+
+// Computed motor phase currents.
+extern float current_u, current_v, current_w;
 
 // Voltage reference for the ADC; it's a filtered 3.3V that power the board.
 const float adc_voltage_reference = 3.3;
@@ -79,9 +70,6 @@ const uint16_t adc_max_value = 0xFFF;
 // The minus sign is because of the way the INA4181 is wired up...
 const float current_conversion = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
-// Compute motor phase currents using latest ADC readouts.
-void update_motor_phase_currents();
-
 
 // Motor control
 // -------------
@@ -91,8 +79,6 @@ enum struct DriverState {
     DRIVE,
     MEASURE_CURRENT,
 };
-
-extern volatile bool motor_register_update_needed;
 
 const uint16_t PWM_AUTORELOAD = 1535;
 const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
@@ -104,16 +90,12 @@ const uint16_t max_pwm_duty = PWM_BASE - min_bootstrap_duty; // 1024/72MHz = 14.
 // Sentinel value to indicate that the phase output should be floating.
 const uint16_t set_floating_duty = PWM_BASE - 1;
 
-extern volatile DriverState driver_state;
-
 // Motor control state
+extern volatile DriverState driver_state;
 extern volatile uint16_t motor_u_pwm_duty;
 extern volatile uint16_t motor_v_pwm_duty;
 extern volatile uint16_t motor_w_pwm_duty;
-
 extern volatile bool motor_register_update_needed;
-
-
 
 
 // Motor voltage fraction for the 6-step commutation.
@@ -125,6 +107,9 @@ const float motor_voltage_table[6][3] = {
     {1.0, 0.0, 0.5},
     {1.0, 0.5, 0.0}
 };
+
+// Calibration procedures
+// ----------------------
 
 const uint16_t measure_current_table[12][3] = {
     {0,            0,            0},
@@ -146,4 +131,13 @@ const size_t measure_current_steps = HISTORY_SIZE / 12;
 extern size_t measure_current_stage;
 extern size_t measure_current_counter;
 
+
+// Functions
+// ---------
+
+// Read the hall sensors and update the motor rotation angle.
+void read_motor_hall_sensors();
+
+// Compute motor phase currents using latest ADC readouts.
+void calculate_motor_phase_currents();
 

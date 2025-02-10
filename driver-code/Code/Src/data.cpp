@@ -3,47 +3,21 @@
 
 #include <stm32f1xx_ll_gpio.h>
 
-
-void data_init(){
-    state_queue = xQueueCreateStatic(STATE_QUEUE_SIZE, STATE_ITEMSIZE, state_queue_buffer, &state_queue_storage);
-}
-
+// Timing data
 uint32_t adc_update_number = 0;
 uint32_t tim1_update_number = 0;
 uint32_t tim2_update_number = 0;
 uint32_t tim2_cc1_number = 0;
 
-QueueHandle_t state_queue = {};
-StaticQueue_t state_queue_storage = {};
-uint8_t state_queue_buffer[STATE_QUEUE_SIZE * STATE_ITEMSIZE] = {0};
-UpdateReadout state_readouts[HISTORY_SIZE] = {0};
-uint32_t state_readouts_index = 0;
-uint32_t state_processed_number = 0;
 
-size_t move_state_readouts(bool overwrite){
-    UpdateReadout readout;
-    size_t values_read = 0;
-    
-    for (size_t i = 0; i < STATE_QUEUE_SIZE; i++) {
-        if (xQueueReceive(state_queue, &readout, 0) == pdFALSE) break;
-        values_read += 1;
-
-        if (overwrite) {
-            state_readouts[state_readouts_index] = readout;
-            state_readouts_index = (state_readouts_index + 1) % HISTORY_SIZE;
-        }
-    }
-
-    state_processed_number += values_read;
-    
-    return values_read;
-}
+// Electrical state
+UpdateReadout state_readout = {};
+UpdateReadout state_readouts[HISTORY_SIZE] = {};
+size_t state_readouts_index = 0;
+uint32_t state_updates_to_send = 0;
 
 
-volatile uint32_t state_updates_to_send = 0;
-volatile uint32_t state_updates_index = 0;
-
-
+// Hall sensors
 bool hall_1 = false, hall_2 = false, hall_3 = false;
 
 uint8_t motor_electric_angle = 0;
@@ -52,6 +26,24 @@ bool hall_sensor_valid = false;
 uint8_t hall_state = 0;
 
 
+// Phase currents
+float current_u = 0.0, current_v = 0.0, current_w = 0.0;
+
+
+// Motor control state
+volatile DriverState driver_state = DriverState::DRIVE;
+volatile uint16_t motor_u_pwm_duty = 0;
+volatile uint16_t motor_v_pwm_duty = 0;
+volatile uint16_t motor_w_pwm_duty = 0;
+volatile bool motor_register_update_needed = false;
+
+
+// Calibration procedures
+size_t measure_current_stage = 0;
+size_t measure_current_counter = 0;
+
+
+// Functions
 
 void read_motor_hall_sensors(){
 	uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
@@ -106,24 +98,11 @@ void read_motor_hall_sensors(){
 }
 
 
-float current_u = 0.0, current_v = 0.0, current_w = 0.0;
-
-volatile DriverState driver_state = DriverState::DRIVE;
-
-// Motor control state
-volatile uint16_t motor_u_pwm_duty = 0;
-volatile uint16_t motor_v_pwm_duty = 0;
-volatile uint16_t motor_w_pwm_duty = 0;
-
-volatile bool motor_register_update_needed = false;
-
-size_t measure_current_stage = 0;
-size_t measure_current_counter = 0;
-
-
-void update_motor_phase_currents(){
-    // Get the latest readout.
-    const UpdateReadout readout = state_readouts[(state_readouts_index-1+HISTORY_SIZE)%HISTORY_SIZE];
+void calculate_motor_phase_currents(){
+    // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
+    NVIC_DisableIRQ(ADC1_2_IRQn);
+    const UpdateReadout readout = state_readout;
+    NVIC_EnableIRQ(ADC1_2_IRQn);
 
     const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
     const int32_t readout_diff_v = readout.v_readout - readout.ref_readout;

@@ -11,9 +11,6 @@
 #include <cmath>
 
 
-
-
-
 void disable_motor_ouputs(){
     disable_motor_u_output();
     disable_motor_v_output();
@@ -58,10 +55,11 @@ void update_motor_control(){
             motor_w_pwm_duty = voltage_phase_w * pwm_fraction * max_pwm_duty;
         }
     } else {
+        disable_motor_ouputs();
         motor_u_pwm_duty = set_floating_duty;
         motor_v_pwm_duty = set_floating_duty;
         motor_w_pwm_duty = set_floating_duty;
-        disable_motor_ouputs();
+        driver_state = DriverState::OFF;
     }
 }
 
@@ -93,9 +91,7 @@ void measure_current(){
     motor_v_pwm_duty = measure_current_table[measure_current_stage][1];
     motor_w_pwm_duty = measure_current_table[measure_current_stage][2];
 
-    enable_motor_u_output();
-    enable_motor_v_output();
-    enable_motor_w_output();
+
     set_motor_u_pwm_duty_cycle(motor_u_pwm_duty);
     set_motor_v_pwm_duty_cycle(motor_v_pwm_duty);
     set_motor_w_pwm_duty_cycle(motor_w_pwm_duty);
