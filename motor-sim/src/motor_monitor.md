@@ -37,19 +37,11 @@ const port = view(Inputs.button(
 
 
 ```js
-
-
 const data_stream = function(){
   if(port && port.readable) {
     return view(Inputs.button(
       [
-        ["Read ADC", async function(){
-          await send_command(port, GET_STATE_READOUTS);
-          return stream_state_readouts({port, timeout: 50});
-        }],
-        ["Stop", async function(){
-          await send_command(port, SET_STATE_OFF);
-          await wait(100);
+        ["ADC", async function(){
           await send_command(port, GET_STATE_READOUTS);
           return stream_state_readouts({port, timeout: 50});
         }],
@@ -57,20 +49,36 @@ const data_stream = function(){
           await send_command(port, SET_STATE_MEASURE_CURRENT);
           return stream_state_readouts({port, timeout: 500});
         }],
-        ["Drive", async function(){
-          await send_command(port, SET_STATE_DRIVE);
-          await wait(100);
-          await send_command(port, GET_STATE_READOUTS);
-          return stream_state_readouts({port, timeout: 50});
-        }],
       ],
-      {label: "Send commands", value: undefined},
+      {label: "Read data", value: undefined},
     ));
   }
   
   return undefined;
 }();
+
+const commands = function(){
+  if(port && port.writable) {
+    return view(Inputs.button(
+      [
+        ["Stop", async function(){
+          await send_command(port, SET_STATE_OFF);
+        }],
+        ["Drive", async function(){
+          await send_command(port, SET_STATE_DRIVE);
+        }],
+      ],
+      {label: "Commands", value: undefined},
+    ));
+  }
+  
+  return undefined;
+}();
+
 ```
+
+
+
 
 ```js
 const data = async function*(){
@@ -85,8 +93,33 @@ const data = async function*(){
 
 Motor driver phase currents
 ----------------------------
+```js
+const colors = {
+  u_readout: "cyan",
+  v_readout: "orangered",
+  w_readout: "purple",
+  ref_readout: "gray",
+  sum: "black",
+  u_pwm: "cyan",
+  v_pwm: "orangered",
+  w_pwm: "purple",
+};
+
+const data_to_plot = ["u_readout", "v_readout", "w_readout", "ref_readout", "sum", "u_pwm", "v_pwm", "w_pwm"];
+
+const checkboxes = view(Inputs.checkbox(data_to_plot, {
+  label: "Display:", 
+  value: data_to_plot, 
+  format: (d) => html`<span style="color: ${colors[d]}">${d}</span>`,
+}));
+```
+
 
 ```js
+const current_conversion = 0.004029304;
+const time_conversion = 1/23400 * 1000;
+
+
 const currents_plots = function(){
   if (!data) {
     return html`Not connected...`;
@@ -96,8 +129,7 @@ const currents_plots = function(){
 
   const computed_data = data.map((d) => {
     const readout_number = d.readout_number - data[0].readout_number;
-    const time = readout_number * 1/23200 * 1000;
-    const current_conversion = 0.004029304;
+    const time = readout_number * time_conversion;
 
     let u_readout = -current_conversion * (d.u_readout - d.ref_readout);
     u_readout = u_readout > 0 ? u_readout * 1.0 : u_readout * 1.0;
@@ -115,26 +147,38 @@ const currents_plots = function(){
     return {...d, u_pwm, v_pwm, w_pwm, u_readout, v_readout, w_readout, ref_readout, time};
   });
 
+  const current_lines = {
+    u_readout: Plot.line(computed_data, {x: "time", y: 'u_readout', stroke: colors.u_readout, label: 'adc 0', curve: 'step'}),
+    v_readout: Plot.line(computed_data, {x: "time", y: 'v_readout', stroke: colors.v_readout, label: 'adc 1', curve: 'step'}),
+    w_readout: Plot.line(computed_data, {x: "time", y: 'w_readout', stroke: colors.w_readout, label: 'adc 2', curve: 'step'}),
+    sum: Plot.line(computed_data, {x: "time", y: (d) => d.u_readout + d.v_readout + d.w_readout, stroke: colors.sum, label: 'sum', curve: 'step'}),
+    ref_readout: Plot.line(computed_data, {x: "time", y: 'ref_readout', stroke: colors.ref_readout, label: 'ref', curve: 'step'}),
+  };
+
+  const pwm_lines = {
+    u_pwm: Plot.line(computed_data, {x: "time", y: 'u_pwm', stroke: colors.u_pwm, label: 'pwm 0', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
+    v_pwm: Plot.line(computed_data, {x: "time", y: 'v_pwm', stroke: colors.v_pwm, label: 'pwm 1', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
+    w_pwm: Plot.line(computed_data, {x: "time", y: 'w_pwm', stroke: colors.w_pwm, label: 'pwm 2', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
+  };
+
+  const selected_current_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => current_lines[key]);
+  const selected_pwm_lines = Object.keys(pwm_lines).filter((key) => checkboxes.includes(key)).map((key) => pwm_lines[key]);
+
   return [
     Plot.plot({
       marks: [
-        Plot.line(computed_data, {x: "time", y: 'u_readout', stroke: 'cyan', label: 'adc 0', curve: 'step'}),
-        Plot.line(computed_data, {x: "time", y: 'v_readout', stroke: 'orangered', label: 'adc 1', curve: 'step'}),
-        Plot.line(computed_data, {x: "time", y: 'w_readout', stroke: 'purple', label: 'adc 2', curve: 'step'}),
-        Plot.line(computed_data, {x: "time", y: (d) => d.u_readout + d.v_readout + d.w_readout, stroke: 'black', label: 'sum', curve: 'step'}),
-        Plot.line(computed_data, {x: "time", y: 'ref_readout', stroke: 'gray', label: 'ref', curve: 'step'}),
-        Plot.gridY({interval: 1, stroke: 'black', strokeWidth : 1}),
-        Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+        ...selected_current_lines,
+        Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+        Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
       ],
       x: {label: "Time (ms)"},
       width: 1200, height: 500,
     }),
     Plot.plot({
       marks: [
-        Plot.line(computed_data, {x: "time", y: 'u_pwm', stroke: 'cyan', label: 'pwm 0', curve: 'step', strokeDasharray: "2 9", strokeWidth: 3}),
-        Plot.line(computed_data, {x: "time", y: 'v_pwm', stroke: 'orangered', label: 'pwm 1', curve: 'step', strokeDasharray: "2 7", strokeWidth: 3}),
-        Plot.line(computed_data, {x: "time", y: 'w_pwm', stroke: 'purple', label: 'pwm 2', curve: 'step', strokeDasharray: "2 11", strokeWidth: 3}),
+        ...selected_pwm_lines,
         Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+        Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
       ],
       x: {label: "Time (ms)"},
       width: 1200, height: 150,
@@ -212,7 +256,9 @@ async function * stream_state_readouts({port, timeout = 200, max_missed_messages
 
     if (data.length > 2) {
       if ((data[data.length - 1].readout_number - data[data.length - 2].readout_number) > max_missed_messages){
-        data = data.slice(-1);
+        data = data.slice(0, -1);
+        // Give up reading the rest.
+        break;
       }
     }
 
