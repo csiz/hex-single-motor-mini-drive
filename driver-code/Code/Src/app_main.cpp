@@ -22,8 +22,6 @@ float tim1_update_rate = 0.0f;
 float tim2_update_rate = 0.0f;
 float tim2_cc1_rate = 0.0f;
 
-uint32_t adc_updates_to_send = 0;
-uint32_t adc_updates_index = 0;
 
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
@@ -158,11 +156,13 @@ void app_init() {
 
 
 
-void write_adc_readout(uint8_t* buffer, const UpdateReadout& readout) {
+void write_state_readout(uint8_t* buffer, const UpdateReadout& readout) {
     size_t offset = 0;
-    write_uint32(buffer + offset, ADC_READOUT);
+    write_uint32(buffer + offset, STATE_READOUT);
     offset += 4;
     write_uint32(buffer + offset, readout.readout_number);
+    offset += 4;
+    write_uint32(buffer + offset, readout.pwm_commands);
     offset += 4;
     write_uint16(buffer + offset, readout.u_readout);
     offset += 2;
@@ -186,12 +186,15 @@ void app_tick() {
     tim2_cc1_rate = tim2_cc1_number / seconds;
 
     // Overwrite history only when we're not sending data.
-    bool overwrite_adc_history = adc_updates_to_send == 0;
-    move_adc_readouts(overwrite_adc_history);
+    bool overwrite_adc_history = state_updates_to_send == 0;
+    move_state_readouts(overwrite_adc_history);
 
     update_motor_phase_currents();
 
-    update_motor_control();
+    if (driver_state == DriverState::DRIVE) {
+        update_motor_control();
+        motor_register_update_needed = true;
+    }
 
     set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
 
@@ -201,25 +204,37 @@ void app_tick() {
     if (bytes_received == 8) {
         uint32_t command = usb_command[3] | (usb_command[2] << 8) | (usb_command[1] << 16) | (usb_command[0] << 24);
         uint32_t data = usb_command[7] | (usb_command[6] << 8) | (usb_command[5] << 16) | (usb_command[4] << 24);
+        UNUSED(data);
 
         switch (command) {
-            case GET_ADC_READOUTS:
-                adc_updates_to_send = HISTORY_SIZE;
-                UNUSED(data);
+            case GET_STATE_READOUTS:
+                state_updates_to_send = HISTORY_SIZE;
+                break;
+            case SET_STATE_OFF:
+                driver_state = DriverState::OFF;
+                motor_register_update_needed = true;
+                break;
+            case SET_STATE_MEASURE_CURRENT:
+                state_updates_to_send = 0;
+                driver_state = DriverState::MEASURE_CURRENT;
+                motor_register_update_needed = true;
+                break;
+            case SET_STATE_DRIVE:
+                driver_state = DriverState::DRIVE;
                 break;
         }
     }
 
-    while (adc_updates_to_send > 0) {
-        const UpdateReadout readout = adc_readouts[adc_readouts_index];
+    while (state_updates_to_send > 0) {
+        const UpdateReadout readout = state_readouts[state_readouts_index];
 
         // Send the readout to the host.
-        uint8_t readout_data[16] = {0};
-        write_adc_readout(readout_data, readout);
+        uint8_t readout_data[20] = {0};
+        write_state_readout(readout_data, readout);
 
-        if(usb_com_queue_send(readout_data, 16) == 0){
-            adc_updates_to_send -= 1;
-            adc_readouts_index = (adc_readouts_index + 1) % HISTORY_SIZE;
+        if(usb_com_queue_send(readout_data, 20) == 0){
+            state_updates_to_send -= 1;
+            state_readouts_index = (state_readouts_index + 1) % HISTORY_SIZE;
         }else {
             break;
         }

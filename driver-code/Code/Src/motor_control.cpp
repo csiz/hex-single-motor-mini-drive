@@ -5,6 +5,9 @@
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
 
+#include <FreeRTOS.h>
+#include <queue.h>
+
 #include <cmath>
 
 
@@ -15,7 +18,12 @@ void disable_motor_ouputs(){
     disable_motor_u_output();
     disable_motor_v_output();
     disable_motor_w_output();
+
+    motor_u_pwm_duty = set_floating_duty;
+    motor_v_pwm_duty = set_floating_duty;
+    motor_w_pwm_duty = set_floating_duty;
 }
+
 
 bool check_overcurrent(){
     const float overcurrent_threshold = 5.0;
@@ -33,48 +41,46 @@ void update_motor_control(){
         const float voltage_phase_w = motor_voltage_table[motor_electric_phase][2];
 
         if (voltage_phase_u == 0.5) {
-            motor_u_pwm_duty = floating_pwm_duty;
+            motor_u_pwm_duty = set_floating_duty;
         } else {
             motor_u_pwm_duty = voltage_phase_u * pwm_fraction * max_pwm_duty;
         }
 
         if (voltage_phase_v == 0.5) {
-            motor_v_pwm_duty = floating_pwm_duty;
+            motor_v_pwm_duty = set_floating_duty;
         } else {
             motor_v_pwm_duty = voltage_phase_v * pwm_fraction * max_pwm_duty;
         }
 
         if (voltage_phase_w == 0.5) {
-            motor_w_pwm_duty = floating_pwm_duty;
+            motor_w_pwm_duty = set_floating_duty;
         } else {
             motor_w_pwm_duty = voltage_phase_w * pwm_fraction * max_pwm_duty;
         }
     } else {
-        motor_u_pwm_duty = floating_pwm_duty;
-        motor_v_pwm_duty = floating_pwm_duty;
-        motor_w_pwm_duty = floating_pwm_duty;
+        motor_u_pwm_duty = set_floating_duty;
+        motor_v_pwm_duty = set_floating_duty;
+        motor_w_pwm_duty = set_floating_duty;
         disable_motor_ouputs();
     }
-
-    motor_register_update_needed = true;
 }
 
 void drive_motor(){
-    if(motor_u_pwm_duty == floating_pwm_duty){
+    if(motor_u_pwm_duty == set_floating_duty){
         disable_motor_u_output();
     } else {
         enable_motor_u_output();
         set_motor_u_pwm_duty_cycle(motor_u_pwm_duty);
     }
 
-    if(motor_v_pwm_duty == floating_pwm_duty){
+    if(motor_v_pwm_duty == set_floating_duty){
         disable_motor_v_output();
     } else {
         enable_motor_v_output();
         set_motor_v_pwm_duty_cycle(motor_v_pwm_duty);
     }
 
-    if(motor_w_pwm_duty == floating_pwm_duty){
+    if(motor_w_pwm_duty == set_floating_duty){
         disable_motor_w_output();
     } else {
         enable_motor_w_output();
@@ -83,13 +89,18 @@ void drive_motor(){
 }
 
 void measure_current(){
-    const uint16_t u_duty = measure_current_table[measure_current_stage][0];
-    const uint16_t v_duty = measure_current_table[measure_current_stage][1];
-    const uint16_t w_duty = measure_current_table[measure_current_stage][2];
+    motor_u_pwm_duty = measure_current_table[measure_current_stage][0];
+    motor_v_pwm_duty = measure_current_table[measure_current_stage][1];
+    motor_w_pwm_duty = measure_current_table[measure_current_stage][2];
 
-    set_motor_u_pwm_duty_cycle(u_duty);
-    set_motor_v_pwm_duty_cycle(v_duty);
-    set_motor_w_pwm_duty_cycle(w_duty);
+    enable_motor_u_output();
+    enable_motor_v_output();
+    enable_motor_w_output();
+    set_motor_u_pwm_duty_cycle(motor_u_pwm_duty);
+    set_motor_v_pwm_duty_cycle(motor_v_pwm_duty);
+    set_motor_w_pwm_duty_cycle(motor_w_pwm_duty);
+
+
 
     measure_current_counter += 1;
     if (measure_current_counter >= measure_current_steps) {
@@ -98,8 +109,13 @@ void measure_current(){
     }
 
     if (measure_current_stage >= 12) {
+        measure_current_stage = 0;
+        measure_current_counter = 0;
         driver_state = DriverState::OFF;
+        state_updates_to_send = HISTORY_SIZE;
     }
+
+    motor_register_update_needed = true;
 }
 
 void update_motor_control_registers(){

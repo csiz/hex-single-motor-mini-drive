@@ -35,7 +35,9 @@ void adc_interrupt_handler(){
         readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
         readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
 
-        xQueueSendToBackFromISR(adc_queue, &readout, NULL);
+        readout.pwm_commands = motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
+
+        xQueueSendToBackFromISR(state_queue, &readout, NULL);
 
         adc_update_number += 1;
         LL_ADC_ClearFlag_JEOS(ADC1);

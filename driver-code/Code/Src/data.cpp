@@ -5,7 +5,7 @@
 
 
 void data_init(){
-    adc_queue = xQueueCreateStatic(ADC_QUEUE_SIZE, ADC_ITEMSIZE, adc_queue_buffer, &adc_queue_storage);
+    state_queue = xQueueCreateStatic(STATE_QUEUE_SIZE, STATE_ITEMSIZE, state_queue_buffer, &state_queue_storage);
 }
 
 uint32_t adc_update_number = 0;
@@ -13,31 +13,35 @@ uint32_t tim1_update_number = 0;
 uint32_t tim2_update_number = 0;
 uint32_t tim2_cc1_number = 0;
 
-QueueHandle_t adc_queue = {};
-StaticQueue_t adc_queue_storage = {};
-uint8_t adc_queue_buffer[ADC_QUEUE_SIZE * ADC_ITEMSIZE] = {0};
-UpdateReadout adc_readouts[HISTORY_SIZE] = {0};
-uint32_t adc_readouts_index = 0;
-uint32_t adc_processed_number = 0;
+QueueHandle_t state_queue = {};
+StaticQueue_t state_queue_storage = {};
+uint8_t state_queue_buffer[STATE_QUEUE_SIZE * STATE_ITEMSIZE] = {0};
+UpdateReadout state_readouts[HISTORY_SIZE] = {0};
+uint32_t state_readouts_index = 0;
+uint32_t state_processed_number = 0;
 
-size_t move_adc_readouts(bool overwrite){
+size_t move_state_readouts(bool overwrite){
     UpdateReadout readout;
     size_t values_read = 0;
     
-    for (size_t i = 0; i < ADC_QUEUE_SIZE; i++) {
-        if (xQueueReceive(adc_queue, &readout, 0) == pdFALSE) break;
+    for (size_t i = 0; i < STATE_QUEUE_SIZE; i++) {
+        if (xQueueReceive(state_queue, &readout, 0) == pdFALSE) break;
         values_read += 1;
 
         if (overwrite) {
-            adc_readouts[adc_readouts_index] = readout;
-            adc_readouts_index = (adc_readouts_index + 1) % HISTORY_SIZE;
+            state_readouts[state_readouts_index] = readout;
+            state_readouts_index = (state_readouts_index + 1) % HISTORY_SIZE;
         }
     }
 
-    adc_processed_number += values_read;
+    state_processed_number += values_read;
     
     return values_read;
 }
+
+
+volatile uint32_t state_updates_to_send = 0;
+volatile uint32_t state_updates_index = 0;
 
 
 bool hall_1 = false, hall_2 = false, hall_3 = false;
@@ -104,12 +108,12 @@ void read_motor_hall_sensors(){
 
 float current_u = 0.0, current_v = 0.0, current_w = 0.0;
 
-DriverState driver_state = DriverState::DRIVE;
+volatile DriverState driver_state = DriverState::DRIVE;
 
 // Motor control state
-uint16_t motor_u_pwm_duty = 0;
-uint16_t motor_v_pwm_duty = 0;
-uint16_t motor_w_pwm_duty = 0;
+volatile uint16_t motor_u_pwm_duty = 0;
+volatile uint16_t motor_v_pwm_duty = 0;
+volatile uint16_t motor_w_pwm_duty = 0;
 
 volatile bool motor_register_update_needed = false;
 
@@ -119,7 +123,7 @@ size_t measure_current_counter = 0;
 
 void update_motor_phase_currents(){
     // Get the latest readout.
-    const UpdateReadout readout = adc_readouts[(adc_readouts_index-1+HISTORY_SIZE)%HISTORY_SIZE];
+    const UpdateReadout readout = state_readouts[(state_readouts_index-1+HISTORY_SIZE)%HISTORY_SIZE];
 
     const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
     const int32_t readout_diff_v = readout.v_readout - readout.ref_readout;

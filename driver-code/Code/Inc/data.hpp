@@ -3,9 +3,11 @@
 #include <FreeRTOS.h>
 #include <queue.h>
 
-const uint32_t ADC_READOUT = 0x80202020;
-const uint32_t GET_ADC_READOUTS = 0x80202021;
-
+const uint32_t STATE_READOUT = 0x80202020;
+const uint32_t GET_STATE_READOUTS = 0x80202021;
+const uint32_t SET_STATE_OFF = 0x80202030;
+const uint32_t SET_STATE_MEASURE_CURRENT = 0x80202031;
+const uint32_t SET_STATE_DRIVE = 0x80202032;
 
 void data_init();
 
@@ -23,21 +25,23 @@ struct UpdateReadout{
     uint16_t ref_readout;
 };
 #define HISTORY_SIZE 384
-#define ADC_QUEUE_SIZE 32
-#define ADC_ITEMSIZE sizeof(struct UpdateReadout)
+#define STATE_QUEUE_SIZE 32
+#define STATE_ITEMSIZE sizeof(struct UpdateReadout)
 
 
 
-extern QueueHandle_t adc_queue;
-extern StaticQueue_t adc_queue_storage;
-extern uint8_t adc_queue_buffer[ADC_QUEUE_SIZE * ADC_ITEMSIZE];
+extern QueueHandle_t state_queue;
+extern StaticQueue_t state_queue_storage;
+extern uint8_t state_queue_buffer[STATE_QUEUE_SIZE * STATE_ITEMSIZE];
 
-extern struct UpdateReadout adc_readouts[HISTORY_SIZE];
-extern uint32_t adc_readouts_index;
-extern uint32_t adc_processed_number;
+extern struct UpdateReadout state_readouts[HISTORY_SIZE];
+extern uint32_t state_readouts_index;
+extern uint32_t state_processed_number;
 
-size_t move_adc_readouts(bool overwrite);
+size_t move_state_readouts(bool overwrite);
 
+extern volatile uint32_t state_updates_to_send;
+extern volatile uint32_t state_updates_index;
 
 
 extern bool hall_1, hall_2, hall_3;
@@ -88,24 +92,24 @@ enum struct DriverState {
     MEASURE_CURRENT,
 };
 
-extern DriverState driver_state;
-
 extern volatile bool motor_register_update_needed;
 
-const uint32_t PWM_AUTORELOAD = 1535;
+const uint16_t PWM_AUTORELOAD = 1535;
+const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
 
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
 const uint16_t min_bootstrap_duty = 4; // 4/(72MHz) = 55.5ns
-const uint16_t max_pwm_duty = PWM_AUTORELOAD + 1 - min_bootstrap_duty; // 1024/72MHz = 14.2us
-const uint16_t floating_pwm_duty = 0b1000'0000'0000'0000;
+const uint16_t max_pwm_duty = PWM_BASE - min_bootstrap_duty; // 1024/72MHz = 14.2us
+// Sentinel value to indicate that the phase output should be floating.
+const uint16_t set_floating_duty = PWM_BASE - 1;
 
-extern DriverState driver_state;
+extern volatile DriverState driver_state;
 
 // Motor control state
-extern uint16_t motor_u_pwm_duty;
-extern uint16_t motor_v_pwm_duty;
-extern uint16_t motor_w_pwm_duty;
+extern volatile uint16_t motor_u_pwm_duty;
+extern volatile uint16_t motor_v_pwm_duty;
+extern volatile uint16_t motor_w_pwm_duty;
 
 extern volatile bool motor_register_update_needed;
 

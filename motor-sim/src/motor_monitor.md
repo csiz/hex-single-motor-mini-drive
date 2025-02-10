@@ -37,16 +37,31 @@ const port = view(Inputs.button(
 
 
 ```js
+
+
 const data_stream = function(){
   if(port && port.readable) {
     return view(Inputs.button(
       [
-        ["Read ADC", function(){
-          try {
-            return stream_adc_readouts(port);
-          } catch (error) {
-            console.error("Error reading from port:", error);
-          }
+        ["Read ADC", async function(){
+          await send_command(port, GET_STATE_READOUTS);
+          return stream_state_readouts({port, timeout: 50});
+        }],
+        ["Stop", async function(){
+          await send_command(port, SET_STATE_OFF);
+          await wait(100);
+          await send_command(port, GET_STATE_READOUTS);
+          return stream_state_readouts({port, timeout: 50});
+        }],
+        ["Measure current", async function(){
+          await send_command(port, SET_STATE_MEASURE_CURRENT);
+          return stream_state_readouts({port, timeout: 500});
+        }],
+        ["Drive", async function(){
+          await send_command(port, SET_STATE_DRIVE);
+          await wait(100);
+          await send_command(port, GET_STATE_READOUTS);
+          return stream_state_readouts({port, timeout: 50});
         }],
       ],
       {label: "Send commands", value: undefined},
@@ -74,45 +89,70 @@ Motor driver phase currents
 ```js
 const currents_plots = function(){
   if (!data) {
-    return display(html`Not connected...`);
+    return html`Not connected...`;
   }
 
   const ref_readout_mean = d3.mean(data, (d) => d.ref_readout);
 
   const computed_data = data.map((d) => {
-    const readout_number = d.readout_number;
-    let u_readout = +(d.u_readout - d.ref_readout);
-    u_readout = u_readout > 0 ? u_readout * 1.0 : u_readout * 1.0;
-    let v_readout = -(d.v_readout - d.ref_readout);
-    v_readout = v_readout > 0 ? v_readout * 1.0 : v_readout * 1.0;
-    let w_readout = +(d.w_readout - d.ref_readout);
-    w_readout = w_readout > 0 ? w_readout * 1.0 : w_readout * 1.0;
-    const ref_readout = d.ref_readout - ref_readout_mean;
+    const readout_number = d.readout_number - data[0].readout_number;
+    const time = readout_number * 1/23200 * 1000;
+    const current_conversion = 0.004029304;
 
-    return {readout_number, u_readout, v_readout, w_readout, ref_readout};
+    let u_readout = -current_conversion * (d.u_readout - d.ref_readout);
+    u_readout = u_readout > 0 ? u_readout * 1.0 : u_readout * 1.0;
+    let v_readout = +current_conversion * (d.v_readout - d.ref_readout);
+    v_readout = v_readout > 0 ? v_readout * 1.0 : v_readout * 1.0;
+    let w_readout = -current_conversion * (d.w_readout - d.ref_readout);
+    w_readout = w_readout > 0 ? w_readout * 1.0 : w_readout * 1.0;
+    const ref_readout = current_conversion * (d.ref_readout - ref_readout_mean);
+
+    let u_pwm = d.u_pwm == SET_FLOATING_DUTY ? null : d.u_pwm;
+    let v_pwm = d.v_pwm == SET_FLOATING_DUTY ? null : d.v_pwm;
+    let w_pwm = d.w_pwm == SET_FLOATING_DUTY ? null : d.w_pwm;
+    
+
+    return {...d, u_pwm, v_pwm, w_pwm, u_readout, v_readout, w_readout, ref_readout, time};
   });
 
-
-  return display(Plot.plot({
-    marks: [
-      Plot.lineY(computed_data, {x: "readout_number", y: 'u_readout', stroke: 'steelblue', label: 'adc 0', curve: 'step'}),
-      Plot.lineY(computed_data, {x: "readout_number", y: 'v_readout', stroke: 'orangered', label: 'adc 1', curve: 'step'}),
-      Plot.lineY(computed_data, {x: "readout_number", y: 'w_readout', stroke: 'purple', label: 'adc 2', curve: 'step'}),
-      Plot.lineY(computed_data, {x: "readout_number", y: (d) => d.u_readout + d.v_readout + d.w_readout, stroke: 'black', label: 'sum', curve: 'step'}),
-      Plot.lineY(computed_data, {x: "readout_number", y: 'ref_readout', stroke: 'gray', label: 'ref', curve: 'step'}),
-      Plot.gridY({interval: 100, stroke: 'black', strokeWidth : 1}),
-    ],
-    width: 1200,
-  }));
+  return [
+    Plot.plot({
+      marks: [
+        Plot.line(computed_data, {x: "time", y: 'u_readout', stroke: 'cyan', label: 'adc 0', curve: 'step'}),
+        Plot.line(computed_data, {x: "time", y: 'v_readout', stroke: 'orangered', label: 'adc 1', curve: 'step'}),
+        Plot.line(computed_data, {x: "time", y: 'w_readout', stroke: 'purple', label: 'adc 2', curve: 'step'}),
+        Plot.line(computed_data, {x: "time", y: (d) => d.u_readout + d.v_readout + d.w_readout, stroke: 'black', label: 'sum', curve: 'step'}),
+        Plot.line(computed_data, {x: "time", y: 'ref_readout', stroke: 'gray', label: 'ref', curve: 'step'}),
+        Plot.gridY({interval: 1, stroke: 'black', strokeWidth : 1}),
+        Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+      ],
+      x: {label: "Time (ms)"},
+      width: 1200, height: 500,
+    }),
+    Plot.plot({
+      marks: [
+        Plot.line(computed_data, {x: "time", y: 'u_pwm', stroke: 'cyan', label: 'pwm 0', curve: 'step', strokeDasharray: "2 9", strokeWidth: 3}),
+        Plot.line(computed_data, {x: "time", y: 'v_pwm', stroke: 'orangered', label: 'pwm 1', curve: 'step', strokeDasharray: "2 7", strokeWidth: 3}),
+        Plot.line(computed_data, {x: "time", y: 'w_pwm', stroke: 'purple', label: 'pwm 2', curve: 'step', strokeDasharray: "2 11", strokeWidth: 3}),
+        Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+      ],
+      x: {label: "Time (ms)"},
+      width: 1200, height: 150,
+    }),
+  ];
 
 }();
 ```
 
-
+<div class="card tight">${currents_plots}</div>
 
 ```js
-const ADC_READOUT = 0x80202020;
-const GET_ADC_READOUTS = 0x80202021;
+const STATE_READOUT = 0x80202020;
+const GET_STATE_READOUTS = 0x80202021;
+const SET_STATE_OFF = 0x80202030;
+const SET_STATE_MEASURE_CURRENT = 0x80202031;
+const SET_STATE_DRIVE = 0x80202032;
+
 // Uint8Array from uint32
 function uint32_to_bytes(value) {
   let buffer = new Uint8Array(4);
@@ -124,27 +164,30 @@ function uint32_to_bytes(value) {
 
 ```js
 
+const PWM_BASE = 1536;
+const SET_FLOATING_DUTY = PWM_BASE - 1;
 
-async function * stream_adc_readouts(port) {
-  const max_missed_messages = 1;
-  const timeout = 200;
 
+
+async function * stream_state_readouts({port, timeout = 200, max_missed_messages = 1}) {
   let data = [];
 
-  await request_adc_readings(port);
-
-  let messages = parse_with_delimiter(read_from(port, timeout), uint32_to_bytes(ADC_READOUT));
-
+  let messages = parse_with_delimiter(read_from(port, timeout), uint32_to_bytes(STATE_READOUT));
 
   for await (const message of messages) {
-    if (message.buffer.byteLength != 12) continue;
+    if (message.buffer.byteLength != 16) continue;
     
     let data_view = new DataView(message.buffer);
     
     let offset = 0;
     let readout_number = data_view.getUint32(0);
     offset += 4;
+    let pwm_commands = data_view.getUint32(offset);
+    offset += 4;
 
+    let u_pwm = Math.floor(pwm_commands / PWM_BASE / PWM_BASE) % PWM_BASE;
+    let v_pwm = Math.floor(pwm_commands / PWM_BASE) % PWM_BASE;
+    let w_pwm = pwm_commands % PWM_BASE;
 
     let u_readout = data_view.getUint16(offset);
     offset += 2;
@@ -162,6 +205,9 @@ async function * stream_adc_readouts(port) {
       v_readout,
       w_readout,
       ref_readout,
+      u_pwm,
+      v_pwm,
+      w_pwm,
     });
 
     if (data.length > 2) {
@@ -180,15 +226,18 @@ async function * stream_adc_readouts(port) {
 
 ```js
 
-
-async function request_adc_readings(port){
+async function send_command(port, command){
   let writer = port.writable.getWriter();
   let buffer = new Uint8Array(8);
   let view = new DataView(buffer.buffer);
-  view.setUint32(0, GET_ADC_READOUTS);
+  view.setUint32(0, command);
   view.setUint32(4, 0);
   await writer.write(buffer);
   writer.releaseLock();
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function timeout_promise(promise, timeout) {
