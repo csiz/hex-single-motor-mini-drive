@@ -31,16 +31,11 @@ float current_u = 0.0, current_v = 0.0, current_w = 0.0;
 
 
 // Motor control state
-volatile DriverState driver_state = DriverState::DRIVE;
-volatile uint16_t motor_u_pwm_duty = 0;
-volatile uint16_t motor_v_pwm_duty = 0;
-volatile uint16_t motor_w_pwm_duty = 0;
-volatile bool motor_register_update_needed = false;
-
-
-// Calibration procedures
-size_t measure_current_stage = 0;
-size_t measure_current_counter = 0;
+DriverState driver_state = DriverState::OFF;
+uint16_t motor_u_pwm_duty = 0;
+uint16_t motor_v_pwm_duty = 0;
+uint16_t motor_w_pwm_duty = 0;
+bool motor_register_update_needed = true;
 
 
 // Functions
@@ -98,7 +93,7 @@ void read_motor_hall_sensors(){
 }
 
 
-void calculate_motor_phase_currents(){
+void calculate_motor_phase_currents_gated(){
     // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
     const UpdateReadout readout = state_readout;

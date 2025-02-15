@@ -9,8 +9,29 @@
 const uint32_t STATE_READOUT = 0x80202020;
 const uint32_t GET_STATE_READOUTS = 0x80202021;
 const uint32_t SET_STATE_OFF = 0x80202030;
-const uint32_t SET_STATE_MEASURE_CURRENT = 0x80202031;
-const uint32_t SET_STATE_DRIVE = 0x80202032;
+const uint32_t SET_STATE_DRIVE = 0x80202031;
+const uint32_t SET_STATE_TEST_ALL_PERMUTATIONS = 0x80202032;
+const uint32_t SET_STATE_TEST_SINGLE_PHASE_POSITIVE = 0x80202033;
+const uint32_t SET_STATE_TEST_DOUBLE_PHASE_POSITIVE = 0x80202034;
+const uint32_t SET_STATE_TEST_ALL_SHORTED = 0x80202035;
+const uint32_t SET_STATE_TEST_LONG_GROUNDED_SHORT = 0x80202036;
+const uint32_t SET_STATE_TEST_LONG_POSITIVE_SHORT = 0x80202037;
+
+const uint32_t SET_STATE_TEST_U_DIRECTIONS = 0x80202039;
+const uint32_t SET_STATE_TEST_U_INCREASING = 0x8020203A;
+const uint32_t SET_STATE_TEST_U_DECREASING = 0x8020203B;
+const uint32_t SET_STATE_TEST_V_INCREASING = 0x8020203C;
+const uint32_t SET_STATE_TEST_V_DECREASING = 0x8020203D;
+const uint32_t SET_STATE_TEST_W_INCREASING = 0x8020203E;
+const uint32_t SET_STATE_TEST_W_DECREASING = 0x8020203F;
+
+const uint32_t SET_STATE_HOLD_U_POSITIVE = 0x80203020;
+const uint32_t SET_STATE_HOLD_V_POSITIVE = 0x80203021;
+const uint32_t SET_STATE_HOLD_W_POSITIVE = 0x80203022;
+const uint32_t SET_STATE_HOLD_U_NEGATIVE = 0x80203023;
+const uint32_t SET_STATE_HOLD_V_NEGATIVE = 0x80203024;
+const uint32_t SET_STATE_HOLD_W_NEGATIVE = 0x80203025;
+
 
 extern uint32_t adc_update_number;
 extern uint32_t tim1_update_number;
@@ -30,7 +51,7 @@ struct UpdateReadout{
 };
 
 extern UpdateReadout state_readout;
-const size_t HISTORY_SIZE = 420;
+const size_t HISTORY_SIZE = 384;
 extern UpdateReadout state_readouts[HISTORY_SIZE];
 extern size_t state_readouts_index;
 extern uint32_t state_updates_to_send;
@@ -77,7 +98,25 @@ const float current_conversion = -adc_voltage_reference / (adc_max_value * motor
 enum struct DriverState {
     OFF,
     DRIVE,
-    MEASURE_CURRENT,
+    HOLD_U_POSITIVE,
+    HOLD_V_POSITIVE,
+    HOLD_W_POSITIVE,
+    HOLD_U_NEGATIVE,
+    HOLD_V_NEGATIVE,
+    HOLD_W_NEGATIVE,
+    TEST_ALL_PERMUTATIONS,
+    TEST_SINGLE_PHASE_POSITIVE,
+    TEST_DOUBLE_PHASE_POSITIVE,
+    TEST_ALL_SHORTED,
+    TEST_LONG_GROUNDED_SHORT,
+    TEST_LONG_POSITIVE_SHORT,
+    TEST_U_DIRECTIONS,
+    TEST_U_INCREASING,
+    TEST_U_DECREASING,
+    TEST_V_INCREASING,
+    TEST_V_DECREASING,
+    TEST_W_INCREASING,
+    TEST_W_DECREASING
 };
 
 const uint16_t PWM_AUTORELOAD = 1535;
@@ -85,51 +124,20 @@ const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
 
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
-const uint16_t min_bootstrap_duty = 4; // 4/(72MHz) = 55.5ns
-const uint16_t max_pwm_duty = PWM_BASE - min_bootstrap_duty; // 1024/72MHz = 14.2us
+const uint16_t MIN_BOOTSTRAP_DUTY = 4; // 4/(72MHz) = 55.5ns
+const uint16_t PWM_MAX = PWM_BASE - MIN_BOOTSTRAP_DUTY; // 1024/72MHz = 14.2us
 // Sentinel value to indicate that the phase output should be floating.
-const uint16_t set_floating_duty = PWM_BASE - 1;
+const uint16_t PWM_FLOAT = PWM_BASE - 1;
+
+const uint16_t PWM_HOLD = PWM_BASE / 5;
 
 // Motor control state
-extern volatile DriverState driver_state;
-extern volatile uint16_t motor_u_pwm_duty;
-extern volatile uint16_t motor_v_pwm_duty;
-extern volatile uint16_t motor_w_pwm_duty;
-extern volatile bool motor_register_update_needed;
+extern DriverState driver_state;
+extern uint16_t motor_u_pwm_duty;
+extern uint16_t motor_v_pwm_duty;
+extern uint16_t motor_w_pwm_duty;
+extern bool motor_register_update_needed;
 
-
-// Motor voltage fraction for the 6-step commutation.
-const float motor_voltage_table[6][3] = {
-    {0.5, 1.0, 0.0},
-    {0.0, 1.0, 0.5},
-    {0.0, 0.5, 1.0},
-    {0.5, 0.0, 1.0},
-    {1.0, 0.0, 0.5},
-    {1.0, 0.5, 0.0}
-};
-
-// Calibration procedures
-// ----------------------
-
-const uint16_t measure_current_table[12][3] = {
-    {0,            0,            0},
-    {max_pwm_duty, 0,            0}, // Positive U
-    {0,            0,            0},
-    {0,            max_pwm_duty, 0}, // Positive V
-    {0,            0,            0},
-    {0,            0,            max_pwm_duty}, // Positive W
-    {0,            0,            0},
-    {0,            max_pwm_duty, max_pwm_duty}, // Negative U
-    {0,            0,            0},
-    {max_pwm_duty, 0,            max_pwm_duty}, // Negative V
-    {0,            0,            0},
-    {max_pwm_duty, max_pwm_duty, 0} // Negative W
-};
-
-const size_t measure_current_steps = HISTORY_SIZE / 12;
-
-extern size_t measure_current_stage;
-extern size_t measure_current_counter;
 
 
 // Functions
@@ -139,5 +147,5 @@ extern size_t measure_current_counter;
 void read_motor_hall_sensors();
 
 // Compute motor phase currents using latest ADC readouts.
-void calculate_motor_phase_currents();
+void calculate_motor_phase_currents_gated();
 

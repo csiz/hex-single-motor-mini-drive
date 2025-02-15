@@ -26,6 +26,9 @@ void adc_interrupt_handler(){
         // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
         // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
         // 16ticks after the update event (PWM counter resets). This is a delay of 16/72MHz = 222ns.
+
+        // For reference a PWM period is 1536 ticks, so the PWM frequency is 72MHz / 1536 / 2 = 23.4KHz.
+        // The PWM period lasts 1/23.4KHz = 42.7us.
         
         state_readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
         // Note: in the v0 board the V phase shunt is connected in reverse to the current sense amplifier.
