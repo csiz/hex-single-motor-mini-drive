@@ -295,13 +295,13 @@ static void MX_ADC1_Init(void)
   /** Configure Injected Channel
   */
   LL_ADC_INJ_SetSequencerRanks(ADC1, LL_ADC_INJ_RANK_1, LL_ADC_CHANNEL_2);
-  LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_2, LL_ADC_SAMPLINGTIME_7CYCLES_5);
+  LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_2, LL_ADC_SAMPLINGTIME_1CYCLE_5);
   LL_ADC_INJ_SetOffset(ADC1, LL_ADC_INJ_RANK_1, 0);
 
   /** Configure Injected Channel
   */
   LL_ADC_INJ_SetSequencerRanks(ADC1, LL_ADC_INJ_RANK_2, LL_ADC_CHANNEL_3);
-  LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_3, LL_ADC_SAMPLINGTIME_7CYCLES_5);
+  LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_3, LL_ADC_SAMPLINGTIME_1CYCLE_5);
   LL_ADC_INJ_SetOffset(ADC1, LL_ADC_INJ_RANK_2, 0);
   /* USER CODE BEGIN ADC1_Init 2 */
 
@@ -375,13 +375,13 @@ static void MX_ADC2_Init(void)
   /** Configure Injected Channel
   */
   LL_ADC_INJ_SetSequencerRanks(ADC2, LL_ADC_INJ_RANK_1, LL_ADC_CHANNEL_4);
-  LL_ADC_SetChannelSamplingTime(ADC2, LL_ADC_CHANNEL_4, LL_ADC_SAMPLINGTIME_7CYCLES_5);
+  LL_ADC_SetChannelSamplingTime(ADC2, LL_ADC_CHANNEL_4, LL_ADC_SAMPLINGTIME_1CYCLE_5);
   LL_ADC_INJ_SetOffset(ADC2, LL_ADC_INJ_RANK_1, 0);
 
   /** Configure Injected Channel
   */
   LL_ADC_INJ_SetSequencerRanks(ADC2, LL_ADC_INJ_RANK_2, LL_ADC_CHANNEL_5);
-  LL_ADC_SetChannelSamplingTime(ADC2, LL_ADC_CHANNEL_5, LL_ADC_SAMPLINGTIME_7CYCLES_5);
+  LL_ADC_SetChannelSamplingTime(ADC2, LL_ADC_CHANNEL_5, LL_ADC_SAMPLINGTIME_1CYCLE_5);
   LL_ADC_INJ_SetOffset(ADC2, LL_ADC_INJ_RANK_2, 0);
   /* USER CODE BEGIN ADC2_Init 2 */
 
@@ -501,7 +501,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   TIM_InitStruct.Prescaler = 0;
-  TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_CENTER_DOWN;
+  TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_CENTER_UP;
   TIM_InitStruct.Autoreload = 0;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   TIM_InitStruct.RepetitionCounter = 0;

@@ -45,9 +45,9 @@ void adc_init(){
     // (and convert for 12.5); then finally sample W and the reference. 7.5/12MHz = 625ns.
     // For reference, the ADC sample time is 20*72MHz/12MHz = 120 ticks of TIM1.
 
-    // When counting down, this is triggered 14cycles before the counter reaches 0, measuring 
+    // When counting down, this is triggered 14/2 cycles before the counter reaches 0, sampling 
     // current symmetrically around 0 for the 2 consecutive readings.
-    LL_TIM_OC_SetCompareCH4(TIM1, 84);
+    LL_TIM_OC_SetCompareCH4(TIM1, PWM_BASE - 42);
 
 
     // Enable the ADC interrupt for the end of the injected sequence which reads motor current.
