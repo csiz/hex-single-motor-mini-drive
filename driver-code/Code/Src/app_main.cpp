@@ -163,7 +163,7 @@ void app_init() {
     enable_LED_channels();
 
     // Get initial hall sensor state.
-    read_motor_hall_sensors();
+    read_hall_sensors();
 }
 
 
@@ -207,110 +207,76 @@ void usb_tick(){
                 break;
             // Turn off the motor driver.
             case SET_STATE_OFF:
-                driver_state = DriverState::OFF;
+                disable_motor_ouputs();
                 break;
                 
             // Measure the motor phase currents.
             
             case SET_STATE_TEST_ALL_PERMUTATIONS:
-                driver_state = DriverState::TEST_ALL_PERMUTATIONS;
-                start_test();
+                start_test(test_all_permutations);
                 break;
 
-            case SET_STATE_TEST_SINGLE_PHASE_POSITIVE:
-                driver_state = DriverState::TEST_SINGLE_PHASE_POSITIVE;
-                start_test();
+            case SET_STATE_TEST_GROUND_SHORT:
+                start_test(test_ground_short);
                 break;
 
-            case SET_STATE_TEST_DOUBLE_PHASE_POSITIVE:
-                driver_state = DriverState::TEST_DOUBLE_PHASE_POSITIVE;
-                start_test();
-                break;
-
-            case SET_STATE_TEST_ALL_SHORTED:
-                driver_state = DriverState::TEST_ALL_SHORTED;
-                start_test();
-                break;
-
-            case SET_STATE_TEST_LONG_GROUNDED_SHORT:
-                driver_state = DriverState::TEST_LONG_GROUNDED_SHORT;
-                start_test();
-                break;
-
-            case SET_STATE_TEST_LONG_POSITIVE_SHORT:
-                driver_state = DriverState::TEST_LONG_POSITIVE_SHORT;
-                start_test();
+            case SET_STATE_TEST_POSITIVE_SHORT:
+                start_test(test_positive_short);
                 break;
 
             case SET_STATE_TEST_U_DIRECTIONS:
-                driver_state = DriverState::TEST_U_DIRECTIONS;
-                start_test();
+                start_test(test_u_directions);
                 break;
 
             case SET_STATE_TEST_U_INCREASING:
-                driver_state = DriverState::TEST_U_INCREASING;
-                start_test();
+                start_test(test_u_increasing);
                 break;
             case SET_STATE_TEST_U_DECREASING:
-                driver_state = DriverState::TEST_U_DECREASING;
-                start_test();
+                start_test(test_u_decreasing);
                 break;
             case SET_STATE_TEST_V_INCREASING:
-                driver_state = DriverState::TEST_V_INCREASING;
-                start_test();
+                start_test(test_v_increasing);
                 break;
             case SET_STATE_TEST_V_DECREASING:
-                driver_state = DriverState::TEST_V_DECREASING;
-                start_test();
+                start_test(test_v_decreasing);
                 break;
             case SET_STATE_TEST_W_INCREASING:
-                driver_state = DriverState::TEST_W_INCREASING;
-                start_test();
+                start_test(test_w_increasing);
                 break;
             case SET_STATE_TEST_W_DECREASING:
-                driver_state = DriverState::TEST_W_DECREASING;
-                start_test();
+                start_test(test_w_decreasing);
                 break;
 
             // Drive the motor.
             case SET_STATE_DRIVE:
-                driver_state = DriverState::DRIVE;
+                drive_motor();
                 break;
 
             case SET_STATE_HOLD_U_POSITIVE:
-                driver_state = DriverState::HOLD_U_POSITIVE;
-                set_motor_pwm_gated(PWM_HOLD, 0, 0);
+                hold_motor(PWM_HOLD, 0, 0);
                 break;
 
             case SET_STATE_HOLD_V_POSITIVE:
-                driver_state = DriverState::HOLD_V_POSITIVE;
-                set_motor_pwm_gated(0, PWM_HOLD, 0);
+                hold_motor(0, PWM_HOLD, 0);
                 break;
 
             case SET_STATE_HOLD_W_POSITIVE:
-                driver_state = DriverState::HOLD_W_POSITIVE;
-                set_motor_pwm_gated(0, 0, PWM_HOLD);
+                hold_motor(0, 0, PWM_HOLD);
                 break;
 
             case SET_STATE_HOLD_U_NEGATIVE:
-                driver_state = DriverState::HOLD_U_NEGATIVE;
-                set_motor_pwm_gated(0, PWM_HOLD, PWM_HOLD);
+                hold_motor(0, PWM_HOLD, PWM_HOLD);
                 break;
 
             case SET_STATE_HOLD_V_NEGATIVE:
-                driver_state = DriverState::HOLD_V_NEGATIVE;
-                set_motor_pwm_gated(PWM_HOLD, 0, PWM_HOLD);
+                hold_motor(PWM_HOLD, 0, PWM_HOLD);
                 break;
 
             case SET_STATE_HOLD_W_NEGATIVE:
-                driver_state = DriverState::HOLD_W_NEGATIVE;
-                set_motor_pwm_gated(PWM_HOLD, PWM_HOLD, 0);
+                hold_motor(PWM_HOLD, PWM_HOLD, 0);
                 break;
                 
         }
-
-        // We almost always need to run the motor control update after a command.
-        motor_register_update_needed = true;
     }
 
     // Send data
@@ -355,12 +321,7 @@ void app_tick() {
     // Show the current hall sensor state on the LEDs.
     set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
 
-    // Update motor control registers only if actively driving.
-    // Note: The registers need to be left unchanged whilst running in the calibration modes.
-    if (driver_state == DriverState::DRIVE) {
-        update_motor_control();
-        motor_register_update_needed = true;
-    }
+    update_motor_control();
 
     // Handle USB communication.
     usb_tick();

@@ -37,7 +37,7 @@ void adc_interrupt_handler(){
         state_readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
         state_readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
 
-        state_readout.pwm_commands = motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
+        state_readout.pwm_commands = get_combined_motor_pwm_duty();
 
         // Only write to the history buffer if we're not sending updates. Sending data over USB
         // uses too much time and we'll miss ADC updates so recording more data is unreliable.
@@ -65,7 +65,7 @@ void tim1_update_interrupt_handler(){
         // Note, this updates on both up and down counting, get direction with: LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP;
         
         // Update motor state once per up and down cycle.
-        if (motor_register_update_needed and LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_DOWN) {
+        if (LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_DOWN) {
             update_motor_control_registers();
         }
         tim1_update_number += 1;
@@ -91,7 +91,7 @@ void tim2_global_handler(){
 
     // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
     } else if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
-        read_motor_hall_sensors();
+        read_hall_sensors();
 
         tim2_cc1_number += 1;
         LL_TIM_ClearFlag_CC1(TIM2);

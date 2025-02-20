@@ -30,17 +30,9 @@ uint8_t hall_state = 0;
 float current_u = 0.0, current_v = 0.0, current_w = 0.0;
 
 
-// Motor control state
-DriverState driver_state = DriverState::OFF;
-uint16_t motor_u_pwm_duty = 0;
-uint16_t motor_v_pwm_duty = 0;
-uint16_t motor_w_pwm_duty = 0;
-bool motor_register_update_needed = true;
-
-
 // Functions
 
-void read_motor_hall_sensors(){
+void read_hall_sensors(){
 	uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
 	uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
 

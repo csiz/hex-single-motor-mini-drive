@@ -21,3 +21,4 @@
 /driver-code/build.ninja
 /driver-code/cmake/stm32cubemx/*
 /motor-sim/src/.observablehq/*
+/motor-sim/.vscode
