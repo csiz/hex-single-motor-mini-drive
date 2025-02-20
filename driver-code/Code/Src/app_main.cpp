@@ -198,7 +198,7 @@ void usb_tick(){
         const uint32_t command = read_uint32(&usb_command[0]);
         const uint32_t data = read_uint32(&usb_command[4]);
 
-        UNUSED(data);
+        const uint16_t pwm = data > PWM_MAX ? PWM_MAX : data;
 
         switch (command) {
             // Send the whole history buffer over USB.
@@ -249,33 +249,32 @@ void usb_tick(){
 
             // Drive the motor.
             case SET_STATE_DRIVE:
-                drive_motor();
+                drive_motor(pwm);
                 break;
 
             case SET_STATE_HOLD_U_POSITIVE:
-                hold_motor(PWM_HOLD, 0, 0);
+                hold_motor(pwm, 0, 0);
                 break;
 
             case SET_STATE_HOLD_V_POSITIVE:
-                hold_motor(0, PWM_HOLD, 0);
+                hold_motor(0, pwm, 0);
                 break;
 
             case SET_STATE_HOLD_W_POSITIVE:
-                hold_motor(0, 0, PWM_HOLD);
+                hold_motor(0, 0, pwm);
                 break;
 
             case SET_STATE_HOLD_U_NEGATIVE:
-                hold_motor(0, PWM_HOLD, PWM_HOLD);
+                hold_motor(0, pwm, pwm);
                 break;
 
             case SET_STATE_HOLD_V_NEGATIVE:
-                hold_motor(PWM_HOLD, 0, PWM_HOLD);
+                hold_motor(pwm, 0, pwm);
                 break;
 
             case SET_STATE_HOLD_W_NEGATIVE:
-                hold_motor(PWM_HOLD, PWM_HOLD, 0);
+                hold_motor(pwm, pwm, 0);
                 break;
-                
         }
     }
 

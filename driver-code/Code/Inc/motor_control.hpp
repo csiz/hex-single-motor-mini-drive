@@ -37,13 +37,13 @@ const uint16_t PWM_MAX = PWM_BASE - MIN_BOOTSTRAP_DUTY; // 1024/72MHz = 14.2us
 // Sentinel value to indicate that the phase output should be floating.
 const uint16_t PWM_FLOAT = PWM_BASE - 1;
 
-const uint16_t PWM_HOLD = PWM_BASE / 10;
+const uint16_t PWM_MAX_HOLD = PWM_BASE * 2 / 10;
 
 
 // Motor control functions
 void motor_control_init();
 
-void drive_motor();
+void drive_motor(uint16_t pwm);
 
 void hold_motor(uint16_t u, uint16_t v, uint16_t w);
 

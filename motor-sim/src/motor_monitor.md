@@ -44,6 +44,8 @@ Connect to COM port and read motor driver data.
 <div>${connect_buttons}</div>
 <div>${data_stream_buttons}</div>
 <div>${command_buttons}</div>
+<div>${command_value_slider}</div>
+
 
 ```js
 
@@ -69,6 +71,11 @@ const connect_buttons = Inputs.button(
 );
 ```
 
+```js
+const command_value_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: "Command value:"});
+
+const command_value = Generators.input(command_value_slider);
+```
 
 ```js
 let raw_data = Mutable();
@@ -148,6 +155,7 @@ const command_buttons = Inputs.button(
   ],
   {label: "Commands"},
 );
+
 ```
 
 Motor driver phase currents
@@ -571,7 +579,7 @@ async function send_command(port, command){
   let buffer = new Uint8Array(8);
   let view = new DataView(buffer.buffer);
   view.setUint32(0, command);
-  view.setUint32(4, 0);
+  view.setUint32(4, command_value * PWM_BASE);
   await writer.write(buffer);
   writer.releaseLock();
 }

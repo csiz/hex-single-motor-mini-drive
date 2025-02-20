@@ -31,6 +31,8 @@ const float motor_voltage_table[6][3] = {
     {1.0, 0.0, 1.0}
 };
 
+float pwm_fraction = 0.0;
+
 uint32_t get_combined_motor_pwm_duty(){
     return motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
 }
@@ -93,7 +95,9 @@ void set_motor_pwm_gated(uint16_t u, uint16_t v, uint16_t w){
 
 void hold_motor(uint16_t u, uint16_t v, uint16_t w){
     driver_state = DriverState::HOLD;
-    set_motor_pwm_gated(u, v, w);
+    set_motor_pwm_gated(u > PWM_MAX_HOLD ? PWM_MAX_HOLD : u, 
+                        v > PWM_MAX_HOLD ? PWM_MAX_HOLD : v, 
+                        w > PWM_MAX_HOLD ? PWM_MAX_HOLD : w);
     motor_register_update_needed = true;
 }
 
@@ -108,8 +112,6 @@ void update_motor_control(){
         disable_motor_ouputs();
         return;
     }
-    
-    const float pwm_fraction = 0.4;
 
     const float voltage_phase_u = motor_voltage_table[motor_electric_phase][0];
     const float voltage_phase_v = motor_voltage_table[motor_electric_phase][1];
@@ -118,27 +120,29 @@ void update_motor_control(){
     if (voltage_phase_u == 0.5) {
         motor_u_pwm_duty = PWM_FLOAT;
     } else {
-        motor_u_pwm_duty = voltage_phase_u * pwm_fraction * PWM_MAX;
+        motor_u_pwm_duty = voltage_phase_u * pwm_fraction * PWM_BASE;
     }
 
     if (voltage_phase_v == 0.5) {
         motor_v_pwm_duty = PWM_FLOAT;
     } else {
-        motor_v_pwm_duty = voltage_phase_v * pwm_fraction * PWM_MAX;
+        motor_v_pwm_duty = voltage_phase_v * pwm_fraction * PWM_BASE;
     }
 
     if (voltage_phase_w == 0.5) {
         motor_w_pwm_duty = PWM_FLOAT;
     } else {
-        motor_w_pwm_duty = voltage_phase_w * pwm_fraction * PWM_MAX;
+        motor_w_pwm_duty = voltage_phase_w * pwm_fraction * PWM_BASE;
     }
 
     motor_register_update_needed = true;
 }
 
 
-void drive_motor(){
+void drive_motor(uint16_t pwm){
     driver_state = DriverState::DRIVE;
+    pwm_fraction = (pwm > PWM_MAX ? PWM_MAX : pwm) / static_cast<float>(PWM_BASE);
+    update_motor_control();
 }
 
 void start_test(const PWMSchedule & schedule){
