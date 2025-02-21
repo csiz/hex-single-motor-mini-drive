@@ -39,13 +39,14 @@ const uint16_t PWM_FLOAT = PWM_BASE - 1;
 
 const uint16_t PWM_MAX_HOLD = PWM_BASE * 2 / 10;
 
+const uint16_t MAX_TIMEOUT = 0xFFFF;
 
 // Motor control functions
 void motor_control_init();
 
-void drive_motor(uint16_t pwm);
+void drive_motor(uint16_t pwm, uint16_t timeout);
 
-void hold_motor(uint16_t u, uint16_t v, uint16_t w);
+void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
 
 uint32_t get_combined_motor_pwm_duty();
 
@@ -83,7 +84,6 @@ const PWMSchedule test_all_permutations = {
 
 
 const PWMSchedule test_ground_short = {
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT},
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         0,         0},
@@ -93,12 +93,12 @@ const PWMSchedule test_ground_short = {
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         0,         0},
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, 0,         0,         0},
+    {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT}
 };
 
 const PWMSchedule test_positive_short = {
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT},
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
@@ -108,7 +108,8 @@ const PWMSchedule test_positive_short = {
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
+    {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
     {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT}
 };
 
@@ -128,7 +129,7 @@ const PWMSchedule test_u_directions = {
 };
 
 const PWMSchedule test_u_increasing = {
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, 0,                   0,         0},
     {SHORT_DURATION, PWM_BASE * 1 / 10,   0,         0},
     {SHORT_DURATION, PWM_BASE * 2 / 10,   0,         0},
     {SHORT_DURATION, PWM_BASE * 3 / 10,   0,         0},
@@ -139,11 +140,11 @@ const PWMSchedule test_u_increasing = {
     {SHORT_DURATION, PWM_BASE * 8 / 10,   0,         0},
     {SHORT_DURATION, PWM_BASE * 9 / 10,   0,         0},
     {SHORT_DURATION, 0,                   0,         0},
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT}
+    {SHORT_DURATION, 0,                   0,         0},
 };
 
 const PWMSchedule test_u_decreasing = {
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, 0,                   0,                 0},
     {SHORT_DURATION, 0,                   PWM_BASE * 1 / 10, PWM_BASE * 1 / 10},
     {SHORT_DURATION, 0,                   PWM_BASE * 2 / 10, PWM_BASE * 2 / 10},
     {SHORT_DURATION, 0,                   PWM_BASE * 3 / 10, PWM_BASE * 3 / 10},
@@ -154,11 +155,11 @@ const PWMSchedule test_u_decreasing = {
     {SHORT_DURATION, 0,                   PWM_BASE * 8 / 10, PWM_BASE * 8 / 10},
     {SHORT_DURATION, 0,                   PWM_BASE * 9 / 10, PWM_BASE * 9 / 10},
     {SHORT_DURATION, 0,                   0,                 0},
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT,         PWM_FLOAT}
+    {SHORT_DURATION, 0,                   0,                 0}
 };
 
 const PWMSchedule test_v_increasing = {
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, 0,                   0,                 0},
     {SHORT_DURATION, 0,                   PWM_BASE * 1 / 10, 0},
     {SHORT_DURATION, 0,                   PWM_BASE * 2 / 10, 0},
     {SHORT_DURATION, 0,                   PWM_BASE * 3 / 10, 0},
@@ -169,11 +170,11 @@ const PWMSchedule test_v_increasing = {
     {SHORT_DURATION, 0,                   PWM_BASE * 8 / 10, 0},
     {SHORT_DURATION, 0,                   PWM_BASE * 9 / 10, 0},
     {SHORT_DURATION, 0,                   0,                 0},
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT,         PWM_FLOAT}
+    {SHORT_DURATION, 0,                   0,                 0}
 };
 
 const PWMSchedule test_v_decreasing = {
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, 0,                   0,         0},
     {SHORT_DURATION, PWM_BASE * 1 / 10,   0,         PWM_BASE * 1 / 10},
     {SHORT_DURATION, PWM_BASE * 2 / 10,   0,         PWM_BASE * 2 / 10},
     {SHORT_DURATION, PWM_BASE * 3 / 10,   0,         PWM_BASE * 3 / 10},
@@ -184,11 +185,11 @@ const PWMSchedule test_v_decreasing = {
     {SHORT_DURATION, PWM_BASE * 8 / 10,   0,         PWM_BASE * 8 / 10},
     {SHORT_DURATION, PWM_BASE * 9 / 10,   0,         PWM_BASE * 9 / 10},
     {SHORT_DURATION, 0,                   0,         0},
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT}
+    {SHORT_DURATION, 0,                   0,         0}
 };
 
 const PWMSchedule test_w_increasing = {
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, 0,                   0,         0},
     {SHORT_DURATION, 0,                   0,         PWM_BASE * 1 / 10},
     {SHORT_DURATION, 0,                   0,         PWM_BASE * 2 / 10},
     {SHORT_DURATION, 0,                   0,         PWM_BASE * 3 / 10},
@@ -199,11 +200,11 @@ const PWMSchedule test_w_increasing = {
     {SHORT_DURATION, 0,                   0,         PWM_BASE * 8 / 10},
     {SHORT_DURATION, 0,                   0,         PWM_BASE * 9 / 10},
     {SHORT_DURATION, 0,                   0,         0},
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT}
+    {SHORT_DURATION, 0,                   0,         0}
 };
 
 const PWMSchedule test_w_decreasing = {
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT},
+    {SHORT_DURATION, 0,                   0,         0},
     {SHORT_DURATION, PWM_BASE * 1 / 10,   PWM_BASE * 1 / 10, 0},
     {SHORT_DURATION, PWM_BASE * 2 / 10,   PWM_BASE * 2 / 10, 0},
     {SHORT_DURATION, PWM_BASE * 3 / 10,   PWM_BASE * 3 / 10, 0},
@@ -214,5 +215,5 @@ const PWMSchedule test_w_decreasing = {
     {SHORT_DURATION, PWM_BASE * 8 / 10,   PWM_BASE * 8 / 10, 0},
     {SHORT_DURATION, PWM_BASE * 9 / 10,   PWM_BASE * 9 / 10, 0},
     {SHORT_DURATION, 0,                   0,         0},
-    {SHORT_DURATION, PWM_FLOAT,           PWM_FLOAT, PWM_FLOAT}
+    {SHORT_DURATION, 0,                   0,         0}
 };

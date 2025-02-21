@@ -32,6 +32,7 @@ const SET_STATE_HOLD_W_NEGATIVE = 0x80203025;
 
 // Other constants
 const PWM_BASE = 1536;
+const MAX_TIMEOUT = 0xFFFF; 
 const SET_FLOATING_DUTY = PWM_BASE - 1;
 const HISTORY_SIZE = 420;
 
@@ -44,7 +45,10 @@ Connect to COM port and read motor driver data.
 <div>${connect_buttons}</div>
 <div>${data_stream_buttons}</div>
 <div>${command_buttons}</div>
-<div>${command_value_slider}</div>
+<div>
+  ${command_value_slider}
+  ${command_timeout_slider}
+</div>
 
 
 ```js
@@ -75,6 +79,10 @@ const connect_buttons = Inputs.button(
 const command_value_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: "Command value:"});
 
 const command_value = Generators.input(command_value_slider);
+
+const command_timeout_slider = Inputs.range([0, MAX_TIMEOUT*time_conversion], {value: 2000, step: 100, label: "Command timeout (ms):"});
+
+const command_timeout = Generators.input(command_timeout_slider);
 ```
 
 ```js
@@ -129,28 +137,28 @@ const data_stream_buttons = Inputs.button(
 const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
-      await send_command(port, SET_STATE_OFF);
+      await command_and_stream(SET_STATE_OFF, 0);
     }],
     ["Drive", async function(){
-      await send_command(port, SET_STATE_DRIVE);
+      await command_and_stream(SET_STATE_DRIVE, 100 + command_timeout);
     }],
     ["Hold U positive", async function(){
-      await send_command(port, SET_STATE_HOLD_U_POSITIVE);
+      await command_and_stream(SET_STATE_HOLD_U_POSITIVE, 100 + command_timeout);
     }],
     ["Hold V positive", async function(){
-      await send_command(port, SET_STATE_HOLD_V_POSITIVE);
+      await command_and_stream(SET_STATE_HOLD_V_POSITIVE, 100 + command_timeout);
     }],
     ["Hold W positive", async function(){
-      await send_command(port, SET_STATE_HOLD_W_POSITIVE);
+      await command_and_stream(SET_STATE_HOLD_W_POSITIVE, 100 + command_timeout);
     }],
     ["Hold U negative", async function(){
-      await send_command(port, SET_STATE_HOLD_U_NEGATIVE);
+      await command_and_stream(SET_STATE_HOLD_U_NEGATIVE, 100 + command_timeout);
     }],
     ["Hold V negative", async function(){
-      await send_command(port, SET_STATE_HOLD_V_NEGATIVE);
+      await command_and_stream(SET_STATE_HOLD_V_NEGATIVE, 100 + command_timeout);
     }],
     ["Hold W negative", async function(){
-      await send_command(port, SET_STATE_HOLD_W_NEGATIVE);
+      await command_and_stream(SET_STATE_HOLD_W_NEGATIVE, 100 + command_timeout);
     }],
   ],
   {label: "Commands"},
@@ -579,7 +587,8 @@ async function send_command(port, command){
   let buffer = new Uint8Array(8);
   let view = new DataView(buffer.buffer);
   view.setUint32(0, command);
-  view.setUint32(4, command_value * PWM_BASE);
+  view.setUint16(4, Math.floor(command_timeout / time_conversion));
+  view.setUint16(6, Math.floor(command_value * PWM_BASE));
   await writer.write(buffer);
   writer.releaseLock();
 }

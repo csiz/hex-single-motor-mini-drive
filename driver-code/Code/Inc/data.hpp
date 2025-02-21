@@ -82,11 +82,15 @@ const float motor_shunt_resistance = 0.010;
 // High Side Voltage Output, Current-Sense Amplifier.
 const float amplifier_gain = 20.0;
 // The ADC has a 12-bit resolution.
-const uint16_t adc_max_value = 0xFFF;
+const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 // The formula that determines the current from the ADC readout: 
 //   Vout = (Iload * Rsense * GAIN) + Vref
-//   Vout = adc_current_readout / adc_max_value * adc_voltage_reference.
-// The minus sign is because of the way the INA4181 is wired up...
+// And the conversion from the ADC readout is given by:
+//   Vout = adc_voltage_reference * (adc_current_readout / adc_max_value).
+// So the current is:
+//   Iload = (Vout - Vref) / (Rsense * GAIN) = adc_voltage_reference * (adc_readout_diff / adc_max_value) / (Rsense * GAIN).
+// 
+// Note: The minus sign is because of the way I wired up the INA4181 ...
 const float current_conversion = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
 

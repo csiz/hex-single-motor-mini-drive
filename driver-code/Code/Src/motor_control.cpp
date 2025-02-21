@@ -18,7 +18,7 @@ uint16_t motor_u_pwm_duty = 0;
 uint16_t motor_v_pwm_duty = 0;
 uint16_t motor_w_pwm_duty = 0;
 bool motor_register_update_needed = true;
-
+uint16_t duration_till_timeout = 0;
 
 
 // Motor voltage fraction for the 6-step commutation.
@@ -93,11 +93,12 @@ void set_motor_pwm_gated(uint16_t u, uint16_t v, uint16_t w){
 }
 
 
-void hold_motor(uint16_t u, uint16_t v, uint16_t w){
+void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
     driver_state = DriverState::HOLD;
     set_motor_pwm_gated(u > PWM_MAX_HOLD ? PWM_MAX_HOLD : u, 
                         v > PWM_MAX_HOLD ? PWM_MAX_HOLD : v, 
                         w > PWM_MAX_HOLD ? PWM_MAX_HOLD : w);
+    duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
     motor_register_update_needed = true;
 }
 
@@ -139,9 +140,10 @@ void update_motor_control(){
 }
 
 
-void drive_motor(uint16_t pwm){
+void drive_motor(uint16_t pwm, uint16_t timeout){
     driver_state = DriverState::DRIVE;
     pwm_fraction = (pwm > PWM_MAX ? PWM_MAX : pwm) / static_cast<float>(PWM_BASE);
+    duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
     update_motor_control();
 }
 
@@ -184,6 +186,21 @@ void test_procedure(){
 }
 
 void update_motor_control_registers(){
+    if (duration_till_timeout > 0) {
+        duration_till_timeout -= 1;
+    } else {
+        switch (driver_state) {
+            case DriverState::HOLD:
+            case DriverState::DRIVE:
+                // Send the last state readouts and stop.
+                state_updates_to_send = HISTORY_SIZE;
+                disable_motor_ouputs();       
+                return;
+            case DriverState::OFF:
+            case DriverState::TEST_SCHEDULE:
+                break; // continue despite timeout
+        }
+    }
     if (not motor_register_update_needed) return;
 
     motor_register_update_needed = false;
@@ -191,11 +208,11 @@ void update_motor_control_registers(){
         case DriverState::OFF:
             disable_motor_ouputs();
             break;
-        case DriverState::DRIVE:
-            write_motor_registers();
-            break;
         case DriverState::TEST_SCHEDULE:
             test_procedure();
+            break;
+        case DriverState::DRIVE:
+            write_motor_registers();
             break;
         case DriverState::HOLD:
             write_motor_registers();
