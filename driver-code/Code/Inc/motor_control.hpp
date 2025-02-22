@@ -32,7 +32,7 @@ const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
 
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
-const uint16_t MIN_BOOTSTRAP_DUTY = 4; // 4/(72MHz) = 55.5ns
+const uint16_t MIN_BOOTSTRAP_DUTY = 16; // 4/(72MHz) = 55.5ns TODO: 4 was definitely too short
 const uint16_t PWM_MAX = PWM_BASE - MIN_BOOTSTRAP_DUTY; // 1024/72MHz = 14.2us
 // Sentinel value to indicate that the phase output should be floating.
 const uint16_t PWM_FLOAT = PWM_BASE - 1;

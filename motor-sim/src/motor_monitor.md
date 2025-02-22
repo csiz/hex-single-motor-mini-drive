@@ -204,7 +204,7 @@ const calibration_zones = [
 
 const calibration_points = 32;
 
-function compute_phase_calibration({measurements, targets}){
+function compute_zone_calibration({measurements, targets}){
 
   const slow_calibration = piecewise_linear({
     X: [0.0, ...measurements], 
@@ -249,12 +249,12 @@ function parse_calibration(calibration_summary){
   const X = even_spacing(max_measurable_current, calibration_points / 2 + 1).slice(1, -1);
   
   return {
-    u_positive: compute_phase_calibration({measurements: X, targets: calibration_summary.u_positive_targets}),
-    u_negative: compute_phase_calibration({measurements: X, targets: calibration_summary.u_negative_targets}),
-    v_positive: compute_phase_calibration({measurements: X, targets: calibration_summary.v_positive_targets}),
-    v_negative: compute_phase_calibration({measurements: X, targets: calibration_summary.v_negative_targets}),
-    w_positive: compute_phase_calibration({measurements: X, targets: calibration_summary.w_positive_targets}),
-    w_negative: compute_phase_calibration({measurements: X, targets: calibration_summary.w_negative_targets}),
+    u_positive: compute_zone_calibration({measurements: X, targets: calibration_summary.u_positive_targets}),
+    u_negative: compute_zone_calibration({measurements: X, targets: calibration_summary.u_negative_targets}),
+    v_positive: compute_zone_calibration({measurements: X, targets: calibration_summary.v_positive_targets}),
+    v_negative: compute_zone_calibration({measurements: X, targets: calibration_summary.v_negative_targets}),
+    w_positive: compute_zone_calibration({measurements: X, targets: calibration_summary.w_positive_targets}),
+    w_negative: compute_zone_calibration({measurements: X, targets: calibration_summary.w_negative_targets}),
     calibration_summary,
   };
 }
@@ -293,10 +293,8 @@ function reset_calibration(){
   localStorage.removeItem("pwm_step_calibration");
   update_calibration(parse_calibration(get_identity_calibration_data()));
 }
-```
 
 
-```js
 function calculate_data_stats(raw_readout_data){
 
   const ref_readout_mean = d3.mean(raw_readout_data, (d) => d.ref_readout);
@@ -316,16 +314,16 @@ function calculate_data_stats(raw_readout_data){
     const w_pwm = d.w_pwm == SET_FLOATING_DUTY ? null : d.w_pwm;
   
     const u = u_readout >= 0 ? 
-      calibration.u_positive.func(u_readout) : 
-      -calibration.u_negative.func(-u_readout);
+      calibration.value.u_positive.func(u_readout) : 
+      -calibration.value.u_negative.func(-u_readout);
   
     const v = v_readout >= 0 ? 
-      calibration.v_positive.func(v_readout) : 
-      -calibration.v_negative.func(-v_readout);
+      calibration.value.v_positive.func(v_readout) : 
+      -calibration.value.v_negative.func(-v_readout);
   
     const w = w_readout >= 0 ? 
-      calibration.w_positive.func(w_readout) : 
-      -calibration.w_negative.func(-w_readout);
+      calibration.value.w_positive.func(w_readout) : 
+      -calibration.value.w_negative.func(-w_readout);
   
     // const sum = (u_pwm === null ? 0 : u) + (v_pwm === null ? 0 : v) + (w_pwm === null ? 0 : w);
     const sum = u + v + w;
@@ -336,6 +334,119 @@ function calculate_data_stats(raw_readout_data){
   return {data, ref_readout_mean, start_readout_number};
 }
 
+
+async function command_and_return({command, timeout, command_timeout, command_value}) {
+  await send_command(port, command, command_timeout, command_value);
+  let data = [];
+  for await (const data_snapshot of stream_state_readouts({port, timeout})) {
+    data = data_snapshot;
+  }
+  return data;
+}
+
+let calibration_results = Mutable([]);
+
+
+async function run_calibration(){
+  // Note: hold pwm is clamped by the motor driver
+
+  await command_and_return({command: SET_STATE_HOLD_U_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
+  const u_positive_data = calculate_data_stats(
+    await command_and_return({command: SET_STATE_TEST_U_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
+  ).data;
+
+  console.info("U positive done");
+
+  await command_and_return({command: SET_STATE_HOLD_W_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
+  const w_negative_data = calculate_data_stats(
+    await command_and_return({command: SET_STATE_TEST_W_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
+  ).data;
+
+  console.info("W negative done");
+
+  await command_and_return({command: SET_STATE_HOLD_V_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
+  const v_positive_data = calculate_data_stats(
+    await command_and_return({command: SET_STATE_TEST_V_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
+  ).data;
+
+  console.info("V positive done");
+
+  await command_and_return({command: SET_STATE_HOLD_U_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
+  const u_negative_data = calculate_data_stats(
+    await command_and_return({command: SET_STATE_TEST_U_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
+  ).data;
+
+  console.info("U negative done");
+
+  await command_and_return({command: SET_STATE_HOLD_W_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
+  const w_positive_data = calculate_data_stats(
+    await command_and_return({command: SET_STATE_TEST_W_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
+  ).data;
+
+  console.info("W positive done");
+
+  await command_and_return({command: SET_STATE_HOLD_V_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
+  const v_negative_data = calculate_data_stats(
+    await command_and_return({command: SET_STATE_TEST_V_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
+  ).data;
+
+  console.info("V negative done");
+
+  const calibration_data = {
+    u_positive_data,
+    u_negative_data,
+    v_positive_data,
+    v_negative_data,
+    w_positive_data,
+    w_negative_data,
+  };
+
+  console.info("Calibration done");
+
+  calibration_results.value = [calibration_data, ...calibration_results.value];
+}
+
+const calibration_buttons = Inputs.button(
+  [
+    ["Start Calibration", async function(){
+      await run_calibration();
+    }],
+    ["Save Calibration", function(){
+      save_calibration();
+    }],
+    ["Reload Calibration", function(){
+      reload_calibration();
+    }],
+    ["Reset Calibration", function(){
+      reset_calibration();
+    }],
+  ],
+  {label: "Collect calibration data"},
+);
+
+const active_calibration_plots = [
+  Plot.plot({
+    marks: [
+      Plot.line(identity_calibration.u_positive.sample, {x: "reading", y: "target", stroke: "gray", label: "reference"}),
+      Plot.line(calibration.value.u_positive.sample, {x: "reading", y: "target", stroke: colors.u, label: "u", marker: "circle"}),
+      Plot.line(calibration.value.v_positive.sample, {x: "reading", y: "target", stroke: colors.v, label: "v", marker: "circle"}),
+      Plot.line(calibration.value.w_positive.sample, {x: "reading", y: "target", stroke: colors.w, label: "w", marker: "circle"}),
+      Plot.line(calibration.value.u_negative.sample, {x: "reading", y: "target", stroke: colors.u, strokeDasharray: "2 5", label: "u linear", marker: "circle"}),
+      Plot.line(calibration.value.v_negative.sample, {x: "reading", y: "target", stroke: colors.v, strokeDasharray: "2 5", label: "v linear", marker: "circle"}),
+      Plot.line(calibration.value.w_negative.sample, {x: "reading", y: "target", stroke: colors.w, strokeDasharray: "2 5", label: "w linear", marker: "circle"}),
+
+      Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+    ],
+    x: {label: "Current Reading (A)"},
+    y: {label: "Current Estimate (A)"},
+    width: 1200, height: 400,
+  })
+];
+```
+
+
+```js
 
 const {data, ref_readout_mean} = calculate_data_stats(raw_readout_data);
 
@@ -429,126 +540,68 @@ Calibration procedures
 
 <div class="card tight">
   <div>${calibration_buttons}</div>
+  <div>${active_calibration_plots}</div>
   <div>${calibration_plots}</div>
 </div>
 
 
 ```js
 
-async function command_and_return({command, timeout, command_timeout, command_value}) {
-  await send_command(port, command, command_timeout, command_value);
-  let data = [];
-  for await (const data_snapshot of stream_state_readouts({port, timeout})) {
-    data = data_snapshot;
-  }
-  return data;
-}
+function compute_calibration_stats(data_selector, readout_selector){
+  if (calibration_results.length < 1) return null;
 
-
-
-async function run_calibration(){
-  // Note: hold pwm is clamped by the motor driver
-
-  await command_and_return({command: SET_STATE_HOLD_U_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const u_positive_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_U_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
-
-  console.info("U positive done");
-
-  await command_and_return({command: SET_STATE_HOLD_W_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const w_negative_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_W_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
-
-  console.info("W negative done");
-
-  await command_and_return({command: SET_STATE_HOLD_V_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const v_positive_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_V_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
-
-  console.info("V positive done");
-
-  await command_and_return({command: SET_STATE_HOLD_U_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const u_negative_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_U_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
-
-  console.info("U negative done");
-
-  await command_and_return({command: SET_STATE_HOLD_W_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const w_positive_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_W_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
-
-  console.info("W positive done");
-
-  await command_and_return({command: SET_STATE_HOLD_V_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const v_negative_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_V_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
-
-  console.info("V negative done");
-
-  let calibrations = [{u_positive_data, u_negative_data, v_positive_data, v_negative_data, w_positive_data, w_negative_data}];
-  let last_calibration = calibration;
-
-  while (last_calibration && last_calibration.has_data) {
-    calibrations.push(last_calibration);
-    last_calibration = last_calibration.previous_calibration;
-  }
-
-  function compute_multi_calibration_stats(data_selector, readout_selector){
-    const current_data = data_selector(calibrations[0]);
-    return current_data.map((d, i) => {
-      const prev_data = calibrations.map(data_selector).map((d) => d[i]);
-      const readouts = prev_data.map(readout_selector);
-      return {
-        ...d,
-        cal_readout_mean: d3.mean(readouts),
-        cal_readout_std: d3.deviation(readouts),
-      };
-    });
+  const phase_calibration_data = calibration_results.map(data_selector);
+  // Check the length of the data is the same for all collections.
+  const latest_data = phase_calibration_data[0];
+  if (phase_calibration_data.some((d) => d.length !== latest_data.length)) {
+    throw new Error("Data length mismatch");
   }
   
-  const calibration_data = {
-    u_positive_data: compute_multi_calibration_stats((d) => d.u_positive_data, (d) => d.u_readout),
-    u_negative_data: compute_multi_calibration_stats((d) => d.u_negative_data, (d) => -d.u_readout),
-    v_positive_data: compute_multi_calibration_stats((d) => d.v_positive_data, (d) => d.v_readout),
-    v_negative_data: compute_multi_calibration_stats((d) => d.v_negative_data, (d) => -d.v_readout),
-    w_positive_data: compute_multi_calibration_stats((d) => d.w_positive_data, (d) => d.w_readout),
-    w_negative_data: compute_multi_calibration_stats((d) => d.w_negative_data, (d) => -d.w_readout),
-  };
+  return latest_data.map((d, i) => {
+    const calibration_data = calibration_results.map(data_selector).map((d) => d[i]);
+    const readouts = calibration_data.map(readout_selector);
+    return {
+      time: d.time,
+      readout_mean: d3.mean(readouts),
+      readout_std: d3.deviation(readouts),
+    };
+  });
+}
 
-  const predicted_targets = calibration_zones.map((zone) => zone.pwm * drive_voltage / drive_resistance);
+const calibration_stats = {
+  u_positive_stats: compute_calibration_stats((d) => d.u_positive_data, (d) => d.u_readout),
+  u_negative_stats: compute_calibration_stats((d) => d.u_negative_data, (d) => -d.u_readout),
+  v_positive_stats: compute_calibration_stats((d) => d.v_positive_data, (d) => d.v_readout),
+  v_negative_stats: compute_calibration_stats((d) => d.v_negative_data, (d) => -d.v_readout),
+  w_positive_stats: compute_calibration_stats((d) => d.w_positive_data, (d) => d.w_readout),
+  w_negative_stats: compute_calibration_stats((d) => d.w_negative_data, (d) => -d.w_readout),
+};
 
-  function compute_zone_statistics(data){
-    return calibration_zones.map((zone) => {
-      // Gather the data by zone., as an array of measurements.
-      const zone_data = data.filter((d) => d.time > zone.start && d.time < zone.end);
+const predicted_targets = calibration_zones.map((zone) => zone.pwm * drive_voltage / drive_resistance);
 
-      return {
-        ...zone,
-        cal_readout_mean: d3.mean(zone_data, (d) => d.cal_readout_mean),
-      };
-    });
-  }
+function select_by_zone(data){
+  return calibration_zones.map((zone) => {
+    return data.filter((d) => d.time > zone.start && d.time < zone.end);
+  });
+}
 
-  function compute_calibration(data){
-    return compute_phase_calibration({
-      measurements: compute_zone_statistics(data).map((d) => d.cal_readout_mean),
-      targets: predicted_targets,
-    });
-  }
+function compute_phase_calibration(data){
+  return compute_zone_calibration({
+    measurements: select_by_zone(data).map((zone_data)=> d3.mean(zone_data, (d) => d.readout_mean)),
+    targets: predicted_targets,
+  });
+}
 
+const latest_calibration = function compute_calibration(){
+  if (calibration_results.length < 1) return null;
 
-  const u_positive = compute_calibration(calibration_data.u_positive_data);
-  const u_negative = compute_calibration(calibration_data.u_negative_data);
-  const v_positive = compute_calibration(calibration_data.v_positive_data);
-  const v_negative = compute_calibration(calibration_data.v_negative_data);
-  const w_positive = compute_calibration(calibration_data.w_positive_data);
-  const w_negative = compute_calibration(calibration_data.w_negative_data);
+  const u_positive = compute_phase_calibration(calibration_stats.u_positive_stats);
+  const u_negative = compute_phase_calibration(calibration_stats.u_negative_stats);
+  const v_positive = compute_phase_calibration(calibration_stats.v_positive_stats);
+  const v_negative = compute_phase_calibration(calibration_stats.v_negative_stats);
+  const w_positive = compute_phase_calibration(calibration_stats.w_positive_stats);
+  const w_negative = compute_phase_calibration(calibration_stats.w_negative_stats);
+
 
   const calibration_summary = {
     u_positive_targets: u_positive.Y.slice(1, -1),
@@ -559,8 +612,7 @@ async function run_calibration(){
     w_negative_targets: w_negative.Y.slice(1, -1),
   };
 
-
-  update_calibration({
+  const result = {
     u_positive,
     u_negative,
     v_positive,
@@ -568,40 +620,23 @@ async function run_calibration(){
     w_positive,
     w_negative,
     calibration_summary,
-    has_data: true,
-    ...calibration_data,
-    previous_calibration: calibration.has_data ? calibration : null,
-  });
-}
+  };
 
-const have_std_estimate = calibration.has_data && calibration.previous_calibration && calibration.previous_calibration.has_data;
+  update_calibration(result);
+
+  return result;
+}();
 
 const calibration_plots = [
-  Plot.plot({
+  html`<div>Number of calibration data sets: ${calibration_results.length}</div>`,
+  calibration_results.length >= 1 ? Plot.plot({
     marks: [
-      Plot.line(identity_calibration.u_positive.sample, {x: "reading", y: "target", stroke: "gray", label: "reference"}),
-      Plot.line(calibration.u_positive.sample, {x: "reading", y: "target", stroke: colors.u, label: "u", marker: "circle"}),
-      Plot.line(calibration.v_positive.sample, {x: "reading", y: "target", stroke: colors.v, label: "v", marker: "circle"}),
-      Plot.line(calibration.w_positive.sample, {x: "reading", y: "target", stroke: colors.w, label: "w", marker: "circle"}),
-      Plot.line(calibration.u_negative.sample, {x: "reading", y: "target", stroke: colors.u, strokeDasharray: "2 5", label: "u linear", marker: "circle"}),
-      Plot.line(calibration.v_negative.sample, {x: "reading", y: "target", stroke: colors.v, strokeDasharray: "2 5", label: "v linear", marker: "circle"}),
-      Plot.line(calibration.w_negative.sample, {x: "reading", y: "target", stroke: colors.w, strokeDasharray: "2 5", label: "w linear", marker: "circle"}),
-
-      Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-    ],
-    x: {label: "Current Reading (A)"},
-    y: {label: "Current Estimate (A)"},
-    width: 1200, height: 400,
-  }),
-  calibration.has_data ? Plot.plot({
-    marks: [
-      Plot.line(calibration.u_positive_data, {x: "time", y: "u_readout", stroke: colors.u, label: "u"}),
-      Plot.line(calibration.u_negative_data, {x: "time", y: (d) => -d.u_readout, stroke: colors.u, strokeDasharray: "2 5", label: "u linear"}),
-      Plot.line(calibration.v_positive_data, {x: "time", y: "v_readout", stroke: colors.v, label: "v"}),
-      Plot.line(calibration.w_positive_data, {x: "time", y: "w_readout", stroke: colors.w, label: "w"}),
-      Plot.line(calibration.v_negative_data, {x: "time", y: (d) => -d.v_readout, stroke: colors.v, strokeDasharray: "2 5", label: "v linear"}),
-      Plot.line(calibration.w_negative_data, {x: "time", y: (d) => -d.w_readout, stroke: colors.w, strokeDasharray: "2 5", label: "w linear"}),
+      Plot.line(calibration_stats.u_positive_stats, {x: "time", y: "readout_mean", stroke: colors.u, label: "u positive"}),
+      Plot.line(calibration_stats.v_positive_stats, {x: "time", y: "readout_mean", stroke: colors.v, label: "v positive"}),
+      Plot.line(calibration_stats.w_positive_stats, {x: "time", y: "readout_mean", stroke: colors.w, label: "w positive"}),
+      Plot.line(calibration_stats.u_negative_stats, {x: "time", y: "readout_mean", stroke: colors.u, strokeDasharray: "2 5", label: "u negative"}),
+      Plot.line(calibration_stats.v_negative_stats, {x: "time", y: "readout_mean", stroke: colors.v, strokeDasharray: "2 5", label: "v negative"}),
+      Plot.line(calibration_stats.w_negative_stats, {x: "time", y: "readout_mean", stroke: colors.w, strokeDasharray: "2 5", label: "w negative"}),
       Plot.rect(calibration_zones, {x1: "start", x2: "end", y1: 0, y2: max_measurable_current, fill: "rgba(0, 0, 0, 0.05)"}),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
@@ -609,15 +644,15 @@ const calibration_plots = [
     x: {label: "Time (ms)"},
     y: {label: "Current (A)"},
     width: 1200, height: 400,
-  }) : html`<div>Calibration hasn't run yet</div>`,
-  have_std_estimate ? Plot.plot({
+  }) : html`<div>No calibration data</div>`,
+  calibration_results.length >= 2 ? Plot.plot({
     marks: [
-      Plot.areaY(calibration.u_positive_data, {x: "time", y1: (d) => d.cal_readout_mean - d.cal_readout_std, y2: (d) => d.cal_readout_mean + d.cal_readout_std, fill: colors.u}),
-      Plot.areaY(calibration.v_positive_data, {x: "time", y1: (d) => d.cal_readout_mean - d.cal_readout_std, y2: (d) => d.cal_readout_mean + d.cal_readout_std, fill: colors.v}),
-      Plot.areaY(calibration.w_positive_data, {x: "time", y1: (d) => d.cal_readout_mean - d.cal_readout_std, y2: (d) => d.cal_readout_mean + d.cal_readout_std, fill: colors.w}),
-      Plot.areaY(calibration.u_negative_data, {x: "time", y1: (d) => -d.cal_readout_mean - d.cal_readout_std, y2: (d) => -d.cal_readout_mean + d.cal_readout_std, fill: colors.u}),
-      Plot.areaY(calibration.v_negative_data, {x: "time", y1: (d) => -d.cal_readout_mean - d.cal_readout_std, y2: (d) => -d.cal_readout_mean + d.cal_readout_std, fill: colors.v}),
-      Plot.areaY(calibration.w_negative_data, {x: "time", y1: (d) => -d.cal_readout_mean - d.cal_readout_std, y2: (d) => -d.cal_readout_mean + d.cal_readout_std, fill: colors.w}),
+      Plot.areaY(calibration_stats.u_positive_stats, {x: "time", y1: (d) => d.readout_mean - d.readout_std, y2: (d) => d.readout_mean + d.readout_std, fill: colors.u}),
+      Plot.areaY(calibration_stats.v_positive_stats, {x: "time", y1: (d) => d.readout_mean - d.readout_std, y2: (d) => d.readout_mean + d.readout_std, fill: colors.v}),
+      Plot.areaY(calibration_stats.w_positive_stats, {x: "time", y1: (d) => d.readout_mean - d.readout_std, y2: (d) => d.readout_mean + d.readout_std, fill: colors.w}),
+      Plot.areaY(calibration_stats.u_negative_stats, {x: "time", y1: (d) => -d.readout_mean - d.readout_std, y2: (d) => -d.readout_mean + d.readout_std, fill: colors.u}),
+      Plot.areaY(calibration_stats.v_negative_stats, {x: "time", y1: (d) => -d.readout_mean - d.readout_std, y2: (d) => -d.readout_mean + d.readout_std, fill: colors.v}),
+      Plot.areaY(calibration_stats.w_negative_stats, {x: "time", y1: (d) => -d.readout_mean - d.readout_std, y2: (d) => -d.readout_mean + d.readout_std, fill: colors.w}),
       Plot.rect(calibration_zones, {x1: "start", x2: "end", y1: -max_measurable_current, y2: max_measurable_current, fill: "rgba(0, 0, 0, 0.05)"}),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
@@ -625,27 +660,11 @@ const calibration_plots = [
     x: {label: "Time (ms)"},
     y: {label: "Current (A)"},
     width: 1200, height: 600,
-  }) : html`<div>No std estimate</div>`,
+  }) : html`<div>No calibration statistics</div>`,
 ];
 
 
-const calibration_buttons = Inputs.button(
-  [
-    ["Start Calibration", async function(){
-      await run_calibration();
-    }],
-    ["Save Calibration", function(){
-      save_calibration();
-    }],
-    ["Reload Calibration", function(){
-      reload_calibration();
-    }],
-    ["Reset Calibration", function(){
-      reset_calibration();
-    }],
-],
-  {label: "Collect calibration data"},
-);
+
 ```
 
 
@@ -706,7 +725,7 @@ async function * stream_state_readouts({port, timeout = 200, max_missed_messages
     if (data.length % 64 === 0) yield data;
   }
 
-  yield data;
+  if (data.length) yield data;
 }
 ```
 
