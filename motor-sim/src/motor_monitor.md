@@ -46,9 +46,10 @@ const current_conversion = adc_voltage_reference / (adc_max_value * motor_shunt_
 
 const max_measurable_current = adc_max_value / 2 * current_conversion;
 
-
 const drive_resistance = 2.0; // 2.0 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
 const drive_voltage = 10.0; // 10.0 V // TODO: get it from the chip
+
+const max_calibration_current = 1.0 * drive_voltage / drive_resistance;
 ```
 
 
@@ -205,27 +206,32 @@ const calibration_zones = [
 const calibration_points = 32;
 
 function compute_zone_calibration({measurements, targets}){
+  // Make sure the lengths are equal.
+  if (measurements.length !== targets.length) throw new Error("Data length mismatch");
+
+  const factor = d3.mean(targets, (target, i) => target / measurements[i]); 
 
   const slow_calibration = piecewise_linear({
-    X: [0.0, ...measurements], 
-    Y: [0.0, ...targets],
+    X: [0.0, ...measurements.map((x) => x)], 
+    Y: [0.0, ...targets.map((y) => y / factor)],
   });
 
   const n = calibration_points / 2 + 1;
 
   // Recalibrate to evenly spaced points for fast processing.
 
-  const X = even_spacing(max_measurable_current, n);
-  const Y = X.map(slow_calibration);
+  const X = even_spacing(max_calibration_current, n);
+  const Y = X.map((x) => slow_calibration(x));
 
 
-  const func = even_piecewise_linear({x_min: 0, x_max: max_measurable_current, Y});
+  const func = even_piecewise_linear({x_min: 0, x_max: max_calibration_current, Y});
 
   const sample = X.map((x) => ({reading: x, target: func(x)}));
-
+  
   return {
-    X,
-    Y,
+    measurements,
+    targets,
+    factor,
     func,
     sample,
   };
@@ -233,28 +239,34 @@ function compute_zone_calibration({measurements, targets}){
 
 function get_identity_calibration_data(){
   // Drop the first 0.
-  const even_readouts = even_spacing(max_measurable_current, calibration_points / 2 + 1).slice(1, -1);
+  const even_readouts = even_spacing(max_calibration_current, calibration_points / 2 + 1).slice(1, -1);
   return {
     u_positive_targets: even_readouts,
+    u_positive_measurements: even_readouts,
     u_negative_targets: even_readouts,
+    u_negative_measurements: even_readouts,
     v_positive_targets: even_readouts,
+    v_positive_measurements: even_readouts,
     v_negative_targets: even_readouts,
+    v_negative_measurements: even_readouts,
     w_positive_targets: even_readouts,
+    w_positive_measurements: even_readouts,
     w_negative_targets: even_readouts,
+    w_negative_measurements: even_readouts,
   };
 }
 
 function parse_calibration(calibration_summary){
   // Drop the first 0.
-  const X = even_spacing(max_measurable_current, calibration_points / 2 + 1).slice(1, -1);
+  const X = even_spacing(max_calibration_current, calibration_points / 2 + 1).slice(1, -1);
   
   return {
-    u_positive: compute_zone_calibration({measurements: X, targets: calibration_summary.u_positive_targets}),
-    u_negative: compute_zone_calibration({measurements: X, targets: calibration_summary.u_negative_targets}),
-    v_positive: compute_zone_calibration({measurements: X, targets: calibration_summary.v_positive_targets}),
-    v_negative: compute_zone_calibration({measurements: X, targets: calibration_summary.v_negative_targets}),
-    w_positive: compute_zone_calibration({measurements: X, targets: calibration_summary.w_positive_targets}),
-    w_negative: compute_zone_calibration({measurements: X, targets: calibration_summary.w_negative_targets}),
+    u_positive: compute_zone_calibration({measurements: calibration_summary.u_positive_measurements, targets: calibration_summary.u_positive_targets}),
+    u_negative: compute_zone_calibration({measurements: calibration_summary.u_negative_measurements, targets: calibration_summary.u_negative_targets}),
+    v_positive: compute_zone_calibration({measurements: calibration_summary.v_positive_measurements, targets: calibration_summary.v_positive_targets}),
+    v_negative: compute_zone_calibration({measurements: calibration_summary.v_negative_measurements, targets: calibration_summary.v_negative_targets}),
+    w_positive: compute_zone_calibration({measurements: calibration_summary.w_positive_measurements, targets: calibration_summary.w_positive_targets}),
+    w_negative: compute_zone_calibration({measurements: calibration_summary.w_negative_measurements, targets: calibration_summary.w_negative_targets}),
     calibration_summary,
   };
 }
@@ -313,18 +325,19 @@ function calculate_data_stats(raw_readout_data){
     const v_pwm = d.v_pwm == SET_FLOATING_DUTY ? null : d.v_pwm;
     const w_pwm = d.w_pwm == SET_FLOATING_DUTY ? null : d.w_pwm;
   
-    const u = u_readout >= 0 ? 
-      calibration.value.u_positive.func(u_readout) : 
-      -calibration.value.u_negative.func(-u_readout);
-  
-    const v = v_readout >= 0 ? 
-      calibration.value.v_positive.func(v_readout) : 
-      -calibration.value.v_negative.func(-v_readout);
-  
-    const w = w_readout >= 0 ? 
-      calibration.value.w_positive.func(w_readout) : 
-      -calibration.value.w_negative.func(-w_readout);
-  
+    const u = u_readout * (u_readout >= 0 ? 
+      calibration.value.u_positive.factor :
+      calibration.value.u_negative.factor);
+
+    const v = v_readout * (v_readout >= 0 ?
+      calibration.value.v_positive.factor :
+      calibration.value.v_negative.factor);
+
+    const w = w_readout * (w_readout >= 0 ?
+      calibration.value.w_positive.factor :
+      calibration.value.w_negative.factor);
+
+    // TODO: do I have to discard shunt readings for floating duty cycle?
     // const sum = (u_pwm === null ? 0 : u) + (v_pwm === null ? 0 : v) + (w_pwm === null ? 0 : w);
     const sum = u + v + w;
   
@@ -348,6 +361,8 @@ let calibration_results = Mutable([]);
 
 
 async function run_calibration(){
+  console.info("Calibration starting");
+
   // Note: hold pwm is clamped by the motor driver
 
   await command_and_return({command: SET_STATE_HOLD_U_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
@@ -424,17 +439,24 @@ const calibration_buttons = Inputs.button(
   {label: "Collect calibration data"},
 );
 
+```
+
+```js
 const active_calibration_plots = [
+  html`<div>Phase correction factors:</div><table>
+    <tr><td>U:</td><td>${calibration.u_positive.factor.toFixed(3)}</td><td>${calibration.u_negative.factor.toFixed(3)}</td></tr>
+    <tr><td>V:</td><td>${calibration.v_positive.factor.toFixed(3)}</td><td>${calibration.v_negative.factor.toFixed(3)}</td></tr>
+    <tr><td>W:</td><td>${calibration.w_positive.factor.toFixed(3)}</td><td>${calibration.w_negative.factor.toFixed(3)}</td></tr>
+  </table>`,
   Plot.plot({
     marks: [
       Plot.line(identity_calibration.u_positive.sample, {x: "reading", y: "target", stroke: "gray", label: "reference"}),
-      Plot.line(calibration.value.u_positive.sample, {x: "reading", y: "target", stroke: colors.u, label: "u", marker: "circle"}),
-      Plot.line(calibration.value.v_positive.sample, {x: "reading", y: "target", stroke: colors.v, label: "v", marker: "circle"}),
-      Plot.line(calibration.value.w_positive.sample, {x: "reading", y: "target", stroke: colors.w, label: "w", marker: "circle"}),
-      Plot.line(calibration.value.u_negative.sample, {x: "reading", y: "target", stroke: colors.u, strokeDasharray: "2 5", label: "u linear", marker: "circle"}),
-      Plot.line(calibration.value.v_negative.sample, {x: "reading", y: "target", stroke: colors.v, strokeDasharray: "2 5", label: "v linear", marker: "circle"}),
-      Plot.line(calibration.value.w_negative.sample, {x: "reading", y: "target", stroke: colors.w, strokeDasharray: "2 5", label: "w linear", marker: "circle"}),
-
+      Plot.line(calibration.u_positive.sample, {x: "reading", y: "target", stroke: colors.u, label: "u", marker: "circle"}),
+      Plot.line(calibration.v_positive.sample, {x: "reading", y: "target", stroke: colors.v, label: "v", marker: "circle"}),
+      Plot.line(calibration.w_positive.sample, {x: "reading", y: "target", stroke: colors.w, label: "w", marker: "circle"}),
+      Plot.line(calibration.u_negative.sample, {x: "reading", y: "target", stroke: colors.u, strokeDasharray: "2 5", label: "u linear", marker: "circle"}),
+      Plot.line(calibration.v_negative.sample, {x: "reading", y: "target", stroke: colors.v, strokeDasharray: "2 5", label: "v linear", marker: "circle"}),
+      Plot.line(calibration.w_negative.sample, {x: "reading", y: "target", stroke: colors.w, strokeDasharray: "2 5", label: "w linear", marker: "circle"}),
       Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
     ],
@@ -554,6 +576,7 @@ function compute_calibration_stats(data_selector, readout_selector){
   // Check the length of the data is the same for all collections.
   const latest_data = phase_calibration_data[0];
   if (phase_calibration_data.some((d) => d.length !== latest_data.length)) {
+    console.error(phase_calibration_data.map((d) => d.length));
     throw new Error("Data length mismatch");
   }
   
@@ -587,7 +610,7 @@ function select_by_zone(data){
 
 function compute_phase_calibration(data){
   return compute_zone_calibration({
-    measurements: select_by_zone(data).map((zone_data)=> d3.mean(zone_data, (d) => d.readout_mean)),
+    measurements: select_by_zone(data).map((zone_data) => d3.mean(zone_data, (d) => d.readout_mean)),
     targets: predicted_targets,
   });
 }
@@ -602,14 +625,29 @@ const latest_calibration = function compute_calibration(){
   const w_positive = compute_phase_calibration(calibration_stats.w_positive_stats);
   const w_negative = compute_phase_calibration(calibration_stats.w_negative_stats);
 
+  const phase_calibrations = [
+    u_positive,
+    u_negative,
+    v_positive,
+    v_negative,
+    w_positive,
+    w_negative,
+  ];
+
 
   const calibration_summary = {
-    u_positive_targets: u_positive.Y.slice(1, -1),
-    u_negative_targets: u_negative.Y.slice(1, -1),
-    v_positive_targets: v_positive.Y.slice(1, -1),
-    v_negative_targets: v_negative.Y.slice(1, -1),
-    w_positive_targets: w_positive.Y.slice(1, -1),
-    w_negative_targets: w_negative.Y.slice(1, -1),
+    u_positive_targets: u_positive.targets,
+    u_positive_measurements: u_positive.measurements,
+    u_negative_targets: u_negative.targets,
+    u_negative_measurements: u_negative.measurements,
+    v_positive_targets: v_positive.targets,
+    v_positive_measurements: v_positive.measurements,
+    v_negative_targets: v_negative.targets,
+    v_negative_measurements: v_negative.measurements,
+    w_positive_targets: w_positive.targets,
+    w_positive_measurements: w_positive.measurements,
+    w_negative_targets: w_negative.targets,
+    w_negative_measurements: w_negative.measurements,
   };
 
   const result = {
@@ -637,7 +675,7 @@ const calibration_plots = [
       Plot.line(calibration_stats.u_negative_stats, {x: "time", y: "readout_mean", stroke: colors.u, strokeDasharray: "2 5", label: "u negative"}),
       Plot.line(calibration_stats.v_negative_stats, {x: "time", y: "readout_mean", stroke: colors.v, strokeDasharray: "2 5", label: "v negative"}),
       Plot.line(calibration_stats.w_negative_stats, {x: "time", y: "readout_mean", stroke: colors.w, strokeDasharray: "2 5", label: "w negative"}),
-      Plot.rect(calibration_zones, {x1: "start", x2: "end", y1: 0, y2: max_measurable_current, fill: "rgba(0, 0, 0, 0.05)"}),
+      Plot.rect(calibration_zones, {x1: "start", x2: "end", y1: 0, y2: max_calibration_current, fill: "rgba(0, 0, 0, 0.05)"}),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
     ],
@@ -653,7 +691,7 @@ const calibration_plots = [
       Plot.areaY(calibration_stats.u_negative_stats, {x: "time", y1: (d) => -d.readout_mean - d.readout_std, y2: (d) => -d.readout_mean + d.readout_std, fill: colors.u}),
       Plot.areaY(calibration_stats.v_negative_stats, {x: "time", y1: (d) => -d.readout_mean - d.readout_std, y2: (d) => -d.readout_mean + d.readout_std, fill: colors.v}),
       Plot.areaY(calibration_stats.w_negative_stats, {x: "time", y1: (d) => -d.readout_mean - d.readout_std, y2: (d) => -d.readout_mean + d.readout_std, fill: colors.w}),
-      Plot.rect(calibration_zones, {x1: "start", x2: "end", y1: -max_measurable_current, y2: max_measurable_current, fill: "rgba(0, 0, 0, 0.05)"}),
+      Plot.rect(calibration_zones, {x1: "start", x2: "end", y1: -max_calibration_current, y2: max_calibration_current, fill: "rgba(0, 0, 0, 0.05)"}),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
     ],
