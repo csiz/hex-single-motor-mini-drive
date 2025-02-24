@@ -11,6 +11,7 @@ const GET_STATE_READOUTS = 0x80202021;
 const SET_STATE_OFF = 0x80202030;
 const SET_STATE_DRIVE = 0x80202031;
 const SET_STATE_TEST_ALL_PERMUTATIONS = 0x80202032;
+const SET_STATE_DRIVE_2PHASE = 0x80202033;
 
 const SET_STATE_TEST_GROUND_SHORT = 0x80202036;
 const SET_STATE_TEST_POSITIVE_SHORT = 0x80202037;
@@ -166,6 +167,9 @@ const command_buttons = Inputs.button(
     }],
     ["Drive", async function(){
       await command(SET_STATE_DRIVE, command_timeout);
+    }],
+    ["Drive 2-phase", async function(){
+      await command(SET_STATE_DRIVE_2PHASE, command_timeout);
     }],
     ["Hold U positive", async function(){
       await command(SET_STATE_HOLD_U_POSITIVE);

@@ -22,7 +22,8 @@ using PWMSchedule = PWMStage[SCHEDULE_SIZE];
 
 enum struct DriverState {
     OFF,
-    DRIVE,
+    DRIVE_3PHASE,
+    DRIVE_2PHASE,
     HOLD,
     TEST_SCHEDULE,
 };
@@ -44,7 +45,8 @@ const uint16_t MAX_TIMEOUT = 0xFFFF;
 // Motor control functions
 void motor_control_init();
 
-void drive_motor(uint16_t pwm, uint16_t timeout);
+void drive_motor_2phase(uint16_t pwm, uint16_t timeout);
+void drive_motor_3phase(uint16_t pwm, uint16_t timeout);
 
 void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
 

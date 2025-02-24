@@ -253,7 +253,10 @@ void usb_tick(){
 
             // Drive the motor.
             case SET_STATE_DRIVE:
-                drive_motor(pwm, timeout);
+                drive_motor_3phase(pwm, timeout);
+                break;
+            case SET_STATE_DRIVE_2PHASE:
+                drive_motor_2phase(pwm, timeout);
                 break;
 
             case SET_STATE_HOLD_U_POSITIVE:
