@@ -22,7 +22,8 @@ float tim1_update_rate = 0.0f;
 float tim2_update_rate = 0.0f;
 float tim2_cc1_rate = 0.0f;
 
-
+uint32_t last_usb_send = 0;
+const uint32_t USB_TIMEOUT = 500;
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
 // TODO: also need to set a minium on time for MOSFET driving, too little 
@@ -295,7 +296,13 @@ void usb_tick(){
         if(usb_com_queue_send(readout_data, 20) == 0){
             state_updates_to_send -= 1;
             state_readouts_index = (state_readouts_index + 1) % HISTORY_SIZE;
+            last_usb_send = HAL_GetTick();
         }else {
+            if (HAL_GetTick() > last_usb_send + USB_TIMEOUT) {
+                // The USB controller is not reading data; stop sending and clear the queue.
+                state_updates_to_send = 0;
+                usb_com_reset();
+            }
             break;
         }
     }

@@ -159,9 +159,7 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 static int8_t CDC_Init_FS(void)
 {
   /* USER CODE BEGIN 3 */
-  usb_com_init();
-  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  usb_com_reset();
   usb_com_ready = true;
   return (USBD_OK);
   /* USER CODE END 3 */
@@ -418,6 +416,12 @@ void usb_com_init(){
   usb_com_rx_fifo.tail = 0;
   usb_com_rx_fifo.size = 0;
   usb_com_rx_fifo.extra = 0;
+}
+
+void usb_com_reset(){
+  usb_com_init();
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
 }
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 

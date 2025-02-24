@@ -104,9 +104,20 @@ let raw_readout_data = Mutable();
 
 async function command_and_stream(command, timeout){
   await send_command(port, command, command_timeout, command_value);
+
+  if (port.readable.locked) {
+    console.error("Port is locked");
+    return;
+  }
+
+  // Start reading the data stream.
   for await (const data_snapshot of stream_state_readouts({port, timeout})) {
     raw_readout_data.value = data_snapshot;
   }
+}
+
+async function command(command){
+  await send_command(port, command, command_timeout, command_value);
 }
 
 const data_stream_buttons = Inputs.button(
@@ -151,28 +162,28 @@ const data_stream_buttons = Inputs.button(
 const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
-      await command_and_stream(SET_STATE_OFF, 0);
+      await command(SET_STATE_OFF);
     }],
     ["Drive", async function(){
-      await command_and_stream(SET_STATE_DRIVE, 100 + command_timeout);
+      await command(SET_STATE_DRIVE, command_timeout);
     }],
     ["Hold U positive", async function(){
-      await command_and_stream(SET_STATE_HOLD_U_POSITIVE, 100 + command_timeout);
+      await command(SET_STATE_HOLD_U_POSITIVE);
     }],
     ["Hold V positive", async function(){
-      await command_and_stream(SET_STATE_HOLD_V_POSITIVE, 100 + command_timeout);
+      await command(SET_STATE_HOLD_V_POSITIVE);
     }],
     ["Hold W positive", async function(){
-      await command_and_stream(SET_STATE_HOLD_W_POSITIVE, 100 + command_timeout);
+      await command(SET_STATE_HOLD_W_POSITIVE);
     }],
     ["Hold U negative", async function(){
-      await command_and_stream(SET_STATE_HOLD_U_NEGATIVE, 100 + command_timeout);
+      await command(SET_STATE_HOLD_U_NEGATIVE);
     }],
     ["Hold V negative", async function(){
-      await command_and_stream(SET_STATE_HOLD_V_NEGATIVE, 100 + command_timeout);
+      await command(SET_STATE_HOLD_V_NEGATIVE);
     }],
     ["Hold W negative", async function(){
-      await command_and_stream(SET_STATE_HOLD_W_NEGATIVE, 100 + command_timeout);
+      await command(SET_STATE_HOLD_W_NEGATIVE);
     }],
   ],
   {label: "Commands"},
@@ -512,6 +523,7 @@ function compute_calibration_stats(data_selector, readout_selector){
     const readouts = calibration_data.map(readout_selector);
     return {
       time: d.time,
+      readout_latest: readout_selector(d),
       readout_mean: d3.mean(readouts),
       readout_std: d3.deviation(readouts),
     };
@@ -557,6 +569,23 @@ const calibration = {
 const calibration_plots = [
   html`<div>Number of calibration data sets: ${calibration_results.length}</div>`,
   ...(calibration_results.length < 1 ? [html`<div>No calibration data</div>`] : [
+    html`<h3>Calibration results</h3>`,
+    Plot.plot({
+      marks: [
+        Plot.line(calibration_stats.u_positive_stats, {x: "time", y: "readout_latest", stroke: colors.u, label: "u positive"}),
+        Plot.line(calibration_stats.v_positive_stats, {x: "time", y: "readout_latest", stroke: colors.v, label: "v positive"}),
+        Plot.line(calibration_stats.w_positive_stats, {x: "time", y: "readout_latest", stroke: colors.w, label: "w positive"}),
+        Plot.line(calibration_stats.u_negative_stats, {x: "time", y: "readout_latest", stroke: colors.u, strokeDasharray: "2 5", label: "u negative"}),
+        Plot.line(calibration_stats.v_negative_stats, {x: "time", y: "readout_latest", stroke: colors.v, strokeDasharray: "2 5", label: "v negative"}),
+        Plot.line(calibration_stats.w_negative_stats, {x: "time", y: "readout_latest", stroke: colors.w, strokeDasharray: "2 5", label: "w negative"}),
+        Plot.rect(calibration_zones, {x1: "start", x2: "end", y1: 0, y2: max_calibration_current, fill: "rgba(0, 0, 0, 0.05)"}),
+        Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
+        Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+      ],
+      x: {label: "Time (ms)"},
+      y: {label: "Current (A)"},
+      width: 1200, height: 400,
+    }),
     html`<div>Phase correction factors:</div><table>
       <tr><td>U:</td><td>${calibration.u_positive.factor.toFixed(3)}</td><td>${calibration.u_negative.factor.toFixed(3)}</td></tr>
       <tr><td>V:</td><td>${calibration.v_positive.factor.toFixed(3)}</td><td>${calibration.v_negative.factor.toFixed(3)}</td></tr>
@@ -578,6 +607,9 @@ const calibration_plots = [
       y: {label: "Current Estimate (A)"},
       width: 1200, height: 400,
     }),
+  ]),
+  ...(calibration_results.length < 2 ? [html`<div>No calibration statistics</div>`] : [
+    html`<h3>Calibration statistics</h3>`,
     Plot.plot({
       marks: [
         Plot.line(calibration_stats.u_positive_stats, {x: "time", y: "readout_mean", stroke: colors.u, label: "u positive"}),
@@ -594,8 +626,6 @@ const calibration_plots = [
       y: {label: "Current (A)"},
       width: 1200, height: 400,
     }),
-  ]),
-  ...(calibration_results.length < 2 ? [html`<div>No calibration statistics</div>`] : [
     Plot.plot({
       marks: [
         Plot.areaY(calibration_stats.u_positive_stats, {x: "time", y1: (d) => d.readout_mean - d.readout_std, y2: (d) => d.readout_mean + d.readout_std, fill: colors.u}),
@@ -651,16 +681,23 @@ const calibration_buttons = Inputs.button(
 // Stream motor driver data
 // ------------------------
 
-async function * stream_state_readouts({port, timeout = 200, max_missed_messages = 1}) {
+async function * stream_state_readouts({port, expected_messages = 420, timeout = 200, max_missed_messages = 1}) {
+
   let data = [];
+  let buffer = new Uint8Array();
+  let chunk = null;
 
-  let messages = parse_with_delimiter(read_from(port, timeout), uint32_to_bytes(STATE_READOUT));
 
-  for await (const message of messages) {
-    if (message.buffer.byteLength != 16) continue;
-    
-    let data_view = new DataView(message.buffer);
-    
+  for (let i = 0; i < expected_messages; i++){
+    ({chunk, buffer} = await read_from({port, n_bytes: 4, timeout, buffer}));
+    if(chunk === null) break;
+    if (bytes_to_uint32(chunk) != STATE_READOUT) break;
+
+    ({chunk, buffer} = await read_from({port, n_bytes: 16, timeout, buffer}));
+    if(chunk === null) break;
+
+    const data_view = new DataView(chunk.buffer);
+
     let offset = 0;
     let readout_number = data_view.getUint32(0);
     offset += 4;
@@ -700,7 +737,7 @@ async function * stream_state_readouts({port, timeout = 200, max_missed_messages
       }
     }
 
-    if (data.length % 64 === 0) yield data;
+    if (data.length && (data.length % 256 == 0)) yield data;
   }
 
   if (data.length) yield data;
@@ -739,13 +776,29 @@ function timeout_promise(promise, timeout) {
   });
 }
 
-async function * read_from(port, timeout) {
+async function read_from({port, n_bytes, timeout, buffer}) {
+  if (buffer.length >= n_bytes) {
+    const chunk = buffer.slice(0, n_bytes);
+    buffer = buffer.slice(n_bytes);
+    return {chunk, buffer};
+  }
+
   const reader = port.readable.getReader();
   try {
     while (true) {
       const { value, done } = await timeout_promise(reader.read(), timeout);
       if (done) break;
-      yield value;
+      
+      let concatenated_buffer = new Uint8Array(buffer.length + value.length);
+      concatenated_buffer.set(buffer);
+      concatenated_buffer.set(value, buffer.length);
+      buffer = concatenated_buffer;
+
+      if (buffer.length >= n_bytes) {
+        const chunk = buffer.slice(0, n_bytes);
+        buffer = buffer.slice(n_bytes);
+        return {chunk, buffer};
+      }
     }
   } catch (error) {
     if (error.message !== "Timeout") console.error("Error reading from port:", error);
@@ -753,49 +806,10 @@ async function * read_from(port, timeout) {
   } finally {
     reader.releaseLock();
   }
+
+  return {chunk: null, buffer};
 }
 
-
-function find_substring_index(text, delimiter) {
-  for (let i = 0; i <= text.length - delimiter.length; i++) {
-    let match = true;
-    for (let j = 0; j < delimiter.length; j++) {
-      if (text[i + j] !== delimiter[j]) {
-        match = false;
-        break;
-      }
-    }
-    if (match) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-
-
-async function * parse_with_delimiter(message_generator, delimiter){
-  if (typeof delimiter === "string") {
-    delimiter = new TextEncoder().encode(delimiter);
-  }
-
-  let buffer = new Uint8Array();
-  for await (const chunk of message_generator) {
-    let tempBuffer = new Uint8Array(buffer.length + chunk.length);
-    tempBuffer.set(buffer);
-    tempBuffer.set(chunk, buffer.length);
-    buffer = tempBuffer;
-
-    let delimiterIndex;
-    
-    while ((delimiterIndex = find_substring_index(buffer, delimiter)) !== -1) {
-      let part = buffer.slice(0, delimiterIndex);
-      yield part;
-      buffer = buffer.slice(delimiterIndex + delimiter.length);
-    }
-  }
-  yield buffer;
-}
 ```
 
 ```js
@@ -807,6 +821,13 @@ function uint32_to_bytes(value) {
   let view = new DataView(buffer.buffer);
   view.setUint32(0, value);
   return buffer;
+}
+
+function bytes_to_uint32(buffer) {
+  // Check buffer is exactly 4 bytes long
+  if (buffer.byteLength !== 4) throw new Error("Buffer must be 4 bytes long");
+  let view = new DataView(buffer.buffer);
+  return view.getUint32(0);
 }
 
 

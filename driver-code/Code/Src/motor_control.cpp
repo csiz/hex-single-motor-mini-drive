@@ -192,8 +192,6 @@ void update_motor_control_registers(){
         switch (driver_state) {
             case DriverState::HOLD:
             case DriverState::DRIVE:
-                // Send the last state readouts and stop.
-                state_updates_to_send = HISTORY_SIZE;
                 disable_motor_ouputs();       
                 return;
             case DriverState::OFF:
