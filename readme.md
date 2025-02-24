@@ -16,6 +16,9 @@ and/or mosfet switch for the chip power on.
 [ ] Oppsies I flipped the sign of the V phase current measurement lines.
 [ ] The boost gate should maybe be connected to the driver side of the shunt resistor. At the moment we're measuring current used to charge the high gate.
 [ ] There's a summing option for the current measurments. Try outputing U, V, U+V, U+V+W using the 4th spare output.
+[ ] ! Think carefully about the shunt resistor placement, there's big interference going on if we measure during high side. Timing it around ground as
+common mode voltage seems to fix it. Is that the only way to measure all current going through the motor coils?
+[ ] ! Measure voltage of the motor coils!
 [ ] There's a conflict between i2c and timer 3 channel 2. Choose a different GPIO for the red LED.
 	I2C1 and TIM3_CH2 remapped
 	Description
