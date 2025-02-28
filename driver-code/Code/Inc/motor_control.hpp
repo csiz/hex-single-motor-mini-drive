@@ -97,7 +97,7 @@ const PWMSchedule test_ground_short = {
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         0,         0},
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT}
+    {SHORT_DURATION, 0,         0,         0},
 };
 
 const PWMSchedule test_positive_short = {
@@ -112,7 +112,7 @@ const PWMSchedule test_positive_short = {
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
     {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT}
+    {SHORT_DURATION, PWM_MAX,   PWM_MAX,   PWM_MAX},
 };
 
 const PWMSchedule test_u_directions = {

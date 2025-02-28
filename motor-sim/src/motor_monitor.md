@@ -51,6 +51,9 @@ const drive_resistance = 2.0; // 2.0 Ohm measured with voltmeter between 1 phase
 const drive_voltage = 10.0; // 10.0 V // TODO: get it from the chip
 
 const max_calibration_current = 0.9 * drive_voltage / drive_resistance;
+
+const phase_inductance = 0.000_21; // 0.21 mH
+const phase_resistance = 2.0; // 2.0 Ohm
 ```
 
 
@@ -341,6 +344,12 @@ const current_lines = {
   ref_diff: Plot.line(data, {x: "time", y: 'ref_diff', stroke: colors.ref_diff, label: 'ref', curve: 'step'}),
 };
 
+const voltage_lines = {
+  u: Plot.line(data.slice(1), {x: "time", y: (d, i) => (d.u - data[i].u) * phase_inductance / (d.time - data[i].time) * 1000, stroke: colors.u, label: 'u', curve: 'step'}),
+  v: Plot.line(data.slice(1), {x: "time", y: (d, i) => (d.v - data[i].v) * phase_inductance / (d.time - data[i].time) * 1000, stroke: colors.v, label: 'v', curve: 'step'}),
+  w: Plot.line(data.slice(1), {x: "time", y: (d, i) => (d.w - data[i].w) * phase_inductance / (d.time - data[i].time) * 1000, stroke: colors.w, label: 'w', curve: 'step'}),
+}
+
 const pwm_lines = {
   u_pwm: Plot.line(data, {x: "time", y: 'u_pwm', stroke: colors.u, label: 'pwm 0', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
   v_pwm: Plot.line(data, {x: "time", y: 'v_pwm', stroke: colors.v, label: 'pwm 1', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
@@ -354,6 +363,8 @@ const hall_lines = {
 };
 
 const selected_current_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => current_lines[key]);
+const selected_voltage_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => voltage_lines[key]);
+
 const selected_pwm_lines = Object.keys(pwm_lines).filter((key) => checkboxes.includes(key)).map((key) => pwm_lines[key]);
 const selected_hall_lines = Object.keys(hall_lines).filter((key) => checkboxes.includes(key)).map((key) => hall_lines[key]);
 
@@ -372,6 +383,7 @@ const currents_plots = [
   Plot.plot({
     marks: [
       ...selected_current_lines,
+      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
       Plot.gridY({interval: 0.1, stroke: 'gray', strokeWidth : 1}),
       Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
@@ -382,8 +394,21 @@ const currents_plots = [
   }),
   Plot.plot({
     marks: [
+      ...selected_voltage_lines,
+      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+      Plot.gridY({interval: 0.1, stroke: 'gray', strokeWidth : 1}),
+      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    ],
+    x: {label: "Time (ms)"},
+    y: {label: "Voltage (V)"},
+    width: 1200, height: 500,
+  }),
+  Plot.plot({
+    marks: [
       ...selected_pwm_lines,
-      Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
+      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
     ],
     y: {label: "PWM"},
@@ -393,6 +418,8 @@ const currents_plots = [
   Plot.plot({
     marks: [
       ...selected_hall_lines,
+      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     ],
     y: {label: "Hall state"},
     x: {label: "Time (ms)"},
