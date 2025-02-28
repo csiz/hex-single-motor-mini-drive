@@ -20,7 +20,10 @@
 void adc_interrupt_handler(){
     const bool injected_conversions_complete = LL_ADC_IsActiveFlag_JEOS(ADC1);
     if (injected_conversions_complete) {
-        state_readout.readout_number = adc_update_number;
+        // Reserve the first 3 bits for the hall sensors.
+        state_readout.readout_number = adc_update_number & 0x1FFFFFFF;
+        state_readout.readout_number |= (hall_1 << 29) | (hall_2 << 30) | (hall_3 << 31);
+
 
         // U and W phases are measured at the same time, followed by V and the reference voltage.
         // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is

@@ -214,18 +214,25 @@ Motor driver phase currents
 
 ```js
 
-const colors = {
+const base_colors = {
   u: "cyan",
   v: "orangered",
   w: "purple",
   ref_diff: "gray",
   sum: "black",
-  u_pwm: "cyan",
-  v_pwm: "orangered",
-  w_pwm: "purple",
 };
 
-const data_to_plot = ["u", "v", "w", "ref_diff", "sum", "u_pwm", "v_pwm", "w_pwm", "stats"];
+const colors = {
+  ...base_colors,
+  u_pwm: base_colors.u,
+  v_pwm: base_colors.v,
+  w_pwm: base_colors.w,
+  hall_3: base_colors.u, // Note colors are one permutation away
+  hall_1: base_colors.v,
+  hall_2: base_colors.w,
+};
+
+const data_to_plot = ["u", "v", "w", "ref_diff", "sum", "u_pwm", "v_pwm", "w_pwm", "hall_1", "hall_2", "hall_3", "stats"];
 
 const checkboxes_inputs = Inputs.checkbox(data_to_plot, {
   label: "Display:", 
@@ -335,13 +342,20 @@ const current_lines = {
 };
 
 const pwm_lines = {
-  u_pwm: Plot.line(data, {x: "time", y: 'u_pwm', stroke: colors.u_pwm, label: 'pwm 0', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
-  v_pwm: Plot.line(data, {x: "time", y: 'v_pwm', stroke: colors.v_pwm, label: 'pwm 1', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
-  w_pwm: Plot.line(data, {x: "time", y: 'w_pwm', stroke: colors.w_pwm, label: 'pwm 2', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
+  u_pwm: Plot.line(data, {x: "time", y: 'u_pwm', stroke: colors.u, label: 'pwm 0', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
+  v_pwm: Plot.line(data, {x: "time", y: 'v_pwm', stroke: colors.v, label: 'pwm 1', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
+  w_pwm: Plot.line(data, {x: "time", y: 'w_pwm', stroke: colors.w, label: 'pwm 2', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
+};
+
+const hall_lines = {
+  hall_3: Plot.line(data, {x: "time", y: 'hall_3', stroke: colors.u, label: 'hall 3', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
+  hall_1: Plot.line(data, {x: "time", y: 'hall_1', stroke: colors.v, label: 'hall 1', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
+  hall_2: Plot.line(data, {x: "time", y: 'hall_2', stroke: colors.w, label: 'hall 2', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
 };
 
 const selected_current_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => current_lines[key]);
 const selected_pwm_lines = Object.keys(pwm_lines).filter((key) => checkboxes.includes(key)).map((key) => pwm_lines[key]);
+const selected_hall_lines = Object.keys(hall_lines).filter((key) => checkboxes.includes(key)).map((key) => hall_lines[key]);
 
 const stats_table = data.length ? html`<div>Current stats:</div><table>
   <tr><td>U:</td><td>${d3.mean(data, (d) => d.u).toFixed(3)} A</td></tr>
@@ -373,6 +387,14 @@ const currents_plots = [
       Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
     ],
     y: {label: "PWM"},
+    x: {label: "Time (ms)"},
+    width: 1200, height: 150,
+  }),
+  Plot.plot({
+    marks: [
+      ...selected_hall_lines,
+    ],
+    y: {label: "Hall state"},
     x: {label: "Time (ms)"},
     width: 1200, height: 150,
   }),
@@ -874,7 +896,12 @@ class MotorController {
     const data_view = new DataView(data_bytes.buffer);
 
     let offset = 0;
-    let readout_number = data_view.getUint32(0);
+    let hall_and_readout_number = data_view.getUint32(0);
+    // The first 3 bits are the hall sensor state.
+    let hall_1 = (hall_and_readout_number >> 29) & 0b1;
+    let hall_2 = (hall_and_readout_number >> 30) & 0b1;
+    let hall_3 = (hall_and_readout_number >> 31) & 0b1;
+    let readout_number = hall_and_readout_number & 0x1FFFFFFF;
     offset += 4;
     let pwm_commands = data_view.getUint32(offset);
     offset += 4;
@@ -902,6 +929,9 @@ class MotorController {
       u_pwm,
       v_pwm,
       w_pwm,
+      hall_1,
+      hall_2,
+      hall_3,
     });
   }
 }
