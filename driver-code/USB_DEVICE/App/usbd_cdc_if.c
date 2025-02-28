@@ -374,15 +374,15 @@ int usb_com_queue_send (uint8_t* buf, uint16_t len) {
   return 0;
 }
 
-void usb_com_send(){
+size_t usb_com_send(){
   // Check if the USB is ready.
-  if (!usb_com_ready) return;
+  if (!usb_com_ready) return 0;
 
   // Get the CDC handle.
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
 
   // Test if the USB CDC is ready to transmit
-  if (hcdc->TxState != 0) return;
+  if (hcdc->TxState != 0) return 0;
 
   // Update the FIFO to reflect the completion of the last transmission
   usb_com_tx_fifo.tail = (usb_com_tx_fifo.tail + usb_com_tx_fifo.extra) % APP_TX_DATA_SIZE;
@@ -390,7 +390,7 @@ void usb_com_send(){
   usb_com_tx_fifo.extra = 0;
 
   // Return if nothing to send.
-  if (usb_com_tx_fifo.size == 0) return;
+  if (usb_com_tx_fifo.size == 0) return 0;
 
   const bool wrap_around = usb_com_tx_fifo.tail > usb_com_tx_fifo.head;
 
@@ -402,6 +402,8 @@ void usb_com_send(){
   
   // Remember how much data we've sent.
   usb_com_tx_fifo.extra = n_sent;
+
+  return n_sent;
 }
 
 void usb_com_init(){

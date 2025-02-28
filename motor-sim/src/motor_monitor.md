@@ -50,7 +50,7 @@ const max_measurable_current = adc_max_value / 2 * current_conversion;
 const drive_resistance = 2.0; // 2.0 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
 const drive_voltage = 10.0; // 10.0 V // TODO: get it from the chip
 
-const max_calibration_current = 1.0 * drive_voltage / drive_resistance;
+const max_calibration_current = 0.9 * drive_voltage / drive_resistance;
 ```
 
 
@@ -68,23 +68,34 @@ Motor command dashboard
 
 ```js
 
-let port = Mutable();
+let motor_controller = Mutable();
+
+async function open_port_and_read(){
+  if (motor_controller.value) {
+    console.info("Forgetting previous port");
+    await motor_controller.value.com_port.forget();
+  }
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({baudRate: 115200, bufferSize: 16});
+    if (!port.readable) return;
+
+    motor_controller.value = new MotorController(port);
+
+    motor_controller.value.start_reading_loop();
+
+  } catch (error) {
+    if (error.message === "EOF") return;
+    console.error("Error requesting port:", error);
+  }
+} 
+
+
+
 
 const connect_buttons = Inputs.button(
   [
-    ["Connect", async function(){
-      if (port.value) {
-        console.log("Forgetting previous port");
-        await port.value.forget();
-      }
-      try {
-        const new_port = await navigator.serial.requestPort();
-        await new_port.open({baudRate: 115200, bufferSize: 16});
-        if (new_port.readable) port.value = new_port;
-      } catch (error) {
-        console.error("Error requesting port:", error);
-      }
-    }],
+    ["Connect", open_port_and_read],
   ],
   {label: "Connect to COM"},
 );
@@ -101,25 +112,24 @@ const command_timeout = Generators.input(command_timeout_slider);
 ```
 
 ```js
+
+// Control functions
+
 let raw_readout_data = Mutable();
 
-async function command_and_stream(command, timeout){
-  await send_command(port, command, command_timeout, command_value);
-
-  if (port.readable.locked) {
-    console.error("Port is locked");
-    return;
-  }
+async function command_and_stream(command){
+  await motor_controller.send_command({command, command_timeout, command_value});
 
   // Start reading the data stream.
-  for await (const data_snapshot of stream_state_readouts({port, timeout})) {
+  for await (const data_snapshot of motor_controller.stream_readouts()) {
     raw_readout_data.value = data_snapshot;
   }
 }
 
 async function command(command){
-  await send_command(port, command, command_timeout, command_value);
+  await motor_controller.send_command({command, command_timeout, command_value});
 }
+
 
 const data_stream_buttons = Inputs.button(
   [
@@ -166,10 +176,10 @@ const command_buttons = Inputs.button(
       await command(SET_STATE_OFF);
     }],
     ["Drive", async function(){
-      await command(SET_STATE_DRIVE, command_timeout);
+      await command(SET_STATE_DRIVE);
     }],
     ["Drive 2-phase", async function(){
-      await command(SET_STATE_DRIVE_2PHASE, command_timeout);
+      await command(SET_STATE_DRIVE_2PHASE);
     }],
     ["Hold U positive", async function(){
       await command(SET_STATE_HOLD_U_POSITIVE);
@@ -406,59 +416,60 @@ const calibration_zones = [
 const calibration_points = 32;
 
 
-async function command_and_return({command, timeout, command_timeout, command_value}) {
-  await send_command(port, command, command_timeout, command_value);
-  let data = [];
-  for await (const data_snapshot of stream_state_readouts({port, timeout})) {
-    data = data_snapshot;
-  }
-  return data;
-}
+
 
 async function run_calibration(){
+  const settle_time = 300;
+
   console.info("Calibration starting");
 
   // Note: hold pwm is clamped by the motor driver
 
-  await command_and_return({command: SET_STATE_HOLD_U_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const u_positive_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_U_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
+  await motor_controller.send_command({command: SET_STATE_HOLD_U_POSITIVE, command_timeout: 1000, command_value: 1.0});
+  await wait(settle_time);
+  await motor_controller.send_command({command: SET_STATE_TEST_U_INCREASING, command_timeout: 0, command_value: 0})
+
+  const u_positive_data = calculate_data_stats(await motor_controller.get_readouts()).data;
 
   console.info("U positive done");
 
-  await command_and_return({command: SET_STATE_HOLD_W_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const w_negative_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_W_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
+  await motor_controller.send_command({command: SET_STATE_HOLD_W_NEGATIVE, command_timeout: 1000, command_value: 1.0});
+  await wait(settle_time);
+  await motor_controller.send_command({command: SET_STATE_TEST_W_DECREASING, command_timeout: 0, command_value: 0})
+
+  const w_negative_data = calculate_data_stats(await motor_controller.get_readouts()).data;
 
   console.info("W negative done");
 
-  await command_and_return({command: SET_STATE_HOLD_V_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const v_positive_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_V_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
+  await motor_controller.send_command({command: SET_STATE_HOLD_V_POSITIVE, command_timeout: 1000, command_value: 1.0});
+  await wait(settle_time);
+  await motor_controller.send_command({command: SET_STATE_TEST_V_INCREASING, command_timeout: 0, command_value: 0})
+
+  const v_positive_data = calculate_data_stats(await motor_controller.get_readouts()).data;
 
   console.info("V positive done");
 
-  await command_and_return({command: SET_STATE_HOLD_U_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const u_negative_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_U_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
+  await motor_controller.send_command({command: SET_STATE_HOLD_U_NEGATIVE, command_timeout: 1000, command_value: 1.0});
+  await wait(settle_time);
+  await motor_controller.send_command({command: SET_STATE_TEST_U_DECREASING, command_timeout: 0, command_value: 0})
+
+  const u_negative_data = calculate_data_stats(await motor_controller.get_readouts()).data;
 
   console.info("U negative done");
 
-  await command_and_return({command: SET_STATE_HOLD_W_POSITIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const w_positive_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_W_INCREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
+  await motor_controller.send_command({command: SET_STATE_HOLD_W_POSITIVE, command_timeout: 1000, command_value: 1.0});
+  await wait(settle_time);
+  await motor_controller.send_command({command: SET_STATE_TEST_W_INCREASING, command_timeout: 0, command_value: 0})
+
+  const w_positive_data = calculate_data_stats(await motor_controller.get_readouts()).data;
 
   console.info("W positive done");
 
-  await command_and_return({command: SET_STATE_HOLD_V_NEGATIVE, timeout: 500, command_timeout: 1000, command_value: 1.0});
-  const v_negative_data = calculate_data_stats(
-    await command_and_return({command: SET_STATE_TEST_V_DECREASING, timeout: 100, command_timeout: 0, command_value: 0})
-  ).data;
+  await motor_controller.send_command({command: SET_STATE_HOLD_V_NEGATIVE, command_timeout: 1000, command_value: 1.0});
+  await wait(settle_time);
+  await motor_controller.send_command({command: SET_STATE_TEST_V_DECREASING, command_timeout: 0, command_value: 0})
+
+  const v_negative_data = calculate_data_stats(await motor_controller.get_readouts()).data;
 
   console.info("V negative done");
 
@@ -679,28 +690,188 @@ const calibration_buttons = Inputs.button(
 
 ```
 
-
 ```js
 
-// Stream motor driver data
-// ------------------------
 
-async function * stream_state_readouts({port, expected_messages = 420, timeout = 200, max_missed_messages = 1}) {
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  let data = [];
-  let buffer = new Uint8Array();
-  let chunk = null;
+function timeout_promise(promise, timeout) {
+  let timeout_id;
+
+  const timed_reject = new Promise((resolve, reject)=>{
+    timeout_id = setTimeout(() => {
+      reject(new Error("Timeout"));
+    }, timeout);
+  });
+
+  return Promise.race([promise.finally(() => { clearTimeout(timeout_id); }), timed_reject]);
+}
+
+// USB serial port communication
+// -----------------------------
 
 
-  for (let i = 0; i < expected_messages; i++){
-    ({chunk, buffer} = await read_from({port, n_bytes: 4, timeout, buffer}));
-    if(chunk === null) break;
-    if (bytes_to_uint32(chunk) != STATE_READOUT) break;
+class COMPort {
+  constructor(port){
+    this.port = port;
+    this.buffer = new Uint8Array();
+    this.reader = port.readable.getReader();
+    this.writer = port.writable.getWriter();
+  }
 
-    ({chunk, buffer} = await read_from({port, n_bytes: 16, timeout, buffer}));
-    if(chunk === null) break;
+  async read(n_bytes){
 
-    const data_view = new DataView(chunk.buffer);
+    while (this.buffer.length < n_bytes){
+      const {value, done} = await (this.reader.read());
+      if (done) throw new Error("EOF");
+      this.buffer = new Uint8Array([...this.buffer, ...value]);
+    }
+    const result = this.buffer.slice(0, n_bytes);
+    this.buffer = this.buffer.slice(n_bytes);
+    return result;
+  }
+
+  async write(buffer){
+    await this.writer.write(buffer);
+  }
+
+  async forget(){
+    await this.reader.cancel();
+    this.reader.releaseLock();
+    await this.writer.abort();
+    this.writer.releaseLock();
+    await this.port.close();
+  }
+}
+
+
+// Motor control logic
+// -------------------
+
+
+class MotorController {
+  constructor(port){
+    this.com_port = new COMPort(port);
+    this.data = [];
+    this.notify = null;
+    this.resolve = null;
+    this.reject = null;
+    this.expected_messages = 0;
+    this.max_missed_messages = 1;
+    this.timeout = 500;
+  }
+
+  async start_reading_loop(){
+    while(true){
+      await this._read_message();
+
+      // Nothing to do if we are not expecting messages.
+      if (!this.expected_messages) {
+        console.warn("Unexpected message received.");
+        continue;
+      }
+
+      if (this.data.length > 2) {
+        const last_index = this.data.length - 1;
+
+        if ((this.data[last_index].readout_number - this.data[last_index - 1].readout_number) > this.max_missed_messages){
+          // Notify the observer and carry on.
+          this._push_readouts(this.data.slice(0, -1));
+          // Keep the last message.
+          this.data = this.data.slice(-1);
+          // Push an error to the deterministic readout.
+          this._reject_readouts(new Error("Missed messages."));
+        }
+      }
+
+      // Stream data as it's being transmitted.
+      if (this.data.length && this.data.length % 256) this._push_readouts(this.data);
+
+      if (this.data.length == this.expected_messages) {
+        this._clear_stream(this.data);
+        this._resolve_readouts(this.data);
+      }
+    }
+  }
+
+  async send_command({command, command_timeout, command_value}) {
+    if (this.com_port === null) return;
+
+    let buffer = new Uint8Array(8);
+    let view = new DataView(buffer.buffer);
+    view.setUint32(0, command);
+    view.setUint16(4, Math.floor(command_timeout / time_conversion));
+    view.setUint16(6, Math.floor(command_value * PWM_BASE));
+    await this.com_port.write(buffer);
+  }
+
+  _expect_readouts({expected_messages = 420, max_missed_messages = 1}) {
+    this.data = [];
+    this.expected_messages = expected_messages;
+    this.max_missed_messages = max_missed_messages;
+  }
+
+  get_readouts(options={}) {
+    this._clear_stream();
+    this._reject_readouts(new Error("Overriding previous readout."));
+
+    this._expect_readouts(options);
+
+    return timeout_promise(new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    }), this.timeout);
+  }
+
+  _resolve_readouts(data){
+    if (this.resolve) {
+      this.resolve(data);
+      this.expected_messages = 0;
+      this.resolve = null;
+      this.reject = null;
+    }
+  }
+
+  _reject_readouts(error){
+    if (this.reject) {
+      this.reject(error);
+      this.expected_messages = 0;
+      this.resolve = null;
+      this.reject = null;
+    }
+  }
+
+  stream_readouts(options={}) {
+    this._expect_readouts(options);
+
+    return Generators.observe((notify)=>{
+      this.notify = notify;
+    })
+  }
+
+  _push_readouts(data){
+    if (this.notify) this.notify(data);
+  }
+
+  _clear_stream(last_data){
+    if (this.notify) {
+      if (last_data !== undefined) this.notify(last_data);
+      this.expected_messages = 0;
+      this.notify = null;
+    }
+  }
+
+
+
+  async _read_message(){
+    const message_header = await this.com_port.read(4)
+    if (bytes_to_uint32(message_header) != STATE_READOUT) return;
+
+    const data_bytes = await this.com_port.read(16);
+
+    const data_view = new DataView(data_bytes.buffer);
 
     let offset = 0;
     let readout_number = data_view.getUint32(0);
@@ -721,8 +892,8 @@ async function * stream_state_readouts({port, expected_messages = 420, timeout =
     let ref_readout = data_view.getUint16(offset);
     offset += 2;
 
-
-    data.push({
+    // Only add messages if we are expecting them.
+    if (this.expected_messages) this.data.push({
       readout_number,
       u_readout,
       v_readout,
@@ -732,86 +903,7 @@ async function * stream_state_readouts({port, expected_messages = 420, timeout =
       v_pwm,
       w_pwm,
     });
-
-    if (data.length > 2) {
-      if ((data[data.length - 1].readout_number - data[data.length - 2].readout_number) > max_missed_messages){
-        data = data.slice(0, -1);
-        // Give up reading the rest.
-        break;
-      }
-    }
-
-    if (data.length && (data.length % 256 == 0)) yield data;
   }
-
-  if (data.length) yield data;
-}
-```
-
-
-```js
-
-// USB serial port communication
-// -----------------------------
-
-async function send_command(port, command, timeout, value) {
-  let writer = port.writable.getWriter();
-  let buffer = new Uint8Array(8);
-  let view = new DataView(buffer.buffer);
-  view.setUint32(0, command);
-  view.setUint16(4, Math.floor(timeout / time_conversion));
-  view.setUint16(6, Math.floor(value * PWM_BASE));
-  await writer.write(buffer);
-  writer.releaseLock();
-}
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function timeout_promise(promise, timeout) {
-  return new Promise((resolve, reject) => {
-    let timer = setTimeout(() => {
-      reject(new Error("Timeout"));
-    }, timeout);
-    promise.then(resolve, reject).finally(() => {
-      clearTimeout(timer);
-    });
-  });
-}
-
-async function read_from({port, n_bytes, timeout, buffer}) {
-  if (buffer.length >= n_bytes) {
-    const chunk = buffer.slice(0, n_bytes);
-    buffer = buffer.slice(n_bytes);
-    return {chunk, buffer};
-  }
-
-  const reader = port.readable.getReader();
-  try {
-    while (true) {
-      const { value, done } = await timeout_promise(reader.read(), timeout);
-      if (done) break;
-      
-      let concatenated_buffer = new Uint8Array(buffer.length + value.length);
-      concatenated_buffer.set(buffer);
-      concatenated_buffer.set(value, buffer.length);
-      buffer = concatenated_buffer;
-
-      if (buffer.length >= n_bytes) {
-        const chunk = buffer.slice(0, n_bytes);
-        buffer = buffer.slice(n_bytes);
-        return {chunk, buffer};
-      }
-    }
-  } catch (error) {
-    if (error.message !== "Timeout") console.error("Error reading from port:", error);
-    else console.info("Timeout reading from port");
-  } finally {
-    reader.releaseLock();
-  }
-
-  return {chunk: null, buffer};
 }
 
 ```
