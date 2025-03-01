@@ -5,6 +5,8 @@ title: Motor monitor
 ```js
 // USB serial port commands
 // ------------------------
+const USBD_VID = 56987;
+const USBD_PID_FS = 56988;
 
 const READOUT = 0x80202020;
 const GET_READOUTS = 0x80202021;
@@ -72,17 +74,47 @@ Motor command dashboard
 
 ```js
 
-let motor_controller = Mutable();
+let motor_controller = Mutable(null);
 
 let motor_controller_status = Mutable(html`<span>Not connected.</span>`);
+
+async function grab_ports(){
+  const ports = await navigator.serial.getPorts();
+  return ports.filter((port) => {
+    const info = port.getInfo();
+    return info.usbVendorId === USBD_VID && info.usbProductId === USBD_PID_FS;
+  });
+}
+
+async function maybe_prompt_port(){
+  const ports = await grab_ports();
+  if (ports.length == 1) return ports[0];
+  try {
+    return await navigator.serial.requestPort({filters: [{usbVendorId: USBD_VID, usbProductId: USBD_PID_FS}]});
+  } catch (error) {
+    if (error.name === "SecurityError") {
+      motor_controller_status.value = html`<span style="color: red">Permission for port dialog denied.</span>`;
+      return null;
+    }
+    throw error;
+  }
+}
 
 async function open_port_and_read(){
   if (motor_controller.value) {
     console.info("Forgetting previous port");
-    await motor_controller.value.com_port.forget();
+    try {
+      await motor_controller.value.com_port.forget();
+    } catch (error) {
+      // Ignore network errors when forgetting, likely due to previous disconnect.
+      if (error.name != "NetworkError") throw error;
+    }
   }
   try {
-    const port = await navigator.serial.requestPort();
+    const port = await maybe_prompt_port();
+
+    if (!port) return;
+
     await port.open({baudRate: 115200, bufferSize: 16});
 
     if (!port.readable) throw new Error("Port unreadable");
@@ -97,11 +129,36 @@ async function open_port_and_read(){
     }
 
   } catch (error) {
-    if (error.message === "EOF") return html`<span>End of connection.</span>`;
-    console.error("Error requesting port:", error);
-  }
-} 
+    motor_controller.value = null;
 
+    if (error.message === "EOF") {
+      motor_controller_status.value = html`<span style="color: red">End of connection.</span>`;
+      return;
+    }
+    // Check for NetworkError due to disconnect.
+    if (error.name === "NetworkError") {
+      motor_controller_status.value = html`<span style="color: red">Connection lost.</span>`;
+      return;
+    }
+
+    if (error.name === "NotFoundError") {
+      motor_controller_status.value = html`<span style="color: red">No device found or nothing selected.</span>`;
+      return;
+    }
+
+    motor_controller_status.value = html`<span style="color: red">Connection lost; unknown error: ${error}</span>`;
+    throw error;
+  }
+}
+
+
+invalidation.then(async function(){
+  if (motor_controller.value) {
+    await motor_controller.value.com_port.forget();
+    motor_controller.value = null;
+    motor_controller_status.value = html`<span style="color: red">Invalidated!</span>`;
+  }
+});
 
 
 
@@ -112,6 +169,7 @@ const connect_buttons = Inputs.button(
   {label: "Connect to COM"},
 );
 
+open_port_and_read();
 ```
 
 ```js
@@ -137,6 +195,8 @@ const command_value = Math.floor(command_value_fraction * PWM_BASE);
 
 
 async function command_and_stream(command, options = {}){
+  if (!motor_controller) return;
+  
   await motor_controller.send_command({command, command_timeout, command_value, ...options});
 
   // Start reading the data stream.
@@ -146,6 +206,8 @@ async function command_and_stream(command, options = {}){
 }
 
 async function command(command){
+  if (!motor_controller) return;
+  
   await motor_controller.send_command({command, command_timeout, command_value});
 }
 
@@ -506,6 +568,8 @@ const calibration_points = 32;
 
 
 async function run_calibration(){
+  if (!motor_controller) return;
+  
   const settle_time = 300;
   const settle_timeout = settle_time * 3;
   const settle_strength = Math.floor(PWM_BASE * 2 / 10);
