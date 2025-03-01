@@ -50,6 +50,18 @@ static inline void enable_motor_w_output(){
     LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3N);
 }
 
+static inline void enable_motor_outputs(){
+    enable_motor_u_output();
+    enable_motor_v_output();
+    enable_motor_w_output();
+}
+
+static inline void disable_motor_outputs(){
+    disable_motor_u_output();
+    disable_motor_v_output();
+    disable_motor_w_output();
+}
+
 
 // LED functions
 // -------------

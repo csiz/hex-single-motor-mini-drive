@@ -79,8 +79,8 @@ void interrupts_init(){
     // built-in dead-time of 100-300ns. The MOSFETs AO4266E have turn on rise time of 8ns and 
     // turn off fall time of 22ns so we should be covered.
 
-    // Enable TIM1 update interrupt; occuring every PWM cycle.
-    LL_TIM_EnableIT_UPDATE(TIM1);
+    // Disable TIM1 update interrupt; occuring every PWM cycle. We will use the ADC interrupt to update the motor control.
+    LL_TIM_DisableIT_UPDATE(TIM1);
     // Disable TIM1 trigger interrupt; it's only triggered during resets.
     LL_TIM_DisableIT_TRIG(TIM1);
     // Disable commutation interrupts; 
@@ -146,6 +146,8 @@ void enable_timers(){
 }
 
 void app_init() {
+    data_init();
+
     // Setup PWM settings.
     LL_TIM_SetAutoReload(TIM1, PWM_AUTORELOAD); // 72MHz / 1536 / 2 = 23.4KHz
 
@@ -171,7 +173,7 @@ void app_init() {
 
 void write_state_readout(uint8_t* buffer, const UpdateReadout& readout) {
     size_t offset = 0;
-    write_uint32(buffer + offset, STATE_READOUT);
+    write_uint32(buffer + offset, READOUT);
     offset += 4;
     write_uint32(buffer + offset, readout.readout_number);
     offset += 4;
@@ -185,6 +187,7 @@ void write_state_readout(uint8_t* buffer, const UpdateReadout& readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.ref_readout);
 }
+
 
 void usb_tick(){
     // Receive data
@@ -206,12 +209,23 @@ void usb_tick(){
 
         switch (command) {
             // Send the whole history buffer over USB.
-            case GET_STATE_READOUTS:
-                state_updates_to_send = HISTORY_SIZE;
+            case GET_READOUTS:
+                readouts_to_send = timeout;
                 break;
+
+            case GET_READOUTS_SNAPSHOT:
+                {
+                    UpdateReadout discard_readout = {};
+                    while(xQueueReceive(readouts_queue, &discard_readout, 0) == pdTRUE) /* Discard all past readouts. */;
+                }
+                readouts_allow_missing = false;
+                readouts_allow_sending = false;
+                readouts_to_send = HISTORY_SIZE;
+                break;
+
             // Turn off the motor driver.
             case SET_STATE_OFF:
-                disable_motor_ouputs();
+                turn_motor_off();
                 break;
                 
             // Measure the motor phase currents.
@@ -289,32 +303,54 @@ void usb_tick(){
     // ---------
 
     // Queue the state readouts on the USB buffer.
-    while (state_updates_to_send > 0) {
-        const UpdateReadout readout = state_readouts[state_readouts_index];
+    if (readouts_allow_sending){
+        UpdateReadout readout;
 
-        // Send the readout to the host.
-        uint8_t readout_data[20] = {0};
-        write_state_readout(readout_data, readout);
+        for (size_t i = 0; i < HISTORY_SIZE; i++){
+            // Skip if we have no data left to read.
+            if (xQueuePeek(readouts_queue, &readout, 0) != pdTRUE) break;
 
-        if(usb_com_queue_send(readout_data, 20) == 0){
-            state_updates_to_send -= 1;
-            state_readouts_index = (state_readouts_index + 1) % HISTORY_SIZE;
-            last_usb_send = HAL_GetTick();
-        }else {
-            if (HAL_GetTick() > last_usb_send + USB_TIMEOUT) {
-                // The USB controller is not reading data; stop sending and clear the queue.
-                state_updates_to_send = 0;
-                usb_com_reset();
+            // Send as many readouts as requested.
+            if (readouts_to_send > 0) {
+                // Send the readout to the host.
+                uint8_t readout_data[20] = {0};
+                write_state_readout(readout_data, readout);
+                
+                if(usb_com_queue_send(readout_data, 20) == 0){
+                    // We successfully added the readout to the USB buffer.
+                    readouts_to_send -= 1;
+                    last_usb_send = HAL_GetTick();
+                } else {
+                    // The USB buffer is full; stop sending until there's space.
+                    if (HAL_GetTick() > last_usb_send + USB_TIMEOUT) {
+                        // The USB controller is not reading data; stop sending and clear the USB buffer.
+                        readouts_to_send = 0;
+                        usb_com_reset();
+                    }
+                    // Break before we consume the readout.
+                    break;
+                }
+
+            } else {
+                // Reset to 0 just in case we doubly subtracted.
+                readouts_to_send = 0;
+                // No readouts left to send, re-enable overwriting in case we came out of test mode.
+                readouts_allow_missing = true;
             }
-            break;
+            
+            // Either we've sent or want to discard the last readout.
+            xQueueReceive(readouts_queue, &readout, 0);
         }
     }
-
+    
     // Send USB data from the buffer.
     usb_com_send();
 }
 
 void app_tick() {
+    // Send USB data from the buffer, twice per loop, hopefully the USB module sends 64 byte packets while we compute.
+    usb_com_send();
+
     // Update timing information.
     uint32_t milliseconds = HAL_GetTick();
     float seconds = milliseconds / 1000.f;

@@ -11,11 +11,14 @@ uint32_t tim2_cc1_number = 0;
 
 
 // Electrical state
-UpdateReadout state_readout = {};
-UpdateReadout state_readouts[HISTORY_SIZE] = {};
-size_t state_readouts_index = 0;
-uint32_t state_updates_to_send = 0;
-
+UpdateReadout latest_readout = {};
+QueueHandle_t readouts_queue = nullptr;
+StaticQueue_t readouts_queue_storage = {};
+uint8_t readouts_queue_buffer[HISTORY_SIZE * READOUT_ITEMSIZE] = {};
+uint32_t readouts_missed = 0;
+int32_t readouts_to_send = 0;
+bool readouts_allow_sending = true;
+bool readouts_allow_missing = true;
 
 // Hall sensors
 bool hall_1 = false, hall_2 = false, hall_3 = false;
@@ -31,6 +34,13 @@ float current_u = 0.0, current_v = 0.0, current_w = 0.0;
 
 
 // Functions
+// ---------
+
+void data_init(){
+    // Create the queue for the readouts.
+    readouts_queue = xQueueCreateStatic(HISTORY_SIZE, READOUT_ITEMSIZE, readouts_queue_buffer, &readouts_queue_storage);
+    if (readouts_queue == nullptr) Error_Handler();
+}
 
 void read_hall_sensors(){
 	uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
@@ -88,7 +98,7 @@ void read_hall_sensors(){
 void calculate_motor_phase_currents_gated(){
     // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
-    const UpdateReadout readout = state_readout;
+    const UpdateReadout readout = latest_readout;
     NVIC_EnableIRQ(ADC1_2_IRQn);
 
     const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;

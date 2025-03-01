@@ -52,7 +52,7 @@ void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
 
 uint32_t get_combined_motor_pwm_duty();
 
-void disable_motor_ouputs();
+void turn_motor_off();
 
 void update_motor_control();
 

@@ -1,13 +1,17 @@
 #pragma once
 
+#include "FreeRTOS.h"
+#include "queue.h"
+
 #include <cstdint>
 #include <cstddef>
 
 // Interface command codes
 // -----------------------
 
-const uint32_t STATE_READOUT = 0x80202020;
-const uint32_t GET_STATE_READOUTS = 0x80202021;
+const uint32_t READOUT = 0x80202020;
+const uint32_t GET_READOUTS = 0x80202021;
+const uint32_t GET_READOUTS_SNAPSHOT = 0x80202022;
 const uint32_t SET_STATE_OFF = 0x80202030;
 const uint32_t SET_STATE_DRIVE = 0x80202031;
 const uint32_t SET_STATE_TEST_ALL_PERMUTATIONS = 0x80202032;
@@ -49,11 +53,19 @@ struct UpdateReadout{
     uint16_t ref_readout;
 };
 
-extern UpdateReadout state_readout;
+extern UpdateReadout latest_readout;
 const size_t HISTORY_SIZE = 420;
-extern UpdateReadout state_readouts[HISTORY_SIZE];
-extern size_t state_readouts_index;
-extern uint32_t state_updates_to_send;
+const size_t READOUT_ITEMSIZE = sizeof(UpdateReadout);
+
+extern QueueHandle_t readouts_queue;
+extern StaticQueue_t readouts_queue_storage;
+extern uint8_t readouts_queue_buffer[HISTORY_SIZE * READOUT_ITEMSIZE];
+extern uint32_t readouts_missed;
+
+extern bool readouts_allow_missing;
+extern bool readouts_allow_sending;
+
+extern int32_t readouts_to_send;
 
 // Hall sensors
 // ------------
@@ -98,6 +110,8 @@ const float current_conversion = -adc_voltage_reference / (adc_max_value * motor
 
 // Functions
 // ---------
+
+void data_init();
 
 // Read the hall sensors and update the motor rotation angle.
 void read_hall_sensors();
