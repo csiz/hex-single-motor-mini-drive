@@ -48,7 +48,7 @@ void adc_interrupt_handler(){
                 // We didn't have space to add the latest readout. Discard the oldest readout and try again; this time 
                 // it must work or we have a bigger error.
                 readouts_missed += 1;
-                if (readouts_to_send > HISTORY_SIZE) readouts_to_send -= 1;
+                if (readouts_to_send > static_cast<int>(HISTORY_SIZE)) readouts_to_send -= 1;
 
             } else {
                 // If we filled the queue without overwriting, we now need to send the data over USB.

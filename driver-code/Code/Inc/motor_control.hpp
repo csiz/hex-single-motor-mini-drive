@@ -22,8 +22,9 @@ using PWMSchedule = PWMStage[SCHEDULE_SIZE];
 
 enum struct DriverState {
     OFF,
-    DRIVE_3PHASE,
-    DRIVE_2PHASE,
+    FREEWHEEL,
+    DRIVE_POS,
+    DRIVE_NEG,
     HOLD,
     TEST_SCHEDULE,
 };
@@ -35,8 +36,6 @@ const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
 const uint16_t MIN_BOOTSTRAP_DUTY = 16; // 16/72MHz = 222ns
 const uint16_t PWM_MAX = PWM_BASE - MIN_BOOTSTRAP_DUTY; // 1536/72MHz = 21.3us
-// Sentinel value to indicate that the phase output should be floating.
-const uint16_t PWM_FLOAT = PWM_BASE - 1;
 
 const uint16_t PWM_MAX_HOLD = PWM_BASE * 2 / 10;
 
@@ -45,14 +44,16 @@ const uint16_t MAX_TIMEOUT = 0xFFFF;
 // Motor control functions
 void motor_control_init();
 
-void drive_motor_2phase(uint16_t pwm, uint16_t timeout);
-void drive_motor_3phase(uint16_t pwm, uint16_t timeout);
+void drive_motor_neg(uint16_t pwm, uint16_t timeout);
+void drive_motor_pos(uint16_t pwm, uint16_t timeout);
 
 void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
 
 uint32_t get_combined_motor_pwm_duty();
 
-void turn_motor_off();
+void motor_break();
+
+void motor_freewheel();
 
 void update_motor_control();
 
@@ -116,10 +117,6 @@ const PWMSchedule test_positive_short = {
 };
 
 const PWMSchedule test_u_directions = {
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT},
-    {SHORT_DURATION, 0,         PWM_TEST,  PWM_TEST},
-    {SHORT_DURATION, 0,         0,         0},
-    {SHORT_DURATION, PWM_TEST,  0,         0},
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         PWM_TEST,  PWM_TEST},
     {SHORT_DURATION, 0,         0,         0},
@@ -127,7 +124,11 @@ const PWMSchedule test_u_directions = {
     {SHORT_DURATION, 0,         0,         0},
     {SHORT_DURATION, 0,         PWM_TEST,  PWM_TEST},
     {SHORT_DURATION, 0,         0,         0},
-    {SHORT_DURATION, PWM_FLOAT, PWM_FLOAT, PWM_FLOAT}
+    {SHORT_DURATION, PWM_TEST,  0,         0},
+    {SHORT_DURATION, 0,         0,         0},
+    {SHORT_DURATION, 0,         PWM_TEST,  PWM_TEST},
+    {SHORT_DURATION, 0,         0,         0},
+    {SHORT_DURATION, 0,         0,         0},
 };
 
 const PWMSchedule test_u_increasing = {

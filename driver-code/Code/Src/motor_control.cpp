@@ -21,10 +21,8 @@ uint16_t duration_till_timeout = 0;
 
 bool test_procedure_start = true;
 
-const float TRI = -1.0;
-
 // Motor voltage fraction for the 6-step commutation.
-const float motor_3phase_voltage_table_pos[6][3] = {
+const float motor_voltage_table_pos[6][3] = {
     {0.0, 0.5, 1.0},
     {0.5, 0.0, 1.0},
     {1.0, 0.0, 0.5},
@@ -34,32 +32,13 @@ const float motor_3phase_voltage_table_pos[6][3] = {
 };
 
 // Surpirsingly good schedule for the 6-step commutation.
-const float motor_3phase_voltage_table_neg[6][3] {
+const float motor_voltage_table_neg[6][3] {
     {1.0, 0.0, 0.0},
     {1.0, 1.0, 0.0},
     {0.0, 1.0, 0.0},
     {0.0, 1.0, 1.0},
     {0.0, 0.0, 1.0},
     {1.0, 0.0, 1.0},
-};
-
-// Motor voltage fraction for the 6-step commutation.
-const float motor_2phase_voltage_table_neg[6][3] = {
-    {1.0, 0.0, TRI},
-    {1.0, TRI, 0.0},
-    {TRI, 1.0, 0.0},
-    {0.0, 1.0, TRI},
-    {0.0, TRI, 1.0},
-    {TRI, 0.0, 1.0},
-};
-
-const float motor_2phase_voltage_table_pos[6][3] = {
-    {0.0, TRI, 1.0},
-    {TRI, 0.0, 1.0},
-    {1.0, 0.0, TRI},
-    {1.0, TRI, 0.0},
-    {TRI, 1.0, 0.0},
-    {0.0, 1.0, TRI},
 };
 
 float pwm_fraction = 0.0;
@@ -75,16 +54,28 @@ static inline void write_motor_registers(){
 }
 
 
-void turn_motor_off(){
+void motor_break(){
     driver_state = DriverState::OFF;
 
-    // Immediately disable the motor outputs.
-    disable_motor_outputs();
-
-    motor_u_pwm_duty = PWM_FLOAT;
-    motor_v_pwm_duty = PWM_FLOAT;
-    motor_w_pwm_duty = PWM_FLOAT;
+    motor_u_pwm_duty = 0;
+    motor_v_pwm_duty = 0;
+    motor_w_pwm_duty = 0;
+    
+    // Immediately update and enable the motor outputs.
+    write_motor_registers();
+    enable_motor_outputs();
 }
+
+void motor_freewheel(){
+    driver_state = DriverState::FREEWHEEL;
+
+    disable_motor_outputs();
+    motor_u_pwm_duty = 0;
+    motor_v_pwm_duty = 0;
+    motor_w_pwm_duty = 0;
+}
+
+
 
 
 bool check_overcurrent(){
@@ -111,15 +102,15 @@ void update_motor_control(){
     // Update motor control registers only if actively driving.
 
     const float (*motor_voltage_table)[3] = nullptr;
-    if (driver_state == DriverState::DRIVE_2PHASE) motor_voltage_table = motor_2phase_voltage_table_pos;
-    else if(driver_state == DriverState::DRIVE_3PHASE) motor_voltage_table = motor_3phase_voltage_table_pos;
+    if (driver_state == DriverState::DRIVE_NEG) motor_voltage_table = motor_voltage_table_neg;
+    else if(driver_state == DriverState::DRIVE_POS) motor_voltage_table = motor_voltage_table_pos;
     else return;
 
     // Note: The registers need to be left unchanged whilst running in the calibration modes.
 
     // Use the hall sensor state to determine the motor position and commutation.
     if (not hall_sensor_valid) {
-        turn_motor_off();
+        motor_break();
         return;
     }
 
@@ -127,43 +118,27 @@ void update_motor_control(){
     const float voltage_phase_v = motor_voltage_table[motor_electric_phase][1];
     const float voltage_phase_w = motor_voltage_table[motor_electric_phase][2];
 
-    if (voltage_phase_u == TRI) {
-        disable_motor_u_output();
-        motor_u_pwm_duty = PWM_FLOAT;
-    } else {
-        motor_u_pwm_duty = voltage_phase_u * pwm_fraction * PWM_BASE;
-        enable_motor_u_output();
-    }
 
-    if (voltage_phase_v == TRI) {
-        disable_motor_v_output();
-        motor_v_pwm_duty = PWM_FLOAT;
-    } else {
-        motor_v_pwm_duty = voltage_phase_v * pwm_fraction * PWM_BASE;
-        enable_motor_v_output();
-    }
+    motor_u_pwm_duty = voltage_phase_u * pwm_fraction * PWM_BASE;
+    motor_v_pwm_duty = voltage_phase_v * pwm_fraction * PWM_BASE;
+    motor_w_pwm_duty = voltage_phase_w * pwm_fraction * PWM_BASE;
 
-    if (voltage_phase_w == TRI) {
-        motor_w_pwm_duty = PWM_FLOAT;
-        disable_motor_w_output();
-    } else {
-        motor_w_pwm_duty = voltage_phase_w * pwm_fraction * PWM_BASE;
-        enable_motor_w_output();
-    }
 }
 
-void drive_motor_2phase(uint16_t pwm, uint16_t timeout){
-    driver_state = DriverState::DRIVE_2PHASE;
+void drive_motor_neg(uint16_t pwm, uint16_t timeout){
+    driver_state = DriverState::DRIVE_NEG;
     pwm_fraction = (pwm > PWM_MAX ? PWM_MAX : pwm) / static_cast<float>(PWM_BASE);
     duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
     update_motor_control();
+    enable_motor_outputs();
 }
 
-void drive_motor_3phase(uint16_t pwm, uint16_t timeout){
-    driver_state = DriverState::DRIVE_3PHASE;
+void drive_motor_pos(uint16_t pwm, uint16_t timeout){
+    driver_state = DriverState::DRIVE_POS;
     pwm_fraction = (pwm > PWM_MAX ? PWM_MAX : pwm) / static_cast<float>(PWM_BASE);
     duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
     update_motor_control();
+    enable_motor_outputs();
 }
 
 
@@ -191,22 +166,16 @@ void test_procedure(){
         UpdateReadout discard_readout = {};
         while(xQueueReceiveFromISR(readouts_queue, &discard_readout, NULL) == pdPASS) /* Discard all readouts up to test start. */;
         // Store exactly HISTORY_SIZE readouts; until we fully transmit the test.
+
+        enable_motor_outputs();
     }
 
     const PWMSchedule & schedule = *active_schedule;
 
 
     motor_u_pwm_duty = schedule[schedule_stage].u;
-    if (motor_u_pwm_duty == PWM_FLOAT) disable_motor_u_output();
-    else enable_motor_u_output();
-
     motor_v_pwm_duty = schedule[schedule_stage].v;
-    if (motor_v_pwm_duty == PWM_FLOAT) disable_motor_v_output();
-    else enable_motor_v_output();
-
     motor_w_pwm_duty = schedule[schedule_stage].w;
-    if (motor_w_pwm_duty == PWM_FLOAT) disable_motor_w_output();
-    else enable_motor_w_output();
 
     // Go to the next step in the schedule.
     schedule_counter += 1;
@@ -217,7 +186,7 @@ void test_procedure(){
     // Next stage, unless we're at the end of the schedule.
     if (schedule_stage >= SCHEDULE_SIZE) {
         
-        turn_motor_off();
+        motor_break();
         readouts_to_send = HISTORY_SIZE;
         readouts_allow_sending = true;
         // Reset the first run flag.
@@ -230,18 +199,19 @@ void test_procedure(){
 void update_motor_control_registers(){
     switch (driver_state) {
         case DriverState::OFF:
+        case DriverState::FREEWHEEL:
             break;
-            
+    
         case DriverState::TEST_SCHEDULE:
             // Quickly update the PWM settings from the test schedule.
             test_procedure();
             break;
             
-        case DriverState::DRIVE_2PHASE:
-        case DriverState::DRIVE_3PHASE:
+        case DriverState::DRIVE_NEG:
+        case DriverState::DRIVE_POS:
         case DriverState::HOLD:
             if (duration_till_timeout <= 0) {
-                turn_motor_off();
+                motor_break();
             } else {
                 duration_till_timeout -= 1;
             }

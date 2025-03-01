@@ -10,9 +10,10 @@ const READOUT = 0x80202020;
 const GET_READOUTS = 0x80202021;
 const GET_READOUTS_SNAPSHOT = 0x80202022;
 const SET_STATE_OFF = 0x80202030;
-const SET_STATE_DRIVE = 0x80202031;
+const SET_STATE_DRIVE_POS = 0x80202031;
 const SET_STATE_TEST_ALL_PERMUTATIONS = 0x80202032;
-const SET_STATE_DRIVE_2PHASE = 0x80202033;
+const SET_STATE_DRIVE_NEG = 0x80202033;
+const SET_STATE_FREEWHEEL = 0x80202034;
 
 const SET_STATE_TEST_GROUND_SHORT = 0x80202036;
 const SET_STATE_TEST_POSITIVE_SHORT = 0x80202037;
@@ -35,7 +36,6 @@ const SET_STATE_HOLD_W_NEGATIVE = 0x80203025;
 // Other constants
 const PWM_BASE = 1536;
 const MAX_TIMEOUT = 0xFFFF; 
-const SET_FLOATING_DUTY = PWM_BASE - 1;
 const HISTORY_SIZE = 420;
 
 const time_conversion = 1/23400 * 1000;
@@ -197,11 +197,14 @@ const command_buttons = Inputs.button(
     ["Stop", async function(){
       await command(SET_STATE_OFF);
     }],
-    ["Drive", async function(){
-      await command(SET_STATE_DRIVE);
+    ["Drive+", async function(){
+      await command(SET_STATE_DRIVE_POS);
     }],
-    ["Drive 2-phase", async function(){
-      await command(SET_STATE_DRIVE_2PHASE);
+    ["Drive-", async function(){
+      await command(SET_STATE_DRIVE_NEG);
+    }],
+    ["Freewheel", async function(){
+      await command(SET_STATE_FREEWHEEL);
     }],
     ["Hold U positive", async function(){
       await command(SET_STATE_HOLD_U_POSITIVE);
@@ -326,10 +329,6 @@ function calculate_data_stats(raw_readout_data){
     const w_readout = -current_conversion * (d.w_readout - d.ref_readout);
     const ref_diff = current_conversion * (d.ref_readout - ref_readout_mean);
   
-    const u_pwm = d.u_pwm == SET_FLOATING_DUTY ? null : d.u_pwm;
-    const v_pwm = d.v_pwm == SET_FLOATING_DUTY ? null : d.v_pwm;
-    const w_pwm = d.w_pwm == SET_FLOATING_DUTY ? null : d.w_pwm;
-  
     const u = u_readout * (u_readout >= 0 ? 
       calibration_factors.u_positive :
       calibration_factors.u_negative);
@@ -346,7 +345,7 @@ function calculate_data_stats(raw_readout_data){
     // const sum = (u_pwm === null ? 0 : u) + (v_pwm === null ? 0 : v) + (w_pwm === null ? 0 : w);
     const sum = u + v + w;
   
-    return {...d, u_pwm, v_pwm, w_pwm, u_readout, v_readout, w_readout, u, v, w, ref_diff, time, sum};
+    return {...d, u_readout, v_readout, w_readout, u, v, w, ref_diff, time, sum};
   });
 
   return {data, ref_readout_mean, start_readout_number};

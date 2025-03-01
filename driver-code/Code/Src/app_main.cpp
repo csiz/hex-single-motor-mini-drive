@@ -225,7 +225,7 @@ void usb_tick(){
 
             // Turn off the motor driver.
             case SET_STATE_OFF:
-                turn_motor_off();
+                motor_break();
                 break;
                 
             // Measure the motor phase currents.
@@ -266,11 +266,16 @@ void usb_tick(){
                 break;
 
             // Drive the motor.
-            case SET_STATE_DRIVE:
-                drive_motor_3phase(pwm, timeout);
+            case SET_STATE_DRIVE_POS:
+                drive_motor_pos(pwm, timeout);
                 break;
-            case SET_STATE_DRIVE_2PHASE:
-                drive_motor_2phase(pwm, timeout);
+            case SET_STATE_DRIVE_NEG:
+                drive_motor_neg(pwm, timeout);
+                break;
+
+            // Freewheel the motor.
+            case SET_STATE_FREEWHEEL:
+                motor_freewheel();
                 break;
 
             case SET_STATE_HOLD_U_POSITIVE:
