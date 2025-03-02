@@ -322,6 +322,11 @@ const base_colors = {
   w: "purple",
   ref_diff: "gray",
   sum: "black",
+  radial_magnitude: "gold",
+  current_angle: "green",
+  radial_speed: "steelblue",
+  alpha: "red",
+  beta: "blue",
 };
 
 const colors = {
@@ -334,11 +339,13 @@ const colors = {
   hall_2: base_colors.w,
 };
 
-const data_to_plot = ["u", "v", "w", "ref_diff", "sum", "u_pwm", "v_pwm", "w_pwm", "hall_1", "hall_2", "hall_3", "stats"];
+const data_to_plot = ["u", "v", "w", "u_pwm", "v_pwm", "w_pwm", "hall_3", "hall_1", "hall_2", "alpha", "beta", "current_angle", "radial_magnitude", "ref_diff", "sum", "stats"];
+
+const selected_plots = ["u", "v", "w", "current_angle", "radial_magnitude", "sum", "u_pwm", "v_pwm", "w_pwm", "hall_1", "hall_2", "hall_3"];
 
 const checkboxes_inputs = Inputs.checkbox(data_to_plot, {
   label: "Display:", 
-  value: data_to_plot, 
+  value: selected_plots, 
   format: (d) => html`<span style="color: ${colors[d]}">${d}</span>`,
 });
 
@@ -392,12 +399,29 @@ function reset_calibration_factors(){
 
 ```js
 
+function matrix_multiply(m, v){
+  // Return the matrix-vector product of a 3x3 matrix and a 3-vector.
+  return m.map((row) => d3.sum(row.map((x, i) => x * v[i])));
+}
+
+const power_invariant_clarke_matrix = [
+  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
+  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
+  [1/Math.sqrt(3), 1/Math.sqrt(3), 1/Math.sqrt(3)],
+];
+
+const power_invariant_simplified_clarke_matrix = [
+  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
+  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
+];
+
 function calculate_data_stats(raw_readout_data){
 
   const ref_readout_mean = d3.mean(raw_readout_data, (d) => d.ref_readout);
   const start_readout_number = raw_readout_data[0].readout_number;
 
-  const data = raw_readout_data.map((d) => {
+
+  const data_with_current = raw_readout_data.map((d) => {
     const readout_number = d.readout_number - start_readout_number;
     const time = readout_number * time_conversion;
   
@@ -406,24 +430,71 @@ function calculate_data_stats(raw_readout_data){
     const w_readout = -current_conversion * (d.w_readout - d.ref_readout);
     const ref_diff = current_conversion * (d.ref_readout - ref_readout_mean);
   
-    const u = u_readout * (u_readout >= 0 ? 
+    const calibrated_u = u_readout * (u_readout >= 0 ? 
       calibration_factors.u_positive :
       calibration_factors.u_negative);
 
-    const v = v_readout * (v_readout >= 0 ?
+    const calibrated_v = v_readout * (v_readout >= 0 ?
       calibration_factors.v_positive :
       calibration_factors.v_negative);
 
-    const w = w_readout * (w_readout >= 0 ?
+    const calibrated_w = w_readout * (w_readout >= 0 ?
       calibration_factors.w_positive :
       calibration_factors.w_negative);
 
-    // TODO: do I have to discard shunt readings for floating duty cycle?
-    // const sum = (u_pwm === null ? 0 : u) + (v_pwm === null ? 0 : v) + (w_pwm === null ? 0 : w);
-    const sum = u + v + w;
-  
-    return {...d, u_readout, v_readout, w_readout, u, v, w, ref_diff, time, sum};
+    const sum = calibrated_u + calibrated_v + calibrated_w;
+
+    const u = calibrated_u - sum / 3.0;
+    const v = calibrated_v - sum / 3.0;
+    const w = calibrated_w - sum / 3.0;
+
+    const [alpha, beta] = matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
+
+    const current_angle = Math.atan2(beta, alpha);
+    const radial_magnitude = Math.sqrt(alpha * alpha + beta * beta);
+
+    return {...d, u_readout, v_readout, w_readout, u, v, w, ref_diff, time, sum, alpha, beta, current_angle, radial_magnitude};
   });
+
+  const derivative_start_index = 8;
+  const derivative_end_index = raw_readout_data.length - 2;
+
+  function derivative_3_points(index, df, data, circular = false){
+    if (index < derivative_start_index || index > derivative_end_index) return null;
+    const left = data[index - 1];
+    const mid = data[index];
+    const right = data[index + 1];
+    const left_derivative = df(left, mid) / (mid.time - left.time) * 1000;
+    const right_derivative = df(mid, right) / (right.time - mid.time) * 1000;
+    return (left_derivative + right_derivative) / 2.0;
+  }
+
+  function voltage_3_points(index, df, data){
+    const derivative = derivative_3_points(index, df, data);
+    return derivative == null ? null : derivative * phase_inductance;
+  }
+
+  function diff_phi(a, b){
+    const diff = b.current_angle - a.current_angle;
+    return diff > Math.PI ? diff - 2 * Math.PI : diff < -Math.PI ? diff + 2 * Math.PI : diff;
+  }
+
+  function speed_3_points(index, df, data){
+    const derivative = derivative_3_points(index, df, data);
+    return derivative == null ? null : derivative / (1000 * 2 * Math.PI); // rotations per millisecond
+  }
+
+  const data_with_derivatives = data_with_current.map((d, i, data) => {
+    return {
+      ...d,
+      radial_speed: speed_3_points(i, diff_phi, data),
+      u_voltage: voltage_3_points(i, (a, b) => b.u - a.u, data),
+      v_voltage: voltage_3_points(i, (a, b) => b.v - a.v, data),
+      w_voltage: voltage_3_points(i, (a, b) => b.w - a.w, data),
+    };
+  });
+
+  const data = data_with_derivatives;
 
   return {data, ref_readout_mean, start_readout_number};
 }
@@ -432,37 +503,20 @@ const {data, ref_readout_mean} = calculate_data_stats(raw_readout_data);
 
 
 const current_lines = {
+  radial_magnitude: Plot.line(data, {x: "time", y: 'radial_magnitude', stroke: colors.radial_magnitude, label: 'radial current', curve: 'step'}),
   u: Plot.line(data, {x: "time", y: 'u', stroke: colors.u, label: 'adc 0', curve: 'step'}),
   v: Plot.line(data, {x: "time", y: 'v', stroke: colors.v, label: 'adc 1', curve: 'step'}),
   w: Plot.line(data, {x: "time", y: 'w', stroke: colors.w, label: 'adc 2', curve: 'step'}),
+  alpha: Plot.line(data, {x: "time", y: 'alpha', stroke: colors.alpha, label: 'alpha', curve: 'step'}),
+  beta: Plot.line(data, {x: "time", y: 'beta', stroke: colors.beta, label: 'beta', curve: 'step'}),
   sum: Plot.line(data, {x: "time", y: 'sum', stroke: colors.sum, label: 'sum', curve: 'step'}),
   ref_diff: Plot.line(data, {x: "time", y: 'ref_diff', stroke: colors.ref_diff, label: 'ref', curve: 'step'}),
 };
 
-const derivative_start_index = 8;
-
-function derivative_3_points(index, f){
-  const left = data[derivative_start_index + index - 1];
-  const mid = data[derivative_start_index + index];
-  const right = data[derivative_start_index + index + 1];
-  const left_derivative = (f(mid) - f(left)) / (mid.time - left.time) * 1000;
-  const right_derivative = (f(right) - f(mid)) / (right.time - mid.time) * 1000;
-  return (left_derivative + right_derivative) / 2;
-}
-
-const derivative_data = data.slice(derivative_start_index, -2).map((d, i) => {
-  return {
-    ...d,
-    d_u: phase_inductance * derivative_3_points(i, (d) => d.u),
-    d_v: phase_inductance * derivative_3_points(i, (d) => d.v),
-    d_w: phase_inductance * derivative_3_points(i, (d) => d.w),
-  };
-});
-
 const voltage_lines = {
-  u: Plot.line(derivative_data, {x: "time", y: "d_u", stroke: colors.u, label: 'u', curve: 'step'}),
-  v: Plot.line(derivative_data, {x: "time", y: "d_v", stroke: colors.v, label: 'v', curve: 'step'}),
-  w: Plot.line(derivative_data, {x: "time", y: "d_w", stroke: colors.w, label: 'w', curve: 'step'}),
+  u: Plot.line(data, {x: "time", y: "u_voltage", stroke: colors.u, label: 'u', curve: 'step'}),
+  v: Plot.line(data, {x: "time", y: "v_voltage", stroke: colors.v, label: 'v', curve: 'step'}),
+  w: Plot.line(data, {x: "time", y: "w_voltage", stroke: colors.w, label: 'w', curve: 'step'}),
 }
 
 const pwm_lines = {
@@ -471,17 +525,22 @@ const pwm_lines = {
   w_pwm: Plot.line(data, {x: "time", y: 'w_pwm', stroke: colors.w, label: 'pwm 2', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
 };
 
-const hall_lines = {
-  hall_3: Plot.line(data, {x: "time", y: 'hall_3', stroke: colors.u, label: 'hall 3', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
-  hall_1: Plot.line(data, {x: "time", y: 'hall_1', stroke: colors.v, label: 'hall 1', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
-  hall_2: Plot.line(data, {x: "time", y: 'hall_2', stroke: colors.w, label: 'hall 2', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
+
+const π = Math.PI;
+const ε = 0.1;
+
+const angle_lines = {
+  current_angle: Plot.line(data, {x: "time", y: "current_angle", stroke: colors.current_angle, label: "radial angle", curve: "step"}),
+  hall_3: Plot.line(data, {x: "time", y: (d) => d.hall_3 ? d.hall_1 ? +π/3 -ε : d.hall_2 ? -π/3 +ε : 0.0 : null, stroke: colors.u, label: 'hall 3', curve: 'step',  strokeWidth: 3}),
+  hall_1: Plot.line(data, {x: "time", y: (d) => d.hall_1 ? d.hall_3 ? +π/3 +ε : d.hall_2 ? +π -ε : +2*π/3 : null, stroke: colors.v, label: 'hall 1', curve: 'step',  strokeWidth: 3}),
+  hall_2: Plot.line(data, {x: "time", y: (d) => d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 -ε : -2*π/3 : null, stroke: colors.w, label: 'hall 2', curve: 'step', strokeWidth: 3}),
 };
 
 const selected_current_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => current_lines[key]);
 const selected_voltage_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => voltage_lines[key]);
 
 const selected_pwm_lines = Object.keys(pwm_lines).filter((key) => checkboxes.includes(key)).map((key) => pwm_lines[key]);
-const selected_hall_lines = Object.keys(hall_lines).filter((key) => checkboxes.includes(key)).map((key) => hall_lines[key]);
+const selected_angle_lines = Object.keys(angle_lines).filter((key) => checkboxes.includes(key)).map((key) => angle_lines[key]);
 
 const stats_table = data.length ? html`<div>Current stats:</div><table>
   <tr><td>U:</td><td>${d3.mean(data, (d) => d.u).toFixed(3)} A</td></tr>
@@ -497,25 +556,38 @@ const currents_plots = [
   ...(checkboxes.includes("stats") ? [stats_table] : []),
   Plot.plot({
     marks: [
+      ...selected_angle_lines,
+      
+      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+      Plot.gridY({interval: Math.PI / 2, stroke: 'black', strokeWidth : 2}),
+    ],
+    x: {label: "Time (ms)"},
+    y: {label: "Radial angle (rad)", domain: [-Math.PI, Math.PI]},
+    width: 1200, height: 200,
+  }),
+  Plot.plot({
+    marks: [
+      Plot.line(data, {x: "time", y: "radial_speed", stroke: colors.radial_speed, label: "radial speed", curve: 'step'}),
+      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+    ],
+    x: {label: "Time (ms)"},
+    y: {label: "Radial speed (rotations/ms)"},
+    width: 1200, height: 200,
+  }),
+  Plot.plot({
+    marks: [
       ...selected_current_lines,
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
       Plot.gridY({interval: 0.1, stroke: 'gray', strokeWidth : 1}),
-      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     ],
     x: {label: "Time (ms)"},
     y: {label: "Current (A)"},
     width: 1200, height: 500,
-  }),
-  Plot.plot({
-    marks: [
-      ...selected_hall_lines,
-      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-      Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    ],
-    y: {label: "Hall state"},
-    x: {label: "Time (ms)"},
-    width: 1200, height: 150,
   }),
   Plot.plot({
     marks: [
@@ -525,7 +597,7 @@ const currents_plots = [
       Plot.gridY({interval: 0.1, stroke: 'gray', strokeWidth : 1}),
       Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     ],
-    x: {label: "Time (ms)", domain: [0, data[data.length - 1].time]},
+    x: {label: "Time (ms)"},
     y: {label: "Voltage (V)"},
     width: 1200, height: 500,
   }),
