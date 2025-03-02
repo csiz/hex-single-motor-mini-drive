@@ -115,7 +115,22 @@ async function open_port_and_read(){
 
     if (!port) return;
 
-    await port.open({baudRate: 115200, bufferSize: 16});
+    let tries = 10;
+
+    while(tries-- > 0){
+      try {
+        await port.open({baudRate: 115200, bufferSize: 16});
+        break;
+      } catch (error) {
+        if (error.name === "InvalidStateError") {
+          await wait(100);
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (tries <= 0) throw new Error("Port open failed");
 
     if (!port.readable) throw new Error("Port unreadable");
     if (!port.writable) throw new Error("Port unwritable");
@@ -151,9 +166,9 @@ async function open_port_and_read(){
   }
 }
 
-
 invalidation.then(async function(){
   if (motor_controller.value) {
+    console.info("Invalidating motor controller; forgetting port.");
     await motor_controller.value.com_port.forget();
     motor_controller.value = null;
     motor_controller_status.value = html`<span style="color: red">Invalidated!</span>`;
@@ -943,10 +958,11 @@ class MotorController {
       }
 
       // Stream data as it's being transmitted.
-      if (this.data.length && this.data.length % 256) this._push_readouts(this.data);
+      if (this.data.length && this.data.length % 1024) this._push_readouts(this.data);
 
       if (this.data.length == this.expected_messages) {
         this._resolve_readouts(this.data);
+        this._push_readouts(this.data);
       }
     }
   }
