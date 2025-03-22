@@ -229,10 +229,14 @@ async function command(command){
 
 const data_stream_buttons = Inputs.button(
   [
-    ["ADC SNAPSHOT", async function(){
+    ["ADC snapshot", async function(){
       await command_and_stream(GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE, max_missed_messages: 0});
     }],
-    ["ADC STREAM", async function(){
+    ["Freewheel Snapshot", async function(){
+      await command(SET_STATE_FREEWHEEL);
+      await command_and_stream(GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE, max_missed_messages: 0});
+    }],
+    ["ADC stream", async function(){
       await command_and_stream(GET_READOUTS, {max_missed_messages: 128});
     }],
     ["Test all permutations", async function(){
@@ -529,11 +533,15 @@ const pwm_lines = {
 const π = Math.PI;
 const ε = 0.1;
 
+const hall_3_as_angle = (d) => d.hall_3 ? d.hall_1 ? +π/3 -ε : d.hall_2 ? -π/3 +ε : 0.0 : null;
+const hall_1_as_angle = (d) => d.hall_1 ? d.hall_3 ? +π/3 +ε : d.hall_2 ? +π -ε : +2*π/3 : null;
+const hall_2_as_angle = (d) => d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 -ε : -2*π/3 : null;
+
 const angle_lines = {
   current_angle: Plot.line(data, {x: "time", y: "current_angle", stroke: colors.current_angle, label: "radial angle", curve: "step"}),
-  hall_3: Plot.line(data, {x: "time", y: (d) => d.hall_3 ? d.hall_1 ? +π/3 -ε : d.hall_2 ? -π/3 +ε : 0.0 : null, stroke: colors.u, label: 'hall 3', curve: 'step',  strokeWidth: 3}),
-  hall_1: Plot.line(data, {x: "time", y: (d) => d.hall_1 ? d.hall_3 ? +π/3 +ε : d.hall_2 ? +π -ε : +2*π/3 : null, stroke: colors.v, label: 'hall 1', curve: 'step',  strokeWidth: 3}),
-  hall_2: Plot.line(data, {x: "time", y: (d) => d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 -ε : -2*π/3 : null, stroke: colors.w, label: 'hall 2', curve: 'step', strokeWidth: 3}),
+  hall_3: Plot.line(data, {x: "time", y: hall_3_as_angle, stroke: colors.u, label: 'hall 3', curve: 'step',  strokeWidth: 3}),
+  hall_1: Plot.line(data, {x: "time", y: hall_1_as_angle, stroke: colors.v, label: 'hall 1', curve: 'step',  strokeWidth: 3}),
+  hall_2: Plot.line(data, {x: "time", y: hall_2_as_angle, stroke: colors.w, label: 'hall 2', curve: 'step', strokeWidth: 3}),
 };
 
 const selected_current_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => current_lines[key]);
@@ -571,7 +579,7 @@ const currents_plots = [
       Plot.line(data, {x: "time", y: "radial_speed", stroke: colors.radial_speed, label: "radial speed", curve: 'step'}),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
       Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+      Plot.gridY({stroke: 'black', strokeWidth : 2}),
     ],
     x: {label: "Time (ms)"},
     y: {label: "Radial speed (rotations/ms)"},
