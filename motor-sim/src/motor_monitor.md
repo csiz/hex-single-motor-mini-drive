@@ -2,43 +2,21 @@
 title: Motor monitor
 ---
 
+
+Motor command dashboard
+-----------------------
+
+<div>${connect_buttons}</div>
+<div>${motor_controller_status}</div>
+<div>${data_stream_buttons}</div>
+<div>${command_buttons}</div>
+<div>
+  ${command_value_slider}
+  ${command_timeout_slider}
+</div>
+
+
 ```js
-// USB serial port commands
-// ------------------------
-const USBD_VID = 56987;
-const USBD_PID_FS = 56988;
-
-const READOUT = 0x80202020;
-const GET_READOUTS = 0x80202021;
-const GET_READOUTS_SNAPSHOT = 0x80202022;
-const SET_STATE_OFF = 0x80202030;
-const SET_STATE_DRIVE_POS = 0x80202031;
-const SET_STATE_TEST_ALL_PERMUTATIONS = 0x80202032;
-const SET_STATE_DRIVE_NEG = 0x80202033;
-const SET_STATE_FREEWHEEL = 0x80202034;
-
-const SET_STATE_TEST_GROUND_SHORT = 0x80202036;
-const SET_STATE_TEST_POSITIVE_SHORT = 0x80202037;
-
-const SET_STATE_TEST_U_DIRECTIONS = 0x80202039;
-const SET_STATE_TEST_U_INCREASING = 0x8020203A;
-const SET_STATE_TEST_U_DECREASING = 0x8020203B;
-const SET_STATE_TEST_V_INCREASING = 0x8020203C;
-const SET_STATE_TEST_V_DECREASING = 0x8020203D;
-const SET_STATE_TEST_W_INCREASING = 0x8020203E;
-const SET_STATE_TEST_W_DECREASING = 0x8020203F;
-
-const SET_STATE_HOLD_U_POSITIVE = 0x80203020;
-const SET_STATE_HOLD_V_POSITIVE = 0x80203021;
-const SET_STATE_HOLD_W_POSITIVE = 0x80203022;
-const SET_STATE_HOLD_U_NEGATIVE = 0x80203023;
-const SET_STATE_HOLD_V_NEGATIVE = 0x80203024;
-const SET_STATE_HOLD_W_NEGATIVE = 0x80203025;
-
-// Other constants
-const PWM_BASE = 1536;
-const MAX_TIMEOUT = 0xFFFF; 
-const HISTORY_SIZE = 420;
 
 const time_conversion = 1/23400 * 1000;
 
@@ -57,20 +35,8 @@ const max_calibration_current = 0.9 * drive_voltage / drive_resistance;
 
 const phase_inductance = 0.000_21; // 0.21 mH
 const phase_resistance = 2.0; // 2.0 Ohm
+
 ```
-
-
-Motor command dashboard
------------------------
-
-<div>${connect_buttons}</div>
-<div>${motor_controller_status}</div>
-<div>${data_stream_buttons}</div>
-<div>${command_buttons}</div>
-<div>
-  ${command_value_slider}
-  ${command_timeout_slider}
-</div>
 
 ```js
 
@@ -78,27 +44,10 @@ let motor_controller = Mutable(null);
 
 let motor_controller_status = Mutable(html`<span>Not connected.</span>`);
 
-async function grab_ports(){
-  const ports = await navigator.serial.getPorts();
-  return ports.filter((port) => {
-    const info = port.getInfo();
-    return info.usbVendorId === USBD_VID && info.usbProductId === USBD_PID_FS;
-  });
+function update_motor_controller_status(status){
+  motor_controller_status.value = status;
 }
 
-async function maybe_prompt_port(){
-  const ports = await grab_ports();
-  if (ports.length == 1) return ports[0];
-  try {
-    return await navigator.serial.requestPort({filters: [{usbVendorId: USBD_VID, usbProductId: USBD_PID_FS}]});
-  } catch (error) {
-    if (error.name === "SecurityError") {
-      motor_controller_status.value = html`<span style="color: red">Permission for port dialog denied.</span>`;
-      return null;
-    }
-    throw error;
-  }
-}
 
 async function open_port_and_read(){
   if (motor_controller.value) {
@@ -111,57 +60,38 @@ async function open_port_and_read(){
     }
   }
   try {
-    const port = await maybe_prompt_port();
+    motor_controller.value = await motor.connect_usb_motor_controller();
 
-    if (!port) return;
-
-    let tries = 10;
-
-    while(tries-- > 0){
-      try {
-        await port.open({baudRate: 115200, bufferSize: 16});
-        break;
-      } catch (error) {
-        if (error.name === "InvalidStateError") {
-          await wait(100);
-          continue;
-        }
-        throw error;
-      }
-    }
-
-    if (tries <= 0) throw new Error("Port open failed");
-
-    if (!port.readable) throw new Error("Port unreadable");
-    if (!port.writable) throw new Error("Port unwritable");
-
-    motor_controller.value = new MotorController(port);
-
-    motor_controller_status.value = html`<span>Connected, waiting for data.</span>`;
+    update_motor_controller_status(html`<span>Connected, waiting for data.</span>`);
 
     for await (const data_received of motor_controller.value.reading_loop()) {
-      motor_controller_status.value = html`<span>Connected; received: ${data_received}bytes.</span>`;
+      update_motor_controller_status(html`<span>Connected; received: ${data_received} bytes.</span>`);
     }
 
   } catch (error) {
     motor_controller.value = null;
 
+    if (error.name === "SecurityError") {
+      update_motor_controller_status(html`<span style="color: red">Permission for port dialog denied.</span>`);
+      return;
+    }
+
     if (error.message === "EOF") {
-      motor_controller_status.value = html`<span style="color: red">End of connection.</span>`;
+      update_motor_controller_status(html`<span style="color: red">End of connection.</span>`);
       return;
     }
     // Check for NetworkError due to disconnect.
     if (error.name === "NetworkError") {
-      motor_controller_status.value = html`<span style="color: red">Connection lost.</span>`;
+      update_motor_controller_status(html`<span style="color: red">Connection lost.</span>`);
       return;
     }
 
     if (error.name === "NotFoundError") {
-      motor_controller_status.value = html`<span style="color: red">No device found or nothing selected.</span>`;
+      update_motor_controller_status(html`<span style="color: red">No device found or nothing selected.</span>`);
       return;
     }
 
-    motor_controller_status.value = html`<span style="color: red">Connection lost; unknown error: ${error}</span>`;
+    update_motor_controller_status(html`<span style="color: red">Connection lost; unknown error: ${error}</span>`);
     throw error;
   }
 }
@@ -192,7 +122,7 @@ const command_value_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label
 
 const command_value_fraction = Generators.input(command_value_slider);
 
-const command_timeout_slider = Inputs.range([0, MAX_TIMEOUT*time_conversion], {value: 2000, step: 100, label: "Command timeout (ms):"});
+const command_timeout_slider = Inputs.range([0, motor.MAX_TIMEOUT*time_conversion], {value: 2000, step: 100, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 ```
@@ -203,20 +133,25 @@ const command_timeout_millis = Generators.input(command_timeout_slider);
 
 let raw_readout_data = Mutable();
 
-const max_data_points = HISTORY_SIZE;
+const max_data_points = motor.HISTORY_SIZE;
 
-const command_timeout = Math.floor(command_timeout_millis / time_conversion)
-const command_value = Math.floor(command_value_fraction * PWM_BASE);
+const command_timeout = Math.floor(command_timeout_millis / time_conversion);
+const command_value = Math.floor(command_value_fraction * motor.PWM_BASE);
 
 
 async function command_and_stream(command, options = {}){
   if (!motor_controller) return;
-  
-  await motor_controller.send_command({command, command_timeout, command_value, ...options});
+    
+  try {
+    await motor_controller.send_command({command, command_timeout, command_value, ...options});
 
-  // Start reading the data stream.
-  for await (const data_snapshot of motor_controller.stream_readouts(options)) {
-    raw_readout_data.value = data_snapshot.length > max_data_points ? data_snapshot.slice(-max_data_points) : data_snapshot;
+    // Start reading the data stream.
+    for await (const data_snapshot of motor_controller.stream_readouts(options)) {
+      raw_readout_data.value = data_snapshot.length > max_data_points ? data_snapshot.slice(-max_data_points) : data_snapshot;
+    }
+  } catch (error) {
+    update_motor_controller_status(html`<span style="color: red">Error streaming data: ${error}</span>`);
+    throw error;
   }
 }
 
@@ -230,44 +165,44 @@ async function command(command){
 const data_stream_buttons = Inputs.button(
   [
     ["ADC snapshot", async function(){
-      await command_and_stream(GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE, max_missed_messages: 0});
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0});
     }],
     ["Freewheel Snapshot", async function(){
-      await command(SET_STATE_FREEWHEEL);
-      await command_and_stream(GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE, max_missed_messages: 0});
+      await command(motor.SET_STATE_FREEWHEEL);
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0});
     }],
     ["ADC stream", async function(){
-      await command_and_stream(GET_READOUTS, {max_missed_messages: 128});
+      await command_and_stream(motor.GET_READOUTS, {max_missed_messages: 128});
     }],
     ["Test all permutations", async function(){
-      await command_and_stream(SET_STATE_TEST_ALL_PERMUTATIONS);
+      await command_and_stream(motor.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
     ["Test ground short", async function(){
-      await command_and_stream(SET_STATE_TEST_GROUND_SHORT);
+      await command_and_stream(motor.SET_STATE_TEST_GROUND_SHORT);
     }],
     ["Test positive short", async function(){
-      await command_and_stream(SET_STATE_TEST_POSITIVE_SHORT);
+      await command_and_stream(motor.SET_STATE_TEST_POSITIVE_SHORT);
     }],
     ["Test U directions", async function(){
-      await command_and_stream(SET_STATE_TEST_U_DIRECTIONS);
+      await command_and_stream(motor.SET_STATE_TEST_U_DIRECTIONS);
     }],
     ["Test U increasing", async function(){
-      await command_and_stream(SET_STATE_TEST_U_INCREASING);
+      await command_and_stream(motor.SET_STATE_TEST_U_INCREASING);
     }],
     ["Test U decreasing", async function(){
-      await command_and_stream(SET_STATE_TEST_U_DECREASING);
+      await command_and_stream(motor.SET_STATE_TEST_U_DECREASING);
     }],
     ["Test V increasing", async function(){
-      await command_and_stream(SET_STATE_TEST_V_INCREASING);
+      await command_and_stream(motor.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", async function(){
-      await command_and_stream(SET_STATE_TEST_V_DECREASING);
+      await command_and_stream(motor.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", async function(){
-      await command_and_stream(SET_STATE_TEST_W_INCREASING);
+      await command_and_stream(motor.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", async function(){
-      await command_and_stream(SET_STATE_TEST_W_DECREASING);
+      await command_and_stream(motor.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Read data"},
@@ -276,34 +211,34 @@ const data_stream_buttons = Inputs.button(
 const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
-      await command(SET_STATE_OFF);
+      await command(motor.SET_STATE_OFF);
     }],
     ["Drive+", async function(){
-      await command(SET_STATE_DRIVE_POS);
+      await command(motor.SET_STATE_DRIVE_POS);
     }],
     ["Drive-", async function(){
-      await command(SET_STATE_DRIVE_NEG);
+      await command(motor.SET_STATE_DRIVE_NEG);
     }],
     ["Freewheel", async function(){
-      await command(SET_STATE_FREEWHEEL);
+      await command(motor.SET_STATE_FREEWHEEL);
     }],
     ["Hold U positive", async function(){
-      await command(SET_STATE_HOLD_U_POSITIVE);
+      await command(motor.SET_STATE_HOLD_U_POSITIVE);
     }],
     ["Hold V positive", async function(){
-      await command(SET_STATE_HOLD_V_POSITIVE);
+      await command(motor.SET_STATE_HOLD_V_POSITIVE);
     }],
     ["Hold W positive", async function(){
-      await command(SET_STATE_HOLD_W_POSITIVE);
+      await command(motor.SET_STATE_HOLD_W_POSITIVE);
     }],
     ["Hold U negative", async function(){
-      await command(SET_STATE_HOLD_U_NEGATIVE);
+      await command(motor.SET_STATE_HOLD_U_NEGATIVE);
     }],
     ["Hold V negative", async function(){
-      await command(SET_STATE_HOLD_V_NEGATIVE);
+      await command(motor.SET_STATE_HOLD_V_NEGATIVE);
     }],
     ["Hold W negative", async function(){
-      await command(SET_STATE_HOLD_W_NEGATIVE);
+      await command(motor.SET_STATE_HOLD_W_NEGATIVE);
     }],
   ],
   {label: "Commands"},
@@ -366,14 +301,7 @@ const identity_calibration_factors = {
 };
 
 function load_calibration_factors(){
-  try {
-    const saved_calibration_string = localStorage.getItem("current_calibration");
-    if (!saved_calibration_string) return identity_calibration_factors;
-    return JSON.parse(localStorage.getItem("current_calibration"));
-  } catch (error) {
-    console.error("Error loading calibration:", error);
-    return identity_calibration_factors;
-  }
+  return get_stored_or_default("current_calibration", identity_calibration_factors);
 }
 
 // Load or make default calibration
@@ -642,7 +570,7 @@ function store_calibration_result(calibration_data){
 
 
 ```js
-const short_duration = HISTORY_SIZE / 12 * time_conversion;
+const short_duration = motor.HISTORY_SIZE / 12 * time_conversion;
 
 const calibration_zones = [
   {pwm: 0.1, start: short_duration * 1.4, end: short_duration * 1.95},
@@ -667,57 +595,57 @@ async function run_calibration(){
   
   const settle_time = 300;
   const settle_timeout = settle_time * 3;
-  const settle_strength = Math.floor(PWM_BASE * 2 / 10);
+  const settle_strength = Math.floor(motor.PWM_BASE * 2 / 10);
 
   console.info("Calibration starting");
 
   // Note: hold pwm is clamped by the motor driver
 
-  await motor_controller.send_command({command: SET_STATE_HOLD_U_POSITIVE, command_timeout: settle_timeout, command_value: settle_strength});
+  await motor_controller.send_command({command: motor.SET_STATE_HOLD_U_POSITIVE, command_timeout: settle_timeout, command_value: settle_strength});
   await wait(settle_time);
-  await motor_controller.send_command({command: SET_STATE_TEST_U_INCREASING, command_timeout: 0, command_value: 0})
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_U_INCREASING, command_timeout: 0, command_value: 0});
 
-  const u_positive_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE, max_missed_messages: 0})).data;
+  const u_positive_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0})).data;
 
   console.info("U positive done");
 
-  await motor_controller.send_command({command: SET_STATE_HOLD_W_NEGATIVE, command_timeout: settle_timeout, command_value: settle_strength});
+  await motor_controller.send_command({command: motor.SET_STATE_HOLD_W_NEGATIVE, command_timeout: settle_timeout, command_value: settle_strength});
   await wait(settle_time);
-  await motor_controller.send_command({command: SET_STATE_TEST_W_DECREASING, command_timeout: 0, command_value: 0})
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_W_DECREASING, command_timeout: 0, command_value: 0});
 
-  const w_negative_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE, max_missed_messages: 0})).data;
+  const w_negative_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0})).data;
 
   console.info("W negative done");
 
-  await motor_controller.send_command({command: SET_STATE_HOLD_V_POSITIVE, command_timeout: settle_timeout, command_value: settle_strength});
+  await motor_controller.send_command({command: motor.SET_STATE_HOLD_V_POSITIVE, command_timeout: settle_timeout, command_value: settle_strength});
   await wait(settle_time);
-  await motor_controller.send_command({command: SET_STATE_TEST_V_INCREASING, command_timeout: 0, command_value: 0})
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_V_INCREASING, command_timeout: 0, command_value: 0});
 
-  const v_positive_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE, max_missed_messages: 0})).data;
+  const v_positive_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0})).data;
 
   console.info("V positive done");
 
-  await motor_controller.send_command({command: SET_STATE_HOLD_U_NEGATIVE, command_timeout: settle_timeout, command_value: settle_strength});
+  await motor_controller.send_command({command: motor.SET_STATE_HOLD_U_NEGATIVE, command_timeout: settle_timeout, command_value: settle_strength});
   await wait(settle_time);
-  await motor_controller.send_command({command: SET_STATE_TEST_U_DECREASING, command_timeout: 0, command_value: 0})
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_U_DECREASING, command_timeout: 0, command_value: 0});
 
-  const u_negative_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE, max_missed_messages: 0})).data;
+  const u_negative_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0})).data;
 
   console.info("U negative done");
 
-  await motor_controller.send_command({command: SET_STATE_HOLD_W_POSITIVE, command_timeout: settle_timeout, command_value: settle_strength});
+  await motor_controller.send_command({command: motor.SET_STATE_HOLD_W_POSITIVE, command_timeout: settle_timeout, command_value: settle_strength});
   await wait(settle_time);
-  await motor_controller.send_command({command: SET_STATE_TEST_W_INCREASING, command_timeout: 0, command_value: 0})
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_W_INCREASING, command_timeout: 0, command_value: 0});
 
-  const w_positive_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE, max_missed_messages: 0})).data;
+  const w_positive_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0})).data;
 
   console.info("W positive done");
 
-  await motor_controller.send_command({command: SET_STATE_HOLD_V_NEGATIVE, command_timeout: settle_timeout, command_value: settle_strength});
+  await motor_controller.send_command({command: motor.SET_STATE_HOLD_V_NEGATIVE, command_timeout: settle_timeout, command_value: settle_strength});
   await wait(settle_time);
-  await motor_controller.send_command({command: SET_STATE_TEST_V_DECREASING, command_timeout: 0, command_value: 0})
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_V_DECREASING, command_timeout: 0, command_value: 0});
 
-  const v_negative_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE, max_missed_messages: 0})).data;
+  const v_negative_data = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE, max_missed_messages: 0})).data;
 
   console.info("V negative done");
 
@@ -939,358 +867,13 @@ const calibration_buttons = Inputs.button(
 ```
 
 ```js
-
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function timeout_promise(promise, timeout) {
-  let timeout_id;
-
-  const timed_reject = new Promise((resolve, reject)=>{
-    timeout_id = setTimeout(() => {
-      reject(new Error("Timeout"));
-    }, timeout);
-  });
-
-  return Promise.race([promise.finally(() => { clearTimeout(timeout_id); }), timed_reject]);
-}
-
-// USB serial port communication
-// -----------------------------
-
-
-class COMPort {
-  constructor(port){
-    this.port = port;
-    this.buffer = new Uint8Array();
-    this.reader = port.readable.getReader();
-    this.writer = port.writable.getWriter();
-  }
-
-  async read(n_bytes){
-
-    while (this.buffer.length < n_bytes){
-      const {value, done} = await (this.reader.read());
-      if (done) throw new Error("EOF");
-      this.buffer = new Uint8Array([...this.buffer, ...value]);
-    }
-    const result = this.buffer.slice(0, n_bytes);
-    this.buffer = this.buffer.slice(n_bytes);
-    return result;
-  }
-
-  async write(buffer){
-    await this.writer.write(buffer);
-  }
-
-  async forget(){
-    await this.reader.cancel();
-    this.reader.releaseLock();
-    await this.writer.abort();
-    this.writer.releaseLock();
-    await this.port.close();
-  }
-}
-
-
-// Motor control logic
-// -------------------
-
-
-class MotorController {
-  constructor(port){
-    this.com_port = new COMPort(port);
-    this.data = [];
-    this.notify = null;
-    this.resolve = null;
-    this.reject = null;
-    this.expected_messages = 0;
-    this.max_missed_messages = 0;
-    this.timeout = 500;
-  }
-
-  async * reading_loop(){
-    let data_received = 0;
-
-    while(true){
-      data_received += await this._read_message();
-      yield data_received;
-
-      // Nothing to do if we are not expecting messages.
-      if (!this.expected_messages) {
-        console.warn("Unexpected message received.");
-        continue;
-      }
-
-      if (this.data.length > 2) {
-        const last_index = this.data.length - 1;
-
-        if ((this.data[last_index].readout_number - this.data[last_index - 1].readout_number) > (1 + this.max_missed_messages)){
-          // Notify the observer and carry on.
-          this._push_readouts(this.data.slice(0, -1));
-          // Keep the last message.
-          this.data = this.data.slice(-1);
-          // Push an error to the deterministic readout.
-          this._reject_readouts(new Error("Missed messages."));
-        }
-      }
-
-      // Stream data as it's being transmitted.
-      if (this.data.length && this.data.length % 1024) this._push_readouts(this.data);
-
-      if (this.data.length == this.expected_messages) {
-        this._resolve_readouts(this.data);
-        this._push_readouts(this.data);
-      }
-    }
-  }
-
-  async send_command({command, command_timeout, command_value}) {
-    if (this.com_port === null) return;
-
-    let buffer = new Uint8Array(8);
-    let view = new DataView(buffer.buffer);
-    view.setUint32(0, command);
-    view.setUint16(4, command_timeout);
-    view.setUint16(6, command_value);
-    await this.com_port.write(buffer);
-  }
-
-  _expect_readouts({expected_messages = HISTORY_SIZE, max_missed_messages = 0}) {
-    this.data = [];
-    this.expected_messages = expected_messages;
-    this.max_missed_messages = max_missed_messages;
-  }
-
-  get_readouts(options={}) {
-    this._clear_stream();
-    this._reject_readouts(new Error("Overriding previous readout."));
-
-    this._expect_readouts(options);
-
-    return timeout_promise(new Promise((resolve, reject) => {
-      this.resolve = resolve;
-      this.reject = reject;
-    }), this.timeout);
-  }
-
-  _resolve_readouts(data){
-    if (this.resolve) {
-      this.resolve(data);
-      this.expected_messages = 0;
-      this.resolve = null;
-      this.reject = null;
-    }
-  }
-
-  _reject_readouts(error){
-    if (this.reject) {
-      this.reject(error);
-      this.expected_messages = 0;
-      this.resolve = null;
-      this.reject = null;
-    }
-  }
-
-  stream_readouts(options={}) {
-    this._expect_readouts(options);
-
-    return Generators.observe((notify)=>{
-      this.notify = notify;
-    })
-  }
-
-  _push_readouts(data){
-    if (this.notify) this.notify(data);
-  }
-
-  _clear_stream(last_data){
-    if (this.notify) {
-      if (last_data !== undefined) this.notify(last_data);
-      this.expected_messages = 0;
-      this.notify = null;
-    }
-  }
-
-
-
-  async _read_message(){
-    const message_header = await this.com_port.read(4)
-    if (bytes_to_uint32(message_header) != READOUT) {
-      console.warn("Unknown message header: ", message_header);
-      return 4;
-    }
-
-    const data_bytes = await this.com_port.read(16);
-
-    const data_view = new DataView(data_bytes.buffer);
-
-    let offset = 0;
-    let hall_and_readout_number = data_view.getUint32(0);
-    // The first 3 bits are the hall sensor state.
-    let hall_1 = (hall_and_readout_number >> 29) & 0b1;
-    let hall_2 = (hall_and_readout_number >> 30) & 0b1;
-    let hall_3 = (hall_and_readout_number >> 31) & 0b1;
-    let readout_number = hall_and_readout_number & 0x1FFFFFFF;
-    offset += 4;
-    let pwm_commands = data_view.getUint32(offset);
-    offset += 4;
-
-    let u_pwm = Math.floor(pwm_commands / PWM_BASE / PWM_BASE) % PWM_BASE;
-    let v_pwm = Math.floor(pwm_commands / PWM_BASE) % PWM_BASE;
-    let w_pwm = pwm_commands % PWM_BASE;
-
-    let u_readout = data_view.getUint16(offset);
-    offset += 2;
-    let v_readout = data_view.getUint16(offset);
-    offset += 2;
-    let w_readout = data_view.getUint16(offset);
-    offset += 2;
-    let ref_readout = data_view.getUint16(offset);
-    offset += 2;
-
-    // Only add messages if we are expecting them.
-    if (this.expected_messages) this.data.push({
-      readout_number,
-      u_readout,
-      v_readout,
-      w_readout,
-      ref_readout,
-      u_pwm,
-      v_pwm,
-      w_pwm,
-      hall_1,
-      hall_2,
-      hall_3,
-    });
-
-    return 20;
-  }
-}
-
-```
-
-```js
-// Utils
-
-// Uint8Array from uint32
-function uint32_to_bytes(value) {
-  let buffer = new Uint8Array(4);
-  let view = new DataView(buffer.buffer);
-  view.setUint32(0, value);
-  return buffer;
-}
-
-function bytes_to_uint32(buffer) {
-  // Check buffer is exactly 4 bytes long
-  if (buffer.byteLength !== 4) throw new Error("Buffer must be 4 bytes long");
-  let view = new DataView(buffer.buffer);
-  return view.getUint32(0);
-}
-
-
-function round3(value) {
-  return Number(value.toPrecision(3));
-}
-
-function even_spacing(max_value, n) {
-  return d3.range(n).map((i) => i / (n - 1) * max_value);
-}
-
-function piecewise_linear({X, Y}) {
-  const n = X.length;
-  const m = Y.length;
-  if (n !== m) throw new Error("X and Y must have the same length");
-  if (n < 2) throw new Error("X and Y must have at least 2 points");
-
-  // Check if X is sorted
-  for (let i = 1; i < n; i++) {
-    if (X[i] < X[i - 1]) throw new Error("X must be sorted");
-  }
-
-  const slopes = new Array(n - 1);
-  const intercepts = new Array(n - 1);
-  for (let i = 0; i < n - 1; i++) {
-    slopes[i] = (Y[i + 1] - Y[i]) / (X[i + 1] - X[i]);
-    intercepts[i] = Y[i] - slopes[i] * X[i];
-  }
-
-  return function(x) {
-    let i = (x <= X[0]) ? 0 : (x > X[n - 1]) ? n - 2 : d3.bisectRight(X, x, 1, n - 1) - 1;
-    return slopes[i] * x + intercepts[i];
-  };
-}
-
-function even_piecewise_linear({x_min, x_max, Y}) {
-  const n = Y.length;
-  if (n < 2) throw new Error("Y must have at least 2 points");
-
-  const x_period = (x_max - x_min) / (n - 1);
-
-  const slopes = new Array(n - 1);
-  const intercepts = new Array(n - 1);
-  for (let i = 0; i < n - 1; i++) {
-    slopes[i] = (Y[i + 1] - Y[i]) / x_period
-    intercepts[i] = Y[i] - slopes[i] * (x_period * i + x_min);
-  }
-
-  return function(x) {
-    let i = (x <= x_min) ? 0 : (x > x_max) ? n - 2 : Math.ceil((x - x_min) / x_period) - 1;
-    return slopes[i] * x + intercepts[i];
-  };
-}
-
-```
-
-```js
 // Imports
 // -------
 
 import {html} from "htl";
-
-// Inline copy of https://observablehq.com/@mbostock/safe-local-storage
-class MemoryStorage {
-  constructor() {
-    Object.defineProperties(this, {_: {value: new Map}});
-  }
-  get length() {
-    return this._.size;
-  }
-  key(index) {
-    return Array.from(this._.keys())[index | 0];
-  }
-  getItem(key) {
-    return this._.has(key += "") ? this._.get(key) : null;
-  }
-  setItem(key, value) {
-    this._.set(key + "", value + "");
-  }
-  removeItem(key) {
-    this._.delete(key + "");
-  }
-  clear() {
-    this._.clear();
-  }
-}
-
-const localStorage = function(){
-  try {
-    const storage = window.localStorage;
-    const key = "__storage_test__";
-    storage.setItem(key, key);
-    storage.removeItem(key);
-    return storage;
-  } catch (error) {
-    return new MemoryStorage;
-  }
-}();
-
-function get_default(key, default_func){
-  let saved_value = localStorage.getItem(key);
-  if (saved_value === null) return default_func();
-  return JSON.parse(saved_value);
-}
+import {localStorage, get_stored_or_default} from "./components/local_storage.js";
+import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait}  from "./components/utils.js";
+import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
+import * as motor from "./components/usb_motor_controller.js";
 
 ```
