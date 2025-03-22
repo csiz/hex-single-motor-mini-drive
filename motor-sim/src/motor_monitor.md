@@ -33,7 +33,7 @@ const drive_voltage = 10.0; // 10.0 V // TODO: get it from the chip
 
 const max_calibration_current = 0.9 * drive_voltage / drive_resistance;
 
-const phase_inductance = 0.000_21; // 0.21 mH
+const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 const phase_resistance = 2.0; // 2.0 Ohm
 
 ```
@@ -246,6 +246,8 @@ const command_buttons = Inputs.button(
 
 ```
 
+
+
 Motor driver phase currents
 ----------------------------
 <div class="card tight">
@@ -253,44 +255,8 @@ Motor driver phase currents
   <div>${currents_plots}</div>
 </div>
 
+
 ```js
-
-const base_colors = {
-  u: "cyan",
-  v: "orangered",
-  w: "purple",
-  ref_diff: "gray",
-  sum: "black",
-  radial_magnitude: "gold",
-  current_angle: "green",
-  radial_speed: "steelblue",
-  alpha: "red",
-  beta: "blue",
-};
-
-const colors = {
-  ...base_colors,
-  u_pwm: base_colors.u,
-  v_pwm: base_colors.v,
-  w_pwm: base_colors.w,
-  hall_3: base_colors.u, // Note colors are one permutation away
-  hall_1: base_colors.v,
-  hall_2: base_colors.w,
-};
-
-const data_to_plot = ["u", "v", "w", "u_pwm", "v_pwm", "w_pwm", "hall_3", "hall_1", "hall_2", "alpha", "beta", "current_angle", "radial_magnitude", "ref_diff", "sum", "stats"];
-
-const selected_plots = ["u", "v", "w", "current_angle", "radial_magnitude", "sum", "u_pwm", "v_pwm", "w_pwm", "hall_1", "hall_2", "hall_3"];
-
-const checkboxes_inputs = Inputs.checkbox(data_to_plot, {
-  label: "Display:", 
-  value: selected_plots, 
-  format: (d) => html`<span style="color: ${colors[d]}">${d}</span>`,
-});
-
-const checkboxes = Generators.input(checkboxes_inputs);
-
-
 const identity_calibration_factors = {
   u_positive: 1.0,
   u_negative: 1.0,
@@ -325,7 +291,6 @@ function reset_calibration_factors(){
   localStorage.removeItem("current_calibration");
   update_calibration_factors(identity_calibration_factors);
 }
-
 ```
 
 
@@ -433,29 +398,49 @@ function calculate_data_stats(raw_readout_data){
 
 const {data, ref_readout_mean} = calculate_data_stats(raw_readout_data);
 
+```
 
-const current_lines = {
-  radial_magnitude: Plot.line(data, {x: "time", y: 'radial_magnitude', stroke: colors.radial_magnitude, label: 'radial current', curve: 'step'}),
-  u: Plot.line(data, {x: "time", y: 'u', stroke: colors.u, label: 'adc 0', curve: 'step'}),
-  v: Plot.line(data, {x: "time", y: 'v', stroke: colors.v, label: 'adc 1', curve: 'step'}),
-  w: Plot.line(data, {x: "time", y: 'w', stroke: colors.w, label: 'adc 2', curve: 'step'}),
-  alpha: Plot.line(data, {x: "time", y: 'alpha', stroke: colors.alpha, label: 'alpha', curve: 'step'}),
-  beta: Plot.line(data, {x: "time", y: 'beta', stroke: colors.beta, label: 'beta', curve: 'step'}),
-  sum: Plot.line(data, {x: "time", y: 'sum', stroke: colors.sum, label: 'sum', curve: 'step'}),
-  ref_diff: Plot.line(data, {x: "time", y: 'ref_diff', stroke: colors.ref_diff, label: 'ref', curve: 'step'}),
+```js
+
+const base_colors = {
+  u: "cyan",
+  v: "orangered",
+  w: "purple",
+  ref_diff: "gray",
+  sum: "black",
+  radial_magnitude: "gold",
+  current_angle: "green",
+  radial_speed: "steelblue",
+  alpha: "red",
+  beta: "blue",
 };
 
-const voltage_lines = {
-  u: Plot.line(data, {x: "time", y: "u_voltage", stroke: colors.u, label: 'u', curve: 'step'}),
-  v: Plot.line(data, {x: "time", y: "v_voltage", stroke: colors.v, label: 'v', curve: 'step'}),
-  w: Plot.line(data, {x: "time", y: "w_voltage", stroke: colors.w, label: 'w', curve: 'step'}),
-}
-
-const pwm_lines = {
-  u_pwm: Plot.line(data, {x: "time", y: 'u_pwm', stroke: colors.u, label: 'pwm 0', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
-  v_pwm: Plot.line(data, {x: "time", y: 'v_pwm', stroke: colors.v, label: 'pwm 1', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
-  w_pwm: Plot.line(data, {x: "time", y: 'w_pwm', stroke: colors.w, label: 'pwm 2', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
+const colors = {
+  ...base_colors,
+  u_pwm: base_colors.u,
+  v_pwm: base_colors.v,
+  w_pwm: base_colors.w,
+  hall_3: base_colors.u, // Note colors are one permutation away
+  hall_1: base_colors.v,
+  hall_2: base_colors.w,
 };
+
+const data_to_plot = ["u", "v", "w", "u_pwm", "v_pwm", "w_pwm", "hall_3", "hall_1", "hall_2", "alpha", "beta", "current_angle", "radial_magnitude", "ref_diff", "sum"];
+
+const selected_plots = ["u", "v", "w", "current_angle", "radial_magnitude", "sum", "u_pwm", "v_pwm", "w_pwm", "hall_1", "hall_2", "hall_3"];
+
+const checkboxes_inputs = Inputs.checkbox(data_to_plot, {
+  label: "Display:", 
+  value: selected_plots, 
+  format: (d) => html`<span style="color: ${colors[d]}">${d}</span>`,
+});
+
+const checkboxes = Generators.input(checkboxes_inputs);
+
+```
+
+
+```js
 
 
 const π = Math.PI;
@@ -465,35 +450,20 @@ const hall_3_as_angle = (d) => d.hall_3 ? d.hall_1 ? +π/3 -ε : d.hall_2 ? -π/
 const hall_1_as_angle = (d) => d.hall_1 ? d.hall_3 ? +π/3 +ε : d.hall_2 ? +π -ε : +2*π/3 : null;
 const hall_2_as_angle = (d) => d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 -ε : -2*π/3 : null;
 
-const angle_lines = {
-  current_angle: Plot.line(data, {x: "time", y: "current_angle", stroke: colors.current_angle, label: "radial angle", curve: "step"}),
-  hall_3: Plot.line(data, {x: "time", y: hall_3_as_angle, stroke: colors.u, label: 'hall 3', curve: 'step',  strokeWidth: 3}),
-  hall_1: Plot.line(data, {x: "time", y: hall_1_as_angle, stroke: colors.v, label: 'hall 1', curve: 'step',  strokeWidth: 3}),
-  hall_2: Plot.line(data, {x: "time", y: hall_2_as_angle, stroke: colors.w, label: 'hall 2', curve: 'step', strokeWidth: 3}),
-};
-
-const selected_current_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => current_lines[key]);
-const selected_voltage_lines = Object.keys(current_lines).filter((key) => checkboxes.includes(key)).map((key) => voltage_lines[key]);
-
-const selected_pwm_lines = Object.keys(pwm_lines).filter((key) => checkboxes.includes(key)).map((key) => pwm_lines[key]);
-const selected_angle_lines = Object.keys(angle_lines).filter((key) => checkboxes.includes(key)).map((key) => angle_lines[key]);
-
-const stats_table = data.length ? html`<div>Current stats:</div><table>
-  <tr><td>U:</td><td>${d3.mean(data, (d) => d.u).toFixed(3)} A</td></tr>
-  <tr><td>V:</td><td>${d3.mean(data, (d) => d.v).toFixed(3)} A</td></tr>
-  <tr><td>W:</td><td>${d3.mean(data, (d) => d.w).toFixed(3)} A</td></tr>
-  <tr><td>Sum:</td><td>${d3.mean(data, (d) => d.sum).toFixed(3)} A</td></tr>
-  <tr><td>Ref:</td><td>${ref_readout_mean.toFixed(0)} ADC bits</td></tr>
-</table>` : html`<div>No data</div>`;
-
-
+function pick_selected(selected_keys, object){
+  return Object.keys(object).filter((key) => selected_keys.includes(key)).map((key) => object[key]);
+}
 
 const currents_plots = [
-  ...(checkboxes.includes("stats") ? [stats_table] : []),
   Plot.plot({
     marks: [
-      ...selected_angle_lines,
-      
+      ...pick_selected(checkboxes, {
+        current_angle: Plot.line(data, {x: "time", y: "current_angle", stroke: colors.current_angle, label: "radial angle", curve: "step"}),
+        hall_3: Plot.line(data, {x: "time", y: hall_3_as_angle, stroke: colors.u, label: 'hall 3', curve: 'step',  strokeWidth: 3}),
+        hall_1: Plot.line(data, {x: "time", y: hall_1_as_angle, stroke: colors.v, label: 'hall 1', curve: 'step',  strokeWidth: 3}),
+        hall_2: Plot.line(data, {x: "time", y: hall_2_as_angle, stroke: colors.w, label: 'hall 2', curve: 'step', strokeWidth: 3}),
+      }),
+        
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
       Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: Math.PI / 2, stroke: 'black', strokeWidth : 2}),
@@ -515,7 +485,16 @@ const currents_plots = [
   }),
   Plot.plot({
     marks: [
-      ...selected_current_lines,
+      ...pick_selected(checkboxes, {
+        radial_magnitude: Plot.line(data, {x: "time", y: 'radial_magnitude', stroke: colors.radial_magnitude, label: 'radial current', curve: 'step'}),
+        u: Plot.line(data, {x: "time", y: 'u', stroke: colors.u, label: 'adc 0', curve: 'step'}),
+        v: Plot.line(data, {x: "time", y: 'v', stroke: colors.v, label: 'adc 1', curve: 'step'}),
+        w: Plot.line(data, {x: "time", y: 'w', stroke: colors.w, label: 'adc 2', curve: 'step'}),
+        alpha: Plot.line(data, {x: "time", y: 'alpha', stroke: colors.alpha, label: 'alpha', curve: 'step'}),
+        beta: Plot.line(data, {x: "time", y: 'beta', stroke: colors.beta, label: 'beta', curve: 'step'}),
+        sum: Plot.line(data, {x: "time", y: 'sum', stroke: colors.sum, label: 'sum', curve: 'step'}),
+        ref_diff: Plot.line(data, {x: "time", y: 'ref_diff', stroke: colors.ref_diff, label: 'ref', curve: 'step'}),
+      }),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
       Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
@@ -527,7 +506,11 @@ const currents_plots = [
   }),
   Plot.plot({
     marks: [
-      ...selected_voltage_lines,
+      ...pick_selected(checkboxes, {
+        u: Plot.line(data, {x: "time", y: "u_voltage", stroke: colors.u, label: 'u', curve: 'step'}),
+        v: Plot.line(data, {x: "time", y: "v_voltage", stroke: colors.v, label: 'v', curve: 'step'}),
+        w: Plot.line(data, {x: "time", y: "w_voltage", stroke: colors.w, label: 'w', curve: 'step'}),
+      }),
       Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
       Plot.gridY({interval: 0.1, stroke: 'gray', strokeWidth : 1}),
@@ -539,7 +522,11 @@ const currents_plots = [
   }),
   Plot.plot({
     marks: [
-      ...selected_pwm_lines,
+      ...pick_selected(checkboxes, {
+        u_pwm: Plot.line(data, {x: "time", y: 'u_pwm', stroke: colors.u, label: 'pwm 0', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
+        v_pwm: Plot.line(data, {x: "time", y: 'v_pwm', stroke: colors.v, label: 'pwm 1', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
+        w_pwm: Plot.line(data, {x: "time", y: 'w_pwm', stroke: colors.w, label: 'pwm 2', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
+      }),
       Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
       Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
       Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
@@ -551,6 +538,7 @@ const currents_plots = [
 ];
 
 ```
+
 
 Calibration procedures
 ----------------------
@@ -865,6 +853,8 @@ const calibration_buttons = Inputs.button(
 );
 
 ```
+
+
 
 ```js
 // Imports
