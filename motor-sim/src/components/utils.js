@@ -87,3 +87,8 @@ export function timeout_promise(promise, timeout) {
 
   return Promise.race([promise.finally(() => { clearTimeout(timeout_id); }), timed_reject]);
 }
+
+/* Clean a string so it can be used as an id. */
+export function clean_id(id) {
+  return id.replace(/[^a-zA-Z0-9_]/g, "_");
+}
