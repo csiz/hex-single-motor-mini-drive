@@ -250,12 +250,7 @@ const command_buttons = Inputs.button(
 
 Motor driver phase currents
 ----------------------------
-<div class="card tight">${data_plots["Electric Position"]}</div>
-<div class="card tight">${data_plots["Speed"]}</div>
-<div class="card tight">${data_plots["Measured Current"]}</div>
-<div class="card tight">${data_plots["DQ0 Currents"]}</div>
-<div class="card tight">${data_plots["Inferred Voltage"]}</div>
-<div class="card tight">${data_plots["PWM Settings"]}</div>
+<div>${data_plots_element}</div>
 
 
 ```js
@@ -429,8 +424,9 @@ const hall_2_as_angle = (d) => d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 
 
 
 const data_plot_layout = {
-  "Electric Position": {
-    description: html`<p>The position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.</p>`,
+  plot_electric_position: {
+    subtitle: "Electric position",
+    description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
     y: {label: "Electric position (rad)", domain: [-Math.PI, Math.PI]},
     width: 1200, height: 150,
     mark_functions: {
@@ -447,8 +443,9 @@ const data_plot_layout = {
       ],
     }
   },
-  "Speed": {
-    description: html`<p>The speed of the rotor in rotations per millisecond.</p>`,
+  plot_speed: {
+    subtitle: "Rotor Speed",
+    description: "Angular speed of the rotor in rotations per millisecond.",
     y: {label: "Speed (rotations/ms)"},
     width: 1200, height: 150,
     mark_functions: {
@@ -460,8 +457,9 @@ const data_plot_layout = {
       ],
     }
   },
-  "Measured Current": {
-    description: html`<p>The measured current values for each phase.</p>`,
+  plot_measured_current: {
+    subtitle: "Measured Current",
+    description: "Measured current values for each phase.",
     y: {label: "Current (A)"},
     width: 1200, height: 400,
     mark_functions: {
@@ -477,8 +475,9 @@ const data_plot_layout = {
       ],
     }
   },
-  "DQ0 Currents": {
-    description: html`<p>The DQ currents calculated from the measured currents.</p>`,
+  plot_dq0_currents: {
+    subtitle: "DQ0 Currents",
+    description: "DQ0 currents after Clarke and Park transforming the measured currents.",
     y: {label: "Current (A)"},
     width: 1200, height: 400,
     mark_functions: {
@@ -492,8 +491,9 @@ const data_plot_layout = {
       ],
     }
   },
-  "Inferred Voltage": {
-    description: html`<p>The inferred voltage values for each phase (V = L*dI/dt).</p>`,
+  plot_inferred_voltage: {
+    subtitle: "Inferred Voltage",
+    description: "Inferred voltage values for each phase (V = L*dI/dt).",
     y: {label: "Voltage (V)"},
     width: 1200, height: 300,
     mark_functions: {
@@ -507,8 +507,9 @@ const data_plot_layout = {
       ],
     }
   },
-  "PWM Settings": {
-    description: html`<p>The PWM value currently set for each phase.</p>`,
+  plot_pwm_settings: {
+    subtitle: "PWM Settings",
+    description: "The PWM value currently set for each phase.",
     y: {label: "PWM", domain: [0, motor.PWM_BASE]},
     width: 1200, height: 150,
     mark_functions: {
@@ -525,8 +526,8 @@ const data_plot_layout = {
 }; // End of data_plot_layout
 
 const data_plot_default_selection = Object.fromEntries(
-  Object.entries(data_plot_layout).map(([subtitle, plot_group]) => {
-    return [subtitle, {
+  Object.entries(data_plot_layout).map(([id, plot_group]) => {
+    return [id, {
       show: true,
       shown_marks: Object.keys(plot_group.mark_functions),
     }];
@@ -534,7 +535,6 @@ const data_plot_default_selection = Object.fromEntries(
 );
 
 let data_plot_selection = Mutable(get_stored_or_default("data_plot_selection", data_plot_default_selection));
-// let data_plot_selection = Mutable(data_plot_default_selection);
 
 function update_data_plot_selection(new_selection){
   data_plot_selection.value = new_selection;
@@ -545,68 +545,81 @@ function pick_selected(selected_keys, object){
   return Object.keys(object).filter((key) => selected_keys.includes(key)).map((key) => object[key]);
 }
 
+
 function selectable_plots(data, selection, update_selection){
+
   const domain = [0, data[data.length - 1].time];
   
   // We want to render a list of plots, each with a title, a description, and configurable selection of data.
   // Because they share the x axis, we can select a subset of the data. We can also show the same vertical
   // cursor when the user hovers over the plots.
-  const built_plots = Object.fromEntries(Object.entries(data_plot_layout).map(([subtitle, plot_group]) => {
+  const built_plots = Object.fromEntries(Object.entries(data_plot_layout).map(([id, plot_group]) => {
     // Create a plot for each group.
-    const {description, y, width, height, mark_functions} = plot_group;
+    const {subtitle, description, y, width, height, mark_functions} = plot_group;
 
 
     // First, make the title into a checkbox to toggle the plot on and off.
     const subtitle_checkbox = Inputs.checkbox([subtitle], {
-      value: selection[subtitle].show ? [subtitle] : [],
+      value: selection[id].show ? [subtitle] : [],
       format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
     });
 
-    subtitle_checkbox.addEventListener("input", function(){
+
+    subtitle_checkbox.addEventListener("input", function(event){
       const show = subtitle_checkbox.value.length > 0;
-      selection[subtitle].show = show;
+      selection[id].show = show;
       update_data_plot_selection(selection);
     });
 
-
-    if (!selection[subtitle].show) {
-      return [subtitle, html`<div class="card tight">${subtitle_checkbox}</div>`];
+    if (!selection[id].show) {
+      return [id, html`<div class="card tight">${subtitle_checkbox}</div>`];
     }
 
-    // Then, make the marks into checkboxes to toggle them on and off.
-    const marks_checkboxes = Inputs.checkbox(Object.keys(mark_functions), {value: selection[subtitle].shown_marks, label: "Display:"});
+    const description_element = html`<p>${description}</p>`;
 
-    marks_checkboxes.addEventListener("input", function(){
+    // Then, make the marks into checkboxes to toggle them on and off.
+    const marks_checkboxes = Inputs.checkbox(Object.keys(mark_functions), {value: selection[id].shown_marks, label: "Display:"});
+
+    marks_checkboxes.addEventListener("input", function(event){
       const shown_marks = marks_checkboxes.value;
-      selection[subtitle].shown_marks = shown_marks;
+      selection[id].shown_marks = shown_marks;
       update_data_plot_selection(selection);
     });
 
     // Finally, create the plot with the selected marks.
-    const selected_marks = pick_selected(selection[subtitle].shown_marks, mark_functions).map((mark_function) => mark_function(data));
+    const selected_marks = pick_selected(selection[id].shown_marks, mark_functions).map((mark_function) => mark_function(data));
+    
+    function make_plot(y){
+      return Plot.plot({
+        x: {label: "Time (ms)", domain},
+        y,
+        width, height,
+        color: {legend: true},
+        marks: selected_marks,
+      });
+    }
 
-    const plot = Plot.plot({
-      x: {label: "Time (ms)", domain},
-      y,
-      width, height,
-      color: {legend: true},
-      marks: selected_marks,
-    });
+    const plot_figure = function(){
+      try {
+        return make_plot(y);
+      } catch (error) {
+        if (error.message == "missing scale: y") return make_plot({...y, domain: [0, 1]});
+        return html`<div style="color: red;">Error making plot: ${error}</div>`;
+      }
+    }();
 
-    return [subtitle, html`<div>${subtitle_checkbox}${description}${marks_checkboxes}${plot}</div>`];
+    return [id, html`<div class="card tight">${subtitle_checkbox}${description_element}${marks_checkboxes}${plot_figure}</div>`];
   }));
-
 
   return built_plots;
 }
-
-
 ```
 
+
 ```js
-const data_plots = selectable_plots(data, data_plot_selection, update_data_plot_selection);
+const data_plots = Object.values(selectable_plots(data, data_plot_selection, update_data_plot_selection));
 
-
+const data_plots_element = html`<span>${data_plots}</span>`;
 ```
 
 Calibration procedures

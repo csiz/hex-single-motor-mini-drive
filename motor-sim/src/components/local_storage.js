@@ -1,3 +1,4 @@
+import _ from 'lodash';
 
 /* Inline copy of https://observablehq.com/@mbostock/safe-local-storage */
 class MemoryStorage {
@@ -38,7 +39,9 @@ class MemoryStorage {
   
   /* Get the stored value or return the default value if not found. */
   export function get_stored_or_default(key, default_value){
-    let saved_value = localStorage.getItem(key);
-    if (saved_value === null) return default_value;
-    return JSON.parse(saved_value);
+    const saved_string = localStorage.getItem(key);
+    if (saved_string === null) return default_value;
+    const saved_value = JSON.parse(saved_string);
+    // Ensure we return all elements of the default value.
+    return _.merge({}, default_value, saved_value);
   }
