@@ -43,7 +43,6 @@ const π = Math.PI;
 
 ```js
 
-let motor_controller = Mutable(null);
 let motor_controller = Mutable();
 
 let motor_controller_status = Mutable(html`<span>Not connected.</span>`);
@@ -134,8 +133,6 @@ const command_timeout_millis = Generators.input(command_timeout_slider);
 ```js
 
 // Control functions
-
-let raw_readout_data = Mutable();
 // -----------------
 
 const max_data_points = motor.HISTORY_SIZE;
@@ -434,7 +431,7 @@ const colors = {
   w: "purple",
   ref_diff: "gray",
   sum: "black",
-  radial_magnitude: "gold",
+  radial_magnitude: "#B59410", // dark gold
   current_angle: "green",
   radial_speed: "steelblue",
   alpha: "red",
@@ -537,12 +534,30 @@ function plot_multiline(options){
         Plot.line(
           selected_data,
           {
-            x: x_label,
-            y: y_label,
-            stroke: channel_label,
+            x: x_label, y: y_label, stroke: channel_label,
             curve: "step",
-            tip: "xy",
           },
+        ),
+        Plot.crosshairX(
+          selected_data,
+          {
+            x: x_label, y: y_label, color: channel_label,
+            ruleStrokeWidth: 3,
+          },
+        ),
+        Plot.dot(
+          selected_data,
+          Plot.pointerX({
+            x: x_label, y: y_label, stroke: channel_label,
+          }),
+        ),
+        Plot.text(
+          selected_data,
+          Plot.pointerX({
+            px: x_label, py: y_label, fill: channel_label,
+            dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14,
+            text: (d) => `Channel: ${d[channel_label].padEnd(20)} | ${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)}`,
+          }),
         ),
         ...(selection.shown_marks.includes("grid") ? grid_marks : []),
       ],
