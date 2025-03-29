@@ -36,6 +36,9 @@ const max_calibration_current = 0.9 * drive_voltage / drive_resistance;
 const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 const phase_resistance = 2.0; // 2.0 Ohm
 
+const π = Math.PI;
+
+
 ```
 
 ```js
@@ -247,13 +250,12 @@ const command_buttons = Inputs.button(
 ```
 
 
-
-Motor driver phase currents
-----------------------------
-<div>${data_plots_element}</div>
-
-
 ```js
+
+// Load Calibration
+// ----------------
+
+
 const identity_calibration_factors = {
   u_positive: 1.0,
   u_negative: 1.0,
@@ -293,6 +295,9 @@ function reset_calibration_factors(){
 
 ```js
 
+// Calculate Data
+// --------------
+
 function matrix_multiply(m, v){
   // Return the matrix-vector product of a 3x3 matrix and a 3-vector.
   return m.map((row) => d3.sum(row.map((x, i) => x * v[i])));
@@ -315,7 +320,7 @@ function calculate_data_stats(raw_readout_data){
   const start_readout_number = raw_readout_data[0].readout_number;
 
 
-  const data_with_current = raw_readout_data.map((d) => {
+  const data_with_annotations = raw_readout_data.map((d) => {
     const readout_number = d.readout_number - start_readout_number;
     const time = readout_number * time_conversion;
   
@@ -347,7 +352,14 @@ function calculate_data_stats(raw_readout_data){
     const current_angle = Math.atan2(beta, alpha);
     const radial_magnitude = Math.sqrt(alpha * alpha + beta * beta);
 
-    return {...d, u_readout, v_readout, w_readout, u, v, w, ref_diff, time, sum, alpha, beta, current_angle, radial_magnitude};
+    // Approximate the angle for the 6 sectors of the hall sensor.
+    const ε = 0.1;
+    const hall_3_as_angle = d.hall_3 ? d.hall_1 ? +π/3 -ε : d.hall_2 ? -π/3 +ε : 0.0 : null;
+    const hall_1_as_angle = d.hall_1 ? d.hall_3 ? +π/3 +ε : d.hall_2 ? +π -ε : +2*π/3 : null;
+    const hall_2_as_angle = d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 -ε : -2*π/3 : null;
+
+
+    return {...d, u_readout, v_readout, w_readout, u, v, w, ref_diff, time, sum, alpha, beta, current_angle, radial_magnitude, hall_3_as_angle, hall_1_as_angle, hall_2_as_angle};
   });
 
   const derivative_start_index = 8;
@@ -378,7 +390,7 @@ function calculate_data_stats(raw_readout_data){
     return derivative == null ? null : derivative / (1000 * 2 * Math.PI); // rotations per millisecond
   }
 
-  const data_with_derivatives = data_with_current.map((d, i, data) => {
+  const data_with_derivatives = data_with_annotations.map((d, i, data) => {
     return {
       ...d,
       radial_speed: speed_3_points(i, diff_phi, data),
@@ -401,6 +413,10 @@ const {data, ref_readout_mean} = calculate_data_stats(raw_readout_data);
 
 ```js
 
+// Plotting
+// --------
+
+
 const colors = {
   u: "cyan",
   v: "orangered",
@@ -415,211 +431,290 @@ const colors = {
 };
 
 
-const π = Math.PI;
-const ε = 0.1;
-
-const hall_3_as_angle = (d) => d.hall_3 ? d.hall_1 ? +π/3 -ε : d.hall_2 ? -π/3 +ε : 0.0 : null;
-const hall_1_as_angle = (d) => d.hall_1 ? d.hall_3 ? +π/3 +ε : d.hall_2 ? +π -ε : +2*π/3 : null;
-const hall_2_as_angle = (d) => d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 -ε : -2*π/3 : null;
-
-
-const data_plot_layout = {
-  plot_electric_position: {
-    subtitle: "Electric position",
-    description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
-    y: {label: "Electric position (rad)", domain: [-Math.PI, Math.PI]},
-    width: 1200, height: 150,
-    mark_functions: {
-      "Current (Park) Angle": (data) => Plot.line(data, {x: "time", y: "current_angle", stroke: colors.current_angle, label: "current angle", curve: "step"}),
-      "Hall Angle": (data) => [
-        Plot.line(data, {x: "time", y: hall_3_as_angle, stroke: colors.u, label: 'hall 3', curve: 'step', strokeWidth: 3}),
-        Plot.line(data, {x: "time", y: hall_1_as_angle, stroke: colors.v, label: 'hall 1', curve: 'step', strokeWidth: 3}),
-        Plot.line(data, {x: "time", y: hall_2_as_angle, stroke: colors.w, label: 'hall 2', curve: 'step', strokeWidth: 3}),
-      ],
-      "Grid": (data) => [
-        Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-        Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-        Plot.gridY({interval: Math.PI / 2, stroke: 'black', strokeWidth : 2}),
-      ],
-    }
-  },
-  plot_speed: {
-    subtitle: "Rotor Speed",
-    description: "Angular speed of the rotor in rotations per millisecond.",
-    y: {label: "Speed (rotations/ms)"},
-    width: 1200, height: 150,
-    mark_functions: {
-      "Speed": (data) => Plot.line(data, {x: "time", y: "radial_speed", stroke: colors.radial_speed, label: "radial speed", curve: 'step'}),
-      "Grid": (data) => [
-        Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-        Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-        Plot.gridY({stroke: 'black', strokeWidth : 2}),
-      ],
-    }
-  },
-  plot_measured_current: {
-    subtitle: "Measured Current",
-    description: "Measured current values for each phase.",
-    y: {label: "Current (A)"},
-    width: 1200, height: 400,
-    mark_functions: {
-      "Current U": (data) => Plot.line(data, {x: "time", y: "u", stroke: colors.u, label: 'Current U', curve: 'step'}),
-      "Current V": (data) => Plot.line(data, {x: "time", y: "v", stroke: colors.v, label: 'Current V', curve: 'step'}),
-      "Current W": (data) => Plot.line(data, {x: "time", y: "w", stroke: colors.w, label: 'Current W', curve: 'step'}),
-      "Sum": (data) => Plot.line(data, {x: "time", y: "sum", stroke: colors.sum, label: 'Sum', curve: 'step'}),
-      "Reference Change": (data) => Plot.line(data, {x: "time", y: "ref_diff", stroke: colors.ref_diff, label: 'Ref Diff', curve: 'step'}),
-      "Grid": (data) => [
-        Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-        Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-        Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-      ],
-    }
-  },
-  plot_dq0_currents: {
-    subtitle: "DQ0 Currents",
-    description: "DQ0 currents after Clarke and Park transforming the measured currents.",
-    y: {label: "Current (A)"},
-    width: 1200, height: 400,
-    mark_functions: {
-      "Alpha": (data) => Plot.line(data, {x: "time", y: "alpha", stroke: colors.alpha, label: 'Alpha', curve: 'step'}),
-      "Beta": (data) => Plot.line(data, {x: "time", y: "beta", stroke: colors.beta, label: 'Beta', curve: 'step'}),
-      "Radial Magnitude": (data) => Plot.line(data, {x: "time", y: "radial_magnitude", stroke: colors.radial_magnitude, label: 'Radial Magnitude', curve: 'step'}),
-      "Grid": (data) => [
-        Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-        Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-        Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-      ],
-    }
-  },
-  plot_inferred_voltage: {
-    subtitle: "Inferred Voltage",
-    description: "Inferred voltage values for each phase (V = L*dI/dt).",
-    y: {label: "Voltage (V)"},
-    width: 1200, height: 300,
-    mark_functions: {
-      "Voltage U": (data) => Plot.line(data, {x: "time", y: "u_voltage", stroke: colors.u, label: 'Voltage U', curve: 'step'}),
-      "Voltage V": (data) => Plot.line(data, {x: "time", y: "v_voltage", stroke: colors.v, label: 'Voltage V', curve: 'step'}),
-      "Voltage W": (data) => Plot.line(data, {x: "time", y: "w_voltage", stroke: colors.w, label: 'Voltage W', curve: 'step'}),
-      "Grid": (data) => [
-        Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-        Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-        Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-      ],
-    }
-  },
-  plot_pwm_settings: {
-    subtitle: "PWM Settings",
-    description: "The PWM value currently set for each phase.",
-    y: {label: "PWM", domain: [0, motor.PWM_BASE]},
-    width: 1200, height: 150,
-    mark_functions: {
-      "PWM U": (data) => Plot.line(data, {x: "time", y: "u_pwm", stroke: colors.u, label: 'PWM U', curve: 'step', strokeDasharray: "1 4", strokeWidth: 2}),
-      "PWM V": (data) => Plot.line(data, {x: "time", y: "v_pwm", stroke: colors.v, label: 'PWM V', curve: 'step', strokeDasharray: "1 3", strokeWidth: 2}),
-      "PWM W": (data) => Plot.line(data, {x: "time", y: "w_pwm", stroke: colors.w, label: 'PWM W', curve: 'step', strokeDasharray: "2 4", strokeWidth: 2}),
-      "Grid": (data) => [
-        Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-        Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-        Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
-      ],
-    }
-  },
-}; // End of data_plot_layout
-
-const data_plot_default_selection = Object.fromEntries(
-  Object.entries(data_plot_layout).map(([id, plot_group]) => {
-    return [id, {
-      show: true,
-      shown_marks: Object.keys(plot_group.mark_functions),
-    }];
-  })
-);
-
-let data_plot_selection = Mutable(get_stored_or_default("data_plot_selection", data_plot_default_selection));
-
-function update_data_plot_selection(new_selection){
-  data_plot_selection.value = new_selection;
-  localStorage.setItem("data_plot_selection", JSON.stringify(new_selection));
+function tidy_select({data, x, x_label = "x", y_label = "y", channel_label = "channel", channels}){
+  return data.flatMap((d) => {
+    return channels.map(({y, label}) => {
+      return Object.fromEntries([
+        [x_label, d[x]],
+        [y_label, d[y]],
+        [channel_label, label],
+      ]);
+    });
+  });
 }
 
-function pick_selected(selected_keys, object){
-  return Object.keys(object).filter((key) => selected_keys.includes(key)).map((key) => object[key]);
-}
+function plot_multiline(options){
+  const {
+    data, 
+    store_id,
+    width, height,
+    x_options, y_options,
+    x, y, 
+    x_label, y_label,
+    channel_label, channels,
+    subtitle, description,
+    grid_marks = [],
+  } = options;
 
+  let {selection} = options;
 
-function selectable_plots(data, selection, update_selection){
+  selection = selection ? selection : get_stored_or_default(store_id, {
+    show: true,
+    shown_marks: [...channels.map(({y}) => y), "grid"],
+  });
 
-  const domain = [0, data[data.length - 1].time];
-  
-  // We want to render a list of plots, each with a title, a description, and configurable selection of data.
-  // Because they share the x axis, we can select a subset of the data. We can also show the same vertical
-  // cursor when the user hovers over the plots.
-  const built_plots = Object.fromEntries(Object.entries(data_plot_layout).map(([id, plot_group]) => {
-    // Create a plot for each group.
-    const {subtitle, description, y, width, height, mark_functions} = plot_group;
+  let result = Mutable(create_element(selection));
 
+  function update_selection(new_selection){
+    selection = {...selection, ...new_selection};
+    // Store the selection in local storage.
+    localStorage.setItem(store_id, JSON.stringify(selection));
+    // Update the plot.
+    result.value = create_element(selection);
+  }
+
+  function create_element(selection){
 
     // First, make the title into a checkbox to toggle the plot on and off.
     const subtitle_checkbox = Inputs.checkbox([subtitle], {
-      value: selection[id].show ? [subtitle] : [],
+      value: selection.show ? [subtitle] : [],
       format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
     });
 
-
     subtitle_checkbox.addEventListener("input", function(event){
       const show = subtitle_checkbox.value.length > 0;
-      selection[id].show = show;
-      update_data_plot_selection(selection);
+      update_selection({show});
     });
 
-    if (!selection[id].show) {
-      return [id, html`<div class="card tight">${subtitle_checkbox}</div>`];
+    if (!selection.show) {
+      return html`<div>${subtitle_checkbox}</div>`;
     }
 
     const description_element = html`<p>${description}</p>`;
 
+    const checkbox_y_to_label = Object.fromEntries([...channels.map(({y, label}) => [y, label]), ["grid", "Grid"]]);
+    const checkbox_y_to_color = Object.fromEntries([...channels.map(({y, color}) => [y, color]), ["grid", "grey"]]);
+
     // Then, make the marks into checkboxes to toggle them on and off.
-    const marks_checkboxes = Inputs.checkbox(Object.keys(mark_functions), {value: selection[id].shown_marks, label: "Display:"});
+    const marks_checkboxes = Inputs.checkbox(
+      [...channels.map(({y}) => y), "grid"], 
+      {
+        value: selection.shown_marks,
+        label: "Display:",
+        format: (y) => html`<span style="border-bottom: solid 3px ${checkbox_y_to_color[y]}; margin-bottom: -3px;">${checkbox_y_to_label[y]}</span>`,
+      },
+    );
 
     marks_checkboxes.addEventListener("input", function(event){
       const shown_marks = marks_checkboxes.value;
-      selection[id].shown_marks = shown_marks;
-      update_data_plot_selection(selection);
+      update_selection({shown_marks});
     });
 
-    // Finally, create the plot with the selected marks.
-    const selected_marks = pick_selected(selection[id].shown_marks, mark_functions).map((mark_function) => mark_function(data));
-    
-    function make_plot(y){
-      return Plot.plot({
-        x: {label: "Time (ms)", domain},
-        y,
-        width, height,
-        color: {legend: true},
-        marks: selected_marks,
-      });
-    }
+    const selected_channels = channels.filter(({y}) => selection.shown_marks.includes(y));
+    const selected_data = tidy_select({data, x, x_label, y_label, channel_label, channels: selected_channels});
 
-    const plot_figure = function(){
-      try {
-        return make_plot(y);
-      } catch (error) {
-        if (error.message == "missing scale: y") return make_plot({...y, domain: [0, 1]});
-        return html`<div style="color: red;">Error making plot: ${error}</div>`;
-      }
-    }();
+    const plot_figure = Plot.plot({
+      width, height,
+      x: {label: x_label, ...x_options},
+      y: {label: y_label, domain: selected_data.length > 0 ? undefined : [0, 1], ...y_options},
+      color: {
+        // legend: true,
+        domain: channels.map(({label}) => label),
+        range: channels.map(({color}) => color),
+      },
+      marks: [
+        Plot.line(
+          selected_data,
+          {
+            x: x_label,
+            y: y_label,
+            stroke: channel_label,
+            curve: "step",
+            tip: "xy",
+          },
+        ),
+        ...(selection.shown_marks.includes("grid") ? grid_marks : []),
+      ],
+    });
 
-    return [id, html`<div class="card tight">${subtitle_checkbox}${description_element}${marks_checkboxes}${plot_figure}</div>`];
-  }));
+    return html`<div>${subtitle_checkbox}${description_element}${marks_checkboxes}${plot_figure}</div>`;
+  }
 
-  return built_plots;
+  return result;
 }
+
 ```
 
 
-```js
-const data_plots = Object.values(selectable_plots(data, data_plot_selection, update_data_plot_selection));
+Motor driver phase currents
+----------------------------
+<div class="card tight">${plot_electric_position}</div>
+<div class="card tight">${plot_speed}</div>
+<div class="card tight">${plot_measured_current}</div>
+<div class="card tight">${plot_dq0_currents}</div>
+<div class="card tight">${plot_inferred_voltage}</div>
+<div class="card tight">${plot_pwm_settings}</div>
 
-const data_plots_element = html`<span>${data_plots}</span>`;
+
+```js
+
+const plot_electric_position = plot_multiline({
+  data,
+  store_id: "plot_electric_position",
+  selection: null,
+  subtitle: "Electric position",
+  description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
+  width: 1200, height: 150,
+  x_options: {domain: [0, data[data.length - 1].time]},
+  y_options: {domain: [-Math.PI, Math.PI]},
+  x: "time",
+  y: "current_angle",
+  x_label: "Time (ms)",
+  y_label: "Electric position (rad)",
+  channel_label: "Angle Source",
+  channels: [
+    {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
+    {y: "hall_3_as_angle", label: "Hall 3", color: colors.u},
+    {y: "hall_1_as_angle", label: "Hall 1", color: colors.v},
+    {y: "hall_2_as_angle", label: "Hall 2", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: Math.PI / 2, stroke: 'black', strokeWidth : 2}),
+  ],
+});
+
+const plot_speed = plot_multiline({
+  data,
+  store_id: "plot_speed",
+  selection: null,
+  subtitle: "Rotor Speed",
+  description: "Angular speed of the rotor in rotations per millisecond.",
+  width: 1200, height: 150,
+  x_options: {domain: [0, data[data.length - 1].time]},
+  y_options: {},
+  x: "time",
+  y: "radial_speed",
+  x_label: "Time (ms)",
+  y_label: "Speed (rotations/ms)",
+  channel_label: "Speed Source",
+  channels: [
+    {y: "radial_speed", label: "Speed", color: colors.radial_speed},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({stroke: 'black', strokeWidth : 2}),
+  ],
+});
+
+const plot_measured_current = plot_multiline({
+  data,
+  store_id: "plot_measured_current",
+  selection: null,
+  subtitle: "Measured Current",
+  description: "Measured current values for each phase.",
+  width: 1200, height: 400,
+  x_options: {domain: [0, data[data.length - 1].time]},
+  y_options: {},
+  x: "time",
+  y: "u",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channel_label: "Phase",
+  channels: [
+    {y: "u", label: "Current U", color: colors.u},
+    {y: "v", label: "Current V", color: colors.v},
+    {y: "w", label: "Current W", color: colors.w},
+    {y: "sum", label: "Sum", color: colors.sum},
+    {y: "ref_diff", label: "Ref Diff", color: colors.ref_diff},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+});
+
+const plot_dq0_currents = plot_multiline({
+  data,
+  store_id: "plot_dq0_currents",
+  selection: null,
+  subtitle: "DQ0 Currents",
+  description: "DQ0 currents after Clarke and Park transforming the measured currents.",
+  width: 1200, height: 400,
+  x_options: {domain: [0, data[data.length - 1].time]},
+  y_options: {},
+  x: "time",
+  y: "alpha",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channel_label: "Phase",
+  channels: [
+    {y: "alpha", label: "Alpha", color: colors.alpha},
+    {y: "beta", label: "Beta", color: colors.beta},
+    {y: "radial_magnitude", label: "Radial Magnitude", color: colors.radial_magnitude},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+});
+
+const plot_inferred_voltage = plot_multiline({
+  data,
+  store_id: "plot_inferred_voltage",
+  selection: null,
+  subtitle: "Inferred Voltage",
+  description: "Inferred voltage values for each phase (V = L*dI/dt).",
+  width: 1200, height: 300,
+  x_options: {domain: [0, data[data.length - 1].time]},
+  y_options: {},
+  x: "time",
+  y: "u_voltage",
+  x_label: "Time (ms)",
+  y_label: "Voltage (V)",
+  channel_label: "Phase",
+  channels: [
+    {y: "u_voltage", label: "Voltage U", color: colors.u},
+    {y: "v_voltage", label: "Voltage V", color: colors.v},
+    {y: "w_voltage", label: "Voltage W", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+});
+
+const plot_pwm_settings = plot_multiline({
+  data,
+  store_id: "plot_pwm_settings",
+  selection: null,
+  subtitle: "PWM Settings",
+  description: "The PWM value currently set for each phase.",
+  width: 1200, height: 150,
+  x_options: {domain: [0, data[data.length - 1].time]},
+  y_options: {domain: [0, motor.PWM_BASE]},
+  x: "time",
+  y: "u_pwm",
+  x_label: "Time (ms)",
+  y_label: "PWM",
+  channel_label: "Phase",
+  channels: [
+    {y: "u_pwm", label: "PWM U", color: colors.u},
+    {y: "v_pwm", label: "PWM V", color: colors.v},
+    {y: "w_pwm", label: "PWM W", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
+  ],
+});
+
 ```
 
 Calibration procedures
