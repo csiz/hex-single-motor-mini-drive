@@ -44,6 +44,7 @@ const π = Math.PI;
 ```js
 
 let motor_controller = Mutable(null);
+let motor_controller = Mutable();
 
 let motor_controller_status = Mutable(html`<span>Not connected.</span>`);
 
@@ -135,12 +136,22 @@ const command_timeout_millis = Generators.input(command_timeout_slider);
 // Control functions
 
 let raw_readout_data = Mutable();
+// -----------------
 
 const max_data_points = motor.HISTORY_SIZE;
 
 const command_timeout = Math.floor(command_timeout_millis / time_conversion);
 const command_value = Math.floor(command_value_fraction * motor.PWM_BASE);
 
+let raw_readout_data = Mutable();
+
+function update_raw_readout_data(new_data){
+  raw_readout_data.value = new_data;
+}
+
+```
+
+```js
 
 async function command_and_stream(command, options = {}){
   if (!motor_controller) return;
@@ -150,7 +161,7 @@ async function command_and_stream(command, options = {}){
 
     // Start reading the data stream.
     for await (const data_snapshot of motor_controller.stream_readouts(options)) {
-      raw_readout_data.value = data_snapshot.length > max_data_points ? data_snapshot.slice(-max_data_points) : data_snapshot;
+      update_raw_readout_data(data_snapshot.length > max_data_points ? data_snapshot.slice(-max_data_points) : data_snapshot);
     }
   } catch (error) {
     update_motor_controller_status(html`<span style="color: red">Error streaming data: ${error}</span>`);
