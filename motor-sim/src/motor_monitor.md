@@ -426,16 +426,16 @@ const {data, ref_readout_mean} = calculate_data_stats(raw_readout_data);
 
 
 const colors = {
-  u: "cyan",
-  v: "orangered",
-  w: "purple",
-  ref_diff: "gray",
+  u: "rgb(117, 112, 179)",
+  v: "rgb(217, 95, 2)",
+  w: "rgb(231, 41, 138)",
+  ref_diff: "rgb(102, 102, 102)",
   sum: "black",
-  radial_magnitude: "#B59410", // dark gold
-  current_angle: "green",
-  radial_speed: "steelblue",
-  alpha: "red",
-  beta: "blue",
+  radial_magnitude: "rgb(197, 152, 67)",
+  current_angle: "rgb(102, 166, 30)",
+  radial_speed: "rgb(27, 158, 119)",
+  alpha: "rgb(199, 0, 57)",
+  beta: "rgb(26, 82, 118)",
 };
 
 
@@ -555,7 +555,7 @@ function plot_multiline(options){
           selected_data,
           Plot.pointerX({
             px: x_label, py: y_label, fill: channel_label,
-            dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14,
+            dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14, fontWeight: "bold",
             text: (d) => `Channel: ${d[channel_label].padEnd(20)} | ${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)}`,
           }),
         ),
