@@ -3,7 +3,7 @@ title: Motor monitor
 ---
 
 
-Motor command dashboard
+Motor Command Dashboard
 -----------------------
 
 <div>${connect_buttons}</div>
@@ -466,7 +466,7 @@ function plot_multiline(options){
 
   let {selection} = options;
 
-  selection = selection ? selection : get_stored_or_default(store_id, {
+  selection = selection ?? get_stored_or_default(store_id, {
     show: true,
     shown_marks: [...channels.map(({y}) => y), "grid"],
   });
@@ -572,8 +572,13 @@ function plot_multiline(options){
 ```
 
 
-Motor driver phase currents
-----------------------------
+Motor Driving Data
+------------------
+<div class="card tight">
+Controls for the plotting time window:
+  ${time_period_input}
+  ${time_offset_input}
+</div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_speed}</div>
 <div class="card tight">${plot_measured_current}</div>
@@ -581,17 +586,43 @@ Motor driver phase currents
 <div class="card tight">${plot_inferred_voltage}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 
+```js
+const data_duration = data[data.length - 1].time;
+
+const time_period_input = Inputs.range([1, 50], {
+  value: Math.ceil(motor.HISTORY_SIZE * time_conversion),
+  transform: Math.log,
+  step: 0.5,
+  label: "Time window Duration (ms):",
+});
+const time_period = Generators.input(time_period_input);
+
+const time_offset_input = Inputs.range([0, data_duration], {
+  value: 0, 
+  step: 0.1,
+  label: "Time window Rewind (ms):",
+});
+d3.select(time_offset_input).select("div").style("width", "640px");
+d3.select(time_offset_input).select("input[type=range]").style("width", "100em");
+
+const time_offset = Generators.input(time_offset_input);
+
+```
 
 ```js
 
+const time_domain = [data_duration - time_offset - time_period, data_duration - time_offset];
+
+const selected_data = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
+
 const plot_electric_position = plot_multiline({
-  data,
+  data: selected_data,
   store_id: "plot_electric_position",
   selection: null,
   subtitle: "Electric position",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: [0, data[data.length - 1].time]},
+  x_options: {domain: time_domain},
   y_options: {domain: [-Math.PI, Math.PI]},
   x: "time",
   y: "current_angle",
@@ -612,13 +643,13 @@ const plot_electric_position = plot_multiline({
 });
 
 const plot_speed = plot_multiline({
-  data,
+  data: selected_data,
   store_id: "plot_speed",
   selection: null,
   subtitle: "Rotor Speed",
   description: "Angular speed of the rotor in rotations per millisecond.",
   width: 1200, height: 150,
-  x_options: {domain: [0, data[data.length - 1].time]},
+  x_options: {domain: time_domain},
   y_options: {},
   x: "time",
   y: "radial_speed",
@@ -636,13 +667,13 @@ const plot_speed = plot_multiline({
 });
 
 const plot_measured_current = plot_multiline({
-  data,
+  data: selected_data,
   store_id: "plot_measured_current",
   selection: null,
   subtitle: "Measured Current",
   description: "Measured current values for each phase.",
   width: 1200, height: 400,
-  x_options: {domain: [0, data[data.length - 1].time]},
+  x_options: {domain: time_domain},
   y_options: {},
   x: "time",
   y: "u",
@@ -664,13 +695,13 @@ const plot_measured_current = plot_multiline({
 });
 
 const plot_dq0_currents = plot_multiline({
-  data,
+  data: selected_data,
   store_id: "plot_dq0_currents",
   selection: null,
   subtitle: "DQ0 Currents",
   description: "DQ0 currents after Clarke and Park transforming the measured currents.",
   width: 1200, height: 400,
-  x_options: {domain: [0, data[data.length - 1].time]},
+  x_options: {domain: time_domain},
   y_options: {},
   x: "time",
   y: "alpha",
@@ -690,13 +721,13 @@ const plot_dq0_currents = plot_multiline({
 });
 
 const plot_inferred_voltage = plot_multiline({
-  data,
+  data: selected_data,
   store_id: "plot_inferred_voltage",
   selection: null,
   subtitle: "Inferred Voltage",
   description: "Inferred voltage values for each phase (V = L*dI/dt).",
   width: 1200, height: 300,
-  x_options: {domain: [0, data[data.length - 1].time]},
+  x_options: {domain: time_domain},
   y_options: {},
   x: "time",
   y: "u_voltage",
@@ -716,13 +747,13 @@ const plot_inferred_voltage = plot_multiline({
 });
 
 const plot_pwm_settings = plot_multiline({
-  data,
+  data: selected_data,
   store_id: "plot_pwm_settings",
   selection: null,
   subtitle: "PWM Settings",
   description: "The PWM value currently set for each phase.",
-  width: 1200, height: 150,
-  x_options: {domain: [0, data[data.length - 1].time]},
+  width: 1200, height: 300,
+  x_options: {domain: time_domain},
   y_options: {domain: [0, motor.PWM_BASE]},
   x: "time",
   y: "u_pwm",
@@ -743,7 +774,7 @@ const plot_pwm_settings = plot_multiline({
 
 ```
 
-Calibration procedures
+Calibration Procedures
 ----------------------
 
 <div class="card tight">
