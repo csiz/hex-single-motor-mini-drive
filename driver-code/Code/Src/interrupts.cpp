@@ -22,7 +22,7 @@ void adc_interrupt_handler(){
     if (injected_conversions_complete) {
         // Reserve the first 3 bits for the hall sensors.
         latest_readout.readout_number = adc_update_number & 0x1FFFFFFF;
-        latest_readout.readout_number |= (hall_1 << 29) | (hall_2 << 30) | (hall_3 << 31);
+        latest_readout.readout_number |= hall_state << 29;
 
 
         // U and W phases are measured at the same time, followed by V and the reference voltage.

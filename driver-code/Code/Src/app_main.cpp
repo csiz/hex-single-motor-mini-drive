@@ -372,7 +372,7 @@ void app_tick() {
     calculate_motor_phase_currents_gated();
 
     // Show the current hall sensor state on the LEDs.
-    set_LED_RGB_colours(hall_1 ? 0x80 : 0, hall_2 ? 0x40 : 0, hall_3 ? 0x80 : 0);
+    set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
 
     update_motor_control();
 

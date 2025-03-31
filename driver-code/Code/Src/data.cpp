@@ -21,12 +21,12 @@ bool readouts_allow_sending = true;
 bool readouts_allow_missing = true;
 
 // Hall sensors
-bool hall_1 = false, hall_2 = false, hall_3 = false;
+// ------------
 
-uint8_t motor_electric_angle = 0;
+// Hall states as bits, 0b001 = hall 1, 0b010 = hall 2, 0b100 = hall 3.
+uint8_t hall_state = 0b000; 
 uint8_t motor_electric_phase = 0;
 bool hall_sensor_valid = false;
-uint8_t hall_state = 0;
 
 
 // Phase currents
@@ -42,48 +42,45 @@ void data_init(){
     if (readouts_queue == nullptr) Error_Handler();
 }
 
+
 void read_hall_sensors(){
-	uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
-	uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
+    uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
+    uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
 
-	// Hall sensors are active low.
-	hall_1 = !(gpio_A_inputs & (1<<0));
-	hall_2 = !(gpio_A_inputs & (1<<1));
-	hall_3 = !(gpio_B_inputs & (1<<10));
+    // Note: Hall sensors are active low!
+    const bool hall_1 = !(gpio_A_inputs & (1<<0)); // Hall sensor 1, corresponding to phase V
+    const bool hall_2 = !(gpio_A_inputs & (1<<1)); // Hall sensor 2, corresponding to phase W
+    const bool hall_3 = !(gpio_B_inputs & (1<<10)); // Hall sensor 3, corresponding to phase U
 
-    hall_state = (hall_1 << 2) | (hall_2 << 1) | hall_3;
+    // Combine the hall sensor states into a single byte.
+    // Note: Reorder the sensors according to the phase order; U on bit 0, V on bit 1, W on bit 2.
+    hall_state = hall_3 | (hall_1 << 1) | (hall_2 << 2);
 
     switch (hall_state) {
         case 0b000: // no hall sensors; either it's not ready or no magnet
             hall_sensor_valid = false;
             break;
-        case 0b100: // hall 1 active; 0 degrees
-            motor_electric_angle = 0;
+        case 0b001: // hall U active; 0 degrees
             motor_electric_phase = 0;
             hall_sensor_valid = true;
             break;
-        case 0b110: // hall 1 and hall 2 active; 60 degrees
-            motor_electric_angle = 43;
+        case 0b011: // hall U and hall V active; 60 degrees
             motor_electric_phase = 1;
             hall_sensor_valid = true;
             break;
-        case 0b010: // hall 2 active; 120 degrees
-            motor_electric_angle = 85;
+        case 0b010: // hall V active; 120 degrees
             motor_electric_phase = 2;
             hall_sensor_valid = true;
             break;
-        case 0b011: // hall 2 and hall 3 active; 180 degrees
-            motor_electric_angle = 128;
+        case 0b110: // hall V and hall W active; 180 degrees
             motor_electric_phase = 3;
             hall_sensor_valid = true;
             break;
-        case 0b001: // hall 3 active; 240 degrees
-            motor_electric_angle = 171;
+        case 0b100: // hall W active; 240 degrees
             motor_electric_phase = 4;
             hall_sensor_valid = true;
             break;
-        case 0b101: // hall 1 and hall 3 active; 300 degrees
-            motor_electric_angle = 213;
+        case 0b101: // hall U and hall W active; 300 degrees
             motor_electric_phase = 5;
             hall_sensor_valid = true;
             break;

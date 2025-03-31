@@ -131,14 +131,8 @@ const command_timeout_millis = Generators.input(command_timeout_slider);
 ```
 
 ```js
-
-// Control functions
-// -----------------
-
-const max_data_points = motor.HISTORY_SIZE;
-
-const command_timeout = Math.floor(command_timeout_millis / time_conversion);
-const command_value = Math.floor(command_value_fraction * motor.PWM_BASE);
+// Data stream output
+// ------------------
 
 let raw_readout_data = Mutable();
 
@@ -149,6 +143,14 @@ function update_raw_readout_data(new_data){
 ```
 
 ```js
+
+// Control functions
+// -----------------
+
+const max_data_points = motor.HISTORY_SIZE;
+
+const command_timeout = Math.floor(command_timeout_millis / time_conversion);
+const command_value = Math.floor(command_value_fraction * motor.PWM_BASE);
 
 async function command_and_stream(command, options = {}){
   if (!motor_controller) return;
@@ -355,19 +357,30 @@ function calculate_data_stats(raw_readout_data){
     const v = calibrated_v - sum / 3.0;
     const w = calibrated_w - sum / 3.0;
 
-    const [alpha, beta] = matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
+    const [current_alpha, current_beta] = matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
 
-    const current_angle = Math.atan2(beta, alpha);
-    const radial_magnitude = Math.sqrt(alpha * alpha + beta * beta);
+    const current_angle = Math.atan2(current_beta, current_alpha);
+    const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
 
     // Approximate the angle for the 6 sectors of the hall sensor.
     const ε = 0.1;
-    const hall_3_as_angle = d.hall_3 ? d.hall_1 ? +π/3 -ε : d.hall_2 ? -π/3 +ε : 0.0 : null;
-    const hall_1_as_angle = d.hall_1 ? d.hall_3 ? +π/3 +ε : d.hall_2 ? +π -ε : +2*π/3 : null;
-    const hall_2_as_angle = d.hall_2 ? d.hall_1 ? -π +ε : d.hall_3 ? -π/3 -ε : -2*π/3 : null;
+    const hall_u_as_angle = d.hall_u ? d.hall_v ? +π/3 -ε : d.hall_w ? -π/3 +ε : 0.0 : null;
+    const hall_v_as_angle = d.hall_v ? d.hall_u ? +π/3 +ε : d.hall_w ? +π -ε : +2*π/3 : null;
+    const hall_w_as_angle = d.hall_w ? d.hall_v ? -π +ε : d.hall_u ? -π/3 -ε : -2*π/3 : null;
 
 
-    return {...d, u_readout, v_readout, w_readout, u, v, w, ref_diff, time, sum, alpha, beta, current_angle, radial_magnitude, hall_3_as_angle, hall_1_as_angle, hall_2_as_angle};
+    return {
+      ...d, 
+      u_readout, v_readout, w_readout, 
+      u, v, w, 
+      ref_diff, time, sum, 
+      current_alpha, current_beta, 
+      current_angle: current_angle * 180 / Math.PI, 
+      current_magnitude, 
+      hall_u_as_angle: hall_u_as_angle === null ? null : hall_u_as_angle * 180 / Math.PI, 
+      hall_v_as_angle: hall_v_as_angle === null ? null : hall_v_as_angle * 180 / Math.PI, 
+      hall_w_as_angle: hall_w_as_angle === null ? null : hall_w_as_angle * 180 / Math.PI,
+    };
   });
 
   const derivative_start_index = 8;
@@ -383,13 +396,13 @@ function calculate_data_stats(raw_readout_data){
     return (left_derivative + right_derivative) / 2.0;
   }
 
-  function voltage_3_points(index, df, data){
+  function inductor_voltage_3_points(index, df, data){
     const derivative = derivative_3_points(index, df, data);
-    return derivative == null ? null : derivative * phase_inductance;
+    return derivative == null ? null : derivative * phase_inductance; // V = L*dI/dt + R*I
   }
 
-  function diff_phi(a, b){
-    const diff = b.current_angle - a.current_angle;
+  function diff_current_angle(a, b){
+    const diff = (b.current_angle - a.current_angle) * Math.PI / 180.0;
     return diff > Math.PI ? diff - 2 * Math.PI : diff < -Math.PI ? diff + 2 * Math.PI : diff;
   }
 
@@ -399,12 +412,38 @@ function calculate_data_stats(raw_readout_data){
   }
 
   const data_with_derivatives = data_with_annotations.map((d, i, data) => {
+    const radial_speed = speed_3_points(i, diff_current_angle, data);
+    const u_L_voltage = inductor_voltage_3_points(i, (a, b) => b.u - a.u, data);
+    const v_L_voltage = inductor_voltage_3_points(i, (a, b) => b.v - a.v, data);
+    const w_L_voltage = inductor_voltage_3_points(i, (a, b) => b.w - a.w, data);
+    
+    const u_voltage = u_L_voltage === null ? null : u_L_voltage + phase_resistance * d.u;
+    const v_voltage = v_L_voltage === null ? null : v_L_voltage + phase_resistance * d.v;
+    const w_voltage = w_L_voltage === null ? null : w_L_voltage + phase_resistance * d.w;
+
+    const any_null = radial_speed === null || u_L_voltage === null || v_L_voltage === null || w_L_voltage === null;
+
+    const [voltage_alpha, voltage_beta] = any_null ? [null, null] : matrix_multiply(power_invariant_clarke_matrix, [u_voltage, v_voltage, w_voltage]);
+    const voltage_angle = any_null ? null : Math.atan2(voltage_beta, voltage_alpha);
+    
+    const voltage_magnitude = any_null ? null : Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
+
+    const breaking_angle = any_null ? null : ((voltage_angle + (radial_speed > 0 ? Math.PI / 2.0 : -Math.PI / 2.0)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+
     return {
       ...d,
-      radial_speed: speed_3_points(i, diff_phi, data),
-      u_voltage: voltage_3_points(i, (a, b) => b.u - a.u, data),
-      v_voltage: voltage_3_points(i, (a, b) => b.v - a.v, data),
-      w_voltage: voltage_3_points(i, (a, b) => b.w - a.w, data),
+      radial_speed,
+      u_voltage,
+      v_voltage,
+      w_voltage,
+      u_L_voltage,
+      v_L_voltage,
+      w_L_voltage,
+      voltage_alpha,
+      voltage_beta,
+      voltage_angle: voltage_angle === null ? null : voltage_angle * 180 / Math.PI,
+      voltage_magnitude,
+      breaking_angle: breaking_angle === null ? null : breaking_angle * 180 / Math.PI,
     };
   });
 
@@ -431,11 +470,11 @@ const colors = {
   w: "rgb(231, 41, 138)",
   ref_diff: "rgb(102, 102, 102)",
   sum: "black",
-  radial_magnitude: "rgb(197, 152, 67)",
+  current_magnitude: "rgb(197, 152, 67)",
   current_angle: "rgb(102, 166, 30)",
   radial_speed: "rgb(27, 158, 119)",
-  alpha: "rgb(199, 0, 57)",
-  beta: "rgb(26, 82, 118)",
+  current_alpha: "rgb(199, 0, 57)",
+  current_beta: "rgb(26, 82, 118)",
 };
 
 
@@ -462,6 +501,7 @@ function plot_multiline(options){
     channel_label, channels,
     subtitle, description,
     grid_marks = [],
+    curve = undefined,
   } = options;
 
   let {selection} = options;
@@ -531,26 +571,9 @@ function plot_multiline(options){
         range: channels.map(({color}) => color),
       },
       marks: [
-        Plot.line(
-          selected_data,
-          {
-            x: x_label, y: y_label, stroke: channel_label,
-            curve: "step",
-          },
-        ),
-        Plot.crosshairX(
-          selected_data,
-          {
-            x: x_label, y: y_label, color: channel_label,
-            ruleStrokeWidth: 3,
-          },
-        ),
-        Plot.dot(
-          selected_data,
-          Plot.pointerX({
-            x: x_label, y: y_label, stroke: channel_label,
-          }),
-        ),
+        Plot.line(selected_data, {x: x_label, y: y_label, stroke: channel_label, curve}),
+        Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: channel_label, ruleStrokeWidth: 3}),
+        Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: channel_label})),
         Plot.text(
           selected_data,
           Plot.pointerX({
@@ -578,28 +601,31 @@ Motor Driving Data
 Controls for the plotting time window:
   ${time_period_input}
   ${time_offset_input}
+  ${plot_options_input}
 </div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_speed}</div>
 <div class="card tight">${plot_measured_current}</div>
 <div class="card tight">${plot_dq0_currents}</div>
+<div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_inferred_voltage}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 
 ```js
-const data_duration = data[data.length - 1].time;
+
+const history_duration = Math.ceil(motor.HISTORY_SIZE * time_conversion);
 
 const time_period_input = Inputs.range([1, 50], {
-  value: Math.ceil(motor.HISTORY_SIZE * time_conversion),
+  value: history_duration,
   transform: Math.log,
   step: 0.5,
   label: "Time window Duration (ms):",
 });
 const time_period = Generators.input(time_period_input);
 
-const time_offset_input = Inputs.range([0, data_duration], {
+const time_offset_input = Inputs.range([-1.0, 1.0], {
   value: 0, 
-  step: 0.1,
+  step: 0.01,
   label: "Time window Rewind (ms):",
 });
 d3.select(time_offset_input).select("div").style("width", "640px");
@@ -607,11 +633,22 @@ d3.select(time_offset_input).select("input[type=range]").style("width", "100em")
 
 const time_offset = Generators.input(time_offset_input);
 
+const plot_options_input = Inputs.checkbox(
+  ["Connected lines"],
+  {
+    value: ["Connected lines"],
+    label: "Plot options:",
+  },
+);
+
+const plot_options = Generators.input(plot_options_input);
 ```
 
 ```js
+const data_duration = data[data.length - 1].time;
 
-const time_domain = [data_duration - time_offset - time_period, data_duration - time_offset];
+const time_end = Math.max(+time_period * 0.5, Math.min(data_duration * (1.0 - time_offset), data_duration + time_period * 0.5));
+const time_domain = [time_end - time_period, time_end];
 
 const selected_data = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
 
@@ -623,23 +660,26 @@ const plot_electric_position = plot_multiline({
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
   x_options: {domain: time_domain},
-  y_options: {domain: [-Math.PI, Math.PI]},
+  y_options: {domain: [-180, 180]},
   x: "time",
   y: "current_angle",
   x_label: "Time (ms)",
-  y_label: "Electric position (rad)",
+  y_label: "Electric position (degrees)",
   channel_label: "Angle Source",
   channels: [
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
-    {y: "hall_3_as_angle", label: "Hall 3", color: colors.u},
-    {y: "hall_1_as_angle", label: "Hall 1", color: colors.v},
-    {y: "hall_2_as_angle", label: "Hall 2", color: colors.w},
+    {y: "voltage_angle", label: "Voltage (Park) Angle", color: d3.color(colors.current_angle).darker(1)},
+    {y: "breaking_angle", label: "Inferred Angle", color: d3.color(colors.current_angle).darker(2)},
+    {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
+    {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
+    {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
   ],
   grid_marks: [
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: Math.PI / 2, stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
   ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
 const plot_speed = plot_multiline({
@@ -664,6 +704,7 @@ const plot_speed = plot_multiline({
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({stroke: 'black', strokeWidth : 2}),
   ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
 const plot_measured_current = plot_multiline({
@@ -692,6 +733,7 @@ const plot_measured_current = plot_multiline({
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
 const plot_dq0_currents = plot_multiline({
@@ -704,20 +746,48 @@ const plot_dq0_currents = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {},
   x: "time",
-  y: "alpha",
+  y: "current_alpha",
   x_label: "Time (ms)",
   y_label: "Current (A)",
   channel_label: "Phase",
   channels: [
-    {y: "alpha", label: "Alpha", color: colors.alpha},
-    {y: "beta", label: "Beta", color: colors.beta},
-    {y: "radial_magnitude", label: "Radial Magnitude", color: colors.radial_magnitude},
+    {y: "current_alpha", label: "Current Alpha", color: colors.current_alpha},
+    {y: "current_beta", label: "Current Beta", color: colors.current_beta},
+    {y: "current_magnitude", label: "Current (Park) Magnitude", color: colors.current_magnitude},
   ],
   grid_marks: [
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+});
+
+const plot_dq0_voltages = plot_multiline({
+  data: selected_data,
+  store_id: "plot_dq0_voltages",
+  selection: null,
+  subtitle: "DQ0 Voltages",
+  description: "DQ0 voltages after Clarke and Park transforming the inferred voltages.",
+  width: 1200, height: 400,
+  x_options: {domain: time_domain},
+  y_options: {},
+  x: "time",
+  y: "voltage_alpha",
+  x_label: "Time (ms)",
+  y_label: "Voltage (V)",
+  channel_label: "Phase",
+  channels: [
+    {y: "voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
+    {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
+    {y: "voltage_magnitude", label: "Voltage (Park) Magnitude", color: colors.current_magnitude},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
 const plot_inferred_voltage = plot_multiline({
@@ -725,7 +795,7 @@ const plot_inferred_voltage = plot_multiline({
   store_id: "plot_inferred_voltage",
   selection: null,
   subtitle: "Inferred Voltage",
-  description: "Inferred voltage values for each phase (V = L*dI/dt).",
+  description: html`Inferred voltage values for each phase: ${tex`V = IR + L(dI/dt)`}.`,
   width: 1200, height: 300,
   x_options: {domain: time_domain},
   y_options: {},
@@ -738,12 +808,16 @@ const plot_inferred_voltage = plot_multiline({
     {y: "u_voltage", label: "Voltage U", color: colors.u},
     {y: "v_voltage", label: "Voltage V", color: colors.v},
     {y: "w_voltage", label: "Voltage W", color: colors.w},
+    {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
+    {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
+    {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
   ],
   grid_marks: [
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
 const plot_pwm_settings = plot_multiline({
@@ -770,6 +844,7 @@ const plot_pwm_settings = plot_multiline({
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
   ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
 ```
@@ -1086,6 +1161,64 @@ const calibration_buttons = Inputs.button(
   {label: "Collect calibration data"},
 );
 
+```
+
+
+
+```js
+function HorizontalStep(context, t) {
+  this._context = context;
+  this._t = t;
+}
+
+HorizontalStep.prototype = {
+  areaStart: function() {
+    this._line = 0;
+  },
+  areaEnd: function() {
+    this._line = NaN;
+  },
+  lineStart: function() {
+    this._x = this._y = NaN;
+    this._point = 0;
+  },
+  lineEnd: function() {
+    if (0 < this._t && this._t < 1 && this._point === 2) this._context.lineTo(this._x, this._y);
+    if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
+    if (this._line >= 0) this._t = 1 - this._t, this._line = 1 - this._line;
+  },
+  point: function(x, y) {
+    x = +x, y = +y;
+    switch (this._point) {
+      case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
+      case 1: this._point = 2; // falls through
+      default: {
+        if (this._t <= 0) {
+          this._context.lineTo(this._x, y);
+          this._context.lineTo(x, y);
+        } else {
+          var x1 = this._x * (1 - this._t) + x * this._t;
+          this._context.lineTo(x1, this._y);
+          this._context.moveTo(x1, y);
+        }
+        break;
+      }
+    }
+    this._x = x, this._y = y;
+  }
+};
+
+function horizontal_step(context) {
+  return new HorizontalStep(context, 0.5);
+}
+
+function horizontal_step_before(context) {
+  return new HorizontalStep(context, 0);
+}
+
+function horizontal_step_after(context) {
+  return new HorizontalStep(context, 1);
+}
 ```
 
 

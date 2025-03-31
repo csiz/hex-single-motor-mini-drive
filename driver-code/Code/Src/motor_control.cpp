@@ -23,22 +23,22 @@ bool test_procedure_start = true;
 
 // Motor voltage fraction for the 6-step commutation.
 const float motor_voltage_table_pos[6][3] = {
-    {0.0, 0.5, 1.0},
-    {0.5, 0.0, 1.0},
-    {1.0, 0.0, 0.5},
-    {1.0, 0.5, 0.0},
-    {0.5, 1.0, 0.0},
-    {0.0, 1.0, 0.5},
-};
-
-// Surpirsingly good schedule for the 6-step commutation.
-const float motor_voltage_table_neg[6][3] {
-    {1.0, 0.0, 0.0},
-    {1.0, 1.0, 0.0},
     {0.0, 1.0, 0.0},
     {0.0, 1.0, 1.0},
     {0.0, 0.0, 1.0},
     {1.0, 0.0, 1.0},
+    {1.0, 0.0, 0.0},
+    {1.0, 1.0, 0.0},
+};
+
+// Surpirsingly good schedule for the 6-step commutation.
+const float motor_voltage_table_neg[6][3] {
+    {0.0, 0.0, 1.0},
+    {1.0, 0.0, 1.0},
+    {1.0, 0.0, 0.0},
+    {1.0, 1.0, 0.0},
+    {0.0, 1.0, 0.0},
+    {0.0, 1.0, 1.0},
 };
 
 float pwm_fraction = 0.0;

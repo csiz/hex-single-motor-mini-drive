@@ -211,9 +211,9 @@ export class MotorController {
     let offset = 0;
     let hall_and_readout_number = data_view.getUint32(0);
     // The first 3 bits are the hall sensor state.
-    let hall_1 = (hall_and_readout_number >> 29) & 0b1;
-    let hall_2 = (hall_and_readout_number >> 30) & 0b1;
-    let hall_3 = (hall_and_readout_number >> 31) & 0b1;
+    let hall_u = (hall_and_readout_number >> 29) & 0b1;
+    let hall_v = (hall_and_readout_number >> 30) & 0b1;
+    let hall_w = (hall_and_readout_number >> 31) & 0b1;
     let readout_number = hall_and_readout_number & 0x1FFFFFFF;
     offset += 4;
     let pwm_commands = data_view.getUint32(offset);
@@ -242,9 +242,9 @@ export class MotorController {
       u_pwm,
       v_pwm,
       w_pwm,
-      hall_1,
-      hall_2,
-      hall_3,
+      hall_u,
+      hall_v,
+      hall_w,
     });
 
     return 20;

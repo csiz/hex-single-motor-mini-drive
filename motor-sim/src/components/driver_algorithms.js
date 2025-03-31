@@ -1,7 +1,7 @@
 import {normalized_angle, π, phase_switches, phase_states} from "./simulation.js";
 
-function get_sixstep_hall_code(hall_1, hall_2, hall_3){
-  return hall_3 << 2 | hall_2 << 1 | hall_1;
+function get_sixstep_hall_code(hall_u, hall_v, hall_w){
+  return hall_w << 2 | hall_v << 1 | hall_u;
 }
 
 const sixstep_phase_map = {
