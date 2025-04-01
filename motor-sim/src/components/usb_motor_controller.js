@@ -88,7 +88,6 @@ export class MotorController {
     this.resolve = null;
     this.reject = null;
     this.expected_messages = 0;
-    this.max_missed_messages = 0;
     this.timeout = 500;
   }
 
@@ -105,21 +104,8 @@ export class MotorController {
         continue;
       }
 
-      if (this.data.length > 2) {
-        const last_index = this.data.length - 1;
-
-        if ((this.data[last_index].readout_number - this.data[last_index - 1].readout_number) > (1 + this.max_missed_messages)){
-          // Notify the observer and carry on.
-          this._push_readouts(this.data.slice(0, -1));
-          // Keep the last message.
-          this.data = this.data.slice(-1);
-          // Push an error to the deterministic readout.
-          this._reject_readouts(new Error("Missed messages."));
-        }
-      }
-
       // Stream data as it's being transmitted.
-      if (this.data.length && this.data.length % 1024) this._push_readouts(this.data);
+      if (this.data.length && (this.data.length % 1024 === 0)) this._push_readouts(this.data);
 
       if (this.data.length == this.expected_messages) {
         this._resolve_readouts(this.data);
@@ -139,10 +125,9 @@ export class MotorController {
     await this.com_port.write(buffer);
   }
 
-  _expect_readouts({expected_messages = HISTORY_SIZE, max_missed_messages = 0}) {
+  _expect_readouts({expected_messages = HISTORY_SIZE}) {
     this.data = [];
     this.expected_messages = expected_messages;
-    this.max_missed_messages = max_missed_messages;
   }
 
   get_readouts(options={}) {
