@@ -1117,6 +1117,8 @@ const current_calibration_interpolate_plot = plot_multiline({
   ],
 });
 
+const std_z_score = 1.944; // 95% confidence interval for normal distribution
+
 const current_calibration_positive_mean_plot = plot_multiline({
   data: current_calibration_stats,
   store_id: "plot_current_calibration_positive_mean",
@@ -1131,9 +1133,24 @@ const current_calibration_positive_mean_plot = plot_multiline({
   y_label: "Current (A)",
   channel_label: "Phase",
   channels: [
-    {y: "u_positive_mean", y_std: "u_positive_std", label: "U positive", color: colors.u},
-    {y: "v_positive_mean", y_std: "v_positive_std", label: "V positive", color: colors.v},
-    {y: "w_positive_mean", y_std: "w_positive_std", label: "W positive", color: colors.w},
+    {
+      y: "u_positive_mean", 
+      y1: (d) => d.u_positive_mean - d.u_positive_std * std_z_score, 
+      y2: (d) => d.u_positive_mean + d.u_positive_std * std_z_score, 
+      label: "U positive", color: colors.u,
+    },
+    {
+      y: "v_positive_mean",
+      y1: (d) => d.v_positive_mean - d.v_positive_std * std_z_score,
+      y2: (d) => d.v_positive_mean + d.v_positive_std * std_z_score, 
+      label: "V positive", color: colors.v,
+    },
+    {
+      y: "w_positive_mean",
+      y1: (d) => d.w_positive_mean - d.w_positive_std * std_z_score,
+      y2: (d) => d.w_positive_mean + d.w_positive_std * std_z_score,
+      label: "W positive", color: colors.w,
+    },
   ],
   grid_marks: [
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
@@ -1142,6 +1159,7 @@ const current_calibration_positive_mean_plot = plot_multiline({
   ],
   other_marks: [
     Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
+    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
   ]
 });
 
@@ -1159,9 +1177,24 @@ const current_calibration_negative_mean_plot = plot_multiline({
   y_label: "Current (A)",
   channel_label: "Phase",
   channels: [
-    {y: "u_negative_mean", y_std: "u_negative_std", label: "U negative", color: colors.u},
-    {y: "v_negative_mean", y_std: "v_negative_std", label: "V negative", color: colors.v},
-    {y: "w_negative_mean", y_std: "w_negative_std", label: "W negative", color: colors.w},
+    {
+      y: "u_negative_mean", 
+      y1: (d) => d.u_negative_mean - d.u_negative_std * std_z_score, 
+      y2: (d) => d.u_negative_mean + d.u_negative_std * std_z_score, 
+      label: "U negative", color: colors.u,
+    },
+    {
+      y: "v_negative_mean",
+      y1: (d) => d.v_negative_mean - d.v_negative_std * std_z_score,
+      y2: (d) => d.v_negative_mean + d.v_negative_std * std_z_score, 
+      label: "V negative", color: colors.v,
+    },
+    {
+      y: "w_negative_mean",
+      y1: (d) => d.w_negative_mean - d.w_negative_std * std_z_score,
+      y2: (d) => d.w_negative_mean + d.w_negative_std * std_z_score,
+      label: "W negative", color: colors.w,
+    },
   ],
   grid_marks: [
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
@@ -1170,6 +1203,7 @@ const current_calibration_negative_mean_plot = plot_multiline({
   ],
   other_marks: [
     Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
+    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
   ]
 });
 
@@ -1179,13 +1213,13 @@ const current_calibration_negative_mean_plot = plot_multiline({
 
 
 function tidy_select({data, x, x_label = "x", y_label = "y", channel_label = "channel", channels}){
-  return data.flatMap((d) => {
-    return channels.map(({y, label, y_std}) => {
+  return data.flatMap((d, i, data) => {
+    return channels.map(({y, label, ...other_y}) => {
       return Object.fromEntries([
         [x_label, d[x]],
-        [y_label, d[y]],
+        [y_label, _.isFunction(y) ? y(d, i, data) : d[y]],
         [channel_label, label],
-        [`${y_label}_std`, d[y_std]],
+        ...Object.entries(other_y).map(([key, value]) => [key, _.isFunction(value) ? value(d, i, data) : d[value]]),
       ]);
     });
   });
@@ -1264,8 +1298,6 @@ function plot_multiline(options){
     const selected_channels = channels.filter(({y}) => selection.shown_marks.includes(y));
     const selected_data = tidy_select({data, x, x_label, y_label, channel_label, channels: selected_channels});
 
-    const std_z_score = 1.944; // 95% confidence interval for normal distribution
-
     const plot_figure = Plot.plot({
       width, height,
       x: {label: x_label, ...x_options},
@@ -1276,7 +1308,6 @@ function plot_multiline(options){
         range: channels.map(({color}) => color),
       },
       marks: [
-        Plot.areaY(selected_data, {x: x_label, y1: (d) => d[y_label] - d[`${y_label}_std`] * std_z_score, y2: (d) => d[y_label] + d[`${y_label}_std`] * std_z_score, fill: channel_label, opacity: 0.2}),
         Plot.line(selected_data, {x: x_label, y: y_label, stroke: channel_label, curve}),
         Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: channel_label, ruleStrokeWidth: 3}),
         Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: channel_label})),
@@ -1289,7 +1320,7 @@ function plot_multiline(options){
           }),
         ),
         ...(selection.shown_marks.includes("grid") ? grid_marks : []),
-        ...other_marks,
+        ...other_marks.map(mark => _.isFunction(mark) ? mark(selected_data, {x: x_label, y: y_label, z: channel_label}) : mark),
       ],
     });
 
