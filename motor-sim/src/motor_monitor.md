@@ -735,6 +735,164 @@ const plot_pwm_settings = plot_multiline({
 });
 
 ```
+Position Calibration Procedures
+-------------------------------
+
+<div class="card tight">
+  <div>${position_calibration_buttons}</div>
+  <div>Number of calibration data sets: ${position_calibration_results.length}</div>
+</div>
+<div class="card tight">
+  <h3>Position Calibration Results</h3>
+  <div>${position_calibration_result_to_display_input}</div>
+  <div>${position_calibration_pos_plot}</div>
+  <div>${position_calibration_neg_plot}</div>
+</div>
+
+```js
+const position_calibration_buttons = Inputs.button(
+  [
+    ["Start Position Calibration", async function(){
+      await run_position_calibration();
+    }],
+  ],
+  {label: "Collect position calibration data"},
+);
+
+d3.select(position_calibration_buttons).style("width", "100%");
+```
+
+```js
+let position_calibration_results = Mutable();
+
+function store_position_calibration_results(calibration_data){
+  position_calibration_results.value = [...position_calibration_results.value ?? [], calibration_data];
+}
+```
+
+```js
+async function run_position_calibration(){
+  if (!motor_controller) return;
+
+  console.info("Position calibration starting");
+  
+  const drive_time = 200;
+  const drive_timeout = Math.floor((drive_time + 300) / time_conversion);
+
+  const drive_strength = Math.floor(motor.PWM_BASE * 3 / 10);
+  const drive_options = {command_timeout: drive_timeout, command_value: drive_strength};
+
+  const test_options = {command_timeout: 0, command_value: 0};
+
+  await motor_controller.send_command({command: motor.SET_STATE_DRIVE_POS, ...drive_options});  
+  await wait(drive_time);
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_GROUND_SHORT, ...test_options});
+
+  const drive_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+
+  console.info("Drive positive done");
+
+  await motor_controller.send_command({command: motor.SET_STATE_DRIVE_NEG, ...drive_options});
+  await wait(drive_time);
+  await motor_controller.send_command({command: motor.SET_STATE_TEST_GROUND_SHORT, ...test_options});
+  
+  const drive_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  
+  
+  console.info("Drive negative done");
+
+  console.info("Position calibration done");
+
+  if (drive_positive.length != motor.HISTORY_SIZE) {
+    console.error("Drive positive data is not valid", drive_positive);
+    return;
+  }
+  if (drive_negative.length != motor.HISTORY_SIZE) {
+    console.error("Drive negative data is not valid", drive_negative);
+    return;
+  }
+
+  const position_calibration_data = {
+    drive_positive,
+    drive_negative,
+  };
+  
+  store_position_calibration_results(position_calibration_data);
+}
+
+const position_calibration_result_to_display_input = Inputs.select(
+  d3.range(0, position_calibration_results.length),
+  {
+    value: position_calibration_results.length - 1,
+    label: "Select position calibration data set:",
+  },
+);
+const position_calibration_result_to_display = Generators.input(position_calibration_result_to_display_input);
+```
+
+  
+```js
+const position_calibration_pos_plot = plot_multiline({
+  data: position_calibration_results[position_calibration_result_to_display].drive_positive,
+  store_id: "position_calibration_pos_plot",
+  selection: null,
+  subtitle: "Electric position positive drive then stop",
+  description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
+  width: 1200, height: 150,
+  x_options: {domain: time_domain},
+  y_options: {domain: [-180, 180]},
+  x: "time",
+  y: "current_angle",
+  x_label: "Time (ms)",
+  y_label: "Electric position (degrees)",
+  channel_label: "Angle Source",
+  channels: [
+    {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
+    {y: "voltage_angle", label: "Voltage (Park) Angle", color: d3.color(colors.current_angle).darker(1)},
+    {y: "breaking_angle", label: "Inferred Angle", color: d3.color(colors.current_angle).darker(2)},
+    {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
+    {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
+    {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
+  ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+});
+
+const position_calibration_neg_plot = plot_multiline({
+  data: position_calibration_results[position_calibration_result_to_display].drive_negative,
+  store_id: "position_calibration_neg_plot",
+  selection: null,
+  subtitle: "Electric position negative drive then stop",
+  description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
+  width: 1200, height: 150,
+  x_options: {domain: time_domain},
+  y_options: {domain: [-180, 180]},
+  x: "time",
+  y: "current_angle",
+  x_label: "Time (ms)",
+  y_label: "Electric position (degrees)",
+  channel_label: "Angle Source",
+  channels: [
+    {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
+    {y: "voltage_angle", label: "Voltage (Park) Angle", color: d3.color(colors.current_angle).darker(1)},
+    {y: "breaking_angle", label: "Inferred Angle", color: d3.color(colors.current_angle).darker(2)},
+    {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
+    {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
+    {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
+  ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+});
+
+```
 
 Current Calibration Procedures
 ------------------------------
@@ -838,14 +996,14 @@ const current_calibration_reading_points = even_spacing(calibration_reference, c
 async function run_current_calibration(){
   if (!motor_controller) return;
   
-  const settle_time = 300;
-  const settle_timeout = settle_time * 3;
+  const settle_time = 200;
+  const settle_timeout = Math.floor((settle_time + 300) / time_conversion);
   const settle_strength = Math.floor(motor.PWM_BASE * 2 / 10);
 
   const drive_options = {command_timeout: settle_timeout, command_value: settle_strength};
   const test_options = {command_timeout: 0, command_value: 0};
 
-  console.info("Calibration starting");
+  console.info("Current calibration starting");
 
   // Note: hold pwm is clamped by the motor driver
 
@@ -936,7 +1094,7 @@ async function run_current_calibration(){
     };
   });
 
-  console.info("Calibration done");
+  console.info("Current calibration done");
   
   store_current_calibration_results(calibration_data);
 }
