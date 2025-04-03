@@ -2,7 +2,7 @@
 toc: true
 title: Motor Model Equations
 ---
-<div class="hero">
+<main class="hero">
 
 The Physics
 ===========
@@ -442,4 +442,4 @@ Where the symbols mean:
 * ${tex`R_{fet}`} is the resistance of the MOSFET when turned on.
 
 
-</div>
+</main>

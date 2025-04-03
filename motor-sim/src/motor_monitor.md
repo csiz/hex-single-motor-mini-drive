@@ -1,10 +1,10 @@
 ---
 title: Motor monitor
 ---
+<main class="hero">
 
-
-Motor Command Dashboard
------------------------
+Motor Commands
+--------------
 
 <div>${connect_buttons}</div>
 <div>${motor_controller_status}</div>
@@ -30,8 +30,6 @@ const max_measurable_current = adc_max_value / 2 * current_conversion;
 
 const drive_resistance = 2.0; // 2.0 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
 const drive_voltage = 10.0; // 10.0 V // TODO: get it from the chip
-
-const calibration_reference = drive_voltage / drive_resistance;
 
 const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 const phase_resistance = 2.0; // 2.0 Ohm
@@ -481,127 +479,13 @@ const colors = {
 };
 
 
-function tidy_select({data, x, x_label = "x", y_label = "y", channel_label = "channel", channels}){
-  return data.flatMap((d) => {
-    return channels.map(({y, label}) => {
-      return Object.fromEntries([
-        [x_label, d[x]],
-        [y_label, d[y]],
-        [channel_label, label],
-      ]);
-    });
-  });
-}
-
-function plot_multiline(options){
-  const {
-    data, 
-    store_id,
-    width, height,
-    x_options, y_options,
-    x, y, 
-    x_label, y_label,
-    channel_label, channels,
-    subtitle, description,
-    grid_marks = [],
-    curve = undefined,
-  } = options;
-
-  let {selection} = options;
-
-  selection = selection ?? get_stored_or_default(store_id, {
-    show: true,
-    shown_marks: [...channels.map(({y}) => y), "grid"],
-  });
-
-  let result = Mutable(create_element(selection));
-
-  function update_selection(new_selection){
-    selection = {...selection, ...new_selection};
-    // Store the selection in local storage.
-    localStorage.setItem(store_id, JSON.stringify(selection));
-    // Update the plot.
-    result.value = create_element(selection);
-  }
-
-  function create_element(selection){
-
-    // First, make the title into a checkbox to toggle the plot on and off.
-    const subtitle_checkbox = Inputs.checkbox([subtitle], {
-      value: selection.show ? [subtitle] : [],
-      format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
-    });
-
-    subtitle_checkbox.addEventListener("input", function(event){
-      const show = subtitle_checkbox.value.length > 0;
-      update_selection({show});
-    });
-
-    if (!selection.show) {
-      return html`<div>${subtitle_checkbox}</div>`;
-    }
-
-    const description_element = html`<p>${description}</p>`;
-
-    const checkbox_y_to_label = Object.fromEntries([...channels.map(({y, label}) => [y, label]), ["grid", "Grid"]]);
-    const checkbox_y_to_color = Object.fromEntries([...channels.map(({y, color}) => [y, color]), ["grid", "grey"]]);
-
-    // Then, make the marks into checkboxes to toggle them on and off.
-    const marks_checkboxes = Inputs.checkbox(
-      [...channels.map(({y}) => y), "grid"], 
-      {
-        value: selection.shown_marks,
-        label: "Display:",
-        format: (y) => html`<span style="border-bottom: solid 3px ${checkbox_y_to_color[y]}; margin-bottom: -3px;">${checkbox_y_to_label[y]}</span>`,
-      },
-    );
-
-    marks_checkboxes.addEventListener("input", function(event){
-      const shown_marks = marks_checkboxes.value;
-      update_selection({shown_marks});
-    });
-
-    const selected_channels = channels.filter(({y}) => selection.shown_marks.includes(y));
-    const selected_data = tidy_select({data, x, x_label, y_label, channel_label, channels: selected_channels});
-
-    const plot_figure = Plot.plot({
-      width, height,
-      x: {label: x_label, ...x_options},
-      y: {label: y_label, domain: selected_data.length > 0 ? undefined : [0, 1], ...y_options},
-      color: {
-        // legend: true,
-        domain: channels.map(({label}) => label),
-        range: channels.map(({color}) => color),
-      },
-      marks: [
-        Plot.line(selected_data, {x: x_label, y: y_label, stroke: channel_label, curve}),
-        Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: channel_label, ruleStrokeWidth: 3}),
-        Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: channel_label})),
-        Plot.text(
-          selected_data,
-          Plot.pointerX({
-            px: x_label, py: y_label, fill: channel_label,
-            dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14, fontWeight: "bold",
-            text: (d) => `Channel: ${d[channel_label].padEnd(20)} | ${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)}`,
-          }),
-        ),
-        ...(selection.shown_marks.includes("grid") ? grid_marks : []),
-      ],
-    });
-
-    return html`<div>${subtitle_checkbox}${description_element}${marks_checkboxes}${plot_figure}</div>`;
-  }
-
-  return result;
-}
-
 ```
 
 
 Motor Driving Data
 ------------------
 <div class="card tight">
-Controls for the plotting time window:
+<p>Controls for the plotting time window:</p>
   ${time_period_input}
   ${time_offset_input}
   ${plot_options_input}
@@ -852,20 +736,81 @@ const plot_pwm_settings = plot_multiline({
 
 ```
 
-Calibration Procedures
-----------------------
+Current Calibration Procedures
+------------------------------
 
 <div class="card tight">
   <div>${current_calibration_buttons}</div>
-  <div>${current_calibration_plots}</div>
+  <div>Number of calibration data sets: ${current_calibration_results.length}</div>
+</div>
+<div class="card tight">
+  <h3>Current Calibration Results</h3>
+  <div>${current_calibration_table}</div>
+  <div>${current_calibration_result_to_display_input}</div>
+  <div>${current_calibration_plot}</div>
+  <div>${current_calibration_interpolate_plot}</div>
+</div>
+<div class="card tight">  
+  <h3>Current Calibration Statistics</h3>
+  <div>${current_calibration_positive_mean_plot}</div>
+  <div>${current_calibration_negative_mean_plot}</div>
 </div>
 
 ```js
-let current_calibration_results = Mutable([]);
+let calculated_current_calibration_factors = Mutable(current_calibration_factors);
+
+function update_current_calibration(new_calibration){
+  // Save calibration factors if valid.
+  if (new_calibration === null) {
+    console.error("Calibration data is not valid", new_calibration);
+    return;
+  }
+  if (Object.values(new_calibration).some((data) => data === null)) {
+    console.error("Calibration data is not valid", new_calibration);
+    return;
+  }
+  calculated_current_calibration_factors.value = {
+    u_positive: new_calibration.u_positive.factor,
+    u_negative: new_calibration.u_negative.factor,
+    v_positive: new_calibration.v_positive.factor,
+    v_negative: new_calibration.v_negative.factor,
+    w_positive: new_calibration.w_positive.factor,
+    w_negative: new_calibration.w_negative.factor,
+  };
+}
+```
+
+
+```js
+
+const current_calibration_buttons = Inputs.button(
+  [
+    ["Start Current Calibration", async function(){
+      await run_current_calibration();
+    }],
+    ["Save Current Factors", function(){
+      update_current_calibration_factors(calculated_current_calibration_factors);
+      save_current_calibration_factors();
+    }],
+    ["Reload Current Factors", function(){
+      reload_current_calibration_factors();
+    }],
+    ["Reset Current Factors", function(){
+      reset_current_calibration_factors();
+    }],
+  ],
+  {label: "Collect current calibration data"},
+);
+
+d3.select(current_calibration_buttons).style("width", "100%");
+```
+
+```js
+let current_calibration_results = Mutable();
 
 function store_current_calibration_results(calibration_data){
-  current_calibration_results.value = [calibration_data, ...current_calibration_results.value];
-} 
+  current_calibration_results.value = [...current_calibration_results.value ?? [], calibration_data];
+}
 ```
 
 
@@ -885,7 +830,9 @@ const current_calibration_zones = [
 ];
 
 
+const calibration_reference = drive_voltage / drive_resistance;
 const current_calibration_points = 32;
+const current_calibration_reading_points = even_spacing(calibration_reference, current_calibration_points / 2 + 1);
 
 
 async function run_current_calibration(){
@@ -1000,7 +947,7 @@ async function run_current_calibration(){
 ```js
 
 
-const current_calibration_stats = current_calibration_results.length == 0 ? null : d3.range(motor.HISTORY_SIZE).map((i) => {
+const current_calibration_stats = d3.range(motor.HISTORY_SIZE).map((i) => {
   return {
     time: current_calibration_results[0][i].time,
     u_positive_mean: d3.mean(current_calibration_results, (data) => data[i].u_positive),
@@ -1021,229 +968,337 @@ const current_calibration_stats = current_calibration_results.length == 0 ? null
 const current_calibration_targets = current_calibration_zones.map((zone) => zone.pwm * calibration_reference);
 
 
-function compute_current_calibration(calibration_data, phase_selector){
-  if (calibration_data === null) return null;
+function compute_current_calibration(calibration_data){
 
-  function select_by_zone(calibration_data){
-    return current_calibration_zones.map((zone) => {
-      return calibration_data.filter((d) => d.time > zone.settle_start && d.time < zone.settle_end);
-    });
-  }
+  function compute_phase_calibration(phase_selector){
 
-  function compute_zone_calibration({measurements, targets}){
-    // Make sure the lengths are equal.
-    if (measurements.length !== targets.length) throw new Error("Data length mismatch");
+    function select_by_zone(calibration_data){
+      return current_calibration_zones.map((zone) => {
+        return calibration_data.filter((d) => d.time > zone.settle_start && d.time < zone.settle_end);
+      });
+    }
+  
+    function compute_zone_calibration({measurements, targets}){
+      // Make sure the lengths are equal.
+      if (measurements.length !== targets.length) throw new Error("Data length mismatch");
+  
+      const factor = d3.mean(targets, (target, i) => target / measurements[i]); 
+      
+      const slow_calibration = piecewise_linear({
+        X: [0.0, ...measurements.map((x) => x)], 
+        Y: [0.0, ...targets.map((y) => y / factor)],
+      });
+  
+      // Recalibrate to evenly spaced points for fast processing.
 
-    const factor = d3.mean(targets, (target, i) => target / measurements[i]); 
-    
-    const slow_calibration = piecewise_linear({
-      X: [0.0, ...measurements.map((x) => x)], 
-      Y: [0.0, ...targets.map((y) => y / factor)],
-    });
-
-    const n = current_calibration_points / 2 + 1;
-
-    // Recalibrate to evenly spaced points for fast processing.
-
-    const X = even_spacing(calibration_reference, n);
-    const Y = X.map((x) => slow_calibration(x));
-
-
-    const func = even_piecewise_linear({x_min: 0, x_max: calibration_reference, Y});
-
-    const sample = X.map((x) => ({reading: x, target: func(x)}));
-    
-    return {
-      measurements,
-      targets,
-      factor,
-      func,
-      sample,
-    };
-  }
-
-  try {
+      const Y = current_calibration_reading_points.map((x) => slow_calibration(x));
+  
+  
+      const func = even_piecewise_linear({x_min: 0, x_max: calibration_reference, Y});
+  
+      const sample = current_calibration_reading_points.map((x) => ({reading: x, target: func(x)}));
+      
+      return {
+        measurements,
+        targets,
+        factor,
+        func,
+        sample,
+      };
+    }
+  
     return compute_zone_calibration({
       measurements: select_by_zone(calibration_data).map((zone_data) => d3.mean(zone_data, (d) => d[phase_selector])),
       targets: current_calibration_targets,
     });
-  } catch (e) {
-    console.error(e);
-    return null;
   }
+
+  return {
+    u_positive: compute_phase_calibration("u_positive_mean"),
+    u_negative: compute_phase_calibration("u_negative_mean"),
+    v_positive: compute_phase_calibration("v_positive_mean"),
+    v_negative: compute_phase_calibration("v_negative_mean"),
+    w_positive: compute_phase_calibration("w_positive_mean"),
+    w_negative: compute_phase_calibration("w_negative_mean"),
+  };
 }
 
-const current_calibration = {
-  u_positive: compute_current_calibration(current_calibration_stats, "u_positive_mean"),
-  u_negative: compute_current_calibration(current_calibration_stats, "u_negative_mean"),
-  v_positive: compute_current_calibration(current_calibration_stats, "v_positive_mean"),
-  v_negative: compute_current_calibration(current_calibration_stats, "v_negative_mean"),
-  w_positive: compute_current_calibration(current_calibration_stats, "w_positive_mean"),
-  w_negative: compute_current_calibration(current_calibration_stats, "w_negative_mean"),
-};
+const current_calibration = compute_current_calibration(current_calibration_stats); 
 
+update_current_calibration(current_calibration);
 
+const current_calibration_table = html`<div>Phase correction factors:</div><table>
+  <tr><td>U:</td><td>${current_calibration.u_positive.factor.toFixed(3)}</td><td>${current_calibration.u_negative.factor.toFixed(3)}</td></tr>
+  <tr><td>V:</td><td>${current_calibration.v_positive.factor.toFixed(3)}</td><td>${current_calibration.v_negative.factor.toFixed(3)}</td></tr>
+  <tr><td>W:</td><td>${current_calibration.w_positive.factor.toFixed(3)}</td><td>${current_calibration.w_negative.factor.toFixed(3)}</td></tr>
+</table>`;
 
-// const current_calibration_measurements_plot = plot_multiline({
-//   data: current_calibration_stats,
-//   store_id: "plot_dq0_voltages",
-//   selection: null,
-//   subtitle: "DQ0 Voltages",
-//   description: "DQ0 voltages after Clarke and Park transforming the inferred voltages.",
-//   width: 1200, height: 400,
-//   x_options: {domain: time_domain},
-//   y_options: {},
-//   x: "time",
-//   y: "voltage_alpha",
-//   x_label: "Time (ms)",
-//   y_label: "Voltage (V)",
-//   channel_label: "Phase",
-//   channels: [
-//     {y: "voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
-//     {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
-//     {y: "voltage_magnitude", label: "Voltage (Park) Magnitude", color: colors.current_magnitude},
-//   ],
-//   grid_marks: [
-//     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-//     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-//     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-//   ],
-//   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
-// });
+const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration_results.length), {
+  value: current_calibration_results.length - 1,
+  label: "Select calibration result to display:",
+});
+const current_calibration_result_to_display = Generators.input(current_calibration_result_to_display_input);
 
+```
+```js
 
-const calibration_run_plots = current_calibration_results.length < 1 ? [html`<div>No calibration data</div>`] : [
-  html`<h3>Calibration results</h3>`,
-  html`<div>Phase correction factors:</div><table>
-    <tr><td>U:</td><td>${current_calibration.u_positive?.factor.toFixed(3)}</td><td>${current_calibration.u_negative?.factor.toFixed(3)}</td></tr>
-    <tr><td>V:</td><td>${current_calibration.v_positive?.factor.toFixed(3)}</td><td>${current_calibration.v_negative?.factor.toFixed(3)}</td></tr>
-    <tr><td>W:</td><td>${current_calibration.w_positive?.factor.toFixed(3)}</td><td>${current_calibration.w_negative?.factor.toFixed(3)}</td></tr>
-  </table>`,
-  Plot.plot({
-    marks: [
-      Plot.line(current_calibration_results[0], {x: "time", y: "u_positive", stroke: colors.u, label: "u positive"}),
-      Plot.line(current_calibration_results[0], {x: "time", y: "v_positive", stroke: colors.v, label: "v positive"}),
-      Plot.line(current_calibration_results[0], {x: "time", y: "w_positive", stroke: colors.w, label: "w positive"}),
-      Plot.line(current_calibration_results[0], {x: "time", y: "u_negative", stroke: colors.u, strokeDasharray: "2 5", label: "u negative"}),
-      Plot.line(current_calibration_results[0], {x: "time", y: "v_negative", stroke: colors.v, strokeDasharray: "2 5", label: "v negative"}),
-      Plot.line(current_calibration_results[0], {x: "time", y: "w_negative", stroke: colors.w, strokeDasharray: "2 5", label: "w negative"}),
-      Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
-      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
-      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-    ],
-    x: {label: "Time (ms)"},
-    y: {label: "Current (A)"},
-    width: 1200, height: 400,
-  }),
-  Plot.plot({
-    marks: [
-      Plot.line([[0, 0], [calibration_reference, calibration_reference]], {stroke: "gray", label: "reference"}),
-      Plot.line(current_calibration.u_positive?.sample ?? [], {x: "reading", y: "target", stroke: colors.u, label: "u", marker: "circle"}),
-      Plot.line(current_calibration.v_positive?.sample ?? [], {x: "reading", y: "target", stroke: colors.v, label: "v", marker: "circle"}),
-      Plot.line(current_calibration.w_positive?.sample ?? [], {x: "reading", y: "target", stroke: colors.w, label: "w", marker: "circle"}),
-      Plot.line(current_calibration.u_negative?.sample ?? [], {x: "reading", y: "target", stroke: colors.u, strokeDasharray: "2 5", label: "u linear", marker: "circle"}),
-      Plot.line(current_calibration.v_negative?.sample ?? [], {x: "reading", y: "target", stroke: colors.v, strokeDasharray: "2 5", label: "v linear", marker: "circle"}),
-      Plot.line(current_calibration.w_negative?.sample ?? [], {x: "reading", y: "target", stroke: colors.w, strokeDasharray: "2 5", label: "w linear", marker: "circle"}),
-      Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-    ],
-    x: {label: "Current Reading (A)"},
-    y: {label: "Current Estimate (A)"},
-    width: 1200, height: 400,
-  }),
-];
+const current_calibration_plot = plot_multiline({
+  data: current_calibration_results[current_calibration_result_to_display],
+  store_id: "plot_current_calibration",
+  selection: null,
+  subtitle: "Current Calibration",
+  description: "Current calibration results for each phase.",
+  width: 1200, height: 400,
+  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  y_options: {},
+  x: "time",
+  y: "u_positive",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channel_label: "Phase",
+  channels: [
+    {y: "u_positive", label: "U positive", color: colors.u},
+    {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
+    {y: "v_positive", label: "V positive", color: colors.v},
+    {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
+    {y: "w_positive", label: "W positive", color: colors.w},
+    {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+  other_marks: [
+    Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
+  ]
+});
 
-const calibration_stats_plots = current_calibration_results.length < 2 ? [html`<div>No calibration statistics</div>`] : [
-  html`<h3>Calibration statistics</h3>`,
-  Plot.plot({
-    marks: [
-      Plot.line(current_calibration_stats, {x: "time", y: "u_positive_mean", stroke: colors.u, label: "u positive"}),
-      Plot.line(current_calibration_stats, {x: "time", y: "v_positive_mean", stroke: colors.v, label: "v positive"}),
-      Plot.line(current_calibration_stats, {x: "time", y: "w_positive_mean", stroke: colors.w, label: "w positive"}),
-      Plot.line(current_calibration_stats, {x: "time", y: "u_negative_mean", stroke: colors.u, strokeDasharray: "2 5", label: "u negative"}),
-      Plot.line(current_calibration_stats, {x: "time", y: "v_negative_mean", stroke: colors.v, strokeDasharray: "2 5", label: "v negative"}),
-      Plot.line(current_calibration_stats, {x: "time", y: "w_negative_mean", stroke: colors.w, strokeDasharray: "2 5", label: "w negative"}),
-      Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
-      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
-      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-    ],
-    x: {label: "Time (ms)"},
-    y: {label: "Current (A)"},
-    width: 1200, height: 300,
-  }),
-  Plot.plot({
-    marks: [
-      Plot.areaY(current_calibration_stats, {x: "time", y1: (d) => d.u_positive_mean - d.u_positive_std, y2: (d) => d.u_positive_mean + d.u_positive_std, fill: colors.u}),
-      Plot.areaY(current_calibration_stats, {x: "time", y1: (d) => d.v_positive_mean - d.v_positive_std, y2: (d) => d.v_positive_mean + d.v_positive_std, fill: colors.v}),
-      Plot.areaY(current_calibration_stats, {x: "time", y1: (d) => d.w_positive_mean - d.w_positive_std, y2: (d) => d.w_positive_mean + d.w_positive_std, fill: colors.w}),
-      Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
-      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
-      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-    ],
-    x: {label: "Time (ms)"},
-    y: {label: "Current (A)"},
-    width: 1200, height: 300,
-  }),
-  Plot.plot({
-    marks: [
-      Plot.areaY(current_calibration_stats, {x: "time", y1: (d) => -d.u_negative_mean - d.u_negative_std, y2: (d) => -d.u_negative_mean + d.u_negative_std, fill: colors.u}),
-      Plot.areaY(current_calibration_stats, {x: "time", y1: (d) => -d.v_negative_mean - d.v_negative_std, y2: (d) => -d.v_negative_mean + d.v_negative_std, fill: colors.v}),
-      Plot.areaY(current_calibration_stats, {x: "time", y1: (d) => -d.w_negative_mean - d.w_negative_std, y2: (d) => -d.w_negative_mean + d.w_negative_std, fill: colors.w}),
-      Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: (zone) => -zone.pwm * calibration_reference, y2: 0, fill: "rgba(0, 0, 0, 0.05)"}),
-      Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 1}),
-      Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 1}),
-    ],
-    x: {label: "Time (ms)"},
-    y: {label: "Current (A)"},
-    width: 1200, height: 300,
-  }),
-];
+const calibration_samples = current_calibration_reading_points.map((x, i) => {
+  return {
+    reading: x,
+    target: x,
+    u_positive: current_calibration.u_positive.sample[i].target,
+    u_negative: current_calibration.u_negative.sample[i].target,
+    v_positive: current_calibration.v_positive.sample[i].target,
+    v_negative: current_calibration.v_negative.sample[i].target,
+    w_positive: current_calibration.w_positive.sample[i].target,
+    w_negative: current_calibration.w_negative.sample[i].target,
+  };
+});
 
-const current_calibration_plots = [
-  html`<div>Number of calibration data sets: ${current_calibration_results.length}</div>`,
-  ...calibration_run_plots,
-  ...calibration_stats_plots,
-];
+const current_calibration_interpolate_plot = plot_multiline({
+  data: calibration_samples,
+  store_id: "plot_current_calibration_interpolate",
+  selection: null,
+  subtitle: "Current Calibration Interpolation",
+  description: "Current calibration interpolation results for each phase.",
+  width: 1200, height: 400,
+  x_options: {domain: [0, calibration_reference]},
+  y_options: {},
+  x: "reading",
+  y: "u_positive",
+  x_label: "Current Reading (A)",
+  y_label: "Current Estimate (A)",
+  channel_label: "Phase",
+  channels: [
+    {y: "u_positive", label: "U positive", color: colors.u},
+    {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
+    {y: "v_positive", label: "V positive", color: colors.v},
+    {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
+    {y: "w_positive", label: "W positive", color: colors.w},
+    {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
+    {y: "target", label: "Target", color: "gray"},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.1, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+});
+
+const current_calibration_positive_mean_plot = plot_multiline({
+  data: current_calibration_stats,
+  store_id: "plot_current_calibration_positive_mean",
+  selection: null,
+  subtitle: "Current Calibration Mean",
+  description: "Current calibration mean results for each phase driven positive.",
+  width: 1200, height: 300,
+  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  y_options: {},
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channel_label: "Phase",
+  channels: [
+    {y: "u_positive_mean", y_std: "u_positive_std", label: "U positive", color: colors.u},
+    {y: "v_positive_mean", y_std: "v_positive_std", label: "V positive", color: colors.v},
+    {y: "w_positive_mean", y_std: "w_positive_std", label: "W positive", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+  other_marks: [
+    Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
+  ]
+});
+
+const current_calibration_negative_mean_plot = plot_multiline({
+  data: current_calibration_stats,
+  store_id: "plot_current_calibration_negative_mean",
+  selection: null,
+  subtitle: "Current Calibration Mean",
+  description: "Current calibration mean results for each phase driven negative.",
+  width: 1200, height: 300,
+  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  y_options: {},
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channel_label: "Phase",
+  channels: [
+    {y: "u_negative_mean", y_std: "u_negative_std", label: "U negative", color: colors.u},
+    {y: "v_negative_mean", y_std: "v_negative_std", label: "V negative", color: colors.v},
+    {y: "w_negative_mean", y_std: "w_negative_std", label: "W negative", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
+    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+  ],
+  other_marks: [
+    Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
+  ]
+});
 
 ```
 
 ```js
 
-const current_calibration_buttons = Inputs.button(
-  [
-    ["Start Current Calibration", async function(){
-      await run_current_calibration();
-    }],
-    ["Save Current Factors", function(){
-      // Save calibration factors if valid.
-      if (Object.values(current_calibration).some((data) => data === null)) {
-        console.error("Calibration data is not valid", current_calibration);
-        return;
-      }
 
-      update_current_calibration_factors({
-        u_positive: current_calibration.u_positive.factor,
-        u_negative: current_calibration.u_negative.factor,
-        v_positive: current_calibration.v_positive.factor,
-        v_negative: current_calibration.v_negative.factor,
-        w_positive: current_calibration.w_positive.factor,
-        w_negative: current_calibration.w_negative.factor,
-      });
-      save_current_calibration_factors();
-    }],
-    ["Reload Current Factors", function(){
-      reload_current_calibration_factors();
-    }],
-    ["Reset Current Factors", function(){
-      reset_current_calibration_factors();
-    }],
-  ],
-  {label: "Collect current calibration data"},
-);
+function tidy_select({data, x, x_label = "x", y_label = "y", channel_label = "channel", channels}){
+  return data.flatMap((d) => {
+    return channels.map(({y, label, y_std}) => {
+      return Object.fromEntries([
+        [x_label, d[x]],
+        [y_label, d[y]],
+        [channel_label, label],
+        [`${y_label}_std`, d[y_std]],
+      ]);
+    });
+  });
+}
 
-d3.select(current_calibration_buttons).style("width", "100%");
+
+function plot_multiline(options){
+  const {
+    data, 
+    store_id,
+    width, height,
+    x_options, y_options,
+    x, y, 
+    x_label, y_label,
+    channel_label, channels,
+    subtitle, description,
+    grid_marks = [],
+    other_marks = [],
+    curve = undefined,
+  } = options;
+
+  let {selection} = options;
+
+  selection = selection ?? get_stored_or_default(store_id, {
+    show: true,
+    shown_marks: [...channels.map(({y}) => y), "grid"],
+  });
+
+  let result = Mutable(create_element(selection));
+
+  function update_selection(new_selection){
+    selection = {...selection, ...new_selection};
+    // Store the selection in local storage.
+    localStorage.setItem(store_id, JSON.stringify(selection));
+    // Update the plot.
+    result.value = create_element(selection);
+  }
+
+  function create_element(selection){
+
+    // First, make the title into a checkbox to toggle the plot on and off.
+    const subtitle_checkbox = Inputs.checkbox([subtitle], {
+      value: selection.show ? [subtitle] : [],
+      format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
+    });
+
+    subtitle_checkbox.addEventListener("input", function(event){
+      const show = subtitle_checkbox.value.length > 0;
+      update_selection({show});
+    });
+
+    if (!selection.show) {
+      return html`<div>${subtitle_checkbox}</div>`;
+    }
+
+    const description_element = html`<p>${description}</p>`;
+
+    const checkbox_y_to_label = Object.fromEntries([...channels.map(({y, label}) => [y, label]), ["grid", "Grid"]]);
+    const checkbox_y_to_color = Object.fromEntries([...channels.map(({y, color}) => [y, color]), ["grid", "grey"]]);
+
+    // Then, make the marks into checkboxes to toggle them on and off.
+    const marks_checkboxes = Inputs.checkbox(
+      [...channels.map(({y}) => y), "grid"], 
+      {
+        value: selection.shown_marks,
+        label: "Display:",
+        format: (y) => html`<span style="border-bottom: solid 3px ${checkbox_y_to_color[y]}; margin-bottom: -3px;">${checkbox_y_to_label[y]}</span>`,
+      },
+    );
+
+    marks_checkboxes.addEventListener("input", function(event){
+      const shown_marks = marks_checkboxes.value;
+      update_selection({shown_marks});
+    });
+
+    const selected_channels = channels.filter(({y}) => selection.shown_marks.includes(y));
+    const selected_data = tidy_select({data, x, x_label, y_label, channel_label, channels: selected_channels});
+
+    const std_z_score = 1.944; // 95% confidence interval for normal distribution
+
+    const plot_figure = Plot.plot({
+      width, height,
+      x: {label: x_label, ...x_options},
+      y: {label: y_label, domain: selected_data.length > 0 ? undefined : [0, 1], ...y_options},
+      color: {
+        // legend: true,
+        domain: channels.map(({label}) => label),
+        range: channels.map(({color}) => color),
+      },
+      marks: [
+        Plot.areaY(selected_data, {x: x_label, y1: (d) => d[y_label] - d[`${y_label}_std`] * std_z_score, y2: (d) => d[y_label] + d[`${y_label}_std`] * std_z_score, fill: channel_label, opacity: 0.2}),
+        Plot.line(selected_data, {x: x_label, y: y_label, stroke: channel_label, curve}),
+        Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: channel_label, ruleStrokeWidth: 3}),
+        Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: channel_label})),
+        Plot.text(
+          selected_data,
+          Plot.pointerX({
+            px: x_label, py: y_label, fill: channel_label,
+            dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14, fontWeight: "bold",
+            text: (d) => `Channel: ${d[channel_label].padEnd(20)} | ${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)}`,
+          }),
+        ),
+        ...(selection.shown_marks.includes("grid") ? grid_marks : []),
+        ...other_marks,
+      ],
+    });
+
+    return html`<div>${subtitle_checkbox}${description_element}${marks_checkboxes}${plot_figure}</div>`;
+  }
+
+  return result;
+}
 ```
-
 
 
 ```js
@@ -1315,3 +1370,6 @@ import {even_spacing, piecewise_linear, even_piecewise_linear} from "./component
 import * as motor from "./components/usb_motor_controller.js";
 
 ```
+
+
+</main>
