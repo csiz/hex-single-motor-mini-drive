@@ -959,6 +959,21 @@ function circular_stats_degrees(values){
   };
 }
 
+function hall_sector({hall_u, hall_v, hall_w}){
+  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
+  switch(hall_state){
+    case 0b001: return 0;
+    case 0b011: return 1;
+    case 0b010: return 2;
+    case 0b110: return 3;
+    case 0b100: return 4;
+    case 0b101: return 5;
+    default: return null;
+  }
+}
+
+
+
 // Store the inferred angle for every hall sensor switching event.
 function extract_hall_switching_events(data){
   return data.flatMap((d, i) => {
@@ -967,28 +982,15 @@ function extract_hall_switching_events(data){
     const next = data[i + 1];
     const angle = degree_mid_point(d.angle_if_breaking, next.angle_if_breaking);
 
-    let switching_events = [];
+    const prev_sector = hall_sector(d);
+    const next_sector = hall_sector(next);
 
-    if (d.hall_u && !next.hall_u) {
-      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_u_turning_off`});
-    }
-    if (!d.hall_u && next.hall_u) {
-      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_u_turning_on`});
-    }
-    if (d.hall_v && !next.hall_v) {
-      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_v_turning_off`});
-    }
-    if (!d.hall_v && next.hall_v) {
-      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_v_turning_on`});
-    }
-    if (d.hall_w && !next.hall_w) {
-      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_w_turning_off`});
-    }
-    if (!d.hall_w && next.hall_w) {
-      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_w_turning_on`});
-    }
+    if (prev_sector == null || next_sector == null) return [];
 
-    return switching_events;
+    if (prev_sector == next_sector) return [];
+
+    return [{time: d.time, angle, switching: `hall_sector_${prev_sector}_to_${next_sector}`}];
+
   });
 }
 
@@ -997,26 +999,26 @@ const position_calibration_switching_events = position_calibration_results.flatM
   return extract_hall_switching_events(calibration_data.concatenated);
 });
 
+display(position_calibration_switching_events);
 
 const position_calibration_switching_angles = position_calibration_switching_events.reduce((acc, d) => {
   acc[d.switching].push(d.angle);
   return acc;
 }, {
-  drive_positive_hall_u_turning_on: [],
-  drive_negative_hall_u_turning_off: [],
-  drive_negative_hall_u_turning_on: [],
-  drive_positive_hall_u_turning_off: [],
-  drive_positive_hall_v_turning_on: [],
-  drive_negative_hall_v_turning_off: [],
-  drive_negative_hall_v_turning_on: [],
-  drive_positive_hall_v_turning_off: [],
-  drive_positive_hall_w_turning_on: [],
-  drive_negative_hall_w_turning_off: [],
-  drive_negative_hall_w_turning_on: [],
-  drive_positive_hall_w_turning_off: [],
-});
+  hall_sector_0_to_1: [],
+  hall_sector_1_to_2: [],
+  hall_sector_2_to_3: [],
+  hall_sector_3_to_4: [],
+  hall_sector_4_to_5: [],
+  hall_sector_5_to_0: [],
 
-display(position_calibration_switching_angles);
+  hall_sector_1_to_0: [], 
+  hall_sector_2_to_1: [],
+  hall_sector_3_to_2: [],
+  hall_sector_4_to_3: [],
+  hall_sector_5_to_4: [],
+  hall_sector_0_to_5: [],
+});
 
 const position_calibration_statistics = Object.entries(position_calibration_switching_angles).map(([key, values]) => {
   const { circular_mean: mean, circular_stddev: stddev } = circular_stats_degrees(values);
@@ -1025,14 +1027,17 @@ const position_calibration_statistics = Object.entries(position_calibration_swit
 
 const position_calibration_table = Inputs.table(position_calibration_statistics, {height: "32vh"});
 
+```
+
+```js
 
 const position_calibration_hall_details = [
-  ["drive_positive_hall_u", "drive_positive_hall_u_turning_on", "drive_positive_hall_u_turning_off"],
-  ["drive_negative_hall_u", "drive_negative_hall_u_turning_off", "drive_negative_hall_u_turning_on"],
-  ["drive_positive_hall_v", "drive_positive_hall_v_turning_on", "drive_positive_hall_v_turning_off"],
-  ["drive_negative_hall_v", "drive_negative_hall_v_turning_off", "drive_negative_hall_v_turning_on"],
-  ["drive_positive_hall_w", "drive_positive_hall_w_turning_on", "drive_positive_hall_w_turning_off"],
-  ["drive_negative_hall_w", "drive_negative_hall_w_turning_off", "drive_negative_hall_w_turning_on"],
+  ["drive_positive_hall_u", "hall_sector_4_to_5", "hall_sector_1_to_2"],
+  ["drive_negative_hall_u", "hall_sector_5_to_4", "hall_sector_2_to_1"],
+  ["drive_positive_hall_v", "hall_sector_0_to_1", "hall_sector_3_to_4"],
+  ["drive_negative_hall_v", "hall_sector_1_to_0", "hall_sector_4_to_3"],
+  ["drive_positive_hall_w", "hall_sector_2_to_3", "hall_sector_5_to_0"],
+  ["drive_negative_hall_w", "hall_sector_3_to_2", "hall_sector_0_to_5"],
 ].map(([key, a_key, b_key]) => {
   const a_stats = position_calibration_statistics.find(d => d.key === a_key);
   const b_stats = position_calibration_statistics.find(d => d.key === b_key);
@@ -1042,9 +1047,9 @@ const position_calibration_hall_details = [
 const position_calibration_hall_details_table = Inputs.table(position_calibration_hall_details, {height: "18vh"});
 
 const position_calibration_hysterisis = [
-  ["hysterisis_u", "drive_negative_hall_u", "drive_positive_hall_u"],
-  ["hysterisis_v", "drive_negative_hall_v", "drive_positive_hall_v"],
-  ["hysterisis_w", "drive_negative_hall_w", "drive_positive_hall_w"],
+  ["hysterisis_hall_u", "drive_negative_hall_u", "drive_positive_hall_u"],
+  ["hysterisis_hall_v", "drive_negative_hall_v", "drive_positive_hall_v"],
+  ["hysterisis_hall_w", "drive_negative_hall_w", "drive_positive_hall_w"],
 ].map(([key, a_key, b_key]) => {
   const a_stats = position_calibration_hall_details.find(d => d.key === a_key);
   const b_stats = position_calibration_hall_details.find(d => d.key === b_key);

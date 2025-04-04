@@ -25,7 +25,7 @@ bool readouts_allow_missing = true;
 
 // Hall states as bits, 0b001 = hall 1, 0b010 = hall 2, 0b100 = hall 3.
 uint8_t hall_state = 0b000; 
-uint8_t motor_electric_phase = 0;
+uint8_t hall_sector = 0;
 bool hall_sensor_valid = false;
 
 
@@ -61,27 +61,27 @@ void read_hall_sensors(){
             hall_sensor_valid = false;
             break;
         case 0b001: // hall U active; 0 degrees
-            motor_electric_phase = 0;
+            hall_sector = 0;
             hall_sensor_valid = true;
             break;
         case 0b011: // hall U and hall V active; 60 degrees
-            motor_electric_phase = 1;
+            hall_sector = 1;
             hall_sensor_valid = true;
             break;
         case 0b010: // hall V active; 120 degrees
-            motor_electric_phase = 2;
+            hall_sector = 2;
             hall_sensor_valid = true;
             break;
         case 0b110: // hall V and hall W active; 180 degrees
-            motor_electric_phase = 3;
+            hall_sector = 3;
             hall_sensor_valid = true;
             break;
         case 0b100: // hall W active; 240 degrees
-            motor_electric_phase = 4;
+            hall_sector = 4;
             hall_sensor_valid = true;
             break;
         case 0b101: // hall U and hall W active; 300 degrees
-            motor_electric_phase = 5;
+            hall_sector = 5;
             hall_sensor_valid = true;
             break;
         case 0b111: // all hall sensors active; this would be quite unusual

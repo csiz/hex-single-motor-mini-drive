@@ -77,7 +77,7 @@ extern bool hall_1, hall_2, hall_3;
 // value as a lookup into the sine table to generate the PWM duty cycles.
 extern uint8_t motor_electric_angle;
 // Same as the angle, but split into the 6 commutation steps.
-extern uint8_t motor_electric_phase;
+extern uint8_t hall_sector;
 extern bool hall_sensor_valid;
 extern uint8_t hall_state;
 

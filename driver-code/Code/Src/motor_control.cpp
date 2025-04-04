@@ -114,9 +114,9 @@ void update_motor_control(){
         return;
     }
 
-    const float voltage_phase_u = motor_voltage_table[motor_electric_phase][0];
-    const float voltage_phase_v = motor_voltage_table[motor_electric_phase][1];
-    const float voltage_phase_w = motor_voltage_table[motor_electric_phase][2];
+    const float voltage_phase_u = motor_voltage_table[hall_sector][0];
+    const float voltage_phase_v = motor_voltage_table[hall_sector][1];
+    const float voltage_phase_w = motor_voltage_table[hall_sector][2];
 
 
     motor_u_pwm_duty = voltage_phase_u * pwm_fraction * PWM_BASE;
