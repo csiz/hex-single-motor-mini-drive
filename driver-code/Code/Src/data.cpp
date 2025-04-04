@@ -42,7 +42,7 @@ void data_init(){
     if (readouts_queue == nullptr) Error_Handler();
 }
 
-
+/* Get Hall sensor data from: SS360NT */
 void read_hall_sensors(){
     uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
     uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);

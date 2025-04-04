@@ -426,7 +426,7 @@ function calculate_data_stats(raw_readout_data){
     
     const voltage_magnitude = any_null ? null : Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
 
-    const breaking_angle = any_null ? null : ((voltage_angle + (radial_speed > 0 ? Math.PI / 2.0 : -Math.PI / 2.0)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+    const angle_if_breaking = any_null ? null : ((voltage_angle + (radial_speed > 0 ? +Math.PI / 2.0 : -Math.PI / 2.0)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
 
     return {
       ...d,
@@ -441,7 +441,7 @@ function calculate_data_stats(raw_readout_data){
       voltage_beta,
       voltage_angle: voltage_angle === null ? null : voltage_angle * 180 / Math.PI,
       voltage_magnitude,
-      breaking_angle: breaking_angle === null ? null : breaking_angle * 180 / Math.PI,
+      angle_if_breaking: angle_if_breaking === null ? null : angle_if_breaking * 180 / Math.PI,
     };
   });
 
@@ -556,7 +556,7 @@ const plot_electric_position = plot_multiline({
   channels: [
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage (Park) Angle", color: d3.color(colors.current_angle).darker(1)},
-    {y: "breaking_angle", label: "Inferred Angle", color: d3.color(colors.current_angle).darker(2)},
+    {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
@@ -744,6 +744,9 @@ Position Calibration Procedures
 </div>
 <div class="card tight">
   <h3>Position Calibration Results</h3>
+  <div>${position_calibration_table}</div>
+  <div>${position_calibration_hall_details_table}</div>
+  <div>${position_calibration_hysterisis_table}</div>
   <div>${position_calibration_result_to_display_input}</div>
   <div>${position_calibration_pos_plot}</div>
   <div>${position_calibration_neg_plot}</div>
@@ -753,7 +756,9 @@ Position Calibration Procedures
 const position_calibration_buttons = Inputs.button(
   [
     ["Start Position Calibration", async function(){
-      await run_position_calibration();
+      for (let i = 0; i < 10; i++){
+        await run_position_calibration();
+      }
     }],
   ],
   {label: "Collect position calibration data"},
@@ -779,7 +784,7 @@ async function run_position_calibration(){
   const drive_time = 200;
   const drive_timeout = Math.floor((drive_time + 300) / time_conversion);
 
-  const drive_strength = Math.floor(motor.PWM_BASE * 3 / 10);
+  const drive_strength = Math.floor(motor.PWM_BASE * 2 / 10);
   const drive_options = {command_timeout: drive_timeout, command_value: drive_strength};
 
   const test_options = {command_timeout: 0, command_value: 0};
@@ -815,11 +820,18 @@ async function run_position_calibration(){
   const position_calibration_data = {
     drive_positive,
     drive_negative,
+    concatenated: [
+      ...drive_positive.map(d => ({...d, direction: "positive"})),
+      ...drive_negative.map(d => ({...d, direction: "negative"})),
+    ],
   };
   
   store_position_calibration_results(position_calibration_data);
 }
+```
 
+  
+```js
 const position_calibration_result_to_display_input = Inputs.select(
   d3.range(0, position_calibration_results.length),
   {
@@ -836,10 +848,10 @@ const position_calibration_pos_plot = plot_multiline({
   data: position_calibration_results[position_calibration_result_to_display].drive_positive,
   store_id: "position_calibration_pos_plot",
   selection: null,
-  subtitle: "Electric position positive drive then stop",
+  subtitle: "Electric position | drive positive then stop",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: time_domain},
+  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
   y_options: {domain: [-180, 180]},
   x: "time",
   y: "current_angle",
@@ -849,7 +861,7 @@ const position_calibration_pos_plot = plot_multiline({
   channels: [
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage (Park) Angle", color: d3.color(colors.current_angle).darker(1)},
-    {y: "breaking_angle", label: "Inferred Angle", color: d3.color(colors.current_angle).darker(2)},
+    {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
@@ -859,17 +871,17 @@ const position_calibration_pos_plot = plot_multiline({
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
   ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: "step",
 });
 
 const position_calibration_neg_plot = plot_multiline({
   data: position_calibration_results[position_calibration_result_to_display].drive_negative,
   store_id: "position_calibration_neg_plot",
   selection: null,
-  subtitle: "Electric position negative drive then stop",
+  subtitle: "Electric position | drive negative then stop",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: time_domain},
+  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
   y_options: {domain: [-180, 180]},
   x: "time",
   y: "current_angle",
@@ -879,7 +891,7 @@ const position_calibration_neg_plot = plot_multiline({
   channels: [
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage (Park) Angle", color: d3.color(colors.current_angle).darker(1)},
-    {y: "breaking_angle", label: "Inferred Angle", color: d3.color(colors.current_angle).darker(2)},
+    {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
@@ -889,9 +901,160 @@ const position_calibration_neg_plot = plot_multiline({
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
   ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: "step",
+});
+```
+
+```js
+function degree_distance(a, b){
+  return (b + 360 - a) % 360;
+}
+
+function degree_shortest_distance(a, b){
+  const diff = degree_distance(a, b);
+  return diff > 180 ? 360 - diff : diff;
+}
+
+function degree_mid_point(a, b){
+  const diff = degree_distance(a, b);
+  return diff > 180 ? a + (diff - 360) / 2 : a + diff / 2;
+}
+
+function normalize_degree(a){
+  return a > 180 ? a - 360 : a < -180 ? a + 360 : a;
+}
+
+function degree_interpolate(a, b, fraction){
+  const diff = degree_distance(a, b);
+  return normalize_degree(a + diff * fraction);
+}
+
+function angle_switching_details(key, a_stats, b_stats){
+  const a = a_stats.mean;
+  const b = b_stats.mean;
+
+  const diff = degree_distance(a, b);
+  const location = degree_interpolate(a, b, 0.5);
+  const err = diff - 180;
+  return {key, diff, location, err};
+}
+
+function circular_stats_degrees(values){
+  const mean_point = [
+    d3.mean(values, (d) => Math.cos(d * Math.PI / 180.0)),
+    d3.mean(values, (d) => Math.sin(d * Math.PI / 180.0)),
+  ]
+  const circular_mean = Math.atan2(mean_point[1], mean_point[0]) * 180 / Math.PI;
+
+  const circular_stddev = Math.sqrt(
+    d3.mean(values, (d) => {
+      const diff = degree_shortest_distance(circular_mean, d);
+      return diff * diff;
+    })
+  );
+
+  return {
+    circular_mean,
+    circular_stddev,
+  };
+}
+
+// Store the inferred angle for every hall sensor switching event.
+function extract_hall_switching_events(data){
+  return data.flatMap((d, i) => {
+    if (d.angle_if_breaking == null) return [];
+    if (i >= data.length - 1) return [];
+    const next = data[i + 1];
+    const angle = degree_mid_point(d.angle_if_breaking, next.angle_if_breaking);
+
+    let switching_events = [];
+
+    if (d.hall_u && !next.hall_u) {
+      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_u_turning_off`});
+    }
+    if (!d.hall_u && next.hall_u) {
+      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_u_turning_on`});
+    }
+    if (d.hall_v && !next.hall_v) {
+      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_v_turning_off`});
+    }
+    if (!d.hall_v && next.hall_v) {
+      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_v_turning_on`});
+    }
+    if (d.hall_w && !next.hall_w) {
+      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_w_turning_off`});
+    }
+    if (!d.hall_w && next.hall_w) {
+      switching_events.push({time: d.time, angle, switching: `drive_${d.direction}_hall_w_turning_on`});
+    }
+
+    return switching_events;
+  });
+}
+
+
+const position_calibration_switching_events = position_calibration_results.flatMap((calibration_data) => {
+  return extract_hall_switching_events(calibration_data.concatenated);
 });
 
+
+const position_calibration_switching_angles = position_calibration_switching_events.reduce((acc, d) => {
+  acc[d.switching].push(d.angle);
+  return acc;
+}, {
+  drive_positive_hall_u_turning_on: [],
+  drive_negative_hall_u_turning_off: [],
+  drive_negative_hall_u_turning_on: [],
+  drive_positive_hall_u_turning_off: [],
+  drive_positive_hall_v_turning_on: [],
+  drive_negative_hall_v_turning_off: [],
+  drive_negative_hall_v_turning_on: [],
+  drive_positive_hall_v_turning_off: [],
+  drive_positive_hall_w_turning_on: [],
+  drive_negative_hall_w_turning_off: [],
+  drive_negative_hall_w_turning_on: [],
+  drive_positive_hall_w_turning_off: [],
+});
+
+display(position_calibration_switching_angles);
+
+const position_calibration_statistics = Object.entries(position_calibration_switching_angles).map(([key, values]) => {
+  const { circular_mean: mean, circular_stddev: stddev } = circular_stats_degrees(values);
+  return {key, n: values.length, mean, stddev};
+});
+
+const position_calibration_table = Inputs.table(position_calibration_statistics, {height: "32vh"});
+
+
+const position_calibration_hall_details = [
+  ["drive_positive_hall_u", "drive_positive_hall_u_turning_on", "drive_positive_hall_u_turning_off"],
+  ["drive_negative_hall_u", "drive_negative_hall_u_turning_off", "drive_negative_hall_u_turning_on"],
+  ["drive_positive_hall_v", "drive_positive_hall_v_turning_on", "drive_positive_hall_v_turning_off"],
+  ["drive_negative_hall_v", "drive_negative_hall_v_turning_off", "drive_negative_hall_v_turning_on"],
+  ["drive_positive_hall_w", "drive_positive_hall_w_turning_on", "drive_positive_hall_w_turning_off"],
+  ["drive_negative_hall_w", "drive_negative_hall_w_turning_off", "drive_negative_hall_w_turning_on"],
+].map(([key, a_key, b_key]) => {
+  const a_stats = position_calibration_statistics.find(d => d.key === a_key);
+  const b_stats = position_calibration_statistics.find(d => d.key === b_key);
+  return angle_switching_details(key, a_stats, b_stats);
+});
+
+const position_calibration_hall_details_table = Inputs.table(position_calibration_hall_details, {height: "18vh"});
+
+const position_calibration_hysterisis = [
+  ["hysterisis_u", "drive_negative_hall_u", "drive_positive_hall_u"],
+  ["hysterisis_v", "drive_negative_hall_v", "drive_positive_hall_v"],
+  ["hysterisis_w", "drive_negative_hall_w", "drive_positive_hall_w"],
+].map(([key, a_key, b_key]) => {
+  const a_stats = position_calibration_hall_details.find(d => d.key === a_key);
+  const b_stats = position_calibration_hall_details.find(d => d.key === b_key);
+  const hysterisis = degree_distance(a_stats.location, b_stats.location);
+  const mid_location = degree_interpolate(a_stats.location, b_stats.location, 0.5);
+
+  return {key, hysterisis, mid_location};
+});
+
+const position_calibration_hysterisis_table = Inputs.table(position_calibration_hysterisis, {height: "12vh"});
 ```
 
 Current Calibration Procedures
@@ -1295,19 +1458,19 @@ const current_calibration_positive_mean_plot = plot_multiline({
       y: "u_positive_mean", 
       y1: (d) => d.u_positive_mean - d.u_positive_std * std_z_score, 
       y2: (d) => d.u_positive_mean + d.u_positive_std * std_z_score, 
-      label: "U positive", color: colors.u,
+      label: "U positive mean", color: colors.u,
     },
     {
       y: "v_positive_mean",
       y1: (d) => d.v_positive_mean - d.v_positive_std * std_z_score,
       y2: (d) => d.v_positive_mean + d.v_positive_std * std_z_score, 
-      label: "V positive", color: colors.v,
+      label: "V positive mean", color: colors.v,
     },
     {
       y: "w_positive_mean",
       y1: (d) => d.w_positive_mean - d.w_positive_std * std_z_score,
       y2: (d) => d.w_positive_mean + d.w_positive_std * std_z_score,
-      label: "W positive", color: colors.w,
+      label: "W positive mean", color: colors.w,
     },
   ],
   grid_marks: [
@@ -1339,19 +1502,19 @@ const current_calibration_negative_mean_plot = plot_multiline({
       y: "u_negative_mean", 
       y1: (d) => d.u_negative_mean - d.u_negative_std * std_z_score, 
       y2: (d) => d.u_negative_mean + d.u_negative_std * std_z_score, 
-      label: "U negative", color: colors.u,
+      label: "U negative mean", color: colors.u,
     },
     {
       y: "v_negative_mean",
       y1: (d) => d.v_negative_mean - d.v_negative_std * std_z_score,
       y2: (d) => d.v_negative_mean + d.v_negative_std * std_z_score, 
-      label: "V negative", color: colors.v,
+      label: "V negative mean", color: colors.v,
     },
     {
       y: "w_negative_mean",
       y1: (d) => d.w_negative_mean - d.w_negative_std * std_z_score,
       y2: (d) => d.w_negative_mean + d.w_negative_std * std_z_score,
-      label: "W negative", color: colors.w,
+      label: "W negative mean", color: colors.w,
     },
   ],
   grid_marks: [

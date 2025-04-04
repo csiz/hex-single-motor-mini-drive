@@ -194,27 +194,27 @@ export class MotorController {
     const data_view = new DataView(data_bytes.buffer);
 
     let offset = 0;
-    let hall_and_readout_number = data_view.getUint32(0);
+    const hall_and_readout_number = data_view.getUint32(0);
     // The first 3 bits are the hall sensor state.
-    let hall_u = (hall_and_readout_number >> 29) & 0b1;
-    let hall_v = (hall_and_readout_number >> 30) & 0b1;
-    let hall_w = (hall_and_readout_number >> 31) & 0b1;
-    let readout_number = hall_and_readout_number & 0x1FFFFFFF;
+    const hall_u = (hall_and_readout_number >> 29) & 0b1;
+    const hall_v = (hall_and_readout_number >> 30) & 0b1;
+    const hall_w = (hall_and_readout_number >> 31) & 0b1;
+    const readout_number = hall_and_readout_number & 0x1FFFFFFF;
     offset += 4;
-    let pwm_commands = data_view.getUint32(offset);
+    const pwm_commands = data_view.getUint32(offset);
     offset += 4;
 
-    let u_pwm = Math.floor(pwm_commands / PWM_BASE / PWM_BASE) % PWM_BASE;
-    let v_pwm = Math.floor(pwm_commands / PWM_BASE) % PWM_BASE;
-    let w_pwm = pwm_commands % PWM_BASE;
+    const u_pwm = Math.floor(pwm_commands / PWM_BASE / PWM_BASE) % PWM_BASE;
+    const v_pwm = Math.floor(pwm_commands / PWM_BASE) % PWM_BASE;
+    const w_pwm = pwm_commands % PWM_BASE;
 
-    let u_readout = data_view.getUint16(offset);
+    const u_readout = data_view.getUint16(offset);
     offset += 2;
-    let v_readout = data_view.getUint16(offset);
+    const v_readout = data_view.getUint16(offset);
     offset += 2;
-    let w_readout = data_view.getUint16(offset);
+    const w_readout = data_view.getUint16(offset);
     offset += 2;
-    let ref_readout = data_view.getUint16(offset);
+    const ref_readout = data_view.getUint16(offset);
     offset += 2;
 
     // Only add messages if we are expecting them.
