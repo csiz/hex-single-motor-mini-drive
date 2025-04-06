@@ -12,6 +12,7 @@
     "@observablehq/framework": "^1.13.2",
     "@observablehq/plot": "^0.6.17",
     "@observablehq/stdlib": "^5.8.8",
+    "@stdlib/stats-base-dists-normal": "^0.2.2",
     "@stdlib/stats-base-dists-normal-cdf": "^0.2.2",
     "circular-buffer": "^1.0.3",
     "d3-array": "^3.2.4",
