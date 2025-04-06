@@ -43,5 +43,7 @@ class MemoryStorage {
     if (saved_string === null) return default_value;
     const saved_value = JSON.parse(saved_string);
     // Ensure we return all elements of the default value.
-    return _.merge({}, default_value, saved_value);
+    const merged_value = {...default_value, ...saved_value};
+
+    return merged_value;
   }
