@@ -6,7 +6,6 @@ title: Motor monitor
 Motor Commands
 --------------
 
-
 <div>${connect_buttons}</div>
 <div>${motor_controller_status}</div>
 <div>${data_stream_buttons}</div>
@@ -16,6 +15,66 @@ Motor Commands
   ${command_timeout_slider}
 </div>
 
+Motor Driving Data
+------------------
+<div class="card tight">
+<p>Controls for the plotting time window:</p>
+  ${time_period_input}
+  ${time_offset_input}
+  ${plot_options_input}
+</div>
+<div class="card tight">${plot_electric_position}</div>
+<div class="card tight">${plot_speed}</div>
+<div class="card tight">${plot_measured_current}</div>
+<div class="card tight">${plot_dq0_currents}</div>
+<div class="card tight">${plot_dq0_voltages}</div>
+<div class="card tight">${plot_inferred_voltage}</div>
+<div class="card tight">${plot_pwm_settings}</div>
+
+
+Position Calibration Procedures
+-------------------------------
+
+<div class="card tight">
+  <div>${position_calibration_buttons}</div>
+  <div>Number of calibration data sets: ${position_calibration_results.length}</div>
+</div>
+<div class="card tight">
+  <h3>Position Calibration Results</h3>
+  <div>${position_calibration_result_to_display_input}</div>
+  <div>${position_calibration_debug}</div>
+  <div>${position_calibration_pos_plot}</div>
+  <div>${position_calibration_pos_speed_plot}</div>
+  <div>${position_calibration_neg_plot}</div>
+  <div>${position_calibration_neg_speed_plot}</div>
+  <div>${position_calibration_table}</div>
+  <div>${position_calibration_hall_details_table}</div>
+  <div>${position_calibration_hysterisis_table}</div>
+</div>
+
+
+Current Calibration Procedures
+------------------------------
+
+<div class="card tight">
+  <div>${current_calibration_buttons}</div>
+  <div>Number of calibration data sets: ${current_calibration_results.length}</div>
+</div>
+<div class="card tight">
+  <h3>Current Calibration Results</h3>
+  <div>${current_calibration_table}</div>
+  <div>${current_calibration_result_to_display_input}</div>
+  <div>${current_calibration_plot}</div>
+  <div>${current_calibration_interpolate_plot}</div>
+</div>
+<div class="card tight">  
+  <h3>Current Calibration Statistics</h3>
+  <div>${current_calibration_positive_mean_plot}</div>
+  <div>${current_calibration_negative_mean_plot}</div>
+</div>
+
+
+</main>
 
 ```js
 
@@ -484,23 +543,6 @@ const colors = {
 
 ```
 
-
-Motor Driving Data
-------------------
-<div class="card tight">
-<p>Controls for the plotting time window:</p>
-  ${time_period_input}
-  ${time_offset_input}
-  ${plot_options_input}
-</div>
-<div class="card tight">${plot_electric_position}</div>
-<div class="card tight">${plot_speed}</div>
-<div class="card tight">${plot_measured_current}</div>
-<div class="card tight">${plot_dq0_currents}</div>
-<div class="card tight">${plot_dq0_voltages}</div>
-<div class="card tight">${plot_inferred_voltage}</div>
-<div class="card tight">${plot_pwm_settings}</div>
-
 ```js
 
 const history_duration = Math.ceil(motor.HISTORY_SIZE * time_conversion);
@@ -738,25 +780,7 @@ const plot_pwm_settings = plot_multiline({
 });
 
 ```
-Position Calibration Procedures
--------------------------------
 
-<div class="card tight">
-  <div>${position_calibration_buttons}</div>
-  <div>Number of calibration data sets: ${position_calibration_results.length}</div>
-</div>
-<div class="card tight">
-  <h3>Position Calibration Results</h3>
-  <div>${position_calibration_result_to_display_input}</div>
-  <div>${position_calibration_debug}</div>
-  <div>${position_calibration_pos_plot}</div>
-  <div>${position_calibration_pos_speed_plot}</div>
-  <div>${position_calibration_neg_plot}</div>
-  <div>${position_calibration_neg_speed_plot}</div>
-  <div>${position_calibration_table}</div>
-  <div>${position_calibration_hall_details_table}</div>
-  <div>${position_calibration_hysterisis_table}</div>
-</div>
 
 ```js
 const position_calibration_buttons = Inputs.button(
@@ -1131,44 +1155,7 @@ function compute_position_from_hall(data){
 }
 ```
 
-```js
-const truncated_example = d3.range(-2, 2, 0.01).map((x) => {
-  const b = -x;
-  const β = b;
-  const cdf_β = cdf_normal(β, 0.0, 1.0);
-  const pdf_β = pdf_normal(β, 0.0, 1.0);
 
-  return {x, y: -pdf_β/cdf_β, cdf_β, pdf_β};
-});
-
-const truncated_example_plot = plot_multiline({
-  data: truncated_example,
-  store_id: "truncated_example_plot",
-  selection: null,
-  subtitle: "Truncated Normal Distribution",
-  description: "Truncated normal distribution with mean = 0 and σ = 0.5.",
-  width: 1200, height: 300,
-  x_options: {},
-  y_options: {},
-  x: "x",
-  y: "y",
-  x_label: "X",
-  y_label: "Y",
-  channel_label: "Phase",
-  channels: [
-    {y: "y", label: "mean_adjustment", color: colors.u},
-    {y: "cdf_β", label: "CDF", color: colors.v},
-    {y: "pdf_β", label: "PDF", color: colors.w},
-  ],
-  grid_marks: [
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.1, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-});
-
-```
-<div class="card tight">${truncated_example_plot}</div>
 
 ```js
 const position_calibration_result_to_display_input = Inputs.select(
@@ -1262,7 +1249,11 @@ const position_calibration_pos_plot = plot_multiline({
   y_label: "Electric position (degrees)",
   channel_label: "Angle Source",
   channels: [
-    {y: "angle", label: "Angle", color: colors.angle},
+    {
+      y: "angle", label: "Angle", color: colors.angle,
+      y1: clipped_lower((d) => d.angle - std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_positive, "angle"),
+      y2: clipped_upper((d) => d.angle + std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_positive, "angle"),
+    },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
@@ -1273,8 +1264,22 @@ const position_calibration_pos_plot = plot_multiline({
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
   ],
+  other_marks: [
+    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
+  ],
   curve: "step",
 });
+
+function clipped_lower(f, data, y){
+  const lower_bound = d3.min(data, (d) => d[y]);
+  if (lower_bound == null) return f;
+  return (d, i, data) => Math.max(f(d, i, data), lower_bound);
+}
+function clipped_upper(f, data, y){
+  const upper_bound = d3.max(data, (d) => d[y]);
+  if (upper_bound == null) return f;
+  return (d, i, data) => Math.min(f(d, i, data), upper_bound);
+}
 
 const position_calibration_pos_speed_plot = plot_multiline({
   data: position_calibration_detailed_result.drive_positive,
@@ -1292,12 +1297,19 @@ const position_calibration_pos_speed_plot = plot_multiline({
   channel_label: "Speed Source",
   channels: [
     {y: "radial_speed", label: "Speed", color: colors.radial_speed},
-    {y: "spin", label: "Spin", color: "black"},
+    {
+      y: "spin", label: "Spin", color: "black", 
+      y1: clipped_lower((d) => d.spin - std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_positive, "spin"),
+      y2: clipped_upper((d) => d.spin + std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_positive, "spin"),
+    },
   ],
   grid_marks: [
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({stroke: 'black', strokeWidth : 2}),
+  ],
+  other_marks: [
+    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
   ],
   curve: "step",
 });
@@ -1317,7 +1329,11 @@ const position_calibration_neg_plot = plot_multiline({
   y_label: "Electric position (degrees)",
   channel_label: "Angle Source",
   channels: [
-    {y: "angle", label: "Angle", color: colors.angle},
+    {
+      y: "angle", label: "Angle", color: colors.angle, 
+      y1: clipped_lower((d) => d.angle - std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_negative, "angle"),
+      y2: clipped_upper((d) => d.angle + std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_negative, "angle"),
+    },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
@@ -1327,6 +1343,9 @@ const position_calibration_neg_plot = plot_multiline({
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
+  ],
+  other_marks: [
+    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
   ],
   curve: "step",
 });
@@ -1347,12 +1366,19 @@ const position_calibration_neg_speed_plot = plot_multiline({
   channel_label: "Speed Source",
   channels: [
     {y: "radial_speed", label: "Speed", color: colors.radial_speed},
-    {y: "spin", label: "Spin", color: "black"},
+    {
+      y: "spin", label: "Spin", color: "black",
+      y1: clipped_lower((d) => d.spin - std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_negative, "spin"),
+      y2: clipped_upper((d) => d.spin + std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_negative, "spin"),
+    },
   ],
   grid_marks: [
     Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
     Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
     Plot.gridY({stroke: 'black', strokeWidth : 2}),
+  ],
+  other_marks: [
+    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
   ],
   curve: "step",
 });
@@ -1445,25 +1471,6 @@ const position_calibration_hysterisis = [
 const position_calibration_hysterisis_table = Inputs.table(position_calibration_hysterisis, {rows: 3+1});
 ```
 
-Current Calibration Procedures
-------------------------------
-
-<div class="card tight">
-  <div>${current_calibration_buttons}</div>
-  <div>Number of calibration data sets: ${current_calibration_results.length}</div>
-</div>
-<div class="card tight">
-  <h3>Current Calibration Results</h3>
-  <div>${current_calibration_table}</div>
-  <div>${current_calibration_result_to_display_input}</div>
-  <div>${current_calibration_plot}</div>
-  <div>${current_calibration_interpolate_plot}</div>
-</div>
-<div class="card tight">  
-  <h3>Current Calibration Statistics</h3>
-  <div>${current_calibration_positive_mean_plot}</div>
-  <div>${current_calibration_negative_mean_plot}</div>
-</div>
 
 ```js
 let calculated_current_calibration_factors = Mutable(current_calibration_factors);
@@ -1917,203 +1924,18 @@ const current_calibration_negative_mean_plot = plot_multiline({
 
 ```
 
-```js
-
-
-function tidy_select({data, x, x_label = "x", y_label = "y", channel_label = "channel", channels}){
-  return data.flatMap((d, i, data) => {
-    return channels.map(({y, label, ...other_y}) => {
-      return Object.fromEntries([
-        [x_label, d[x]],
-        [y_label, _.isFunction(y) ? y(d, i, data) : d[y]],
-        [channel_label, label],
-        ...Object.entries(other_y).map(([key, value]) => [key, _.isFunction(value) ? value(d, i, data) : d[value]]),
-      ]);
-    });
-  });
-}
-
-
-function plot_multiline(options){
-  const {
-    data, 
-    store_id,
-    width, height,
-    x_options, y_options,
-    x, y, 
-    x_label, y_label,
-    channel_label, channels,
-    subtitle, description,
-    grid_marks = [],
-    other_marks = [],
-    curve = undefined,
-  } = options;
-
-  let {selection} = options;
-
-  selection = selection ?? get_stored_or_default(store_id, {
-    show: true,
-    shown_marks: [...channels.map(({y}) => y), "grid"],
-  });
-
-  let result = Mutable(create_element(selection));
-
-  function update_selection(new_selection){
-    selection = {...selection, ...new_selection};
-    // Store the selection in local storage.
-    localStorage.setItem(store_id, JSON.stringify(selection));
-    // Update the plot.
-    result.value = create_element(selection);
-  }
-
-  function create_element(selection){
-
-    // First, make the title into a checkbox to toggle the plot on and off.
-    const subtitle_checkbox = Inputs.checkbox([subtitle], {
-      value: selection.show ? [subtitle] : [],
-      format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
-    });
-
-    subtitle_checkbox.addEventListener("input", function(event){
-      const show = subtitle_checkbox.value.length > 0;
-      update_selection({show});
-    });
-
-    if (!selection.show) {
-      return html`<div>${subtitle_checkbox}</div>`;
-    }
-
-    const description_element = html`<p>${description}</p>`;
-
-    const checkbox_y_to_label = Object.fromEntries([...channels.map(({y, label}) => [y, label]), ["grid", "Grid"]]);
-    const checkbox_y_to_color = Object.fromEntries([...channels.map(({y, color}) => [y, color]), ["grid", "grey"]]);
-
-    // Then, make the marks into checkboxes to toggle them on and off.
-    const marks_checkboxes = Inputs.checkbox(
-      [...channels.map(({y}) => y), "grid"], 
-      {
-        value: selection.shown_marks,
-        label: "Display:",
-        format: (y) => html`<span style="border-bottom: solid 3px ${checkbox_y_to_color[y]}; margin-bottom: -3px;">${checkbox_y_to_label[y]}</span>`,
-      },
-    );
-
-    marks_checkboxes.addEventListener("input", function(event){
-      const shown_marks = marks_checkboxes.value;
-      update_selection({shown_marks});
-    });
-
-    const selected_channels = channels.filter(({y}) => selection.shown_marks.includes(y));
-    const selected_data = tidy_select({data, x, x_label, y_label, channel_label, channels: selected_channels});
-
-    const plot_figure = Plot.plot({
-      width, height,
-      x: {label: x_label, ...x_options},
-      y: {label: y_label, domain: selected_data.length > 0 ? undefined : [0, 1], ...y_options},
-      color: {
-        // legend: true,
-        domain: channels.map(({label}) => label),
-        range: channels.map(({color}) => color),
-      },
-      marks: [
-        Plot.line(selected_data, {x: x_label, y: y_label, stroke: channel_label, curve}),
-        Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: channel_label, ruleStrokeWidth: 3}),
-        Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: channel_label})),
-        Plot.text(
-          selected_data,
-          Plot.pointerX({
-            px: x_label, py: y_label, fill: channel_label,
-            dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14, fontWeight: "bold",
-            text: (d) => `Channel: ${d[channel_label].padEnd(20)} | ${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)}`,
-          }),
-        ),
-        ...(selection.shown_marks.includes("grid") ? grid_marks : []),
-        ...other_marks.map(mark => _.isFunction(mark) ? mark(selected_data, {x: x_label, y: y_label, z: channel_label}) : mark),
-      ],
-    });
-
-    return html`<div>${subtitle_checkbox}${description_element}${marks_checkboxes}${plot_figure}</div>`;
-  }
-
-  return result;
-}
-```
-
-
-```js
-function HorizontalStep(context, t) {
-  this._context = context;
-  this._t = t;
-}
-
-HorizontalStep.prototype = {
-  areaStart: function() {
-    this._line = 0;
-  },
-  areaEnd: function() {
-    this._line = NaN;
-  },
-  lineStart: function() {
-    this._x = this._y = NaN;
-    this._point = 0;
-  },
-  lineEnd: function() {
-    if (0 < this._t && this._t < 1 && this._point === 2) this._context.lineTo(this._x, this._y);
-    if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
-    if (this._line >= 0) this._t = 1 - this._t, this._line = 1 - this._line;
-  },
-  point: function(x, y) {
-    x = +x, y = +y;
-    switch (this._point) {
-      case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
-      case 1: this._point = 2; // falls through
-      default: {
-        if (this._t <= 0) {
-          this._context.lineTo(this._x, y);
-          this._context.lineTo(x, y);
-        } else {
-          var x1 = this._x * (1 - this._t) + x * this._t;
-          this._context.lineTo(x1, this._y);
-          this._context.moveTo(x1, y);
-        }
-        break;
-      }
-    }
-    this._x = x, this._y = y;
-  }
-};
-
-function horizontal_step(context) {
-  return new HorizontalStep(context, 0.5);
-}
-
-function horizontal_step_before(context) {
-  return new HorizontalStep(context, 0);
-}
-
-function horizontal_step_after(context) {
-  return new HorizontalStep(context, 1);
-}
-```
 
 
 ```js
 // Imports
 // -------
 
-
-import {html} from "htl";
+import {plot_multiline, horizontal_step} from "./components/plotting_utils.js";
 import {localStorage, get_stored_or_default} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
 import * as motor from "./components/usb_motor_controller.js";
-import cdf_normal from "@stdlib/stats-base-dists-normal-cdf";
-import normal_dist from "@stdlib/stats-base-dists-normal";
+import {cdf_normal, pdf_normal} from "./components/stats_utils.js";
 
-const pdf_normal = normal_dist.pdf;
-
-display(pdf_normal(0.0, 0.0, 1.0));
 ```
 
-
-</main>
