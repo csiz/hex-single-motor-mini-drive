@@ -862,38 +862,21 @@ async function run_position_calibration(){
 
 
 ```js
-function distance_degrees(a, b){
-  return (b + 360 - a) % 360;
+
+function normalize_degrees(a){
+  return (a % 360 + 540) % 360 - 180;
 }
 
 function shortest_distance_degrees(a, b){
-  const diff = distance_degrees(a, b);
-  return diff > 180 ? 360 - diff : diff;
+  return normalize_degrees(b - a);
 }
 
-function mid_point_degrees(a, b){
-  const diff = distance_degrees(a, b);
-  return diff > 180 ? a + (diff - 360) / 2 : a + diff / 2;
-}
-
-function normalize_degrees(a){
-  return (a + 900) % 360 - 180;
-}
-
-function degree_interpolate(a, b, fraction){
-  const diff = distance_degrees(a, b);
+function interpolate_degrees(a, b, fraction){
+  const diff = b - a;
   return normalize_degrees(a + diff * fraction);
 }
 
-function angle_switching_details(key, a_stats, b_stats){
-  const a = a_stats.mean;
-  const b = b_stats.mean;
 
-  const diff = distance_degrees(a, b);
-  const location = degree_interpolate(a, b, 0.5);
-  const err = diff - 180;
-  return {key, diff, location, err};
-}
 
 function circular_stats_degrees(values){
   const mean_point = [
@@ -977,8 +960,10 @@ function compute_position_from_hall(data){
     spin_σ: initial_spin_σ,
   };
 
-  return data.map((d, i) => {
-    if (i === 0) return {...d, ...last_event};
+  let result = [{...data[0], ...last_event}];
+
+  for (let i = 1; i < data.length; i++){
+    const d = data[i];
 
     const {time} = d;
 
@@ -987,7 +972,7 @@ function compute_position_from_hall(data){
     const angular_speed = last_event.spin * 360;
     const angular_speed_σ = last_event.spin_σ * 360;
 
-    const estimated_angle = last_event.angle + angular_speed * dt;
+    const estimated_angle = normalize_degrees(last_event.angle + angular_speed * dt);
     const estimated_angle_σ = last_event.angle_σ + angular_speed_σ * dt + 360 * accel_σ * dt * dt / 2.0;
 
     const sector = hall_sector(d);
@@ -998,7 +983,7 @@ function compute_position_from_hall(data){
       const trigger_angle = sector_transition_degrees[sector][direction >= 0 ? 0 : 1];
       const trigger_angle_σ = sector_transition_σ[sector][direction >= 0 ? 0 : 1];
 
-      const distance_to_trigger = normalize_degrees(distance_degrees(estimated_angle, trigger_angle));
+      const distance_to_trigger = shortest_distance_degrees(estimated_angle, trigger_angle);
 
       const {mean: adjusted_distance_to_trigger, σ: angle_σ} = product_of_normals({
         mean_a: 0.0,
@@ -1009,7 +994,7 @@ function compute_position_from_hall(data){
 
       const angle = normalize_degrees(estimated_angle + adjusted_distance_to_trigger);
 
-      const calculated_spin = normalize_degrees(distance_degrees(last_event.angle, angle)) / 360 / dt;
+      const calculated_spin = shortest_distance_degrees(last_event.angle, angle) / 360 / dt;
       const calculated_spin_σ = (angle_σ + last_event.angle_σ) / 360 / dt;
 
       const {mean: spin, σ: spin_σ} = product_of_normals({
@@ -1035,7 +1020,7 @@ function compute_position_from_hall(data){
       };
         
 
-      return {...d, ...last_event,
+      result.push({...d, ...last_event,
         dt,
 
         direction,
@@ -1047,7 +1032,7 @@ function compute_position_from_hall(data){
         estimated_angle_σ,
         calculated_spin,
         calculated_spin_σ,
-      };
+      });
 
     // If we didn't switch sectors, then we need to carry on with our previous estimate, but adjusted...
     } else {
@@ -1056,7 +1041,7 @@ function compute_position_from_hall(data){
       const next_sector = angular_speed >= 0 ? (last_event.sector + 1) % 6 : (last_event.sector - 1 + 6) % 6;
       const next_transition_angle = sector_transition_degrees[next_sector][angular_speed >= 0 ? 0 : 1];
       const next_transition_angle_σ = sector_transition_σ[next_sector][angular_speed >= 0 ? 0 : 1];
-      const distance_to_next_transition = normalize_degrees(distance_degrees(estimated_angle, next_transition_angle) + direction * std_95_z_score * next_transition_angle_σ);
+      const distance_to_next_transition = normalize_degrees(next_transition_angle - estimated_angle + direction * std_95_z_score * next_transition_angle_σ);
       const distance_to_next_transition_σ = Math.sqrt(
         estimated_angle_σ * estimated_angle_σ +
         next_transition_angle_σ * next_transition_angle_σ
@@ -1065,7 +1050,7 @@ function compute_position_from_hall(data){
       const prev_sector = angular_speed >= 0 ? (last_event.sector - 1 + 6) % 6 : (last_event.sector + 1) % 6;
       const prev_transition_angle = sector_transition_degrees[prev_sector][angular_speed >= 0 ? 1 : 0];
       const prev_transition_angle_σ = sector_transition_σ[prev_sector][angular_speed >= 0 ? 1 : 0];
-      const distance_to_prev_transition = normalize_degrees(distance_degrees(estimated_angle, prev_transition_angle) - direction * std_95_z_score * prev_transition_angle_σ);
+      const distance_to_prev_transition = normalize_degrees(prev_transition_angle - estimated_angle - direction * std_95_z_score * prev_transition_angle_σ);
       const distance_to_prev_transition_σ = Math.sqrt(
         estimated_angle_σ * estimated_angle_σ +
         prev_transition_angle_σ * prev_transition_angle_σ
@@ -1094,7 +1079,7 @@ function compute_position_from_hall(data){
       // Don't need distance_to_current_sector yet, but will do once we assign some probability for settling in the current sector.
       const current_sector_angle = sector_center_degrees[last_event.sector];
       const current_sector_angle_σ = sector_center_σ[last_event.sector];
-      const distance_to_current_sector = normalize_degrees(distance_degrees(estimated_angle, current_sector_angle));
+      const distance_to_current_sector = shortest_distance_degrees(estimated_angle, current_sector_angle);
       const p_stopped_in_current_sector = 0.0;
 
       // const angle = normalize_degrees(estimated_angle + p_stopped_in_current_sector * distance_to_current_sector);
@@ -1108,7 +1093,7 @@ function compute_position_from_hall(data){
       // the random acceleration adds a lot more noise.
       const angle_σ = estimated_angle_σ;
 
-      const calculated_spin = normalize_degrees(distance_degrees(last_event.angle, angle)) / 360 / dt;
+      const calculated_spin = shortest_distance_degrees(last_event.angle, angle) / 360 / dt;
       const calculated_spin_σ = (angle_σ + last_event.angle_σ) / 360 / dt;
 
       const {mean: spin, σ: spin_σ} = product_of_normals({
@@ -1118,7 +1103,7 @@ function compute_position_from_hall(data){
         σ_b: last_event.spin_σ + accel_σ * dt,
       });
 
-      return {...d, angle, angle_σ, spin, spin_σ,
+      result.push({...d, angle, angle_σ, spin, spin_σ,
         next_sector,
         next_transition_angle,
         next_transition_angle_σ,
@@ -1149,9 +1134,11 @@ function compute_position_from_hall(data){
         distance_to_current_sector,
         current_sector_angle,
         current_sector_angle_σ,
-      };
+      });
     }
-  });
+  }
+
+  return result;
 }
 ```
 
@@ -1392,7 +1379,7 @@ function extract_hall_switching_events(data){
     if (d.angle_if_breaking == null) return [];
     if (i >= data.length - 1) return [];
     const next = data[i + 1];
-    const angle_if_breaking = mid_point_degrees(d.angle_if_breaking, next.angle_if_breaking);
+    const angle_if_breaking = interpolate_degrees(d.angle_if_breaking, next.angle_if_breaking, 0.5);
 
     const prev_sector = hall_sector(d);
     const next_sector = hall_sector(next);
@@ -1450,7 +1437,14 @@ const position_calibration_hall_details = [
 ].map(([key, a_key, b_key]) => {
   const a_stats = position_calibration_statistics.find(d => d.key === a_key);
   const b_stats = position_calibration_statistics.find(d => d.key === b_key);
-  return angle_switching_details(key, a_stats, b_stats);
+
+  const a = a_stats.mean;
+  const b = b_stats.mean;
+
+  const diff = (b - a + 360) % 360;
+  const location = interpolate_degrees(a, b, 0.5);
+  const err = diff - 180;
+  return {key, a, b, diff, location, err};
 });
 
 const position_calibration_hall_details_table = Inputs.table(position_calibration_hall_details, {rows: 6+1});
@@ -1462,8 +1456,8 @@ const position_calibration_hysterisis = [
 ].map(([key, a_key, b_key]) => {
   const a_stats = position_calibration_hall_details.find(d => d.key === a_key);
   const b_stats = position_calibration_hall_details.find(d => d.key === b_key);
-  const hysterisis = distance_degrees(a_stats.location, b_stats.location);
-  const mid_location = degree_interpolate(a_stats.location, b_stats.location, 0.5);
+  const hysterisis = shortest_distance_degrees(a_stats.location, b_stats.location);
+  const mid_location = interpolate_degrees(a_stats.location, b_stats.location, 0.5);
 
   return {key, hysterisis, mid_location};
 });
