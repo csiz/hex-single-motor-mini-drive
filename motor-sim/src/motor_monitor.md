@@ -42,7 +42,6 @@ Position Calibration Procedures
 <div class="card tight">
   <h3>Position Calibration Results</h3>
   <div>${position_calibration_result_to_display_input}</div>
-  <div>${position_calibration_debug}</div>
   <div>${position_calibration_pos_plot}</div>
   <div>${position_calibration_pos_speed_plot}</div>
   <div>${position_calibration_neg_plot}</div>
@@ -781,6 +780,16 @@ const plot_pwm_settings = plot_multiline({
 
 ```
 
+```js
+// Position Calibration
+// --------------------
+
+let position_calibration_results = Mutable();
+
+function store_position_calibration_results(calibration_data){
+  position_calibration_results.value = [...position_calibration_results.value ?? [], calibration_data];
+}
+```
 
 ```js
 const position_calibration_buttons = Inputs.button(
@@ -795,17 +804,8 @@ const position_calibration_buttons = Inputs.button(
 );
 
 d3.select(position_calibration_buttons).style("width", "100%");
-```
 
-```js
-let position_calibration_results = Mutable();
 
-function store_position_calibration_results(calibration_data){
-  position_calibration_results.value = [...position_calibration_results.value ?? [], calibration_data];
-}
-```
-
-```js
 async function run_position_calibration(){
   if (!motor_controller) return;
 
@@ -876,6 +876,10 @@ function interpolate_degrees(a, b, fraction){
   return normalize_degrees(a + diff * fraction);
 }
 
+function interpolate_linear(a, b, fraction){
+  return a + (b - a) * fraction;
+}
+
 
 
 function circular_stats_degrees(values){
@@ -931,8 +935,8 @@ const sector_transition_σ = [
   [transition_σ, transition_σ],
   [transition_σ, transition_σ],
 ];
-const accel_σ = 1.0 / 5.0 / 200.0; // acceleration distribution up to (1 rotation per 5ms) per 200ms.
-const initial_spin_σ = 1.0;
+const accel_σ = 1.0 / 5.0 / 50.0; // acceleration distribution up to (1 rotation per 5ms) per 50ms.
+const initial_spin_σ = 0.05;
 
 function shortest_distance_mod_6(a, b){
   const diff = (b + 6 - a) % 6;
@@ -944,6 +948,11 @@ function product_of_normals({mean_a, σ_a, mean_b, σ_b}){
   const σ = Math.sqrt((σ_a * σ_a * σ_b * σ_b) / (σ_a * σ_a + σ_b * σ_b));
   return {mean, σ};
 }
+
+function add_σ(...σ_values){
+  return Math.sqrt(σ_values.reduce((sum, σ) => sum + σ * σ, 0));
+}
+
 
 
 function compute_position_from_hall(data){
@@ -973,7 +982,7 @@ function compute_position_from_hall(data){
     const angular_speed_σ = last_event.spin_σ * 360;
 
     const estimated_angle = normalize_degrees(last_event.angle + angular_speed * dt);
-    const estimated_angle_σ = last_event.angle_σ + angular_speed_σ * dt + 360 * accel_σ * dt * dt / 2.0;
+    const estimated_angle_σ = add_σ(last_event.angle_σ, angular_speed_σ * dt, 360 * accel_σ * dt * dt / 2.0);
 
     const sector = hall_sector(d);
 
@@ -1011,87 +1020,37 @@ function compute_position_from_hall(data){
         angle_σ,
         spin,
         spin_σ,
-        
-        last_sector: last_event.sector,
-        last_angle: last_event.angle,
-        last_angle_σ: last_event.angle_σ,
-        last_spin: last_event.spin,
-        last_spin_σ: last_event.spin_σ,
       };
         
 
-      result.push({...d, ...last_event,
-        dt,
-
-        direction,
-        trigger_angle,
-        trigger_angle_σ,
-        distance_to_trigger,
-        adjusted_distance_to_trigger,
-        estimated_angle,
-        estimated_angle_σ,
-        calculated_spin,
-        calculated_spin_σ,
-      });
+      result.push({...d, ...last_event});
 
     // If we didn't switch sectors, then we need to carry on with our previous estimate, but adjusted...
     } else {
-      const direction = Math.sign(angular_speed) >= 0 ? +1 : -1;
+      const positive_direction = angular_speed >= 0;
+      const direction = positive_direction ? +1 : -1;
 
-      const next_sector = angular_speed >= 0 ? (last_event.sector + 1) % 6 : (last_event.sector - 1 + 6) % 6;
-      const next_transition_angle = sector_transition_degrees[next_sector][angular_speed >= 0 ? 0 : 1];
-      const next_transition_angle_σ = sector_transition_σ[next_sector][angular_speed >= 0 ? 0 : 1];
-      const distance_to_next_transition = normalize_degrees(next_transition_angle - estimated_angle + direction * std_95_z_score * next_transition_angle_σ);
-      const distance_to_next_transition_σ = Math.sqrt(
-        estimated_angle_σ * estimated_angle_σ +
-        next_transition_angle_σ * next_transition_angle_σ
-      );
+      const next_sector = positive_direction ? (last_event.sector + 1) % 6 : (last_event.sector - 1 + 6) % 6;
+      const next_transition_angle = sector_transition_degrees[next_sector][positive_direction ? 0 : 1];
+      const next_transition_angle_σ = sector_transition_σ[next_sector][positive_direction ? 0 : 1];
+      const distance_to_next_transition = direction * normalize_degrees(next_transition_angle - estimated_angle + direction * std_95_z_score * next_transition_angle_σ);
 
-      const prev_sector = angular_speed >= 0 ? (last_event.sector - 1 + 6) % 6 : (last_event.sector + 1) % 6;
-      const prev_transition_angle = sector_transition_degrees[prev_sector][angular_speed >= 0 ? 1 : 0];
-      const prev_transition_angle_σ = sector_transition_σ[prev_sector][angular_speed >= 0 ? 1 : 0];
-      const distance_to_prev_transition = normalize_degrees(prev_transition_angle - estimated_angle - direction * std_95_z_score * prev_transition_angle_σ);
-      const distance_to_prev_transition_σ = Math.sqrt(
-        estimated_angle_σ * estimated_angle_σ +
-        prev_transition_angle_σ * prev_transition_angle_σ
-      );
+      // Cap the position in the 95% confidence interval before the next transition. We cross
+      // this threshold when distance_to_next_transition is negative. Also the adjustement
+      // depends on the direction of travel.
+      const angle_correction = direction * Math.min(distance_to_next_transition, 0.0);
 
-      const truncation_σ = Math.max(distance_to_next_transition_σ, distance_to_prev_transition_σ);
+      const angle_overshoot = Math.abs(angle_correction);
 
-      // Assuming a very sharp transition angle for mathematical convenience, we should obtain a truncated normal distribution,
-      // bounded at the trigger distance. We can calculate the mean and σ of the truncated distribution and recast it as a normal distribution.
+      const p_stopped_in_current_sector = angle_overshoot < 90 ? 0.0 : Math.min(1.0, (angle_overshoot - 90) / 45);
 
-      // Using the notation from wikipedia: https://en.wikipedia.org/wiki/Truncated_normal_distribution
-      const a = direction * distance_to_prev_transition;
-      const α = a / truncation_σ;
-      const cdf_α = cdf_normal(α, 0.0, 1.0);
-      const pdf_α = pdf_normal(α, 0.0, 1.0);
-
-      const b = direction * distance_to_next_transition;
-      const β = b / truncation_σ;
-      const cdf_β = cdf_normal(β, 0.0, 1.0);
-      const pdf_β = pdf_normal(β, 0.0, 1.0);
-
-      const correction = - (pdf_β - pdf_α) / (cdf_β - cdf_α); // This is the mean adjustment for the truncated normal distribution.
-
-      const angle_correction = direction * correction * truncation_σ;
-
-      // Don't need distance_to_current_sector yet, but will do once we assign some probability for settling in the current sector.
       const current_sector_angle = sector_center_degrees[last_event.sector];
       const current_sector_angle_σ = sector_center_σ[last_event.sector];
       const distance_to_current_sector = shortest_distance_degrees(estimated_angle, current_sector_angle);
-      const p_stopped_in_current_sector = 0.0;
 
-      // const angle = normalize_degrees(estimated_angle + p_stopped_in_current_sector * distance_to_current_sector);
-      // const angle_σ = Math.sqrt(
-      //   (1.0 - p_stopped_in_current_sector) * estimated_angle_σ * estimated_angle_σ +
-      //   p_stopped_in_current_sector * current_sector_angle_σ * current_sector_angle_σ
-      // );
 
-      const angle = normalize_degrees(estimated_angle + angle_correction);
-      // The truncated normal distribution actually has a lower variance, but that will be negligible in our case as
-      // the random acceleration adds a lot more noise.
-      const angle_σ = estimated_angle_σ;
+      const angle = interpolate_degrees(normalize_degrees(estimated_angle + angle_correction), current_sector_angle, p_stopped_in_current_sector);
+      const angle_σ = interpolate_linear(estimated_angle_σ, current_sector_angle_σ, p_stopped_in_current_sector);
 
       const calculated_spin = shortest_distance_degrees(last_event.angle, angle) / 360 / dt;
       const calculated_spin_σ = (angle_σ + last_event.angle_σ) / 360 / dt;
@@ -1103,38 +1062,18 @@ function compute_position_from_hall(data){
         σ_b: last_event.spin_σ + accel_σ * dt,
       });
 
-      result.push({...d, angle, angle_σ, spin, spin_σ,
-        next_sector,
-        next_transition_angle,
-        next_transition_angle_σ,
-        distance_to_next_transition,
-        distance_to_next_transition_σ,
-        prev_transition_angle,
-        prev_transition_angle_σ,
-        distance_to_prev_transition,
-        distance_to_prev_transition_σ,
-        dt,
-        a,
-        α,
-        cdf_α,
-        pdf_α,
-        b,
-        β,
-        cdf_β,
-        pdf_β,
-        correction,
-        truncation_σ,
-        angle_correction,
-        angle,
-        angle_σ,
-        estimated_angle,
-        estimated_angle_σ,
-        calculated_spin,
-        calculated_spin_σ,
-        distance_to_current_sector,
-        current_sector_angle,
-        current_sector_angle_σ,
-      });
+      if (angle_overshoot > 90 + 45){
+        last_event = {
+          time,
+          sector: next_sector,
+          angle: next_transition_angle,
+          angle_σ: next_transition_angle_σ,
+          spin: 0.0,
+          spin_σ: initial_spin_σ,
+        };
+      }
+
+      result.push({...d, angle, angle_σ, spin, spin_σ});
     }
   }
 
@@ -1164,63 +1103,6 @@ const position_calibration_detailed_result = {
   drive_negative: compute_position_from_hall(position_calibration_selected_result.drive_negative),
 };
 
-const position_calibration_debug = Inputs.table(
-  position_calibration_detailed_result.drive_positive.flatMap((d) => {
-    // if (d.next_sector === undefined) return [];
-    // if (d.direction === undefined) return [];
-    return [_.pick(d, [
-      "time",
-      "sector",
-      "angle",
-      "angle_σ",
-      "spin",
-      "spin_σ",
-
-      "dt",
-      "last_sector",
-      "last_angle",
-      "last_angle_σ",
-      "last_spin",
-      "last_spin_σ",
-
-      "direction",
-      "trigger_angle",
-      "trigger_angle_σ",
-      "distance_to_next_sector",
-      "distance_to_trigger",
-      "adjusted_distance_to_trigger",
-      "estimated_angle",
-      "estimated_angle_σ",
-      "calculated_spin",
-      "calculated_spin_σ",
-
-      "a",
-      "α",
-      "cdf_α",
-      "pdf_α",
-      "b",
-      "β",
-      "cdf_β",
-      "pdf_β",
-      "correction",
-      "truncation_σ",
-      "angle_correction",
-      "next_sector",
-      "next_transition_angle",
-      "next_transition_angle_σ",
-      "distance_to_next_transition",
-      "distance_to_next_transition_σ",
-      "prev_transition_angle",
-      "prev_transition_angle_σ",
-      "distance_to_prev_transition",
-      "distance_to_prev_transition_σ",
-    ])];
-  }),
-  {
-    rows: 20,
-  }
-);
-
 const position_calibration_pos_plot = plot_multiline({
   data: position_calibration_detailed_result.drive_positive,
   store_id: "position_calibration_pos_plot",
@@ -1238,8 +1120,8 @@ const position_calibration_pos_plot = plot_multiline({
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
-      y1: clipped_lower((d) => d.angle - std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_positive, "angle"),
-      y2: clipped_upper((d) => d.angle + std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_positive, "angle"),
+      y1: (d) => d.angle - std_95_z_score * d.angle_σ,
+      y2: (d) => d.angle + std_95_z_score * d.angle_σ,
     },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
@@ -1286,8 +1168,8 @@ const position_calibration_pos_speed_plot = plot_multiline({
     {y: "radial_speed", label: "Speed", color: colors.radial_speed},
     {
       y: "spin", label: "Spin", color: "black", 
-      y1: clipped_lower((d) => d.spin - std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_positive, "spin"),
-      y2: clipped_upper((d) => d.spin + std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_positive, "spin"),
+      y1: (d) => d.spin - std_95_z_score * d.spin_σ,
+      y2: (d) => d.spin + std_95_z_score * d.spin_σ,
     },
   ],
   grid_marks: [
@@ -1318,8 +1200,8 @@ const position_calibration_neg_plot = plot_multiline({
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle, 
-      y1: clipped_lower((d) => d.angle - std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_negative, "angle"),
-      y2: clipped_upper((d) => d.angle + std_95_z_score * d.angle_σ, position_calibration_detailed_result.drive_negative, "angle"),
+      y1: (d) => d.angle - std_95_z_score * d.angle_σ,
+      y2: (d) => d.angle + std_95_z_score * d.angle_σ,
     },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
@@ -1355,8 +1237,8 @@ const position_calibration_neg_speed_plot = plot_multiline({
     {y: "radial_speed", label: "Speed", color: colors.radial_speed},
     {
       y: "spin", label: "Spin", color: "black",
-      y1: clipped_lower((d) => d.spin - std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_negative, "spin"),
-      y2: clipped_upper((d) => d.spin + std_95_z_score * d.spin_σ, position_calibration_detailed_result.drive_negative, "spin"),
+      y1: (d) => d.spin - std_95_z_score * d.spin_σ,
+      y2: (d) => d.spin + std_95_z_score * d.spin_σ,
     },
   ],
   grid_marks: [
@@ -1467,6 +1349,9 @@ const position_calibration_hysterisis_table = Inputs.table(position_calibration_
 
 
 ```js
+// Current calibration
+// -------------------
+
 let calculated_current_calibration_factors = Mutable(current_calibration_factors);
 
 function update_current_calibration(new_calibration){
@@ -1929,7 +1814,6 @@ import {localStorage, get_stored_or_default} from "./components/local_storage.js
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
 import * as motor from "./components/usb_motor_controller.js";
-import {cdf_normal, pdf_normal} from "./components/stats_utils.js";
 
 ```
 

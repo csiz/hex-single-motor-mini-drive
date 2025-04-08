@@ -136,16 +136,15 @@ const truncated_normal_animation = truncated_normal_mode_functions[truncated_nor
 ```js
 
 const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_normal_span / 500).map((x) => {
+  // Using the notation from wikipedia: https://en.wikipedia.org/wiki/Truncated_normal_distribution
+
+  
   const μ = truncated_normal_position;
   const σ = truncated_normal_position_σ;
   const a = truncated_normal_lower;
   const α = (a - μ) / truncated_normal_lower_σ;
-  const cdf_α = cdf_normal(α, 0.0, 1.0);
-  const pdf_α = pdf_normal(α, 0.0, 1.0);
   const b = truncated_normal_upper;
   const β = (b - μ) / truncated_normal_upper_σ;
-  const cdf_β = cdf_normal(β, 0.0, 1.0);
-  const pdf_β = pdf_normal(β, 0.0, 1.0);
 
   const pdf_μ = pdf_normal(x, μ, σ) / pdf_normal(0, 0, σ);
   const pdf_a = pdf_normal(a, x, truncated_normal_lower_σ);
@@ -153,7 +152,8 @@ const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_nor
   const pdf_b = pdf_normal(x, b, truncated_normal_upper_σ);
   const cdf_b = cdf_normal(x, b, truncated_normal_upper_σ);
 
-  const untriggered_pdf_μ = pdf_μ * (1.0 - cdf_a) * (1.0 - cdf_b); 
+  const untriggered_pdf_μ = pdf_μ * (1.0 - cdf_a) * (1.0 - cdf_b);
+
 
   return {
     x, 
@@ -163,10 +163,6 @@ const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_nor
     cdf_a,
     cdf_b,
     untriggered_pdf_μ,
-
-    y: -pdf_β/cdf_β, 
-    cdf_β, 
-    pdf_β,
   };
 });
 
