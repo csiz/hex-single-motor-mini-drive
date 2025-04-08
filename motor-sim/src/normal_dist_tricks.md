@@ -50,7 +50,7 @@ const truncated_normal_position_input = Inputs.range(truncated_normal_domain, {
 
 const truncated_normal_position = Generators.input(truncated_normal_position_input);
 
-const truncated_normal_position_σ_input = Inputs.range([0, truncated_normal_span / 5], {
+const truncated_normal_position_σ_input = Inputs.range([0, truncated_normal_span], {
   value: 15,
   step: 0.1,
   label: "Estimated angle σ:",
@@ -88,8 +88,30 @@ const truncated_normal_lower_σ_input = Inputs.range([0, truncated_normal_span /
 
 const truncated_normal_lower_σ = Generators.input(truncated_normal_lower_σ_input);
 
-const truncated_normal_mode_input = Inputs.radio(["User selection", "Slide estimated angle", "Loop estimation uncertainty"], {
-  value: "Slide estimated angle",
+const truncated_normal_mode_functions = {
+  "Pause": function *(){ return; },
+  "Slide angle": function *(){
+    while (true) {
+      for (let x of d3.range(0, 1, 1.0/(3*60))) {
+        truncated_normal_position_input.value = truncated_normal_domain[0] + truncated_normal_span * x;
+        truncated_normal_position_input.dispatchEvent(new Event("input"));
+        yield;
+      }
+    }
+  },
+  "Loop uncertainty": function *(){
+    while (true) {
+      for (let x of d3.range(0, 1, 1.0/(3*60))) {
+        truncated_normal_position_σ_input.value = 1.0 + truncated_normal_span * (Math.sin(2 * Math.PI * x) + 1.0) / 2.0;
+        truncated_normal_position_σ_input.dispatchEvent(new Event("input"));
+        yield;
+      }
+    }
+  },
+};
+
+const truncated_normal_mode_input = Inputs.radio(Object.keys(truncated_normal_mode_functions), {
+  value: "Slide angle",
   label: "Play mode:",
 });
 
@@ -108,24 +130,14 @@ const truncated_normal_input = [
 ```
 
 ```js
-const truncated_normal_shown_position = 
-  truncated_normal_mode == "User selection" ? truncated_normal_position :
-  truncated_normal_mode == "Slide estimated angle" ? truncated_normal_domain[0] + truncated_normal_span * (now / 10000.0 % 1.0) :
-  truncated_normal_mode == "Loop estimation uncertainty" ? truncated_normal_upper - 2 * truncated_normal_upper_σ :
-  0.0;
-
-const truncated_normal_shown_position_σ = 
-  truncated_normal_mode == "User selection" ? truncated_normal_position_σ :
-  truncated_normal_mode == "Slide estimated angle" ? truncated_normal_position_σ :
-  truncated_normal_mode == "Loop estimation uncertainty" ? 1.0 + truncated_normal_span * (Math.sin(2 * Math.PI * (now / 10000.0 % 1.0)) + 1.0) / 2.0:
-  0.0;
-
+const truncated_normal_animation = truncated_normal_mode_functions[truncated_normal_mode]();
 ```
 
 ```js
+
 const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_normal_span / 500).map((x) => {
-  const μ = truncated_normal_shown_position;
-  const σ = truncated_normal_shown_position_σ;
+  const μ = truncated_normal_position;
+  const σ = truncated_normal_position_σ;
   const a = truncated_normal_lower;
   const α = (a - μ) / truncated_normal_lower_σ;
   const cdf_α = cdf_normal(α, 0.0, 1.0);
@@ -163,7 +175,7 @@ const truncated_normal_plot = plot_multiline({
   store_id: "truncated_normal_plot",
   selection: null,
   subtitle: "Truncated Normal Distribution",
-  description: "Example truncating a normal distribution to a lower and upper bound (the next hall sector thresholds).",
+  description: "Example truncating a normal distribution to a lower and upper bound (for example the previous and next hall sector thresholds).",
   width: 1200, height: 300,
   x_options: {},
   y_options: {domain: [0, 1]},
@@ -189,7 +201,7 @@ const truncated_normal_plot = plot_multiline({
     (selected_data, options) => Plot.areaY(selected_data, Plot.normalizeY("extent", {...options, y: "area_y", fill: options.z, opacity: 0.2})),
     Plot.ruleX([truncated_normal_lower], {stroke: colors.a, strokeWidth: 2, strokeDasharray: "2,5"}),
     Plot.ruleX([truncated_normal_upper], {stroke: colors.b, strokeWidth: 2, strokeDasharray: "2,5"}),
-    Plot.ruleX([truncated_normal_shown_position], {stroke: colors.u, strokeWidth: 2, strokeDasharray: "2,5"}),
+    Plot.ruleX([truncated_normal_position], {stroke: colors.u, strokeWidth: 2, strokeDasharray: "2,5"}),
   ],
 });
 
