@@ -7,10 +7,10 @@ import * as Inputs from "@observablehq/inputs";
 
 export function tidy_select({data, x, x_label = "x", y_label = "y", channel_label = "channel", channels}){
   return data.flatMap((d, i, data) => {
-    return channels.map(({y, label, ...other_y}) => {
+    return channels.map(({y, label, fy = null, ...other_y}) => {
       return Object.fromEntries([
         [x_label, d[x]],
-        [y_label, _.isFunction(y) ? y(d, i, data) : d[y]],
+        [y_label, _.isFunction(fy) ? fy(d, i, data) : d[y]],
         [channel_label, label],
         ...Object.entries(other_y).map(([key, value]) => [key, _.isFunction(value) ? value(d, i, data) : d[value]]),
       ]);
