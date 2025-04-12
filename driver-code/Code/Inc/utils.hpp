@@ -23,6 +23,11 @@ static inline void write_uint16(uint8_t* buf, uint16_t value) {
     buf[1] = value & 0xFF;
 }
 
+static inline void write_int16(uint8_t* buf, int16_t value) {
+    buf[0] = (value >> 8) & 0xFF;
+    buf[1] = value & 0xFF;
+}
+
 static inline uint16_t read_uint16(uint8_t* buf) {
     uint16_t value = 0;
     value |= buf[0] << 8;

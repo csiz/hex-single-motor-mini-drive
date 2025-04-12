@@ -1,6 +1,6 @@
 #pragma once
 
-#include "data.hpp"
+#include "constants.hpp"
 
 #include <cstdint>
 #include <cstddef>
@@ -54,8 +54,6 @@ uint32_t get_combined_motor_pwm_duty();
 void motor_break();
 
 void motor_freewheel();
-
-void update_motor_control();
 
 void update_motor_control_registers();
 

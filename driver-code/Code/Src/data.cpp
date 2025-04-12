@@ -1,7 +1,7 @@
 #include "data.hpp"
-#include "main.h"
 
-#include <stm32f1xx_ll_gpio.h>
+
+
 
 // Timing data
 uint32_t adc_update_number = 0;
@@ -26,8 +26,22 @@ bool readouts_allow_missing = true;
 // Hall states as bits, 0b001 = hall 1, 0b010 = hall 2, 0b100 = hall 3.
 uint8_t hall_state = 0b000; 
 uint8_t hall_sector = 0;
-bool hall_sensor_valid = false;
+bool hall_sector_valid = false;
 
+
+// Position tracking
+// -----------------
+
+bool angle_valid = false;
+uint8_t previous_hall_sector = 0;
+bool previous_hall_sector_valid = false;
+
+bool new_observation = false;
+int time_since_observation = 0;
+int angle_at_observation = 0;
+int angle_variance_at_observation = 0;
+int angular_speed_at_observation = 0;
+int angular_speed_variance_at_observation = 0;
 
 // Phase currents
 float current_u = 0.0, current_v = 0.0, current_w = 0.0;
@@ -40,55 +54,6 @@ void data_init(){
     // Create the queue for the readouts.
     readouts_queue = xQueueCreateStatic(HISTORY_SIZE, READOUT_ITEMSIZE, readouts_queue_buffer, &readouts_queue_storage);
     if (readouts_queue == nullptr) Error_Handler();
-}
-
-/* Get Hall sensor data from: SS360NT */
-void read_hall_sensors(){
-    uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
-    uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
-
-    // Note: Hall sensors are active low!
-    const bool hall_1 = !(gpio_A_inputs & (1<<0)); // Hall sensor 1, corresponding to phase V
-    const bool hall_2 = !(gpio_A_inputs & (1<<1)); // Hall sensor 2, corresponding to phase W
-    const bool hall_3 = !(gpio_B_inputs & (1<<10)); // Hall sensor 3, corresponding to phase U
-
-    // Combine the hall sensor states into a single byte.
-    // Note: Reorder the sensors according to the phase order; U on bit 0, V on bit 1, W on bit 2.
-    hall_state = hall_3 | (hall_1 << 1) | (hall_2 << 2);
-
-    switch (hall_state) {
-        case 0b000: // no hall sensors; either it's not ready or no magnet
-            hall_sensor_valid = false;
-            break;
-        case 0b001: // hall U active; 0 degrees
-            hall_sector = 0;
-            hall_sensor_valid = true;
-            break;
-        case 0b011: // hall U and hall V active; 60 degrees
-            hall_sector = 1;
-            hall_sensor_valid = true;
-            break;
-        case 0b010: // hall V active; 120 degrees
-            hall_sector = 2;
-            hall_sensor_valid = true;
-            break;
-        case 0b110: // hall V and hall W active; 180 degrees
-            hall_sector = 3;
-            hall_sensor_valid = true;
-            break;
-        case 0b100: // hall W active; 240 degrees
-            hall_sector = 4;
-            hall_sensor_valid = true;
-            break;
-        case 0b101: // hall U and hall W active; 300 degrees
-            hall_sector = 5;
-            hall_sensor_valid = true;
-            break;
-        case 0b111: // all hall sensors active; this would be quite unusual
-            hall_sensor_valid = false;
-            Error_Handler();
-            break;
-    }
 }
 
 

@@ -1,4 +1,4 @@
-import {bytes_to_uint32, uint32_to_bytes, timeout_promise} from "./utils.js";
+import {bytes_to_uint32, uint32_to_bytes, timeout_promise, wait} from "./utils.js";
 
 import {Generators} from "observablehq:stdlib";
 
@@ -37,6 +37,8 @@ export const SET_STATE_HOLD_W_NEGATIVE = 0x80203025;
 export const PWM_BASE = 1536; // 0x0600
 export const MAX_TIMEOUT = 0xFFFF; 
 export const HISTORY_SIZE = 420;
+
+export const READOUT_BASE = 0x10000;
 
 
 // USB serial port communication
@@ -194,19 +196,24 @@ export class MotorController {
     const data_view = new DataView(data_bytes.buffer);
 
     let offset = 0;
-    const hall_and_readout_number = data_view.getUint32(0);
+    const readout_number = data_view.getUint16(0);
+    offset += 2;
+    const position = data_view.getUint16(offset);
+    offset += 2;
     // The first 3 bits are the hall sensor state.
-    const hall_u = (hall_and_readout_number >> 29) & 0b1;
-    const hall_v = (hall_and_readout_number >> 30) & 0b1;
-    const hall_w = (hall_and_readout_number >> 31) & 0b1;
-    const readout_number = hall_and_readout_number & 0x1FFFFFFF;
-    offset += 4;
+    const hall_u = (position >> 13) & 0b1;
+    const hall_v = (position >> 14) & 0b1;
+    const hall_w = (position >> 15) & 0b1;
+    const motor_angle_valid = (position >> 12) & 0b1;
+    const motor_angle = position & 0xFF;
+    
     const pwm_commands = data_view.getUint32(offset);
     offset += 4;
 
     const u_pwm = Math.floor(pwm_commands / PWM_BASE / PWM_BASE) % PWM_BASE;
     const v_pwm = Math.floor(pwm_commands / PWM_BASE) % PWM_BASE;
     const w_pwm = pwm_commands % PWM_BASE;
+
 
     const u_readout = data_view.getUint16(offset);
     offset += 2;
@@ -230,6 +237,8 @@ export class MotorController {
       hall_u,
       hall_v,
       hall_w,
+      motor_angle_valid,
+      motor_angle,
     });
 
     return 20;

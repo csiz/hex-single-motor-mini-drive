@@ -391,6 +391,7 @@ function shortest_distance_degrees(a, b){
   return normalize_degrees(b - a);
 }
 
+
 function interpolate_degrees(a, b, fraction){
   const diff = b - a;
   return normalize_degrees(a + diff * fraction);
@@ -458,7 +459,7 @@ const accel_σ = 360.0 / 5.0 / 50.0; // acceleration distribution up to (360 deg
 const initial_angular_speed_σ = 0.05 * 360;
 
 function shortest_distance_mod_6(a, b){
-  const diff = (b + 6 - a) % 6;
+  const diff = (b + 12 - a) % 6;
   return diff > 3 ? diff - 6 : diff;
 }
 
@@ -466,6 +467,12 @@ function product_of_normals({mean_a, σ_a, mean_b, σ_b}){
   const mean = (mean_a * σ_b * σ_b + mean_b * σ_a * σ_a) / (σ_a * σ_a + σ_b * σ_b);
   const σ = Math.sqrt((σ_a * σ_a * σ_b * σ_b) / (σ_a * σ_a + σ_b * σ_b));
   return {mean, σ};
+}
+
+function product_normals_2({mean_a, variance_a, mean_b, variance_b}){
+  const mean = (mean_a * variance_b + mean_b * variance_a) / (variance_a + variance_b);
+  const variance = (variance_a * variance_b) / (variance_a + variance_b);
+  return {mean, variance};
 }
 
 function add_σ(...σ_values){
@@ -496,37 +503,45 @@ function compute_position_from_hall(data){
 
     const dt = time - last_event.time;
 
-    const estimated_angle = normalize_degrees(last_event.angle + last_event.angular_speed * dt);
-    const estimated_angle_σ = add_σ(last_event.angle_σ, last_event.angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
 
     const sector = hall_sector(d);
 
     // If we switched sectors, we should have an accurate position estimate.
     if (sector != null && sector != last_event.sector){
       const direction = Math.sign(shortest_distance_mod_6(last_event.sector, sector));
+
       const trigger_angle = sector_transition_degrees[sector][direction >= 0 ? 0 : 1];
       const trigger_angle_σ = sector_transition_σ[sector][direction >= 0 ? 0 : 1];
 
-      const estimated_distance_innovation = shortest_distance_degrees(estimated_angle, trigger_angle);
+      const distance_to_trigger = shortest_distance_degrees(last_event.angle, trigger_angle);
 
-      const estimated_speed_innovation = estimated_distance_innovation / dt;
-      const estimated_speed_σ = add_σ(estimated_angle_σ / dt, trigger_angle_σ / dt);
+      const estimated_distance = last_event.angular_speed * dt;
+      const estimated_distance_error = distance_to_trigger - estimated_distance;
+      const estimated_speed_error = estimated_distance_error / dt;
+
+      const estimated_distance_σ = add_σ(last_event.angle_σ, last_event.angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
+      const estimated_speed_error_σ = add_σ(estimated_distance_σ / dt, trigger_angle_σ / dt);
       
       const {mean: distance_adjustment, σ: angle_σ} = product_of_normals({
         mean_a: 0.0,
-        σ_a: estimated_angle_σ,
-        mean_b: estimated_distance_innovation,
+        σ_a: estimated_distance_σ,
+        mean_b: estimated_distance_error,
         σ_b: trigger_angle_σ,
       });
 
-      const angle = normalize_degrees(estimated_angle + distance_adjustment);
+      const kalman_angle = normalize_degrees(last_event.angle + estimated_distance + distance_adjustment);
 
+      // Ensure we dragged the angle within the 95% confidence interval of the trigger angle. If we're too slow
+      // to update the angle we cross 180 degrees and our math switches sign. To avoid that we need to keep the 
+      // angle near the trigger. The formula below handles the lower bound of the trigger angle; the upper bound
+      // is handled by capping the speed above.
+      const angle = kalman_angle + direction * Math.max(direction * normalize_degrees(trigger_angle - direction * std_95_z_score * trigger_angle_σ - kalman_angle), 0);
 
       const {mean: speed_adjustment, σ: angular_speed_σ} = product_of_normals({
-        mean_a: estimated_speed_innovation,
-        σ_a: estimated_speed_σ,
-        mean_b: 0.0,
-        σ_b: last_event.angular_speed_σ + 0.5 * accel_σ * dt,
+        mean_a: 0.0,
+        σ_a: last_event.angular_speed_σ + 0.5 * accel_σ * dt,
+        mean_b: estimated_speed_error,
+        σ_b: estimated_speed_error_σ,
       });
 
       const angular_speed = last_event.angular_speed + speed_adjustment;
@@ -548,27 +563,29 @@ function compute_position_from_hall(data){
       const positive_direction = last_event.angular_speed >= 0;
       const direction = positive_direction ? +1 : -1;
 
+      const estimated_distance = last_event.angular_speed * dt;
+      const estimated_distance_σ = add_σ(last_event.angle_σ, last_event.angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
+
       const next_sector = positive_direction ? (last_event.sector + 1) % 6 : (last_event.sector - 1 + 6) % 6;
       const next_transition_angle = sector_transition_degrees[next_sector][positive_direction ? 0 : 1];
       const next_transition_angle_σ = sector_transition_σ[next_sector][positive_direction ? 0 : 1];
-      const distance_to_next_transition = direction * normalize_degrees(next_transition_angle - estimated_angle + direction * std_95_z_score * next_transition_angle_σ);
-
       // Cap the position in the 95% confidence interval before the next transition. We cross
       // this threshold when distance_to_next_transition is negative. Also the adjustement
       // depends on the direction of travel.
-      const angle_correction = direction * Math.min(distance_to_next_transition, 0.0);
+      const distance_to_next_transition = direction * shortest_distance_degrees(last_event.angle, next_transition_angle) + std_95_z_score * next_transition_angle_σ;
+      
+      const distance_overshoot = Math.max(direction * estimated_distance - distance_to_next_transition, 0);
+      const distance_adjustment = direction * Math.min(distance_to_next_transition - direction * estimated_distance, 0);
 
-      const angle_overshoot = Math.abs(angle_correction);
+      const estimated_angle = normalize_degrees(last_event.angle + estimated_distance + distance_adjustment);
 
-      const p_stopped_in_current_sector = angle_overshoot < 90 ? 0.0 : Math.min(1.0, (angle_overshoot - 90) / 45);
+      const p_stopped_in_current_sector = distance_overshoot < 90 ? 0.0 : Math.min(1.0, (distance_overshoot - 90) / 45);
 
       const current_sector_angle = sector_center_degrees[last_event.sector];
       const current_sector_angle_σ = sector_center_σ[last_event.sector];
-      const distance_to_current_sector = shortest_distance_degrees(estimated_angle, current_sector_angle);
 
-
-      const angle = interpolate_degrees(normalize_degrees(estimated_angle + angle_correction), current_sector_angle, p_stopped_in_current_sector);
-      const angle_σ = interpolate_linear(estimated_angle_σ, current_sector_angle_σ, p_stopped_in_current_sector);
+      const angle = interpolate_degrees(estimated_angle, current_sector_angle, p_stopped_in_current_sector);
+      const angle_σ = interpolate_linear(estimated_distance_σ, current_sector_angle_σ, p_stopped_in_current_sector);
 
       const calculated_spin = shortest_distance_degrees(last_event.angle, angle) / dt;
       const calculated_spin_σ = (angle_σ + last_event.angle_σ) / dt;
@@ -580,7 +597,7 @@ function compute_position_from_hall(data){
         σ_b: last_event.angular_speed_σ + accel_σ * dt,
       });
 
-      if (angle_overshoot > 90 + 45){
+      if (distance_overshoot > 90 + 45){
         last_event = {
           time,
           sector: next_sector,
@@ -606,7 +623,7 @@ function calculate_data_stats(raw_readout_data){
   const start_readout_number = raw_readout_data[0].readout_number;
 
   const data_with_annotations = raw_readout_data.map((d) => {
-    const readout_number = d.readout_number - start_readout_number;
+    const readout_number = (motor.READOUT_BASE + d.readout_number - start_readout_number) % motor.READOUT_BASE;
     const time = readout_number * time_conversion;
   
     const u_readout = -current_conversion * (d.u_readout - d.ref_readout);
@@ -646,6 +663,8 @@ function calculate_data_stats(raw_readout_data){
 
     return {
       ...d, 
+      motor_angle: normalize_degrees(d.motor_angle * 360 / 256),
+      motor_speed_σ: Math.sqrt(d.motor_speed_variance),
       u_readout, v_readout, w_readout, 
       u, v, w, 
       ref_diff, time, sum, 
@@ -741,6 +760,7 @@ const colors = {
   ref_diff: "rgb(102, 102, 102)",
   sum: "black",
   angle: "black",
+  motor_angle: "rgb(39, 163, 185)",
   current_magnitude: "rgb(197, 152, 67)",
   current_angle: "rgb(102, 166, 30)",
   voltage_angle: d3.color("rgb(102, 166, 30)").darker(1),
@@ -815,6 +835,7 @@ const plot_electric_position = plot_multiline({
       y1: (d) => d.angle - std_95_z_score * d.angle_σ,
       y2: (d) => d.angle + std_95_z_score * d.angle_σ,
     },
+    {y: "motor_angle", label: "Motor Angle", color: colors.motor_angle},
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage (Park) Angle", color: colors.voltage_angle},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},

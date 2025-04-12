@@ -22,26 +22,26 @@ uint16_t duration_till_timeout = 0;
 bool test_procedure_start = true;
 
 // Motor voltage fraction for the 6-step commutation.
-const float motor_voltage_table_pos[6][3] = {
-    {0.0, 1.0, 0.0},
-    {0.0, 1.0, 1.0},
-    {0.0, 0.0, 1.0},
-    {1.0, 0.0, 1.0},
-    {1.0, 0.0, 0.0},
-    {1.0, 1.0, 0.0},
+const uint16_t motor_voltage_table_pos[6][3] = {
+    {0,        PWM_BASE, 0       },
+    {0,        PWM_BASE, PWM_BASE},
+    {0,        0,        PWM_BASE},
+    {PWM_BASE, 0,        PWM_BASE},
+    {PWM_BASE, 0,        0       },
+    {PWM_BASE, PWM_BASE, 0       },
 };
 
 // Surpirsingly good schedule for the 6-step commutation.
-const float motor_voltage_table_neg[6][3] {
-    {0.0, 0.0, 1.0},
-    {1.0, 0.0, 1.0},
-    {1.0, 0.0, 0.0},
-    {1.0, 1.0, 0.0},
-    {0.0, 1.0, 0.0},
-    {0.0, 1.0, 1.0},
+const uint16_t motor_voltage_table_neg[6][3] {
+    {0,        0,        PWM_BASE},
+    {PWM_BASE, 0,        PWM_BASE},
+    {PWM_BASE, 0,        0       },
+    {PWM_BASE, PWM_BASE, 0       },
+    {0,        PWM_BASE, 0       },
+    {0,        PWM_BASE, PWM_BASE},
 };
 
-float pwm_fraction = 0.0;
+uint16_t pwm_command = 0;
 
 uint32_t get_combined_motor_pwm_duty(){
     return motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
@@ -78,15 +78,6 @@ void motor_freewheel(){
 
 
 
-bool check_overcurrent(){
-    const float overcurrent_threshold = 5.0;
-    return abs(current_u) > overcurrent_threshold || 
-           abs(current_v) > overcurrent_threshold || 
-           abs(current_w) > overcurrent_threshold;
-}
-
-
-
 void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
     driver_state = DriverState::HOLD;
 
@@ -98,10 +89,10 @@ void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
     enable_motor_outputs();
 }
 
-void update_motor_control(){
+static inline void sector_motor_control(){
     // Update motor control registers only if actively driving.
 
-    const float (*motor_voltage_table)[3] = nullptr;
+    const uint16_t (*motor_voltage_table)[3] = nullptr;
     if (driver_state == DriverState::DRIVE_NEG) motor_voltage_table = motor_voltage_table_neg;
     else if(driver_state == DriverState::DRIVE_POS) motor_voltage_table = motor_voltage_table_pos;
     else return;
@@ -109,35 +100,43 @@ void update_motor_control(){
     // Note: The registers need to be left unchanged whilst running in the calibration modes.
 
     // Use the hall sensor state to determine the motor position and commutation.
-    if (not hall_sensor_valid) {
+    if (not hall_sector_valid) {
         motor_break();
         return;
     }
 
-    const float voltage_phase_u = motor_voltage_table[hall_sector][0];
-    const float voltage_phase_v = motor_voltage_table[hall_sector][1];
-    const float voltage_phase_w = motor_voltage_table[hall_sector][2];
+    const uint16_t voltage_phase_u = motor_voltage_table[hall_sector][0];
+    const uint16_t voltage_phase_v = motor_voltage_table[hall_sector][1];
+    const uint16_t voltage_phase_w = motor_voltage_table[hall_sector][2];
 
 
-    motor_u_pwm_duty = voltage_phase_u * pwm_fraction * PWM_BASE;
-    motor_v_pwm_duty = voltage_phase_v * pwm_fraction * PWM_BASE;
-    motor_w_pwm_duty = voltage_phase_w * pwm_fraction * PWM_BASE;
+    motor_u_pwm_duty = voltage_phase_u * pwm_command / PWM_BASE;
+    motor_v_pwm_duty = voltage_phase_v * pwm_command / PWM_BASE;
+    motor_w_pwm_duty = voltage_phase_w * pwm_command / PWM_BASE;
+}
 
+static inline void radial_motor_control(){
+    if (not angle_valid) {
+        motor_break();
+        return;
+    }
+
+    // TODO:
 }
 
 void drive_motor_neg(uint16_t pwm, uint16_t timeout){
     driver_state = DriverState::DRIVE_NEG;
-    pwm_fraction = (pwm > PWM_MAX ? PWM_MAX : pwm) / static_cast<float>(PWM_BASE);
+    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
     duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
-    update_motor_control();
+    sector_motor_control();
     enable_motor_outputs();
 }
 
 void drive_motor_pos(uint16_t pwm, uint16_t timeout){
     driver_state = DriverState::DRIVE_POS;
-    pwm_fraction = (pwm > PWM_MAX ? PWM_MAX : pwm) / static_cast<float>(PWM_BASE);
+    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
     duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
-    update_motor_control();
+    sector_motor_control();
     enable_motor_outputs();
 }
 
@@ -209,6 +208,7 @@ void update_motor_control_registers(){
             
         case DriverState::DRIVE_NEG:
         case DriverState::DRIVE_POS:
+            sector_motor_control();
         case DriverState::HOLD:
             if (duration_till_timeout <= 0) {
                 motor_break();

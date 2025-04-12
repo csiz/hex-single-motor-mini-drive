@@ -165,18 +165,21 @@ void app_init() {
     // Enable LED outputs: TIM2_CH4, TIM3_CH1, TIM3_CH2.
     enable_LED_channels();
 
-    // Get initial hall sensor state.
-    read_hall_sensors();
+    // Get initial hall sensor state and initialize poisition tracking.
+    update_position_observation();
 }
 
 
+const size_t state_readout_size = 20;
 
 void write_state_readout(uint8_t* buffer, const UpdateReadout& readout) {
     size_t offset = 0;
     write_uint32(buffer + offset, READOUT);
     offset += 4;
-    write_uint32(buffer + offset, readout.readout_number);
-    offset += 4;
+    write_uint16(buffer + offset, readout.readout_number);
+    offset += 2;
+    write_uint16(buffer + offset, readout.position);
+    offset += 2;
     write_uint32(buffer + offset, readout.pwm_commands);
     offset += 4;
     write_uint16(buffer + offset, readout.u_readout);
@@ -318,10 +321,10 @@ void usb_tick(){
             // Send as many readouts as requested.
             if (readouts_to_send > 0) {
                 // Send the readout to the host.
-                uint8_t readout_data[20] = {0};
+                uint8_t readout_data[state_readout_size] = {0};
                 write_state_readout(readout_data, readout);
                 
-                if(usb_com_queue_send(readout_data, 20) == 0){
+                if(usb_com_queue_send(readout_data, state_readout_size) == 0){
                     // We successfully added the readout to the USB buffer.
                     readouts_to_send -= 1;
                     last_usb_send = HAL_GetTick();
@@ -373,8 +376,6 @@ void app_tick() {
 
     // Show the current hall sensor state on the LEDs.
     set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
-
-    update_motor_control();
 
     // Handle USB communication.
     usb_tick();
