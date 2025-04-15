@@ -183,7 +183,7 @@ const command_value_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label
 
 const command_value_fraction = Generators.input(command_value_slider);
 
-const command_timeout_slider = Inputs.range([0, motor.MAX_TIMEOUT*time_conversion], {value: 2000, step: 100, label: "Command timeout (ms):"});
+const command_timeout_slider = Inputs.range([0, motor.MAX_TIMEOUT*time_conversion], {value: 2000, step: 5, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 ```
@@ -283,15 +283,32 @@ const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
       await command(motor.SET_STATE_OFF);
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
-    ["Drive+", async function(){
+    ["Drive +", async function(){
       await command(motor.SET_STATE_DRIVE_POS);
+      await wait(400);
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
-    ["Drive-", async function(){
+    ["Drive -", async function(){
       await command(motor.SET_STATE_DRIVE_NEG);
+      await wait(400);
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+    }],
+    ["Drive smooth +", async function(){
+      await command(motor.SET_STATE_DRIVE_SMOOTH_POS);
+      await wait(400);
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+    }],
+    ["Drive smooth -", async function(){
+      await command(motor.SET_STATE_DRIVE_SMOOTH_NEG);
+      await wait(400);
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Freewheel", async function(){
       await command(motor.SET_STATE_FREEWHEEL);
+      await wait(400);
+      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold U positive", async function(){
       await command(motor.SET_STATE_HOLD_U_POSITIVE);

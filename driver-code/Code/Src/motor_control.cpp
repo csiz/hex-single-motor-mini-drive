@@ -21,6 +21,9 @@ uint16_t duration_till_timeout = 0;
 
 bool test_procedure_start = true;
 
+uint16_t pwm_command = 0;
+
+
 // Motor voltage fraction for the 6-step commutation.
 const uint16_t motor_voltage_table_pos[6][3] = {
     {0,        PWM_BASE, 0       },
@@ -41,7 +44,25 @@ const uint16_t motor_voltage_table_neg[6][3] {
     {0,        PWM_BASE, PWM_BASE},
 };
 
-uint16_t pwm_command = 0;
+const uint16_t phases_waveform[256] = {
+	1330, 1349, 1366, 1383, 1399, 1414, 1429, 1442, 1455, 1466, 1477, 1487, 1496, 1504, 1511, 1518,
+	1523, 1527, 1531, 1534, 1535, 1536, 1536, 1535, 1533, 1530, 1526, 1521, 1516, 1509, 1501, 1493,
+	1484, 1474, 1462, 1450, 1438, 1424, 1409, 1394, 1378, 1361, 1343, 1324, 1304, 1284, 1263, 1241,
+	1219, 1195, 1171, 1147, 1121, 1095, 1068, 1041, 1013,  984,  955,  925,  895,  864,  832,  800,
+	 768,  735,  702,  668,  634,  599,  565,  529,  494,  458,  422,  385,  349,  312,  275,  238,
+	 200,  163,  126,   88,   50,   13,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,   13,   50,   88,  126,  163,
+	 200,  238,  275,  312,  349,  385,  422,  458,  494,  529,  565,  599,  634,  668,  702,  735,
+	 768,  800,  832,  864,  895,  925,  955,  984, 1013, 1041, 1068, 1095, 1121, 1147, 1171, 1195,
+	1219, 1241, 1263, 1284, 1304, 1324, 1343, 1361, 1378, 1394, 1409, 1424, 1438, 1450, 1462, 1474,
+	1484, 1493, 1501, 1509, 1516, 1521, 1526, 1530, 1533, 1535, 1536, 1536, 1535, 1534, 1531, 1527,
+	1523, 1518, 1511, 1504, 1496, 1487, 1477, 1466, 1455, 1442, 1429, 1414, 1399, 1383, 1366, 1349
+};
+
 
 uint32_t get_combined_motor_pwm_duty(){
     return motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
@@ -92,10 +113,11 @@ void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
 static inline void sector_motor_control(){
     // Update motor control registers only if actively driving.
 
-    const uint16_t (*motor_voltage_table)[3] = nullptr;
-    if (driver_state == DriverState::DRIVE_NEG) motor_voltage_table = motor_voltage_table_neg;
-    else if(driver_state == DriverState::DRIVE_POS) motor_voltage_table = motor_voltage_table_pos;
-    else return;
+    const uint16_t (*motor_voltage_table)[3] = 
+        driver_state == DriverState::DRIVE_POS ? motor_voltage_table_pos : 
+        driver_state == DriverState::DRIVE_NEG ? motor_voltage_table_neg : 
+        nullptr;
+    if (motor_voltage_table == nullptr) return;
 
     // Note: The registers need to be left unchanged whilst running in the calibration modes.
 
@@ -109,6 +131,32 @@ static inline void sector_motor_control(){
     const uint16_t voltage_phase_v = motor_voltage_table[hall_sector][1];
     const uint16_t voltage_phase_w = motor_voltage_table[hall_sector][2];
 
+
+    motor_u_pwm_duty = voltage_phase_u * pwm_command / PWM_BASE;
+    motor_v_pwm_duty = voltage_phase_v * pwm_command / PWM_BASE;
+    motor_w_pwm_duty = voltage_phase_w * pwm_command / PWM_BASE;
+}
+
+int drive_angle = 0;
+
+static inline void smooth_motor_control(uint8_t angle){
+    const int direction = 
+        driver_state == DriverState::DRIVE_SMOOTH_POS ? +1 : 
+        driver_state == DriverState::DRIVE_SMOOTH_NEG ? -1 : 
+        0;
+    if (direction == 0) return;
+
+    if (not angle_valid) {
+        motor_break();
+        return;
+    }
+
+
+    const int target_angle = (256 + static_cast<int>(angle) + direction * drive_angle) % 256;
+
+    const uint16_t voltage_phase_u = phases_waveform[target_angle];
+    const uint16_t voltage_phase_v = phases_waveform[(256 + target_angle - 85) % 256];
+    const uint16_t voltage_phase_w = phases_waveform[(256 + target_angle - 170) % 256];
 
     motor_u_pwm_duty = voltage_phase_u * pwm_command / PWM_BASE;
     motor_v_pwm_duty = voltage_phase_v * pwm_command / PWM_BASE;
@@ -139,6 +187,28 @@ void drive_motor_pos(uint16_t pwm, uint16_t timeout){
     sector_motor_control();
     enable_motor_outputs();
 }
+
+
+
+void drive_motor_smooth_pos(uint16_t pwm, uint16_t timeout){
+    driver_state = DriverState::DRIVE_SMOOTH_POS;
+    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
+    // Fix timeout to experiment with drive angle.
+    duration_till_timeout = MAX_TIMEOUT / 2;
+    drive_angle = 256 * static_cast<int>(timeout) / MAX_TIMEOUT;
+    // duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
+    enable_motor_outputs();
+}
+
+void drive_motor_smooth_neg(uint16_t pwm, uint16_t timeout){
+    driver_state = DriverState::DRIVE_SMOOTH_NEG;
+    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
+    duration_till_timeout = MAX_TIMEOUT / 2;
+    drive_angle = 256 * static_cast<int>(timeout) / MAX_TIMEOUT;
+    // duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
+    enable_motor_outputs();
+}
+
 
 
 void start_test(const PWMSchedule & schedule){
@@ -195,7 +265,15 @@ void test_procedure(){
     }
 }
 
-void update_motor_control_registers(){
+static inline void update_timeout(){
+    if (duration_till_timeout > 0) {
+        duration_till_timeout -= 1;
+    } else {
+        motor_break();
+    }
+}
+
+void update_motor_control_registers(uint8_t angle){
     switch (driver_state) {
         case DriverState::OFF:
         case DriverState::FREEWHEEL:
@@ -209,13 +287,15 @@ void update_motor_control_registers(){
         case DriverState::DRIVE_NEG:
         case DriverState::DRIVE_POS:
             sector_motor_control();
+            update_timeout();
+            break;
+        case DriverState::DRIVE_SMOOTH_POS:
+        case DriverState::DRIVE_SMOOTH_NEG:
+            smooth_motor_control(angle);
+            update_timeout();
+            break;
         case DriverState::HOLD:
-            if (duration_till_timeout <= 0) {
-                motor_break();
-            } else {
-                duration_till_timeout -= 1;
-            }
-            // The PWM settings are updated in the main loop; we only need to write the registers.
+            update_timeout();
             break;
     }
 

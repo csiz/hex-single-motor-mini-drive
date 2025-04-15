@@ -33,6 +33,10 @@ export const SET_STATE_HOLD_U_NEGATIVE = 0x80203023;
 export const SET_STATE_HOLD_V_NEGATIVE = 0x80203024;
 export const SET_STATE_HOLD_W_NEGATIVE = 0x80203025;
 
+export const SET_STATE_DRIVE_SMOOTH_POS = 0x80204030;
+export const SET_STATE_DRIVE_SMOOTH_NEG = 0x80204031;
+
+
 // Other constants
 export const PWM_BASE = 1536; // 0x0600
 export const MAX_TIMEOUT = 0xFFFF; 

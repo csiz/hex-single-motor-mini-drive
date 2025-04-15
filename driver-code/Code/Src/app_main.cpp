@@ -276,6 +276,13 @@ void usb_tick(){
                 drive_motor_neg(pwm, timeout);
                 break;
 
+            case SET_STATE_DRIVE_SMOOTH_POS:
+                drive_motor_smooth_pos(pwm, timeout);
+                break;
+            case SET_STATE_DRIVE_SMOOTH_NEG:
+                drive_motor_smooth_neg(pwm, timeout);
+                break;
+
             // Freewheel the motor.
             case SET_STATE_FREEWHEEL:
                 motor_freewheel();

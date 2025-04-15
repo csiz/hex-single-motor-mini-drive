@@ -517,7 +517,7 @@ static inline void pwm_cycle_and_adc_update(){
 
     adc_update_number += 1;
     
-    update_motor_control_registers();
+    update_motor_control_registers(angle);
     
     
     // Always write the readout to the history buffer.

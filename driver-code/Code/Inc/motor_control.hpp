@@ -25,6 +25,8 @@ enum struct DriverState {
     FREEWHEEL,
     DRIVE_POS,
     DRIVE_NEG,
+    DRIVE_SMOOTH_POS,
+    DRIVE_SMOOTH_NEG,
     HOLD,
     TEST_SCHEDULE,
 };
@@ -46,6 +48,8 @@ void motor_control_init();
 
 void drive_motor_neg(uint16_t pwm, uint16_t timeout);
 void drive_motor_pos(uint16_t pwm, uint16_t timeout);
+void drive_motor_smooth_pos(uint16_t pwm, uint16_t timeout);
+void drive_motor_smooth_neg(uint16_t pwm, uint16_t timeout);
 
 void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
 
@@ -55,7 +59,7 @@ void motor_break();
 
 void motor_freewheel();
 
-void update_motor_control_registers();
+void update_motor_control_registers(uint8_t angle);
 
 void start_test(const PWMSchedule & schedule);
 
