@@ -120,14 +120,16 @@ export class MotorController {
     }
   }
 
-  async send_command({command, command_timeout, command_value}) {
+  async send_command({command, command_timeout, command_pwm, command_leading_angle = 0, command_max_current = 0}) {
     if (this.com_port === null) return;
-
-    let buffer = new Uint8Array(8);
+    
+    let buffer = new Uint8Array(12);
     let view = new DataView(buffer.buffer);
     view.setUint32(0, command);
     view.setUint16(4, command_timeout);
-    view.setUint16(6, command_value);
+    view.setUint16(6, command_pwm);
+    view.setUint16(8, command_leading_angle);
+    view.setUint16(10, command_max_current);
     await this.com_port.write(buffer);
   }
 

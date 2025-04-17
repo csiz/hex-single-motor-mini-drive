@@ -60,8 +60,8 @@ extern size_t test_schedule_stage;
 
 void motor_drive_neg(uint16_t pwm, uint16_t timeout);
 void motor_drive_pos(uint16_t pwm, uint16_t timeout);
-void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout);
-void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout);
+void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle);
+void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle);
 void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
 void motor_break();
 void motor_freewheel();

@@ -11,8 +11,9 @@ Motor Commands
 <div>${data_stream_buttons}</div>
 <div>${command_buttons}</div>
 <div>
-  ${command_value_slider}
+  ${command_pwm_slider}
   ${command_timeout_slider}
+  ${command_leading_angle_slider}
 </div>
 
 Motor Driving Data
@@ -179,13 +180,17 @@ open_port_and_read();
 ```
 
 ```js
-const command_value_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: "Command value:"});
+const command_pwm_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: "Command value:"});
 
-const command_value_fraction = Generators.input(command_value_slider);
+const command_pwm_fraction = Generators.input(command_pwm_slider);
 
 const command_timeout_slider = Inputs.range([0, motor.MAX_TIMEOUT*time_conversion], {value: 2000, step: 5, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
+
+const command_leading_angle_slider = Inputs.range([-180, 180], {value: 95, step: 1, label: "Leading angle (degrees):"});
+
+const command_leading_angle_degrees = Generators.input(command_leading_angle_slider);
 ```
 
 ```js
@@ -208,13 +213,14 @@ function update_raw_readout_data(new_data){
 const max_data_points = motor.HISTORY_SIZE;
 
 const command_timeout = Math.floor(command_timeout_millis / time_conversion);
-const command_value = Math.floor(command_value_fraction * motor.PWM_BASE);
+const command_pwm = Math.floor(command_pwm_fraction * motor.PWM_BASE);
+const command_leading_angle = Math.floor(256 + 256 * command_leading_angle_degrees / 360) % 256;
 
 async function command_and_stream(command, options = {}){
   if (!motor_controller) return;
     
   try {
-    await motor_controller.send_command({command, command_timeout, command_value, ...options});
+    await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle, ...options});
 
     // Start reading the data stream.
     for await (const data_snapshot of motor_controller.stream_readouts(options)) {
@@ -229,7 +235,7 @@ async function command_and_stream(command, options = {}){
 async function command(command){
   if (!motor_controller) return;
   
-  await motor_controller.send_command({command, command_timeout, command_value});
+  await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle});
 }
 
 
@@ -1098,9 +1104,9 @@ async function run_position_calibration(){
   const drive_timeout = Math.floor((drive_time + 300) / time_conversion);
 
   const drive_strength = Math.floor(motor.PWM_BASE * 2 / 10);
-  const drive_options = {command_timeout: drive_timeout, command_value: drive_strength};
+  const drive_options = {command_timeout: drive_timeout, command_pwm: drive_strength};
 
-  const test_options = {command_timeout: 0, command_value: 0};
+  const test_options = {command_timeout: 0, command_pwm: 0};
 
   await motor_controller.send_command({command: motor.SET_STATE_DRIVE_POS, ...drive_options});  
   await wait(drive_time);
@@ -1498,8 +1504,8 @@ async function run_current_calibration(){
   const settle_timeout = Math.floor((settle_time + 300) / time_conversion);
   const settle_strength = Math.floor(motor.PWM_BASE * 2 / 10);
 
-  const drive_options = {command_timeout: settle_timeout, command_value: settle_strength};
-  const test_options = {command_timeout: 0, command_value: 0};
+  const drive_options = {command_timeout: settle_timeout, command_pwm: settle_strength};
+  const test_options = {command_timeout: 0, command_pwm: 0};
 
   console.info("Current calibration starting");
 

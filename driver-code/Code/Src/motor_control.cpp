@@ -53,20 +53,17 @@ void motor_drive_pos(uint16_t pwm, uint16_t timeout){
 
 
 
-void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout){
-    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
-    // Fix timeout to experiment with drive angle.
-    duration_till_timeout = MAX_TIMEOUT / 2;
-    leading_angle = 256 * static_cast<int>(timeout) / MAX_TIMEOUT;
-    // duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
+void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle){
+    pwm_command = clip_to(0, PWM_MAX, pwm);
+    leading_angle = clip_to(0, 255, new_leading_angle);
+    duration_till_timeout = clip_to(0, MAX_TIMEOUT, timeout);
     driver_state = DriverState::DRIVE_SMOOTH_POS;
 }
 
-void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout){
-    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
-    duration_till_timeout = MAX_TIMEOUT / 2;
-    leading_angle = 256 * static_cast<int>(timeout) / MAX_TIMEOUT;
-    // duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
+void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle){
+    pwm_command = clip_to(0, PWM_MAX, pwm);
+    leading_angle = clip_to(0, 255, new_leading_angle);
+    duration_till_timeout = clip_to(0, MAX_TIMEOUT, timeout);
     driver_state = DriverState::DRIVE_SMOOTH_NEG;
 }
 

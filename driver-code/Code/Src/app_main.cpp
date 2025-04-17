@@ -197,19 +197,20 @@ void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
 void usb_tick(){
     // Receive data
     // ------------
-    uint8_t usb_command[8] = {0};
+    const size_t command_size = 12;
 
-    size_t bytes_received = usb_com_recv(usb_command, 8);
+    uint8_t usb_command[command_size] = {0};
+
+    size_t bytes_received = usb_com_recv(usb_command, command_size);
 
     // Check if we have received a full command; or any data at all.
-    if (bytes_received == 8) {
+    if (bytes_received == command_size) {
         // The first number is the command code, the second is the data; if any.
         const uint32_t command = read_uint32(&usb_command[0]);
-        const uint16_t data_0 = read_uint16(&usb_command[4]);
-        const uint16_t data_1 = read_uint16(&usb_command[6]);
-        
-        const uint16_t pwm = data_1 > PWM_MAX ? PWM_MAX : data_1;
-        const uint16_t timeout = data_0 > MAX_TIMEOUT ? MAX_TIMEOUT : data_0;
+        const uint16_t timeout = clip_to(0, MAX_TIMEOUT, read_uint16(&usb_command[4]));
+        const uint16_t pwm = clip_to(0, PWM_MAX, read_uint16(&usb_command[6]));
+        const uint16_t leading_angle = clip_to(0, 255, read_uint16(&usb_command[8]));
+        const uint16_t max_current = clip_to(0, 0xFFFF, read_uint16(&usb_command[10]));
 
 
         switch (command) {
@@ -278,10 +279,10 @@ void usb_tick(){
                 break;
 
             case SET_STATE_DRIVE_SMOOTH_POS:
-                motor_drive_smooth_pos(pwm, timeout);
+                motor_drive_smooth_pos(pwm, timeout, leading_angle);
                 break;
             case SET_STATE_DRIVE_SMOOTH_NEG:
-                motor_drive_smooth_neg(pwm, timeout);
+                motor_drive_smooth_neg(pwm, timeout, leading_angle);
                 break;
 
             // Freewheel the motor.
