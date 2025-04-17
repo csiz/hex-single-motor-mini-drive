@@ -15,7 +15,7 @@
 
 
 uint32_t main_loop_update_number = 0;
-
+uint32_t invalid_commands = 0;
 
 float main_loop_update_rate = 0.0f;
 float adc_update_rate = 0.0f;
@@ -25,6 +25,15 @@ float tim2_cc1_rate = 0.0f;
 
 uint32_t last_usb_send = 0;
 const uint32_t USB_TIMEOUT = 500;
+
+// Receive data
+// ------------
+const size_t usb_command_size = 12;
+// Buffer for the USB command in case we receive it in chunks.
+uint8_t usb_command[usb_command_size] = {};
+
+size_t usb_command_end = 0;
+
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
 // TODO: also need to set a minium on time for MOSFET driving, too little 
@@ -195,22 +204,19 @@ void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
 
 
 void usb_tick(){
-    // Receive data
-    // ------------
-    const size_t command_size = 12;
-
-    uint8_t usb_command[command_size] = {0};
-
-    size_t bytes_received = usb_com_recv(usb_command, command_size);
+    usb_command_end += usb_com_recv(usb_command + usb_command_end, usb_command_size - usb_command_end);
 
     // Check if we have received a full command; or any data at all.
-    if (bytes_received == command_size) {
+    if (usb_command_end >= usb_command_size) {
+        // Reset the end of the command buffer.
+        usb_command_end = 0;
+
         // The first number is the command code, the second is the data; if any.
         const uint32_t command = read_uint32(&usb_command[0]);
         const uint16_t timeout = clip_to(0, MAX_TIMEOUT, read_uint16(&usb_command[4]));
         const uint16_t pwm = clip_to(0, PWM_MAX, read_uint16(&usb_command[6]));
         const uint16_t leading_angle = clip_to(0, 255, read_uint16(&usb_command[8]));
-        const uint16_t max_current = clip_to(0, 0xFFFF, read_uint16(&usb_command[10]));
+        // const uint16_t max_current = clip_to(0, 0xFFFF, read_uint16(&usb_command[10]));
 
 
         switch (command) {
@@ -312,6 +318,13 @@ void usb_tick(){
 
             case SET_STATE_HOLD_W_NEGATIVE:
                 motor_hold(pwm, pwm, 0, timeout);
+                break;
+
+            default:
+                // Invalid command; ignore it.
+                invalid_commands += 1;
+                // Flush the recv buffer once to remove any residual data; but ignore the data.
+                usb_com_recv(usb_command, usb_command_size);
                 break;
         }
     }
