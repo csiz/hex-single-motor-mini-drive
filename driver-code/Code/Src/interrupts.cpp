@@ -68,229 +68,6 @@ uint16_t motor_u_pwm_duty = 0;
 uint16_t motor_v_pwm_duty = 0;
 uint16_t motor_w_pwm_duty = 0;
 
-// Test Schedule
-// -------------
-
-size_t schedule_counter = 0;
-size_t schedule_stage = 0;
-
-bool test_procedure_starting = true;
-
-
-
-// Constants
-// ---------
-
-// Some useful functions to compute position. These need to be inlined for 
-// efficiency, and constexpr to define a bunch more constants below.
-
-// Square a number.
-inline constexpr int square(int x){
-    return x * x;
-}
-
-// Get the smaller between two numbers.
-inline constexpr int min(int a, int b){
-    return a < b ? a : b;
-}
-
-// Get the larger between two numbers.
-inline constexpr int max(int a, int b){
-    return a > b ? a : b;
-}
-
-// Clip a value between two limits; params are (low high value).
-inline constexpr int clip_to(int low, int high, int value){
-    return min(high, max(low, value));
-}
-
-
-// Define a lot of constants. First, we need to define angles as integers because 
-// we can't (shouldn't) use floating point arithmetic in the interrupt handlers.
-// Then define the time units. Then speed units, further scaled by a constant to
-// have enough precision to represent it.
-
-// Maximum value we can use in signed 32 bit multiplication.
-const int max_16bit = 0x0000'8FFF; //0x0000'B504;
-
-// Angle units of a full circle (2pi).
-const int max_angle_unit = 2048;
-// Half a circle (pi).
-const int half_max_angle = max_angle_unit / 2;
-// 3/2 of a circle (3pi/2).
-const int one_and_half_max_angle = (3 * max_angle_unit) / 2;
-
-// Normalize to a positive angle (0 to 2pi).
-inline constexpr int normalize_angle(int angle){
-    return (angle + max_angle_unit) % max_angle_unit;
-}
-// Normalize a 0 centerd angle; keeping its sign (-pi to pi).
-inline constexpr int signed_angle(int angle){
-    return (angle + one_and_half_max_angle) % max_angle_unit - half_max_angle;
-}
-
-// Scaling constant for time.
-const int ticks_per_time_units = 256;
-// Ticks per microsecond with the 72MHz clock.
-const int ticks_per_microsecond = 72;
-// Ticks per millisecond with the 72MHz clock.
-const int ticks_per_millisecond = 72'000;
-// Our time units per millisecond. Helpful scaling factor for the constants below.
-const int time_units_per_millisecond = ticks_per_millisecond / ticks_per_time_units; 
-// Time units per PWM cycle (2x because it counts up then down).
-const int time_increment_per_cycle = 2 * static_cast<int>(PWM_BASE) / ticks_per_time_units;
-
-// Another scaling factor: speed = distances * scale / time; acceleration = speed_change * scale;
-const int scale = 128;
-// Precomputed square of scale.
-const int square_scale = square(scale);
-
-// Reference for the maximum speed we should be able to represent.
-const int max_speed = 20 * scale * max_angle_unit / time_units_per_millisecond;
-
-// The maximum time in our time units before we can no longer safely square the value.
-// 
-// Keep in mind that a single motor rotation takes at least 12 toggles (6 per electrical
-//  revolution * 2 poles per phase).
-const int max_time_between_observations = 100 * time_units_per_millisecond;
-
-
-// Note:
-// Speed and acceleration are written in degrees per ms and per ms^2 respectively.
-
-// Initial speed estimate.
-const int initial_angular_speed = 0;
-// Start with a high speed variance.
-const int initial_angular_speed_variance = square(scale * max_angle_unit * 30 / 360 / time_units_per_millisecond);
-
-// Precalculate the acceleration variance divided by 4. Note the scaled is squared twice.
-const int angular_acceleration_variance_div_4 = square(square_scale * max_angle_unit / 1 / 50 / time_units_per_millisecond / time_units_per_millisecond) / 4;
-
-// Maximum distance to a trigger angle. Don't let the estimated angle deviate
-// from the hall sensor angle by more than this value to keep the estimate
-// within the half circle of the trigger so we don't switch sign.
-const int sector_transition_confidence = 20 * max_angle_unit / 360;
-
-// Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
-const int default_sector_transition_variance = square(5 * max_angle_unit / 360);
-// Variance of a gaussian spread over the entire sector.
-const int default_sector_center_variance = square(30 * max_angle_unit / 360);
-
-// The hall sensors trigger later than expected going each direction.
-const int hysterisis = 5 * max_angle_unit / 360;
-
-// The angle at which we transition to this sector. The first is when rotating in the
-// positive direction; second for the negative direction.
-const int sector_transition_angles[6][2] = {
-    {330 * max_angle_unit / 360 + hysterisis,  30 * max_angle_unit / 360 - hysterisis},
-    { 30 * max_angle_unit / 360 + hysterisis,  90 * max_angle_unit / 360 - hysterisis},
-    { 90 * max_angle_unit / 360 + hysterisis, 150 * max_angle_unit / 360 - hysterisis},
-    {150 * max_angle_unit / 360 + hysterisis, 210 * max_angle_unit / 360 - hysterisis},
-    {210 * max_angle_unit / 360 + hysterisis, 270 * max_angle_unit / 360 - hysterisis},
-    {270 * max_angle_unit / 360 + hysterisis, 330 * max_angle_unit / 360 - hysterisis},     
-};
-
-// Variance of each sector transition; we can calibrate it.
-const int sector_transition_variances[6][2] = {
-    {default_sector_transition_variance, default_sector_transition_variance},
-    {default_sector_transition_variance, default_sector_transition_variance},
-    {default_sector_transition_variance, default_sector_transition_variance},
-    {default_sector_transition_variance, default_sector_transition_variance},
-    {default_sector_transition_variance, default_sector_transition_variance},
-    {default_sector_transition_variance, default_sector_transition_variance},
-};
-
-// The center of each hall sector; the motor should rest at these poles.
-const int sector_center_angles[6] = {
-    (  0 * max_angle_unit / 360),
-    ( 60 * max_angle_unit / 360),
-    (120 * max_angle_unit / 360),
-    (180 * max_angle_unit / 360),
-    (240 * max_angle_unit / 360),
-    (300 * max_angle_unit / 360),
-};
-
-// Variance of the centers.
-const int sector_center_variances[6] = {
-    default_sector_center_variance,
-    default_sector_center_variance,
-    default_sector_center_variance,
-    default_sector_center_variance,
-    default_sector_center_variance,
-    default_sector_center_variance,
-};
-
-
-
-// Motor Currents
-// --------------
-
-
-
-// Voltage reference for the ADC; it's a filtered 3.3V that powers the board.
-const float adc_voltage_reference = 3.3;
-// Shunt resistance for the motor phase current sensing is 10mOhm, 500mW resistor.
-const float motor_shunt_resistance = 0.010;
-// The voltage on the shunt resistor is amplified by INA4181 Bidirectional, Low and 
-// High Side Voltage Output, Current-Sense Amplifier.
-const float amplifier_gain = 20.0;
-// The ADC has a 12-bit resolution.
-const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
-// The formula that determines the current from the ADC readout: 
-//   Vout = (Iload * Rsense * GAIN) + Vref
-// And the conversion from the ADC readout is given by:
-//   Vout = adc_voltage_reference * (adc_current_readout / adc_max_value).
-// So the current is:
-//   Iload = (Vout - Vref) / (Rsense * GAIN) = adc_voltage_reference * (adc_readout_diff / adc_max_value) / (Rsense * GAIN).
-// 
-// Note: The minus sign is because of the way I wired up the INA4181 ...
-const float current_conversion = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
-
-
-// Motor control
-// -------------
-
-// Motor voltage fraction for the 6-step commutation.
-const uint16_t motor_voltage_table_pos[6][3] = {
-    {0,        PWM_BASE, 0       },
-    {0,        PWM_BASE, PWM_BASE},
-    {0,        0,        PWM_BASE},
-    {PWM_BASE, 0,        PWM_BASE},
-    {PWM_BASE, 0,        0       },
-    {PWM_BASE, PWM_BASE, 0       },
-};
-
-// Surpirsingly good schedule for the 6-step commutation.
-const uint16_t motor_voltage_table_neg[6][3] {
-    {0,        0,        PWM_BASE},
-    {PWM_BASE, 0,        PWM_BASE},
-    {PWM_BASE, 0,        0       },
-    {PWM_BASE, PWM_BASE, 0       },
-    {0,        PWM_BASE, 0       },
-    {0,        PWM_BASE, PWM_BASE},
-};
-
-const uint16_t phases_waveform[256] = {
-	1330, 1349, 1366, 1383, 1399, 1414, 1429, 1442, 1455, 1466, 1477, 1487, 1496, 1504, 1511, 1518,
-	1523, 1527, 1531, 1534, 1535, 1536, 1536, 1535, 1533, 1530, 1526, 1521, 1516, 1509, 1501, 1493,
-	1484, 1474, 1462, 1450, 1438, 1424, 1409, 1394, 1378, 1361, 1343, 1324, 1304, 1284, 1263, 1241,
-	1219, 1195, 1171, 1147, 1121, 1095, 1068, 1041, 1013,  984,  955,  925,  895,  864,  832,  800,
-	 768,  735,  702,  668,  634,  599,  565,  529,  494,  458,  422,  385,  349,  312,  275,  238,
-	 200,  163,  126,   88,   50,   13,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
-	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
-	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
-	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
-	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
-	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,   13,   50,   88,  126,  163,
-	 200,  238,  275,  312,  349,  385,  422,  458,  494,  529,  565,  599,  634,  668,  702,  735,
-	 768,  800,  832,  864,  895,  925,  955,  984, 1013, 1041, 1068, 1095, 1121, 1147, 1171, 1195,
-	1219, 1241, 1263, 1284, 1304, 1324, 1343, 1361, 1378, 1394, 1409, 1424, 1438, 1450, 1462, 1474,
-	1484, 1493, 1501, 1509, 1516, 1521, 1526, 1530, 1533, 1535, 1536, 1536, 1535, 1534, 1531, 1527,
-	1523, 1518, 1511, 1504, 1496, 1487, 1477, 1466, 1455, 1442, 1429, 1414, 1399, 1383, 1366, 1349
-};
-
-
-
 
 // Functions
 // ---------
@@ -303,7 +80,7 @@ void calculate_motor_phase_currents_gated(){
 
     // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
-    const UpdateReadout readout = latest_readout;
+    const StateReadout readout = latest_readout;
     NVIC_EnableIRQ(ADC1_2_IRQn);
 
     const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
@@ -607,48 +384,26 @@ static inline void smooth_motor_control(uint8_t angle){
 }
 
 static inline void test_motor_control(){
-    if(active_schedule == nullptr) return motor_break();
+    if(test_schedule_pointer == nullptr) return motor_break();
 
-    if (test_procedure_starting) {
-        test_procedure_starting = false;
-        schedule_counter = 0;
-        schedule_stage = 0;
-            
-        readouts_to_send = 0;
-        readouts_allow_sending = false;
-        readouts_allow_missing = false;
+    const PWMSchedule & schedule = *test_schedule_pointer;
 
-        // Clear the readouts buffer.
-        UpdateReadout discard_readout = {};
-        while(xQueueReceiveFromISR(readouts_queue, &discard_readout, NULL) == pdPASS) /* Discard all readouts up to test start. */;
-        // Store exactly HISTORY_SIZE readouts; until we fully transmit the test.
-
-        enable_motor_outputs();
-    }
-
-    const PWMSchedule & schedule = *active_schedule;
-
-
-    motor_u_pwm_duty = schedule[schedule_stage].u;
-    motor_v_pwm_duty = schedule[schedule_stage].v;
-    motor_w_pwm_duty = schedule[schedule_stage].w;
+    motor_u_pwm_duty = schedule[test_schedule_stage].u;
+    motor_v_pwm_duty = schedule[test_schedule_stage].v;
+    motor_w_pwm_duty = schedule[test_schedule_stage].w;
 
     // Go to the next step in the schedule.
-    schedule_counter += 1;
-    if (schedule_counter >= schedule[schedule_stage].duration) {
-        schedule_stage += 1;
-        schedule_counter = 0;
+    test_schedule_counter += 1;
+    if (test_schedule_counter >= schedule[test_schedule_stage].duration) {
+        test_schedule_stage += 1;
+        test_schedule_counter = 0;
     }
+    
     // Next stage, unless we're at the end of the schedule.
-    if (schedule_stage >= SCHEDULE_SIZE) {
-        
-        motor_break();
+    if (test_schedule_stage >= SCHEDULE_SIZE) {
         readouts_to_send = HISTORY_SIZE;
         readouts_allow_sending = true;
-        // Reset the first run flag.
-        test_procedure_starting = true;
-        // Reset active schedule so we can start another test.
-        active_schedule = nullptr;
+        motor_break();
     }
 }
 
@@ -695,19 +450,10 @@ static inline void pwm_cycle_and_adc_update(){
     // Write the previous pwm duty cycle to this readout, it should have been active during the prior to the ADC sampling.
     latest_readout.pwm_commands = motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
     
-    // Always try to write the readout to the history buffer.
+    // Always attempt to write the lastest readout to the history buffer.
     if(xQueueSendToBackFromISR(readouts_queue, &latest_readout, NULL) == errQUEUE_FULL){
-        if (readouts_allow_missing) {
-            // We didn't have space to add the latest readout. Discard the oldest readout and try again; this time 
-            // it must work or we have a bigger error.
-            readouts_missed += 1;
-            if (readouts_to_send > static_cast<int>(HISTORY_SIZE)) readouts_to_send -= 1;
-
-        } else {
-            // If we filled the queue without overwriting, we now need to send the data over USB.
-            // When the data is sent, overwriting will be re-enabled.
-            readouts_allow_sending = true;
-        }
+        // Full queue, allow sending anytime.
+        readouts_allow_sending = true;
     }
 
     // Update motor control.
@@ -721,7 +467,7 @@ static inline void pwm_cycle_and_adc_update(){
             // Immediately update and enable the motor outputs.
             enable_motor_outputs();
             break;
-            
+
         case DriverState::FREEWHEEL:
             // Reset PWM duty cycle to 0 anyway.
             motor_u_pwm_duty = 0;
@@ -735,6 +481,7 @@ static inline void pwm_cycle_and_adc_update(){
         case DriverState::TEST_SCHEDULE:
             // Quickly update the PWM settings from the test schedule.
             test_motor_control();
+            enable_motor_outputs();
             break;
             
         case DriverState::DRIVE_NEG:
@@ -818,7 +565,7 @@ void tim2_global_handler(){
 
     // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
     } else if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
-        update_position_observation(); 
+        update_position_observation();
 
         tim2_cc1_number += 1;
         LL_TIM_ClearFlag_CC1(TIM2);

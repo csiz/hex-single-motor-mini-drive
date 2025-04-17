@@ -36,10 +36,10 @@ using PWMSchedule = PWMStage[SCHEDULE_SIZE];
 
 
 
-// Motor control
-// -------------
+// Driver State
+// ------------
 
-// Motor control state
+// Motor driver state.
 extern DriverState driver_state;
 
 extern uint16_t duration_till_timeout;
@@ -52,9 +52,12 @@ extern uint16_t pwm_command;
 
 extern uint8_t leading_angle;
 
-extern PWMSchedule const* active_schedule;
+extern PWMSchedule const* test_schedule_pointer;
+extern size_t test_schedule_counter;
+extern size_t test_schedule_stage;
 
-// Motor control functions
+// Functions to set motor driver state.
+
 void motor_drive_neg(uint16_t pwm, uint16_t timeout);
 void motor_drive_pos(uint16_t pwm, uint16_t timeout);
 void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout);
@@ -66,22 +69,47 @@ void motor_start_test(const PWMSchedule & schedule);
 
 
 
-// Motor PWM constants
-// -------------------
+// Motor control tables
+// --------------------
 
-const uint16_t PWM_AUTORELOAD = 1535;
-const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
+// Motor voltage fraction for the 6-step commutation.
+const uint16_t motor_voltage_table_pos[6][3] = {
+    {0,        PWM_BASE, 0       },
+    {0,        PWM_BASE, PWM_BASE},
+    {0,        0,        PWM_BASE},
+    {PWM_BASE, 0,        PWM_BASE},
+    {PWM_BASE, 0,        0       },
+    {PWM_BASE, PWM_BASE, 0       },
+};
 
-// Maximum duty cycle for the high side mosfet needs to allow some off time for 
-// the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
-const uint16_t MIN_BOOTSTRAP_DUTY = 16; // 16/72MHz = 222ns
-const uint16_t PWM_MAX = PWM_BASE - MIN_BOOTSTRAP_DUTY; // 1536/72MHz = 21.3us
+// Surpirsingly good schedule for the 6-step commutation.
+const uint16_t motor_voltage_table_neg[6][3] {
+    {0,        0,        PWM_BASE},
+    {PWM_BASE, 0,        PWM_BASE},
+    {PWM_BASE, 0,        0       },
+    {PWM_BASE, PWM_BASE, 0       },
+    {0,        PWM_BASE, 0       },
+    {0,        PWM_BASE, PWM_BASE},
+};
 
-const uint16_t PWM_MAX_HOLD = PWM_BASE * 2 / 10;
-
-const uint16_t MAX_TIMEOUT = 0xFFFF;
-
-
+const uint16_t phases_waveform[256] = {
+	1330, 1349, 1366, 1383, 1399, 1414, 1429, 1442, 1455, 1466, 1477, 1487, 1496, 1504, 1511, 1518,
+	1523, 1527, 1531, 1534, 1535, 1536, 1536, 1535, 1533, 1530, 1526, 1521, 1516, 1509, 1501, 1493,
+	1484, 1474, 1462, 1450, 1438, 1424, 1409, 1394, 1378, 1361, 1343, 1324, 1304, 1284, 1263, 1241,
+	1219, 1195, 1171, 1147, 1121, 1095, 1068, 1041, 1013,  984,  955,  925,  895,  864,  832,  800,
+	 768,  735,  702,  668,  634,  599,  565,  529,  494,  458,  422,  385,  349,  312,  275,  238,
+	 200,  163,  126,   88,   50,   13,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+	   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,   13,   50,   88,  126,  163,
+	 200,  238,  275,  312,  349,  385,  422,  458,  494,  529,  565,  599,  634,  668,  702,  735,
+	 768,  800,  832,  864,  895,  925,  955,  984, 1013, 1041, 1068, 1095, 1121, 1147, 1171, 1195,
+	1219, 1241, 1263, 1284, 1304, 1324, 1343, 1361, 1378, 1394, 1409, 1424, 1438, 1450, 1462, 1474,
+	1484, 1493, 1501, 1509, 1516, 1521, 1526, 1530, 1533, 1535, 1536, 1536, 1535, 1534, 1531, 1527,
+	1523, 1518, 1511, 1504, 1496, 1487, 1477, 1466, 1455, 1442, 1429, 1414, 1399, 1383, 1366, 1349
+};
 
 
 

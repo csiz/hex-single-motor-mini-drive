@@ -174,7 +174,7 @@ void app_init() {
 
 const size_t state_readout_size = 20;
 
-void write_state_readout(uint8_t* buffer, const UpdateReadout& readout) {
+void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
     size_t offset = 0;
     write_uint32(buffer + offset, READOUT);
     offset += 4;
@@ -215,15 +215,14 @@ void usb_tick(){
         switch (command) {
             // Send the whole history buffer over USB.
             case GET_READOUTS:
+                // Clear the queue of older data.
+                xQueueReset(readouts_queue);
                 readouts_to_send = timeout;
                 break;
 
             case GET_READOUTS_SNAPSHOT:
-                {
-                    UpdateReadout discard_readout = {};
-                    while(xQueueReceive(readouts_queue, &discard_readout, 0) == pdTRUE) /* Discard all past readouts. */;
-                }
-                readouts_allow_missing = false;
+                xQueueReset(readouts_queue);
+                // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
                 readouts_allow_sending = false;
                 readouts_to_send = HISTORY_SIZE;
                 break;
@@ -321,42 +320,35 @@ void usb_tick(){
 
     // Queue the state readouts on the USB buffer.
     if (readouts_allow_sending){
-        UpdateReadout readout;
 
-        for (size_t i = 0; i < HISTORY_SIZE; i++){
+        // Send as many readouts as requested.
+        for (size_t i = 0; readouts_to_send > 0 and i < HISTORY_SIZE; i++){
+            StateReadout readout;
+
             // Skip if we have no data left to read.
             if (xQueuePeek(readouts_queue, &readout, 0) != pdTRUE) break;
 
-            // Send as many readouts as requested.
-            if (readouts_to_send > 0) {
-                // Send the readout to the host.
-                uint8_t readout_data[state_readout_size] = {0};
-                write_state_readout(readout_data, readout);
-                
-                if(usb_com_queue_send(readout_data, state_readout_size) == 0){
-                    // We successfully added the readout to the USB buffer.
-                    readouts_to_send -= 1;
-                    last_usb_send = HAL_GetTick();
-                } else {
-                    // The USB buffer is full; stop sending until there's space.
-                    if (HAL_GetTick() > last_usb_send + USB_TIMEOUT) {
-                        // The USB controller is not reading data; stop sending and clear the USB buffer.
-                        readouts_to_send = 0;
-                        usb_com_reset();
-                    }
-                    // Break before we consume the readout.
-                    break;
-                }
+            // Send the readout to the host.
+            uint8_t readout_data[state_readout_size] = {0};
+            write_state_readout(readout_data, readout);
+            
+            if(usb_com_queue_send(readout_data, state_readout_size) == 0){
+                // We successfully added the readout to the USB buffer.
+                readouts_to_send -= 1;
+                last_usb_send = HAL_GetTick();
+                // Discard the sent readout.
+                xQueueReceive(readouts_queue, &readout, 0);
 
             } else {
-                // Reset to 0 just in case we doubly subtracted.
-                readouts_to_send = 0;
-                // No readouts left to send, re-enable overwriting in case we came out of test mode.
-                readouts_allow_missing = true;
+                // The USB buffer is full; stop sending until there's space.
+                if (HAL_GetTick() > last_usb_send + USB_TIMEOUT) {
+                    // The USB controller is not reading data; stop sending and clear the USB buffer.
+                    readouts_to_send = 0;
+                    usb_com_reset();
+                }
+                // Stop sending until the USB buffer is free again.
+                break;
             }
-            
-            // Either we've sent or want to discard the last readout.
-            xQueueReceive(readouts_queue, &readout, 0);
         }
     }
     
