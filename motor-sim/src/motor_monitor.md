@@ -233,100 +233,118 @@ async function command(command){
 }
 
 
+let latest_stream_timeout = null;
+function command_and_stream_latest(delay_ms, command, options = {}){
+  if (latest_stream_timeout) clearTimeout(latest_stream_timeout);
+  latest_stream_timeout = setTimeout(async function(){
+    await command_and_stream(command, {...options});
+  }, delay_ms);
+}
+
 const data_stream_buttons = Inputs.button(
   [
     ["ADC snapshot", async function(){
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
-    }],
-    ["Freewheel Snapshot", async function(){
-      await command(motor.SET_STATE_FREEWHEEL);
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream_latest(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["ADC stream", async function(){
-      await command_and_stream(motor.GET_READOUTS);
+      await command_and_stream_latest(0, motor.GET_READOUTS);
     }],
     ["Test all permutations", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_ALL_PERMUTATIONS);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
     ["Test ground short", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_GROUND_SHORT);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_GROUND_SHORT);
     }],
     ["Test positive short", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_POSITIVE_SHORT);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_POSITIVE_SHORT);
     }],
     ["Test U directions", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_U_DIRECTIONS);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_U_DIRECTIONS);
     }],
     ["Test U increasing", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_U_INCREASING);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_U_INCREASING);
     }],
     ["Test U decreasing", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_U_DECREASING);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_U_DECREASING);
     }],
     ["Test V increasing", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_V_INCREASING);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_V_DECREASING);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_W_INCREASING);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", async function(){
-      await command_and_stream(motor.SET_STATE_TEST_W_DECREASING);
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_DECREASING);
+    }],
+    ["Test V increasing", async function(){
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_INCREASING);
+    }],
+    ["Test V decreasing", async function(){
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_DECREASING);
+    }],
+    ["Test W increasing", async function(){
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_INCREASING);
+    }],
+    ["Test W decreasing", async function(){
+      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Read data"},
 );
 
+
 const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
       await command(motor.SET_STATE_OFF);
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream_latest(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive +", async function(){
       await command(motor.SET_STATE_DRIVE_POS);
-      await wait(400);
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive -", async function(){
       await command(motor.SET_STATE_DRIVE_NEG);
-      await wait(400);
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive smooth +", async function(){
       await command(motor.SET_STATE_DRIVE_SMOOTH_POS);
-      await wait(400);
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive smooth -", async function(){
       await command(motor.SET_STATE_DRIVE_SMOOTH_NEG);
-      await wait(400);
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Freewheel", async function(){
       await command(motor.SET_STATE_FREEWHEEL);
-      await wait(400);
-      await command_and_stream(motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream_latest(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold U positive", async function(){
       await command(motor.SET_STATE_HOLD_U_POSITIVE);
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold V positive", async function(){
       await command(motor.SET_STATE_HOLD_V_POSITIVE);
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold W positive", async function(){
       await command(motor.SET_STATE_HOLD_W_POSITIVE);
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold U negative", async function(){
       await command(motor.SET_STATE_HOLD_U_NEGATIVE);
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold V negative", async function(){
       await command(motor.SET_STATE_HOLD_V_NEGATIVE);
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold W negative", async function(){
       await command(motor.SET_STATE_HOLD_W_NEGATIVE);
+      command_and_stream_latest(1000, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
   ],
   {label: "Commands"},

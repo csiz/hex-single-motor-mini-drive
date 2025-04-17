@@ -3,6 +3,7 @@
 #include "io.hpp"
 #include "motor_control.hpp"
 #include "data.hpp"
+#include "interrupts.hpp"
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
@@ -27,7 +28,8 @@ const uint32_t USB_TIMEOUT = 500;
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
 // TODO: also need to set a minium on time for MOSFET driving, too little 
-// won't spin the motor at all.
+// won't spin the motor at all (lies! we can use a small on time to
+// bias the motor to make it easy to turn by the load).
 
 
 // Setup ADC for reading motor phase currents.
@@ -166,7 +168,7 @@ void app_init() {
     enable_LED_channels();
 
     // Get initial hall sensor state and initialize poisition tracking.
-    update_position_observation();
+    initialize_position_tracking();
 }
 
 
@@ -234,53 +236,53 @@ void usb_tick(){
             // Measure the motor phase currents.
             
             case SET_STATE_TEST_ALL_PERMUTATIONS:
-                start_test(test_all_permutations);
+                motor_start_test(test_all_permutations);
                 break;
 
             case SET_STATE_TEST_GROUND_SHORT:
-                start_test(test_ground_short);
+                motor_start_test(test_ground_short);
                 break;
 
             case SET_STATE_TEST_POSITIVE_SHORT:
-                start_test(test_positive_short);
+                motor_start_test(test_positive_short);
                 break;
 
             case SET_STATE_TEST_U_DIRECTIONS:
-                start_test(test_u_directions);
+                motor_start_test(test_u_directions);
                 break;
 
             case SET_STATE_TEST_U_INCREASING:
-                start_test(test_u_increasing);
+                motor_start_test(test_u_increasing);
                 break;
             case SET_STATE_TEST_U_DECREASING:
-                start_test(test_u_decreasing);
+                motor_start_test(test_u_decreasing);
                 break;
             case SET_STATE_TEST_V_INCREASING:
-                start_test(test_v_increasing);
+                motor_start_test(test_v_increasing);
                 break;
             case SET_STATE_TEST_V_DECREASING:
-                start_test(test_v_decreasing);
+                motor_start_test(test_v_decreasing);
                 break;
             case SET_STATE_TEST_W_INCREASING:
-                start_test(test_w_increasing);
+                motor_start_test(test_w_increasing);
                 break;
             case SET_STATE_TEST_W_DECREASING:
-                start_test(test_w_decreasing);
+                motor_start_test(test_w_decreasing);
                 break;
 
             // Drive the motor.
             case SET_STATE_DRIVE_POS:
-                drive_motor_pos(pwm, timeout);
+                motor_drive_pos(pwm, timeout);
                 break;
             case SET_STATE_DRIVE_NEG:
-                drive_motor_neg(pwm, timeout);
+                motor_drive_neg(pwm, timeout);
                 break;
 
             case SET_STATE_DRIVE_SMOOTH_POS:
-                drive_motor_smooth_pos(pwm, timeout);
+                motor_drive_smooth_pos(pwm, timeout);
                 break;
             case SET_STATE_DRIVE_SMOOTH_NEG:
-                drive_motor_smooth_neg(pwm, timeout);
+                motor_drive_smooth_neg(pwm, timeout);
                 break;
 
             // Freewheel the motor.
@@ -289,27 +291,27 @@ void usb_tick(){
                 break;
 
             case SET_STATE_HOLD_U_POSITIVE:
-                hold_motor(pwm, 0, 0, timeout);
+                motor_hold(pwm, 0, 0, timeout);
                 break;
 
             case SET_STATE_HOLD_V_POSITIVE:
-                hold_motor(0, pwm, 0, timeout);
+                motor_hold(0, pwm, 0, timeout);
                 break;
 
             case SET_STATE_HOLD_W_POSITIVE:
-                hold_motor(0, 0, pwm, timeout);
+                motor_hold(0, 0, pwm, timeout);
                 break;
 
             case SET_STATE_HOLD_U_NEGATIVE:
-                hold_motor(0, pwm, pwm, timeout);
+                motor_hold(0, pwm, pwm, timeout);
                 break;
 
             case SET_STATE_HOLD_V_NEGATIVE:
-                hold_motor(pwm, 0, pwm, timeout);
+                motor_hold(pwm, 0, pwm, timeout);
                 break;
 
             case SET_STATE_HOLD_W_NEGATIVE:
-                hold_motor(pwm, pwm, 0, timeout);
+                motor_hold(pwm, pwm, 0, timeout);
                 break;
         }
     }
@@ -378,10 +380,9 @@ void app_tick() {
     tim2_update_rate = tim2_update_number / seconds;
     tim2_cc1_rate = tim2_cc1_number / seconds;
 
-    // Process the latest ADC readouts.
-    calculate_motor_phase_currents_gated();
-
+    
     // Show the current hall sensor state on the LEDs.
+    const uint8_t hall_state = (latest_readout.position >> 13 & 0b111);
     set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
 
     // Handle USB communication.

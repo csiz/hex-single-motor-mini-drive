@@ -5,20 +5,8 @@
 #include <cstdint>
 #include <cstddef>
 
-
-struct PWMStage {
-    uint16_t duration;
-    uint16_t u;
-    uint16_t v;
-    uint16_t w;
-};
-
-const size_t SCHEDULE_SIZE = 12;
-
-using PWMSchedule = PWMStage[SCHEDULE_SIZE];
-
-// Motor control
-// -------------
+// Type Definitions
+// ----------------
 
 enum struct DriverState {
     OFF,
@@ -30,6 +18,56 @@ enum struct DriverState {
     HOLD,
     TEST_SCHEDULE,
 };
+
+// Stage for a PWM test schedule.
+struct PWMStage {
+    uint16_t duration; // Duration in PWM cycles.
+    uint16_t u; // PWM duty cycle for U phase.
+    uint16_t v; // PWM duty cycle for V phase.
+    uint16_t w; // PWM duty cycle for W phase.
+};
+
+
+// Number of steps in test schedules.
+const size_t SCHEDULE_SIZE = 12;
+
+// Motor driving PWM schedule.
+using PWMSchedule = PWMStage[SCHEDULE_SIZE];
+
+
+
+// Motor control
+// -------------
+
+// Motor control state
+extern DriverState driver_state;
+
+extern uint16_t duration_till_timeout;
+
+extern uint16_t hold_u_pwm_duty;
+extern uint16_t hold_v_pwm_duty;
+extern uint16_t hold_w_pwm_duty;
+
+extern uint16_t pwm_command;
+
+extern uint8_t leading_angle;
+
+extern PWMSchedule const* active_schedule;
+
+// Motor control functions
+void motor_drive_neg(uint16_t pwm, uint16_t timeout);
+void motor_drive_pos(uint16_t pwm, uint16_t timeout);
+void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout);
+void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout);
+void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
+void motor_break();
+void motor_freewheel();
+void motor_start_test(const PWMSchedule & schedule);
+
+
+
+// Motor PWM constants
+// -------------------
 
 const uint16_t PWM_AUTORELOAD = 1535;
 const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
@@ -43,30 +81,13 @@ const uint16_t PWM_MAX_HOLD = PWM_BASE * 2 / 10;
 
 const uint16_t MAX_TIMEOUT = 0xFFFF;
 
-// Motor control functions
-void motor_control_init();
-
-void drive_motor_neg(uint16_t pwm, uint16_t timeout);
-void drive_motor_pos(uint16_t pwm, uint16_t timeout);
-void drive_motor_smooth_pos(uint16_t pwm, uint16_t timeout);
-void drive_motor_smooth_neg(uint16_t pwm, uint16_t timeout);
-
-void hold_motor(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
-
-uint32_t get_combined_motor_pwm_duty();
-
-void motor_break();
-
-void motor_freewheel();
-
-void update_motor_control_registers(uint8_t angle);
-
-void start_test(const PWMSchedule & schedule);
 
 
 
-// Calibration procedures
-// ----------------------
+
+// Test procedures
+// ---------------
+
 
 const uint16_t PWM_TEST = PWM_BASE / 2;
 
