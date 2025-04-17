@@ -7,59 +7,56 @@
 // Motor PWM control
 // -----------------
 
-static inline void set_motor_u_pwm_duty_cycle(uint16_t duty_cycle){
+const uint32_t pwm_u_enable_bits = LL_TIM_CHANNEL_CH1 | LL_TIM_CHANNEL_CH1N;
+const uint32_t pwm_v_enable_bits = LL_TIM_CHANNEL_CH2 | LL_TIM_CHANNEL_CH2N;
+const uint32_t pwm_w_enable_bits = LL_TIM_CHANNEL_CH3 | LL_TIM_CHANNEL_CH3N;
+const uint32_t pwm_enable_bits = pwm_u_enable_bits | pwm_v_enable_bits | pwm_w_enable_bits;
+
+
+static inline void set_motor_u_pwm_duty_cycle(uint32_t duty_cycle){
     LL_TIM_OC_SetCompareCH1(TIM1, duty_cycle);
 }
 
 static inline void disable_motor_u_output(){
-    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH1);
-    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH1N);
+    LL_TIM_CC_DisableChannel(TIM1, pwm_u_enable_bits);
 }
 
 static inline void enable_motor_u_output(){
-    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1);
-    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1N);
+    LL_TIM_CC_EnableChannel(TIM1, pwm_u_enable_bits);
 }
 
-static inline void set_motor_v_pwm_duty_cycle(uint16_t duty_cycle){
+static inline void set_motor_v_pwm_duty_cycle(uint32_t duty_cycle){
     LL_TIM_OC_SetCompareCH2(TIM1, duty_cycle);
 }
 
 static inline void disable_motor_v_output(){
-    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH2);
-    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH2N);
+    LL_TIM_CC_DisableChannel(TIM1, pwm_v_enable_bits);
 }
 
 static inline void enable_motor_v_output(){
-    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH2);
-    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH2N);
+    LL_TIM_CC_EnableChannel(TIM1, pwm_v_enable_bits);
 }
 
 
-static inline void set_motor_w_pwm_duty_cycle(uint16_t duty_cycle){
+static inline void set_motor_w_pwm_duty_cycle(uint32_t duty_cycle){
     LL_TIM_OC_SetCompareCH3(TIM1, duty_cycle);
 }
 
 static inline void disable_motor_w_output(){
-    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH3);
-    LL_TIM_CC_DisableChannel(TIM1, LL_TIM_CHANNEL_CH3N);
+    LL_TIM_CC_DisableChannel(TIM1, pwm_w_enable_bits);
 }
 
 static inline void enable_motor_w_output(){
-    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3);
-    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3N);
+    LL_TIM_CC_EnableChannel(TIM1, pwm_w_enable_bits);
 }
 
+
 static inline void enable_motor_outputs(){
-    enable_motor_u_output();
-    enable_motor_v_output();
-    enable_motor_w_output();
+    LL_TIM_CC_EnableChannel(TIM1, pwm_enable_bits);
 }
 
 static inline void disable_motor_outputs(){
-    disable_motor_u_output();
-    disable_motor_v_output();
-    disable_motor_w_output();
+    LL_TIM_CC_DisableChannel(TIM1, pwm_enable_bits);
 }
 
 
