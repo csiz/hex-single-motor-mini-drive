@@ -23,17 +23,19 @@ float tim1_update_rate = 0.0f;
 float tim2_update_rate = 0.0f;
 float tim2_cc1_rate = 0.0f;
 
-uint32_t last_usb_send = 0;
+uint32_t usb_last_send = 0;
 const uint32_t USB_TIMEOUT = 500;
 
 // Receive data
 // ------------
-const size_t usb_command_size = 12;
+
+const size_t usb_min_command_size = 12;
+const size_t usb_max_command_size = 64;
 // Buffer for the USB command in case we receive it in chunks.
-uint8_t usb_command[usb_command_size] = {};
+uint8_t usb_command[usb_max_command_size] = {};
 
-size_t usb_command_end = 0;
-
+size_t usb_command_index = 0;
+size_t usb_bytes_expected = usb_min_command_size;
 
 // TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
 // TODO: also need to set a minium on time for MOSFET driving, too little 
@@ -203,168 +205,172 @@ void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
 }
 
 
-void usb_tick(){
-    usb_command_end += usb_com_recv(usb_command + usb_command_end, usb_command_size - usb_command_end);
+static inline void usb_receive(){
+    usb_command_index += usb_com_recv(usb_command + usb_command_index, usb_bytes_expected);
 
-    // Check if we have received a full command; or any data at all.
-    if (usb_command_end >= usb_command_size) {
-        // Reset the end of the command buffer.
-        usb_command_end = 0;
+    // Wait for more data if we don't have a full command yet.
+    if (usb_command_index < usb_bytes_expected) return;
+        
 
-        // The first number is the command code, the second is the data; if any.
-        const uint32_t command = read_uint32(&usb_command[0]);
-        const uint16_t timeout = clip_to(0, MAX_TIMEOUT, read_uint16(&usb_command[4]));
-        const uint16_t pwm = clip_to(0, PWM_MAX, read_uint16(&usb_command[6]));
-        const uint16_t leading_angle = clip_to(0, 255, read_uint16(&usb_command[8]));
-        // const uint16_t max_current = clip_to(0, 0xFFFF, read_uint16(&usb_command[10]));
+    // The first number is the command code, the second is the data; if any.
+    const uint32_t command = read_uint32(&usb_command[0]);
+    const uint16_t timeout = clip_to(0, MAX_TIMEOUT, read_uint16(&usb_command[4]));
+    const uint16_t pwm = clip_to(0, PWM_MAX, read_uint16(&usb_command[6]));
+    const uint16_t leading_angle = clip_to(0, 255, read_uint16(&usb_command[8]));
+    // const uint16_t max_current = clip_to(0, 0xFFFF, read_uint16(&usb_command[10]));
 
 
-        switch (command) {
-            // Send the whole history buffer over USB.
-            case GET_READOUTS:
-                // Clear the queue of older data.
-                xQueueReset(readouts_queue);
-                readouts_to_send = timeout;
-                break;
+    switch (command) {
+        // Send the whole history buffer over USB.
+        case GET_READOUTS:
+            // Clear the queue of older data.
+            xQueueReset(readouts_queue);
+            readouts_to_send = timeout;
+            break;
 
-            case GET_READOUTS_SNAPSHOT:
-                xQueueReset(readouts_queue);
-                // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
-                readouts_allow_sending = false;
-                readouts_to_send = HISTORY_SIZE;
-                break;
+        case GET_READOUTS_SNAPSHOT:
+            xQueueReset(readouts_queue);
+            // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
+            readouts_allow_sending = false;
+            readouts_to_send = HISTORY_SIZE;
+            break;
 
-            // Turn off the motor driver.
-            case SET_STATE_OFF:
-                motor_break();
-                break;
-                
-            // Measure the motor phase currents.
+        // Turn off the motor driver.
+        case SET_STATE_OFF:
+            motor_break();
+            break;
             
-            case SET_STATE_TEST_ALL_PERMUTATIONS:
-                motor_start_test(test_all_permutations);
-                break;
+        // Measure the motor phase currents.
+        
+        case SET_STATE_TEST_ALL_PERMUTATIONS:
+            motor_start_test(test_all_permutations);
+            break;
 
-            case SET_STATE_TEST_GROUND_SHORT:
-                motor_start_test(test_ground_short);
-                break;
+        case SET_STATE_TEST_GROUND_SHORT:
+            motor_start_test(test_ground_short);
+            break;
 
-            case SET_STATE_TEST_POSITIVE_SHORT:
-                motor_start_test(test_positive_short);
-                break;
+        case SET_STATE_TEST_POSITIVE_SHORT:
+            motor_start_test(test_positive_short);
+            break;
 
-            case SET_STATE_TEST_U_DIRECTIONS:
-                motor_start_test(test_u_directions);
-                break;
+        case SET_STATE_TEST_U_DIRECTIONS:
+            motor_start_test(test_u_directions);
+            break;
 
-            case SET_STATE_TEST_U_INCREASING:
-                motor_start_test(test_u_increasing);
-                break;
-            case SET_STATE_TEST_U_DECREASING:
-                motor_start_test(test_u_decreasing);
-                break;
-            case SET_STATE_TEST_V_INCREASING:
-                motor_start_test(test_v_increasing);
-                break;
-            case SET_STATE_TEST_V_DECREASING:
-                motor_start_test(test_v_decreasing);
-                break;
-            case SET_STATE_TEST_W_INCREASING:
-                motor_start_test(test_w_increasing);
-                break;
-            case SET_STATE_TEST_W_DECREASING:
-                motor_start_test(test_w_decreasing);
-                break;
+        case SET_STATE_TEST_U_INCREASING:
+            motor_start_test(test_u_increasing);
+            break;
+        case SET_STATE_TEST_U_DECREASING:
+            motor_start_test(test_u_decreasing);
+            break;
+        case SET_STATE_TEST_V_INCREASING:
+            motor_start_test(test_v_increasing);
+            break;
+        case SET_STATE_TEST_V_DECREASING:
+            motor_start_test(test_v_decreasing);
+            break;
+        case SET_STATE_TEST_W_INCREASING:
+            motor_start_test(test_w_increasing);
+            break;
+        case SET_STATE_TEST_W_DECREASING:
+            motor_start_test(test_w_decreasing);
+            break;
 
-            // Drive the motor.
-            case SET_STATE_DRIVE_POS:
-                motor_drive_pos(pwm, timeout);
-                break;
-            case SET_STATE_DRIVE_NEG:
-                motor_drive_neg(pwm, timeout);
-                break;
+        // Drive the motor.
+        case SET_STATE_DRIVE_POS:
+            motor_drive_pos(pwm, timeout);
+            break;
+        case SET_STATE_DRIVE_NEG:
+            motor_drive_neg(pwm, timeout);
+            break;
 
-            case SET_STATE_DRIVE_SMOOTH_POS:
-                motor_drive_smooth_pos(pwm, timeout, leading_angle);
-                break;
-            case SET_STATE_DRIVE_SMOOTH_NEG:
-                motor_drive_smooth_neg(pwm, timeout, leading_angle);
-                break;
+        case SET_STATE_DRIVE_SMOOTH_POS:
+            motor_drive_smooth_pos(pwm, timeout, leading_angle);
+            break;
+        case SET_STATE_DRIVE_SMOOTH_NEG:
+            motor_drive_smooth_neg(pwm, timeout, leading_angle);
+            break;
 
-            // Freewheel the motor.
-            case SET_STATE_FREEWHEEL:
-                motor_freewheel();
-                break;
+        // Freewheel the motor.
+        case SET_STATE_FREEWHEEL:
+            motor_freewheel();
+            break;
 
-            case SET_STATE_HOLD_U_POSITIVE:
-                motor_hold(pwm, 0, 0, timeout);
-                break;
+        case SET_STATE_HOLD_U_POSITIVE:
+            motor_hold(pwm, 0, 0, timeout);
+            break;
 
-            case SET_STATE_HOLD_V_POSITIVE:
-                motor_hold(0, pwm, 0, timeout);
-                break;
+        case SET_STATE_HOLD_V_POSITIVE:
+            motor_hold(0, pwm, 0, timeout);
+            break;
 
-            case SET_STATE_HOLD_W_POSITIVE:
-                motor_hold(0, 0, pwm, timeout);
-                break;
+        case SET_STATE_HOLD_W_POSITIVE:
+            motor_hold(0, 0, pwm, timeout);
+            break;
 
-            case SET_STATE_HOLD_U_NEGATIVE:
-                motor_hold(0, pwm, pwm, timeout);
-                break;
+        case SET_STATE_HOLD_U_NEGATIVE:
+            motor_hold(0, pwm, pwm, timeout);
+            break;
 
-            case SET_STATE_HOLD_V_NEGATIVE:
-                motor_hold(pwm, 0, pwm, timeout);
-                break;
+        case SET_STATE_HOLD_V_NEGATIVE:
+            motor_hold(pwm, 0, pwm, timeout);
+            break;
 
-            case SET_STATE_HOLD_W_NEGATIVE:
-                motor_hold(pwm, pwm, 0, timeout);
-                break;
+        case SET_STATE_HOLD_W_NEGATIVE:
+            motor_hold(pwm, pwm, 0, timeout);
+            break;
 
-            default:
-                // Invalid command; ignore it.
-                invalid_commands += 1;
-                // Flush the recv buffer once to remove any residual data; but ignore the data.
-                usb_com_recv(usb_command, usb_command_size);
-                break;
-        }
+        default:
+            // Invalid command; ignore it.
+            invalid_commands += 1;
+            // Flush the recv buffer once to remove any residual data; but ignore the data.
+            usb_com_recv(usb_command, usb_min_command_size);
+            break;
     }
 
-    // Send data
-    // ---------
+    // Reset the end of the command buffer; to prepare for the next command.
+    usb_command_index = 0;
+    usb_bytes_expected = usb_min_command_size;
+}
+
+static inline void usb_queue_readouts(){
+    // Send as many readouts as requested.
+    for (size_t i = 0; readouts_to_send > 0 and i < HISTORY_SIZE; i++){
+        StateReadout readout;
+
+        // Skip if we have no data left to read.
+        if (xQueuePeek(readouts_queue, &readout, 0) != pdTRUE) break;
+
+        // Send the readout to the host.
+        uint8_t readout_data[state_readout_size] = {0};
+        write_state_readout(readout_data, readout);
+        
+        if(usb_com_queue_send(readout_data, state_readout_size) == 0){
+            // We successfully added the readout to the USB buffer.
+            readouts_to_send -= 1;
+            usb_last_send = HAL_GetTick();
+            // Discard the sent readout.
+            xQueueReceive(readouts_queue, &readout, 0);
+
+        } else {
+            // The USB buffer is full; stop sending until there's space.
+            if (HAL_GetTick() > usb_last_send + USB_TIMEOUT) {
+                // The USB controller is not reading data; stop sending and clear the USB buffer.
+                readouts_to_send = 0;
+                usb_com_reset();
+            }
+            // Stop sending until the USB buffer is free again.
+            break;
+        }
+    }
+}
+
+void usb_tick(){
+    usb_receive();
 
     // Queue the state readouts on the USB buffer.
-    if (readouts_allow_sending){
-
-        // Send as many readouts as requested.
-        for (size_t i = 0; readouts_to_send > 0 and i < HISTORY_SIZE; i++){
-            StateReadout readout;
-
-            // Skip if we have no data left to read.
-            if (xQueuePeek(readouts_queue, &readout, 0) != pdTRUE) break;
-
-            // Send the readout to the host.
-            uint8_t readout_data[state_readout_size] = {0};
-            write_state_readout(readout_data, readout);
-            
-            if(usb_com_queue_send(readout_data, state_readout_size) == 0){
-                // We successfully added the readout to the USB buffer.
-                readouts_to_send -= 1;
-                last_usb_send = HAL_GetTick();
-                // Discard the sent readout.
-                xQueueReceive(readouts_queue, &readout, 0);
-
-            } else {
-                // The USB buffer is full; stop sending until there's space.
-                if (HAL_GetTick() > last_usb_send + USB_TIMEOUT) {
-                    // The USB controller is not reading data; stop sending and clear the USB buffer.
-                    readouts_to_send = 0;
-                    usb_com_reset();
-                }
-                // Stop sending until the USB buffer is free again.
-                break;
-            }
-        }
-    }
+    if (readouts_allow_sending) usb_queue_readouts();
     
     // Send USB data from the buffer.
     usb_com_send();
