@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
 static inline void write_uint32(uint8_t* buf, uint32_t value){
     buf[0] = (value >> 24) & 0xFF;

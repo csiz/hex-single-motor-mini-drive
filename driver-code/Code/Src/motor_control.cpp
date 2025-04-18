@@ -1,7 +1,5 @@
 #include "motor_control.hpp"
 
-#include "interface.hpp"
-#include "interrupts.hpp"
 
 DriverState driver_state = DriverState::OFF;
 uint16_t hold_u_pwm_duty = 0;
@@ -14,9 +12,9 @@ uint16_t duration_till_timeout = 0;
 uint8_t leading_angle = 0;
 
 
-PWMSchedule const* test_schedule_pointer = nullptr;
-size_t test_schedule_counter = 0;
-size_t test_schedule_stage = 0;
+PWMSchedule const* schedule_pointer = nullptr;
+size_t schedule_counter = 0;
+size_t schedule_stage = 0;
 
 
 void motor_break(){
@@ -69,21 +67,13 @@ void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout, uint16_t new_leading
 }
 
 
-void motor_start_test(PWMSchedule const& schedule){
+void motor_start_schedule(PWMSchedule const& schedule){
     // Don't start a new test if we're already running one.
     if (driver_state == DriverState::TEST_SCHEDULE) return;
 
-    // Stop adding readouts to the queue until the test starts in the interrupt handler.
-    readouts_to_send = 0;
-    // Stop emptying the readouts queue; we want to keep the test data.
-    readouts_allow_sending = false;
-    
-    // Clear the readouts buffer of old data.
-    xQueueReset(readouts_queue);
-
-    test_schedule_counter = 0;
-    test_schedule_stage = 0;
-    test_schedule_pointer = &schedule;
+    schedule_counter = 0;
+    schedule_stage = 0;
+    schedule_pointer = &schedule;
 
     driver_state = DriverState::TEST_SCHEDULE;
 }

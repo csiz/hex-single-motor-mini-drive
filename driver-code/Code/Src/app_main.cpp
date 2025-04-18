@@ -2,6 +2,7 @@
 
 #include "constants.hpp"
 #include "io.hpp"
+
 #include "interrupts.hpp"
 #include "interface.hpp"
 
@@ -9,8 +10,8 @@
 #include <stm32f1xx_ll_tim.h>
 
 
-#include <stdlib.h>
-#include <math.h>
+#include <cstdlib>
+#include <cmath>
 
 
 

@@ -2,9 +2,10 @@
 
 #include "io.hpp"
 #include "constants.hpp"
-#include "motor_control.hpp"
 #include "main.h" // For the Error_Handler function.
-#include "interface.hpp"
+
+#include "motor_control.hpp"
+
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
@@ -28,6 +29,7 @@ StateReadout latest_readout = {};
 QueueHandle_t readouts_queue = nullptr;
 StaticQueue_t readouts_queue_storage = {};
 uint8_t readouts_queue_buffer[HISTORY_SIZE * READOUT_ITEMSIZE] = {};
+uint32_t readouts_missed = 0;
 
 void data_init(){
     // Create the queue for the readouts.
@@ -403,25 +405,28 @@ static inline void smooth_motor_control(uint8_t angle){
 }
 
 static inline void test_motor_control(){
-    if(test_schedule_pointer == nullptr) return motor_break();
+    if(schedule_pointer == nullptr) return motor_break();
 
-    const PWMSchedule & schedule = *test_schedule_pointer;
+    const PWMSchedule & schedule = *schedule_pointer;
 
-    motor_u_pwm_duty = schedule[test_schedule_stage].u;
-    motor_v_pwm_duty = schedule[test_schedule_stage].v;
-    motor_w_pwm_duty = schedule[test_schedule_stage].w;
+    motor_u_pwm_duty = schedule[schedule_stage].u;
+    motor_v_pwm_duty = schedule[schedule_stage].v;
+    motor_w_pwm_duty = schedule[schedule_stage].w;
 
     // Go to the next step in the schedule.
-    test_schedule_counter += 1;
-    if (test_schedule_counter >= schedule[test_schedule_stage].duration) {
-        test_schedule_stage += 1;
-        test_schedule_counter = 0;
+    schedule_counter += 1;
+    if (schedule_counter >= schedule[schedule_stage].duration) {
+        schedule_stage += 1;
+        schedule_counter = 0;
     }
     
     // Next stage, unless we're at the end of the schedule.
-    if (test_schedule_stage >= SCHEDULE_SIZE) {
-        readouts_to_send = HISTORY_SIZE;
-        readouts_allow_sending = true;
+    if (schedule_stage >= SCHEDULE_SIZE) {
+        // Reset the schedule stage and counter.
+        schedule_stage = 0;
+        schedule_counter = 0;
+        schedule_pointer = nullptr;
+        // Stop the test by breaking the motor.
         motor_break();
     }
 }
@@ -471,8 +476,8 @@ static inline void pwm_cycle_and_adc_update(){
     
     // Always attempt to write the lastest readout to the history buffer.
     if(xQueueSendToBackFromISR(readouts_queue, &latest_readout, NULL) == errQUEUE_FULL){
-        // Full queue, allow sending anytime.
-        readouts_allow_sending = true;
+        // Full queue, count missed readouts.
+        readouts_missed += 1;
     }
 
     // Update motor control.

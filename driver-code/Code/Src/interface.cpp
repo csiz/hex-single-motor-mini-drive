@@ -1,16 +1,18 @@
 #include "interface.hpp"
 
-#include "constants.hpp"
-#include "motor_control.hpp"
-#include "byte_handling.hpp"
 #include "interrupts.hpp"
+#include "motor_control.hpp"
+
+#include "constants.hpp"
+#include "byte_handling.hpp"
+
 
 #include "main.h"
 #include "usbd_cdc_if.h"
 
 
-uint32_t readouts_to_send = 0;
-bool readouts_allow_sending = true;
+uint32_t usb_readouts_to_send = 0;
+bool usb_wait_full_history = false;
 
 
 
@@ -60,6 +62,22 @@ void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
     offset += 2;
 }
 
+static inline void motor_start_test(PWMSchedule const& schedule){
+    if (driver_state == DriverState::TEST_SCHEDULE) return;
+    
+    // Stop emptying the readouts queue; we want to keep the test data.
+    usb_wait_full_history = true;
+
+    // Stop adding readouts to the queue until the test starts in the interrupt handler.
+    usb_readouts_to_send = HISTORY_SIZE;
+    
+    // Clear the readouts buffer of old data.
+    xQueueReset(readouts_queue);
+
+    // Start the test schedule.
+    motor_start_schedule(schedule);
+}
+
 
 static inline void usb_receive(){
     usb_command_index += usb_com_recv(usb_command + usb_command_index, usb_bytes_expected);
@@ -86,14 +104,14 @@ static inline void usb_receive(){
         case GET_READOUTS:
             // Clear the queue of older data.
             xQueueReset(readouts_queue);
-            readouts_to_send = timeout;
+            usb_readouts_to_send = timeout;
             break;
 
         case GET_READOUTS_SNAPSHOT:
             xQueueReset(readouts_queue);
             // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
-            readouts_allow_sending = false;
-            readouts_to_send = HISTORY_SIZE;
+            usb_wait_full_history = true;
+            usb_readouts_to_send = HISTORY_SIZE;
             break;
 
         // Turn off the motor driver.
@@ -196,8 +214,20 @@ static inline void usb_receive(){
 }
 
 static inline void usb_queue_readouts(){
+    // Check if we have to wait for the queue to fill before sending readouts.
+    // This is used to prevent sending readouts while the motor is commutating.
+    if (usb_wait_full_history) {
+        if(xQueueIsQueueFullFromISR(readouts_queue) == pdTRUE){
+            // The queue is full; we can start sending readouts.
+            usb_wait_full_history = false;
+        } else {
+            // We have not filled the queue yet; don't send readouts.
+            return;
+        }
+    }
+
     // Send as many readouts as requested.
-    for (size_t i = 0; readouts_to_send > 0 and i < HISTORY_SIZE; i++){
+    for (size_t i = 0; usb_readouts_to_send > 0 and i < HISTORY_SIZE; i++){
         StateReadout readout;
 
         // Skip if we have no data left to read.
@@ -209,7 +239,7 @@ static inline void usb_queue_readouts(){
         
         if(usb_com_queue_send(readout_data, state_readout_size) == 0){
             // We successfully added the readout to the USB buffer.
-            readouts_to_send -= 1;
+            usb_readouts_to_send -= 1;
             usb_last_send = HAL_GetTick();
             // Discard the sent readout.
             xQueueReceive(readouts_queue, &readout, 0);
@@ -218,7 +248,7 @@ static inline void usb_queue_readouts(){
             // The USB buffer is full; stop sending until there's space.
             if (HAL_GetTick() > usb_last_send + USB_TIMEOUT) {
                 // The USB controller is not reading data; stop sending and clear the USB buffer.
-                readouts_to_send = 0;
+                usb_readouts_to_send = 0;
                 usb_com_reset();
             }
             // Stop sending until the USB buffer is free again.
@@ -232,11 +262,12 @@ void usb_tick(){
     usb_com_send();
 
     usb_receive();
-
-    // Queue the state readouts on the USB buffer.
-    if (readouts_allow_sending) usb_queue_readouts();
     
-    // Send USB data from the buffer, twice per loop, hopefully the USB module sends 64 byte packets while we compute.
+    // Queue the state readouts on the USB buffer.
+    usb_queue_readouts();
+    
+    // Send USB data from the buffer, twice per loop, hopefully the 
+    // USB module sends 64 byte packets while we computed stuff.
     usb_com_send();
 }
 

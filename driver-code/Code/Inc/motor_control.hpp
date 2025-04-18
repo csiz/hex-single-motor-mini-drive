@@ -53,9 +53,9 @@ extern uint16_t pwm_command;
 
 extern uint8_t leading_angle;
 
-extern PWMSchedule const* test_schedule_pointer;
-extern size_t test_schedule_counter;
-extern size_t test_schedule_stage;
+extern PWMSchedule const* schedule_pointer;
+extern size_t schedule_counter;
+extern size_t schedule_stage;
 
 // Functions to set motor driver state.
 
@@ -66,7 +66,7 @@ void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout, uint16_t new_leading
 void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout);
 void motor_break();
 void motor_freewheel();
-void motor_start_test(const PWMSchedule & schedule);
+void motor_start_schedule(const PWMSchedule & schedule);
 
 
 

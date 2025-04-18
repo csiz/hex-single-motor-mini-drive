@@ -58,6 +58,8 @@ extern QueueHandle_t readouts_queue;
 extern StaticQueue_t readouts_queue_storage;
 extern uint8_t readouts_queue_buffer[HISTORY_SIZE * READOUT_ITEMSIZE];
 
+extern uint32_t readouts_missed;
+
 // Initialize the queue for data passing from interrupt.
 void data_init();
 

@@ -38,10 +38,6 @@ const uint16_t SET_STATE_DRIVE_SMOOTH_POS = 0x4030;
 const uint16_t SET_STATE_DRIVE_SMOOTH_NEG = 0x4031;
 
 
-
-extern bool readouts_allow_sending;
-extern uint32_t readouts_to_send;
-
 // Comms functions
 // ---------------
 
