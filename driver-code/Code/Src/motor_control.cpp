@@ -1,6 +1,7 @@
 #include "motor_control.hpp"
 
-#include "data.hpp"
+#include "interface.hpp"
+#include "interrupts.hpp"
 
 DriverState driver_state = DriverState::OFF;
 uint16_t hold_u_pwm_duty = 0;
@@ -28,10 +29,10 @@ void motor_freewheel(){
 
 
 void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
-    hold_u_pwm_duty = u > PWM_MAX_HOLD ? PWM_MAX_HOLD : u;
-    hold_v_pwm_duty = v > PWM_MAX_HOLD ? PWM_MAX_HOLD : v;
-    hold_w_pwm_duty = w > PWM_MAX_HOLD ? PWM_MAX_HOLD : w;
-    duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
+    hold_u_pwm_duty = clip_to(0, PWM_MAX_HOLD, u);
+    hold_v_pwm_duty = clip_to(0, PWM_MAX_HOLD, v);
+    hold_w_pwm_duty = clip_to(0, PWM_MAX_HOLD, w);
+    duration_till_timeout = clip_to(0, MAX_TIMEOUT, timeout);
 
     driver_state = DriverState::HOLD;
 }
@@ -40,14 +41,14 @@ void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
 
 
 void motor_drive_neg(uint16_t pwm, uint16_t timeout){
-    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
-    duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
+    pwm_command = clip_to(0, PWM_MAX, pwm);
+    duration_till_timeout = clip_to(0, MAX_TIMEOUT, timeout);
     driver_state = DriverState::DRIVE_NEG;
 }
 
 void motor_drive_pos(uint16_t pwm, uint16_t timeout){
-    pwm_command = pwm > PWM_MAX ? PWM_MAX : pwm;
-    duration_till_timeout = timeout > MAX_TIMEOUT ? MAX_TIMEOUT : timeout;
+    pwm_command = clip_to(0, PWM_MAX, pwm);
+    duration_till_timeout = clip_to(0, MAX_TIMEOUT, timeout);
     driver_state = DriverState::DRIVE_POS;
 }
 

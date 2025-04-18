@@ -1,11 +1,10 @@
 #include "interrupts.hpp"
 
 #include "io.hpp"
-#include "data.hpp"
 #include "constants.hpp"
 #include "motor_control.hpp"
 #include "main.h" // For the Error_Handler function.
-
+#include "interface.hpp"
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
@@ -15,6 +14,26 @@
 // Try really hard to keep interrupts fast. Use short inline functions that only rely 
 // on chip primitives; don't use division, multiplication, or floating point operations.
 
+// Timing data
+uint32_t adc_update_number = 0;
+uint32_t tim1_update_number = 0;
+uint32_t tim2_update_number = 0;
+uint32_t tim2_cc1_number = 0;
+
+
+// Electrical state
+StateReadout latest_readout = {};
+
+// Data queue
+QueueHandle_t readouts_queue = nullptr;
+StaticQueue_t readouts_queue_storage = {};
+uint8_t readouts_queue_buffer[HISTORY_SIZE * READOUT_ITEMSIZE] = {};
+
+void data_init(){
+    // Create the queue for the readouts.
+    readouts_queue = xQueueCreateStatic(HISTORY_SIZE, READOUT_ITEMSIZE, readouts_queue_buffer, &readouts_queue_storage);
+    if (readouts_queue == nullptr) Error_Handler();
+}
 
 
 // Hall sensors
