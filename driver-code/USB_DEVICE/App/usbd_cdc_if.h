@@ -118,7 +118,8 @@ extern volatile bool usb_com_ready;
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
-int usb_com_queue_send(uint8_t* buf, uint16_t len);
+bool usb_com_queue_check(uint16_t len);
+bool usb_com_queue_send(uint8_t* buf, uint16_t len);
 int usb_com_recv (uint8_t* buf, uint16_t len);
 size_t usb_com_send();
 void usb_com_init();

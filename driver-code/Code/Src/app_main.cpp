@@ -6,9 +6,10 @@
 #include "interrupts.hpp"
 #include "interface.hpp"
 
+#include "usbd_cdc_if.h"
+
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
-
 
 #include <cstdlib>
 #include <cmath>
@@ -175,6 +176,14 @@ void app_init() {
 
 void app_tick() {
 
+    // Show the current hall sensor state on the LEDs.
+    const uint8_t hall_state = (latest_readout.position >> 13 & 0b111);
+    set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
+
+
+    // Timing
+    // ------
+
     // Update timing information.
     uint32_t milliseconds = HAL_GetTick();
     float seconds = milliseconds / 1000.f;
@@ -187,14 +196,24 @@ void app_tick() {
     tim2_update_rate = tim2_update_number / seconds;
     tim2_cc1_rate = tim2_cc1_number / seconds;
 
-    
-    // Show the current hall sensor state on the LEDs.
-    const uint8_t hall_state = (latest_readout.position >> 13 & 0b111);
-    set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
 
-    // Handle USB communication.
-    usb_tick();
+    // USB comms
+    // ---------
+
+    // Send USB data from the buffer.
+    usb_com_send();
+
+    // Check if we have a new command.
+    usb_receive_command();
+    
+    // Queue the state readouts on the USB buffer.
+    usb_queue_readouts();
+    
+    // Send USB data from the buffer, twice per loop, hopefully the 
+    // USB module sends 64 byte packets while we computed stuff.
+    usb_com_send();
 }
+
 
 // Called by Error_Handler to show an error on the RED LED. Use Error_Handler for errors!
 void show_error(){

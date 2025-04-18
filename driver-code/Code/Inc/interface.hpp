@@ -41,5 +41,8 @@ const uint16_t SET_STATE_DRIVE_SMOOTH_NEG = 0x4031;
 // Comms functions
 // ---------------
 
-// Send and receive data over USB; handle commands.
-void usb_tick();
+// Receive a command from the USB interface.
+void usb_receive_command();
+
+// Queue readouts to be sent to the USB interface.
+void usb_queue_readouts();

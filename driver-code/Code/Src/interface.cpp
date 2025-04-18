@@ -79,7 +79,7 @@ static inline void motor_start_test(PWMSchedule const& schedule){
 }
 
 
-static inline void usb_receive(){
+void usb_receive_command(){
     usb_command_index += usb_com_recv(usb_command + usb_command_index, usb_bytes_expected);
 
     // Wait for more data if we don't have a full command yet.
@@ -213,7 +213,7 @@ static inline void usb_receive(){
     usb_bytes_expected = usb_min_command_size;
 }
 
-static inline void usb_queue_readouts(){
+void usb_queue_readouts(){
     // Check if we have to wait for the queue to fill before sending readouts.
     // This is used to prevent sending readouts while the motor is commutating.
     if (usb_wait_full_history) {
@@ -226,25 +226,10 @@ static inline void usb_queue_readouts(){
         }
     }
 
-    // Send as many readouts as requested.
+    // Send readouts if requested; up to an arbitrary number of readouts so we don't block for long.
     for (size_t i = 0; usb_readouts_to_send > 0 and i < HISTORY_SIZE; i++){
-        StateReadout readout;
-
-        // Skip if we have no data left to read.
-        if (xQueuePeek(readouts_queue, &readout, 0) != pdTRUE) break;
-
-        // Send the readout to the host.
-        uint8_t readout_data[state_readout_size] = {0};
-        write_state_readout(readout_data, readout);
-        
-        if(usb_com_queue_send(readout_data, state_readout_size) == 0){
-            // We successfully added the readout to the USB buffer.
-            usb_readouts_to_send -= 1;
-            usb_last_send = HAL_GetTick();
-            // Discard the sent readout.
-            xQueueReceive(readouts_queue, &readout, 0);
-
-        } else {
+        // Check if we can enqueue the readout to the USB buffer.
+        if(not usb_com_queue_check(state_readout_size)) {
             // The USB buffer is full; stop sending until there's space.
             if (HAL_GetTick() > usb_last_send + USB_TIMEOUT) {
                 // The USB controller is not reading data; stop sending and clear the USB buffer.
@@ -254,20 +239,23 @@ static inline void usb_queue_readouts(){
             // Stop sending until the USB buffer is free again.
             break;
         }
+        
+        StateReadout readout;
+
+        // Skip if we have no data left to read.
+        if (xQueueReceive(readouts_queue, &readout, 0) != pdTRUE) break;
+
+        // Send the readout to the host.
+        uint8_t readout_data[state_readout_size] = {0};
+        write_state_readout(readout_data, readout);
+
+        if(not usb_com_queue_send(readout_data, state_readout_size)){
+            // We checked whether we can send, we should have succeeded.
+            Error_Handler();
+        }
+
+        // Readout added to the USB buffer.
+        usb_readouts_to_send -= 1;
+        usb_last_send = HAL_GetTick();
     }
 }
-
-void usb_tick(){
-    // Send USB data from the buffer.
-    usb_com_send();
-
-    usb_receive();
-    
-    // Queue the state readouts on the USB buffer.
-    usb_queue_readouts();
-    
-    // Send USB data from the buffer, twice per loop, hopefully the 
-    // USB module sends 64 byte packets while we computed stuff.
-    usb_com_send();
-}
-

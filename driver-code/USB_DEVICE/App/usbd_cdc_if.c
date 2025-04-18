@@ -334,15 +334,23 @@ int usb_com_recv (uint8_t* buf, uint16_t len) {
   return len;
 }
 
-int usb_com_queue_send (uint8_t* buf, uint16_t len) {
+inline bool usb_com_queue_check(uint16_t len) {
   // Check if the USB is ready.
-  if (!usb_com_ready) return -1;
+  if (!usb_com_ready) return false;
 
   // Calculate available capacity.
   const int cap = APP_TX_DATA_SIZE - usb_com_tx_fifo.size; 
 
   // Check if there is enough room in the FIFO
-  if (cap < len) return -1; // Error: not enough room in the FIFO.
+  if (cap < len) return false; // Error: not enough room in the FIFO.
+  
+  return true;
+}
+
+bool usb_com_queue_send(uint8_t* buf, uint16_t len) {
+  // Check if there is enough room in the FIFO.
+  if(!usb_com_queue_check(len)) return false; // Error: not enough room in the FIFO.
+
 
   // Get the space available at the tail of the FIFO.
   int tail = APP_TX_DATA_SIZE - usb_com_tx_fifo.head;
@@ -371,7 +379,7 @@ int usb_com_queue_send (uint8_t* buf, uint16_t len) {
   usb_com_tx_fifo.size += len;
 
   // Success!
-  return 0;
+  return true;
 }
 
 size_t usb_com_send(){
