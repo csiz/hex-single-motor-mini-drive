@@ -29,7 +29,7 @@ const uint32_t USB_TIMEOUT = 500;
 // Receive data
 // ------------
 
-const size_t usb_min_command_size = 12;
+const size_t usb_min_command_size = 8;
 const size_t usb_max_command_size = 64;
 // Buffer for the USB command in case we receive it in chunks.
 uint8_t usb_command[usb_max_command_size] = {};
@@ -183,12 +183,12 @@ void app_init() {
 }
 
 
-const size_t state_readout_size = 20;
+const size_t state_readout_size = 18;
 
 void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
     size_t offset = 0;
-    write_uint32(buffer + offset, READOUT);
-    offset += 4;
+    write_uint16(buffer + offset, READOUT);
+    offset += 2;
     write_uint16(buffer + offset, readout.readout_number);
     offset += 2;
     write_uint16(buffer + offset, readout.position);
@@ -202,6 +202,7 @@ void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
     write_uint16(buffer + offset, readout.w_readout);
     offset += 2;
     write_uint16(buffer + offset, readout.ref_readout);
+    offset += 2;
 }
 
 
@@ -213,11 +214,16 @@ static inline void usb_receive(){
         
 
     // The first number is the command code, the second is the data; if any.
-    const uint32_t command = read_uint32(&usb_command[0]);
-    const uint16_t timeout = clip_to(0, MAX_TIMEOUT, read_uint16(&usb_command[4]));
-    const uint16_t pwm = clip_to(0, PWM_MAX, read_uint16(&usb_command[6]));
-    const uint16_t leading_angle = clip_to(0, 255, read_uint16(&usb_command[8]));
-    // const uint16_t max_current = clip_to(0, 0xFFFF, read_uint16(&usb_command[10]));
+    size_t offset = 0;
+    const uint16_t command = read_uint16(&usb_command[offset]);
+    offset += 2;
+    const uint16_t timeout = clip_to(0, MAX_TIMEOUT, read_uint16(&usb_command[offset]));
+    offset += 2;
+    const uint16_t pwm = clip_to(0, PWM_MAX, read_uint16(&usb_command[offset]));
+    offset += 2;
+    const uint16_t leading_angle = clip_to(0, 255, read_uint16(&usb_command[offset]));
+    offset += 2;
+
 
 
     switch (command) {

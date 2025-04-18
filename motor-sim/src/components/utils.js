@@ -65,6 +65,14 @@ export function bytes_to_uint32(buffer) {
   return view.getUint32(0);
 }
 
+/* Convert 2 byte buffer to uint16. */
+export function bytes_to_uint16(buffer) {
+  // Check buffer is exactly 2 bytes long
+  if (buffer.byteLength !== 2) throw new Error("Buffer must be 2 bytes long");
+  let view = new DataView(buffer.buffer);
+  return view.getUint16(0);
+}
+
 /* Round to `n` decimals. */
 export function round(value, n = 3) {
   return Number(value.toPrecision(n));

@@ -1,4 +1,4 @@
-import {bytes_to_uint32, uint32_to_bytes, timeout_promise, wait} from "./utils.js";
+import {bytes_to_uint16, timeout_promise, wait} from "./utils.js";
 
 import {Generators} from "observablehq:stdlib";
 
@@ -7,34 +7,34 @@ import {Generators} from "observablehq:stdlib";
 export const USBD_VID = 56987;
 export const USBD_PID_FS = 56988;
 
-export const READOUT = 0x80202020;
-export const GET_READOUTS = 0x80202021;
-export const GET_READOUTS_SNAPSHOT = 0x80202022;
-export const SET_STATE_OFF = 0x80202030;
-export const SET_STATE_DRIVE_POS = 0x80202031;
-export const SET_STATE_TEST_ALL_PERMUTATIONS = 0x80202032;
-export const SET_STATE_DRIVE_NEG = 0x80202033;
-export const SET_STATE_FREEWHEEL = 0x80202034;
+export const READOUT = 0x2020;
+export const GET_READOUTS = 0x2021;
+export const GET_READOUTS_SNAPSHOT = 0x2022;
+export const SET_STATE_OFF = 0x2030;
+export const SET_STATE_DRIVE_POS = 0x2031;
+export const SET_STATE_TEST_ALL_PERMUTATIONS = 0x2032;
+export const SET_STATE_DRIVE_NEG = 0x2033;
+export const SET_STATE_FREEWHEEL = 0x2034;
 
-export const SET_STATE_TEST_GROUND_SHORT = 0x80202036;
-export const SET_STATE_TEST_POSITIVE_SHORT = 0x80202037;
-export const SET_STATE_TEST_U_DIRECTIONS = 0x80202039;
-export const SET_STATE_TEST_U_INCREASING = 0x8020203A;
-export const SET_STATE_TEST_U_DECREASING = 0x8020203B;
-export const SET_STATE_TEST_V_INCREASING = 0x8020203C;
-export const SET_STATE_TEST_V_DECREASING = 0x8020203D;
-export const SET_STATE_TEST_W_INCREASING = 0x8020203E;
-export const SET_STATE_TEST_W_DECREASING = 0x8020203F;
+export const SET_STATE_TEST_GROUND_SHORT = 0x2036;
+export const SET_STATE_TEST_POSITIVE_SHORT = 0x2037;
+export const SET_STATE_TEST_U_DIRECTIONS = 0x2039;
+export const SET_STATE_TEST_U_INCREASING = 0x203A;
+export const SET_STATE_TEST_U_DECREASING = 0x203B;
+export const SET_STATE_TEST_V_INCREASING = 0x203C;
+export const SET_STATE_TEST_V_DECREASING = 0x203D;
+export const SET_STATE_TEST_W_INCREASING = 0x203E;
+export const SET_STATE_TEST_W_DECREASING = 0x203F;
 
-export const SET_STATE_HOLD_U_POSITIVE = 0x80203020;
-export const SET_STATE_HOLD_V_POSITIVE = 0x80203021;
-export const SET_STATE_HOLD_W_POSITIVE = 0x80203022;
-export const SET_STATE_HOLD_U_NEGATIVE = 0x80203023;
-export const SET_STATE_HOLD_V_NEGATIVE = 0x80203024;
-export const SET_STATE_HOLD_W_NEGATIVE = 0x80203025;
+export const SET_STATE_HOLD_U_POSITIVE = 0x3020;
+export const SET_STATE_HOLD_V_POSITIVE = 0x3021;
+export const SET_STATE_HOLD_W_POSITIVE = 0x3022;
+export const SET_STATE_HOLD_U_NEGATIVE = 0x3023;
+export const SET_STATE_HOLD_V_NEGATIVE = 0x3024;
+export const SET_STATE_HOLD_W_NEGATIVE = 0x3025;
 
-export const SET_STATE_DRIVE_SMOOTH_POS = 0x80204030;
-export const SET_STATE_DRIVE_SMOOTH_NEG = 0x80204031;
+export const SET_STATE_DRIVE_SMOOTH_POS = 0x4030;
+export const SET_STATE_DRIVE_SMOOTH_NEG = 0x4031;
 
 
 // Other constants
@@ -120,16 +120,20 @@ export class MotorController {
     }
   }
 
-  async send_command({command, command_timeout, command_pwm, command_leading_angle = 0, command_max_current = 0}) {
+  async send_command({command, command_timeout, command_pwm, command_leading_angle = 0}) {
     if (this.com_port === null) return;
     
-    let buffer = new Uint8Array(12);
+    let buffer = new Uint8Array(8);
     let view = new DataView(buffer.buffer);
-    view.setUint32(0, command);
-    view.setUint16(4, command_timeout);
-    view.setUint16(6, command_pwm);
-    view.setUint16(8, command_leading_angle);
-    view.setUint16(10, command_max_current);
+    let offset = 0;
+    view.setUint16(offset, command);
+    offset += 2;
+    view.setUint16(offset, command_timeout);
+    offset += 2;
+    view.setUint16(offset, command_pwm);
+    offset += 2;
+    view.setUint16(offset, command_leading_angle);
+    offset += 2;
     await this.com_port.write(buffer);
   }
 
@@ -191,10 +195,10 @@ export class MotorController {
 
 
   async _read_message(){
-    const message_header = await this.com_port.read(4)
-    if (bytes_to_uint32(message_header) != READOUT) {
+    const message_header = await this.com_port.read(2)
+    if (bytes_to_uint16(message_header) != READOUT) {
       console.warn("Unknown message header: ", message_header);
-      return 4;
+      return 2;
     }
 
     const data_bytes = await this.com_port.read(16);
@@ -202,7 +206,7 @@ export class MotorController {
     const data_view = new DataView(data_bytes.buffer);
 
     let offset = 0;
-    const readout_number = data_view.getUint16(0);
+    const readout_number = data_view.getUint16(offset);
     offset += 2;
     const position = data_view.getUint16(offset);
     offset += 2;
@@ -247,7 +251,7 @@ export class MotorController {
       motor_angle,
     });
 
-    return 20;
+    return offset + 2;
   }
 }
 
