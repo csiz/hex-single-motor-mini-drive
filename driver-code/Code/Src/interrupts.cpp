@@ -201,7 +201,7 @@ void tim2_global_handler(){
 // Initializing ADC, interrupts and timers
 // ---------------------------------------
 
-void initialize_position_tracking(){
+void initialize_angle_tracking(){
     update_position_observation();
 }
 

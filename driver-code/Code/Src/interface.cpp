@@ -35,7 +35,6 @@ void write_state_readout(uint8_t * buffer, StateReadout const & readout) {
 // ------------
 
 
-
 bool buffer_command(CommandBuffer & buffer, int receive_function(uint8_t *buf, uint16_t len)){
     // Make sure the buffer is ready to receive data.
     if (buffer.bytes_expected == 0) error();

@@ -102,7 +102,7 @@ void app_init() {
     enable_LED_channels();
 
     // Get initial hall sensor state and initialize poisition tracking.
-    initialize_position_tracking();
+    initialize_angle_tracking();
 }
 
 static inline void motor_start_test(PWMSchedule const& schedule){
