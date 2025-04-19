@@ -36,16 +36,35 @@ StateReadout get_latest_readout(){
 }
 
 // Data queue
-QueueHandle_t readouts_queue = nullptr;
-StaticQueue_t readouts_queue_storage = {};
-uint8_t readouts_queue_buffer[HISTORY_SIZE * sizeof(StateReadout)] = {};
+StateReadout readout_history[HISTORY_SIZE] = {};
+size_t readout_history_write_index = 0;
+size_t readout_history_read_index = 0;
 
-
-void data_init(){
-    // Create the queue for the readouts.
-    readouts_queue = xQueueCreateStatic(HISTORY_SIZE, sizeof(StateReadout), readouts_queue_buffer, &readouts_queue_storage);
-    if (readouts_queue == nullptr) error();
+void readout_history_reset() {
+    readout_history_write_index = 0;
+    readout_history_read_index = 0;
 }
+bool readout_history_full(){
+    return readout_history_write_index >= HISTORY_SIZE;
+}
+bool readout_history_available(){
+    return readout_history_read_index < readout_history_write_index;
+}
+StateReadout readout_history_pop(){
+    StateReadout readout = readout_history[readout_history_read_index];
+    readout_history_read_index += 1;
+    // Reset both indexes if we have sent the whole history.
+    if (readout_history_read_index >= HISTORY_SIZE) readout_history_reset();
+    return readout;
+}
+
+static inline bool readout_history_push(StateReadout const & readout){
+    if (readout_history_full()) return false;
+    readout_history[readout_history_write_index] = readout;
+    readout_history_write_index += 1;
+    return true;
+}
+
 
 
 // Critical function!! 23KHz PWM cycle
@@ -115,8 +134,8 @@ static inline void pwm_cycle_and_adc_update(){
 
     // Send data to the main loop after updating the PWM registers; the queue access might be slow.
     
-    // Always attempt to write the lastest readout to the history buffer.
-    xQueueSendToBackFromISR(readouts_queue, &latest_readout, NULL); // Ignore whether the queue is full.
+    // Try to write the latest readout if there's space.
+    readout_history_push(latest_readout);
 }
 
 

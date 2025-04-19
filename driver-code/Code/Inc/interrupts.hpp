@@ -22,10 +22,6 @@ void tim2_global_handler();
 #include "constants.hpp"
 
 
-#include "FreeRTOS.h"
-#include "queue.h"
-
-
 uint32_t get_adc_update_number();
 uint32_t get_hall_unobserved_number();
 uint32_t get_hall_observed_number();
@@ -48,12 +44,10 @@ void enable_timers();
 // Data queue
 // ----------
 
-extern QueueHandle_t readouts_queue;
-extern StaticQueue_t readouts_queue_storage;
-extern uint8_t readouts_queue_buffer[HISTORY_SIZE * sizeof(StateReadout)];
-
-// Initialize the queue for data passing from interrupt.
-void data_init();
+void readout_history_reset();
+bool readout_history_full();
+bool readout_history_available();
+StateReadout readout_history_pop();
 
 
 // End ifdef __cplusplus

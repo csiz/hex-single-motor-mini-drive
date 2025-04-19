@@ -29,7 +29,6 @@ float hall_observed_rate = 0.0f;
 
 CommandBuffer usb_command_buffer = {};
 
-
 uint32_t usb_readouts_to_send = 0;
 bool usb_wait_full_history = false;
 
@@ -83,7 +82,6 @@ void calculate_motor_phase_currents_gated(){
 
 
 void app_init() {
-    data_init();
 
     // Setup PWM settings.
     LL_TIM_SetAutoReload(TIM1, PWM_AUTORELOAD); // 72MHz / 1536 / 2 = 23.4KHz
@@ -114,7 +112,7 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     usb_readouts_to_send = HISTORY_SIZE;
     
     // Clear the readouts buffer of old data.
-    xQueueReset(readouts_queue);
+    readout_history_reset();
 
     // Start the test schedule.
     motor_start_schedule(schedule);
@@ -131,13 +129,13 @@ bool handle_command(CommandBuffer const & buffer) {
 
         // Send the whole history buffer over USB.
         case GET_READOUTS:
-            // Clear the queue of older data.
-            xQueueReset(readouts_queue);
+            // Clear history of older data.
+            readout_history_reset();
             usb_readouts_to_send = command.timeout;
             return true;
 
         case GET_READOUTS_SNAPSHOT:
-            xQueueReset(readouts_queue);
+            readout_history_reset();
             // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
             usb_wait_full_history = true;
             usb_readouts_to_send = HISTORY_SIZE;
@@ -246,7 +244,7 @@ void usb_queue_readouts(){
     // Check if we have to wait for the queue to fill before sending readouts.
     // This is used to prevent sending readouts while the motor is commutating.
     if (usb_wait_full_history) {
-        if(xQueueIsQueueFullFromISR(readouts_queue) == pdTRUE){
+        if(readout_history_full()){
             // The queue is full; we can start sending readouts.
             usb_wait_full_history = false;
         } else {
@@ -256,7 +254,7 @@ void usb_queue_readouts(){
     }
 
     // Send readouts if requested; up to an arbitrary number of readouts so we don't block for long.
-    for (size_t i = 0; usb_readouts_to_send > 0 and i < HISTORY_SIZE; i++){
+    while(usb_readouts_to_send > 0){
         // Check if we can enqueue the readout to the USB buffer.
         if(not usb_com_queue_check(state_readout_size)) {
             // The USB buffer is full; stop sending until there's space.
@@ -266,18 +264,16 @@ void usb_queue_readouts(){
                 usb_com_reset();
             }
             // Stop sending until the USB buffer is free again.
-            break;
+            return;
         }
         
-        StateReadout readout;
-
-        // Skip if we have no data left to read.
-        if (xQueueReceive(readouts_queue, &readout, 0) != pdTRUE) break;
-
+        // Stop if we have caught up to the readout history.
+        if (not readout_history_available()) return;
+        
         // Send the readout to the host.
         uint8_t readout_data[state_readout_size] = {0};
-        write_state_readout(readout_data, readout);
-
+        write_state_readout(readout_data, readout_history_pop());
+        
         // We checked whether we can send, we should always succeed.
         if(not usb_com_queue_send(readout_data, state_readout_size)) error();
 

@@ -22,8 +22,6 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-#include "FreeRTOS.h"
-#include "task.h"
 
 /* USER CODE END INCLUDE */
 
