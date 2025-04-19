@@ -1,12 +1,11 @@
 #include "interrupts.hpp"
 #include "interrupts_angle.hpp"
 #include "interrupts_motor.hpp"
+#include "motor_control.hpp"
 
 #include "io.hpp"
 #include "constants.hpp"
 #include "error_handler.hpp"
-
-#include "motor_control.hpp"
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
@@ -27,15 +26,14 @@ StateReadout latest_readout = {};
 // Data queue
 QueueHandle_t readouts_queue = nullptr;
 StaticQueue_t readouts_queue_storage = {};
-uint8_t readouts_queue_buffer[HISTORY_SIZE * READOUT_ITEMSIZE] = {};
-uint32_t readouts_missed = 0;
+uint8_t readouts_queue_buffer[HISTORY_SIZE * sizeof(StateReadout)] = {};
+
 
 void data_init(){
     // Create the queue for the readouts.
-    readouts_queue = xQueueCreateStatic(HISTORY_SIZE, READOUT_ITEMSIZE, readouts_queue_buffer, &readouts_queue_storage);
+    readouts_queue = xQueueCreateStatic(HISTORY_SIZE, sizeof(StateReadout), readouts_queue_buffer, &readouts_queue_storage);
     if (readouts_queue == nullptr) error();
 }
-
 
 
 // Critical function!! 23KHz PWM cycle
