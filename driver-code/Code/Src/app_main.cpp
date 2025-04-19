@@ -61,7 +61,7 @@ void calculate_motor_phase_currents_gated(){
 
     // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
-    const StateReadout readout = latest_readout;
+    const StateReadout readout = get_latest_readout();
     NVIC_EnableIRQ(ADC1_2_IRQn);
 
     const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
@@ -292,7 +292,7 @@ void app_tick() {
     main_loop_update_number += 1;
 
     // Show the current hall sensor state on the LEDs.
-    const uint8_t hall_state = (latest_readout.position >> 13 & 0b111);
+    const uint8_t hall_state = (get_latest_readout().position >> 13 & 0b111);
     set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
 
 
@@ -304,9 +304,9 @@ void app_tick() {
     float seconds = milliseconds / 1000.f;
     
     main_loop_update_rate = main_loop_update_number / seconds;
-    adc_update_rate = adc_update_number / seconds;
-    hall_unobserved_rate = hall_unobserved_number / seconds;
-    hall_observed_rate = hall_observed_number / seconds;
+    adc_update_rate = get_adc_update_number() / seconds;
+    hall_unobserved_rate = get_hall_unobserved_number() / seconds;
+    hall_observed_rate = get_hall_observed_number() / seconds;
 
 
     // USB comms

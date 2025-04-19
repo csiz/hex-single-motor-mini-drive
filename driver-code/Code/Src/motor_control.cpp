@@ -1,28 +1,9 @@
 #include "motor_control.hpp"
 
+#include "interrupts_motor.hpp"
+
 #include "error_handler.hpp"
 
-DriverState driver_state = DriverState::OFF;
-
-uint16_t hold_u_pwm_duty = 0;
-uint16_t hold_v_pwm_duty = 0;
-uint16_t hold_w_pwm_duty = 0;
-
-uint16_t pwm_command = 0;
-uint16_t duration_till_timeout = 0;
-
-uint8_t leading_angle = 0;
-
-PWMSchedule const* schedule_queued = nullptr;
-
-
-void motor_break(){
-    driver_state = DriverState::OFF;
-}
-
-void motor_freewheel(){
-    driver_state = DriverState::FREEWHEEL;
-}
 
 
 void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
@@ -33,8 +14,6 @@ void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
 
     driver_state = DriverState::HOLD;
 }
-
-
 
 
 void motor_drive_neg(uint16_t pwm, uint16_t timeout){

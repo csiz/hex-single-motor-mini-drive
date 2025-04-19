@@ -1,11 +1,10 @@
 #pragma once
 
-#include <cstdint>
-
 #include "constants.hpp"
 #include "io.hpp"
 #include "error_handler.hpp"
 
+#include <cstdint>
 
 // Hall sensors
 // ------------

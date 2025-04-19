@@ -1,7 +1,7 @@
 #include "interrupts.hpp"
 #include "interrupts_angle.hpp"
 #include "interrupts_motor.hpp"
-#include "motor_control.hpp"
+
 
 #include "io.hpp"
 #include "constants.hpp"
@@ -17,11 +17,23 @@
 
 // Timing data
 uint32_t adc_update_number = 0;
+uint32_t get_adc_update_number(){
+    return adc_update_number;
+}
 uint32_t hall_unobserved_number = 0;
+uint32_t get_hall_unobserved_number(){
+    return hall_unobserved_number;
+}
 uint32_t hall_observed_number = 0;
+uint32_t get_hall_observed_number(){
+    return hall_observed_number;
+}
 
 // Electrical state
 StateReadout latest_readout = {};
+StateReadout get_latest_readout(){
+    return latest_readout;
+}
 
 // Data queue
 QueueHandle_t readouts_queue = nullptr;
@@ -76,10 +88,10 @@ static inline void pwm_cycle_and_adc_update(){
     // Update motor control.
     switch (driver_state) {
         case DriverState::OFF:
-            update_motor_break();
+            motor_break();
             break;
         case DriverState::FREEWHEEL:
-            update_motor_freewheel();
+            motor_freewheel();
             break;
         case DriverState::SCHEDULE:
             update_motor_schedule();

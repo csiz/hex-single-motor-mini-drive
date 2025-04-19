@@ -1,20 +1,67 @@
 #pragma once
 
-#include "motor_control.hpp"
-
 #include "constants.hpp"
+#include "type_definitions.hpp"
 #include "error_handler.hpp"
 #include "io.hpp"
 
-// Motor Control
-// -------------
 
+// Driver State
+// ------------
+
+enum struct DriverState {
+    OFF,
+    FREEWHEEL,
+    DRIVE_POS,
+    DRIVE_NEG,
+    DRIVE_SMOOTH_POS,
+    DRIVE_SMOOTH_NEG,
+    HOLD,
+    SCHEDULE,
+};
+
+// Motor driver state.
+extern DriverState driver_state;
+
+// Duration until current command expires.
+extern uint16_t duration_till_timeout;
+
+extern uint16_t hold_u_pwm_duty;
+extern uint16_t hold_v_pwm_duty;
+extern uint16_t hold_w_pwm_duty;
+
+extern uint16_t pwm_command;
+
+extern uint8_t leading_angle;
+
+extern PWMSchedule const* schedule_queued;
+
+// Active test schedule.
 extern PWMSchedule const* schedule_active;
 extern size_t schedule_counter;
 extern size_t schedule_stage;
 
 
-static inline void update_motor_break(){
+// Count down until the timeout expires; return true if the timeout expired.
+static inline bool update_and_check_timeout(){
+    if (duration_till_timeout > 0) {
+        duration_till_timeout -= 1;
+        return false;
+    } else {
+        return true;
+    }
+}
+
+static inline PWMSchedule const* get_and_reset_schedule_queued(){
+    PWMSchedule const* schedule = schedule_queued;
+    schedule_queued = nullptr;
+    return schedule;
+}
+
+// Motor Control
+// -------------
+
+inline void motor_break(){
     // Short all motor phases to ground.
     set_motor_u_pwm_duty(0);
     set_motor_v_pwm_duty(0);
@@ -22,9 +69,11 @@ static inline void update_motor_break(){
 
     // Immediately update and enable the motor outputs.
     enable_motor_outputs();
+
+    driver_state = DriverState::OFF;
 }
 
-static inline void update_motor_freewheel(){
+inline void motor_freewheel(){
     // Reset motor phases to 0.
     set_motor_u_pwm_duty(0);
     set_motor_v_pwm_duty(0);
@@ -32,6 +81,8 @@ static inline void update_motor_freewheel(){
 
     // Disable the motor outputs; leaving them floating voltage/tristate.
     disable_motor_outputs();
+
+    driver_state = DriverState::FREEWHEEL;
 }
 
 static inline void update_motor_hold(){
