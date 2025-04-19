@@ -42,14 +42,8 @@ void data_init(){
 // -----------------------------------
 
 static inline void pwm_cycle_and_adc_update(){
-    // Check if we had a new hall sensor observation.
-    if(new_observation) {
-        new_observation = false;
-        time_since_observation = 0;
-    }
-    // Increment the time since the last observation.
-    time_since_observation = min(time_since_observation + time_increment_per_cycle, max_time_between_observations);
-    
+    increment_time_since_observation();
+
     const int estimated_angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / scale);
     
     // Scale down the angle to 8 bits so we can use a lookup table for the voltage targets.
@@ -84,28 +78,28 @@ static inline void pwm_cycle_and_adc_update(){
     // Update motor control.
     switch (driver_state) {
         case DriverState::OFF:
-            control_motor_break();
+            update_motor_break();
             break;
         case DriverState::FREEWHEEL:
-            control_motor_freewheel();
+            update_motor_freewheel();
             break;
-        case DriverState::TEST_SCHEDULE:
-            control_motor_test();
+        case DriverState::SCHEDULE:
+            update_motor_schedule();
             break;
         case DriverState::DRIVE_POS:
-            control_motor_sector(hall_sector, motor_sector_driving_pos);
+            update_motor_sector(hall_sector, motor_sector_driving_pos);
             break;
         case DriverState::DRIVE_NEG:
-            control_motor_sector(hall_sector, motor_sector_driving_neg);
+            update_motor_sector(hall_sector, motor_sector_driving_neg);
             break;
         case DriverState::DRIVE_SMOOTH_POS:
-            control_motor_smooth(angle_valid, angle, +1);
+            update_motor_smooth(angle_valid, angle, +1);
             break;
         case DriverState::DRIVE_SMOOTH_NEG:
-            control_motor_smooth(angle_valid, angle, -1);
+            update_motor_smooth(angle_valid, angle, -1);
             break;
         case DriverState::HOLD:
-            control_motor_hold();
+            update_motor_hold();
             break;
     }
 

@@ -25,8 +25,7 @@ extern uint8_t previous_hall_sector;
 
 // Whether the position is valid.
 extern bool angle_valid;
-// Time, in our units, since the last observation of the hall sensor. The PWM cycle loop updates
-// this variable.
+// Time, in our units, since the last observation of the hall sensor. Incremented by PWM cycle loop.
 extern int time_since_observation;
 // Flag to indicate a new observation; the hall sensor interrupt sets the flag for the PWM cycle loop.
 extern bool new_observation;
@@ -41,7 +40,16 @@ extern int angular_speed_at_observation;
 extern int angular_speed_variance_at_observation;
 
 
-
+static inline void increment_time_since_observation(){
+    // Check if we had a new hall sensor observation.
+    if(new_observation) {
+        new_observation = false;
+        time_since_observation = 0;
+    }
+    // Increment the time since the last observation.
+    time_since_observation = min(time_since_observation + time_increment_per_cycle, max_time_between_observations);
+        
+}
 
 // Read the hall sensors and update the motor rotation angle. Sensor chips might be: SS360NT (can't read the inprint clearly).
 static inline void read_hall_sensors(){

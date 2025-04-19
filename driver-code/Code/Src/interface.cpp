@@ -63,8 +63,6 @@ void write_state_readout(uint8_t* buffer, const StateReadout& readout) {
 }
 
 static inline void motor_start_test(PWMSchedule const& schedule){
-    if (driver_state == DriverState::TEST_SCHEDULE) return;
-    
     // Stop emptying the readouts queue; we want to keep the test data.
     usb_wait_full_history = true;
 

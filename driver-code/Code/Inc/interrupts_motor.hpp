@@ -9,17 +9,12 @@
 // Motor Control
 // -------------
 
+extern PWMSchedule const* schedule_active;
+extern size_t schedule_counter;
+extern size_t schedule_stage;
 
-static inline bool update_and_check_timeout(){
-    if (duration_till_timeout > 0) {
-        duration_till_timeout -= 1;
-        return false;
-    } else {
-        return true;
-    }
-}
 
-static inline void control_motor_break(){
+static inline void update_motor_break(){
     // Short all motor phases to ground.
     set_motor_u_pwm_duty(0);
     set_motor_v_pwm_duty(0);
@@ -29,7 +24,7 @@ static inline void control_motor_break(){
     enable_motor_outputs();
 }
 
-static inline void control_motor_freewheel(){
+static inline void update_motor_freewheel(){
     // Reset motor phases to 0.
     set_motor_u_pwm_duty(0);
     set_motor_v_pwm_duty(0);
@@ -39,7 +34,7 @@ static inline void control_motor_freewheel(){
     disable_motor_outputs();
 }
 
-static inline void control_motor_hold(){
+static inline void update_motor_hold(){
     if(update_and_check_timeout()) return motor_break();
 
     // Set the duty cycle and hold.
@@ -50,7 +45,7 @@ static inline void control_motor_hold(){
     enable_motor_outputs();
 }
 
-static inline void control_motor_sector(const uint8_t hall_sector, const uint16_t (* motor_sector_driving_table)[3]){
+static inline void update_motor_sector(const uint8_t hall_sector, const uint16_t (* motor_sector_driving_table)[3]){
     if (motor_sector_driving_table == nullptr) return error();
     
     if(update_and_check_timeout()) return motor_break();
@@ -73,7 +68,7 @@ static inline void control_motor_sector(const uint8_t hall_sector, const uint16_
     enable_motor_outputs();
 }
 
-static inline void control_motor_smooth(const bool angle_valid, const uint8_t angle, const int direction){
+static inline void update_motor_smooth(const bool angle_valid, const uint8_t angle, const int direction){
     if(update_and_check_timeout()) return motor_break();
     
     if (not angle_valid) return motor_break();
@@ -92,20 +87,27 @@ static inline void control_motor_smooth(const bool angle_valid, const uint8_t an
 }
 
 // Quickly update the PWM settings from the test schedule.
-static inline void control_motor_test(){
-    if(schedule_pointer == nullptr) return error();
+static inline void update_motor_schedule(){
+    // Start a new schedule if the old one is finished.
+    if(schedule_active == nullptr){
+        // Get the queued schedule and reset the variable for a new command.
+        schedule_active = get_and_reset_schedule_queued();
 
-    // Check if we reached the end of the schedule.
-    if (schedule_stage >= SCHEDULE_SIZE) {
-        // Reset the schedule stage and counter.
+        // We should not enter testing mode without a valid schedule.
+        if (schedule_active == nullptr) return error();
+
+        // Reset the schedule counter.
         schedule_stage = 0;
         schedule_counter = 0;
-        schedule_pointer = nullptr;
-        // Stop the test by breaking the motor.
-        motor_break();
     }
 
-    const PWMSchedule & schedule = *schedule_pointer;
+    // Check if we reached the end of the schedule; and stop.
+    if (schedule_stage >= SCHEDULE_SIZE) {
+        schedule_active = nullptr;   
+        return motor_break();
+    }
+
+    const PWMSchedule & schedule = *schedule_active;
 
     set_motor_u_pwm_duty(schedule[schedule_stage].u);
     set_motor_v_pwm_duty(schedule[schedule_stage].v);

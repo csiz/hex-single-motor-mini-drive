@@ -2,10 +2,6 @@
 
 #include "constants.hpp"
 
-
-#include <cstdint>
-#include <cstddef>
-
 // Type Definitions
 // ----------------
 
@@ -17,7 +13,7 @@ enum struct DriverState {
     DRIVE_SMOOTH_POS,
     DRIVE_SMOOTH_NEG,
     HOLD,
-    TEST_SCHEDULE,
+    SCHEDULE,
 };
 
 // Stage for a PWM test schedule.
@@ -53,9 +49,8 @@ extern uint16_t pwm_command;
 
 extern uint8_t leading_angle;
 
-extern PWMSchedule const* schedule_pointer;
-extern size_t schedule_counter;
-extern size_t schedule_stage;
+extern PWMSchedule const* schedule_queued;
+
 
 // Functions to set motor driver state.
 
@@ -68,7 +63,21 @@ void motor_break();
 void motor_freewheel();
 void motor_start_schedule(const PWMSchedule & schedule);
 
+// Count down until the timeout expires; return true if the timeout expired.
+static inline bool update_and_check_timeout(){
+    if (duration_till_timeout > 0) {
+        duration_till_timeout -= 1;
+        return false;
+    } else {
+        return true;
+    }
+}
 
+static inline PWMSchedule const* get_and_reset_schedule_queued(){
+    PWMSchedule const* schedule = schedule_queued;
+    schedule_queued = nullptr;
+    return schedule;
+}
 
 // Motor control tables
 // --------------------
