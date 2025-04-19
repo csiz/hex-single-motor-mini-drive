@@ -5,9 +5,9 @@
 
 #include "constants.hpp"
 #include "byte_handling.hpp"
+#include "error_handler.hpp"
 
 
-#include "main.h"
 #include "usbd_cdc_if.h"
 
 
@@ -249,10 +249,8 @@ void usb_queue_readouts(){
         uint8_t readout_data[state_readout_size] = {0};
         write_state_readout(readout_data, readout);
 
-        if(not usb_com_queue_send(readout_data, state_readout_size)){
-            // We checked whether we can send, we should have succeeded.
-            Error_Handler();
-        }
+        // We checked whether we can send, we should always succeed.
+        if(not usb_com_queue_send(readout_data, state_readout_size)) error();
 
         // Readout added to the USB buffer.
         usb_readouts_to_send -= 1;

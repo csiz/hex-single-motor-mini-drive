@@ -23,6 +23,7 @@ the rest will be modified by STM32CubeMX and should not be edited by hand!)
 #include "FreeRTOS.h"
 #include "task.h"
 #include "app_main.hpp"
+#include "error_handler.hpp"
 
 /* USER CODE END Includes */
 
@@ -890,7 +891,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  show_error();
+  show_error_on_led();
   while (1)
   {
   }

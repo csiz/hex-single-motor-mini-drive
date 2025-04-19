@@ -52,6 +52,10 @@ const uint16_t MAX_TIMEOUT = 0xFFFF;
 // Position tracking defaults
 // --------------------------
 
+// Base and 1 over maximum value of the hall sector.
+const uint8_t hall_sector_base = 6;
+
+
 // Some useful functions to compute position. These need to be inlined for 
 // efficiency, and constexpr to define a bunch more constants below.
 
@@ -85,19 +89,19 @@ inline constexpr int clip_to(int low, int high, int value){
 const int max_16bit = 0x0000'8FFF; //0x0000'B504;
 
 // Angle units of a full circle (2pi).
-const int max_angle_unit = 2048;
+const int angle_base = 2048;
 // Half a circle (pi).
-const int half_max_angle = max_angle_unit / 2;
+const int half_circle = angle_base / 2;
 // 3/2 of a circle (3pi/2).
-const int one_and_half_max_angle = (3 * max_angle_unit) / 2;
+const int one_and_half_circle = (3 * angle_base) / 2;
 
 // Normalize to a positive angle (0 to 2pi).
 inline constexpr int normalize_angle(int angle){
-    return (angle + max_angle_unit) % max_angle_unit;
+    return (angle + angle_base) % angle_base;
 }
 // Normalize a 0 centerd angle; keeping its sign (-pi to pi).
 inline constexpr int signed_angle(int angle){
-    return (angle + one_and_half_max_angle) % max_angle_unit - half_max_angle;
+    return (angle + one_and_half_circle) % angle_base - half_circle;
 }
 
 // Scaling constant for time.
@@ -117,7 +121,7 @@ const int scale = 128;
 const int square_scale = square(scale);
 
 // Reference for the maximum speed we should be able to represent.
-const int max_speed = 20 * scale * max_angle_unit / time_units_per_millisecond;
+const int max_speed = 20 * scale * angle_base / time_units_per_millisecond;
 
 // The maximum time in our time units before we can no longer safely square the value.
 // 
@@ -132,33 +136,33 @@ const int max_time_between_observations = 100 * time_units_per_millisecond;
 // Initial speed estimate.
 const int initial_angular_speed = 0;
 // Start with a high speed variance.
-const int initial_angular_speed_variance = square(scale * max_angle_unit * 30 / 360 / time_units_per_millisecond);
+const int initial_angular_speed_variance = square(scale * angle_base * 30 / 360 / time_units_per_millisecond);
 
 // Precalculate the acceleration variance divided by 4. Note the scaled is squared twice.
-const int angular_acceleration_variance_div_4 = square(square_scale * max_angle_unit / 1 / 50 / time_units_per_millisecond / time_units_per_millisecond) / 4;
+const int angular_acceleration_variance_div_4 = square(square_scale * angle_base / 1 / 50 / time_units_per_millisecond / time_units_per_millisecond) / 4;
 
 // Maximum distance to a trigger angle. Don't let the estimated angle deviate
 // from the hall sensor angle by more than this value to keep the estimate
 // within the half circle of the trigger so we don't switch sign.
-const int sector_transition_confidence = 20 * max_angle_unit / 360;
+const int sector_transition_confidence = 20 * angle_base / 360;
 
 // Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
-const int default_sector_transition_variance = square(5 * max_angle_unit / 360);
+const int default_sector_transition_variance = square(5 * angle_base / 360);
 // Variance of a gaussian spread over the entire sector.
-const int default_sector_center_variance = square(30 * max_angle_unit / 360);
+const int default_sector_center_variance = square(30 * angle_base / 360);
 
 // The hall sensors trigger later than expected going each direction.
-const int hysterisis = 5 * max_angle_unit / 360;
+const int hysterisis = 5 * angle_base / 360;
 
 // The angle at which we transition to this sector. The first is when rotating in the
 // positive direction; second for the negative direction.
 const int sector_transition_angles[6][2] = {
-    {330 * max_angle_unit / 360 + hysterisis,  30 * max_angle_unit / 360 - hysterisis},
-    { 30 * max_angle_unit / 360 + hysterisis,  90 * max_angle_unit / 360 - hysterisis},
-    { 90 * max_angle_unit / 360 + hysterisis, 150 * max_angle_unit / 360 - hysterisis},
-    {150 * max_angle_unit / 360 + hysterisis, 210 * max_angle_unit / 360 - hysterisis},
-    {210 * max_angle_unit / 360 + hysterisis, 270 * max_angle_unit / 360 - hysterisis},
-    {270 * max_angle_unit / 360 + hysterisis, 330 * max_angle_unit / 360 - hysterisis},     
+    {330 * angle_base / 360 + hysterisis,  30 * angle_base / 360 - hysterisis},
+    { 30 * angle_base / 360 + hysterisis,  90 * angle_base / 360 - hysterisis},
+    { 90 * angle_base / 360 + hysterisis, 150 * angle_base / 360 - hysterisis},
+    {150 * angle_base / 360 + hysterisis, 210 * angle_base / 360 - hysterisis},
+    {210 * angle_base / 360 + hysterisis, 270 * angle_base / 360 - hysterisis},
+    {270 * angle_base / 360 + hysterisis, 330 * angle_base / 360 - hysterisis},     
 };
 
 // Variance of each sector transition; we can calibrate it.
@@ -173,12 +177,12 @@ const int sector_transition_variances[6][2] = {
 
 // The center of each hall sector; the motor should rest at these poles.
 const int sector_center_angles[6] = {
-    (  0 * max_angle_unit / 360),
-    ( 60 * max_angle_unit / 360),
-    (120 * max_angle_unit / 360),
-    (180 * max_angle_unit / 360),
-    (240 * max_angle_unit / 360),
-    (300 * max_angle_unit / 360),
+    (  0 * angle_base / 360),
+    ( 60 * angle_base / 360),
+    (120 * angle_base / 360),
+    (180 * angle_base / 360),
+    (240 * angle_base / 360),
+    (300 * angle_base / 360),
 };
 
 // Variance of the centers.

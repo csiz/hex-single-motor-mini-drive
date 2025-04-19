@@ -74,7 +74,7 @@ void motor_start_schedule(const PWMSchedule & schedule);
 // --------------------
 
 // Motor voltage fraction for the 6-step commutation.
-const uint16_t motor_voltage_table_pos[6][3] = {
+const uint16_t motor_sector_driving_pos[6][3] = {
     {0,        PWM_BASE, 0       },
     {0,        PWM_BASE, PWM_BASE},
     {0,        0,        PWM_BASE},
@@ -84,7 +84,7 @@ const uint16_t motor_voltage_table_pos[6][3] = {
 };
 
 // Surpirsingly good schedule for the 6-step commutation.
-const uint16_t motor_voltage_table_neg[6][3] {
+const uint16_t motor_sector_driving_neg[6][3] {
     {0,        0,        PWM_BASE},
     {PWM_BASE, 0,        PWM_BASE},
     {PWM_BASE, 0,        0       },

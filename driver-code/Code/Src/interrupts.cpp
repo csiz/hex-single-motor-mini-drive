@@ -1,11 +1,12 @@
 #include "interrupts.hpp"
+#include "interrupts_angle.hpp"
+#include "interrupts_motor.hpp"
 
 #include "io.hpp"
 #include "constants.hpp"
-#include "main.h" // For the Error_Handler function.
+#include "error_handler.hpp"
 
 #include "motor_control.hpp"
-
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
@@ -17,10 +18,8 @@
 
 // Timing data
 uint32_t adc_update_number = 0;
-uint32_t tim1_update_number = 0;
-uint32_t tim2_update_number = 0;
-uint32_t tim2_cc1_number = 0;
-
+uint32_t hall_unobserved_number = 0;
+uint32_t hall_observed_number = 0;
 
 // Electrical state
 StateReadout latest_readout = {};
@@ -34,407 +33,29 @@ uint32_t readouts_missed = 0;
 void data_init(){
     // Create the queue for the readouts.
     readouts_queue = xQueueCreateStatic(HISTORY_SIZE, READOUT_ITEMSIZE, readouts_queue_buffer, &readouts_queue_storage);
-    if (readouts_queue == nullptr) Error_Handler();
+    if (readouts_queue == nullptr) error();
 }
 
 
-// Hall sensors
-// ------------
-
-// Hall states as bits, 0b001 = hall 1, 0b010 = hall 2, 0b100 = hall 3.
-uint8_t hall_state = 0b000;
-// The 6 valid configurations of hall sensors in trigonometric order.
-uint8_t hall_sector = 0;
-// Whether the sector is valid; it will be false if the magnet is not present or the sensors are not ready.
-bool hall_sector_valid = false;
-
-
-// Position tracking
-// -----------------
-
-// Whether the position is valid.
-bool angle_valid = false;
-// We need to keep track of the previous hall sector to determine the direction of rotation.
-uint8_t previous_hall_sector = 0;
-// Whether the previous hall sector was valid; initialize anew when the magnet is placed back.
-bool previous_hall_sector_valid = false;
-
-// Time, in our units, since the last observation of the hall sensor. The PWM cycle loop updates
-// this variable.
-int time_since_observation = 0;
-// Flag to indicate a new observation; the hall sensor interrupt sets the flag for the PWM cycle loop.
-bool new_observation = false;
-
-// Estimated angle at the last observation; this is our best guess of the angle using a kalman filter.
-int angle_at_observation = 0;
-// Variance of the angle at the last observation.
-int angle_variance_at_observation = 0;
-// Estimated angular speed at the last observation; this is our best guess of the speed using a kalman filter.
-int angular_speed_at_observation = 0;
-// Variance of the angular speed at the last observation.
-int angular_speed_variance_at_observation = 0;
-
-
-// Phase Currents
-// --------------
-
-float current_u = 0;
-float current_v = 0;
-float current_w = 0;
-
-// Motor Control
-// -------------
-
-uint16_t motor_u_pwm_duty = 0;
-uint16_t motor_v_pwm_duty = 0;
-uint16_t motor_w_pwm_duty = 0;
-
-
-// Functions
-// ---------
-
-
-// Compute motor phase currents using latest ADC readouts. 
-void calculate_motor_phase_currents_gated(){
-    // TODO: rework
-    return;
-
-    // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
-    NVIC_DisableIRQ(ADC1_2_IRQn);
-    const StateReadout readout = latest_readout;
-    NVIC_EnableIRQ(ADC1_2_IRQn);
-
-    const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
-    const int32_t readout_diff_v = readout.v_readout - readout.ref_readout;
-    const int32_t readout_diff_w = readout.w_readout - readout.ref_readout;
-
-    // The amplifier voltage output is specified by the formula:
-    //     Vout = (Iload * Rsense * GAIN) + Vref
-    // Therefore:
-    //     Iload = (Vout - Vref) / (Rsense * GAIN)
-    // Where:
-    //     Vout = adc_current_readout / adc_max_value * adc_voltage_reference;
-
-    current_u = readout_diff_u * current_conversion;
-    current_v = readout_diff_v * current_conversion;
-    current_w = readout_diff_w * current_conversion;
-}
-
-
-
-// Read the hall sensors and update the motor rotation angle. Sensor chips might be: SS360NT (can't read the inprint clearly).
-static inline void read_hall_sensors(){
-    // Grab the registers for the GPIO ports with the hall sensors.
-
-    uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
-    uint16_t gpio_B_inputs = LL_GPIO_ReadInputPort(GPIOB);
-
-    // Note: Hall sensors are active low!
-    const bool hall_1 = !(gpio_A_inputs & (1<<0)); // Hall sensor 1, corresponding to phase V
-    const bool hall_2 = !(gpio_A_inputs & (1<<1)); // Hall sensor 2, corresponding to phase W
-    const bool hall_3 = !(gpio_B_inputs & (1<<10)); // Hall sensor 3, corresponding to phase U
-
-    // Combine the hall sensor states into a single byte.
-    // Note: Reorder the sensors according to the phase order; U on bit 0, V on bit 1, W on bit 2.
-    hall_state = hall_3 | (hall_1 << 1) | (hall_2 << 2);
-
-    // Get the hall sector from the state.
-    switch (hall_state) {
-        case 0b000: // no hall sensors; either it's not ready or no magnet
-            hall_sector_valid = false;
-            break;
-        case 0b001: // hall U active; 0 degrees
-            hall_sector = 0;
-            hall_sector_valid = true;
-            break;
-        case 0b011: // hall U and hall V active; 60 degrees
-            hall_sector = 1;
-            hall_sector_valid = true;
-            break;
-        case 0b010: // hall V active; 120 degrees
-            hall_sector = 2;
-            hall_sector_valid = true;
-            break;
-        case 0b110: // hall V and hall W active; 180 degrees
-            hall_sector = 3;
-            hall_sector_valid = true;
-            break;
-        case 0b100: // hall W active; 240 degrees
-            hall_sector = 4;
-            hall_sector_valid = true;
-            break;
-        case 0b101: // hall U and hall W active; 300 degrees
-            hall_sector = 5;
-            hall_sector_valid = true;
-            break;
-        case 0b111: // all hall sensors active; this would be quite unusual
-            hall_sector_valid = false;
-            Error_Handler();
-            break;
-    }
-}
-
-// Update position estimate after not observing any trigger for a while.
-static inline void update_position_unobserved(){
-    if (not angle_valid) return;
-    const int time = max(1, time_since_observation);
-
-    const int direction = angular_speed_at_observation >= 0 ? 1 : -1;
-    const size_t direction_index = angular_speed_at_observation >= 0 ? 0 : 1;
-
-    const int next_sector = (6 + hall_sector + direction) % 6;
-
-    const int trigger_angle = sector_transition_angles[next_sector][direction_index];
-
-    const int distance_to_trigger = signed_angle(trigger_angle - angle_at_observation);
-    
-    const int max_abs_speed = direction * (distance_to_trigger + direction * sector_transition_confidence) * scale / time;
-
-    angular_speed_at_observation = direction * clip_to(0, max_abs_speed, direction * angular_speed_at_observation);
-
-    if (time_since_observation >= max_time_between_observations) {
-        // We haven't observed the hall sensors for a while; we need to reset the position estimate.
-        angle_at_observation = sector_center_angles[hall_sector];
-        angle_variance_at_observation = sector_center_variances[hall_sector];
-        angular_speed_at_observation = initial_angular_speed;
-        angular_speed_variance_at_observation = initial_angular_speed_variance;
-    }
-}
-
-// Update the position from the hall sensors. Use a kalman filter to estimate the position and speed.
-static inline void update_position_observation(){
-    // Get the time since the last observation.
-    const int time = max(1, time_since_observation);
-
-    read_hall_sensors();
-
-    // Check if the magnet is present.
-    if (not hall_sector_valid) {
-        previous_hall_sector_valid = false;
-        angle_valid = false;
-        return;
-    }
-
-    // The new hall sector is valid, let's calculate the angle.
-
-    if (not previous_hall_sector_valid || hall_sector == previous_hall_sector) {
-        // This is the first time we have a valid hall sector; we need to set the angle and the angular speed.
-        previous_hall_sector = hall_sector;
-        previous_hall_sector_valid = true;
-
-        // Reset position tracking to the sector center; our best guess.
-
-        angle_at_observation = sector_center_angles[hall_sector];
-        angle_variance_at_observation = sector_center_variances[hall_sector];
-        angular_speed_at_observation = initial_angular_speed;
-        angular_speed_variance_at_observation = initial_angular_speed_variance;
-
-        new_observation = true;
-        angle_valid = true;
-        return;
-    }
-
-    
-    // We have a valid sector transition; perform a Kalman filter update.
-
-    // Get the sector integer distance to determine the direction of rotation.
-    const int sector_distance = (9 + hall_sector - previous_hall_sector) % 6 - 3;
-
-    // Establish direction of rotation.
-    const int direction = sector_distance >= 0 ? 1 : -1;
-    // Positive rotations index the first element in the calibration table, negative the second.
-    const size_t direction_index = sector_distance >= 0 ? 0 : 1;
-
-    // Get data about this transition from the calibration table.
-
-    const int trigger_angle = sector_transition_angles[hall_sector][direction_index];
-    const int trigger_variance = sector_transition_variances[hall_sector][direction_index];
-    const int sector_variance = sector_center_variances[hall_sector];
-
-    // Change coordinates with angle as the center. The next trigger is always close to the current 
-    // angle (max distance between sectors is 120 degrees). On the other hand the distance since
-    // the last measurement can grow arbitrarily large, we need to be careful to not wrap the estiamte
-    // around the circle, but we do need to wrap and normalize the distance to the trigger.
-    // 
-    // Note: Don't add up variances for the change of coordinates! It's just a math trick.
-
-    // Calculate the distance travelled since the last observation to the current trigger angle.
-    const int distance_to_trigger = signed_angle(trigger_angle - angle_at_observation);
-    
-    // Make sure we don't overshoot the upper bound of the trigger angle. This is likely because
-    // our speed doesn't update between observations and a long time can pass until we get a new one.
-    // A low residual speed will push us quite a bit over a long enough time. Cap the speed based
-    // on the observation time such that we don't overshoot the trigger angle by more than the sector confidence.
-
-    // Calculate the maximum allowed speed while handling the direction sign.
-    const int max_abs_speed = direction * (distance_to_trigger + direction * sector_transition_confidence) * scale / time;
-
-    // Clip the angular speed to the maximum allowed speed; we also clip it so it does't go backwards. A positive
-    // sector transition necesarily implies a positive speed of the rotor.
-    const int clipped_angular_speed = direction * clip_to(0, max_abs_speed, direction * angular_speed_at_observation);
-
-    // The distance traveled is the speed * time divided by our extra scaling factor (for integer math precision).
-    const int estimated_distance = clipped_angular_speed * time / scale;
-    
-    // Get the error in our estimate.
-    const int estimated_distance_error = distance_to_trigger - estimated_distance;
-
-    // Get the speed error.
-    const int estimated_speed_error = scale * estimated_distance_error / time;
-    
-    // Precompute the square of time and downscale by our magic scale to keep it within integer arithmetic bounds.
-    const int square_time_div_square_scale = clip_to(1, max_16bit, time * time / square_scale);
-
-    // Calculate the variances.
-
-    // The angular speed variance increases with acceleration over time.
-    const int angular_speed_variance = min(max_16bit,
-        angular_speed_variance_at_observation + angular_acceleration_variance_div_4 * square_time_div_square_scale);
-    
-    // The distance variance does not depend on the trigger variance as we're treating it as a coordinate change.
-    // This is the variance of the estimated angle! It depends on the last angle and speed variances.
-    const int estimated_distance_variance = min(max_16bit, 
-        angle_variance_at_observation + square_time_div_square_scale * angular_speed_variance);
-    
-    // Variance of the speed error. This is the variance of our predicted speed. It depends on the estimate of the
-    // last angle, the trigger angle, and the previous speed variance.
-    const int estimated_speed_error_variance = min(max_16bit, 
-        angular_speed_variance + (angle_variance_at_observation + trigger_variance) / square_time_div_square_scale);
-
-    // Adjust the distance using the kalman gain. This is actually the new mean of a product of gaussians.
-    const int distance_adjustment = (estimated_distance_error * estimated_distance_variance) / (estimated_distance_variance + trigger_variance);
-    // Similarly adjust the speed based on our new guess and previous variance.
-    const int speed_adjustment = (estimated_speed_error * angular_speed_variance) / (angular_speed_variance + estimated_speed_error_variance);
-    
-    // Return to the original coordinates and use the distance adjustment computed with the kalman gain.
-    const int kalman_angle = normalize_angle(angle_at_observation + estimated_distance + distance_adjustment);
-    
-    // Update the position parameters.
-    
-    // Store the previous hall sector and mark it as valid.
-    previous_hall_sector = hall_sector;
-    previous_hall_sector_valid = true;
-    
-    // Ensure the angle at observation is within the confidence band of the current sector. We only need to check the lower bound now, we
-    // did the upper bound by clipping the angular speed.
-    angle_at_observation = kalman_angle + direction * max(0, 
-        direction * signed_angle(trigger_angle - direction * sector_transition_confidence - kalman_angle));
-
-    // Calculate the new angle variance by combining the trigger variance and the estimated angle variance.
-    angle_variance_at_observation = clip_to(2, sector_variance,
-        trigger_variance * estimated_distance_variance / (trigger_variance + estimated_distance_variance));
-    
-    // Update the angular speed using the clipped speed and the adjustment calculated with the kalman gain.
-    angular_speed_at_observation = clipped_angular_speed + speed_adjustment;
-
-    // Calculate the new angular speed variance by the old variance and the estimated speed error variance.
-    angular_speed_variance_at_observation = clip_to(2, initial_angular_speed_variance,
-        angular_speed_variance * estimated_speed_error_variance / (angular_speed_variance + estimated_speed_error_variance));
-
-    // Flag to the PWM cycle loop that we have a new observation.
-    new_observation = true;
-    angle_valid = true;
-}
-
-// Initialize the position tracking system. 
-// 
-// This should be called once at startup to get the initial hall sensor state.
-void initialize_position_tracking(){
-    update_position_observation();
-}
-
-
-
-static inline void update_timeout(){
-    if (duration_till_timeout > 0) {
-        duration_till_timeout -= 1;
-    } else {
-        motor_break();
-    }
-}
-
-static inline void sector_motor_control(){
-    // Update motor control registers only if actively driving.
-
-    const uint16_t (*motor_voltage_table)[3] = 
-        driver_state == DriverState::DRIVE_POS ? motor_voltage_table_pos : 
-        driver_state == DriverState::DRIVE_NEG ? motor_voltage_table_neg : 
-        nullptr;
-    if (motor_voltage_table == nullptr) return;
-
-    // Note: The registers need to be left unchanged whilst running in the calibration modes.
-
-    // Use the hall sensor state to determine the motor position and commutation.
-    if (not hall_sector_valid) {
-        motor_break();
-        return;
-    }
-
-    const uint16_t voltage_phase_u = motor_voltage_table[hall_sector][0];
-    const uint16_t voltage_phase_v = motor_voltage_table[hall_sector][1];
-    const uint16_t voltage_phase_w = motor_voltage_table[hall_sector][2];
-
-
-    motor_u_pwm_duty = voltage_phase_u * pwm_command / PWM_BASE;
-    motor_v_pwm_duty = voltage_phase_v * pwm_command / PWM_BASE;
-    motor_w_pwm_duty = voltage_phase_w * pwm_command / PWM_BASE;
-}
-
-static inline void smooth_motor_control(uint8_t angle){
-    const int direction = 
-        driver_state == DriverState::DRIVE_SMOOTH_POS ? +1 : 
-        driver_state == DriverState::DRIVE_SMOOTH_NEG ? -1 : 
-        0;
-    if (direction == 0) return;
-
-    if (not angle_valid) {
-        motor_break();
-        return;
-    }
-
-
-    const int target_angle = (256 + static_cast<int>(angle) + direction * static_cast<int>(leading_angle)) % 256;
-
-    const uint16_t voltage_phase_u = phases_waveform[target_angle];
-    const uint16_t voltage_phase_v = phases_waveform[(256 + target_angle - 85) % 256];
-    const uint16_t voltage_phase_w = phases_waveform[(256 + target_angle - 170) % 256];
-
-    motor_u_pwm_duty = voltage_phase_u * pwm_command / PWM_BASE;
-    motor_v_pwm_duty = voltage_phase_v * pwm_command / PWM_BASE;
-    motor_w_pwm_duty = voltage_phase_w * pwm_command / PWM_BASE;
-}
-
-static inline void test_motor_control(){
-    if(schedule_pointer == nullptr) return motor_break();
-
-    const PWMSchedule & schedule = *schedule_pointer;
-
-    motor_u_pwm_duty = schedule[schedule_stage].u;
-    motor_v_pwm_duty = schedule[schedule_stage].v;
-    motor_w_pwm_duty = schedule[schedule_stage].w;
-
-    // Go to the next step in the schedule.
-    schedule_counter += 1;
-    if (schedule_counter >= schedule[schedule_stage].duration) {
-        schedule_stage += 1;
-        schedule_counter = 0;
-    }
-    
-    // Next stage, unless we're at the end of the schedule.
-    if (schedule_stage >= SCHEDULE_SIZE) {
-        // Reset the schedule stage and counter.
-        schedule_stage = 0;
-        schedule_counter = 0;
-        schedule_pointer = nullptr;
-        // Stop the test by breaking the motor.
-        motor_break();
-    }
-}
 
 // Critical function!! 23KHz PWM cycle
 // -----------------------------------
 
 static inline void pwm_cycle_and_adc_update(){
+    // Check if we had a new hall sensor observation.
+    if(new_observation) {
+        new_observation = false;
+        time_since_observation = 0;
+    }
+    // Increment the time since the last observation.
+    time_since_observation = min(time_since_observation + time_increment_per_cycle, max_time_between_observations);
+    
+    const int estimated_angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / scale);
+    
+    // Scale down the angle to 8 bits so we can use a lookup table for the voltage targets.
+    const uint8_t angle = estimated_angle * 256 / angle_base;
+    
+
     // Write the current readout index.
     latest_readout.readout_number = adc_update_number;
     
@@ -453,93 +74,52 @@ static inline void pwm_cycle_and_adc_update(){
     latest_readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
     latest_readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
     
-    
-    
-    // Check if we had a new hall sensor observation.
-    if(new_observation) {
-        new_observation = false;
-        time_since_observation = 0;
-    }
-    // Increment the time since the last observation.
-    time_since_observation = min(time_since_observation + time_increment_per_cycle, max_time_between_observations);
-    
-    const int estimated_angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / scale);
-    
-    
-    // Scale down the angle to 8 bits so we can use a lookup table for the voltage targets.
-    const uint8_t angle = estimated_angle * 256 / max_angle_unit;
-    
     latest_readout.position = angle | (hall_state << 13) | angle_valid << 12;
     
     // Write the previous pwm duty cycle to this readout, it should have been active during the prior to the ADC sampling.
-    latest_readout.pwm_commands = motor_u_pwm_duty * PWM_BASE * PWM_BASE + motor_v_pwm_duty * PWM_BASE + motor_w_pwm_duty;
+    latest_readout.pwm_commands = get_motor_u_pwm_duty() * PWM_BASE * PWM_BASE + get_motor_v_pwm_duty() * PWM_BASE + get_motor_w_pwm_duty();
     
-    // Always attempt to write the lastest readout to the history buffer.
-    if(xQueueSendToBackFromISR(readouts_queue, &latest_readout, NULL) == errQUEUE_FULL){
-        // Full queue, count missed readouts.
-        readouts_missed += 1;
-    }
+
 
     // Update motor control.
     switch (driver_state) {
         case DriverState::OFF:
-            // Short all motor phases to ground.
-            motor_u_pwm_duty = 0;
-            motor_v_pwm_duty = 0;
-            motor_w_pwm_duty = 0;
-            
-            // Immediately update and enable the motor outputs.
-            enable_motor_outputs();
+            control_motor_break();
             break;
-
         case DriverState::FREEWHEEL:
-            // Reset PWM duty cycle to 0 anyway.
-            motor_u_pwm_duty = 0;
-            motor_v_pwm_duty = 0;
-            motor_w_pwm_duty = 0;
-            
-            // Set all motor phases to floating voltage/tristate.
-            disable_motor_outputs();
+            control_motor_freewheel();
             break;
-    
         case DriverState::TEST_SCHEDULE:
-            // Quickly update the PWM settings from the test schedule.
-            test_motor_control();
-            enable_motor_outputs();
+            control_motor_test();
             break;
-            
-        case DriverState::DRIVE_NEG:
         case DriverState::DRIVE_POS:
-            sector_motor_control();
-            enable_motor_outputs();
-            update_timeout();
+            control_motor_sector(hall_sector, motor_sector_driving_pos);
+            break;
+        case DriverState::DRIVE_NEG:
+            control_motor_sector(hall_sector, motor_sector_driving_neg);
             break;
         case DriverState::DRIVE_SMOOTH_POS:
+            control_motor_smooth(angle_valid, angle, +1);
+            break;
         case DriverState::DRIVE_SMOOTH_NEG:
-            smooth_motor_control(angle);
-            enable_motor_outputs();
-            update_timeout();
+            control_motor_smooth(angle_valid, angle, -1);
             break;
         case DriverState::HOLD:
-            // Set the duty cycle and hold.
-            motor_u_pwm_duty = hold_u_pwm_duty;
-            motor_v_pwm_duty = hold_v_pwm_duty;
-            motor_w_pwm_duty = hold_w_pwm_duty;
-            enable_motor_outputs();
-            update_timeout();
+            control_motor_hold();
             break;
     }
 
-    set_motor_u_pwm_duty_cycle(motor_u_pwm_duty);
-    set_motor_v_pwm_duty_cycle(motor_v_pwm_duty);
-    set_motor_w_pwm_duty_cycle(motor_w_pwm_duty);
+    // Send data to the main loop after updating the PWM registers; the queue access might be slow.
+    
+    // Always attempt to write the lastest readout to the history buffer.
+    xQueueSendToBackFromISR(readouts_queue, &latest_readout, NULL); // Ignore whether the queue is full.
 }
 
 
 // Interrupt handlers
 // ------------------
 
-
+// These functions are called by the autogenerated C code.
 
 void adc_interrupt_handler(){
     const bool injected_conversions_complete = LL_ADC_IsActiveFlag_JEOS(ADC1);
@@ -549,7 +129,7 @@ void adc_interrupt_handler(){
         adc_update_number += 1;
         LL_ADC_ClearFlag_JEOS(ADC1);
     } else {
-        Error_Handler();
+        error();
     }
 }
 
@@ -561,20 +141,15 @@ void dma_interrupt_handler() {
 
 // Timer 1 is updated every motor PWM cycle; at ~ 70KHz.
 void tim1_update_interrupt_handler(){
-    if(LL_TIM_IsActiveFlag_UPDATE(TIM1)){
-        // Note, this updates on both up and down counting, get direction with: LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP;
-        
-        tim1_update_number += 1;
-
-        LL_TIM_ClearFlag_UPDATE(TIM1);
-    } else {
-        Error_Handler();
-    }
+    // We shouldn't trigger this, but including for documentation.
+    error();
+    // Note, this updates on both up and down counting, get direction 
+    // with: LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP;
 }
 
 void tim1_trigger_and_commutation_interrupt_handler() {
     // We shouldn't trigger this, but including for documentation.
-    Error_Handler();
+    error();
 }
 
 
@@ -584,16 +159,132 @@ void tim2_global_handler(){
     if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
         update_position_unobserved();
 
-        tim2_update_number += 1;
+        hall_unobserved_number += 1;
         LL_TIM_ClearFlag_UPDATE(TIM2);
 
     // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
+    // TODO: it doesn't work properly, it seems we have to forward the trigger to another timer.
     } else if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
         update_position_observation();
 
-        tim2_cc1_number += 1;
+        hall_observed_number += 1;
         LL_TIM_ClearFlag_CC1(TIM2);
     } else {
-        Error_Handler();
+        error();
     }
+}
+
+// Initializing ADC, interrupts and timers
+// ---------------------------------------
+
+void initialize_position_tracking(){
+    update_position_observation();
+}
+
+void adc_init(){
+    // We use the ADC1 and ADC2 in simulatenous mode to read the motor phase currents
+    // a short time after we turn on the mosfets during each PWM cycle (the motors
+    // are driven by TIM1). When the ADC is triggered in injected mode both ADC modules 
+    // read the current for U and V phases first then W and reference voltage second.
+    // 
+    // The ADC sample time is 20cycles, so the total sampling period is 20/12MHz = 1.67us.
+    // 
+    // Use the TIM1 channel 4 to generate an event a short time after the update event.
+    // This event is used to trigger the ADC to read the current from the motor phases.
+    // 
+    // Delay the ADC sampling time by 16/72MHz = 222ns; the ADC will sample for 7.5 cycles
+    // (and convert for 12.5); then finally sample W and the reference. 7.5/12MHz = 625ns.
+    // For reference, the ADC sample time is 20*72MHz/12MHz = 120 ticks of TIM1.
+
+    // When counting down, this is triggered 14/2 cycles before the counter reaches 0, sampling 
+    // current symmetrically around 0 for the 2 consecutive readings.
+    LL_TIM_OC_SetCompareCH4(TIM1, PWM_BASE - 42);
+
+
+    // Enable the ADC interrupt for the end of the injected sequence which reads motor current.
+    LL_ADC_EnableIT_JEOS(ADC1);
+
+    // Enable the ADCs and wait for them to settle.
+    LL_ADC_Enable(ADC1);
+    LL_ADC_Enable(ADC2);
+    HAL_Delay(100);
+
+    // Calibrate the ADCs.
+    LL_ADC_StartCalibration(ADC1);
+    while (LL_ADC_IsCalibrationOnGoing(ADC1)) {}
+    LL_ADC_StartCalibration(ADC2);
+    while (LL_ADC_IsCalibrationOnGoing(ADC2)) {}
+
+    // Start ADC conversions from the external trigger in TIM1.
+    LL_ADC_INJ_StartConversionExtTrig(ADC1, LL_ADC_INJ_TRIG_EXT_RISING);
+    LL_ADC_INJ_StartConversionExtTrig(ADC2, LL_ADC_INJ_TRIG_EXT_RISING);
+}
+
+
+void interrupts_init(){
+
+    // TIM1 is used to generate the PWM signals for the motor phases, and to trigger the ADC.
+    // 
+    // Note that we don't need to set dead-time at this point; the gate driver FD6288T&Q has a 
+    // built-in dead-time of 100-300ns. The MOSFETs AO4266E have turn on rise time of 8ns and 
+    // turn off fall time of 22ns so we should be covered.
+
+    // Disable TIM1 update interrupt; occuring every PWM cycle. We will use the ADC interrupt to update the motor control.
+    LL_TIM_DisableIT_UPDATE(TIM1);
+    // Disable TIM1 trigger interrupt; it's only triggered during resets.
+    LL_TIM_DisableIT_TRIG(TIM1);
+    // Disable commutation interrupts; 
+    LL_TIM_DisableIT_COM(TIM1);
+
+
+    // Enable TIM2 update interrupt. We need to count updates of TIM2 to measure slow motor 
+    // speed in case the timer overflows before a toggle in the hall sensor.
+    LL_TIM_EnableIT_UPDATE(TIM2);
+    // Disable TIM2 trigger interrupt. It is triggered every reset and hall sensor toggle.
+    LL_TIM_DisableIT_TRIG(TIM2);
+    // Enable TIM2 channel 1 interrupt. It is triggered every hall sensor toggle; we can 
+    // read the time from the last time the input changed.
+    LL_TIM_EnableIT_CC1(TIM2);
+    // Disable TIM2 channel 2 interrupt. We are ignoring the delayed trigger output from 
+    // TIM2 as we will commutate faster than the hall sensor toggles. To use this effectively
+    // we need to use the prescaler to slow the timer down; but then we lose resolution.
+    LL_TIM_DisableIT_CC2(TIM2);
+
+    // Disable TIM1 capture/compare update selection preload. This is used to update the
+    // output modes of all channels at the same time when a commutation event is triggered.
+    // We don't need this as we always enable PWM mode and update the compare register to 
+    // modulate the PWM duty cycle.
+    // 
+    // This setting is mostly here to document that in order to trigger commutations on TRGI 
+    // we also need to enable preload for the motor ouput channel mode registers.
+    LL_TIM_CC_DisablePreload(TIM1);
+    // Don't allow TIM1 commutations to be triggered by TIM2 hall sensor toggles.
+    LL_TIM_CC_SetUpdate(TIM1, LL_TIM_CCUPDATESOURCE_COMG_ONLY);
+    
+}
+
+void enable_timers(){
+
+    // Reinitialize the timers; reset the counters and update registers. Because the timers
+    // are setup with preload registers the values we write to them are stored in shadow registers
+    // and only applied when the update event occurs (to any individual PWM cycle consistent). We
+    // need to generate an update event to force the timers to load the new values.
+    LL_TIM_GenerateEvent_UPDATE(TIM1);
+    LL_TIM_GenerateEvent_UPDATE(TIM2);
+    LL_TIM_GenerateEvent_UPDATE(TIM3);
+
+    // Start the timers.
+    LL_TIM_EnableCounter(TIM1);
+    LL_TIM_EnableCounter(TIM2);
+    LL_TIM_EnableCounter(TIM3);
+
+
+    // Enable TIM1 channel 4 used to trigger the ADC.
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH4);
+
+    // Enable the TIM1 outputs following a break or clock issue event.
+    LL_TIM_EnableAllOutputs(TIM1);
+
+    // Enable TIM2 channels 1 as the hall sensor timer between commutations.
+    LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
 }

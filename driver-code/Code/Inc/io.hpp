@@ -13,8 +13,12 @@ const uint32_t pwm_w_enable_bits = LL_TIM_CHANNEL_CH3 | LL_TIM_CHANNEL_CH3N;
 const uint32_t pwm_enable_bits = pwm_u_enable_bits | pwm_v_enable_bits | pwm_w_enable_bits;
 
 
-static inline void set_motor_u_pwm_duty_cycle(uint32_t duty_cycle){
+static inline void set_motor_u_pwm_duty(uint32_t duty_cycle){
     LL_TIM_OC_SetCompareCH1(TIM1, duty_cycle);
+}
+
+static inline uint32_t get_motor_u_pwm_duty(){
+    return LL_TIM_OC_GetCompareCH1(TIM1);
 }
 
 static inline void disable_motor_u_output(){
@@ -25,8 +29,12 @@ static inline void enable_motor_u_output(){
     LL_TIM_CC_EnableChannel(TIM1, pwm_u_enable_bits);
 }
 
-static inline void set_motor_v_pwm_duty_cycle(uint32_t duty_cycle){
+static inline void set_motor_v_pwm_duty(uint32_t duty_cycle){
     LL_TIM_OC_SetCompareCH2(TIM1, duty_cycle);
+}
+
+static inline uint32_t get_motor_v_pwm_duty(){
+    return LL_TIM_OC_GetCompareCH2(TIM1);
 }
 
 static inline void disable_motor_v_output(){
@@ -38,8 +46,12 @@ static inline void enable_motor_v_output(){
 }
 
 
-static inline void set_motor_w_pwm_duty_cycle(uint32_t duty_cycle){
+static inline void set_motor_w_pwm_duty(uint32_t duty_cycle){
     LL_TIM_OC_SetCompareCH3(TIM1, duty_cycle);
+}
+
+static inline uint32_t get_motor_w_pwm_duty(){
+    return LL_TIM_OC_GetCompareCH3(TIM1);
 }
 
 static inline void disable_motor_w_output(){
