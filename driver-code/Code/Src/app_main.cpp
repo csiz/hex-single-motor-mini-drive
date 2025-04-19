@@ -121,123 +121,125 @@ static inline void motor_start_test(PWMSchedule const& schedule){
 }
 
 
-void handle_command(CommandHeader const& command) {
+bool handle_command(CommandBuffer const & buffer) {
+    const CommandHeader command = parse_command_header(buffer);
+
     switch (command.code) {
         case NULL_COMMAND:
             // No command received; ignore it.
-            return;
+            return true;
 
         // Send the whole history buffer over USB.
         case GET_READOUTS:
             // Clear the queue of older data.
             xQueueReset(readouts_queue);
             usb_readouts_to_send = command.timeout;
-            return;
+            return true;
 
         case GET_READOUTS_SNAPSHOT:
             xQueueReset(readouts_queue);
             // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
             usb_wait_full_history = true;
             usb_readouts_to_send = HISTORY_SIZE;
-            return;
+            return true;
 
         // Turn off the motor driver.
         case SET_STATE_OFF:
             motor_break();
-            return;
+            return true;
             
         // Measure the motor phase currents.
         
         case SET_STATE_TEST_ALL_PERMUTATIONS:
             motor_start_test(test_all_permutations);
-            return;
+            return true;
         case SET_STATE_TEST_GROUND_SHORT:
             motor_start_test(test_ground_short);
-            return;
+            return true;
         case SET_STATE_TEST_POSITIVE_SHORT:
             motor_start_test(test_positive_short);
-            return;
+            return true;
         case SET_STATE_TEST_U_DIRECTIONS:
             motor_start_test(test_u_directions);
-            return;
+            return true;
 
         case SET_STATE_TEST_U_INCREASING:
             motor_start_test(test_u_increasing);
-            return;
+            return true;
         case SET_STATE_TEST_U_DECREASING:
             motor_start_test(test_u_decreasing);
-            return;
+            return true;
         case SET_STATE_TEST_V_INCREASING:
             motor_start_test(test_v_increasing);
-            return;
+            return true;
         case SET_STATE_TEST_V_DECREASING:
             motor_start_test(test_v_decreasing);
-            return;
+            return true;
         case SET_STATE_TEST_W_INCREASING:
             motor_start_test(test_w_increasing);
-            return;
+            return true;
         case SET_STATE_TEST_W_DECREASING:
             motor_start_test(test_w_decreasing);
-            return;
+            return true;
 
         // Drive the motor.
         case SET_STATE_DRIVE_POS:
             motor_drive_pos(command.pwm, command.timeout);
-            return;
+            return true;
         case SET_STATE_DRIVE_NEG:
             motor_drive_neg(command.pwm, command.timeout);
-            return;
+            return true;
         case SET_STATE_DRIVE_SMOOTH_POS:
             motor_drive_smooth_pos(command.pwm, command.timeout, command.leading_angle);
-            return;
+            return true;
         case SET_STATE_DRIVE_SMOOTH_NEG:
             motor_drive_smooth_neg(command.pwm, command.timeout, command.leading_angle);
-            return;
+            return true;
 
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
             motor_freewheel();
-            return;
+            return true;
 
         case SET_STATE_HOLD_U_POSITIVE:
             motor_hold(command.pwm, 0, 0, command.timeout);
-            return;
+            return true;
 
         case SET_STATE_HOLD_V_POSITIVE:
             motor_hold(0, command.pwm, 0, command.timeout);
-            return;
+            return true;
 
         case SET_STATE_HOLD_W_POSITIVE:
             motor_hold(0, 0, command.pwm, command.timeout);
-            return;
+            return true;
 
         case SET_STATE_HOLD_U_NEGATIVE:
             motor_hold(0, command.pwm, command.pwm, command.timeout);
-            return;
+            return true;
 
         case SET_STATE_HOLD_V_NEGATIVE:
             motor_hold(command.pwm, 0, command.pwm, command.timeout);
-            return;
+            return true;
 
         case SET_STATE_HOLD_W_NEGATIVE:
             motor_hold(command.pwm, command.pwm, 0, command.timeout);
-            return;
+            return true;
 
         case SET_CURRENT_FACTORS:            
             /* CurrentFactors factors = */ parse_current_factors(usb_command_buffer);
             // TODO: update current factors
-            return;
+            return true;
 
         case SET_TRIGGER_ANGLES:
             /* TriggerAngles angles = */ parse_trigger_angles(usb_command_buffer);
             // TODO: update trigger angles
-            return;
+            return true;
 
         // Don't use a default case so we can catch unhandled commands.
     }
 
-    // If we get here, we have an unknown command. Reset the USB buffers.
-    usb_com_reset();
+    // If we get here, we have an unknown command.
+    return false;
 }
 
 void usb_queue_readouts(){
@@ -315,11 +317,11 @@ void app_tick() {
 
     // Buffer the command from USB and handle it when it's complete.
     if (buffer_command(usb_command_buffer, usb_com_recv)){
-        // We have a complete command; parse it.
-        CommandHeader command = parse_command_header(usb_command_buffer);
-        
-        // Handle the command.
-        handle_command(command);
+        // Handle the complete command.
+        if (not handle_command(usb_command_buffer)){
+            // Invalid command; reset the USB buffers.
+            usb_com_reset();
+        }
 
         // Reset the command buffer for the next command.
         reset_command_buffer(usb_command_buffer);
