@@ -3,6 +3,7 @@
 
 #include "motor_control.hpp"
 #include "interrupts.hpp"
+#include "interrupts_data.hpp"
 #include "interface.hpp"
 
 #include "error_handler.hpp"

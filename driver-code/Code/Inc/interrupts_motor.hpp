@@ -1,5 +1,7 @@
 #pragma once
 
+#include "interrupts_data.hpp"
+
 #include "constants.hpp"
 #include "type_definitions.hpp"
 #include "error_handler.hpp"
@@ -144,9 +146,13 @@ static inline void update_motor_schedule(){
         // Get the queued schedule and reset the variable for a new command.
         schedule_active = get_and_reset_schedule_queued();
 
+        
         // We should not enter testing mode without a valid schedule.
         if (schedule_active == nullptr) return error();
-
+        
+        // Clear the readouts buffer of old data.
+        readout_history_reset();
+        
         // Reset the schedule counter.
         schedule_stage = 0;
         schedule_counter = 0;
