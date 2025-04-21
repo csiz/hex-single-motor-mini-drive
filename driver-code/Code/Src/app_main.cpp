@@ -20,17 +20,24 @@
 
 
 
-uint32_t main_loop_update_number = 0;
+uint32_t tick_number = 0;
+uint32_t last_tick = 0;
+uint32_t last_adc_update = 0;
+uint32_t last_hall_unobserved = 0;
+uint32_t last_hall_observed = 0;
 
+const uint32_t min_timing_period_millis = 50;
+uint32_t last_tick_time_millis = 0;
 
-float main_loop_update_rate = 0.0f;
+float tick_rate = 0.0f;
 float adc_update_rate = 0.0f;
 float hall_unobserved_rate = 0.0f;
 float hall_observed_rate = 0.0f;
 
 CommandBuffer usb_command_buffer = {};
 
-uint32_t usb_readouts_to_send = 0;
+uint16_t usb_stream_state = 0;
+uint16_t usb_readouts_to_send = 0;
 bool usb_wait_full_history = false;
 
 
@@ -61,7 +68,7 @@ void calculate_motor_phase_currents_gated(){
 
     // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
-    const StateReadout readout = get_latest_readout();
+    const Readout readout = get_latest_readout();
     NVIC_EnableIRQ(ADC1_2_IRQn);
 
     const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
@@ -106,14 +113,14 @@ void app_init() {
 }
 
 static inline void motor_start_test(PWMSchedule const& schedule){
+    // Clear the readouts buffer of old data.
+    readout_history_reset();
+    
     // Stop emptying the readouts queue; we want to keep the test data.
     usb_wait_full_history = true;
 
     // Stop adding readouts to the queue until the test starts in the interrupt handler.
     usb_readouts_to_send = HISTORY_SIZE;
-    
-    // Clear the readouts buffer of old data.
-    readout_history_reset();
 
     // Start the test schedule.
     motor_start_schedule(schedule);
@@ -129,13 +136,14 @@ bool handle_command(CommandBuffer const & buffer) {
             return true;
 
         // Send the whole history buffer over USB.
-        case GET_READOUTS:
-            // Clear history of older data.
-            readout_history_reset();
-            usb_readouts_to_send = command.timeout;
+        case STREAM_FULL_READOUTS:
+            usb_stream_state = command.timeout;
             return true;
 
         case GET_READOUTS_SNAPSHOT:
+            // Cancel streaming.
+            usb_stream_state = 0;
+            
             readout_history_reset();
             // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
             usb_wait_full_history = true;
@@ -241,7 +249,30 @@ bool handle_command(CommandBuffer const & buffer) {
     return false;
 }
 
-void usb_queue_readouts(){
+inline bool usb_check_queue(size_t len_to_send) {
+    if(not usb_com_queue_check(len_to_send)) {
+        // The USB buffer is full; stop sending until there's space.
+        if (HAL_GetTick() > usb_last_send + USB_TIMEOUT) {
+            // The USB controller is not reading data; stop sending and clear the USB buffer.
+            usb_readouts_to_send = 0;
+            usb_stream_state = 0;
+            usb_com_reset();
+        }
+        // Stop sending until the USB buffer is free again.
+        return false;
+    }
+
+    return true;
+}
+
+inline void usb_queue_send(uint8_t * data, size_t len_to_send) {
+    // Send the data to the USB buffer.
+    if(not usb_com_queue_send(data, len_to_send)) error();
+
+    usb_last_send = HAL_GetTick();
+}
+
+void usb_queue_response(){
     // Check if we have to wait for the queue to fill before sending readouts.
     // This is used to prevent sending readouts while the motor is commutating.
     if (usb_wait_full_history) {
@@ -253,40 +284,49 @@ void usb_queue_readouts(){
             return;
         }
     }
-
+    
     // Send readouts if requested; up to an arbitrary number of readouts so we don't block for long.
     while(usb_readouts_to_send > 0){
         // Check if we can enqueue the readout to the USB buffer.
-        if(not usb_com_queue_check(state_readout_size)) {
-            // The USB buffer is full; stop sending until there's space.
-            if (HAL_GetTick() > usb_last_send + USB_TIMEOUT) {
-                // The USB controller is not reading data; stop sending and clear the USB buffer.
-                usb_readouts_to_send = 0;
-                usb_com_reset();
-            }
-            // Stop sending until the USB buffer is free again.
-            return;
-        }
+        if(not usb_check_queue(readout_size)) return;
         
         // Stop if we have caught up to the readout history.
-        if (not readout_history_available()) return;
+        if (not readout_history_available()) return readout_history_reset();
         
         // Send the readout to the host.
-        uint8_t readout_data[state_readout_size] = {0};
-        write_state_readout(readout_data, readout_history_pop());
+        uint8_t readout_data[readout_size] = {0};
+        write_readout(readout_data, readout_history_pop());
         
         // We checked whether we can send, we should always succeed.
-        if(not usb_com_queue_send(readout_data, state_readout_size)) error();
+        usb_queue_send(readout_data, readout_size);
 
         // Readout added to the USB buffer.
         usb_readouts_to_send -= 1;
-        usb_last_send = HAL_GetTick();
+        
+    }
+
+    if(usb_stream_state){
+        if (not usb_check_queue(full_readout_size)) return;
+        // Send the full readout to the host.
+        uint8_t full_readout_data[full_readout_size] = {0};
+        FullReadout full_readout = {
+            .readout = get_latest_readout(),
+        };
+        full_readout.tick_rate = static_cast<int>(tick_rate);
+        full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
+        full_readout.hall_unobserved_rate = static_cast<int>(hall_unobserved_rate);
+        full_readout.hall_observed_rate = static_cast<int>(hall_observed_rate);
+        
+
+        write_full_readout(full_readout_data, full_readout);
+
+        usb_queue_send(full_readout_data, full_readout_size);
     }
 }
 
 
 void app_tick() {
-    main_loop_update_number += 1;
+    tick_number += 1;
 
     // Show the current hall sensor state on the LEDs.
     const uint8_t hall_state = (get_latest_readout().position >> 13 & 0b111);
@@ -297,14 +337,30 @@ void app_tick() {
     // ------
 
     // Update timing information.
-    uint32_t milliseconds = HAL_GetTick();
-    float seconds = milliseconds / 1000.f;
-    
-    main_loop_update_rate = main_loop_update_number / seconds;
-    adc_update_rate = get_adc_update_number() / seconds;
-    hall_unobserved_rate = get_hall_unobserved_number() / seconds;
-    hall_observed_rate = get_hall_observed_number() / seconds;
+    const uint32_t milliseconds = HAL_GetTick();
 
+    const uint32_t duration_since_timing_update = milliseconds - last_tick_time_millis;
+    if (duration_since_timing_update > min_timing_period_millis) {
+        last_tick_time_millis = milliseconds;
+        
+        float seconds = duration_since_timing_update / 1000.f;
+
+        const uint32_t adc_update_number = get_adc_update_number();
+        const uint32_t hall_unobserved_number = get_hall_unobserved_number();
+        const uint32_t hall_observed_number = get_hall_observed_number();
+        
+        tick_rate = (tick_number - last_tick) / seconds;
+        adc_update_rate = (adc_update_number - last_adc_update) / seconds;
+        hall_unobserved_rate = (hall_unobserved_number - last_hall_unobserved) / seconds;
+        hall_observed_rate = (hall_observed_number - last_hall_observed) / seconds;
+
+        last_tick = tick_number;
+        last_adc_update = adc_update_number;
+        last_hall_unobserved = hall_unobserved_number;
+        last_hall_observed = hall_observed_number;
+    } 
+
+    
 
     // USB comms
     // ---------
@@ -325,7 +381,7 @@ void app_tick() {
     }
     
     // Queue the state readouts on the USB buffer.
-    usb_queue_readouts();
+    usb_queue_response();
     
     // Send USB data from the buffer, twice per loop, hopefully the 
     // USB module sends 64 byte packets while we computed stuff.

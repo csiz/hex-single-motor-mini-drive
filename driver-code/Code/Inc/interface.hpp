@@ -14,8 +14,10 @@ enum CommandCode : uint16_t {
     NULL_COMMAND = 0x0000,
 
     READOUT = 0x2020,
-    GET_READOUTS = 0x2021,
+    STREAM_FULL_READOUTS = 0x2021,
     GET_READOUTS_SNAPSHOT = 0x2022,
+    FULL_READOUT = 0x2023,
+
     SET_STATE_OFF = 0x2030,
     SET_STATE_DRIVE_POS = 0x2031,
     SET_STATE_TEST_ALL_PERMUTATIONS = 0x2032,
@@ -88,5 +90,8 @@ TriggerAngles parse_trigger_angles(CommandBuffer const & buffer);
 // Sending data
 // ------------
 
-const size_t state_readout_size = 2 + sizeof(StateReadout);
-void write_state_readout(uint8_t * buffer, StateReadout const & readout);
+const size_t readout_size = 2 + sizeof(Readout);
+void write_readout(uint8_t * buffer, Readout const & readout);
+
+const size_t full_readout_size = 2 + sizeof(FullReadout);
+void write_full_readout(uint8_t * buffer, FullReadout const & full_readout);

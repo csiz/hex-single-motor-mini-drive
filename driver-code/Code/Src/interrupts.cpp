@@ -31,13 +31,13 @@ uint32_t get_hall_observed_number(){
 }
 
 // Electrical state
-StateReadout latest_readout = {};
-StateReadout get_latest_readout(){
+Readout latest_readout = {};
+Readout get_latest_readout(){
     return latest_readout;
 }
 
 // Data queue
-StateReadout readout_history[HISTORY_SIZE] = {};
+Readout readout_history[HISTORY_SIZE] = {};
 size_t readout_history_write_index = 0;
 size_t readout_history_read_index = 0;
 
@@ -51,15 +51,15 @@ bool readout_history_full(){
 bool readout_history_available(){
     return readout_history_read_index < readout_history_write_index;
 }
-StateReadout readout_history_pop(){
-    StateReadout readout = readout_history[readout_history_read_index];
+Readout readout_history_pop(){
+    Readout readout = readout_history[readout_history_read_index];
     readout_history_read_index += 1;
     // Reset both indexes if we have sent the whole history.
     if (readout_history_read_index >= HISTORY_SIZE) readout_history_reset();
     return readout;
 }
 
-static inline bool readout_history_push(StateReadout const & readout){
+static inline bool readout_history_push(Readout const & readout){
     if (readout_history_full()) return false;
     readout_history[readout_history_write_index] = readout;
     readout_history_write_index += 1;

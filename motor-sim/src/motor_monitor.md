@@ -8,7 +8,9 @@ Motor Commands
 
 <div>${connect_buttons}</div>
 <div>${motor_controller_status}</div>
-<div>${data_stream_buttons}</div>
+<div>${data_request_buttons}</div>
+<div>${test_buttons}</div>
+<div>${command_options_input}</div>
 <div>${command_buttons}</div>
 <div>
   ${command_pwm_slider}
@@ -110,60 +112,49 @@ function update_motor_controller_status(status){
   motor_controller_status.value = status;
 }
 
+function display_port_error(error){
+  if (error.name === "NotFoundError") {
+    update_motor_controller_status(html`<span style="color: red">No device found or nothing selected.</span>`);
+  } else if (error.name === "SecurityError") {
+    update_motor_controller_status(html`<span style="color: red">Permission for port dialog denied.</span>`);
+  } else if (error.message === "EOF") {
+    update_motor_controller_status(html`<span style="color: red">End of connection.</span>`);
+  } else if (error.name === "NetworkError") {
+    update_motor_controller_status(html`<span style="color: red">Connection lost.</span>`);
+  } else {
+    update_motor_controller_status(html`<span style="color: red">Connection lost; unknown error: ${error}</span>`);
+  }
+}
+
 
 async function open_port_and_read(){
   if (motor_controller.value) {
     console.info("Forgetting previous port");
-    try {
-      await motor_controller.value.com_port.forget();
-    } catch (error) {
-      // Ignore network errors when forgetting, likely due to previous disconnect.
-      if (error.name != "NetworkError") throw error;
-    }
+    await motor_controller.value.forget();
   }
+
   try {
     motor_controller.value = await motor.connect_usb_motor_controller();
 
     update_motor_controller_status(html`<span>Connected, waiting for data.</span>`);
 
-    for await (const data_received of motor_controller.value.reading_loop()) {
-      update_motor_controller_status(html`<span>Connected; received: ${data_received} bytes.</span>`);
+    for await (const bytes_received of motor_controller.value.reading_loop()) {
+      update_motor_controller_status(html`<span>Connected; received: ${bytes_received} bytes.</span>`);
     }
 
   } catch (error) {
     motor_controller.value = null;
 
-    if (error.name === "SecurityError") {
-      update_motor_controller_status(html`<span style="color: red">Permission for port dialog denied.</span>`);
-      return;
-    }
-
-    if (error.message === "EOF") {
-      update_motor_controller_status(html`<span style="color: red">End of connection.</span>`);
-      return;
-    }
-    // Check for NetworkError due to disconnect.
-    if (error.name === "NetworkError") {
-      update_motor_controller_status(html`<span style="color: red">Connection lost.</span>`);
-      return;
-    }
-
-    if (error.name === "NotFoundError") {
-      update_motor_controller_status(html`<span style="color: red">No device found or nothing selected.</span>`);
-      return;
-    }
-
-    update_motor_controller_status(html`<span style="color: red">Connection lost; unknown error: ${error}</span>`);
-    throw error;
+    display_port_error(error);
   }
 }
 
 invalidation.then(async function(){
   if (motor_controller.value) {
     console.info("Invalidating motor controller; forgetting port.");
-    await motor_controller.value.com_port.forget();
+    await motor_controller.value.forget();
     motor_controller.value = null;
-    motor_controller_status.value = html`<span style="color: red">Invalidated!</span>`;
+    update_motor_controller_status(html`<span style="color: yellow">Invalidated!</span>`);
   }
 });
 
@@ -180,6 +171,18 @@ open_port_and_read();
 ```
 
 ```js
+const command_options_input = Inputs.checkbox(
+  ["Stream data with command"],
+  {
+    value: ["Stream data with command"],
+    label: "Command options:",
+  },
+);
+d3.select(command_options_input).select("div").style("width", "100%");
+d3.select(command_options_input).select("div label").style("width", "100em");
+
+const command_options = Generators.input(command_options_input);
+
 const command_pwm_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: "Command value:"});
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
@@ -197,10 +200,13 @@ const command_leading_angle_degrees = Generators.input(command_leading_angle_sli
 // Data stream output
 // ------------------
 
+const max_data_points = 5 * motor.HISTORY_SIZE;
+
 let raw_readout_data = Mutable();
 
 function update_raw_readout_data(new_data){
-  raw_readout_data.value = new_data;
+  const truncated_data = new_data.length > max_data_points ? new_data.slice(-max_data_points) : new_data
+  raw_readout_data.value = truncated_data;
 }
 
 ```
@@ -210,27 +216,11 @@ function update_raw_readout_data(new_data){
 // Control functions
 // -----------------
 
-const max_data_points = motor.HISTORY_SIZE;
 
 const command_timeout = Math.floor(command_timeout_millis / time_conversion);
 const command_pwm = Math.floor(command_pwm_fraction * motor.PWM_BASE);
 const command_leading_angle = Math.floor(256 + 256 * command_leading_angle_degrees / 360) % 256;
 
-async function command_and_stream(command, options = {}){
-  if (!motor_controller) return;
-    
-  try {
-    await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle, ...options});
-
-    // Start reading the data stream.
-    for await (const data_snapshot of motor_controller.stream_readouts(options)) {
-      update_raw_readout_data(data_snapshot.length > max_data_points ? data_snapshot.slice(-max_data_points) : data_snapshot);
-    }
-  } catch (error) {
-    update_motor_controller_status(html`<span style="color: red">Error streaming data: ${error}</span>`);
-    throw error;
-  }
-}
 
 async function command(command){
   if (!motor_controller) return;
@@ -238,123 +228,154 @@ async function command(command){
   await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle});
 }
 
-
 let latest_stream_timeout = null;
-function command_and_stream_latest(delay_ms, command, options = {}){
+
+function command_and_stream(delay_ms, command, options = {}){
   if (latest_stream_timeout) clearTimeout(latest_stream_timeout);
+
+  if (!motor_controller) return;
+  
   latest_stream_timeout = setTimeout(async function(){
-    await command_and_stream(command, {...options});
+    try {
+      await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle, ...options});
+
+      // Start reading the data stream.
+      for await (const data_snapshot of motor_controller.stream_readouts(options)) {
+        update_raw_readout_data(data_snapshot);
+      }
+    } catch (error) {
+      update_motor_controller_status(html`<span style="color: red">Error streaming data: ${error}</span>`);
+      throw error;
+    }
   }, delay_ms);
 }
 
-const data_stream_buttons = Inputs.button(
+const data_request_buttons = Inputs.button(
   [
     ["ADC snapshot", async function(){
-      command_and_stream_latest(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      command_and_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["ADC stream", async function(){
-      await command_and_stream_latest(0, motor.GET_READOUTS);
-    }],
-    ["Test all permutations", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_ALL_PERMUTATIONS);
-    }],
-    ["Test ground short", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_GROUND_SHORT);
-    }],
-    ["Test positive short", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_POSITIVE_SHORT);
-    }],
-    ["Test U directions", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_U_DIRECTIONS);
-    }],
-    ["Test U increasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_U_INCREASING);
-    }],
-    ["Test U decreasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_U_DECREASING);
-    }],
-    ["Test V increasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_INCREASING);
-    }],
-    ["Test V decreasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_DECREASING);
-    }],
-    ["Test W increasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_INCREASING);
-    }],
-    ["Test W decreasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_DECREASING);
-    }],
-    ["Test V increasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_INCREASING);
-    }],
-    ["Test V decreasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_V_DECREASING);
-    }],
-    ["Test W increasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_INCREASING);
-    }],
-    ["Test W decreasing", async function(){
-      await command_and_stream_latest(0, motor.SET_STATE_TEST_W_DECREASING);
+      await command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_code: motor.FULL_READOUT});
     }],
   ],
   {label: "Read data"},
 );
 
+d3.select(data_request_buttons).selectAll("button").style("height", "4em");
+
+const test_buttons = Inputs.button(
+  [
+    ["Test all permutations", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_ALL_PERMUTATIONS);
+    }],
+    ["Test ground short", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_GROUND_SHORT);
+    }],
+    ["Test positive short", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_POSITIVE_SHORT);
+    }],
+    ["Test U directions", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_U_DIRECTIONS);
+    }],
+    ["Test U increasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_U_INCREASING);
+    }],
+    ["Test U decreasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_U_DECREASING);
+    }],
+    ["Test V increasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
+    }],
+    ["Test V decreasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
+    }],
+    ["Test W increasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
+    }],
+    ["Test W decreasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
+    }],
+    ["Test V increasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
+    }],
+    ["Test V decreasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
+    }],
+    ["Test W increasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
+    }],
+    ["Test W decreasing", async function(){
+      await command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
+    }],
+  ],
+  {label: "Test sequence"},
+);
+
+function maybe_stream(delay_ms, command, options = {}){
+  if (command_options.includes("Stream data with command")){
+    command_and_stream(delay_ms, command, options);
+  }
+}
+
+
+d3.select(test_buttons).selectAll("button").style("height", "4em");
 
 const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
       await command(motor.SET_STATE_OFF);
-      command_and_stream_latest(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive +", async function(){
       await command(motor.SET_STATE_DRIVE_POS);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive -", async function(){
       await command(motor.SET_STATE_DRIVE_NEG);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive smooth +", async function(){
       await command(motor.SET_STATE_DRIVE_SMOOTH_POS);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Drive smooth -", async function(){
       await command(motor.SET_STATE_DRIVE_SMOOTH_NEG);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Freewheel", async function(){
       await command(motor.SET_STATE_FREEWHEEL);
-      command_and_stream_latest(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold U positive", async function(){
       await command(motor.SET_STATE_HOLD_U_POSITIVE);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold V positive", async function(){
       await command(motor.SET_STATE_HOLD_V_POSITIVE);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold W positive", async function(){
       await command(motor.SET_STATE_HOLD_W_POSITIVE);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold U negative", async function(){
       await command(motor.SET_STATE_HOLD_U_NEGATIVE);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold V negative", async function(){
       await command(motor.SET_STATE_HOLD_V_NEGATIVE);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["Hold W negative", async function(){
       await command(motor.SET_STATE_HOLD_W_NEGATIVE);
-      command_and_stream_latest(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
+      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
   ],
   {label: "Commands"},
 );
+
+d3.select(command_buttons).selectAll("button").style("height", "4em");
 
 ```
 

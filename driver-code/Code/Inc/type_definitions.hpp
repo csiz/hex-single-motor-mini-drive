@@ -25,7 +25,7 @@ using PWMSchedule = PWMStage[SCHEDULE_SIZE];
 // Response data structures
 // ------------------------
 
-struct StateReadout{
+struct Readout{
     uint16_t readout_number;
     uint16_t u_readout;
     uint16_t v_readout;
@@ -33,6 +33,14 @@ struct StateReadout{
     uint16_t ref_readout;
     uint16_t position;
     uint32_t pwm_commands;
+};
+
+struct FullReadout{
+    Readout readout;
+    uint16_t tick_rate;
+    uint16_t adc_update_rate;
+    uint16_t hall_unobserved_rate;
+    uint16_t hall_observed_rate;
 };
 
 

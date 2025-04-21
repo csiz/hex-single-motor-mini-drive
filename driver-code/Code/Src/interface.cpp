@@ -7,7 +7,7 @@
 // Serialize data
 // --------------
 
-void write_state_readout(uint8_t * buffer, StateReadout const & readout) {
+void write_readout(uint8_t * buffer, Readout const & readout) {
     size_t offset = 0;
     write_uint16(buffer + offset, READOUT);
     offset += 2;
@@ -27,7 +27,29 @@ void write_state_readout(uint8_t * buffer, StateReadout const & readout) {
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
-    if (offset != state_readout_size) error();
+    if (offset != readout_size) error();
+}
+
+void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
+    size_t offset = 0;
+    write_readout(buffer + offset, readout.readout);
+    offset += readout_size;
+
+    // Overwrite command code.
+    write_uint16(buffer + 0, FULL_READOUT);
+
+    // Write the additional data.
+    write_uint16(buffer + offset, readout.tick_rate);
+    offset += 2;
+    write_uint16(buffer + offset, readout.adc_update_rate);
+    offset += 2;
+    write_uint16(buffer + offset, readout.hall_unobserved_rate);
+    offset += 2;
+    write_uint16(buffer + offset, readout.hall_observed_rate);
+    offset += 2;
+
+    // Check if we wrote the correct number of bytes.
+    if (offset != full_readout_size) error();
 }
 
 

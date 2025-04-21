@@ -1,8 +1,5 @@
 import {html} from "htl";
 
-import {Generators} from "observablehq:stdlib";
-import _ from "lodash";
-
 /* Create a tooltip element. */
 export function note (text) {
 	return html`<div class="tooltip">*<span class="tooltiptext">${text}</span></div>`;
@@ -29,25 +26,6 @@ export class TimingStats {
     this.fps = this.gamma * this.fps + (1.0-this.gamma) * (1000.0 / wall_dt);
   };
 }
-
-/* Implement Framework's Mutable generator, but throttled to a max update rate. */
-export function ThrottledMutable(delay, value) {
-  let change = (v) => {value = v};
-  
-  return Object.defineProperty(
-    Generators.observe((notify) => {
-      change = notify;
-      if (value !== undefined) notify(value);
-    }),
-    "value",
-    {
-      get: () => value,
-      set: _.throttle((x) => {change((value = x)); return x;}, delay),
-    }
-  );
-}
-
-
 
 /* Create Uint8Array from uint32. */
 export function uint32_to_bytes(value) {
