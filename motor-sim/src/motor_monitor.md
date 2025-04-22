@@ -868,8 +868,8 @@ const time_period_input = Inputs.range([1, 50], {
 });
 const time_period = Generators.input(time_period_input);
 
-const time_offset_input = Inputs.range([-1.0, 1.0], {
-  value: 0, 
+const time_offset_input = Inputs.range([0, 1.0], {
+  value: 0.0, 
   step: 0.01,
   label: "Time window Rewind (ms):",
 });
@@ -892,8 +892,8 @@ const plot_options = Generators.input(plot_options_input);
 ```js
 const data_duration = data[data.length - 1].time;
 
-const time_end = Math.max(+time_period * 0.5, Math.min(data_duration * (1.0 - time_offset), data_duration + time_period * 0.5));
-const time_domain = [time_end - time_period, time_end];
+const time_start = Math.max(0, data_duration - time_period) * (1.0 - time_offset);
+const time_domain = [time_start, time_start + time_period];
 
 const selected_data = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
 
@@ -925,8 +925,7 @@ const plot_electric_position = plot_multiline({
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
   ],
   grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
     Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
   ],
   other_marks: [
@@ -958,8 +957,7 @@ const plot_speed = plot_multiline({
     },
   ],
   grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
     Plot.gridY({stroke: 'black', strokeWidth : 2}),
   ],
   other_marks: [
@@ -990,8 +988,7 @@ const plot_measured_current = plot_multiline({
     {y: "ref_diff", label: "Ref Diff", color: colors.ref_diff},
   ],
   grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
@@ -1017,8 +1014,7 @@ const plot_dq0_currents = plot_multiline({
     {y: "current_magnitude", label: "Current (Park) Magnitude", color: colors.current_magnitude},
   ],
   grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
@@ -1044,8 +1040,7 @@ const plot_dq0_voltages = plot_multiline({
     {y: "voltage_magnitude", label: "Voltage (Park) Magnitude", color: colors.current_magnitude},
   ],
   grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
@@ -1074,8 +1069,7 @@ const plot_inferred_voltage = plot_multiline({
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
   ],
   grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
@@ -1101,8 +1095,7 @@ const plot_pwm_settings = plot_multiline({
     {y: "w_pwm", label: "PWM W", color: colors.w},
   ],
   grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
     Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
   ],
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
