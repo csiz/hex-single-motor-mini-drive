@@ -215,16 +215,17 @@ const command_leading_angle_degrees = Generators.input(command_leading_angle_sli
 // Data stream output
 // ------------------
 
-const max_data_points = 2 * motor.HISTORY_SIZE;
+const max_data_size = 1000 / (3 * millis_per_cycle);
 
 let raw_readout_data = Mutable();
 
 function update_raw_readout_data(new_data){
-  const truncated_data = new_data.length > max_data_points ? new_data.slice(-max_data_points) : new_data
+  let truncated_data = new_data.length > max_data_size ? new_data.slice(-max_data_size) : new_data;
+  
   raw_readout_data.value = truncated_data;
 }
 
-const messages_per_frame = (1000.0 * cycles_per_millisecond) / 30.0; // How many PWM cycles per display frame at 30fps.
+const messages_per_frame = Math.floor((1000.0 * cycles_per_millisecond) / 30.0); // How many PWM cycles per display frame at 30fps.
 ```
 
 ```js
@@ -257,9 +258,11 @@ function command_and_stream(delay_ms, command, options = {}){
       await motor_controller.send_command({command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options});
 
       // Start reading the data stream.
-      for await (const data_snapshot of motor_controller.stream_readouts(options)) {
-        _.throttle(update_raw_readout_data, 50)(data_snapshot);
-      }
+      await motor_controller.stream_readouts({
+        data_callback: _.throttle(update_raw_readout_data, 30), 
+        max_data_size, 
+        ...options,
+      });
     } catch (error) {
       console.error("Error streaming data:", error);
       update_motor_controller_status(html`<pre style="color: red">Error streaming data: ${error.message}</pre>`);
@@ -860,7 +863,7 @@ const colors = {
 
 const history_duration = Math.ceil(motor.HISTORY_SIZE * millis_per_cycle);
 
-const time_period_input = Inputs.range([1, 50], {
+const time_period_input = Inputs.range([1, 1000], {
   value: history_duration,
   transform: Math.log,
   step: 0.5,
@@ -895,7 +898,13 @@ const data_duration = data[data.length - 1].time;
 const time_start = Math.max(0, data_duration - time_period) * (1.0 - time_offset);
 const time_domain = [time_start, time_start + time_period];
 
-const selected_data = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
+const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
+
+const max_plot_points = motor.HISTORY_SIZE;
+
+const plot_points_skip = Math.ceil(data_in_time_window.length / max_plot_points);
+
+const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip === 0);
 
 const plot_electric_position = plot_multiline({
   data: selected_data,

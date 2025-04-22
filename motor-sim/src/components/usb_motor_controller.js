@@ -265,18 +265,18 @@ export class MotorController {
     This generator will stop if another message function is called; or if the
     driver takes too long to respond. The generator yields an array of messages.
   */
-  async * stream_readouts(options) {
+  async stream_readouts({data_callback, max_data_size = HISTORY_SIZE, ...options}) {
     let data = [];
     while (true) {
       try {
-        data = data.concat(await this.get_readouts({...options, return_partial: true}));
-        yield data;
+        data = data.concat(await this.get_readouts({...options, return_partial: true})).slice(-max_data_size);
+        data_callback(data);
       } catch (error) {
         if (error.message == "Timeout" || error.message == "EOF"){ 
           
           if (data.length == 0) throw error;
 
-          yield data;
+          data_callback(data);
           
           return;
         }
