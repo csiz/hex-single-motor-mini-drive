@@ -1,8 +1,6 @@
 // USB serial port commands
-
-import { exp } from "three/tsl";
-
 // ------------------------
+
 export const USBD_VID = 56987;
 export const USBD_PID_FS = 56988;
 
@@ -43,6 +41,7 @@ export const PWM_BASE = 1536; // 0x0600
 export const MAX_TIMEOUT = 0xFFFF; 
 export const HISTORY_SIZE = 420;
 export const READOUT_BASE = 0x10000;
+export const MAX_WRONG_CODE = 20 * HISTORY_SIZE;
 
 
 // Serial Port Management
@@ -95,66 +94,34 @@ export async function connect_usb_motor_controller(){
 }
 
 
-
-// USB serial port communication
-// -----------------------------
-
-/* Convenience class to work with COM ports. */
-export class COMPort {
-  constructor(port){
-    this.port = port;
-    this.buffer = new Uint8Array();
-    this.reader = port.readable.getReader();
-    this.writer = port.writable.getWriter();
-  }
-
-  /* Read exactly n_bytes from the USB line. */
-  async read(n_bytes){
-
-    while (this.buffer.length < n_bytes){
-      const {value, done} = await (this.reader.read());
-      if (done) throw new Error("EOF");
-      this.buffer = new Uint8Array([...this.buffer, ...value]);
-    }
-    const result = this.buffer.slice(0, n_bytes);
-    this.buffer = this.buffer.slice(n_bytes);
-    
-    return new DataView(result.buffer);
-  }
-
-  /* Write to the USB line. */
-  async write(buffer){
-    await this.writer.write(buffer);
-  }
-
-  /* Close the COM port. */
-  async forget(){
-    await this.reader.cancel();
-    this.reader.releaseLock();
-    await this.writer.abort();
-    this.writer.releaseLock();
-    await this.port.close();
-  }
-}
-
-
 // Motor control logic
 // -------------------
 
 
 export class MotorController {
   constructor(port){
-    this.com_port = new COMPort(port);
-    this.onmessage = () => {};
-    this.onerror = () => {};
+    this._port = port;
+    this._writer = port.writable.getWriter();
+    this._reader = port.readable.getReader();
+    this._promised_readouts = null;
+    this._onmessage = null;
+    this._onerror = null;
+
   }
+
 
   /* Stop receiving messages close the USB line. */
   async forget(){
-    this.onerror(new Error("EOF"));
-
     try {
-      await this.com_port.forget();
+      if (this._port.readable) {
+        await this._reader.cancel();
+        this._reader.releaseLock();
+      }
+      if (this._port.writable) {
+        await this._writer.abort();
+        this._writer.releaseLock();
+      }
+      await this._port.close();
     } catch (error) {
       // Ignore network errors when forgetting, likely due to previous disconnect.
       if (error.name != "NetworkError" && error.name != "InvalidStateError") throw error;
@@ -166,23 +133,60 @@ export class MotorController {
     * Keep the generator running so it polls the USB line to receive messages.
     * The generator yields the number of bytes received.
   */
-  async * reading_loop(){
-    try {
-      let bytes_received = 0;
-      while(true){
-        bytes_received += await this._receive_data();
-        yield bytes_received;
+  async reading_loop(status_callback = () => {}) {
+
+    let bytes_received = 0;
+    let messages_missed = 0;
+
+    let byte_array = new Uint8Array();
+
+    while (true) {
+      const {value: chunk, done} = await this._reader.read();
+      if (done) {
+        if (this._promised_readouts != null) this._onerror(new Error("EOF"));
+        break;
       }
-    } catch (error) {
-      this.onerror(error);
-    } finally {
-      await this.forget();
+
+      byte_array = byte_array.length == 0 ? chunk : new Uint8Array([...byte_array, ...chunk]);
+      let offset = 0;
+
+      while (byte_array.length >= offset + 2) {
+        const message_header = new DataView(byte_array.buffer, offset, 2);
+
+        const code = message_header.getUint16(0);
+
+        const {parse_func, data_size} = parser_mapping[code] || {parse_func: null, data_size: 0};
+        if (parse_func === null) {
+          console.warn("Unknown message header: ", message_header);
+          // Reset the buffer to avoid reading parsing data as command.
+          byte_array = new Uint8Array();
+          // Wait for new data.
+          break;
+        }
+
+        // Wait for enough data to parse the message.
+        if (byte_array.length < offset + 2 + data_size) break;
+        
+        const response = parse_func(new DataView(byte_array.buffer, offset + 2, data_size));
+        offset += data_size + 2;
+
+        if (this._promised_readouts != null) this._onmessage(response);
+        else messages_missed += 1;
+      }
+
+      byte_array = byte_array.slice(offset);
+
+      bytes_received += chunk.length;
+
+      status_callback({bytes_received, messages_missed});
     }
+
+    await this.forget();
   }
 
   /* Send a command to the motor driver. */
   async send_command({command, command_timeout, command_pwm, command_leading_angle = 0}) {
-    if (this.com_port === null) return;
+    if (!this._port.writable) return;
     
     let buffer = new Uint8Array(8);
     let view = new DataView(buffer.buffer);
@@ -196,42 +200,64 @@ export class MotorController {
     view.setUint16(offset, command_leading_angle);
     offset += 2;
 
-    await this.com_port.write(buffer);
+    await this._writer.write(buffer);
   }
 
-  /* Wait for a single message from the motor driver; async alternative to onmessage. */
-  async get_message({expected_code, response_timeout = 500}) {
-    // We're going to hijack the onmessage and onerror handlers to wait for a message.
+  
+  /* Get a snapshot of the last N messages from the motor driver. */
+  async get_readouts({expected_code = READOUT, expected_messages = HISTORY_SIZE, response_timeout = 500, return_partial = false}) {
 
     // Chuck an error to the previous listener; it will be ignored if none exists.
-    this.onerror(new Error("Overriding Request"));
+    if (this._promised_readouts != null) {
+      this._onerror(new Error("Overriding Request"));
+      try {
+        await this._promised_readouts;
+      } catch (error) {
+        if (error.message != "Overriding Request") throw error;
+      }
+    }
 
-    // Save the current handlers so we can restore them after the message.
-    const onmessage = this.onmessage;
-    const onerror = this.onerror;
+    let timeout_id;
+    
+    const data_promise = new Promise((resolve, reject) => {
+
+      let wrong_code_count = 0;
+    
+      let data = [];
+
+      this._onerror = reject;
+
+      timeout_id = setTimeout(() => {
+        if (return_partial && data.length > 0) {
+          resolve(data);
+        } else {
+          reject(new Error("Timeout"));
+        }
+      }, response_timeout);
+
+      this._onmessage = (message) => {
+        if (message.code != expected_code) {
+          wrong_code_count += 1;
+          if (wrong_code_count > MAX_WRONG_CODE) {
+            this._onerror(new Error(`Unexpected message code: ${message.code} vs expected: ${expected_code}`));
+          }
+          return;
+        }
+        data.push(message);
+        if (data.length >= expected_messages) {
+          resolve(data);
+        }
+      };
+    });
+
+    this._promised_readouts = data_promise;
+    
     try {
-      const message = await timeout_promise(new Promise((resolve, reject) => {
-        this.onmessage = resolve;
-        this.onerror = reject;
-      }), response_timeout);
-      
-      if (message.code != expected_code) throw new Error(`Unexpected code: ${message.code} != ${expected_code}`);
-
-      return message;
+      return await data_promise;
     } finally {
-      this.onmessage = onmessage;
-      this.onerror = onerror;
+      clearTimeout(timeout_id);
+      this._promised_readouts = null;
     }
-  }
-
-  /* Get a snapshot of the last N messages from the motor driver. */
-  async get_readouts({expected_code = READOUT, expected_messages = HISTORY_SIZE, response_timeout = 500}) {
-    let data = [];
-    for (let i = 0; i < expected_messages; i++) {
-      data.push(await this.get_message({expected_code, response_timeout}));
-    }
-
-    return data;
   }
 
   /* Stream messages from the motor driver. 
@@ -239,44 +265,29 @@ export class MotorController {
     This generator will stop if another message function is called; or if the
     driver takes too long to respond. The generator yields an array of messages.
   */
-  async * stream_readouts({expected_code = READOUT, response_timeout = 500}) {
+  async * stream_readouts(options) {
     let data = [];
     while (true) {
       try {
-        data.push(await this.get_message({expected_code, response_timeout}));
+        data = data.concat(await this.get_readouts({...options, return_partial: true}));
+        yield data;
       } catch (error) {
-        if (error.message == "Timeout") return data;
-        if (error.message == "EOF") return data;
-        if (error.message == "Overriding Request") return data;
+        if (error.message == "Timeout" || error.message == "EOF"){ 
+          
+          if (data.length == 0) throw error;
+
+          yield data;
+          
+          return;
+        }
+        
+        if (error.message == "Overriding Request") {
+          return;
+        }
+
         throw error;
       }
-
-      if (data.length % HISTORY_SIZE == 0) {
-        yield data;
-      }
     }
-
-    return data;
-  }
-
-
-  /* Read data from the USB line. */
-  async _receive_data(){
-
-    const message_header = await this.com_port.read(2);
-    const code = message_header.getUint16(0);
-    const {parse_func, data_size} = parser_mapping[code] || {parse_func: null, data_size: 0};
-    if (parse_func === null) {
-      console.warn("Unknown message header: ", message_header);
-      return 2;
-    }
-
-    const data_view = await this.com_port.read(data_size);
-    const response = parse_func(data_view);
-
-    this.onmessage(response);
-
-    return data_size + 2;
   }
 }
 

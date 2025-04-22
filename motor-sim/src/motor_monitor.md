@@ -79,8 +79,11 @@ Current Calibration Procedures
 </main>
 
 ```js
+// PWM motor cycles per millisecond.
+const cycles_per_millisecond = 23400.0 / 1000.0; // 23400 cycles per second
 
-const time_conversion = 1/23400 * 1000;
+// Millisecond (fractions) per PWM motor cycle.
+const millis_per_cycle = 1.0/cycles_per_millisecond;
 
 const adc_voltage_reference = 3.3;
 const motor_shunt_resistance = 0.010;
@@ -104,44 +107,62 @@ const std_99_z_score = 2.575829; // 99% confidence interval for normal distribut
 
 ```js
 
-let motor_controller = Mutable();
+let motor_controller = Mutable(null);
 
-let motor_controller_status = Mutable(html`<span>Not connected.</span>`);
+let motor_controller_status = Mutable(html`<pre>Not connected.</pre>`);
 
 function update_motor_controller_status(status){
   motor_controller_status.value = status;
 }
 
 function display_port_error(error){
-  if (error.name === "NotFoundError") {
-    update_motor_controller_status(html`<span style="color: red">No device found or nothing selected.</span>`);
+  if (error.message === "EOF") {
+    update_motor_controller_status(html`<pre>End of connection.</pre>`);
+  } else if (error.name === "NotFoundError") {
+    update_motor_controller_status(html`<pre style="color: red">No device found or nothing selected.</pre>`);
   } else if (error.name === "SecurityError") {
-    update_motor_controller_status(html`<span style="color: red">Permission for port dialog denied.</span>`);
-  } else if (error.message === "EOF") {
-    update_motor_controller_status(html`<span style="color: red">End of connection.</span>`);
+    update_motor_controller_status(html`<pre style="color: red">Permission for port dialog denied.</pre>`);
   } else if (error.name === "NetworkError") {
-    update_motor_controller_status(html`<span style="color: red">Connection lost.</span>`);
+    update_motor_controller_status(html`<pre style="color: red">Connection lost.</pre>`);
   } else {
-    update_motor_controller_status(html`<span style="color: red">Connection lost; unknown error: ${error}</span>`);
+    update_motor_controller_status(html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`);
+    throw error;
   }
 }
 
+function format_bytes(bytes){
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+}
 
-async function open_port_and_read(){
+async function disconnect_motor_controller(show_status = true){
   if (motor_controller.value) {
-    console.info("Forgetting previous port");
+    console.info("Disconnecting motor controller; forgetting port.");
     await motor_controller.value.forget();
+    motor_controller.value = null;
+    if (show_status) {
+      update_motor_controller_status(html`<pre style="color: orange">Disconnected!</pre>`);
+    }
   }
+}
 
+function display_datastream_status({bytes_received, messages_missed}){
+  const received = format_bytes(bytes_received).padStart(12);
+  const missed = messages_missed.toString().padStart(7);
+  update_motor_controller_status(html`<pre>Connected; received: ${received}; missed messages: ${missed}.</pre>`);
+}
+
+async function connect_motor_controller(){
   try {
+    await disconnect_motor_controller(false);
+
     motor_controller.value = await motor.connect_usb_motor_controller();
 
-    update_motor_controller_status(html`<span>Connected, waiting for data.</span>`);
+    update_motor_controller_status(html`<pre>Connected, waiting for data.</pre>`);
 
-    for await (const bytes_received of motor_controller.value.reading_loop()) {
-      update_motor_controller_status(html`<span>Connected; received: ${bytes_received} bytes.</span>`);
-    }
-
+    await motor_controller.value.reading_loop(_.throttle(display_datastream_status, 50));
   } catch (error) {
     motor_controller.value = null;
 
@@ -149,32 +170,26 @@ async function open_port_and_read(){
   }
 }
 
-invalidation.then(async function(){
-  if (motor_controller.value) {
-    console.info("Invalidating motor controller; forgetting port.");
-    await motor_controller.value.forget();
-    motor_controller.value = null;
-    update_motor_controller_status(html`<span style="color: yellow">Invalidated!</span>`);
-  }
-});
+invalidation.then(disconnect_motor_controller);
 
 
 
 const connect_buttons = Inputs.button(
   [
-    ["Connect", open_port_and_read],
+    ["Connect", connect_motor_controller],
+    ["Disconnect", disconnect_motor_controller],
   ],
   {label: "Connect to COM"},
 );
 
-open_port_and_read();
+connect_motor_controller();
 ```
 
 ```js
 const command_options_input = Inputs.checkbox(
-  ["Stream data with command"],
+  ["Take snapshot after command"],
   {
-    value: ["Stream data with command"],
+    value: [],
     label: "Command options:",
   },
 );
@@ -187,7 +202,7 @@ const command_pwm_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: 
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
-const command_timeout_slider = Inputs.range([0, motor.MAX_TIMEOUT*time_conversion], {value: 2000, step: 5, label: "Command timeout (ms):"});
+const command_timeout_slider = Inputs.range([0, motor.MAX_TIMEOUT*millis_per_cycle], {value: 2000, step: 5, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
@@ -200,7 +215,7 @@ const command_leading_angle_degrees = Generators.input(command_leading_angle_sli
 // Data stream output
 // ------------------
 
-const max_data_points = 5 * motor.HISTORY_SIZE;
+const max_data_points = 2 * motor.HISTORY_SIZE;
 
 let raw_readout_data = Mutable();
 
@@ -209,6 +224,7 @@ function update_raw_readout_data(new_data){
   raw_readout_data.value = truncated_data;
 }
 
+const messages_per_frame = (1000.0 * cycles_per_millisecond) / 30.0; // How many PWM cycles per display frame at 30fps.
 ```
 
 ```js
@@ -217,35 +233,36 @@ function update_raw_readout_data(new_data){
 // -----------------
 
 
-const command_timeout = Math.floor(command_timeout_millis / time_conversion);
+const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
 const command_pwm = Math.floor(command_pwm_fraction * motor.PWM_BASE);
 const command_leading_angle = Math.floor(256 + 256 * command_leading_angle_degrees / 360) % 256;
 
 
-async function command(command){
+async function command(command, options = {}){
   if (!motor_controller) return;
   
-  await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle});
+  await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle, ...options});
 }
 
 let latest_stream_timeout = null;
 
 function command_and_stream(delay_ms, command, options = {}){
   if (latest_stream_timeout) clearTimeout(latest_stream_timeout);
+  latest_stream_timeout = null;
 
   if (!motor_controller) return;
-  
+
   latest_stream_timeout = setTimeout(async function(){
     try {
-      await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle, ...options});
+      await motor_controller.send_command({command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options});
 
       // Start reading the data stream.
       for await (const data_snapshot of motor_controller.stream_readouts(options)) {
-        update_raw_readout_data(data_snapshot);
+        _.throttle(update_raw_readout_data, 50)(data_snapshot);
       }
     } catch (error) {
-      update_motor_controller_status(html`<span style="color: red">Error streaming data: ${error}</span>`);
-      throw error;
+      console.error("Error streaming data:", error);
+      update_motor_controller_status(html`<pre style="color: red">Error streaming data: ${error.message}</pre>`);
     }
   }, delay_ms);
 }
@@ -256,7 +273,10 @@ const data_request_buttons = Inputs.button(
       command_and_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["ADC stream", async function(){
-      await command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_code: motor.FULL_READOUT});
+      await command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_messages: messages_per_frame, expected_code: motor.FULL_READOUT, command_timeout: 4});
+    }],
+    ["STOP stream", async function(){
+      await command(motor.STREAM_FULL_READOUTS, {command_timeout: 0});
     }],
   ],
   {label: "Read data"},
@@ -313,7 +333,7 @@ const test_buttons = Inputs.button(
 );
 
 function maybe_stream(delay_ms, command, options = {}){
-  if (command_options.includes("Stream data with command")){
+  if (command_options.includes("Take snapshot after command")){
     command_and_stream(delay_ms, command, options);
   }
 }
@@ -686,7 +706,7 @@ function calculate_data_stats(raw_readout_data){
 
   const data_with_annotations = raw_readout_data.map((d) => {
     const readout_number = (motor.READOUT_BASE + d.readout_number - start_readout_number) % motor.READOUT_BASE;
-    const time = readout_number * time_conversion;
+    const time = readout_number * millis_per_cycle;
   
     const u_readout = -current_conversion * (d.u_readout - d.ref_readout);
     const v_readout = +current_conversion * (d.v_readout - d.ref_readout);
@@ -838,7 +858,7 @@ const colors = {
 
 ```js
 
-const history_duration = Math.ceil(motor.HISTORY_SIZE * time_conversion);
+const history_duration = Math.ceil(motor.HISTORY_SIZE * millis_per_cycle);
 
 const time_period_input = Inputs.range([1, 50], {
   value: history_duration,
@@ -1122,7 +1142,7 @@ async function run_position_calibration(){
   console.info("Position calibration starting");
   
   const drive_time = 200;
-  const drive_timeout = Math.floor((drive_time + 300) / time_conversion);
+  const drive_timeout = Math.floor((drive_time + 300) * cycles_per_millisecond);
 
   const drive_strength = Math.floor(motor.PWM_BASE * 2 / 10);
   const drive_options = {command_timeout: drive_timeout, command_pwm: drive_strength};
@@ -1198,7 +1218,7 @@ const position_calibration_pos_plot = plot_multiline({
   subtitle: "Electric position | drive positive then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {domain: [-180, 180]},
   x: "time",
   y: "current_angle",
@@ -1245,7 +1265,7 @@ const position_calibration_pos_speed_plot = plot_multiline({
   subtitle: "Rotor Speed | drive positive then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
   y: "current_angular_speed",
@@ -1278,7 +1298,7 @@ const position_calibration_neg_plot = plot_multiline({
   subtitle: "Electric position | drive negative then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {domain: [-180, 180]},
   x: "time",
   y: "current_angle",
@@ -1314,7 +1334,7 @@ const position_calibration_neg_speed_plot = plot_multiline({
   subtitle: "Rotor Speed | drive negative then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
   y: "current_angular_speed",
@@ -1498,7 +1518,7 @@ function store_current_calibration_results(calibration_data){
 
 
 ```js
-const short_duration = motor.HISTORY_SIZE / 12 * time_conversion;
+const short_duration = motor.HISTORY_SIZE / 12 * millis_per_cycle;
 
 const current_calibration_zones = [
   {pwm: 0.1, settle_start: short_duration * 1.4, settle_end: short_duration * 1.95},
@@ -1522,7 +1542,7 @@ async function run_current_calibration(){
   if (!motor_controller) return;
   
   const settle_time = 200;
-  const settle_timeout = Math.floor((settle_time + 300) / time_conversion);
+  const settle_timeout = Math.floor((settle_time + 300) * cycles_per_millisecond);
   const settle_strength = Math.floor(motor.PWM_BASE * 2 / 10);
 
   const drive_options = {command_timeout: settle_timeout, command_pwm: settle_strength};
@@ -1732,7 +1752,7 @@ const current_calibration_plot = plot_multiline({
   subtitle: "Current Calibration",
   description: "Current calibration results for each phase.",
   width: 1200, height: 400,
-  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
   y: "u_positive",
@@ -1808,7 +1828,7 @@ const current_calibration_positive_mean_plot = plot_multiline({
   subtitle: "Current Calibration Mean",
   description: "Current calibration mean results for each phase driven positive.",
   width: 1200, height: 300,
-  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
   x_label: "Time (ms)",
@@ -1852,7 +1872,7 @@ const current_calibration_negative_mean_plot = plot_multiline({
   subtitle: "Current Calibration Mean",
   description: "Current calibration mean results for each phase driven negative.",
   width: 1200, height: 300,
-  x_options: {domain: [0, motor.HISTORY_SIZE * time_conversion]},
+  x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
   x_label: "Time (ms)",
