@@ -103,6 +103,10 @@ const π = Math.PI;
 
 const std_95_z_score = 1.959964; // 95% confidence interval for normal distribution
 const std_99_z_score = 2.575829; // 99% confidence interval for normal distribution
+
+const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
+
+const target_fps = 30.0; // Target frames per second for the data stream.
 ```
 
 ```js
@@ -162,7 +166,7 @@ async function connect_motor_controller(){
 
     update_motor_controller_status(html`<pre>Connected, waiting for data.</pre>`);
 
-    await motor_controller.value.reading_loop(_.throttle(display_datastream_status, 50));
+    await motor_controller.value.reading_loop(_.throttle(display_datastream_status, 1000.0/target_fps));
   } catch (error) {
     motor_controller.value = null;
 
@@ -211,19 +215,478 @@ const command_leading_angle_slider = Inputs.range([-180, 180], {value: 95, step:
 const command_leading_angle_degrees = Generators.input(command_leading_angle_slider);
 ```
 
+
+
+```js
+
+// Load Calibration
+// ----------------
+
+
+const current_calibration_default = {
+  u_positive: 1.0,
+  u_negative: 1.0,
+  v_positive: 1.0,
+  v_negative: 1.0,
+  w_positive: 1.0,
+  w_negative: 1.0,
+};
+
+function load_current_calibration_factors(){
+  return get_stored_or_default("current_calibration", current_calibration_default);
+}
+
+// Load or make default calibration
+const saved_current_calibration_factors = load_current_calibration_factors();
+
+let current_calibration_factors = Mutable(saved_current_calibration_factors);
+
+function update_current_calibration_factors(new_calibration_factors){
+  current_calibration_factors.value = new_calibration_factors;
+}
+
+function reload_current_calibration_factors(){
+  update_current_calibration_factors(load_current_calibration_factors());
+}
+
+function save_current_calibration_factors(){
+  localStorage.setItem("current_calibration", JSON.stringify(current_calibration_factors.value));
+}
+
+function reset_current_calibration_factors(){
+  localStorage.removeItem("current_calibration");
+  update_current_calibration_factors(current_calibration_default);
+}
+```
+
+
+```js
+
+function online_map(array, online_fn){
+  if (array.length == 0) return [];
+
+  const result = new Array(array.length);
+  let previous = online_fn(undefined, array[0], 0, array);
+  result[0] = previous;
+  for (let i = 1; i < array.length; i++){
+    previous = online_fn(previous, array[i], i, array);
+    result[i] = previous;
+  }
+  return result;
+}
+
+function online_function_chain(...online_functions){
+  return function(previous, current, i, array){
+    for (const fn of online_functions){
+      current = fn(previous, current, i, array);
+    }
+    return current;
+  };
+}
+
+// Calculate Data
+// --------------
+
+function matrix_multiply(m, v){
+  // Return the matrix-vector product of a 3x3 matrix and a 3-vector.
+  return m.map((row) => d3.sum(row.map((x, i) => x * v[i])));
+}
+
+const power_invariant_clarke_matrix = [
+  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
+  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
+  [1/Math.sqrt(3), 1/Math.sqrt(3), 1/Math.sqrt(3)],
+];
+
+const power_invariant_simplified_clarke_matrix = [
+  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
+  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
+];
+
+
+function normalize_degrees(a){
+  return (a % 360 + 540) % 360 - 180;
+}
+
+function shortest_distance_degrees(a, b){
+  return normalize_degrees(b - a);
+}
+
+
+function interpolate_degrees(a, b, fraction){
+  const diff = b - a;
+  return normalize_degrees(a + diff * fraction);
+}
+
+function interpolate_linear(a, b, fraction){
+  return a + (b - a) * fraction;
+}
+
+
+function circular_stats_degrees(values){
+  const mean_point = [
+    d3.mean(values, (d) => Math.cos(d * Math.PI / 180.0)),
+    d3.mean(values, (d) => Math.sin(d * Math.PI / 180.0)),
+  ]
+  const circular_mean = Math.atan2(mean_point[1], mean_point[0]) * 180 / Math.PI;
+
+  const circular_σ = Math.sqrt(
+    d3.mean(values, (d) => {
+      const diff = shortest_distance_degrees(circular_mean, d);
+      return diff * diff;
+    })
+  );
+
+  return {
+    circular_mean,
+    circular_σ,
+  };
+}
+
+function hall_sector({hall_u, hall_v, hall_w}){
+  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
+  switch(hall_state){
+    case 0b001: return 0;
+    case 0b011: return 1;
+    case 0b010: return 2;
+    case 0b110: return 3;
+    case 0b100: return 4;
+    case 0b101: return 5;
+    default: return null;
+  }
+}
+
+const sector_center_degrees = [0, 60, 120, 180, 240, 300].map(normalize_degrees);
+const sector_center_σ = [30, 30, 30, 30, 30, 30];
+const hall_hysterisis = 10;
+const transition_σ = 15;
+const sector_transition_degrees = [
+  [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
+  [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
+  [+ 90 + hall_hysterisis / 2, +150 - hall_hysterisis / 2],
+  [+150 + hall_hysterisis / 2, -150 - hall_hysterisis / 2],
+  [-150 + hall_hysterisis / 2, - 90 - hall_hysterisis / 2],
+  [- 90 + hall_hysterisis / 2, - 30 - hall_hysterisis / 2],
+];
+const sector_transition_σ = [
+  [transition_σ, transition_σ],
+  [transition_σ, transition_σ],
+  [transition_σ, transition_σ],
+  [transition_σ, transition_σ],
+  [transition_σ, transition_σ],
+  [transition_σ, transition_σ],
+];
+const accel_σ = 360.0 / 5.0 / 50.0; // acceleration distribution up to (360 degrees per 5ms) per 50ms.
+const initial_angular_speed_σ = 0.05 * 360;
+
+function shortest_distance_mod_6(a, b){
+  const diff = (b + 12 - a) % 6;
+  return diff > 3 ? diff - 6 : diff;
+}
+
+function product_of_normals({mean_a, σ_a, mean_b, σ_b}){
+  const mean = (mean_a * σ_b * σ_b + mean_b * σ_a * σ_a) / (σ_a * σ_a + σ_b * σ_b);
+  const σ = Math.sqrt((σ_a * σ_a * σ_b * σ_b) / (σ_a * σ_a + σ_b * σ_b));
+  return {mean, σ};
+}
+
+function product_normals_2({mean_a, variance_a, mean_b, variance_b}){
+  const mean = (mean_a * variance_b + mean_b * variance_a) / (variance_a + variance_b);
+  const variance = (variance_a * variance_b) / (variance_a + variance_b);
+  return {mean, variance};
+}
+
+function add_σ(...σ_values){
+  return Math.sqrt(σ_values.reduce((sum, σ) => sum + σ * σ, 0));
+}
+
+function accumulate_position_from_hall(prev, curr){
+  const sector = hall_sector(curr);
+
+  if (!prev) return {
+    ...curr,
+    sector,
+    angle: sector_center_degrees[sector],
+    angle_σ: sector_center_σ[sector],
+    angular_speed: 0,
+    angular_speed_σ: initial_angular_speed_σ,
+
+    obs_time: curr.time,
+    obs_sector: sector,
+    obs_angle: sector_center_degrees[sector],
+    obs_angle_σ: sector_center_σ[sector],
+    obs_angular_speed: 0,
+    obs_angular_speed_σ: initial_angular_speed_σ,
+  }
+  
+  const dt = curr.time - prev.obs_time;
+
+  // If we switched sectors, we should have an accurate position estimate.
+  if (sector != null && sector != prev.sector){
+    const direction = Math.sign(shortest_distance_mod_6(prev.sector, sector));
+
+    const trigger_angle = sector_transition_degrees[sector][direction >= 0 ? 0 : 1];
+    const trigger_angle_σ = sector_transition_σ[sector][direction >= 0 ? 0 : 1];
+
+    const distance_to_trigger = shortest_distance_degrees(prev.obs_angle, trigger_angle);
+
+    const estimated_distance = prev.obs_angular_speed * dt;
+    const estimated_distance_error = distance_to_trigger - estimated_distance;
+    const estimated_speed_error = estimated_distance_error / dt;
+
+    const estimated_distance_σ = add_σ(prev.obs_angle_σ, prev.obs_angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
+    const estimated_speed_error_σ = add_σ(estimated_distance_σ / dt, trigger_angle_σ / dt);
+    
+    const {mean: distance_adjustment, σ: angle_σ} = product_of_normals({
+      mean_a: 0.0,
+      σ_a: estimated_distance_σ,
+      mean_b: estimated_distance_error,
+      σ_b: trigger_angle_σ,
+    });
+
+    const kalman_angle = normalize_degrees(prev.obs_angle + estimated_distance + distance_adjustment);
+
+    // Ensure we dragged the angle within the 95% confidence interval of the trigger angle. If we're too slow
+    // to update the angle we cross 180 degrees and our math switches sign. To avoid that we need to keep the 
+    // angle near the trigger. The formula below handles the lower bound of the trigger angle; the upper bound
+    // is handled by capping the speed above.
+    const angle = kalman_angle + direction * Math.max(direction * normalize_degrees(trigger_angle - direction * std_95_z_score * trigger_angle_σ - kalman_angle), 0);
+
+    const {mean: speed_adjustment, σ: angular_speed_σ} = product_of_normals({
+      mean_a: 0.0,
+      σ_a: prev.obs_angular_speed_σ + 0.5 * accel_σ * dt,
+      mean_b: estimated_speed_error,
+      σ_b: estimated_speed_error_σ,
+    });
+
+    const angular_speed = prev.obs_angular_speed + speed_adjustment;
+
+    return {
+      ...curr,
+      sector,
+      angle,
+      angle_σ,
+      angular_speed,
+      angular_speed_σ,
+
+      obs_time: curr.time,
+      obs_sector: sector,
+      obs_angle: angle,
+      obs_angle_σ: angle_σ,
+      obs_angular_speed: angular_speed,
+      obs_angular_speed_σ: angular_speed_σ,
+    };
+  } else {
+    // If we didn't switch sectors, then we need to carry on with our previous estimate, but adjusted...
+    const positive_direction = prev.obs_angular_speed >= 0;
+    const direction = positive_direction ? +1 : -1;
+
+    const estimated_distance = prev.obs_angular_speed * dt;
+
+    const estimated_distance_σ = add_σ(prev.obs_angle_σ, prev.obs_angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
+
+    const next_sector = positive_direction ? (prev.obs_sector + 1) % 6 : (prev.obs_sector - 1 + 6) % 6;
+    const next_transition_angle = sector_transition_degrees[next_sector][positive_direction ? 0 : 1];
+    const next_transition_angle_σ = sector_transition_σ[next_sector][positive_direction ? 0 : 1];
+    // Cap the position in the 95% confidence interval before the next transition. We cross
+    // this threshold when distance_to_next_transition is negative. Also the adjustement
+    // depends on the direction of travel.
+    const distance_to_next_transition = direction * shortest_distance_degrees(prev.obs_angle, next_transition_angle) + std_95_z_score * next_transition_angle_σ;
+    
+    const distance_overshoot = Math.max(direction * estimated_distance - distance_to_next_transition, 0);
+    const distance_adjustment = direction * Math.min(distance_to_next_transition - direction * estimated_distance, 0);
+
+    const estimated_angle = normalize_degrees(prev.obs_angle + estimated_distance + distance_adjustment);
+
+
+    const p_stopped_in_current_sector = distance_overshoot < 90 ? 0.0 : Math.min(1.0, (distance_overshoot - 90) / 45);
+
+    const current_sector_angle = sector_center_degrees[prev.obs_sector];
+    const current_sector_angle_σ = sector_center_σ[prev.obs_sector];
+
+    const angle = interpolate_degrees(estimated_angle, current_sector_angle, p_stopped_in_current_sector);
+    const angle_σ = interpolate_linear(estimated_distance_σ, current_sector_angle_σ, p_stopped_in_current_sector);
+
+    const calculated_spin = shortest_distance_degrees(prev.obs_angle, angle) / dt;
+    const calculated_spin_σ = (angle_σ + prev.obs_angle_σ) / dt;
+
+    const {mean: angular_speed, σ: angular_speed_σ} = product_of_normals({
+      mean_a: calculated_spin,
+      σ_a: calculated_spin_σ,
+      mean_b: prev.obs_angular_speed,
+      σ_b: prev.obs_angular_speed_σ + accel_σ * dt,
+    });
+
+    if (p_stopped_in_current_sector >= 0.99){
+      return {
+        ...curr,
+        sector,
+        angle,
+        angle_σ,
+        angular_speed: 0,
+        angular_speed_σ: initial_angular_speed_σ,
+
+        obs_time: curr.time,
+        obs_sector: sector,
+        obs_angle: angle,
+        obs_angle_σ: angle_σ,
+        obs_angular_speed: 0,
+        obs_angular_speed_σ: initial_angular_speed_σ,
+      };
+    } else {
+      
+      return {
+        ...curr,
+        sector,
+        angle,
+        angle_σ,
+        angular_speed,
+        angular_speed_σ,
+
+        obs_time: prev.obs_time,
+        obs_sector: prev.obs_sector,
+        obs_angle: prev.obs_angle,
+        obs_angle_σ: prev.obs_angle_σ,
+        obs_angular_speed: prev.obs_angular_speed,
+        obs_angular_speed_σ: prev.obs_angular_speed_σ,
+      };
+    }
+  }
+}
+
+function annotate_readout(prev, curr){
+  const readout_diff = !prev ? 0 : (motor.READOUT_BASE + curr.readout_number - prev.readout_number) % motor.READOUT_BASE;
+  const readout_index = !prev ? 0 : prev.readout_index + readout_diff;
+
+  const time = readout_index * millis_per_cycle;
+
+  const u_readout = -current_conversion * (curr.u_readout - curr.ref_readout);
+  // Flip the sign of V because we accidentally wired it the other way. Oopsie doopsie.
+  const v_readout = +current_conversion * (curr.v_readout - curr.ref_readout);
+  const w_readout = -current_conversion * (curr.w_readout - curr.ref_readout);
+  const ref_diff = current_conversion * (curr.ref_readout - expected_ref_readout);
+
+  const calibrated_u = u_readout * (u_readout >= 0 ? 
+    current_calibration_factors.u_positive :
+    current_calibration_factors.u_negative);
+
+  const calibrated_v = v_readout * (v_readout >= 0 ?
+    current_calibration_factors.v_positive :
+    current_calibration_factors.v_negative);
+
+  const calibrated_w = w_readout * (w_readout >= 0 ?
+    current_calibration_factors.w_positive :
+    current_calibration_factors.w_negative);
+
+  const sum = calibrated_u + calibrated_v + calibrated_w;
+
+  const u = calibrated_u - sum / 3.0;
+  const v = calibrated_v - sum / 3.0;
+  const w = calibrated_w - sum / 3.0;
+
+  const [current_alpha, current_beta] = matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
+
+  const current_angle = Math.atan2(current_beta, current_alpha);
+  const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
+
+  // Approximate the angle for the 6 sectors of the hall sensor.
+  const ε = 0.1;
+  const hall_u_as_angle = curr.hall_u ? curr.hall_v ? +π/3 -ε : curr.hall_w ? -π/3 +ε : 0.0 : null;
+  const hall_v_as_angle = curr.hall_v ? curr.hall_u ? +π/3 +ε : curr.hall_w ? +π -ε : +2*π/3 : null;
+  const hall_w_as_angle = curr.hall_w ? curr.hall_v ? -π +ε : curr.hall_u ? -π/3 -ε : -2*π/3 : null;
+
+
+  return {
+    ...curr,
+    time,
+    readout_index,
+    readout_diff,
+    u_readout, v_readout, w_readout, 
+    motor_angle: normalize_degrees(curr.motor_angle * 360 / 256),
+    motor_speed_σ: Math.sqrt(curr.motor_speed_variance),
+    u, v, w, 
+    ref_diff,  sum, 
+    current_alpha, current_beta, 
+    current_angle: current_angle * 180 / Math.PI, 
+    current_magnitude, 
+    hall_u_as_angle: hall_u_as_angle === null ? null : hall_u_as_angle * 180 / Math.PI, 
+    hall_v_as_angle: hall_v_as_angle === null ? null : hall_v_as_angle * 180 / Math.PI, 
+    hall_w_as_angle: hall_w_as_angle === null ? null : hall_w_as_angle * 180 / Math.PI,
+  };
+}
+
+
+const derivative_start_index = 8;
+
+
+function compute_derivatives(prev, curr, i){
+  if (i < derivative_start_index) return curr;
+  
+  // Time units are milliseconds.
+  const dt = curr.time - prev.time;
+
+  const current_angular_speed = normalize_degrees(curr.current_angle - prev.current_angle) / dt;
+  // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
+  const u_L_voltage = (curr.u - prev.u) / dt * 1000 * phase_inductance;
+  const v_L_voltage = (curr.v - prev.v) / dt * 1000 * phase_inductance;
+  const w_L_voltage = (curr.w - prev.w) / dt * 1000 * phase_inductance;
+  
+  const u_voltage = u_L_voltage === null ? null : u_L_voltage + phase_resistance * curr.u;
+  const v_voltage = v_L_voltage === null ? null : v_L_voltage + phase_resistance * curr.v;
+  const w_voltage = w_L_voltage === null ? null : w_L_voltage + phase_resistance * curr.w;
+
+  const any_null = current_angular_speed === null || u_L_voltage === null || v_L_voltage === null || w_L_voltage === null;
+
+  const [voltage_alpha, voltage_beta] = any_null ? [null, null] : matrix_multiply(power_invariant_clarke_matrix, [u_voltage, v_voltage, w_voltage]);
+  const voltage_angle = any_null ? null : Math.atan2(voltage_beta, voltage_alpha);
+  
+  const voltage_magnitude = any_null ? null : Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
+
+  const angle_if_breaking = any_null ? null : ((voltage_angle + (current_angular_speed > 0 ? +Math.PI / 2.0 : -Math.PI / 2.0)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+
+  return {
+    ...curr,
+    current_angular_speed,
+    u_voltage,
+    v_voltage,
+    w_voltage,
+    u_L_voltage,
+    v_L_voltage,
+    w_L_voltage,
+    voltage_alpha,
+    voltage_beta,
+    voltage_angle: voltage_angle === null ? null : voltage_angle * 180 / Math.PI,
+    voltage_magnitude,
+    angle_if_breaking: angle_if_breaking === null ? null : angle_if_breaking * 180 / Math.PI,
+  };
+}
+
+
+const process_readout = online_function_chain(
+  annotate_readout,
+  accumulate_position_from_hall,
+  compute_derivatives,
+);
+
+function calculate_data_stats(raw_readout_data){
+  return online_map(raw_readout_data, process_readout);
+}
+```
+
+
 ```js
 // Data stream output
 // ------------------
 
+
+
 const max_data_size = 1000 / (3 * millis_per_cycle);
 
-let raw_readout_data = Mutable([]);
+let data = Mutable([]);
 
-const update_raw_readout_data = _.throttle(function(new_data){
-  let truncated_data = new_data.length > max_data_size ? new_data.slice(-max_data_size) : new_data;
-  
-  raw_readout_data.value = truncated_data;
-}, 1000.0/10);
+const update_data = _.throttle(function(new_data){
+  data.value = new_data;
+}, 1000.0/target_fps);
 
 
 // Control functions
@@ -254,14 +717,16 @@ function command_and_stream(delay_ms, command, options = {}){
       await motor_controller.send_command({command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options});
   
       let data = [];
-      function update_data(readout){
-        data.push(readout);
-        update_raw_readout_data(data);
+      let processed_readout = undefined;
+      function readout_callback(raw_readout){
+        processed_readout = process_readout(processed_readout, raw_readout, data.length, data);
+        data.push(processed_readout);
         if (data.length > max_data_size) data = data.slice(-max_data_size);
+        update_data(data);
       }
       // Start reading the data stream.
       await motor_controller.stream_readouts({
-        readout_callback: update_data,
+        readout_callback,
         max_data_size, 
         ...options,
       });
@@ -401,436 +866,6 @@ const command_buttons = Inputs.button(
 );
 
 d3.select(command_buttons).selectAll("button").style("height", "4em");
-
-```
-
-
-```js
-
-// Load Calibration
-// ----------------
-
-
-const current_calibration_default = {
-  u_positive: 1.0,
-  u_negative: 1.0,
-  v_positive: 1.0,
-  v_negative: 1.0,
-  w_positive: 1.0,
-  w_negative: 1.0,
-};
-
-function load_current_calibration_factors(){
-  return get_stored_or_default("current_calibration", current_calibration_default);
-}
-
-// Load or make default calibration
-const saved_current_calibration_factors = load_current_calibration_factors();
-
-let current_calibration_factors = Mutable(saved_current_calibration_factors);
-
-function update_current_calibration_factors(new_calibration_factors){
-  current_calibration_factors.value = new_calibration_factors;
-}
-
-function reload_current_calibration_factors(){
-  update_current_calibration_factors(load_current_calibration_factors());
-}
-
-function save_current_calibration_factors(){
-  localStorage.setItem("current_calibration", JSON.stringify(current_calibration_factors.value));
-}
-
-function reset_current_calibration_factors(){
-  localStorage.removeItem("current_calibration");
-  update_current_calibration_factors(current_calibration_default);
-}
-```
-
-
-```js
-
-// Calculate Data
-// --------------
-
-function matrix_multiply(m, v){
-  // Return the matrix-vector product of a 3x3 matrix and a 3-vector.
-  return m.map((row) => d3.sum(row.map((x, i) => x * v[i])));
-}
-
-const power_invariant_clarke_matrix = [
-  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
-  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
-  [1/Math.sqrt(3), 1/Math.sqrt(3), 1/Math.sqrt(3)],
-];
-
-const power_invariant_simplified_clarke_matrix = [
-  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
-  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
-];
-
-
-function normalize_degrees(a){
-  return (a % 360 + 540) % 360 - 180;
-}
-
-function shortest_distance_degrees(a, b){
-  return normalize_degrees(b - a);
-}
-
-
-function interpolate_degrees(a, b, fraction){
-  const diff = b - a;
-  return normalize_degrees(a + diff * fraction);
-}
-
-function interpolate_linear(a, b, fraction){
-  return a + (b - a) * fraction;
-}
-
-
-function circular_stats_degrees(values){
-  const mean_point = [
-    d3.mean(values, (d) => Math.cos(d * Math.PI / 180.0)),
-    d3.mean(values, (d) => Math.sin(d * Math.PI / 180.0)),
-  ]
-  const circular_mean = Math.atan2(mean_point[1], mean_point[0]) * 180 / Math.PI;
-
-  const circular_σ = Math.sqrt(
-    d3.mean(values, (d) => {
-      const diff = shortest_distance_degrees(circular_mean, d);
-      return diff * diff;
-    })
-  );
-
-  return {
-    circular_mean,
-    circular_σ,
-  };
-}
-
-function hall_sector({hall_u, hall_v, hall_w}){
-  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
-  switch(hall_state){
-    case 0b001: return 0;
-    case 0b011: return 1;
-    case 0b010: return 2;
-    case 0b110: return 3;
-    case 0b100: return 4;
-    case 0b101: return 5;
-    default: return null;
-  }
-}
-
-const sector_center_degrees = [0, 60, 120, 180, 240, 300].map(normalize_degrees);
-const sector_center_σ = [30, 30, 30, 30, 30, 30];
-const hall_hysterisis = 10;
-const transition_σ = 15;
-const sector_transition_degrees = [
-  [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
-  [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
-  [+ 90 + hall_hysterisis / 2, +150 - hall_hysterisis / 2],
-  [+150 + hall_hysterisis / 2, -150 - hall_hysterisis / 2],
-  [-150 + hall_hysterisis / 2, - 90 - hall_hysterisis / 2],
-  [- 90 + hall_hysterisis / 2, - 30 - hall_hysterisis / 2],
-];
-const sector_transition_σ = [
-  [transition_σ, transition_σ],
-  [transition_σ, transition_σ],
-  [transition_σ, transition_σ],
-  [transition_σ, transition_σ],
-  [transition_σ, transition_σ],
-  [transition_σ, transition_σ],
-];
-const accel_σ = 360.0 / 5.0 / 50.0; // acceleration distribution up to (360 degrees per 5ms) per 50ms.
-const initial_angular_speed_σ = 0.05 * 360;
-
-function shortest_distance_mod_6(a, b){
-  const diff = (b + 12 - a) % 6;
-  return diff > 3 ? diff - 6 : diff;
-}
-
-function product_of_normals({mean_a, σ_a, mean_b, σ_b}){
-  const mean = (mean_a * σ_b * σ_b + mean_b * σ_a * σ_a) / (σ_a * σ_a + σ_b * σ_b);
-  const σ = Math.sqrt((σ_a * σ_a * σ_b * σ_b) / (σ_a * σ_a + σ_b * σ_b));
-  return {mean, σ};
-}
-
-function product_normals_2({mean_a, variance_a, mean_b, variance_b}){
-  const mean = (mean_a * variance_b + mean_b * variance_a) / (variance_a + variance_b);
-  const variance = (variance_a * variance_b) / (variance_a + variance_b);
-  return {mean, variance};
-}
-
-function add_σ(...σ_values){
-  return Math.sqrt(σ_values.reduce((sum, σ) => sum + σ * σ, 0));
-}
-
-
-function compute_position_from_hall(data){
-  if (!Array.isArray(data) || data.length < 1) return data;
-
-  const first_sector = hall_sector(data[0]);
-  
-  let last_event = {
-    time: 0,
-    sector: first_sector,
-    angle: sector_center_degrees[first_sector],
-    angle_σ: sector_center_σ[first_sector],
-    angular_speed: 0,
-    angular_speed_σ: initial_angular_speed_σ,
-  };
-
-  let result = [{...data[0], ...last_event}];
-
-  for (let i = 1; i < data.length; i++){
-    const d = data[i];
-
-    const {time} = d;
-
-    const dt = time - last_event.time;
-
-
-    const sector = hall_sector(d);
-
-    // If we switched sectors, we should have an accurate position estimate.
-    if (sector != null && sector != last_event.sector){
-      const direction = Math.sign(shortest_distance_mod_6(last_event.sector, sector));
-
-      const trigger_angle = sector_transition_degrees[sector][direction >= 0 ? 0 : 1];
-      const trigger_angle_σ = sector_transition_σ[sector][direction >= 0 ? 0 : 1];
-
-      const distance_to_trigger = shortest_distance_degrees(last_event.angle, trigger_angle);
-
-      const estimated_distance = last_event.angular_speed * dt;
-      const estimated_distance_error = distance_to_trigger - estimated_distance;
-      const estimated_speed_error = estimated_distance_error / dt;
-
-      const estimated_distance_σ = add_σ(last_event.angle_σ, last_event.angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
-      const estimated_speed_error_σ = add_σ(estimated_distance_σ / dt, trigger_angle_σ / dt);
-      
-      const {mean: distance_adjustment, σ: angle_σ} = product_of_normals({
-        mean_a: 0.0,
-        σ_a: estimated_distance_σ,
-        mean_b: estimated_distance_error,
-        σ_b: trigger_angle_σ,
-      });
-
-      const kalman_angle = normalize_degrees(last_event.angle + estimated_distance + distance_adjustment);
-
-      // Ensure we dragged the angle within the 95% confidence interval of the trigger angle. If we're too slow
-      // to update the angle we cross 180 degrees and our math switches sign. To avoid that we need to keep the 
-      // angle near the trigger. The formula below handles the lower bound of the trigger angle; the upper bound
-      // is handled by capping the speed above.
-      const angle = kalman_angle + direction * Math.max(direction * normalize_degrees(trigger_angle - direction * std_95_z_score * trigger_angle_σ - kalman_angle), 0);
-
-      const {mean: speed_adjustment, σ: angular_speed_σ} = product_of_normals({
-        mean_a: 0.0,
-        σ_a: last_event.angular_speed_σ + 0.5 * accel_σ * dt,
-        mean_b: estimated_speed_error,
-        σ_b: estimated_speed_error_σ,
-      });
-
-      const angular_speed = last_event.angular_speed + speed_adjustment;
-
-      last_event = {
-        time,
-        sector,
-        angle,
-        angle_σ,
-        angular_speed,
-        angular_speed_σ,
-      };
-        
-
-      result.push({...d, sector, angle, angle_σ, angular_speed, angular_speed_σ});
-
-    // If we didn't switch sectors, then we need to carry on with our previous estimate, but adjusted...
-    } else {
-      const positive_direction = last_event.angular_speed >= 0;
-      const direction = positive_direction ? +1 : -1;
-
-      const estimated_distance = last_event.angular_speed * dt;
-      const estimated_distance_σ = add_σ(last_event.angle_σ, last_event.angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
-
-      const next_sector = positive_direction ? (last_event.sector + 1) % 6 : (last_event.sector - 1 + 6) % 6;
-      const next_transition_angle = sector_transition_degrees[next_sector][positive_direction ? 0 : 1];
-      const next_transition_angle_σ = sector_transition_σ[next_sector][positive_direction ? 0 : 1];
-      // Cap the position in the 95% confidence interval before the next transition. We cross
-      // this threshold when distance_to_next_transition is negative. Also the adjustement
-      // depends on the direction of travel.
-      const distance_to_next_transition = direction * shortest_distance_degrees(last_event.angle, next_transition_angle) + std_95_z_score * next_transition_angle_σ;
-      
-      const distance_overshoot = Math.max(direction * estimated_distance - distance_to_next_transition, 0);
-      const distance_adjustment = direction * Math.min(distance_to_next_transition - direction * estimated_distance, 0);
-
-      const estimated_angle = normalize_degrees(last_event.angle + estimated_distance + distance_adjustment);
-
-      const p_stopped_in_current_sector = distance_overshoot < 90 ? 0.0 : Math.min(1.0, (distance_overshoot - 90) / 45);
-
-      const current_sector_angle = sector_center_degrees[last_event.sector];
-      const current_sector_angle_σ = sector_center_σ[last_event.sector];
-
-      const angle = interpolate_degrees(estimated_angle, current_sector_angle, p_stopped_in_current_sector);
-      const angle_σ = interpolate_linear(estimated_distance_σ, current_sector_angle_σ, p_stopped_in_current_sector);
-
-      const calculated_spin = shortest_distance_degrees(last_event.angle, angle) / dt;
-      const calculated_spin_σ = (angle_σ + last_event.angle_σ) / dt;
-
-      const {mean: angular_speed, σ: angular_speed_σ} = product_of_normals({
-        mean_a: calculated_spin,
-        σ_a: calculated_spin_σ,
-        mean_b: last_event.angular_speed,
-        σ_b: last_event.angular_speed_σ + accel_σ * dt,
-      });
-
-      if (distance_overshoot > 90 + 45){
-        last_event = {
-          time,
-          sector: next_sector,
-          angle: next_transition_angle,
-          angle_σ: next_transition_angle_σ,
-          angular_speed: 0.0,
-          angular_speed_σ: initial_angular_speed_σ,
-        };
-      }
-
-      result.push({...d, sector, angle, angle_σ, angular_speed, angular_speed_σ});
-    }
-  }
-
-  return result;
-}
-
-
-function calculate_data_stats(raw_readout_data){
-  if (raw_readout_data.length == 0) return [];
-  
-  const ref_readout_mean = d3.mean(raw_readout_data, (d) => d.ref_readout);
-  const start_readout_number = raw_readout_data[0].readout_number;
-
-  const data_with_annotations = raw_readout_data.map((d) => {
-    const readout_number = (motor.READOUT_BASE + d.readout_number - start_readout_number) % motor.READOUT_BASE;
-    const time = readout_number * millis_per_cycle;
-  
-    const u_readout = -current_conversion * (d.u_readout - d.ref_readout);
-    const v_readout = +current_conversion * (d.v_readout - d.ref_readout);
-    const w_readout = -current_conversion * (d.w_readout - d.ref_readout);
-    const ref_diff = current_conversion * (d.ref_readout - ref_readout_mean);
-  
-    const calibrated_u = u_readout * (u_readout >= 0 ? 
-      current_calibration_factors.u_positive :
-      current_calibration_factors.u_negative);
-
-    const calibrated_v = v_readout * (v_readout >= 0 ?
-      current_calibration_factors.v_positive :
-      current_calibration_factors.v_negative);
-
-    const calibrated_w = w_readout * (w_readout >= 0 ?
-      current_calibration_factors.w_positive :
-      current_calibration_factors.w_negative);
-
-    const sum = calibrated_u + calibrated_v + calibrated_w;
-
-    const u = calibrated_u - sum / 3.0;
-    const v = calibrated_v - sum / 3.0;
-    const w = calibrated_w - sum / 3.0;
-
-    const [current_alpha, current_beta] = matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
-
-    const current_angle = Math.atan2(current_beta, current_alpha);
-    const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
-
-    // Approximate the angle for the 6 sectors of the hall sensor.
-    const ε = 0.1;
-    const hall_u_as_angle = d.hall_u ? d.hall_v ? +π/3 -ε : d.hall_w ? -π/3 +ε : 0.0 : null;
-    const hall_v_as_angle = d.hall_v ? d.hall_u ? +π/3 +ε : d.hall_w ? +π -ε : +2*π/3 : null;
-    const hall_w_as_angle = d.hall_w ? d.hall_v ? -π +ε : d.hall_u ? -π/3 -ε : -2*π/3 : null;
-
-
-    return {
-      ...d, 
-      motor_angle: normalize_degrees(d.motor_angle * 360 / 256),
-      motor_speed_σ: Math.sqrt(d.motor_speed_variance),
-      u_readout, v_readout, w_readout, 
-      u, v, w, 
-      ref_diff, time, sum, 
-      current_alpha, current_beta, 
-      current_angle: current_angle * 180 / Math.PI, 
-      current_magnitude, 
-      hall_u_as_angle: hall_u_as_angle === null ? null : hall_u_as_angle * 180 / Math.PI, 
-      hall_v_as_angle: hall_v_as_angle === null ? null : hall_v_as_angle * 180 / Math.PI, 
-      hall_w_as_angle: hall_w_as_angle === null ? null : hall_w_as_angle * 180 / Math.PI,
-    };
-  });
-
-  const data_with_positions = compute_position_from_hall(data_with_annotations);
-
-
-  const derivative_start_index = 8;
-  const derivative_end_index = raw_readout_data.length - 2;
-
-  function derivative_3_points(index, df, data, circular = false){
-    if (index < derivative_start_index || index > derivative_end_index) return null;
-    const left = data[index - 1];
-    const mid = data[index];
-    const right = data[index + 1];
-    const left_derivative = df(left, mid) / (mid.time - left.time);
-    const right_derivative = df(mid, right) / (right.time - mid.time);
-    return (left_derivative + right_derivative) / 2.0;
-  }
-
-  function inductor_voltage_3_points(index, df, data){
-    const derivative = derivative_3_points(index, df, data);
-    return derivative == null ? null : derivative * 1000 * phase_inductance; // V = L*dI/dt + R*I
-  }
-
-  const data_with_derivatives = data_with_positions.map((d, i, data) => {
-    const current_angular_speed = derivative_3_points(i, (a, b) => normalize_degrees(b.current_angle - a.current_angle), data);
-    const u_L_voltage = inductor_voltage_3_points(i, (a, b) => b.u - a.u, data);
-    const v_L_voltage = inductor_voltage_3_points(i, (a, b) => b.v - a.v, data);
-    const w_L_voltage = inductor_voltage_3_points(i, (a, b) => b.w - a.w, data);
-    
-    const u_voltage = u_L_voltage === null ? null : u_L_voltage + phase_resistance * d.u;
-    const v_voltage = v_L_voltage === null ? null : v_L_voltage + phase_resistance * d.v;
-    const w_voltage = w_L_voltage === null ? null : w_L_voltage + phase_resistance * d.w;
-
-    const any_null = current_angular_speed === null || u_L_voltage === null || v_L_voltage === null || w_L_voltage === null;
-
-    const [voltage_alpha, voltage_beta] = any_null ? [null, null] : matrix_multiply(power_invariant_clarke_matrix, [u_voltage, v_voltage, w_voltage]);
-    const voltage_angle = any_null ? null : Math.atan2(voltage_beta, voltage_alpha);
-    
-    const voltage_magnitude = any_null ? null : Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
-
-    const angle_if_breaking = any_null ? null : ((voltage_angle + (current_angular_speed > 0 ? +Math.PI / 2.0 : -Math.PI / 2.0)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
-
-    return {
-      ...d,
-      current_angular_speed,
-      u_voltage,
-      v_voltage,
-      w_voltage,
-      u_L_voltage,
-      v_L_voltage,
-      w_L_voltage,
-      voltage_alpha,
-      voltage_beta,
-      voltage_angle: voltage_angle === null ? null : voltage_angle * 180 / Math.PI,
-      voltage_magnitude,
-      angle_if_breaking: angle_if_breaking === null ? null : angle_if_breaking * 180 / Math.PI,
-    };
-  });
-
-
-  const data = data_with_derivatives;
-
-  return data;
-}
-```
-
-
-```js
-const data = calculate_data_stats(raw_readout_data);
 
 ```
 
@@ -1162,7 +1197,7 @@ async function run_position_calibration(){
   await wait(drive_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_GROUND_SHORT, ...test_options});
 
-  const drive_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const drive_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
 
   console.info("Drive positive done");
 
@@ -1170,7 +1205,7 @@ async function run_position_calibration(){
   await wait(drive_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_GROUND_SHORT, ...test_options});
   
-  const drive_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const drive_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
   
   
   console.info("Drive negative done");
@@ -1376,12 +1411,12 @@ const position_calibration_neg_speed_plot = plot_multiline({
 function extract_hall_switching_events(data){
   return data.flatMap((d, i) => {
     if (d.angle_if_breaking == null) return [];
-    if (i >= data.length - 1) return [];
-    const next = data[i + 1];
-    const angle_if_breaking = interpolate_degrees(d.angle_if_breaking, next.angle_if_breaking, 0.5);
+    if (i == 0) return [];
+    const prev = data[i - 1];
+    const angle_if_breaking = interpolate_degrees(prev.angle_if_breaking, d.angle_if_breaking, 0.5);
 
-    const prev_sector = hall_sector(d);
-    const next_sector = hall_sector(next);
+    const prev_sector = hall_sector(prev);
+    const next_sector = hall_sector(d);
 
     if (prev_sector == null || next_sector == null) return [];
 
@@ -1397,7 +1432,7 @@ const position_calibration_switching_events = position_calibration_results.flatM
 });
 
 const position_calibration_switching_angles = position_calibration_switching_events.reduce((acc, d) => {
-  acc[d.switching].push(d.angle_if_breaking);
+  acc[d.switching]?.push(d.angle_if_breaking);
   return acc;
 }, {
   hall_sector_5_to_0: [],
@@ -1565,7 +1600,7 @@ async function run_current_calibration(){
   await wait(settle_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_U_INCREASING, ...test_options});
 
-  const u_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const u_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
 
   console.info("U positive done");
 
@@ -1573,7 +1608,7 @@ async function run_current_calibration(){
   await wait(settle_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_W_DECREASING, ...test_options});
 
-  const w_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const w_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
 
   console.info("W negative done");
 
@@ -1581,7 +1616,7 @@ async function run_current_calibration(){
   await wait(settle_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_V_INCREASING, ...test_options});
 
-  const v_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const v_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
 
   console.info("V positive done");
 
@@ -1589,7 +1624,7 @@ async function run_current_calibration(){
   await wait(settle_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_U_DECREASING, ...test_options});
 
-  const u_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const u_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
 
   console.info("U negative done");
 
@@ -1597,7 +1632,7 @@ async function run_current_calibration(){
   await wait(settle_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_W_INCREASING, ...test_options});
 
-  const w_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const w_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
 
   console.info("W positive done");
 
@@ -1605,7 +1640,7 @@ async function run_current_calibration(){
   await wait(settle_time);
   await motor_controller.send_command({command: motor.SET_STATE_TEST_V_DECREASING, ...test_options});
 
-  const v_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE})).data;
+  const v_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: motor.HISTORY_SIZE}));
 
   console.info("V negative done");
 
@@ -1834,7 +1869,7 @@ const current_calibration_positive_mean_plot = plot_multiline({
   data: current_calibration_stats,
   store_id: "plot_current_calibration_positive_mean",
   selection: null,
-  subtitle: "Current Calibration Mean",
+  subtitle: "Mean Response - Positive",
   description: "Current calibration mean results for each phase driven positive.",
   width: 1200, height: 300,
   x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
@@ -1878,7 +1913,7 @@ const current_calibration_negative_mean_plot = plot_multiline({
   data: current_calibration_stats,
   store_id: "plot_current_calibration_negative_mean",
   selection: null,
-  subtitle: "Current Calibration Mean",
+  subtitle: "Mean Response - Negative (inverted)",
   description: "Current calibration mean results for each phase driven negative.",
   width: 1200, height: 300,
   x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},

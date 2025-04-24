@@ -74,7 +74,10 @@ export async function connect_usb_motor_controller(){
 
   while(tries-- > 0){
     try {
-      await port.open({baudRate: 115200, bufferSize: 16});
+      // I don't know what florControl does! Unfortunately open doesn't have a `highWaterMark` option
+      // to would slow the internal USB reader when the webcode is slow. Thus data appears to keep 
+      // coming after the driver stops sending it. SerialPort is just reading from the internal buffer.
+      await port.open({baudRate: 115200, bufferSize: 2048, flowControl: "hardware"});
       break;
     } catch (error) {
       if (error.name === "InvalidStateError") {
