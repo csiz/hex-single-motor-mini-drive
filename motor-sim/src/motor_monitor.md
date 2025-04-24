@@ -217,18 +217,14 @@ const command_leading_angle_degrees = Generators.input(command_leading_angle_sli
 
 const max_data_size = 1000 / (3 * millis_per_cycle);
 
-let raw_readout_data = Mutable();
+let raw_readout_data = Mutable([]);
 
-function update_raw_readout_data(new_data){
+const update_raw_readout_data = _.throttle(function(new_data){
   let truncated_data = new_data.length > max_data_size ? new_data.slice(-max_data_size) : new_data;
   
   raw_readout_data.value = truncated_data;
-}
+}, 1000.0/10);
 
-const messages_per_frame = Math.floor((1000.0 * cycles_per_millisecond) / 30.0); // How many PWM cycles per display frame at 30fps.
-```
-
-```js
 
 // Control functions
 // -----------------
@@ -256,10 +252,16 @@ function command_and_stream(delay_ms, command, options = {}){
   latest_stream_timeout = setTimeout(async function(){
     try {
       await motor_controller.send_command({command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options});
-
+  
+      let data = [];
+      function update_data(readout){
+        data.push(readout);
+        update_raw_readout_data(data);
+        if (data.length > max_data_size) data = data.slice(-max_data_size);
+      }
       // Start reading the data stream.
       await motor_controller.stream_readouts({
-        data_callback: _.throttle(update_raw_readout_data, 30), 
+        readout_callback: update_data,
         max_data_size, 
         ...options,
       });
@@ -276,7 +278,7 @@ const data_request_buttons = Inputs.button(
       command_and_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: motor.HISTORY_SIZE});
     }],
     ["ADC stream", async function(){
-      await command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_messages: messages_per_frame, expected_code: motor.FULL_READOUT, command_timeout: 4});
+      await command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_code: motor.FULL_READOUT, command_timeout: 1});
     }],
     ["STOP stream", async function(){
       await command(motor.STREAM_FULL_READOUTS, {command_timeout: 0});
@@ -702,7 +704,7 @@ function compute_position_from_hall(data){
 
 
 function calculate_data_stats(raw_readout_data){
-  
+  if (raw_readout_data.length == 0) return [];
   
   const ref_readout_mean = d3.mean(raw_readout_data, (d) => d.ref_readout);
   const start_readout_number = raw_readout_data[0].readout_number;
@@ -762,6 +764,9 @@ function calculate_data_stats(raw_readout_data){
     };
   });
 
+  const data_with_positions = compute_position_from_hall(data_with_annotations);
+
+
   const derivative_start_index = 8;
   const derivative_end_index = raw_readout_data.length - 2;
 
@@ -780,7 +785,7 @@ function calculate_data_stats(raw_readout_data){
     return derivative == null ? null : derivative * 1000 * phase_inductance; // V = L*dI/dt + R*I
   }
 
-  const data_with_derivatives = data_with_annotations.map((d, i, data) => {
+  const data_with_derivatives = data_with_positions.map((d, i, data) => {
     const current_angular_speed = derivative_3_points(i, (a, b) => normalize_degrees(b.current_angle - a.current_angle), data);
     const u_L_voltage = inductor_voltage_3_points(i, (a, b) => b.u - a.u, data);
     const v_L_voltage = inductor_voltage_3_points(i, (a, b) => b.v - a.v, data);
@@ -816,17 +821,16 @@ function calculate_data_stats(raw_readout_data){
     };
   });
 
-  const data_with_positions = compute_position_from_hall(data_with_derivatives);
 
-  const data = data_with_positions;
+  const data = data_with_derivatives;
 
-  return {data, ref_readout_mean, start_readout_number};
+  return data;
 }
 ```
 
 
 ```js
-const {data, ref_readout_mean} = calculate_data_stats(raw_readout_data);
+const data = calculate_data_stats(raw_readout_data);
 
 ```
 
@@ -893,14 +897,17 @@ const plot_options = Generators.input(plot_options_input);
 ```
 
 ```js
-const data_duration = data[data.length - 1].time;
+const data_duration = data.length == 0 ? 0 : data[data.length - 1].time;
 
 const time_start = Math.max(0, data_duration - time_period) * (1.0 - time_offset);
+
 const time_domain = [time_start, time_start + time_period];
 
 const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
 
-const max_plot_points = motor.HISTORY_SIZE;
+// TODO: make the time rewind input more like a play button, that replays the data in slow mo.
+
+const max_plot_points = 720;
 
 const plot_points_skip = Math.ceil(data_in_time_window.length / max_plot_points);
 

@@ -157,7 +157,8 @@ export class MotorController {
 
         const {parse_func, data_size} = parser_mapping[code] || {parse_func: null, data_size: 0};
         if (parse_func === null) {
-          console.warn("Unknown message header: ", message_header);
+          console.warn("Unknown message header: ", code.toString(16));
+          if (this._promised_readouts != null) this._onerror(new Error("Unknown Code"));
           // Reset the buffer to avoid reading parsing data as command.
           byte_array = new Uint8Array();
           // Wait for new data.
@@ -203,12 +204,10 @@ export class MotorController {
     await this._writer.write(buffer);
   }
 
-  
-  /* Get a snapshot of the last N messages from the motor driver. */
-  async get_readouts({expected_code = READOUT, expected_messages = HISTORY_SIZE, response_timeout = 500, return_partial = false}) {
+  async cancel_previous_request() {
 
-    // Chuck an error to the previous listener; it will be ignored if none exists.
     if (this._promised_readouts != null) {
+      // Chuck an error to the previous listener to resolve the 
       this._onerror(new Error("Overriding Request"));
       try {
         await this._promised_readouts;
@@ -216,6 +215,12 @@ export class MotorController {
         if (error.message != "Overriding Request") throw error;
       }
     }
+  }
+
+  /* Get a snapshot of the last N messages from the motor driver. */
+  async get_readouts({expected_code = READOUT, expected_messages = HISTORY_SIZE, response_timeout = 500}) {
+
+    this.cancel_previous_request();
 
     let timeout_id;
     
@@ -228,11 +233,7 @@ export class MotorController {
       this._onerror = reject;
 
       timeout_id = setTimeout(() => {
-        if (return_partial && data.length > 0) {
-          resolve(data);
-        } else {
-          reject(new Error("Timeout"));
-        }
+        reject(new Error("Timeout"));
       }, response_timeout);
 
       this._onmessage = (message) => {
@@ -265,28 +266,42 @@ export class MotorController {
     This generator will stop if another message function is called; or if the
     driver takes too long to respond. The generator yields an array of messages.
   */
-  async stream_readouts({data_callback, max_data_size = HISTORY_SIZE, ...options}) {
-    let data = [];
-    while (true) {
-      try {
-        data = data.concat(await this.get_readouts({...options, return_partial: true})).slice(-max_data_size);
-        data_callback(data);
-      } catch (error) {
-        if (error.message == "Timeout" || error.message == "EOF"){ 
-          
-          if (data.length == 0) throw error;
+  async stream_readouts({readout_callback, expected_code = READOUT, response_timeout = 500}) {
+    this.cancel_previous_request();
 
-          data_callback(data);
-          
+    let timeout_id;
+    
+    const data_promise = new Promise((resolve, reject) => {
+
+      let wrong_code_count = 0;
+    
+      this._onerror = reject;
+
+      timeout_id = setTimeout(resolve, response_timeout);
+
+      this._onmessage = (message) => {
+        if (message.code != expected_code) {
+          wrong_code_count += 1;
+          if (wrong_code_count > MAX_WRONG_CODE) {
+            this._onerror(new Error(`Unexpected message code: ${message.code} vs expected: ${expected_code}`));
+          }
           return;
         }
-        
-        if (error.message == "Overriding Request") {
-          return;
-        }
+        clearTimeout(timeout_id);
+        timeout_id = setTimeout(resolve, response_timeout);
+        readout_callback(message);
+      };
+    });
 
-        throw error;
-      }
+    this._promised_readouts = data_promise;
+    
+    try {
+      return await data_promise;
+    } catch (error) { 
+      if (error.message != "Overriding Request") throw error;
+    } finally {
+      clearTimeout(timeout_id);
+      this._promised_readouts = null;
     }
   }
 }
