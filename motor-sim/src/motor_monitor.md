@@ -65,9 +65,9 @@ Current Calibration Procedures
 <div class="card tight">
   <h3>Current Calibration Results</h3>
   <div>${current_calibration_table}</div>
+  <div>${current_calibration_interpolate_plot}</div>
   <div>${current_calibration_result_to_display_input}</div>
   <div>${current_calibration_plot}</div>
-  <div>${current_calibration_interpolate_plot}</div>
 </div>
 <div class="card tight">  
   <h3>Current Calibration Statistics</h3>
@@ -105,8 +105,6 @@ const std_95_z_score = 1.959964; // 95% confidence interval for normal distribut
 const std_99_z_score = 2.575829; // 99% confidence interval for normal distribution
 
 const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
-
-const target_fps = 30.0; // Target frames per second for the data stream.
 ```
 
 ```js
@@ -1508,66 +1506,12 @@ const position_calibration_hysterisis_table = Inputs.table(position_calibration_
 // Current calibration
 // -------------------
 
-// TODO: fix X must be sorted during the calibration process if the motor isn't driven to the correct voltage.
+let calculated_current_calibration_factors = Mutable(null);
 
-let calculated_current_calibration_factors = Mutable(current_calibration_factors);
-
-function update_current_calibration(new_calibration){
-  // Save calibration factors if valid.
-  if (new_calibration === null) {
-    console.error("Calibration data is not valid", new_calibration);
-    return;
-  }
-  if (Object.values(new_calibration).some((data) => data === null)) {
-    console.error("Calibration data is not valid", new_calibration);
-    return;
-  }
-  calculated_current_calibration_factors.value = {
-    u_positive: new_calibration.u_positive.factor,
-    u_negative: new_calibration.u_negative.factor,
-    v_positive: new_calibration.v_positive.factor,
-    v_negative: new_calibration.v_negative.factor,
-    w_positive: new_calibration.w_positive.factor,
-    w_negative: new_calibration.w_negative.factor,
-  };
-}
-```
-
-
-```js
-
-const current_calibration_buttons = Inputs.button(
-  [
-    ["Start Current Calibration", async function(){
-      await run_current_calibration();
-    }],
-    ["Save Current Factors", function(){
-      update_current_calibration_factors(calculated_current_calibration_factors);
-      save_current_calibration_factors();
-    }],
-    ["Reload Current Factors", function(){
-      reload_current_calibration_factors();
-    }],
-    ["Reset Current Factors", function(){
-      reset_current_calibration_factors();
-    }],
-  ],
-  {label: "Collect current calibration data"},
-);
-
-d3.select(current_calibration_buttons).style("width", "100%");
-```
-
-```js
 let current_calibration_results = Mutable();
+let current_calibration = Mutable();
+let current_calibration_stats = Mutable();
 
-function store_current_calibration_results(calibration_data){
-  current_calibration_results.value = [...current_calibration_results.value ?? [], calibration_data];
-}
-```
-
-
-```js
 const short_duration = motor.HISTORY_SIZE / 12 * millis_per_cycle;
 
 const current_calibration_zones = [
@@ -1586,12 +1530,145 @@ const current_calibration_zones = [
 const calibration_reference = drive_voltage / drive_resistance;
 const current_calibration_points = 32;
 const current_calibration_reading_points = even_spacing(calibration_reference, current_calibration_points / 2 + 1);
+const current_calibration_targets = current_calibration_zones.map((zone) => zone.pwm * calibration_reference);
+
+
+function compute_current_calibration(calibration_data){
+  
+  const calibration_data_by_zone = current_calibration_zones.map((zone) => {
+    return calibration_data.filter((d) => d.time > zone.settle_start && d.time < zone.settle_end);
+  });
+
+  function compute_zone_calibration({measurements, targets}){
+    // Make sure the lengths are equal.
+    if (measurements.length !== targets.length) throw new Error("Data length mismatch");
+
+    const factor = d3.mean(targets, (target, i) => target / measurements[i]); 
+    
+    const slow_calibration = piecewise_linear({
+      X: [0.0, ...measurements.map((x) => x)], 
+      Y: [0.0, ...targets.map((y) => y / factor)],
+    });
+
+    // Recalibrate to evenly spaced points for fast processing.
+
+    const Y = current_calibration_reading_points.map((x) => slow_calibration(x));
+
+    const func = even_piecewise_linear({x_min: 0, x_max: calibration_reference, Y});
+
+    const sample = current_calibration_reading_points.map((x) => ({reading: x, target: func(x)}));
+    
+    return {
+      measurements,
+      targets,
+      factor,
+      func,
+      sample,
+    };
+  }
+
+  function compute_phase_calibration(phase_selector){    
+    return compute_zone_calibration({
+      measurements: calibration_data_by_zone.map((zone_data) => d3.mean(zone_data, (d) => d[phase_selector])),
+      targets: current_calibration_targets,
+    });
+  }
+
+  return {
+    u_positive: compute_phase_calibration("u_positive"),
+    u_negative: compute_phase_calibration("u_negative"),
+    v_positive: compute_phase_calibration("v_positive"),
+    v_negative: compute_phase_calibration("v_negative"),
+    w_positive: compute_phase_calibration("w_positive"),
+    w_negative: compute_phase_calibration("w_negative"),
+  };
+}
+
+function update_current_calibration_results(calibration_data){
+
+  current_calibration_results.value = [...current_calibration_results.value ?? [], calibration_data];
+
+  const valid_calibration_results = current_calibration_results.value.filter((calibration_data, i) => {
+    try {
+      compute_current_calibration(calibration_data);
+      return true;
+    } catch (e) {
+      console.error(`Invalid calibration data (index ${i}); error: ${e}`);
+      return false;
+    }
+  });
+
+  if (valid_calibration_results.length == 0) return;
+
+  const calibration_stats = d3.range(motor.HISTORY_SIZE).map((i) => {
+    return {
+      time: valid_calibration_results[0][i].time,
+      u_positive: d3.mean(valid_calibration_results, (data) => data[i].u_positive),
+      u_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].u_positive),
+      u_negative: d3.mean(valid_calibration_results, (data) => data[i].u_negative),
+      u_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].u_negative),
+      v_positive: d3.mean(valid_calibration_results, (data) => data[i].v_positive),
+      v_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].v_positive),
+      v_negative: d3.mean(valid_calibration_results, (data) => data[i].v_negative),
+      v_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].v_negative),
+      w_positive: d3.mean(valid_calibration_results, (data) => data[i].w_positive),
+      w_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].w_positive),
+      w_negative: d3.mean(valid_calibration_results, (data) => data[i].w_negative),
+      w_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].w_negative),
+    };
+  });
+
+  const calibration = compute_current_calibration(calibration_stats);
+
+  current_calibration.value = calibration;
+  
+  current_calibration_stats.value = calibration_stats;
+
+  calculated_current_calibration_factors.value = {
+    u_positive: calibration.u_positive.factor,
+    u_negative: calibration.u_negative.factor,
+    v_positive: calibration.v_positive.factor,
+    v_negative: calibration.v_negative.factor,
+    w_positive: calibration.w_positive.factor,
+    w_negative: calibration.w_negative.factor,
+  };
+}
+
+```
+
+```js
+
+const current_calibration_buttons = Inputs.button(
+  [
+    ["Start Current Calibration", async function(){
+      await run_current_calibration();
+    }],
+    ["Save Current Factors", function(){
+      if (!calculated_current_calibration_factors) return;
+      update_current_calibration_factors(calculated_current_calibration_factors);
+      save_current_calibration_factors();
+    }],
+    ["Reload Current Factors", function(){
+      reload_current_calibration_factors();
+    }],
+    ["Reset Current Factors", function(){
+      reset_current_calibration_factors();
+    }],
+  ],
+  {label: "Collect current calibration data"},
+);
+
+d3.select(current_calibration_buttons).style("width", "100%");
+```
+
+
+```js
 
 
 async function run_current_calibration(){
   if (!motor_controller) return;
   
-  const settle_time = 200;
+  const settle_time = 100;
   const settle_timeout = Math.floor((settle_time + 300) * cycles_per_millisecond);
   const settle_strength = Math.floor(motor.PWM_BASE * 2 / 10);
 
@@ -1691,100 +1768,15 @@ async function run_current_calibration(){
 
   console.info("Current calibration done");
   
-  store_current_calibration_results(calibration_data);
+  update_current_calibration_results(calibration_data);
 }
 
 ```
 
 
 ```js
-
-
-const current_calibration_stats = d3.range(motor.HISTORY_SIZE).map((i) => {
-  return {
-    time: current_calibration_results[0][i].time,
-    u_positive_mean: d3.mean(current_calibration_results, (data) => data[i].u_positive),
-    u_positive_std: d3.deviation(current_calibration_results, (data) => data[i].u_positive),
-    u_negative_mean: d3.mean(current_calibration_results, (data) => data[i].u_negative),
-    u_negative_std: d3.deviation(current_calibration_results, (data) => data[i].u_negative),
-    v_positive_mean: d3.mean(current_calibration_results, (data) => data[i].v_positive),
-    v_positive_std: d3.deviation(current_calibration_results, (data) => data[i].v_positive),
-    v_negative_mean: d3.mean(current_calibration_results, (data) => data[i].v_negative),
-    v_negative_std: d3.deviation(current_calibration_results, (data) => data[i].v_negative),
-    w_positive_mean: d3.mean(current_calibration_results, (data) => data[i].w_positive),
-    w_positive_std: d3.deviation(current_calibration_results, (data) => data[i].w_positive),
-    w_negative_mean: d3.mean(current_calibration_results, (data) => data[i].w_negative),
-    w_negative_std: d3.deviation(current_calibration_results, (data) => data[i].w_negative),
-  };
-});
-
-const current_calibration_targets = current_calibration_zones.map((zone) => zone.pwm * calibration_reference);
-
-
-function compute_current_calibration(calibration_data){
-
-  function compute_phase_calibration(phase_selector){
-
-    function select_by_zone(calibration_data){
-      return current_calibration_zones.map((zone) => {
-        return calibration_data.filter((d) => d.time > zone.settle_start && d.time < zone.settle_end);
-      });
-    }
-  
-    function compute_zone_calibration({measurements, targets}){
-      // Make sure the lengths are equal.
-      if (measurements.length !== targets.length) throw new Error("Data length mismatch");
-  
-      const factor = d3.mean(targets, (target, i) => target / measurements[i]); 
-      
-      const slow_calibration = piecewise_linear({
-        X: [0.0, ...measurements.map((x) => x)], 
-        Y: [0.0, ...targets.map((y) => y / factor)],
-      });
-  
-      // Recalibrate to evenly spaced points for fast processing.
-
-      const Y = current_calibration_reading_points.map((x) => slow_calibration(x));
-  
-  
-      const func = even_piecewise_linear({x_min: 0, x_max: calibration_reference, Y});
-  
-      const sample = current_calibration_reading_points.map((x) => ({reading: x, target: func(x)}));
-      
-      return {
-        measurements,
-        targets,
-        factor,
-        func,
-        sample,
-      };
-    }
-  
-    return compute_zone_calibration({
-      measurements: select_by_zone(calibration_data).map((zone_data) => d3.mean(zone_data, (d) => d[phase_selector])),
-      targets: current_calibration_targets,
-    });
-  }
-
-  return {
-    u_positive: compute_phase_calibration("u_positive_mean"),
-    u_negative: compute_phase_calibration("u_negative_mean"),
-    v_positive: compute_phase_calibration("v_positive_mean"),
-    v_negative: compute_phase_calibration("v_negative_mean"),
-    w_positive: compute_phase_calibration("w_positive_mean"),
-    w_negative: compute_phase_calibration("w_negative_mean"),
-  };
-}
-
-const current_calibration = compute_current_calibration(current_calibration_stats); 
-
-update_current_calibration(current_calibration);
-
-const current_calibration_table = html`<div>Phase correction factors:</div><table>
-  <tr><td>U:</td><td>${current_calibration.u_positive.factor.toFixed(3)}</td><td>${current_calibration.u_negative.factor.toFixed(3)}</td></tr>
-  <tr><td>V:</td><td>${current_calibration.v_positive.factor.toFixed(3)}</td><td>${current_calibration.v_negative.factor.toFixed(3)}</td></tr>
-  <tr><td>W:</td><td>${current_calibration.w_positive.factor.toFixed(3)}</td><td>${current_calibration.w_negative.factor.toFixed(3)}</td></tr>
-</table>`;
+const current_calibration_table = html`<div>Phase correction factors:</div>
+  <pre>${JSON.stringify(calculated_current_calibration_factors, null, 2)}</pre>`;
 
 const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration_results.length), {
   value: current_calibration_results.length - 1,
@@ -1793,6 +1785,7 @@ const current_calibration_result_to_display_input = Inputs.select(d3.range(curre
 const current_calibration_result_to_display = Generators.input(current_calibration_result_to_display_input);
 
 ```
+
 ```js
 
 const current_calibration_plot = plot_multiline({
@@ -1826,6 +1819,9 @@ const current_calibration_plot = plot_multiline({
     Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
   ]
 });
+```
+
+```js
 
 const calibration_samples = current_calibration_reading_points.map((x, i) => {
   return {
@@ -1869,7 +1865,9 @@ const current_calibration_interpolate_plot = plot_multiline({
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
 });
+```
 
+```js
 
 const current_calibration_positive_mean_plot = plot_multiline({
   data: current_calibration_stats,
@@ -1886,21 +1884,21 @@ const current_calibration_positive_mean_plot = plot_multiline({
   channel_label: "Phase",
   channels: [
     {
-      y: "u_positive_mean", 
-      y1: (d) => d.u_positive_mean - d.u_positive_std * std_95_z_score, 
-      y2: (d) => d.u_positive_mean + d.u_positive_std * std_95_z_score, 
+      y: "u_positive", 
+      y1: (d) => d.u_positive - d.u_positive_std * std_95_z_score, 
+      y2: (d) => d.u_positive + d.u_positive_std * std_95_z_score, 
       label: "U positive mean", color: colors.u,
     },
     {
-      y: "v_positive_mean",
-      y1: (d) => d.v_positive_mean - d.v_positive_std * std_95_z_score,
-      y2: (d) => d.v_positive_mean + d.v_positive_std * std_95_z_score, 
+      y: "v_positive",
+      y1: (d) => d.v_positive - d.v_positive_std * std_95_z_score,
+      y2: (d) => d.v_positive + d.v_positive_std * std_95_z_score, 
       label: "V positive mean", color: colors.v,
     },
     {
-      y: "w_positive_mean",
-      y1: (d) => d.w_positive_mean - d.w_positive_std * std_95_z_score,
-      y2: (d) => d.w_positive_mean + d.w_positive_std * std_95_z_score,
+      y: "w_positive",
+      y1: (d) => d.w_positive - d.w_positive_std * std_95_z_score,
+      y2: (d) => d.w_positive + d.w_positive_std * std_95_z_score,
       label: "W positive mean", color: colors.w,
     },
   ],
@@ -1930,21 +1928,21 @@ const current_calibration_negative_mean_plot = plot_multiline({
   channel_label: "Phase",
   channels: [
     {
-      y: "u_negative_mean", 
-      y1: (d) => d.u_negative_mean - d.u_negative_std * std_95_z_score, 
-      y2: (d) => d.u_negative_mean + d.u_negative_std * std_95_z_score, 
+      y: "u_negative", 
+      y1: (d) => d.u_negative - d.u_negative_std * std_95_z_score, 
+      y2: (d) => d.u_negative + d.u_negative_std * std_95_z_score, 
       label: "U negative mean", color: colors.u,
     },
     {
-      y: "v_negative_mean",
-      y1: (d) => d.v_negative_mean - d.v_negative_std * std_95_z_score,
-      y2: (d) => d.v_negative_mean + d.v_negative_std * std_95_z_score, 
+      y: "v_negative",
+      y1: (d) => d.v_negative - d.v_negative_std * std_95_z_score,
+      y2: (d) => d.v_negative + d.v_negative_std * std_95_z_score, 
       label: "V negative mean", color: colors.v,
     },
     {
-      y: "w_negative_mean",
-      y1: (d) => d.w_negative_mean - d.w_negative_std * std_95_z_score,
-      y2: (d) => d.w_negative_mean + d.w_negative_std * std_95_z_score,
+      y: "w_negative",
+      y1: (d) => d.w_negative - d.w_negative_std * std_95_z_score,
+      y2: (d) => d.w_negative + d.w_negative_std * std_95_z_score,
       label: "W negative mean", color: colors.w,
     },
   ],
