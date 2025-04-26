@@ -77,7 +77,7 @@ export async function connect_usb_motor_controller(){
       // I don't know what florControl does! Unfortunately open doesn't have a `highWaterMark` option
       // to would slow the internal USB reader when the webcode is slow. Thus data appears to keep 
       // coming after the driver stops sending it. SerialPort is just reading from the internal buffer.
-      await port.open({baudRate: 115200, bufferSize: 2048, flowControl: "hardware"});
+      await port.open({baudRate: 115200, bufferSize: 4096, flowControl: "hardware"});
       break;
     } catch (error) {
       if (error.name === "InvalidStateError") {
@@ -96,6 +96,11 @@ export async function connect_usb_motor_controller(){
   return new MotorController(port);
 }
 
+function exponential_average(new_value, old_value, time_since_last, alpha_time) {
+  const alpha = Math.exp(-time_since_last / alpha_time);
+  return new_value * (1 - alpha) + old_value * alpha;
+}
+
 
 // Motor control logic
 // -------------------
@@ -110,6 +115,10 @@ export class MotorController {
     this._onmessage = null;
     this._onerror = null;
 
+    this._last_time_received = Date.now();
+    this._receive_rate = 0.0;
+
+    this.receive_rate_timescale = 1.0; // seconds
   }
 
 
@@ -139,7 +148,7 @@ export class MotorController {
   async reading_loop(status_callback = () => {}) {
 
     let bytes_received = 0;
-    let messages_missed = 0;
+    let missed_messages = 0;
 
     let byte_array = new Uint8Array();
 
@@ -175,14 +184,24 @@ export class MotorController {
         offset += data_size + 2;
 
         if (this._promised_readouts != null) this._onmessage(response);
-        else messages_missed += 1;
+        else missed_messages += 1;
       }
 
       byte_array = byte_array.slice(offset);
 
       bytes_received += chunk.length;
 
-      status_callback({bytes_received, messages_missed});
+      const now = Date.now();
+      // Cap the minimum time since last message to avoid division by zero.
+      const time_since_last = Math.max((now - this._last_time_received) / 1000.0, 0.001);
+
+      const receive_rate = chunk.length == 0 ? this._receive_rate :
+        exponential_average(chunk.length / time_since_last, this._receive_rate, time_since_last, this.receive_rate_timescale);
+
+      this._receive_rate = receive_rate;
+      this._last_time_received = now;
+
+      status_callback({bytes_received, missed_messages, receive_rate});
     }
 
     await this.forget();

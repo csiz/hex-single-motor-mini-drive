@@ -135,7 +135,7 @@ function display_port_error(error){
 }
 
 function format_bytes(bytes){
-  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024) return `${bytes.toFixed(2)} bytes`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
@@ -152,10 +152,11 @@ async function disconnect_motor_controller(show_status = true){
   }
 }
 
-function display_datastream_status({bytes_received, messages_missed}){
+function display_datastream_status({bytes_received, missed_messages, receive_rate}){
   const received = format_bytes(bytes_received).padStart(12);
-  const missed = messages_missed.toString().padStart(7);
-  update_motor_controller_status(html`<pre>Connected; received: ${received}; missed messages: ${missed}.</pre>`);
+  const download_rate = `${format_bytes(receive_rate).padStart(12)}/s`;
+  const missed = missed_messages.toString().padStart(7);
+  update_motor_controller_status(html`<pre>Connected; received: ${received}; download rate: ${download_rate}; missed messages: ${missed}.</pre>`);
 }
 
 async function connect_motor_controller(){
@@ -434,7 +435,7 @@ function accumulate_position_from_hall(prev, curr){
     const estimated_distance_error = distance_to_trigger - estimated_distance;
     const estimated_speed_error = estimated_distance_error / dt;
 
-    const estimated_distance_σ = add_σ(prev.obs_angle_σ, prev.obs_angular_speed_σ * dt, accel_σ * dt * dt / 2.0);
+    const estimated_distance_σ = add_σ(prev.obs_angle_σ, prev.obs_angular_speed_σ * dt, accel_σ * dt * dt / 5.0);
     const estimated_speed_error_σ = add_σ(estimated_distance_σ / dt, trigger_angle_σ / dt);
     
     const {mean: distance_adjustment, σ: angle_σ} = product_of_normals({
@@ -679,8 +680,9 @@ function calculate_data_stats(raw_readout_data){
 // ------------------
 
 
+const target_data_size = 2500 / (3 * millis_per_cycle);
+const max_data_size = 5 * target_data_size;
 
-const max_data_size = 1000 / (3 * millis_per_cycle);
 
 let data = Mutable([]);
 
@@ -688,7 +690,10 @@ const update_data = _.throttle(function(new_data){
   data.value = new_data;
 }, 1000.0/target_fps);
 
+```
 
+
+```js
 // Control functions
 // -----------------
 
@@ -721,13 +726,12 @@ function command_and_stream(delay_ms, command, options = {}){
       function readout_callback(raw_readout){
         processed_readout = process_readout(processed_readout, raw_readout, data.length, data);
         data.push(processed_readout);
-        if (data.length > max_data_size) data = data.slice(-max_data_size);
+        if (data.length > max_data_size) data = data.slice(-target_data_size);
         update_data(data);
       }
       // Start reading the data stream.
       await motor_controller.stream_readouts({
         readout_callback,
-        max_data_size, 
         ...options,
       });
     } catch (error) {
@@ -902,7 +906,7 @@ const colors = {
 
 const history_duration = Math.ceil(motor.HISTORY_SIZE * millis_per_cycle);
 
-const time_period_input = Inputs.range([1, 1000], {
+const time_period_input = Inputs.range([1, 2000], {
   value: history_duration,
   transform: Math.log,
   step: 0.5,
@@ -1503,6 +1507,8 @@ const position_calibration_hysterisis_table = Inputs.table(position_calibration_
 ```js
 // Current calibration
 // -------------------
+
+// TODO: fix X must be sorted during the calibration process if the motor isn't driven to the correct voltage.
 
 let calculated_current_calibration_factors = Mutable(current_calibration_factors);
 
