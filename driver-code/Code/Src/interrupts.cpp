@@ -206,23 +206,6 @@ void initialize_angle_tracking(){
 }
 
 void adc_init(){
-    // We use the ADC1 and ADC2 in simulatenous mode to read the motor phase currents
-    // a short time after we turn on the mosfets during each PWM cycle (the motors
-    // are driven by TIM1). When the ADC is triggered in injected mode both ADC modules 
-    // read the current for U and V phases first then W and reference voltage second.
-    // 
-    // The ADC sample time is 20cycles, so the total sampling period is 20/12MHz = 1.67us.
-    // 
-    // Use the TIM1 channel 4 to generate an event a short time after the update event.
-    // This event is used to trigger the ADC to read the current from the motor phases.
-    // 
-    // Delay the ADC sampling time by 16/72MHz = 222ns; the ADC will sample for 7.5 cycles
-    // (and convert for 12.5); then finally sample W and the reference. 7.5/12MHz = 625ns.
-    // For reference, the ADC sample time is 20*72MHz/12MHz = 120 ticks of TIM1.
-
-    // When counting down, this is triggered 14/2 cycles before the counter reaches 0, sampling 
-    // current symmetrically around 0 for the 2 consecutive readings.
-    LL_TIM_OC_SetCompareCH4(TIM1, PWM_BASE - 42);
 
 
     // Enable the ADC interrupt for the end of the injected sequence which reads motor current.
@@ -288,6 +271,24 @@ void interrupts_init(){
 }
 
 void enable_timers(){
+    // We use the ADC1 and ADC2 in simulatenous mode to read the motor phase currents
+    // a short time after we turn on the mosfets during each PWM cycle (the motors
+    // are driven by TIM1). When the ADC is triggered in injected mode both ADC modules 
+    // read the current for U and V phases first then W and reference voltage second.
+    // 
+    // The ADC sample time is 20cycles, so the total sampling period is 20/12MHz = 1.67us.
+    // 
+    // Use the TIM1 channel 4 to generate an event a short time after the update event.
+    // This event is used to trigger the ADC to read the current from the motor phases.
+    // 
+    // Delay the ADC sampling time by 16/72MHz = 222ns; the ADC will sample for 7.5 cycles
+    // (and convert for 12.5); then finally sample W and the reference. 7.5/12MHz = 625ns.
+    // For reference, the ADC sample time is 20*72MHz/12MHz = 120 ticks of TIM1.
+
+    // When counting down, this is triggered 14/2 cycles before the counter reaches 0, sampling 
+    // current symmetrically around 0 for the 2 consecutive readings.
+    LL_TIM_OC_SetCompareCH4(TIM1, PWM_BASE - 42);
+
 
     // Reinitialize the timers; reset the counters and update registers. Because the timers
     // are setup with preload registers the values we write to them are stored in shadow registers
