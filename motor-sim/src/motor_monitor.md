@@ -167,7 +167,7 @@ async function connect_motor_controller(){
 
     update_motor_controller_status(html`<pre>Connected, waiting for data.</pre>`);
 
-    await motor_controller.value.reading_loop(_.throttle(display_datastream_status, 1000.0/target_fps));
+    await motor_controller.value.reading_loop(display_datastream_status);
   } catch (error) {
     motor_controller.value = null;
 
@@ -686,9 +686,9 @@ const max_data_size = 5 * target_data_size;
 
 let data = Mutable([]);
 
-const update_data = _.throttle(function(new_data){
+function update_data (new_data){
   data.value = new_data;
-}, 1000.0/target_fps);
+};
 
 ```
 
