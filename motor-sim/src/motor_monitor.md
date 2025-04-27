@@ -181,9 +181,13 @@ const connect_buttons = Inputs.button(
   [
     ["Connect", connect_motor_controller],
     ["Disconnect", disconnect_motor_controller],
+    ["Clear Storage", clear_stored_data],
   ],
   {label: "Connect to COM"},
 );
+
+d3.select(connect_buttons).selectAll("button").style("height", "3em");
+
 
 connect_motor_controller();
 ```
@@ -1938,10 +1942,12 @@ const current_calibration_negative_mean_plot = plot_multiline({
 // -------
 
 import {plot_multiline, horizontal_step} from "./components/plotting_utils.js";
-import {localStorage, get_stored_or_default} from "./components/local_storage.js";
+import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
 import * as motor from "./components/usb_motor_controller.js";
+
+import {enabled_checkbox, autosave_inputs, any_checked_input} from "./components/input_utils.js";
 
 ```
 

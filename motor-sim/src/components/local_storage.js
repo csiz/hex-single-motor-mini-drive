@@ -41,9 +41,13 @@ class MemoryStorage {
   export function get_stored_or_default(key, default_value){
     const saved_string = localStorage.getItem(key);
     if (saved_string === null) return default_value;
-    const saved_value = JSON.parse(saved_string);
-    // Ensure we return all elements of the default value.
-    const merged_value = {...default_value, ...saved_value};
+    return JSON.parse(saved_string);
+  }
 
-    return merged_value;
+  export function set_stored(key, value){
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  export function clear_stored_data(){
+    localStorage.clear();
   }

@@ -4,6 +4,7 @@ import {localStorage, get_stored_or_default} from "./local_storage.js";
 import {Mutable} from "observablehq:stdlib";
 import * as Plot from "@observablehq/plot";
 import * as Inputs from "@observablehq/inputs";
+import {enabled_checkbox, autosave_inputs, any_checked_input} from "./input_utils.js";
 
 
 function expand_z_channels({data, x_label, y_label, x, channels}){
