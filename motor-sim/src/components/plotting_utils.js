@@ -5,14 +5,17 @@ import {Mutable} from "observablehq:stdlib";
 import * as Plot from "@observablehq/plot";
 import * as Inputs from "@observablehq/inputs";
 
-export function tidy_select({data, x, x_label = "x", y_label = "y", channel_label = "channel", channels}){
+
+function expand_z_channels({data, x_label, y_label, x, channels}){
+
   return data.flatMap((d, i, data) => {
-    return channels.map(({y, label, fy = null, ...other_y}) => {
+    return channels.map(({y, label, color, ...other_y}) => {
       return Object.fromEntries([
-        [x_label, d[x]],
-        [y_label, _.isFunction(fy) ? fy(d, i, data) : d[y]],
-        [channel_label, label],
         ...Object.entries(other_y).map(([key, value]) => [key, _.isFunction(value) ? value(d, i, data) : d[value]]),
+        [x_label, _.isFunction(x) ? x(d, i, data) : d[x]],
+        [y_label, _.isFunction(y) ? y(d, i, data) : d[y]],
+        ["z", label],
+        ["color", color],
       ]);
     });
   });
@@ -25,11 +28,11 @@ export function plot_multiline(options){
     store_id,
     width, height,
     x_options, y_options,
-    x, y, 
     x_label, y_label,
-    channel_label, channels,
     subtitle, description,
     mark_function = (selected_data, options) => Plot.line(selected_data, {...options}),
+    x, 
+    channels,
     grid_marks = [],
     other_marks = [],
     curve = undefined,
@@ -90,7 +93,7 @@ export function plot_multiline(options){
     });
 
     const selected_channels = channels.filter(({y}) => selection.shown_marks.includes(y));
-    const selected_data = tidy_select({data, x, x_label, y_label, channel_label, channels: selected_channels});
+    const selected_data = expand_z_channels({data, x_label, y_label, x, channels: selected_channels});
 
     const plot_figure = Plot.plot({
       width, height,
@@ -102,19 +105,19 @@ export function plot_multiline(options){
         range: channels.map(({color}) => color),
       },
       marks: [
-        mark_function(selected_data, {x: x_label, y: y_label, stroke: channel_label, z: channel_label, curve}),
-        Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: channel_label, ruleStrokeWidth: 3}),
-        Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: channel_label})),
+        Plot.lineY(selected_data, {x: x_label, y: y_label, stroke: "z", z: "z", curve}),
+        Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: "z", ruleStrokeWidth: 3}),
+        Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: "z"})),
         Plot.text(
           selected_data,
           Plot.pointerX({
-            px: x_label, py: y_label, fill: channel_label,
+            px: x_label, py: y_label, fill: "z",
             dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14, fontWeight: "bold",
-            text: (d) => `Channel: ${d[channel_label].padEnd(20)} | ${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)}`,
+            text: (d) => `${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)} | ${d["z"].padStart(20)}`,
           }),
         ),
-        ...(selection.shown_marks.includes("grid") ? grid_marks : []),
-        ...other_marks.map(mark => _.isFunction(mark) ? mark(selected_data, {x: x_label, y: y_label, z: channel_label}) : mark),
+        ...(marks_checkboxes.value.includes("Grid") ? grid_marks : []),
+        ...other_marks.map(mark => _.isFunction(mark) ? mark(selected_data, {x: x_label, y: y_label, z: "z"}) : mark),
       ],
     });
 

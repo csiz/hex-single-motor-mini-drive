@@ -180,7 +180,6 @@ const truncated_normal_plot = plot_multiline({
   x: "x",
   x_label: "Distance to center",
   y_label: "Y",
-  channel_label: "Phase",
   channels: [
     {y: "pdf_μ", label: "PDF μ", color: colors.u},
     {y: "untriggered_pdf_μ", label: "PDF μ (bounded)", color: d3.color(colors.u).darker(1), area_y: "untriggered_pdf_μ"},

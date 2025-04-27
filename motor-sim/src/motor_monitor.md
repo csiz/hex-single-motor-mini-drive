@@ -960,10 +960,8 @@ const plot_electric_position = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {domain: [-180, 180]},
   x: "time",
-  y: "current_angle",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
-  channel_label: "Angle Source",
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
@@ -997,10 +995,8 @@ const plot_speed = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {},
   x: "time",
-  y: "current_angular_speed",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
-  channel_label: "Speed Source",
   channels: [
     {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
@@ -1029,10 +1025,8 @@ const plot_measured_current = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {},
   x: "time",
-  y: "u",
   x_label: "Time (ms)",
   y_label: "Current (A)",
-  channel_label: "Phase",
   channels: [
     {y: "u", label: "Current U", color: colors.u},
     {y: "v", label: "Current V", color: colors.v},
@@ -1057,10 +1051,8 @@ const plot_dq0_currents = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {},
   x: "time",
-  y: "current_alpha",
   x_label: "Time (ms)",
   y_label: "Current (A)",
-  channel_label: "Phase",
   channels: [
     {y: "current_alpha", label: "Current Alpha", color: colors.current_alpha},
     {y: "current_beta", label: "Current Beta", color: colors.current_beta},
@@ -1083,10 +1075,8 @@ const plot_dq0_voltages = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {},
   x: "time",
-  y: "voltage_alpha",
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
-  channel_label: "Phase",
   channels: [
     {y: "voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
     {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
@@ -1109,10 +1099,8 @@ const plot_inferred_voltage = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {},
   x: "time",
-  y: "u_voltage",
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
-  channel_label: "Phase",
   channels: [
     {y: "u_voltage", label: "Voltage U", color: colors.u},
     {y: "v_voltage", label: "Voltage V", color: colors.v},
@@ -1138,10 +1126,8 @@ const plot_pwm_settings = plot_multiline({
   x_options: {domain: time_domain},
   y_options: {domain: [0, motor.PWM_BASE]},
   x: "time",
-  y: "u_pwm",
   x_label: "Time (ms)",
   y_label: "PWM",
-  channel_label: "Phase",
   channels: [
     {y: "u_pwm", label: "PWM U", color: colors.u},
     {y: "v_pwm", label: "PWM V", color: colors.v},
@@ -1267,10 +1253,8 @@ const position_calibration_pos_plot = plot_multiline({
   x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {domain: [-180, 180]},
   x: "time",
-  y: "current_angle",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
-  channel_label: "Angle Source",
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
@@ -1314,10 +1298,8 @@ const position_calibration_pos_speed_plot = plot_multiline({
   x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
-  y: "current_angular_speed",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
-  channel_label: "Speed Source",
   channels: [
     {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
@@ -1347,10 +1329,8 @@ const position_calibration_neg_plot = plot_multiline({
   x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {domain: [-180, 180]},
   x: "time",
-  y: "current_angle",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
-  channel_label: "Angle Source",
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle, 
@@ -1383,10 +1363,8 @@ const position_calibration_neg_speed_plot = plot_multiline({
   x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
-  y: "current_angular_speed",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
-  channel_label: "Speed Source",
   channels: [
     {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
@@ -1798,10 +1776,8 @@ const current_calibration_plot = plot_multiline({
   x_options: {domain: [0, motor.HISTORY_SIZE * millis_per_cycle]},
   y_options: {},
   x: "time",
-  y: "u_positive",
   x_label: "Time (ms)",
   y_label: "Current (A)",
-  channel_label: "Phase",
   channels: [
     {y: "u_positive", label: "U positive", color: colors.u},
     {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
@@ -1846,10 +1822,8 @@ const current_calibration_interpolate_plot = plot_multiline({
   x_options: {domain: [0, calibration_reference]},
   y_options: {},
   x: "reading",
-  y: "u_positive",
   x_label: "Current Reading (A)",
   y_label: "Current Estimate (A)",
-  channel_label: "Phase",
   channels: [
     {y: "u_positive", label: "U positive", color: colors.u},
     {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
@@ -1881,7 +1855,6 @@ const current_calibration_positive_mean_plot = plot_multiline({
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
-  channel_label: "Phase",
   channels: [
     {
       y: "u_positive", 
@@ -1925,7 +1898,6 @@ const current_calibration_negative_mean_plot = plot_multiline({
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
-  channel_label: "Phase",
   channels: [
     {
       y: "u_negative", 
