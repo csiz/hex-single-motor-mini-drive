@@ -166,8 +166,10 @@ const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_nor
   };
 });
 
+const normalized_data = normalize_extent(truncated_normal_data, ["pdf_μ", "untriggered_pdf_μ", "pdf_a", "pdf_b"]);
+
 const truncated_normal_plot = plot_multiline({
-  data: truncated_normal_data,
+  data: normalized_data,
   store_id: "truncated_normal_plot",
   selection: null,
   subtitle: "Truncated Normal Distribution",
@@ -176,7 +178,6 @@ const truncated_normal_plot = plot_multiline({
   x_options: {},
   y_options: {domain: [0, 1]},
   x: "x",
-  y: "y",
   x_label: "Distance to center",
   y_label: "Y",
   channel_label: "Phase",
@@ -188,13 +189,12 @@ const truncated_normal_plot = plot_multiline({
     {y: "cdf_a", label: "CDF a", color: d3.color(colors.a).darker(1)},
     {y: "cdf_b", label: "CDF b", color: d3.color(colors.b).darker(1)},
   ],
-  mark_function: (selected_data, options) => Plot.lineY(selected_data, Plot.normalizeY("extent", options)),
   grid_marks: [
     Plot.gridX({stroke: 'black', strokeWidth : 1}),
     Plot.gridY({stroke: 'black', strokeWidth : 1}),
   ],
   other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, Plot.normalizeY("extent", {...options, y: "area_y", fill: options.z, opacity: 0.2})),
+    (selected_data, options) => Plot.areaY(selected_data, {...options, y: "area_y", fill: options.z, opacity: 0.2}),
     Plot.ruleX([truncated_normal_lower], {stroke: colors.a, strokeWidth: 2, strokeDasharray: "2,5"}),
     Plot.ruleX([truncated_normal_upper], {stroke: colors.b, strokeWidth: 2, strokeDasharray: "2,5"}),
     Plot.ruleX([truncated_normal_position], {stroke: colors.u, strokeWidth: 2, strokeDasharray: "2,5"}),
@@ -207,4 +207,22 @@ const truncated_normal_plot = plot_multiline({
 
 import {plot_multiline, horizontal_step} from "./components/plotting_utils.js";
 import {cdf_normal, pdf_normal} from "./components/stats_utils.js";
+
+function normalize_extent(data, ys) {
+  const norms = ys.map(y => {
+    const extent = d3.extent(data, (d) => d[y]);
+    const min = extent[0];
+    const span = extent[1] - extent[0];
+    return {min, span};
+  });
+
+  return data.map((d) => {
+    const new_d = {...d};
+    ys.forEach((y, i) => {
+      const norm = norms[i];
+      new_d[y] = (d[y] - norm.min) / norm.span;
+    });
+    return new_d;
+  });
+}
 ```
