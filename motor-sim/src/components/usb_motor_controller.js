@@ -115,10 +115,8 @@ export class MotorController {
     this._onmessage = null;
     this._onerror = null;
 
-    this._last_time_received = Date.now();
-    this._receive_rate = 0.0;
-
-    this.receive_rate_timescale = 1.0; // seconds
+    this.receive_rate_timescale = 0.5; // seconds
+    this.receive_rate_min_period = 0.050; // seconds
   }
 
 
@@ -146,9 +144,12 @@ export class MotorController {
     * The generator yields the number of bytes received.
   */
   async reading_loop(status_callback = () => {}) {
-
     let bytes_received = 0;
     let missed_messages = 0;
+
+    let last_bytes_received = 0;
+    let last_received_time = Date.now();
+    let receive_rate = 0.0;
 
     let byte_array = new Uint8Array();
 
@@ -190,18 +191,27 @@ export class MotorController {
       byte_array = byte_array.slice(offset);
 
       bytes_received += chunk.length;
+      last_bytes_received += chunk.length;
 
       const now = Date.now();
       // Cap the minimum time since last message to avoid division by zero.
-      const time_since_last = Math.max((now - this._last_time_received) / 1000.0, 0.001);
+      const time_since_last = (now - last_received_time) / 1000.0;
 
-      const receive_rate = chunk.length == 0 ? this._receive_rate :
-        exponential_average(chunk.length / time_since_last, this._receive_rate, time_since_last, this.receive_rate_timescale);
+      if(time_since_last < this.receive_rate_min_period) {
 
-      this._receive_rate = receive_rate;
-      this._last_time_received = now;
+        // Wait for more data before updating the rate.
+        status_callback({bytes_received, missed_messages, receive_rate});
 
-      status_callback({bytes_received, missed_messages, receive_rate});
+      } else {
+        // Update the rate only if we have received data since the last update. 
+        receive_rate = last_bytes_received == 0 ? receive_rate :
+          exponential_average(last_bytes_received / time_since_last, receive_rate, time_since_last, this.receive_rate_timescale);
+
+        last_bytes_received = 0;
+        last_received_time = now;
+
+        status_callback({bytes_received, missed_messages, receive_rate});
+      }
     }
 
     await this.forget();

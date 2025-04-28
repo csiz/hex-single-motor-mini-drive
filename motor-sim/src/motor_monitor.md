@@ -151,10 +151,10 @@ async function disconnect_motor_controller(show_status = true){
 }
 
 function display_datastream_status({bytes_received, missed_messages, receive_rate}){
-  const received = format_bytes(bytes_received).padStart(12);
-  const download_rate = `${format_bytes(receive_rate).padStart(12)}/s`;
-  const missed = missed_messages.toString().padStart(7);
-  update_motor_controller_status(html`<pre>Connected; received: ${received}; download rate: ${download_rate}; missed messages: ${missed}.</pre>`);
+  bytes_received = format_bytes(bytes_received).padStart(12);
+  missed_messages = missed_messages.toString().padStart(7);
+  receive_rate = `${format_bytes(receive_rate).padStart(12)}/s`;
+  update_motor_controller_status(html`<pre>Connected; received: ${bytes_received}; download rate: ${receive_rate}; missed messages: ${missed_messages}.</pre>`);
 }
 
 async function connect_motor_controller(){
