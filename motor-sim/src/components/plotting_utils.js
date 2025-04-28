@@ -1,11 +1,41 @@
 import _ from "lodash";
 import {html} from "htl";
-import {localStorage, get_stored_or_default} from "./local_storage.js";
 import {Mutable} from "observablehq:stdlib";
 import * as Plot from "@observablehq/plot";
 import * as Inputs from "@observablehq/inputs";
-import {enabled_checkbox, autosave_inputs, any_checked_input} from "./input_utils.js";
+import * as d3 from "d3";
 
+import {set_stored, get_stored_or_default} from "./local_storage.js";
+
+export function merge_input_properties(input, value) {
+  input.value = {...input.value, ...value};
+  input.dispatchEvent(new Event("input", {bubbles: true}));
+}
+
+export function replace_element(element, new_element) {
+  element.replaceWith(new_element);
+  return new_element;
+}
+
+export function update_multiline_data(multiline_plot, value) {
+  multiline_plot.input.value = {...multiline_plot.input.value, ...value};
+  multiline_plot.input.dispatchEvent(new Event("plot-data"));
+}
+
+export function autosave_multiline_inputs(multiline_plots, delay_millis = 100) {
+    Object.entries(multiline_plots).forEach(([key, multiline_plot]) => {
+      const input = multiline_plot.input;
+      // Merge the stored values with the current input values; preserving data.
+      merge_input_properties(input, get_stored_or_default(key, {}));
+
+      // Add an event listener to save the input values to local storage.
+      input.addEventListener("input", _.debounce(() => {
+        // Ignore plotting data so we don't store too much data in local storage.
+        const {show, shown_marks} = input.value;
+        set_stored(key, {show, shown_marks});
+      }, delay_millis));
+    });
+}
 
 function expand_z_channels({data, x_label, y_label, x, channels}){
 
@@ -25,78 +55,59 @@ function expand_z_channels({data, x_label, y_label, x, channels}){
 
 export function plot_multiline(options){
   const {
-    data, 
-    store_id,
+    data = [], 
+    x_options = {}, 
+    y_options = {},
     width, height,
-    x_options, y_options,
     x_label, y_label,
     subtitle, description,
-    mark_function = (selected_data, options) => Plot.line(selected_data, {...options}),
     x, 
     channels,
     grid_marks = [],
     other_marks = [],
     curve = undefined,
+    default_shown_marks = undefined,
+    default_show = true,
   } = options;
+  
 
-  let {selection} = options;
+  const description_element = html`<p>${description}</p>`;
 
-  selection = selection ?? get_stored_or_default(store_id, {
-    show: true,
-    shown_marks: [...channels.map(({y}) => y), "grid"],
+  const checkbox_info = [...channels, {label: "Grid", color: "grey"}];
+
+  let input = Inputs.input({
+    show: default_show,
+    shown_marks: default_shown_marks ?? checkbox_info.map(({label}) => label),
+    data,
+    x_options, 
+    y_options,
   });
 
-  let result = Mutable(create_element(selection));
+  // First, make the title into a checkbox to toggle the plot on and off.
+  const subtitle_checkbox = Inputs.checkbox([subtitle], {
+    value: input.value.show ? [subtitle] : [],
+    format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
+  });
+  
+  // Then, make the marks into checkboxes to toggle them on and off.
+  const marks_checkboxes = Inputs.checkbox(
+    checkbox_info.map(({label}) => label), 
+    {
+      value: input.value.shown_marks,
+      label: "Display:",
+      format: (label, i) => html`<span style="border-bottom: solid 3px ${checkbox_info[i].color}; margin-bottom: -3px;">${label}</span>`,
+    },
+  );
+  
 
-  function update_selection(new_selection){
-    selection = {...selection, ...new_selection};
-    // Store the selection in local storage.
-    localStorage.setItem(store_id, JSON.stringify(selection));
-    // Update the plot.
-    result.value = create_element(selection);
-  }
 
-  function create_element(selection){
+  function create_plot_element({shown_marks, data, x_options, y_options}) {
+    if (data.length === 0) return html`<div>Waiting for data.</div>`;
 
-    // First, make the title into a checkbox to toggle the plot on and off.
-    const subtitle_checkbox = Inputs.checkbox([subtitle], {
-      value: selection.show ? [subtitle] : [],
-      format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
-    });
-
-    subtitle_checkbox.addEventListener("input", function(event){
-      const show = subtitle_checkbox.value.length > 0;
-      update_selection({show});
-    });
-
-    if (!selection.show) {
-      return html`<div>${subtitle_checkbox}</div>`;
-    }
-
-    const description_element = html`<p>${description}</p>`;
-
-    const checkbox_y_to_label = Object.fromEntries([...channels.map(({y, label}) => [y, label]), ["grid", "Grid"]]);
-    const checkbox_y_to_color = Object.fromEntries([...channels.map(({y, color}) => [y, color]), ["grid", "grey"]]);
-
-    // Then, make the marks into checkboxes to toggle them on and off.
-    const marks_checkboxes = Inputs.checkbox(
-      [...channels.map(({y}) => y), "grid"], 
-      {
-        value: selection.shown_marks,
-        label: "Display:",
-        format: (y) => html`<span style="border-bottom: solid 3px ${checkbox_y_to_color[y]}; margin-bottom: -3px;">${checkbox_y_to_label[y]}</span>`,
-      },
-    );
-
-    marks_checkboxes.addEventListener("input", function(event){
-      const shown_marks = marks_checkboxes.value;
-      update_selection({shown_marks});
-    });
-
-    const selected_channels = channels.filter(({y}) => selection.shown_marks.includes(y));
+    const selected_channels = channels.filter(({label}) => shown_marks.includes(label));
     const selected_data = expand_z_channels({data, x_label, y_label, x, channels: selected_channels});
 
-    const plot_figure = Plot.plot({
+    return Plot.plot({
       width, height,
       x: {label: x_label, ...x_options},
       y: {label: y_label, domain: selected_data.length > 0 ? undefined : [0, 1], ...y_options},
@@ -118,15 +129,55 @@ export function plot_multiline(options){
           }),
         ),
         ...(marks_checkboxes.value.includes("Grid") ? grid_marks : []),
-        ...other_marks.map(mark => _.isFunction(mark) ? mark(selected_data, {x: x_label, y: y_label, z: "z"}) : mark),
+        ...other_marks.map(mark => _.isFunction(mark) ? mark(selected_data, {x: x_label, y: y_label, z: "z"}, input.value) : mark),
       ],
     });
-
-    return html`<div>${subtitle_checkbox}${description_element}${marks_checkboxes}${plot_figure}</div>`;
   }
 
-  return result;
-}
+
+  let plot_element = create_plot_element(input.value);
+
+  const plot_details = html`<div>${description_element}${marks_checkboxes}${plot_element}</div>`;
+
+  let element = html`<figure>${subtitle_checkbox}${plot_details}</figure>`;
+
+  element.input = input;
+
+  subtitle_checkbox.addEventListener("input", function(){
+    const show = subtitle_checkbox.value.length > 0;
+    merge_input_properties(input, {show});
+  });
+
+  marks_checkboxes.addEventListener("input", function(){
+    const shown_marks = marks_checkboxes.value;
+    merge_input_properties(input, {shown_marks});
+  });
+
+  function update_plot() {
+    const {show, shown_marks, data, x_options, y_options} = input.value;
+    // Update the plot; only recompute the figure if we show it.
+    if (show) {
+      plot_element = replace_element(plot_element, create_plot_element({shown_marks, data, x_options, y_options}));
+    }
+    d3.select(plot_details).style("display", show ? "initial" : "none");
+  }
+
+  input.addEventListener("input", function(){
+    const {show, shown_marks} = input.value;
+    
+    // Update the dependent inputs; without triggering the event listeners so we don't loop.
+    subtitle_checkbox.value = show ? [subtitle] : [];
+    marks_checkboxes.value = shown_marks;
+
+    update_plot();
+  });
+
+  input.addEventListener("plot-data", function(){
+    update_plot();
+  });
+
+  return element;
+};
 
 function HorizontalStep(context, t) {
   this._context = context;

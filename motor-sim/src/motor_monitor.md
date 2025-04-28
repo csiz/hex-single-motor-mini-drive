@@ -31,7 +31,7 @@ Motor Driving Data
 <div class="card tight">${plot_measured_current}</div>
 <div class="card tight">${plot_dq0_currents}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
-<div class="card tight">${plot_inferred_voltage}</div>
+<div class="card tight">${plot_inferred_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 
 
@@ -181,7 +181,7 @@ const connect_buttons = Inputs.button(
   [
     ["Connect", connect_motor_controller],
     ["Disconnect", disconnect_motor_controller],
-    ["Clear Storage", clear_stored_data],
+    ["Reset data & inputs", () => (clear_stored_data(), location.reload())],
   ],
   {label: "Connect to COM"},
 );
@@ -683,7 +683,7 @@ function calculate_data_stats(raw_readout_data){
 
 
 const target_data_size = 2500 / (3 * millis_per_cycle);
-const max_data_size = 5 * target_data_size;
+const max_data_size = 2 * target_data_size;
 
 
 let data = Mutable([]);
@@ -937,35 +937,16 @@ const plot_options_input = Inputs.checkbox(
 const plot_options = Generators.input(plot_options_input);
 ```
 
+
 ```js
-const data_duration = data.length == 0 ? 0 : data[data.length - 1].time;
-
-const time_start = Math.max(0, data_duration - time_period) * (1.0 - time_offset);
-
-const time_domain = [time_start, time_start + time_period];
-
-const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
-
-// TODO: make the time rewind input more like a play button, that replays the data in slow mo.
-
-const max_plot_points = 720;
-
-const plot_points_skip = Math.ceil(data_in_time_window.length / max_plot_points);
-
-const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip === 0);
-
 const plot_electric_position = plot_multiline({
-  data: selected_data,
-  store_id: "plot_electric_position",
-  selection: null,
   subtitle: "Electric position",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: time_domain},
-  y_options: {domain: [-180, 180]},
   x: "time",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
+  y_options: {domain: [-180, 180]},
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
@@ -990,14 +971,9 @@ const plot_electric_position = plot_multiline({
 });
 
 const plot_speed = plot_multiline({
-  data: selected_data,
-  store_id: "plot_speed",
-  selection: null,
   subtitle: "Rotor Speed",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_options: {domain: time_domain},
-  y_options: {},
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -1020,14 +996,9 @@ const plot_speed = plot_multiline({
 });
 
 const plot_measured_current = plot_multiline({
-  data: selected_data,
-  store_id: "plot_measured_current",
-  selection: null,
   subtitle: "Measured Current",
   description: "Measured current values for each phase.",
   width: 1200, height: 400,
-  x_options: {domain: time_domain},
-  y_options: {},
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1046,14 +1017,9 @@ const plot_measured_current = plot_multiline({
 });
 
 const plot_dq0_currents = plot_multiline({
-  data: selected_data,
-  store_id: "plot_dq0_currents",
-  selection: null,
   subtitle: "DQ0 Currents",
   description: "DQ0 currents after Clarke and Park transforming the measured currents.",
   width: 1200, height: 400,
-  x_options: {domain: time_domain},
-  y_options: {},
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1070,14 +1036,9 @@ const plot_dq0_currents = plot_multiline({
 });
 
 const plot_dq0_voltages = plot_multiline({
-  data: selected_data,
-  store_id: "plot_dq0_voltages",
-  selection: null,
   subtitle: "DQ0 Voltages",
   description: "DQ0 voltages after Clarke and Park transforming the inferred voltages.",
   width: 1200, height: 400,
-  x_options: {domain: time_domain},
-  y_options: {},
   x: "time",
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
@@ -1093,15 +1054,11 @@ const plot_dq0_voltages = plot_multiline({
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
-const plot_inferred_voltage = plot_multiline({
-  data: selected_data,
-  store_id: "plot_inferred_voltage",
-  selection: null,
+
+const plot_inferred_voltages = plot_multiline({
   subtitle: "Inferred Voltage",
   description: html`Inferred voltage values for each phase: ${tex`V = IR + L(dI/dt)`}.`,
   width: 1200, height: 300,
-  x_options: {domain: time_domain},
-  y_options: {},
   x: "time",
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
@@ -1121,17 +1078,13 @@ const plot_inferred_voltage = plot_multiline({
 });
 
 const plot_pwm_settings = plot_multiline({
-  data: selected_data,
-  store_id: "plot_pwm_settings",
-  selection: null,
   subtitle: "PWM Settings",
   description: "The PWM value currently set for each phase.",
   width: 1200, height: 300,
-  x_options: {domain: time_domain},
-  y_options: {domain: [0, motor.PWM_BASE]},
   x: "time",
   x_label: "Time (ms)",
   y_label: "PWM",
+  y_options: {domain: [0, motor.PWM_BASE]},
   channels: [
     {y: "u_pwm", label: "PWM U", color: colors.u},
     {y: "v_pwm", label: "PWM V", color: colors.v},
@@ -1144,7 +1097,52 @@ const plot_pwm_settings = plot_multiline({
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
+
+autosave_multiline_inputs({
+  plot_electric_position,
+  plot_speed,
+  plot_measured_current,
+  plot_dq0_currents,
+  plot_dq0_voltages,
+  plot_inferred_voltages,
+  plot_pwm_settings,
+});
 ```
+
+
+```js
+const data_duration = data.length == 0 ? 0 : data[data.length - 1].time;
+
+const time_start = Math.max(0, data_duration - time_period) * (1.0 - time_offset);
+
+const time_domain = [time_start, time_start + time_period];
+
+const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
+
+// TODO: make the time rewind input more like a play button, that replays the data in slow mo.
+
+const max_plot_points = 720;
+
+const plot_points_skip = Math.ceil(data_in_time_window.length / max_plot_points);
+
+const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip === 0);
+
+[
+  plot_electric_position,
+  plot_speed,
+  plot_measured_current,
+  plot_dq0_currents,
+  plot_dq0_voltages,
+  plot_inferred_voltages,
+  plot_pwm_settings,
+].forEach((plot) => {
+  update_multiline_data(plot, {
+    data: selected_data,
+    x_options: {domain: time_domain},
+  });
+});
+```
+
 
 ```js
 // Position Calibration
@@ -1249,8 +1247,6 @@ const position_calibration_detailed_result = {
 
 const position_calibration_pos_plot = plot_multiline({
   data: position_calibration_detailed_result.drive_positive,
-  store_id: "position_calibration_pos_plot",
-  selection: null,
   subtitle: "Electric position | drive positive then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
@@ -1294,8 +1290,6 @@ function clipped_upper(f, data, y){
 
 const position_calibration_pos_speed_plot = plot_multiline({
   data: position_calibration_detailed_result.drive_positive,
-  store_id: "position_calibration_pos_speed_plot",
-  selection: null,
   subtitle: "Rotor Speed | drive positive then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
@@ -1325,8 +1319,6 @@ const position_calibration_pos_speed_plot = plot_multiline({
 
 const position_calibration_neg_plot = plot_multiline({
   data: position_calibration_detailed_result.drive_negative,
-  store_id: "position_calibration_neg_plot",
-  selection: null,
   subtitle: "Electric position | drive negative then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
@@ -1359,8 +1351,6 @@ const position_calibration_neg_plot = plot_multiline({
 
 const position_calibration_neg_speed_plot = plot_multiline({
   data: position_calibration_detailed_result.drive_negative,
-  store_id: "position_calibration_neg_speed_plot",
-  selection: null,
   subtitle: "Rotor Speed | drive negative then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
@@ -1386,6 +1376,13 @@ const position_calibration_neg_speed_plot = plot_multiline({
     (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
   ],
   curve: "step",
+});
+
+autosave_multiline_inputs({
+  position_calibration_pos_plot,
+  position_calibration_pos_speed_plot,
+  position_calibration_neg_plot,
+  position_calibration_neg_speed_plot,
 });
 ```
 
@@ -1772,8 +1769,6 @@ const current_calibration_result_to_display = Generators.input(current_calibrati
 
 const current_calibration_plot = plot_multiline({
   data: current_calibration_results[current_calibration_result_to_display],
-  store_id: "plot_current_calibration",
-  selection: null,
   subtitle: "Current Calibration",
   description: "Current calibration results for each phase.",
   width: 1200, height: 400,
@@ -1799,9 +1794,6 @@ const current_calibration_plot = plot_multiline({
     Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
   ]
 });
-```
-
-```js
 
 const calibration_samples = current_calibration_reading_points.map((x, i) => {
   return {
@@ -1818,8 +1810,6 @@ const calibration_samples = current_calibration_reading_points.map((x, i) => {
 
 const current_calibration_interpolate_plot = plot_multiline({
   data: calibration_samples,
-  store_id: "plot_current_calibration_interpolate",
-  selection: null,
   subtitle: "Current Calibration Interpolation",
   description: "Current calibration interpolation results for each phase.",
   width: 1200, height: 400,
@@ -1843,14 +1833,9 @@ const current_calibration_interpolate_plot = plot_multiline({
     Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
   ],
 });
-```
-
-```js
 
 const current_calibration_positive_mean_plot = plot_multiline({
   data: current_calibration_stats,
-  store_id: "plot_current_calibration_positive_mean",
-  selection: null,
   subtitle: "Mean Response - Positive",
   description: "Current calibration mean results for each phase driven positive.",
   width: 1200, height: 300,
@@ -1892,8 +1877,6 @@ const current_calibration_positive_mean_plot = plot_multiline({
 
 const current_calibration_negative_mean_plot = plot_multiline({
   data: current_calibration_stats,
-  store_id: "plot_current_calibration_negative_mean",
-  selection: null,
   subtitle: "Mean Response - Negative (inverted)",
   description: "Current calibration mean results for each phase driven negative.",
   width: 1200, height: 300,
@@ -1933,6 +1916,13 @@ const current_calibration_negative_mean_plot = plot_multiline({
   ]
 });
 
+autosave_multiline_inputs({
+  current_calibration_plot,
+  current_calibration_interpolate_plot,
+  current_calibration_positive_mean_plot,
+  current_calibration_negative_mean_plot,
+});
+
 ```
 
 
@@ -1941,7 +1931,7 @@ const current_calibration_negative_mean_plot = plot_multiline({
 // Imports
 // -------
 
-import {plot_multiline, horizontal_step} from "./components/plotting_utils.js";
+import {plot_multiline, horizontal_step, update_multiline_data, autosave_multiline_inputs} from "./components/plotting_utils.js";
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";

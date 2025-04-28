@@ -38,7 +38,9 @@ const colors = {
   g: "rgb(199, 0, 57)",
   h: "rgb(26, 82, 118)",
 };
+```
 
+```js
 const truncated_normal_domain = [-90, +90];
 const truncated_normal_span = truncated_normal_domain[1] - truncated_normal_domain[0];
 
@@ -156,7 +158,10 @@ const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_nor
 
 
   return {
-    x, 
+    x,
+    μ,
+    a,
+    b,
     pdf_μ,
     pdf_a,
     pdf_b,
@@ -168,10 +173,12 @@ const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_nor
 
 const normalized_data = normalize_extent(truncated_normal_data, ["pdf_μ", "untriggered_pdf_μ", "pdf_a", "pdf_b"]);
 
+update_multiline_data(truncated_normal_plot, {data: normalized_data, truncated_normal_position, truncated_normal_lower, truncated_normal_upper});
+
+```
+
+```js
 const truncated_normal_plot = plot_multiline({
-  data: normalized_data,
-  store_id: "truncated_normal_plot",
-  selection: null,
   subtitle: "Truncated Normal Distribution",
   description: "Example truncating a normal distribution to a lower and upper bound (for example the previous and next hall sector thresholds).",
   width: 1200, height: 300,
@@ -194,17 +201,19 @@ const truncated_normal_plot = plot_multiline({
   ],
   other_marks: [
     (selected_data, options) => Plot.areaY(selected_data, {...options, y: "area_y", fill: options.z, opacity: 0.2}),
-    Plot.ruleX([truncated_normal_lower], {stroke: colors.a, strokeWidth: 2, strokeDasharray: "2,5"}),
-    Plot.ruleX([truncated_normal_upper], {stroke: colors.b, strokeWidth: 2, strokeDasharray: "2,5"}),
-    Plot.ruleX([truncated_normal_position], {stroke: colors.u, strokeWidth: 2, strokeDasharray: "2,5"}),
+    (selected_data, options, {truncated_normal_lower}) => Plot.ruleX([truncated_normal_lower], {stroke: colors.a, strokeWidth: 2, strokeDasharray: "2,5"}),
+    (selected_data, options, {truncated_normal_upper}) => Plot.ruleX([truncated_normal_upper], {stroke: colors.b, strokeWidth: 2, strokeDasharray: "2,5"}),
+    (selected_data, options, {truncated_normal_position}) => Plot.ruleX([truncated_normal_position], {stroke: colors.u, strokeWidth: 2, strokeDasharray: "2,5"}),
   ],
 });
+
+autosave_multiline_inputs({truncated_normal_plot});
 
 ```
 
 ```js
 
-import {plot_multiline, horizontal_step} from "./components/plotting_utils.js";
+import {plot_multiline, horizontal_step, update_multiline_data, autosave_multiline_inputs} from "./components/plotting_utils.js";
 import {cdf_normal, pdf_normal} from "./components/stats_utils.js";
 
 function normalize_extent(data, ys) {
