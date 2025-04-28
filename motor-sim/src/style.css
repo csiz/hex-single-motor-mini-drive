@@ -1,26 +1,10 @@
-@import url("observablehq:default.css");
-@import url("observablehq:theme-air.css");
-@import url("observablehq:theme-wide.css");
-@import url("observablehq:theme-alt.css");
+@import url("base_style.css");
 
 .tight {
   padding: 4px 8px 4px 4px;
   margin: 4px 0px 4px 0px;
 }
 
-p,
-table,
-figure,
-figcaption,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-.katex-display {
-  max-width: 800px;
-}
 
 .observablehq-pre-container {
   margin: 1rem 1rem;
