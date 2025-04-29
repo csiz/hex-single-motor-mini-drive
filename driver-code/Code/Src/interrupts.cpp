@@ -180,19 +180,24 @@ void tim1_trigger_and_commutation_interrupt_handler() {
 void tim2_global_handler(){
     // The TIM2 updates at a frequency of about 1KHz. Our motor might rotate slower than this
     // so we have to count updates (overflows) between hall sensor triggers.
-    if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
+
+    // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
+    if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
+        update_position_observation();
+
+        hall_observed_number += 1;
+        LL_TIM_ClearFlag_CC1(TIM2);
+        if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
+            // We have a hall sensor toggle and an update event at the same time; clear the update flag.
+            LL_TIM_ClearFlag_UPDATE(TIM2);
+        }
+    } else if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
+        // We overflowed the timer; this means we haven't seen a hall sensor toggle in a while.
         update_position_unobserved();
 
         hall_unobserved_number += 1;
         LL_TIM_ClearFlag_UPDATE(TIM2);
 
-    // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
-    // TODO: it doesn't work properly, it seems we have to forward the trigger to another timer.
-    } else if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
-        update_position_observation();
-
-        hall_observed_number += 1;
-        LL_TIM_ClearFlag_CC1(TIM2);
     } else {
         error();
     }
@@ -272,21 +277,14 @@ void interrupts_init(){
 
 void enable_timers(){
     // We use the ADC1 and ADC2 in simulatenous mode to read the motor phase currents
-    // a short time after we turn on the mosfets during each PWM cycle (the motors
-    // are driven by TIM1). When the ADC is triggered in injected mode both ADC modules 
-    // read the current for U and V phases first then W and reference voltage second.
+    // around the PWM cycle up to down transition (when the ground mosfet is on). When 
+    // the ADC is triggered in injected mode both ADC modules read the current for the 
+    // U and V phases first then W and reference voltage second.
     // 
     // The ADC sample time is 20cycles, so the total sampling period is 20/12MHz = 1.67us.
     // 
-    // Use the TIM1 channel 4 to generate an event a short time after the update event.
-    // This event is used to trigger the ADC to read the current from the motor phases.
-    // 
-    // Delay the ADC sampling time by 16/72MHz = 222ns; the ADC will sample for 7.5 cycles
-    // (and convert for 12.5); then finally sample W and the reference. 7.5/12MHz = 625ns.
-    // For reference, the ADC sample time is 20*72MHz/12MHz = 120 ticks of TIM1.
-
-    // When counting down, this is triggered 14/2 cycles before the counter reaches 0, sampling 
-    // current symmetrically around 0 for the 2 consecutive readings.
+    // Use the TIM1 channel 4 to generate an event a short time before the counter reaches
+    // the auto reload value. This event triggers the ADC to read the motor phase currents.
     LL_TIM_OC_SetCompareCH4(TIM1, PWM_BASE - 42);
 
 

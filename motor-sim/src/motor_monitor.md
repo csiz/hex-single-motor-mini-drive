@@ -22,10 +22,11 @@ Motor Driving Data
 ------------------
 <div class="card tight">
 <p>Controls for the plotting time window:</p>
-  ${time_period_input}
-  ${time_offset_input}
-  ${plot_options_input}
+  <span>${time_period_input}</span>
+  <span>${time_offset_input}</span>
+  <span>${plot_options_input}</span>
 </div>
+<div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_speed}</div>
 <div class="card tight">${plot_measured_current}</div>
@@ -939,6 +940,26 @@ const plot_options = Generators.input(plot_options_input);
 
 
 ```js
+const plot_runtime_stats = plot_multiline({
+  subtitle: "Motor driver runtime stats",
+  description: "Timing data for the motor driver interrupt routines and the main loop.",
+  width: 1200, height: 150,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Update frequency (Hz)",
+  y_options: {},
+  channels: [
+    {y: "tick_rate", label: "Tick rate", color: colors.sum},
+    {y: "adc_update_rate", label: "ADC & PWM rate", color: colors.u},
+    {y: "hall_unobserved_rate", label: "Hall overflow rate", color: colors.v},
+    {y: "hall_observed_rate", label: "Hall trigger rate", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
+  ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+});
+
 const plot_electric_position = plot_multiline({
   subtitle: "Electric position",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
@@ -1099,6 +1120,7 @@ const plot_pwm_settings = plot_multiline({
 
 
 autosave_multiline_inputs({
+  plot_runtime_stats,
   plot_electric_position,
   plot_speed,
   plot_measured_current,
@@ -1128,6 +1150,7 @@ const plot_points_skip = Math.ceil(data_in_time_window.length / max_plot_points)
 const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip === 0);
 
 [
+  plot_runtime_stats,
   plot_electric_position,
   plot_speed,
   plot_measured_current,

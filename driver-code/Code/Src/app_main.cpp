@@ -37,6 +37,8 @@ float hall_observed_rate = 0.0f;
 CommandBuffer usb_command_buffer = {};
 
 uint16_t usb_stream_state = 0;
+uint16_t usb_stream_last_sent = 0;
+
 uint16_t usb_readouts_to_send = 0;
 bool usb_wait_full_history = false;
 
@@ -307,20 +309,26 @@ void usb_queue_response(){
 
     if(usb_stream_state){
         if (not usb_check_queue(full_readout_size)) return;
+        
         // Send the full readout to the host.
         uint8_t full_readout_data[full_readout_size] = {0};
         FullReadout full_readout = {
             .readout = get_latest_readout(),
         };
+        
+        // We have already sent this readout; don't send it again.
+        if (usb_stream_last_sent == full_readout.readout.readout_number) return;
+        
         full_readout.tick_rate = static_cast<int>(tick_rate);
         full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
         full_readout.hall_unobserved_rate = static_cast<int>(hall_unobserved_rate);
         full_readout.hall_observed_rate = static_cast<int>(hall_observed_rate);
         
-
         write_full_readout(full_readout_data, full_readout);
-
+        
         usb_queue_send(full_readout_data, full_readout_size);
+        
+        usb_stream_last_sent = full_readout.readout.readout_number;
     }
 }
 
