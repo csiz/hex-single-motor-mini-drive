@@ -43,6 +43,14 @@ export const HISTORY_SIZE = 420;
 export const READOUT_BASE = 0x10000;
 export const MAX_WRONG_CODE = 20 * HISTORY_SIZE;
 
+export const V_REF = 3.3; // V
+export const ADC_RESOLUTION = 4096; // 12 bits
+export const VCC_DIVIDER = 10.0/110.0; // 10k/110k divider
+
+// Constants for the temperature sensor. This sensor isn't very accurate.
+export const TEMP_V_AT_REFERENCE_TEMP = 1.43; // V (varies between 1.34 and 1.52)
+export const TEMP_AVG_SLOPE = 4.3; // mV/C (varies between 4.0 and 4.6)
+export const TEMP_C_REFERENCE = 25.0; // C
 
 // Serial Port Management
 // ----------------------
@@ -390,7 +398,7 @@ function parse_readout(data_view){
   };
 }
 
-const full_readout_size = 16+8;
+const full_readout_size = 16+12;
 
 function parse_full_readout(data_view){
   const readout = parse_readout(data_view);
@@ -403,6 +411,10 @@ function parse_full_readout(data_view){
   offset += 2;
   const hall_observed_rate = data_view.getUint16(offset);
   offset += 2;
+  const temperature = data_view.getUint16(offset);
+  offset += 2;
+  const vcc_voltage = data_view.getUint16(offset);
+  offset += 2;
 
   return {
     ...readout,
@@ -411,6 +423,8 @@ function parse_full_readout(data_view){
     adc_update_rate,
     hall_unobserved_rate,
     hall_observed_rate,
+    temperature: (TEMP_V_AT_REFERENCE_TEMP - temperature * V_REF / ADC_RESOLUTION) * 1000 / TEMP_AVG_SLOPE + TEMP_C_REFERENCE,
+    vcc_voltage: vcc_voltage * V_REF / ADC_RESOLUTION / VCC_DIVIDER,
   };
 }
 

@@ -115,8 +115,9 @@ int main(void)
   app_init();
   while (1) {
     /* USER CODE END WHILE */
-    app_tick();
+
     /* USER CODE BEGIN 3 */
+    app_tick();
   }
   /* USER CODE END 3 */
 }
@@ -238,7 +239,7 @@ static void MX_ADC1_Init(void)
   ADC_REG_InitStruct.TriggerSource = LL_ADC_REG_TRIG_SOFTWARE;
   ADC_REG_InitStruct.SequencerLength = LL_ADC_REG_SEQ_SCAN_DISABLE;
   ADC_REG_InitStruct.SequencerDiscont = LL_ADC_REG_SEQ_DISCONT_DISABLE;
-  ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_CONTINUOUS;
+  ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_SINGLE;
   ADC_REG_InitStruct.DMATransfer = LL_ADC_REG_DMA_TRANSFER_UNLIMITED;
   LL_ADC_REG_Init(ADC1, &ADC_REG_InitStruct);
   ADC_INJ_InitStruct.TriggerSource = LL_ADC_INJ_TRIG_EXT_TIM1_CH4;
@@ -320,7 +321,7 @@ static void MX_ADC2_Init(void)
   ADC_REG_InitStruct.TriggerSource = LL_ADC_REG_TRIG_SOFTWARE;
   ADC_REG_InitStruct.SequencerLength = LL_ADC_REG_SEQ_SCAN_DISABLE;
   ADC_REG_InitStruct.SequencerDiscont = LL_ADC_REG_SEQ_DISCONT_DISABLE;
-  ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_CONTINUOUS;
+  ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_SINGLE;
   ADC_REG_InitStruct.DMATransfer = LL_ADC_REG_DMA_TRANSFER_NONE;
   LL_ADC_REG_Init(ADC2, &ADC_REG_InitStruct);
   ADC_INJ_InitStruct.SequencerLength = LL_ADC_INJ_SEQ_SCAN_ENABLE_2RANKS;

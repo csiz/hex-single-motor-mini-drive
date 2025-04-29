@@ -41,6 +41,8 @@ struct FullReadout{
     uint16_t adc_update_rate;
     uint16_t hall_unobserved_rate;
     uint16_t hall_observed_rate;
+    uint16_t temperature;
+    uint16_t vcc_voltage;
 };
 
 

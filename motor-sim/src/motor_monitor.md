@@ -29,6 +29,8 @@ Motor Driving Data
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_speed}</div>
+<div class="card tight">${plot_measured_voltage}</div>
+<div class="card tight">${plot_measured_temperature}</div>
 <div class="card tight">${plot_measured_current}</div>
 <div class="card tight">${plot_dq0_currents}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
@@ -1016,6 +1018,44 @@ const plot_speed = plot_multiline({
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
+const plot_measured_voltage = plot_multiline({
+  subtitle: "Measured Voltage",
+  description: "Measured voltage values for VCC.",
+  width: 1200, height: 150,
+  x: "time",
+  y_options: {domain: [0, 24]},
+  x_label: "Time (ms)",
+  y_label: "Voltage (V)",
+  channels: [
+    {y: "vcc_voltage", label: "VCC Voltage (V)", color: colors.v},
+  ],
+  grid_marks: [
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({stroke: 'black', strokeWidth : 2}),
+    Plot.ruleY([20], {stroke: "red", strokeWidth: 2, strokeDasharray: "5, 15"}),
+    Plot.ruleY([8], {stroke: "purple", strokeWidth: 2, strokeDasharray: "5, 15"}),
+  ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+});
+
+const plot_measured_temperature = plot_multiline({
+  subtitle: "Measured Temperature",
+  description: "Measured temperature values for the MCU.",
+  width: 1200, height: 150,
+  x: "time",
+  y_options: {domain: [0, 100]},
+  x_label: "Time (ms)",
+  y_label: "Temperature (°C)",
+  channels: [
+    {y: "temperature", label: "MCU Temp (inaccurate)", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({stroke: 'black', strokeWidth : 2}),
+  ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+});
+
 const plot_measured_current = plot_multiline({
   subtitle: "Measured Current",
   description: "Measured current values for each phase.",
@@ -1123,6 +1163,8 @@ autosave_multiline_inputs({
   plot_runtime_stats,
   plot_electric_position,
   plot_speed,
+  plot_measured_voltage,
+  plot_measured_temperature,
   plot_measured_current,
   plot_dq0_currents,
   plot_dq0_voltages,
@@ -1153,6 +1195,8 @@ const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip 
   plot_runtime_stats,
   plot_electric_position,
   plot_speed,
+  plot_measured_voltage,
+  plot_measured_temperature,
   plot_measured_current,
   plot_dq0_currents,
   plot_dq0_voltages,

@@ -323,6 +323,8 @@ void usb_queue_response(){
         full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
         full_readout.hall_unobserved_rate = static_cast<int>(hall_unobserved_rate);
         full_readout.hall_observed_rate = static_cast<int>(hall_observed_rate);
+        full_readout.temperature = get_temperature();
+        full_readout.vcc_voltage = get_vcc_voltage();
         
         write_full_readout(full_readout_data, full_readout);
         

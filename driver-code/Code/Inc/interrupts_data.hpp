@@ -11,6 +11,9 @@ uint32_t get_hall_unobserved_number();
 uint32_t get_hall_observed_number();
 Readout get_latest_readout();
 
+uint16_t get_temperature();
+uint16_t get_vcc_voltage();
+
 
 // Data queue
 // ----------

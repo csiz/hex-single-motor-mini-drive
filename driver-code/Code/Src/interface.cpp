@@ -48,6 +48,11 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_uint16(buffer + offset, readout.hall_observed_rate);
     offset += 2;
 
+    write_uint16(buffer + offset, readout.temperature);
+    offset += 2;
+    write_uint16(buffer + offset, readout.vcc_voltage);
+    offset += 2;
+
     // Check if we wrote the correct number of bytes.
     if (offset != full_readout_size) error();
 }
