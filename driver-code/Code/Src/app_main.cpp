@@ -325,6 +325,8 @@ void usb_queue_response(){
         full_readout.hall_observed_rate = static_cast<int>(hall_observed_rate);
         full_readout.temperature = get_temperature();
         full_readout.vcc_voltage = get_vcc_voltage();
+        full_readout.cycle_start_tick = get_cycle_start_tick();
+        full_readout.cycle_end_tick = get_cycle_end_tick();
         
         write_full_readout(full_readout_data, full_readout);
         

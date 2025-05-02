@@ -43,6 +43,8 @@ struct FullReadout{
     uint16_t hall_observed_rate;
     uint16_t temperature;
     uint16_t vcc_voltage;
+    int16_t cycle_start_tick;
+    int16_t cycle_end_tick;
 };
 
 

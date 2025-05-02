@@ -27,6 +27,7 @@ Motor Driving Data
   <span>${plot_options_input}</span>
 </div>
 <div class="card tight">${plot_runtime_stats}</div>
+<div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_speed}</div>
 <div class="card tight">${plot_measured_voltage}</div>
@@ -962,6 +963,27 @@ const plot_runtime_stats = plot_multiline({
   curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
 });
 
+const plot_cycle_loop_stats = plot_multiline({
+  subtitle: "Motor driver cycle loop stats",
+  description: "Timing data for the motor driver cycle loop routines.",
+  width: 1200, height: 150,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "PWM counter value",
+  y_options: {domain: [0, motor.PWM_PERIOD]},
+  channels: [
+    {y: "cycle_start_tick", label: "Tick at start", color: colors.u},
+    {y: "cycle_end_tick", label: "Tick at end", color: colors.v},
+    {y: (d) => (motor.PWM_PERIOD + d.cycle_end_tick - d.cycle_start_tick) % motor.PWM_PERIOD , label: "Cycle duration", color: colors.w},
+  ],
+  grid_marks: [
+    Plot.gridX({stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({stroke: 'black', strokeWidth : 2}),
+    Plot.ruleY([motor.PWM_BASE], {stroke: "orange", strokeWidth: 2, strokeDasharray: "5, 15"}),
+  ],
+  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+});
+
 const plot_electric_position = plot_multiline({
   subtitle: "Electric position",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
@@ -1161,6 +1183,7 @@ const plot_pwm_settings = plot_multiline({
 
 autosave_multiline_inputs({
   plot_runtime_stats,
+  plot_cycle_loop_stats,
   plot_electric_position,
   plot_speed,
   plot_measured_voltage,
@@ -1171,6 +1194,7 @@ autosave_multiline_inputs({
   plot_inferred_voltages,
   plot_pwm_settings,
 });
+
 ```
 
 
@@ -1193,6 +1217,7 @@ const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip 
 
 [
   plot_runtime_stats,
+  plot_cycle_loop_stats,
   plot_electric_position,
   plot_speed,
   plot_measured_voltage,

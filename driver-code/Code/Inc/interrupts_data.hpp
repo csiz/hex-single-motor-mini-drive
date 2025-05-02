@@ -13,6 +13,8 @@ Readout get_latest_readout();
 
 uint16_t get_temperature();
 uint16_t get_vcc_voltage();
+int16_t get_cycle_start_tick();
+int16_t get_cycle_end_tick();
 
 
 // Data queue

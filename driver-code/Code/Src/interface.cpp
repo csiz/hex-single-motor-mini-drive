@@ -52,6 +52,10 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.vcc_voltage);
     offset += 2;
+    write_int16(buffer + offset, readout.cycle_start_tick);
+    offset += 2;
+    write_int16(buffer + offset, readout.cycle_end_tick);
+    offset += 2;
 
     // Check if we wrote the correct number of bytes.
     if (offset != full_readout_size) error();

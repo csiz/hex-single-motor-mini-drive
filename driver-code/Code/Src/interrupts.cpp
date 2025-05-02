@@ -30,6 +30,15 @@ uint32_t get_hall_observed_number(){
     return hall_observed_number;
 }
 
+int16_t cycle_start_tick = 0;
+int16_t get_cycle_start_tick(){
+    return cycle_start_tick;
+}
+int16_t cycle_end_tick = 0;
+int16_t get_cycle_end_tick(){
+    return cycle_end_tick;
+}
+
 // Electrical state
 Readout latest_readout = {};
 Readout get_latest_readout(){
@@ -69,7 +78,7 @@ Readout readout_history_pop(){
 }
 
 static inline bool readout_history_push(Readout const & readout){
-    if (readout_history_full()) return false;
+    if (readout_history_write_index >= HISTORY_SIZE) return false;
     readout_history[readout_history_write_index] = readout;
     readout_history_write_index += 1;
     return true;
@@ -81,6 +90,9 @@ static inline bool readout_history_push(Readout const & readout){
 // -----------------------------------
 
 static inline void pwm_cycle_and_adc_update(){
+    // Check what time it is on the PWM cycle.
+    cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (PWM_PERIOD - LL_TIM_GetCounter(TIM1));
+    
     increment_time_since_observation();
 
     const int estimated_angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / scale);
@@ -150,6 +162,8 @@ static inline void pwm_cycle_and_adc_update(){
     
     // Try to write the latest readout if there's space.
     readout_history_push(latest_readout);
+
+    cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (PWM_PERIOD - LL_TIM_GetCounter(TIM1));
 }
 
 static inline void voltage_and_temp_update(){

@@ -38,6 +38,7 @@ export const SET_STATE_DRIVE_SMOOTH_NEG = 0x4031;
 
 // Other constants
 export const PWM_BASE = 1536; // 0x0600
+export const PWM_PERIOD = 2 * PWM_BASE;
 export const MAX_TIMEOUT = 0xFFFF; 
 export const HISTORY_SIZE = 420;
 export const READOUT_BASE = 0x10000;
@@ -398,7 +399,7 @@ function parse_readout(data_view){
   };
 }
 
-const full_readout_size = 16+12;
+const full_readout_size = 16+16;
 
 function parse_full_readout(data_view){
   const readout = parse_readout(data_view);
@@ -415,6 +416,10 @@ function parse_full_readout(data_view){
   offset += 2;
   const vcc_voltage = data_view.getUint16(offset);
   offset += 2;
+  const cycle_start_tick = data_view.getInt16(offset);
+  offset += 2;
+  const cycle_end_tick = data_view.getInt16(offset);
+  offset += 2;
 
   return {
     ...readout,
@@ -425,6 +430,8 @@ function parse_full_readout(data_view){
     hall_observed_rate,
     temperature: (TEMP_V_AT_REFERENCE_TEMP - temperature * V_REF / ADC_RESOLUTION) * 1000 / TEMP_AVG_SLOPE + TEMP_C_REFERENCE,
     vcc_voltage: vcc_voltage * V_REF / ADC_RESOLUTION / VCC_DIVIDER,
+    cycle_start_tick,
+    cycle_end_tick,
   };
 }
 

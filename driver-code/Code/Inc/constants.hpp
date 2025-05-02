@@ -32,6 +32,16 @@ const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 const float current_conversion = -adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
 
+// Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 12MHz (72MHz / 6). A cycle is 6 ticks.
+
+// Temperature ADC conversion time: 12.5 cycles + 71.5 cycles = 84 cycles = 7us.
+const uint16_t TEMP_SAMPLE_TIME = (71.5 + 12.5)*6;
+// Current ADC conversion time: 12.5 cycles + 1.5 cycles = 14 cycles = 1.16us.
+const uint16_t CURR_SAMPLE_TIME = (1.5 + 12.5)*6;
+
+// The ADC will read the temperature first then 2 phase currents; try to time the sampling 
+// time of the phase currents symmetrically around the peak of the PWM cycle.
+const int16_t SAMPLE_LEAD_TIME = TEMP_SAMPLE_TIME + CURR_SAMPLE_TIME / 2;
 
 
 // Motor PWM constants
@@ -39,6 +49,7 @@ const float current_conversion = -adc_voltage_reference / (adc_max_value * motor
 
 const uint16_t PWM_AUTORELOAD = 1535;
 const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
+const uint16_t PWM_PERIOD = 2 * PWM_BASE; // 3072 ticks = 42.7us @ 72MHz = 23.4KHz
 
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
