@@ -197,22 +197,12 @@ void adc_interrupt_handler(){
 }
 
 
-
-void dma_interrupt_handler() {
-
-}
-
 // Timer 1 is updated every motor PWM cycle; at ~ 70KHz.
 void tim1_update_interrupt_handler(){
     // We shouldn't trigger this, but including for documentation.
     error();
     // Note, this updates on both up and down counting, get direction 
     // with: LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP;
-}
-
-void tim1_trigger_and_commutation_interrupt_handler() {
-    // We shouldn't trigger this, but including for documentation.
-    error();
 }
 
 
