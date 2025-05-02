@@ -55,6 +55,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "Code/Src/motor_control.cpp"
     "Code/Src/interface.cpp"
     "Code/Src/error_handler.cpp"
+    "Code/Src/user_data.cpp"
 )
 
 # Add include paths
