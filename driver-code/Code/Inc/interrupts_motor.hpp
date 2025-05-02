@@ -2,6 +2,8 @@
 
 #include "interrupts_data.hpp"
 
+#include "motor_control.hpp"
+
 #include "constants.hpp"
 #include "type_definitions.hpp"
 #include "error_handler.hpp"
@@ -63,29 +65,7 @@ static inline PWMSchedule const* get_and_reset_schedule_queued(){
 // Motor Control
 // -------------
 
-inline void motor_break(){
-    // Short all motor phases to ground.
-    set_motor_u_pwm_duty(0);
-    set_motor_v_pwm_duty(0);
-    set_motor_w_pwm_duty(0);
 
-    // Immediately update and enable the motor outputs.
-    enable_motor_outputs();
-
-    driver_state = DriverState::OFF;
-}
-
-inline void motor_freewheel(){
-    // Reset motor phases to 0.
-    set_motor_u_pwm_duty(0);
-    set_motor_v_pwm_duty(0);
-    set_motor_w_pwm_duty(0);
-
-    // Disable the motor outputs; leaving them floating voltage/tristate.
-    disable_motor_outputs();
-
-    driver_state = DriverState::FREEWHEEL;
-}
 
 static inline void update_motor_hold(){
     if(update_and_check_timeout()) return motor_break();

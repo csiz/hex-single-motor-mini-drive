@@ -4,7 +4,29 @@
 
 #include "error_handler.hpp"
 
+void motor_break(){
+    // Short all motor phases to ground.
+    set_motor_u_pwm_duty(0);
+    set_motor_v_pwm_duty(0);
+    set_motor_w_pwm_duty(0);
 
+    // Immediately update and enable the motor outputs.
+    enable_motor_outputs();
+
+    driver_state = DriverState::OFF;
+}
+
+void motor_freewheel(){
+    // Reset motor phases to 0.
+    set_motor_u_pwm_duty(0);
+    set_motor_v_pwm_duty(0);
+    set_motor_w_pwm_duty(0);
+
+    // Disable the motor outputs; leaving them floating voltage/tristate.
+    disable_motor_outputs();
+
+    driver_state = DriverState::FREEWHEEL;
+}
 
 void motor_hold(uint16_t u, uint16_t v, uint16_t w, uint16_t timeout){
     hold_u_pwm_duty = clip_to(0, PWM_MAX_HOLD, u);
