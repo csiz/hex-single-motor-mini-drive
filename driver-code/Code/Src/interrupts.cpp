@@ -112,20 +112,18 @@ static inline void pwm_cycle_and_adc_update(){
     // For reference a PWM period is 1536 ticks, so the PWM frequency is 72MHz / 1536 / 2 = 23.4KHz.
     // The PWM period lasts 1/23.4KHz = 42.7us.
     
-    latest_readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+    latest_readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
     // Note: in the v0 board the V phase shunt is connected in reverse to the current sense amplifier.
-    latest_readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
+    latest_readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3);
     
-    latest_readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
-    latest_readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
+    latest_readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
+    latest_readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
     
     latest_readout.position = angle | (hall_state << 13) | angle_valid << 12;
     
     // Write the previous pwm duty cycle to this readout, it should have been active during the prior to the ADC sampling.
     latest_readout.pwm_commands = get_motor_u_pwm_duty() * PWM_BASE * PWM_BASE + get_motor_v_pwm_duty() * PWM_BASE + get_motor_w_pwm_duty();
     
-
-
     // Update motor control.
     switch (driver_state) {
         case DriverState::OFF:
@@ -154,26 +152,19 @@ static inline void pwm_cycle_and_adc_update(){
             break;
     }
 
-    // Start converting voltage and temperature; this is a regular conversion.
-    // Note that the ADCs are in dual mode so ADC2 is triggered by ADC1.
-    LL_ADC_REG_StartConversionSWStart(ADC1);
-
     // Send data to the main loop after updating the PWM registers; the queue access might be slow.
     
     // Try to write the latest readout if there's space.
     readout_history_push(latest_readout);
 
-    cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (PWM_PERIOD - LL_TIM_GetCounter(TIM1));
-}
-
-static inline void voltage_and_temp_update(){
-    const uint16_t new_temperature = LL_ADC_REG_ReadConversionData12(ADC1);
-    const uint16_t new_vcc_voltage = LL_ADC_REG_ReadConversionData12(ADC2);
+    const uint16_t new_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+    const uint16_t new_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
 
     temperature = (new_temperature * 1 + temperature * 15) / 16;
     vcc_voltage = (new_vcc_voltage * 4 + vcc_voltage * 12) / 16;
-}
 
+    cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (PWM_PERIOD - LL_TIM_GetCounter(TIM1));
+}
 
 // Interrupt handlers
 // ------------------
@@ -187,12 +178,8 @@ void adc_interrupt_handler(){
 
         adc_update_number += 1;
         LL_ADC_ClearFlag_JEOS(ADC1);
-    } 
-    
-    if (LL_ADC_IsActiveFlag_EOS(ADC1)) {
-        //  Process ADC readings for voltage and temperature for regular conversions.
-        voltage_and_temp_update();
-        LL_ADC_ClearFlag_EOS(ADC1);
+    } else {
+        error();
     }
 }
 
@@ -242,10 +229,10 @@ void initialize_angle_tracking(){
 void adc_init(){
 
 
-    // Enable the ADC interrupt for the end of the injected sequence which reads motor current.
+    // Enable the ADC interrupt for the end of the injected sequence.
     LL_ADC_EnableIT_JEOS(ADC1);
-    // Enable the ADC interrupt for the end of the regular sequence which reads voltage and temperature.
-    LL_ADC_EnableIT_EOS(ADC1);
+    // Disable the ADC interrupt for the end of the regular sequence; we are not using it.
+    LL_ADC_DisableIT_EOS(ADC1);
 
     // Enable the ADCs and wait for them to settle.
     LL_ADC_Enable(ADC1);
@@ -319,8 +306,13 @@ void enable_timers(){
     // 
     // Use the TIM1 channel 4 to generate an event a short time before the counter reaches
     // the auto reload value. This event triggers the ADC to read the motor phase currents.
-    LL_TIM_OC_SetCompareCH4(TIM1, PWM_BASE - 42);
+    const uint16_t injected_conversion_start = PWM_BASE - SAMPLE_LEAD_TIME;
+    LL_TIM_OC_SetCompareCH4(TIM1, injected_conversion_start);
 
+    // It appears that the countermode is being ignored for the external ADC triggering.
+    if (LL_TIM_GetCounterMode(TIM1) != LL_TIM_COUNTERMODE_CENTER_DOWN) error();
+    // Invert the PWM mode of channel 4 instead so we emit a rising edge during up counting.
+    LL_TIM_OC_SetMode(TIM1, LL_TIM_CHANNEL_CH4, LL_TIM_OCMODE_PWM2);
 
     // Reinitialize the timers; reset the counters and update registers. Because the timers
     // are setup with preload registers the values we write to them are stored in shadow registers
@@ -334,14 +326,13 @@ void enable_timers(){
     LL_TIM_EnableCounter(TIM1);
     LL_TIM_EnableCounter(TIM2);
     LL_TIM_EnableCounter(TIM3);
-
-
+    
     // Enable TIM1 channel 4 used to trigger the ADC.
     LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH4);
-
+    
     // Enable the TIM1 outputs following a break or clock issue event.
     LL_TIM_EnableAllOutputs(TIM1);
-
+    
     // Enable TIM2 channels 1 as the hall sensor timer between commutations.
     LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
 }

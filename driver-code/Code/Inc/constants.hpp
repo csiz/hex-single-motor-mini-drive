@@ -39,9 +39,11 @@ const uint16_t TEMP_SAMPLE_TIME = (71.5 + 12.5)*6;
 // Current ADC conversion time: 12.5 cycles + 1.5 cycles = 14 cycles = 1.16us.
 const uint16_t CURR_SAMPLE_TIME = (1.5 + 12.5)*6;
 
+const uint16_t CURR_SAMPLE_LEAD_TIME = (1.5 + 12.5 + 1.5)*6 / 2;
+
 // The ADC will read the temperature first then 2 phase currents; try to time the sampling 
 // time of the phase currents symmetrically around the peak of the PWM cycle.
-const int16_t SAMPLE_LEAD_TIME = TEMP_SAMPLE_TIME + CURR_SAMPLE_TIME / 2;
+const int16_t SAMPLE_LEAD_TIME = TEMP_SAMPLE_TIME + CURR_SAMPLE_LEAD_TIME;
 
 
 // Motor PWM constants
@@ -54,7 +56,8 @@ const uint16_t PWM_PERIOD = 2 * PWM_BASE; // 3072 ticks = 42.7us @ 72MHz = 23.4K
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
 const uint16_t MIN_BOOTSTRAP_DUTY = 16; // 16/72MHz = 222ns
-const uint16_t PWM_MAX = PWM_BASE - MIN_BOOTSTRAP_DUTY; // 1536/72MHz = 21.3us
+
+const uint16_t PWM_MAX = PWM_BASE - (CURR_SAMPLE_LEAD_TIME > MIN_BOOTSTRAP_DUTY ? CURR_SAMPLE_LEAD_TIME : MIN_BOOTSTRAP_DUTY); 
 
 const uint16_t PWM_MAX_HOLD = PWM_BASE * 2 / 10;
 
