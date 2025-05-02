@@ -154,11 +154,11 @@ async function disconnect_motor_controller(show_status = true){
   }
 }
 
-function display_datastream_status({bytes_received, missed_messages, receive_rate}){
+function display_datastream_status({bytes_received, bytes_discarded, receive_rate}){
   bytes_received = format_bytes(bytes_received).padStart(12);
-  missed_messages = missed_messages.toString().padStart(7);
+  bytes_discarded = format_bytes(bytes_discarded).padStart(12);
   receive_rate = `${format_bytes(receive_rate).padStart(12)}/s`;
-  update_motor_controller_status(html`<pre>Connected; received: ${bytes_received}; download rate: ${receive_rate}; missed messages: ${missed_messages}.</pre>`);
+  update_motor_controller_status(html`<pre>Connected; received: ${bytes_received}; download rate: ${receive_rate}; discarded: ${bytes_discarded}.</pre>`);
 }
 
 async function connect_motor_controller(){
@@ -686,7 +686,7 @@ function calculate_data_stats(raw_readout_data){
 // ------------------
 
 
-const target_data_size = 2500 / (3 * millis_per_cycle);
+const target_data_size = 2500 / millis_per_cycle;
 const max_data_size = 2 * target_data_size;
 
 
@@ -975,6 +975,7 @@ const plot_cycle_loop_stats = plot_multiline({
     {y: "cycle_start_tick", label: "Tick at start", color: colors.u},
     {y: "cycle_end_tick", label: "Tick at end", color: colors.v},
     {y: (d) => (motor.PWM_PERIOD + d.cycle_end_tick - d.cycle_start_tick) % motor.PWM_PERIOD , label: "Cycle duration", color: colors.w},
+    {y: (d) => d.cycle_start_tick - motor.PWM_BASE, label: "Ticks at start since mid cycle", color: d3.color(colors.u).brighter(1)},
   ],
   grid_marks: [
     Plot.gridX({stroke: 'black', strokeWidth : 2}),

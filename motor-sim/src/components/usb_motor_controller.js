@@ -42,7 +42,7 @@ export const PWM_PERIOD = 2 * PWM_BASE;
 export const MAX_TIMEOUT = 0xFFFF; 
 export const HISTORY_SIZE = 420;
 export const READOUT_BASE = 0x10000;
-export const MAX_WRONG_CODE = 20 * HISTORY_SIZE;
+export const MAX_WRONG_CODE = 256;
 
 export const V_REF = 3.3; // V
 export const ADC_RESOLUTION = 4096; // 12 bits
@@ -124,6 +124,8 @@ export class MotorController {
     this._onmessage = null;
     this._onerror = null;
 
+    this._expected_code = 0;
+
     this.receive_rate_timescale = 0.5; // seconds
     this.receive_rate_min_period = 0.050; // seconds
   }
@@ -154,7 +156,9 @@ export class MotorController {
   */
   async reading_loop(status_callback = () => {}) {
     let bytes_received = 0;
-    let missed_messages = 0;
+
+    let wrong_code_count = 0;
+    let bytes_discarded = 0;
 
     let last_bytes_received = 0;
     let last_received_time = Date.now();
@@ -169,6 +173,13 @@ export class MotorController {
         break;
       }
 
+      // If we're not expecting any messages, just ignore the data.
+      if (this._promised_readouts == null || this._expected_code == 0) {
+        bytes_discarded += chunk.length;
+        byte_array = new Uint8Array();
+        continue;
+      }
+
       byte_array = byte_array.length == 0 ? chunk : new Uint8Array([...byte_array, ...chunk]);
       let offset = 0;
 
@@ -176,15 +187,24 @@ export class MotorController {
         const message_header = new DataView(byte_array.buffer, offset, 2);
 
         const code = message_header.getUint16(0);
+        if (code != this._expected_code) {
+          // Search each byte until we find the expected code.
+          offset += 1;
+          wrong_code_count += 1;
+          bytes_discarded += 1;
+          if (wrong_code_count > MAX_WRONG_CODE) {
+            this._onerror(new Error(`Could not find expected message code: ${this._expected_code}`));
+            break;
+          }
+          continue;
+        }
 
         const {parse_func, data_size} = parser_mapping[code] || {parse_func: null, data_size: 0};
         if (parse_func === null) {
-          console.warn("Unknown message header: ", code.toString(16));
-          if (this._promised_readouts != null) this._onerror(new Error("Unknown Code"));
-          // Reset the buffer to avoid reading parsing data as command.
-          byte_array = new Uint8Array();
-          // Wait for new data.
-          break;
+          const error = new Error(`Unknown message code: ${code}`);
+          console.error(error.message);
+          this._onerror(error);
+          throw error;
         }
 
         // Wait for enough data to parse the message.
@@ -193,8 +213,7 @@ export class MotorController {
         const response = parse_func(new DataView(byte_array.buffer, offset + 2, data_size));
         offset += data_size + 2;
 
-        if (this._promised_readouts != null) this._onmessage(response);
-        else missed_messages += 1;
+        this._onmessage(response);
       }
 
       byte_array = byte_array.slice(offset);
@@ -209,7 +228,7 @@ export class MotorController {
       if(time_since_last < this.receive_rate_min_period) {
 
         // Wait for more data before updating the rate.
-        status_callback({bytes_received, missed_messages, receive_rate});
+        status_callback({bytes_received, bytes_discarded, receive_rate});
 
       } else {
         // Update the rate only if we have received data since the last update. 
@@ -219,7 +238,7 @@ export class MotorController {
         last_bytes_received = 0;
         last_received_time = now;
 
-        status_callback({bytes_received, missed_messages, receive_rate});
+        status_callback({bytes_received, bytes_discarded, receive_rate});
       }
     }
 
@@ -267,9 +286,9 @@ export class MotorController {
     
     const data_promise = new Promise((resolve, reject) => {
 
-      let wrong_code_count = 0;
-    
       let data = [];
+
+      this._expected_code = expected_code;
 
       this._onerror = reject;
 
@@ -278,16 +297,10 @@ export class MotorController {
       }, response_timeout);
 
       this._onmessage = (message) => {
-        if (message.code != expected_code) {
-          wrong_code_count += 1;
-          if (wrong_code_count > MAX_WRONG_CODE) {
-            this._onerror(new Error(`Unexpected message code: ${message.code} vs expected: ${expected_code}`));
-          }
-          return;
-        }
         data.push(message);
         if (data.length >= expected_messages) {
           resolve(data);
+          this._expected_code = 0;
         }
       };
     });
@@ -299,6 +312,8 @@ export class MotorController {
     } finally {
       clearTimeout(timeout_id);
       this._promised_readouts = null;
+      this._onmessage = null;
+      this._onerror = null;
     }
   }
 
@@ -314,20 +329,13 @@ export class MotorController {
     
     const data_promise = new Promise((resolve, reject) => {
 
-      let wrong_code_count = 0;
-    
+      this._expected_code = expected_code;
+
       this._onerror = reject;
 
       timeout_id = setTimeout(resolve, response_timeout);
 
       this._onmessage = (message) => {
-        if (message.code != expected_code) {
-          wrong_code_count += 1;
-          if (wrong_code_count > MAX_WRONG_CODE) {
-            this._onerror(new Error(`Unexpected message code: ${message.code} vs expected: ${expected_code}`));
-          }
-          return;
-        }
         clearTimeout(timeout_id);
         timeout_id = setTimeout(resolve, response_timeout);
         readout_callback(message);
@@ -343,6 +351,9 @@ export class MotorController {
     } finally {
       clearTimeout(timeout_id);
       this._promised_readouts = null;
+      this._expected_code = 0;
+      this._onmessage = null;
+      this._onerror = null;
     }
   }
 }
