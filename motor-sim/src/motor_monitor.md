@@ -471,10 +471,11 @@ d3.select(command_buttons).selectAll("button").style("height", "4em");
 // Plotting
 // --------
 
+const max_time_period = 2000; // ms
 
 const history_duration = Math.ceil(HISTORY_SIZE * millis_per_cycle);
 
-const time_period_input = Inputs.range([1, 2000], {
+const time_period_input = Inputs.range([1, max_time_period], {
   value: history_duration,
   transform: Math.log,
   step: 0.5,
@@ -501,6 +502,8 @@ const plot_options_input = Inputs.checkbox(
 );
 
 const plot_options = Generators.input(plot_options_input);
+
+
 ```
 
 
@@ -762,15 +765,14 @@ autosave_multiline_inputs({
 
 
 ```js
-const data_duration = data.length == 0 ? 0 : data[data.length - 1].time;
+const time_end = (data.length == 0 ? 0 : data[data.length - 1].time) - max_time_period * time_offset;
 
-const time_start = Math.max(0, data_duration - time_period) * (1.0 - time_offset);
-
-const time_domain = [time_start, time_start + time_period];
+const time_domain = [time_end - time_period, time_end];
 
 const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
 
-// TODO: make the time rewind input more like a play button, that replays the data in slow mo.
+// TODO: make brush input for the time window
+
 
 const max_plot_points = 720;
 
