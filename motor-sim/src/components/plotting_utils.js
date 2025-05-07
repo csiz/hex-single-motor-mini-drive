@@ -1,206 +1,395 @@
 import _ from "lodash";
 import {html} from "htl";
-import {Mutable} from "observablehq:stdlib";
-import * as Plot from "@observablehq/plot";
 import * as Inputs from "@observablehq/inputs";
 import * as d3 from "d3";
 
-import {set_stored, get_stored_or_default} from "./local_storage.js";
+import {merge_input_value} from "./input_utils.js";
 
-export function merge_input_properties(input, value) {
-  input.value = {...input.value, ...value};
-  input.dispatchEvent(new Event("input", {bubbles: true}));
+
+// Pick a value by key, function or constant. The function is called with the usual mapping arguments.
+function pick_value(value, d, i, data) {
+  if (_.isFunction(value)) {
+    return value(d, i, data);
+  } else if (_.isString(value)) {
+    return d[value];
+  } else {
+    return value;
+  }
 }
 
-export function replace_element(element, new_element) {
-  element.replaceWith(new_element);
-  return new_element;
-}
-
-export function update_multiline_data(multiline_plot, value) {
-  multiline_plot.input.value = {...multiline_plot.input.value, ...value};
-  multiline_plot.input.dispatchEvent(new Event("plot-data"));
-}
-
-export function autosave_multiline_inputs(multiline_plots, delay_millis = 100) {
-    Object.entries(multiline_plots).forEach(([key, multiline_plot]) => {
-      const input = multiline_plot.input;
-      // Merge the stored values with the current input values; preserving data.
-      merge_input_properties(input, get_stored_or_default(key, {}));
-
-      // Add an event listener to save the input values to local storage.
-      input.addEventListener("input", _.debounce(() => {
-        // Ignore plotting data so we don't store too much data in local storage.
-        const {show, shown_marks} = input.value;
-        set_stored(key, {show, shown_marks});
-      }, delay_millis));
-    });
-}
-
-function expand_z_channels({data, x_label, y_label, x, channels}){
-
-  return data.flatMap((d, i, data) => {
-    return channels.map(({y, label, color, ...other_y}) => {
-      return Object.fromEntries([
-        ...Object.entries(other_y).map(([key, value]) => [key, _.isFunction(value) ? value(d, i, data) : d[value]]),
-        [x_label, _.isFunction(x) ? x(d, i, data) : d[x]],
-        [y_label, _.isFunction(y) ? y(d, i, data) : d[y]],
-        ["z", label],
-        ["color", color],
-      ]);
-    });
-  });
+// Check if a value is neither NaN nor null.
+function not_nan_or_null(d) {
+  return d != null && !isNaN(d);
 }
 
 
-export function plot_multiline(options){
-  const {
-    data = [], 
-    x_options = {}, 
-    y_options = {},
-    width, height,
-    x_label, y_label,
-    subtitle, description,
-    x, 
-    channels,
-    grid_marks = [],
-    other_marks = [],
-    curve = undefined,
-    default_shown_marks = undefined,
-    default_show = true,
-  } = options;
-  
+export function plot_lines({
+  data = [],
+  x_domain = undefined,
+  y_domain = undefined,
 
-  const description_element = html`<p>${description}</p>`;
+  width = 928, height = 600, 
+  marginTop = 20, marginRight = 10, marginBottom = 30, marginLeft = 50,
 
-  const checkbox_info = [...channels, {label: "Grid", color: "grey"}];
+  x_format = ((x) => x.toFixed(3).padStart(9)),
+  y_format = ((y) => y.toFixed(3).padStart(9)),
+  x_label, y_label,
+  x, 
+  subtitle, description,
+  channels,
+  curve = d3.curveLinear,
+  default_shown_marks = undefined,
+  default_show = true,
+}){
+  const font_size = 14;
 
-  let input = Inputs.input({
+  const initial_value = {
     show: default_show,
-    shown_marks: default_shown_marks ?? checkbox_info.map(({label}) => label),
-    data,
-    x_options, 
-    y_options,
-  });
+    shown_marks: default_shown_marks ?? channels.map(({label}) => label),
+  };
+  
+  const description_element = html`<p>${description}</p>`;
 
   // First, make the title into a checkbox to toggle the plot on and off.
   const subtitle_checkbox = Inputs.checkbox([subtitle], {
-    value: input.value.show ? [subtitle] : [],
+    value: initial_value.show ? [subtitle] : [],
     format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
   });
   
   // Then, make the marks into checkboxes to toggle them on and off.
   const marks_checkboxes = Inputs.checkbox(
-    checkbox_info.map(({label}) => label), 
+    channels.map(({label}) => label), 
     {
-      value: input.value.shown_marks,
+      value: initial_value.shown_marks,
       label: "Display:",
-      format: (label, i) => html`<span style="border-bottom: solid 3px ${checkbox_info[i].color}; margin-bottom: -3px;">${label}</span>`,
+      format: (label, i) => html`<span style="border-bottom: solid 3px ${channels[i].color}; margin-bottom: -3px;">${label}</span>`,
     },
   );
+
+    // Create the SVG container.
+  const svg = d3.create("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .attr("viewBox", [0, 0, width, height])
+    .attr("style", `max-width: 100%; height: auto; overflow: visible;`);
+
+  // Add the horizontal axis.
+  const horizontal_axis = svg.append("g")
+    .attr("transform", `translate(0,${height - marginBottom})`)
+    .call(g => g.append("text")
+      .attr("x", width - marginRight)
+      .attr("y", marginBottom)
+      .attr("fill", "currentColor")
+      .attr("text-anchor", "end")
+      .text(`→ ${x_label}`));
+
+  // Add the vertical axis.
+  const vertical_axis = svg.append("g")
+    .attr("transform", `translate(${marginLeft},0)`)
+    .call(g => g.append("text")
+      .attr("x", -marginLeft)
+      .attr("y", 10)
+      .attr("fill", "currentColor")
+      .attr("text-anchor", "start")
+      .text(`↑ ${y_label}`));
+
+  // Create the positional scales.
+  const x_scale = d3.scaleLinear()
+    .range([marginLeft, width - marginRight]);
+
+  const y_scale = d3.scaleLinear()
+    .range([height - marginBottom, marginTop]);
+
+
+
+  const plot_root = svg.append("g")
+    .attr("clip-path", `inset(${marginTop - 2}px ${marginRight - 2}px ${marginBottom - 2}px ${marginLeft - 2}px) view-box`)
+    .attr("fill", "none")
+    .attr("stroke-width", 1.5)
+    .attr("stroke-linejoin", "round")
+    .attr("stroke-linecap", "round");
+
+
+  // Add an invisible layer for the interactive tip.
+  const tip = svg.append("g")
+    .attr("display", "none");
+
+  const circle = tip.append("circle")
+    .attr("fill", "none")
+    .attr("stroke-width", 2)
+    .attr("r", 3);
+
+    
+  const crosshair_x = tip.append("line")
+    .attr("stroke-width", 2)
+    .attr("stroke-opacity", 0.2)
+    .attr("y1", 0)
+    .attr("y2", height);
+    
+  const crosshair_y = tip.append("line")
+    .attr("stroke-width", 2)
+    .attr("stroke-opacity", 0.2)
+    .attr("x1", marginLeft)
+    .attr("x2", width);
+
+  const mini_size = 10;
+    
+  const hover_x = tip.append("text")
+    .attr("style", `font: ${mini_size}px sans-serif; font-family: monospace; stroke: #FFFFFF; stroke-width: 5px; paint-order: stroke;`)
+    .attr("text-anchor", "middle")
+    .attr("vertical-align", "bottom")
+    .attr("y", height - marginBottom + mini_size + 5);
+
+  const hover_y = tip.append("text")
+    .attr("style", `font: ${mini_size}px sans-serif; font-family: monospace; stroke: #FFFFFF; stroke-width: 5px; paint-order: stroke;`)
+    .attr("text-anchor", "end")
+    .attr("dominant-baseline", "middle")
+    .attr("x", marginLeft - 5);
+
+
+  const hover_text = tip.append("text")
+    .attr("style", `font: ${font_size}px sans-serif; font-family: monospace; stroke: #FFFFFF; stroke-width: 5px; paint-order: stroke;`)
+    .attr("text-anchor", "end")
+    .attr("x", width - marginRight)
+    .attr("y", marginTop - 5);
+
+    
+  const plot_details = html`<div>${description_element}${marks_checkboxes}${svg.node()}</div>`;
+
+
+  // Build the final figure.
   
+  const result = html`<figure>${subtitle_checkbox}${plot_details}</figure>`;
+  
+  result.value = initial_value;
+  
+  let plot_data = {data, x_domain, y_domain, pointer: undefined};
+
+  result.update = (draw_data) => {
+    if (!result.value.show) return;
+
+    plot_data = {...plot_data, ...draw_data};
+
+    // Get latest values.
+    const {data, x_domain, y_domain, pointer} = plot_data;
 
 
-  function create_plot_element({shown_marks, data, x_options, y_options}) {
-    if (data.length === 0) return html`<div>Waiting for data.</div>`;
-
-    const selected_channels = channels.filter(({label}) => shown_marks.includes(label));
-    const selected_data = expand_z_channels({data, x_label, y_label, x, channels: selected_channels});
-
-    return Plot.plot({
-      width, height,
-      x: {label: x_label, ...x_options},
-      y: {label: y_label, domain: selected_data.length > 0 ? undefined : [0, 1], ...y_options},
-      color: {
-        // legend: true,
-        domain: channels.map(({label}) => label),
-        range: channels.map(({color}) => color),
-      },
-      marks: [
-        Plot.lineY(selected_data, {x: x_label, y: y_label, stroke: "z", z: "z", curve}),
-        Plot.crosshairX(selected_data, {x: x_label, y: y_label, color: "z", ruleStrokeWidth: 3}),
-        Plot.dot(selected_data, Plot.pointerX({x: x_label, y: y_label, stroke: "z"})),
-        Plot.text(
-          selected_data,
-          Plot.pointerX({
-            px: x_label, py: y_label, fill: "z",
-            dy: -17, frameAnchor: "top-right", monospace: true, fontSize: 14, fontWeight: "bold",
-            text: (d) => `${x_label}: ${d[x_label]?.toFixed(3).padStart(9)} | ${y_label}: ${d[y_label]?.toFixed(3).padStart(9)} | ${d["z"].padStart(20)}`,
-          }),
-        ),
-        ...(marks_checkboxes.value.includes("Grid") ? grid_marks : []),
-        ...other_marks.map(mark => _.isFunction(mark) ? mark(selected_data, {x: x_label, y: y_label, z: "z"}, input.value) : mark),
-      ],
-    });
-  }
-
-
-  let plot_element = create_plot_element(input.value);
-
-  const plot_details = html`<div>${description_element}${marks_checkboxes}${plot_element}</div>`;
-
-  let element = html`<figure>${subtitle_checkbox}${plot_details}</figure>`;
-
-  element.input = input;
-
-  subtitle_checkbox.addEventListener("input", function(){
-    const show = subtitle_checkbox.value.length > 0;
-    merge_input_properties(input, {show});
-  });
-
-  marks_checkboxes.addEventListener("input", function(){
-    const shown_marks = marks_checkboxes.value;
-    merge_input_properties(input, {shown_marks});
-  });
-
-  function update_plot() {
-    const {show, shown_marks, data, x_options, y_options} = input.value;
-    // Update the plot; only recompute the figure if we show it.
-    if (show) {
-      plot_element = replace_element(plot_element, create_plot_element({shown_marks, data, x_options, y_options}));
+    if (!data || data.length === 0) {
+      plot_root.selectAll("g").remove();
+      return;
     }
-    d3.select(plot_details).style("display", show ? "initial" : "none");
-  }
 
-  input.addEventListener("input", function(){
-    const {show, shown_marks} = input.value;
+    const shown_channels = channels.filter(({label}) => result.value.shown_marks.includes(label));
+    
+    const x_values = data.map((d, i, data) => pick_value(x, d, i, data));
+
+    // Update the scales with potentionally new domains.
+    if (x_domain) {
+      x_scale.domain(x_domain);
+    } else {
+      x_scale.domain(d3.extent(x_values)).nice();
+    }
+
+    if (y_domain) {
+      y_scale.domain(y_domain);
+    } else {
+      const min_y_value = d3.min(shown_channels, ({y}) => d3.min(data, (d, i, data) => pick_value(y, d, i, data)));
+      const max_y_value = d3.max(shown_channels, ({y}) => d3.max(data, (d, i, data) => pick_value(y, d, i, data)));
+      y_scale.domain([min_y_value, max_y_value]).nice();
+    }
+
+
+    horizontal_axis.call(d3.axisBottom(x_scale).ticks(width / 80).tickSizeOuter(0));
+    vertical_axis.call(d3.axisLeft(y_scale).ticks(height / 40).tickSizeOuter(0)).call(g => g.select(".domain").remove());
+
+    // Add the common x selector and data to each channel; so we can use a generalized function to draw them.
+    const shown_data = shown_channels.map(channel => ({...channel, x, ...plot_data, x_scale, y_scale, curve}));
+
+    // Redraw channels.
+    plot_root.selectAll("g")
+      .data(shown_data)
+      .join("g").each(function(channel_data){
+        // Clear previous glyphs.
+        d3.select(this).selectChildren().remove();
+
+        // Draw the lines.
+        draw_line.call(this, channel_data);
+
+        channel_data.draw_extra?.call(this, channel_data);
+      });
+
+    if (pointer) {
+      const [xm, ym] = pointer;
+
+      // Get x axis positions for interactive tip.
+      const x_array = x_values.map(x_scale);
+    
+      const x_i = d3.leastIndex(x_array, ((x) => Math.abs(x - xm)));
+      const y_i = d3.leastIndex(shown_channels, ({y}) => Math.abs(y_scale(pick_value(y, data[x_i], x_i, data)) - ym));
+
+      const {y, color, label} = shown_channels[y_i];
+      
+      // Mute all other lines and raise the selected one.
+      plot_root.selectAll("g")
+        .attr("opacity", (channel) => channel.label === label ? null : 0.5)
+        .filter((channel) => channel.label === label).raise();
+
+      const value_x = x_values[x_i];
+      const value_y = pick_value(y, data[x_i], x_i, data);
+
+      const formatted_x = x_format(value_x);
+      const formatted_y = y_format(value_y);
+      
+      const coord_x = x_scale(value_x);
+      const coord_y = y_scale(value_y);
+      
+      const text = `${x_label}: ${formatted_x} | ${y_label}: ${formatted_y} | ${label.padStart(20)}`;
+
+      tip.attr("display", null);
+      
+      circle
+        .attr("cx", coord_x)
+        .attr("cy", coord_y)
+        .attr("stroke", color);
+
+      hover_y
+        .text(formatted_y)
+        .attr("y", coord_y)
+        .attr("fill", color);
+
+      hover_x
+        .text(formatted_x)
+        .attr("x", coord_x)
+        .attr("fill", color);
+
+      crosshair_x
+        .attr("stroke", color)
+        .attr("x1", coord_x)
+        .attr("x2", coord_x);
+        
+      crosshair_y
+        .attr("stroke", color)
+        .attr("y1", coord_y)
+        .attr("y2", coord_y);
+
+      hover_text
+        .text(text)
+        .attr("fill", color);
+
+    } else {
+      plot_root.selectAll("g").attr("opacity", null);
+      tip.attr("display", "none");
+    }
+  };
+
+  result.update(plot_data);
+
+  // When the pointer moves, find the closest point, update the interactive tip, and highlight
+  // the corresponding line.
+  svg.on("pointermove", (event) => result.update({...plot_data, pointer: d3.pointer(event)}));
+
+  svg.on("pointerleave", () => result.update({...plot_data, pointer: undefined}));
+
+
+  subtitle_checkbox.addEventListener("input", (event) => {
+    const show = subtitle_checkbox.value.length > 0;
+    merge_input_value(result, {show});
+    event.stopPropagation();
+  });
+
+  marks_checkboxes.addEventListener("input", (event) => {
+    const shown_marks = marks_checkboxes.value;
+    merge_input_value(result, {shown_marks});
+    event.stopPropagation();
+  });
+
+  result.addEventListener("input", function(){
+    const {show, shown_marks} = result.value;
     
     // Update the dependent inputs; without triggering the event listeners so we don't loop.
     subtitle_checkbox.value = show ? [subtitle] : [];
     marks_checkboxes.value = shown_marks;
 
-    update_plot();
+    d3.select(plot_details).style("display", show ? "initial" : "none");
+
+    result.update(plot_data);
   });
 
-  input.addEventListener("plot-data", function(){
-    update_plot();
-  });
-
-  return element;
-};
-
-function HorizontalStep(context, t) {
-  this._context = context;
-  this._t = t;
+  return result;
 }
 
-HorizontalStep.prototype = {
-  areaStart: function() {
+
+export function draw_line({data, x, y, x_scale, y_scale, curve, color}) {
+  const make_line = d3.line()
+    .x((d, i, data) => x_scale(pick_value(x, d, i, data)))
+    .y((d, i, data) => y_scale(pick_value(y, d, i, data)))
+    .curve(curve)
+    .defined((d, i, data) => d != null && not_nan_or_null(pick_value(y, d, i, data)));
+
+  return d3.select(this).append("path")
+    .style("stroke", color)
+    .attr("d", make_line(data));
+}
+
+export function draw_area({data, x, y0, y1, x_scale, y_scale, curve, color}) {
+  const make_area = d3.area()
+    .x((d, i, data) => x_scale(pick_value(x, d, i, data)))
+    .y0((d, i, data) => y_scale(pick_value(y0, d, i, data)))
+    .y1((d, i, data) => y_scale(pick_value(y1, d, i, data)))
+    .curve(curve)
+    .defined((d, i, data) => d != null && not_nan_or_null(pick_value(y0, d, i, data)) && not_nan_or_null(pick_value(y1, d, i, data)));
+
+  return d3.select(this).append("path")
+    .style("fill", color)
+    .attr("d", make_area(data));
+}
+
+export function setup_faint_area({y0, y1}){
+  return function(draw_data){
+    draw_area.call(this, {...draw_data, y0, y1}).style("fill-opacity", 0.2);
+  };
+}
+
+export function draw_v_line({data, x_value, x_scale, y_scale, color}){
+  return d3.select(this).append("line")
+    .attr("stroke-width", 3)
+    .attr("stroke", color)
+    .attr("y1", y_scale.range()[0])
+    .attr("x1", x_scale(x_value))
+    .attr("y2", y_scale.range()[1])
+    .attr("x2", x_scale(x_value));
+}
+
+
+
+
+// Custom d3.curve to plot unconnected horizontal steps for each data point.
+class HorizontalStep {
+  constructor(context, t) {
+    this._context = context;
+    this._t = t;
+  }
+
+  areaStart() {
     this._line = 0;
-  },
-  areaEnd: function() {
+  }
+
+  areaEnd() {
     this._line = NaN;
-  },
-  lineStart: function() {
+  }
+
+  lineStart() {
     this._x = this._y = NaN;
     this._point = 0;
-  },
-  lineEnd: function() {
+  }
+
+  lineEnd() {
     if (0 < this._t && this._t < 1 && this._point === 2) this._context.lineTo(this._x, this._y);
     if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
     if (this._line >= 0) this._t = 1 - this._t, this._line = 1 - this._line;
-  },
-  point: function(x, y) {
+  }
+
+  point(x, y) {
     x = +x, y = +y;
     switch (this._point) {
       case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
@@ -219,7 +408,7 @@ HorizontalStep.prototype = {
     }
     this._x = x, this._y = y;
   }
-};
+}
 
 export function horizontal_step(context) {
   return new HorizontalStep(context, 0.5);

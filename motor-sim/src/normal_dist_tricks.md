@@ -173,47 +173,67 @@ const truncated_normal_data = d3.range(...truncated_normal_domain, truncated_nor
 
 const normalized_data = normalize_extent(truncated_normal_data, ["pdf_μ", "untriggered_pdf_μ", "pdf_a", "pdf_b"]);
 
-update_multiline_data(truncated_normal_plot, {data: normalized_data, truncated_normal_position, truncated_normal_lower, truncated_normal_upper});
-
+truncated_normal_plot.update({data: normalized_data, truncated_normal_lower, truncated_normal_upper, truncated_normal_position});
 ```
 
+
 ```js
-const truncated_normal_plot = plot_multiline({
+const truncated_normal_plot = plot_lines({
   subtitle: "Truncated Normal Distribution",
   description: "Example truncating a normal distribution to a lower and upper bound (for example the previous and next hall sector thresholds).",
   width: 1200, height: 300,
-  x_options: {},
-  y_options: {domain: [0, 1]},
+  y_domain: [0, 1],
   x: "x",
   x_label: "Distance to center",
   y_label: "Y",
   channels: [
-    {y: "pdf_μ", label: "PDF μ", color: colors.u},
-    {y: "untriggered_pdf_μ", label: "PDF μ (bounded)", color: d3.color(colors.u).darker(1), area_y: "untriggered_pdf_μ"},
-    {y: "pdf_a", label: "PDF a", color: colors.a},
-    {y: "pdf_b", label: "PDF b", color: colors.b},
+    {
+      y: "pdf_μ", label: "PDF μ", color: colors.u,
+      draw_extra: function(draw_data){
+        draw_v_line.call(this, {
+          ...draw_data, 
+          x_value: draw_data.truncated_normal_position
+        }).attr("stroke-dasharray", "2,5");
+      },
+    },
+    {
+      y: "untriggered_pdf_μ", label: "PDF μ (bounded)", color: d3.color(colors.u).darker(1),
+      draw_extra: setup_faint_area({
+        y0: 0, 
+        y1: "untriggered_pdf_μ",
+      }),
+    },
+    {
+      y: "pdf_a", label: "PDF a", color: colors.a,
+      draw_extra: function(draw_data){
+        draw_v_line.call(this, {
+          ...draw_data, 
+          x_value: draw_data.truncated_normal_lower
+        }).attr("stroke-dasharray", "2,7");
+      },
+    },
+    {
+      y: "pdf_b", label: "PDF b", color: colors.b,
+      draw_extra: function(draw_data){
+        draw_v_line.call(this, {
+          ...draw_data, 
+          x_value: draw_data.truncated_normal_upper
+        }).attr("stroke-dasharray", "2,7");
+      },
+    },
     {y: "cdf_a", label: "CDF a", color: d3.color(colors.a).darker(1)},
     {y: "cdf_b", label: "CDF b", color: d3.color(colors.b).darker(1)},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({stroke: 'black', strokeWidth : 1}),
-  ],
-  other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y: "area_y", fill: options.z, opacity: 0.2}),
-    (selected_data, options, {truncated_normal_lower}) => Plot.ruleX([truncated_normal_lower], {stroke: colors.a, strokeWidth: 2, strokeDasharray: "2,5"}),
-    (selected_data, options, {truncated_normal_upper}) => Plot.ruleX([truncated_normal_upper], {stroke: colors.b, strokeWidth: 2, strokeDasharray: "2,5"}),
-    (selected_data, options, {truncated_normal_position}) => Plot.ruleX([truncated_normal_position], {stroke: colors.u, strokeWidth: 2, strokeDasharray: "2,5"}),
-  ],
 });
 
-autosave_multiline_inputs({truncated_normal_plot});
+autosave_inputs({truncated_normal_plot});
 
 ```
 
 ```js
 
-import {plot_multiline, horizontal_step, update_multiline_data, autosave_multiline_inputs} from "./components/plotting_utils.js";
+import {plot_lines, setup_faint_area, horizontal_step, draw_v_line} from "./components/plotting_utils.js";
+import {autosave_inputs} from "./components/input_utils.js";
 import {cdf_normal, pdf_normal} from "./components/stats_utils.js";
 
 function normalize_extent(data, ys) {

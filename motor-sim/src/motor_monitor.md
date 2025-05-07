@@ -508,61 +508,56 @@ const plot_options = Generators.input(plot_options_input);
 
 
 ```js
-const plot_runtime_stats = plot_multiline({
+const plot_runtime_stats = plot_lines({
   subtitle: "Motor driver runtime stats",
   description: "Timing data for the motor driver interrupt routines and the main loop.",
   width: 1200, height: 150,
   x: "time",
   x_label: "Time (ms)",
   y_label: "Update frequency (Hz)",
-  y_options: {},
   channels: [
     {y: "tick_rate", label: "Tick rate", color: colors.sum},
     {y: "adc_update_rate", label: "ADC & PWM rate", color: colors.u},
     {y: "hall_unobserved_rate", label: "Hall overflow rate", color: colors.v},
     {y: "hall_observed_rate", label: "Hall trigger rate", color: colors.w},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_cycle_loop_stats = plot_multiline({
+const plot_cycle_loop_stats = plot_lines({
   subtitle: "Motor driver cycle loop stats",
   description: "Timing data for the motor driver cycle loop routines.",
   width: 1200, height: 150,
   x: "time",
   x_label: "Time (ms)",
   y_label: "PWM counter value",
-  y_options: {domain: [0, PWM_PERIOD]},
+  y_domain: [0, PWM_PERIOD],
   channels: [
     {y: "cycle_start_tick", label: "Tick at start", color: colors.u},
     {y: "cycle_end_tick", label: "Tick at end", color: colors.v},
     {y: (d) => (PWM_PERIOD + d.cycle_end_tick - d.cycle_start_tick) % PWM_PERIOD , label: "Cycle duration", color: colors.w},
     {y: (d) => d.cycle_start_tick - PWM_BASE, label: "Ticks at start since mid cycle", color: d3.color(colors.u).brighter(1)},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({stroke: 'black', strokeWidth : 2}),
-    Plot.ruleY([PWM_BASE], {stroke: "orange", strokeWidth: 2, strokeDasharray: "5, 15"}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_electric_position = plot_multiline({
+
+
+const plot_electric_position = plot_lines({
   subtitle: "Electric position",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
   x: "time",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
-  y_options: {domain: [-180, 180]},
+  y_domain: [-180, 180],
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
-      y1: (d) => d.angle - std_95_z_score * d.angle_std,
-      y2: (d) => d.angle + std_95_z_score * d.angle_std,
+      draw_extra: setup_faint_area({
+        y0: (d) => d.angle - std_95_z_score * d.angle_std, 
+        y1: (d) => d.angle + std_95_z_score * d.angle_std,
+      }),
     },
     {y: "motor_angle", label: "Motor Angle", color: colors.motor_angle},
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
@@ -571,17 +566,10 @@ const plot_electric_position = plot_multiline({
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_speed = plot_multiline({
+const plot_speed = plot_lines({
   subtitle: "Rotor Speed",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
@@ -592,59 +580,44 @@ const plot_speed = plot_multiline({
     {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
-      y1: (d) => d.angular_speed - std_95_z_score * d.angular_speed_std,
-      y2: (d) => d.angular_speed + std_95_z_score * d.angular_speed_std,
+      draw_extra: setup_faint_area({
+        y0: d => d.angular_speed - std_95_z_score * d.angular_speed_std, 
+        y1: d => d.angular_speed + std_95_z_score * d.angular_speed_std,
+      }),
     },
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_measured_voltage = plot_multiline({
+const plot_measured_voltage = plot_lines({
   subtitle: "Measured Voltage",
   description: "Measured voltage values for VCC.",
   width: 1200, height: 150,
   x: "time",
-  y_options: {domain: [0, 24]},
+  y_domain: [0, 24],
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
     {y: "vcc_voltage", label: "VCC Voltage (V)", color: colors.v},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({stroke: 'black', strokeWidth : 2}),
-    Plot.ruleY([20], {stroke: "red", strokeWidth: 2, strokeDasharray: "5, 15"}),
-    Plot.ruleY([8], {stroke: "purple", strokeWidth: 2, strokeDasharray: "5, 15"}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_measured_temperature = plot_multiline({
+const plot_measured_temperature = plot_lines({
   subtitle: "Measured Temperature",
   description: "Measured temperature values for the MCU.",
   width: 1200, height: 150,
   x: "time",
-  y_options: {domain: [0, 100]},
+  y_domain: [0, 100],
   x_label: "Time (ms)",
   y_label: "Temperature (°C)",
   channels: [
     {y: "temperature", label: "MCU Temp (inaccurate)", color: colors.w},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({stroke: 'black', strokeWidth : 2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_measured_current = plot_multiline({
+const plot_measured_current = plot_lines({
   subtitle: "Measured Current",
   description: "Measured current values for each phase.",
   width: 1200, height: 400,
@@ -658,14 +631,10 @@ const plot_measured_current = plot_multiline({
     {y: "sum", label: "Sum", color: colors.sum},
     {y: "ref_diff", label: "Ref Diff", color: colors.ref_diff},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_dq0_currents = plot_multiline({
+const plot_dq0_currents = plot_lines({
   subtitle: "DQ0 Currents",
   description: "DQ0 currents after Clarke and Park transforming the measured currents.",
   width: 1200, height: 400,
@@ -677,14 +646,10 @@ const plot_dq0_currents = plot_multiline({
     {y: "current_beta", label: "Current Beta", color: colors.current_beta},
     {y: "current_magnitude", label: "Current (Park) Magnitude", color: colors.current_magnitude},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_dq0_voltages = plot_multiline({
+const plot_dq0_voltages = plot_lines({
   subtitle: "DQ0 Voltages",
   description: "DQ0 voltages after Clarke and Park transforming the inferred voltages.",
   width: 1200, height: 400,
@@ -696,15 +661,11 @@ const plot_dq0_voltages = plot_multiline({
     {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
     {y: "voltage_magnitude", label: "Voltage (Park) Magnitude", color: colors.current_magnitude},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
 
-const plot_inferred_voltages = plot_multiline({
+const plot_inferred_voltages = plot_lines({
   subtitle: "Inferred Voltage",
   description: html`Inferred voltage values for each phase: ${tex`V = IR + L(dI/dt)`}.`,
   width: 1200, height: 300,
@@ -719,35 +680,27 @@ const plot_inferred_voltages = plot_multiline({
     {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
-const plot_pwm_settings = plot_multiline({
+const plot_pwm_settings = plot_lines({
   subtitle: "PWM Settings",
   description: "The PWM value currently set for each phase.",
   width: 1200, height: 300,
   x: "time",
   x_label: "Time (ms)",
   y_label: "PWM",
-  y_options: {domain: [0, PWM_BASE]},
+  y_domain: [0, PWM_BASE],
   channels: [
     {y: "u_pwm", label: "PWM U", color: colors.u},
     {y: "v_pwm", label: "PWM V", color: colors.v},
     {y: "w_pwm", label: "PWM W", color: colors.w},
   ],
-  grid_marks: [
-    Plot.gridX({stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 128, stroke: 'black', strokeWidth : 1}),
-  ],
-  curve: plot_options.includes("Connected lines") ? "step" : horizontal_step,
+  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
 });
 
 
-autosave_multiline_inputs({
+autosave_inputs({
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
@@ -792,13 +745,11 @@ const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip 
   plot_dq0_voltages,
   plot_inferred_voltages,
   plot_pwm_settings,
-].forEach((plot) => {
-  update_multiline_data(plot, {
-    data: selected_data,
-    x_options: {domain: time_domain},
-  });
-});
+].forEach((plot) => plot.update({data: selected_data, x_domain: time_domain}));
+
+
 ```
+
 
 
 ```js
@@ -902,56 +853,39 @@ const position_calibration_detailed_result = {
   drive_negative: position_calibration_selected_result.drive_negative,
 };
 
-const position_calibration_pos_plot = plot_multiline({
+const position_calibration_pos_plot = plot_lines({
   data: position_calibration_detailed_result.drive_positive,
   subtitle: "Electric position | drive positive then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: [0, HISTORY_SIZE * millis_per_cycle]},
-  y_options: {domain: [-180, 180]},
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  y_domain: [-180, 180],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
-      y1: (d) => d.angle - std_95_z_score * d.angle_std,
-      y2: (d) => d.angle + std_95_z_score * d.angle_std,
+      draw_extra: setup_faint_area({
+        y1: (d) => d.angle - std_95_z_score * d.angle_std,
+        y2: (d) => d.angle + std_95_z_score * d.angle_std,
+      }),
     },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: colors.angle_if_breaking},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
   ],
-  grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ],
-  curve: "step",
+  curve: d3.curveStep,
 });
 
-function clipped_lower(f, data, y){
-  const lower_bound = d3.min(data, (d) => d[y]);
-  if (lower_bound == null) return f;
-  return (d, i, data) => Math.max(f(d, i, data), lower_bound);
-}
-function clipped_upper(f, data, y){
-  const upper_bound = d3.max(data, (d) => d[y]);
-  if (upper_bound == null) return f;
-  return (d, i, data) => Math.min(f(d, i, data), upper_bound);
-}
 
-const position_calibration_pos_speed_plot = plot_multiline({
+const position_calibration_pos_speed_plot = plot_lines({
   data: position_calibration_detailed_result.drive_positive,
   subtitle: "Rotor Speed | drive positive then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_options: {domain: [0, HISTORY_SIZE * millis_per_cycle]},
-  y_options: {},
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -959,60 +893,47 @@ const position_calibration_pos_speed_plot = plot_multiline({
     {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed, 
-      y1: (d) => d.angular_speed - std_95_z_score * d.angular_speed_std,
-      y2: (d) => d.angular_speed + std_95_z_score * d.angular_speed_std,
+      draw_extra: setup_faint_area({
+        y0: d => d.angular_speed - std_95_z_score * d.angular_speed_std, 
+        y1: d => d.angular_speed + std_95_z_score * d.angular_speed_std,
+      }),
     },
   ],
-  grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ],
-  curve: "step",
+  curve: d3.curveStep,
 });
 
-const position_calibration_neg_plot = plot_multiline({
+const position_calibration_neg_plot = plot_lines({
   data: position_calibration_detailed_result.drive_negative,
   subtitle: "Electric position | drive negative then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_options: {domain: [0, HISTORY_SIZE * millis_per_cycle]},
-  y_options: {domain: [-180, 180]},
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  y_domain: [-180, 180],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle, 
-      y1: (d) => d.angle - std_95_z_score * d.angle_std,
-      y2: (d) => d.angle + std_95_z_score * d.angle_std,
+      draw_extra: setup_faint_area({
+        y1: (d) => d.angle - std_95_z_score * d.angle_std,
+        y2: (d) => d.angle + std_95_z_score * d.angle_std,
+      }),
     },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
   ],
-  grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ],
-  curve: "step",
+  curve: d3.curveStep,
 });
 
-const position_calibration_neg_speed_plot = plot_multiline({
+const position_calibration_neg_speed_plot = plot_lines({
   data: position_calibration_detailed_result.drive_negative,
   subtitle: "Rotor Speed | drive negative then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_options: {domain: [0, HISTORY_SIZE * millis_per_cycle]},
-  y_options: {},
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -1020,22 +941,16 @@ const position_calibration_neg_speed_plot = plot_multiline({
     {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
-      y1: (d) => d.angular_speed - std_95_z_score * d.angular_speed_std,
-      y2: (d) => d.angular_speed + std_95_z_score * d.angular_speed_std,
+      draw_extra: setup_faint_area({
+        y0: d => d.angular_speed - std_95_z_score * d.angular_speed_std,
+        y1: d => d.angular_speed + std_95_z_score * d.angular_speed_std,
+      }),
     },
   ],
-  grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ],
-  curve: "step",
+  curve: d3.curveStep,
 });
 
-autosave_multiline_inputs({
+autosave_inputs({
   position_calibration_pos_plot,
   position_calibration_pos_speed_plot,
   position_calibration_neg_plot,
@@ -1168,6 +1083,7 @@ const drive_voltage = 10.0; // 10.0 V // TODO: get it from the chip
 
 
 const calibration_reference = drive_voltage / drive_resistance;
+
 const current_calibration_points = 32;
 const current_calibration_reading_points = even_spacing(calibration_reference, current_calibration_points / 2 + 1);
 const current_calibration_targets = current_calibration_zones.map((zone) => zone.pwm * calibration_reference);
@@ -1243,6 +1159,7 @@ function update_current_calibration_results(calibration_data){
   const calibration_stats = d3.range(HISTORY_SIZE).map((i) => {
     return {
       time: valid_calibration_results[0][i].time,
+      target: d3.mean(valid_calibration_results, (data) => data[i].target),
       u_positive: d3.mean(valid_calibration_results, (data) => data[i].u_positive),
       u_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].u_positive),
       u_negative: d3.mean(valid_calibration_results, (data) => data[i].u_negative),
@@ -1393,10 +1310,23 @@ async function run_current_calibration(){
     return;
   }
 
+  const targets = d3.range(HISTORY_SIZE).map((i) => {
+    const t = i * millis_per_cycle;
+    const zone = current_calibration_zones.filter((zone) => zone.settle_start <= t && t <= zone.settle_end);
+
+    if (zone.length == 0) return null;
+    if (zone.length > 1) {
+      console.error("Multiple zones found", zone);
+      return null;
+    }
+    return zone[0].pwm * calibration_reference;
+  });
+
   // Make a new table with each calibration phase as a column.
   const calibration_data = d3.range(HISTORY_SIZE).map((i) => {
     return {
       time: u_positive[i].time,
+      target: targets[i],
       u_positive: u_positive[i].u_readout,
       u_negative: -u_negative[i].u_readout,
       v_positive: v_positive[i].v_readout,
@@ -1428,13 +1358,12 @@ const current_calibration_result_to_display = Generators.input(current_calibrati
 
 ```js
 
-const current_calibration_plot = plot_multiline({
+const current_calibration_plot = plot_lines({
   data: current_calibration_results[current_calibration_result_to_display],
   subtitle: "Current Calibration",
   description: "Current calibration results for each phase.",
   width: 1200, height: 400,
-  x_options: {domain: [0, HISTORY_SIZE * millis_per_cycle]},
-  y_options: {},
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1445,15 +1374,12 @@ const current_calibration_plot = plot_multiline({
     {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
     {y: "w_positive", label: "W positive", color: colors.w},
     {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
+    {
+      y: "target",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "target"}),
+      label: "Target", color: "gray",
+    }
   ],
-  grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
-  ]
 });
 
 const calibration_samples = current_calibration_reading_points.map((x, i) => {
@@ -1469,13 +1395,12 @@ const calibration_samples = current_calibration_reading_points.map((x, i) => {
   };
 });
 
-const current_calibration_interpolate_plot = plot_multiline({
+const current_calibration_interpolate_plot = plot_lines({
   data: calibration_samples,
   subtitle: "Current Calibration Interpolation",
   description: "Current calibration interpolation results for each phase.",
   width: 1200, height: 400,
-  x_options: {domain: [0, calibration_reference]},
-  y_options: {},
+  x_domain: [0, calibration_reference],
   x: "reading",
   x_label: "Current Reading (A)",
   y_label: "Current Estimate (A)",
@@ -1488,96 +1413,93 @@ const current_calibration_interpolate_plot = plot_multiline({
     {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
     {y: "target", label: "Target", color: "gray"},
   ],
-  grid_marks: [
-    Plot.gridX({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.1, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
 });
 
-const current_calibration_positive_mean_plot = plot_multiline({
+const current_calibration_positive_mean_plot = plot_lines({
   data: current_calibration_stats,
   subtitle: "Mean Response - Positive",
   description: "Current calibration mean results for each phase driven positive.",
   width: 1200, height: 300,
-  x_options: {domain: [0, HISTORY_SIZE * millis_per_cycle]},
-  y_options: {},
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
   channels: [
     {
       y: "u_positive", 
-      y1: (d) => d.u_positive - d.u_positive_std * std_95_z_score, 
-      y2: (d) => d.u_positive + d.u_positive_std * std_95_z_score, 
+      draw_extra: setup_faint_area({
+        y0: d => d.u_positive - d.u_positive_std * std_95_z_score,
+        y1: d => d.u_positive + d.u_positive_std * std_95_z_score,
+      }),
       label: "U positive mean", color: colors.u,
     },
     {
       y: "v_positive",
-      y1: (d) => d.v_positive - d.v_positive_std * std_95_z_score,
-      y2: (d) => d.v_positive + d.v_positive_std * std_95_z_score, 
+      draw_extra: setup_faint_area({
+        y0: d => d.v_positive - d.v_positive_std * std_95_z_score,
+        y1: d => d.v_positive + d.v_positive_std * std_95_z_score,
+      }),
       label: "V positive mean", color: colors.v,
     },
     {
       y: "w_positive",
-      y1: (d) => d.w_positive - d.w_positive_std * std_95_z_score,
-      y2: (d) => d.w_positive + d.w_positive_std * std_95_z_score,
+      draw_extra: setup_faint_area({
+        y0: d => d.w_positive - d.w_positive_std * std_95_z_score,
+        y1: d => d.w_positive + d.w_positive_std * std_95_z_score,
+      }),
       label: "W positive mean", color: colors.w,
     },
+    {
+      y: "target",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "target"}),
+      label: "Target", color: "gray",
+    },
   ],
-  grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ]
 });
 
-const current_calibration_negative_mean_plot = plot_multiline({
+const current_calibration_negative_mean_plot = plot_lines({
   data: current_calibration_stats,
   subtitle: "Mean Response - Negative (inverted)",
   description: "Current calibration mean results for each phase driven negative.",
   width: 1200, height: 300,
-  x_options: {domain: [0, HISTORY_SIZE * millis_per_cycle]},
-  y_options: {},
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
   channels: [
     {
       y: "u_negative", 
-      y1: (d) => d.u_negative - d.u_negative_std * std_95_z_score, 
-      y2: (d) => d.u_negative + d.u_negative_std * std_95_z_score, 
+      draw_extra: setup_faint_area({
+        y0: d => d.u_negative - d.u_negative_std * std_95_z_score,
+        y1: d => d.u_negative + d.u_negative_std * std_95_z_score,
+      }),
       label: "U negative mean", color: colors.u,
     },
     {
       y: "v_negative",
-      y1: (d) => d.v_negative - d.v_negative_std * std_95_z_score,
-      y2: (d) => d.v_negative + d.v_negative_std * std_95_z_score, 
+      draw_extra: setup_faint_area({
+        y0: d => d.v_negative - d.v_negative_std * std_95_z_score,
+        y1: d => d.v_negative + d.v_negative_std * std_95_z_score,
+      }),
       label: "V negative mean", color: colors.v,
     },
     {
       y: "w_negative",
-      y1: (d) => d.w_negative - d.w_negative_std * std_95_z_score,
-      y2: (d) => d.w_negative + d.w_negative_std * std_95_z_score,
+      draw_extra: setup_faint_area({
+        y0: d => d.w_negative - d.w_negative_std * std_95_z_score,
+        y1: d => d.w_negative + d.w_negative_std * std_95_z_score,
+      }),
       label: "W negative mean", color: colors.w,
     },
+    {
+      y: "target",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "target"}),
+      label: "Target", color: "gray",
+    },
   ],
-  grid_marks: [
-    Plot.gridX({interval: 1.0, stroke: 'black', strokeWidth : 2}),
-    Plot.gridX({interval: 0.2, stroke: 'black', strokeWidth : 1}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ],
-  other_marks: [
-    Plot.rect(current_calibration_zones, {x1: "settle_start", x2: "settle_end", y1: 0, y2: (zone) => zone.pwm * calibration_reference, fill: "rgba(0, 0, 0, 0.05)"}),
-    (selected_data, options) => Plot.areaY(selected_data, {...options, y1: "y1", y2: "y2", fill: options.z, opacity: 0.2}),
-  ]
 });
 
-autosave_multiline_inputs({
+autosave_inputs({
   current_calibration_plot,
   current_calibration_interpolate_plot,
   current_calibration_positive_mean_plot,
@@ -1592,7 +1514,7 @@ autosave_multiline_inputs({
 // Imports
 // -------
 
-import {plot_multiline, horizontal_step, update_multiline_data, autosave_multiline_inputs} from "./components/plotting_utils.js";
+import {plot_lines, setup_faint_area, horizontal_step} from "./components/plotting_utils.js";
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
