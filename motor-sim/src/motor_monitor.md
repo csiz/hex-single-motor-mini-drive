@@ -508,6 +508,9 @@ const plot_options = Generators.input(plot_options_input);
 
 
 ```js
+
+const curve = plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step;
+
 const plot_runtime_stats = plot_lines({
   subtitle: "Motor driver runtime stats",
   description: "Timing data for the motor driver interrupt routines and the main loop.",
@@ -521,7 +524,7 @@ const plot_runtime_stats = plot_lines({
     {y: "hall_unobserved_rate", label: "Hall overflow rate", color: colors.v},
     {y: "hall_observed_rate", label: "Hall trigger rate", color: colors.w},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_cycle_loop_stats = plot_lines({
@@ -538,7 +541,7 @@ const plot_cycle_loop_stats = plot_lines({
     {y: (d) => (PWM_PERIOD + d.cycle_end_tick - d.cycle_start_tick) % PWM_PERIOD , label: "Cycle duration", color: colors.w},
     {y: (d) => d.cycle_start_tick - PWM_BASE, label: "Ticks at start since mid cycle", color: d3.color(colors.u).brighter(1)},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 
@@ -566,7 +569,7 @@ const plot_electric_position = plot_lines({
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_speed = plot_lines({
@@ -586,7 +589,7 @@ const plot_speed = plot_lines({
       }),
     },
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_measured_voltage = plot_lines({
@@ -600,7 +603,7 @@ const plot_measured_voltage = plot_lines({
   channels: [
     {y: "vcc_voltage", label: "VCC Voltage (V)", color: colors.v},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_measured_temperature = plot_lines({
@@ -614,7 +617,7 @@ const plot_measured_temperature = plot_lines({
   channels: [
     {y: "temperature", label: "MCU Temp (inaccurate)", color: colors.w},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_measured_current = plot_lines({
@@ -631,7 +634,7 @@ const plot_measured_current = plot_lines({
     {y: "sum", label: "Sum", color: colors.sum},
     {y: "ref_diff", label: "Ref Diff", color: colors.ref_diff},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_dq0_currents = plot_lines({
@@ -646,7 +649,7 @@ const plot_dq0_currents = plot_lines({
     {y: "current_beta", label: "Current Beta", color: colors.current_beta},
     {y: "current_magnitude", label: "Current (Park) Magnitude", color: colors.current_magnitude},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_dq0_voltages = plot_lines({
@@ -661,7 +664,7 @@ const plot_dq0_voltages = plot_lines({
     {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
     {y: "voltage_magnitude", label: "Voltage (Park) Magnitude", color: colors.current_magnitude},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 
@@ -680,7 +683,7 @@ const plot_inferred_voltages = plot_lines({
     {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 const plot_pwm_settings = plot_lines({
@@ -696,7 +699,7 @@ const plot_pwm_settings = plot_lines({
     {y: "v_pwm", label: "PWM V", color: colors.v},
     {y: "w_pwm", label: "PWM W", color: colors.w},
   ],
-  curve: plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step,
+  curve,
 });
 
 
