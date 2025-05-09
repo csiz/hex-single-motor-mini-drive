@@ -6,23 +6,6 @@ import * as d3 from "d3";
 import {merge_input_value} from "./input_utils.js";
 
 
-// Pick a value by key, function or constant. The function is called with the usual mapping arguments.
-function pick_value(value, d, i, data) {
-  if (_.isFunction(value)) {
-    return value(d, i, data);
-  } else if (_.isString(value)) {
-    return d[value];
-  } else {
-    return value;
-  }
-}
-
-// Check if a value is neither NaN nor null.
-function not_nan_or_null(d) {
-  return d != null && !isNaN(d);
-}
-
-
 export function plot_lines({
   data = [],
   x_domain = undefined,
@@ -163,7 +146,9 @@ export function plot_lines({
   
   result.value = initial_value;
   
-  let plot_data = {data, x_domain, y_domain, pointer: undefined};
+  let plot_data = {data, x_domain, y_domain};
+
+  let shown_data = undefined;
 
   result.update = (draw_data) => {
     if (!result.value.show) return;
@@ -171,7 +156,7 @@ export function plot_lines({
     plot_data = {...plot_data, ...draw_data};
 
     // Get latest values.
-    const {data, x_domain, y_domain, pointer} = plot_data;
+    const {data, x_domain, y_domain} = plot_data;
 
 
     if (!data || data.length === 0) {
@@ -203,7 +188,7 @@ export function plot_lines({
     vertical_axis.call(d3.axisLeft(y_scale).ticks(height / 40).tickSizeOuter(0)).call(g => g.select(".domain").remove());
 
     // Add the common x selector and data to each channel; so we can use a generalized function to draw them.
-    const shown_data = shown_channels.map(channel => ({...channel, x, ...plot_data, x_scale, y_scale, curve}));
+    shown_data = shown_channels.map(channel => ({...channel, x, ...plot_data, x_scale, y_scale, curve}));
 
     // Redraw channels.
     plot_root.selectAll("g")
@@ -217,78 +202,79 @@ export function plot_lines({
 
         channel_data.draw_extra?.call(this, channel_data);
       });
-
-    if (pointer) {
-      const [xm, ym] = pointer;
-
-      // Get x axis positions for interactive tip.
-      const x_array = x_values.map(x_scale);
-    
-      const x_i = d3.leastIndex(x_array, ((x) => Math.abs(x - xm)));
-      const y_i = d3.leastIndex(shown_channels, ({y}) => Math.abs(y_scale(pick_value(y, data[x_i], x_i, data)) - ym));
-
-      const {y, color, label} = shown_channels[y_i];
-      
-      // Mute all other lines and raise the selected one.
-      plot_root.selectAll("g")
-        .attr("opacity", (channel) => channel.label === label ? null : 0.5)
-        .filter((channel) => channel.label === label).raise();
-
-      const value_x = x_values[x_i];
-      const value_y = pick_value(y, data[x_i], x_i, data);
-
-      const formatted_x = x_format(value_x);
-      const formatted_y = y_format(value_y);
-      
-      const coord_x = x_scale(value_x);
-      const coord_y = y_scale(value_y);
-      
-      const text = `${x_label}: ${formatted_x} | ${y_label}: ${formatted_y} | ${label.padStart(20)}`;
-
-      tip.attr("display", null);
-      
-      circle
-        .attr("cx", coord_x)
-        .attr("cy", coord_y)
-        .attr("stroke", color);
-
-      hover_y
-        .text(formatted_y)
-        .attr("y", coord_y)
-        .attr("fill", color);
-
-      hover_x
-        .text(formatted_x)
-        .attr("x", coord_x)
-        .attr("fill", color);
-
-      crosshair_x
-        .attr("stroke", color)
-        .attr("x1", coord_x)
-        .attr("x2", coord_x);
-        
-      crosshair_y
-        .attr("stroke", color)
-        .attr("y1", coord_y)
-        .attr("y2", coord_y);
-
-      hover_text
-        .text(text)
-        .attr("fill", color);
-
-    } else {
-      plot_root.selectAll("g").attr("opacity", null);
-      tip.attr("display", "none");
-    }
   };
 
   result.update(plot_data);
 
   // When the pointer moves, find the closest point, update the interactive tip, and highlight
   // the corresponding line.
-  svg.on("pointermove", (event) => result.update({...plot_data, pointer: d3.pointer(event)}));
+  svg.on("pointermove", (event) => {
+    const [xm, ym] = d3.pointer(event);
+    if (!shown_data || shown_data.length == 0) return;
 
-  svg.on("pointerleave", () => result.update({...plot_data, pointer: undefined}));
+    const [x_i, y_i] = min_index_2d(shown_data.map(({x, y, x_scale, y_scale, data}) => {
+      return data.map((d, i) => {
+        const coord_x = x_scale(pick_value(x, d, i, data));
+        const coord_y = y_scale(pick_value(y, d, i, data));
+        return Math.hypot(coord_x - xm, coord_y - ym);
+      });
+    }));
+
+    const {x, y, color, label, x_scale, y_scale, data} = shown_data[y_i];
+    
+    // Mute all other lines and raise the selected one.
+    plot_root.selectAll("g")
+      .attr("opacity", (channel) => channel.label === label ? null : 0.3)
+      .filter((channel) => channel.label === label).raise();
+
+    const value_x = pick_value(x, data[x_i], x_i, data);
+    const value_y = pick_value(y, data[x_i], x_i, data);
+
+    const formatted_x = x_format(value_x);
+    const formatted_y = y_format(value_y);
+    
+    const coord_x = x_scale(value_x);
+    const coord_y = y_scale(value_y);
+    
+    const text = `${x_label}: ${formatted_x} | ${y_label}: ${formatted_y} | ${label.padStart(20)}`;
+
+    tip.attr("display", null);
+    
+    circle
+      .attr("cx", coord_x)
+      .attr("cy", coord_y)
+      .attr("stroke", color);
+
+    hover_y
+      .text(formatted_y)
+      .attr("y", coord_y)
+      .attr("fill", color);
+
+    hover_x
+      .text(formatted_x)
+      .attr("x", coord_x)
+      .attr("fill", color);
+
+    crosshair_x
+      .attr("stroke", color)
+      .attr("x1", coord_x)
+      .attr("x2", coord_x);
+      
+    crosshair_y
+      .attr("stroke", color)
+      .attr("y1", coord_y)
+      .attr("y2", coord_y);
+
+    hover_text
+      .text(text)
+      .attr("fill", color);
+
+  });
+
+  svg.on("pointerleave", () => {
+    plot_root.selectAll("g").attr("opacity", null);
+    tip.attr("display", "none");
+  });
 
 
   subtitle_checkbox.addEventListener("input", (event) => {
@@ -420,4 +406,31 @@ export function horizontal_step_before(context) {
 
 export function horizontal_step_after(context) {
   return new HorizontalStep(context, 1);
+}
+
+// Utility functions
+// -----------------
+
+// Get the 2d coordiates of the minimum value in a 2d array.
+function min_index_2d(array2d) {
+  const min_indexes = array2d.map((array) => d3.minIndex(array));
+  const y_index = d3.minIndex(min_indexes, (min_i, i) => array2d[i][min_i]);
+  const x_index = min_indexes[y_index];
+  return [x_index, y_index];
+}
+
+// Pick a value by key, function or constant. The function is called with the usual mapping arguments.
+function pick_value(value, d, i, data) {
+  if (_.isFunction(value)) {
+    return value(d, i, data);
+  } else if (_.isString(value)) {
+    return d[value];
+  } else {
+    return value;
+  }
+}
+
+// Check if a value is neither NaN nor null.
+function not_nan_or_null(d) {
+  return d != null && !isNaN(d);
 }
