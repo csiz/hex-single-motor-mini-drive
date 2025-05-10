@@ -253,19 +253,20 @@ export function add_crosshair(plot, {svg, plot_root, x_format, y_format, x_label
     if (!plot.shown_data || plot.shown_data.length == 0) return;
     if (!plot.shown_data[0].data || plot.shown_data[0].data.length == 0) return;
 
-    const [x_i, y_i] = min_index_2d(plot.shown_data.map(({x, y, x_scale, y_scale, data}) => {
+    const min_index = min_index_2d(plot.shown_data.map(({x, y, x_scale, y_scale, data}) => {
       return data.map((d, i) => {
         const coord_x = x_scale(pick_value(x, d, i, data));
         const coord_y = y_scale(pick_value(y, d, i, data));
         return Math.hypot(coord_x - xm, coord_y - ym);
       });
     }));
+    if (!min_index) return;
+    const [x_i, y_i] = min_index;
 
     const {x, y, color, label, x_scale, y_scale, data} = plot.shown_data[y_i];
     
     // Mute all other lines and raise the selected one.
     plot_root.selectAll("g").attr("opacity", (channel) => channel.label === label ? null : 0.3);
-      
 
     const value_x = pick_value(x, data[x_i], x_i, data);
     const value_y = pick_value(y, data[x_i], x_i, data);
@@ -434,7 +435,8 @@ export function horizontal_step_after(context) {
 // Get the 2d coordiates of the minimum value in a 2d array.
 function min_index_2d(array2d) {
   const min_indexes = array2d.map((array) => d3.minIndex(array));
-  const y_index = d3.minIndex(min_indexes, (min_i, i) => array2d[i][min_i]);
+  const y_index = d3.minIndex(min_indexes, (min_i, i) => min_i > 0 ? array2d[i][min_i] : undefined);
+  if (y_index === undefined || y_index < 0) return undefined;
   const x_index = min_indexes[y_index];
   return [x_index, y_index];
 }
