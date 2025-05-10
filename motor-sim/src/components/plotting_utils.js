@@ -251,6 +251,7 @@ export function add_crosshair(plot, {svg, plot_root, x_format, y_format, x_label
   svg.on("pointermove", (event) => {
     const [xm, ym] = d3.pointer(event);
     if (!plot.shown_data || plot.shown_data.length == 0) return;
+    if (!plot.shown_data[0].data || plot.shown_data[0].data.length == 0) return;
 
     const [x_i, y_i] = min_index_2d(plot.shown_data.map(({x, y, x_scale, y_scale, data}) => {
       return data.map((d, i) => {

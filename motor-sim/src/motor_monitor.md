@@ -7,7 +7,7 @@ Motor Commands
 --------------
 
 <div>${connect_buttons}</div>
-<div>${motor_controller_status}</div>
+<div>${connection_status}</div>
 <div>${data_request_buttons}</div>
 <div>${test_buttons}</div>
 <div>${command_options_input}</div>
@@ -112,23 +112,20 @@ const colors = {
 
 let motor_controller = Mutable(null);
 
-let motor_controller_status = Mutable(html`<pre>Not connected.</pre>`);
+let connection_status = Mutable(html`<pre>Not connected.</pre>`);
 
-function update_motor_controller_status(status){
-  motor_controller_status.value = status;
-}
 
-function display_port_error(error){
+function display_connection_error(error){
   if (error.message === "EOF") {
-    update_motor_controller_status(html`<pre>End of connection.</pre>`);
+    connection_status.value = html`<pre>End of connection.</pre>`;
   } else if (error.name === "NotFoundError") {
-    update_motor_controller_status(html`<pre style="color: red">No device found or nothing selected.</pre>`);
+    connection_status.value = html`<pre style="color: red">No device found or nothing selected.</pre>`;
   } else if (error.name === "SecurityError") {
-    update_motor_controller_status(html`<pre style="color: red">Permission for port dialog denied.</pre>`);
+    connection_status.value = html`<pre style="color: red">Permission for port dialog denied.</pre>`;
   } else if (error.name === "NetworkError") {
-    update_motor_controller_status(html`<pre style="color: red">Connection lost.</pre>`);
+    connection_status.value = html`<pre style="color: red">Connection lost.</pre>`;
   } else {
-    update_motor_controller_status(html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`);
+    connection_status.value = html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`;
     throw error;
   }
 }
@@ -146,16 +143,17 @@ async function disconnect_motor_controller(show_status = true){
     await motor_controller.value.forget();
     motor_controller.value = null;
     if (show_status) {
-      update_motor_controller_status(html`<pre style="color: orange">Disconnected!</pre>`);
+      connection_status.value = html`<pre style="color: orange">Disconnected!</pre>`;
     }
   }
 }
 
-function display_datastream_status({bytes_received, bytes_discarded, receive_rate}){
-  bytes_received = format_bytes(bytes_received).padStart(12);
-  bytes_discarded = format_bytes(bytes_discarded).padStart(12);
-  receive_rate = `${format_bytes(receive_rate).padStart(12)}/s`;
-  update_motor_controller_status(html`<pre>Connected; received: ${bytes_received}; download rate: ${receive_rate}; discarded: ${bytes_discarded}.</pre>`);
+function display_connection_stats({bytes_received, bytes_discarded, receive_rate}){
+  bytes_received = `received: ${format_bytes(bytes_received).padStart(12)}`;
+  bytes_discarded = `discarded: ${format_bytes(bytes_discarded).padStart(12)}`;
+  receive_rate = `download rate: ${format_bytes(receive_rate).padStart(12)}/s`;
+
+  connection_status.value = html`<pre>Connected; ${bytes_received}; ${receive_rate}; ${bytes_discarded}.</pre>`;
 }
 
 async function connect_motor_controller(){
@@ -164,13 +162,13 @@ async function connect_motor_controller(){
 
     motor_controller.value = await motor.connect_usb_motor_controller();
 
-    update_motor_controller_status(html`<pre>Connected, waiting for data.</pre>`);
+    connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
-    await motor_controller.value.reading_loop(display_datastream_status);
+    await motor_controller.value.reading_loop(display_connection_stats);
   } catch (error) {
     motor_controller.value = null;
 
-    display_port_error(error);
+    display_connection_error(error);
   }
 }
 
@@ -312,10 +310,11 @@ function command_and_stream(delay_ms, command, options = {}){
       await motor_controller.send_command({command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options});
   
       let data = [];
-      let processed_readout = undefined;
+      let prev_readout = undefined;
       function readout_callback(raw_readout){
-        processed_readout = process_readout(processed_readout, raw_readout, data.length, data);
-        data.push(processed_readout);
+        const readout = process_readout(prev_readout, raw_readout, data.length, data);
+        data.push(readout);
+        prev_readout = readout;
         if (data.length > max_data_size) data = data.slice(-target_data_size);
         update_data(data);
       }
@@ -326,18 +325,17 @@ function command_and_stream(delay_ms, command, options = {}){
       });
     } catch (error) {
       console.error("Error streaming data:", error);
-      update_motor_controller_status(html`<pre style="color: red">Error streaming data: ${error.message}</pre>`);
     }
   }, delay_ms);
 }
 
 const data_request_buttons = Inputs.button(
   [
-    ["ADC snapshot", async function(){
+    ["ADC snapshot", function(){
       command_and_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
     }],
-    ["ADC stream", async function(){
-      await command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_code: motor.FULL_READOUT, command_timeout: 1});
+    ["ADC stream", function(){
+      command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_code: motor.FULL_READOUT, command_timeout: 1});
     }],
     ["STOP stream", async function(){
       await command(motor.STREAM_FULL_READOUTS, {command_timeout: 0});
@@ -350,55 +348,55 @@ d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 
 const test_buttons = Inputs.button(
   [
-    ["Test all permutations", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_ALL_PERMUTATIONS);
+    ["Test all permutations", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
-    ["Test ground short", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_GROUND_SHORT);
+    ["Test ground short", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_GROUND_SHORT);
     }],
-    ["Test positive short", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_POSITIVE_SHORT);
+    ["Test positive short", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_POSITIVE_SHORT);
     }],
-    ["Test U directions", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_U_DIRECTIONS);
+    ["Test U directions", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_U_DIRECTIONS);
     }],
-    ["Test U increasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_U_INCREASING);
+    ["Test U increasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_U_INCREASING);
     }],
-    ["Test U decreasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_U_DECREASING);
+    ["Test U decreasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_U_DECREASING);
     }],
-    ["Test V increasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
+    ["Test V increasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
     }],
-    ["Test V decreasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
+    ["Test V decreasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
     }],
-    ["Test W increasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
+    ["Test W increasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
     }],
-    ["Test W decreasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
+    ["Test W decreasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
     }],
-    ["Test V increasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
+    ["Test V increasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
     }],
-    ["Test V decreasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
+    ["Test V decreasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
     }],
-    ["Test W increasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
+    ["Test W increasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
     }],
-    ["Test W decreasing", async function(){
-      await command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
+    ["Test W decreasing", function(){
+      command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Test sequence"},
 );
 
-function maybe_stream(delay_ms, command, options = {}){
+function snapshot_if_checked(delay_ms){
   if (command_options.includes("Take snapshot after command")){
-    command_and_stream(delay_ms, command, options);
+    command_and_stream(delay_ms, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
   }
 }
 
@@ -409,51 +407,51 @@ const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
       await command(motor.SET_STATE_OFF);
-      maybe_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(0);
     }],
     ["Drive +", async function(){
       await command(motor.SET_STATE_DRIVE_POS);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Drive -", async function(){
       await command(motor.SET_STATE_DRIVE_NEG);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Drive smooth +", async function(){
       await command(motor.SET_STATE_DRIVE_SMOOTH_POS);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Drive smooth -", async function(){
       await command(motor.SET_STATE_DRIVE_SMOOTH_NEG);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Freewheel", async function(){
       await command(motor.SET_STATE_FREEWHEEL);
-      maybe_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(0);
     }],
     ["Hold U positive", async function(){
       await command(motor.SET_STATE_HOLD_U_POSITIVE);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Hold V positive", async function(){
       await command(motor.SET_STATE_HOLD_V_POSITIVE);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Hold W positive", async function(){
       await command(motor.SET_STATE_HOLD_W_POSITIVE);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Hold U negative", async function(){
       await command(motor.SET_STATE_HOLD_U_NEGATIVE);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Hold V negative", async function(){
       await command(motor.SET_STATE_HOLD_V_NEGATIVE);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
     ["Hold W negative", async function(){
       await command(motor.SET_STATE_HOLD_W_NEGATIVE);
-      maybe_stream(500, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      snapshot_if_checked(500);
     }],
   ],
   {label: "Commands"},
@@ -1348,8 +1346,13 @@ async function run_current_calibration(){
 
 
 ```js
+
+// Write out the current calibration results in copyable format.
 const current_calibration_table = html`<div>Phase correction factors:</div>
-  <pre>${JSON.stringify(calculated_current_calibration_factors, null, 2)}</pre>`;
+  <pre>calculated_factors = ${JSON.stringify(calculated_current_calibration_factors, null, 2)}</pre>`;
+
+
+// Select which of the calibration runs to display.
 
 const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration_results.length), {
   value: current_calibration_results.length - 1,
@@ -1384,6 +1387,15 @@ const current_calibration_plot = plot_lines({
     }
   ],
 });
+
+autosave_inputs({
+  current_calibration_plot,
+});
+```
+
+
+
+```js
 
 const calibration_samples = current_calibration_reading_points.map((x, i) => {
   return {
@@ -1503,7 +1515,6 @@ const current_calibration_negative_mean_plot = plot_lines({
 });
 
 autosave_inputs({
-  current_calibration_plot,
   current_calibration_interpolate_plot,
   current_calibration_positive_mean_plot,
   current_calibration_negative_mean_plot,
