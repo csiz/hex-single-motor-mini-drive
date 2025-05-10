@@ -11,12 +11,12 @@ export function plot_lines({
   x_domain = undefined,
   y_domain = undefined,
 
+  x_label, y_label,
   width = 928, height = 600, 
   marginTop = 20, marginRight = 10, marginBottom = 30, marginLeft = 50,
-
   x_format = ((x) => x.toFixed(3).padStart(9)),
   y_format = ((y) => y.toFixed(3).padStart(9)),
-  x_label, y_label,
+
   x, 
   subtitle, description,
   channels,
@@ -25,14 +25,13 @@ export function plot_lines({
   default_show = true,
   include_crosshair = true,
 }){
-  const dimensions = {width, height, marginTop, marginRight, marginBottom, marginLeft};
+  const figure_options = {x_format, y_format, x_label, y_label, width, height, marginTop, marginRight, marginBottom, marginLeft};
 
   const initial_value = {
     show: default_show,
     shown_marks: default_shown_marks ?? channels.map(({label}) => label),
   };
   
-  const description_element = html`<p>${description}</p>`;
 
   // First, make the title into a checkbox to toggle the plot on and off.
   const subtitle_checkbox = Inputs.checkbox([subtitle], {
@@ -50,53 +49,9 @@ export function plot_lines({
     },
   );
 
-    // Create the SVG container.
-  const svg = d3.create("svg")
-    .attr("width", width)
-    .attr("height", height)
-    .attr("viewBox", [0, 0, width, height])
-    .attr("style", `max-width: 100%; height: auto; overflow: visible;`);
-
-  // Add the horizontal axis.
-  const horizontal_axis = svg.append("g")
-    .attr("transform", `translate(0,${height - marginBottom})`)
-    .call(g => g.append("text")
-      .attr("x", width - marginRight)
-      .attr("y", marginBottom)
-      .attr("fill", "currentColor")
-      .attr("text-anchor", "end")
-      .text(`→ ${x_label}`));
-
-  // Add the vertical axis.
-  const vertical_axis = svg.append("g")
-    .attr("transform", `translate(${marginLeft},0)`)
-    .call(g => g.append("text")
-      .attr("x", -marginLeft)
-      .attr("y", 10)
-      .attr("fill", "currentColor")
-      .attr("text-anchor", "start")
-      .text(`↑ ${y_label}`));
-
-
-
-  const plot_root = svg.append("g")
-    .attr("clip-path", `inset(${marginTop - 2}px ${marginRight - 2}px ${marginBottom - 2}px ${marginLeft - 2}px) view-box`)
-    .attr("fill", "none")
-    .attr("stroke-width", 1.5)
-    .attr("stroke-linejoin", "round")
-    .attr("stroke-linecap", "round");
-
-
-  // Create the positional scales.
-  const x_scale = d3.scaleLinear()
-    .range([marginLeft, width - marginRight]);
-
-  const y_scale = d3.scaleLinear()
-    .range([height - marginBottom, marginTop]);
-
+  const {svg, plot_root, x_scale, y_scale, horizontal_axis, vertical_axis} = setup_plot_figure(figure_options);
     
-  const plot_contents = html`<div>${description_element}${marks_checkboxes}${svg.node()}</div>`;
-
+  const plot_contents = html`<div><p>${description}</p>${marks_checkboxes}${svg.node()}</div>`;
 
   // Build the final figure.
   
@@ -117,9 +72,8 @@ export function plot_lines({
     // Get latest values.
     const {data, x_domain, y_domain} = result.plot_data;
 
-
     if (!data || data.length === 0) {
-      plot_root.selectAll("g").remove();
+      plot_root.selectChildren().remove();
       return;
     }
 
@@ -193,13 +147,237 @@ export function plot_lines({
 
   // Add the crosshair if requested.
   if (include_crosshair) {
-    add_crosshair(result, {svg, plot_root, x_format, y_format, x_label, y_label, ...dimensions});
+    add_crosshair(result, {svg, plot_root, ...figure_options});
   }
 
   return result;
 }
 
-export function add_crosshair(plot, {svg, plot_root, x_format, y_format, x_label, y_label, width, height, marginLeft, marginRight, marginTop, marginBottom}){
+export function plot_line({
+  data = [],
+  x_domain = undefined,
+  y_domain = undefined,
+
+  x_label, y_label,
+  width = 928, height = 600, 
+  marginTop = 20, marginRight = 10, marginBottom = 30, marginLeft = 50,
+  x_format = ((x) => x.toFixed(3).padStart(9)),
+  y_format = ((y) => y.toFixed(3).padStart(9)),
+
+  x, y, color,
+  curve = d3.curveLinear,
+  draw_extra = undefined,
+  subtitle, description,
+  default_show = true,
+  include_brush = false,
+}){
+  const figure_options = {x_format, y_format, x_label, y_label, width, height, marginTop, marginRight, marginBottom, marginLeft};
+
+  const initial_value = {
+    show: default_show,
+  };
+
+  // First, make the title into a checkbox to toggle the plot on and off.
+  const subtitle_checkbox = Inputs.checkbox([subtitle], {
+    value: initial_value.show ? [subtitle] : [],
+    format: (subtitle) => html`<h4 style="min-width: 20em; font-size: 1.5em; font-weight: normal;">${subtitle}</h4>`,
+  });
+  
+
+  const {svg, plot_root, x_scale, y_scale, horizontal_axis, vertical_axis} = setup_plot_figure(figure_options);
+
+  const plot_contents = html`<div><p>${description}</p>${svg.node()}</div>`;
+
+  // Build the final figure.
+  
+  const result = html`<figure>${subtitle_checkbox}${plot_contents}</figure>`;
+
+
+  result.value = initial_value;
+
+  result.plot_data = {data, x_domain, y_domain};
+
+  result.shown_data = undefined;
+
+  result.update = (draw_data) => {
+    if (!result.value.show) return;
+
+    result.plot_data = {...result.plot_data, ...draw_data};
+
+    // Get latest values.
+    const {data, x_domain, y_domain} = result.plot_data;
+
+    if (!data || data.length === 0) {
+      plot_root.selectChildren().remove();
+      return;
+    }
+
+    const x_values = data.map((d, i, data) => pick_value(x, d, i, data));
+    const y_values = data.map((d, i, data) => pick_value(y, d, i, data));
+
+    // Update the scales with potentionally new domains.
+    if (x_domain) {
+      x_scale.domain(x_domain);
+    } else {
+      x_scale.domain(d3.extent(x_values)).nice();
+    }
+
+    if (y_domain) {
+      y_scale.domain(y_domain);
+    } else {
+      y_scale.domain(d3.extent(y_values)).nice();
+    }
+
+
+    horizontal_axis.call(d3.axisBottom(x_scale).ticks(width / 80).tickSizeOuter(0));
+    vertical_axis.call(d3.axisLeft(y_scale).ticks(height / 40).tickSizeOuter(0)).call(g => g.select(".domain").remove());
+
+    // Add the common x selector and data to each channel; so we can use a generalized function to draw them.
+    result.shown_data = {y, x, color, ...result.plot_data, x_scale, y_scale, curve, draw_extra};
+
+    // Redraw channels.
+    plot_root.selectChildren().remove();
+
+    // Draw the lines.
+    draw_line.call(plot_root.node(), result.shown_data);
+
+    result.shown_data.draw_extra?.call(plot_root.node(), result.shown_data);
+  };
+
+  
+  result.update(result.plot_data);
+  
+  
+  subtitle_checkbox.addEventListener("input", (event) => {
+    const show = subtitle_checkbox.value.length > 0;
+    merge_input_value(result, {show});
+    event.stopPropagation();
+  });
+
+  result.addEventListener("input", function(){
+    const {show} = result.value;
+    
+    // Update the dependent inputs; without triggering the event listeners so we don't loop.
+    subtitle_checkbox.value = show ? [subtitle] : [];
+    
+    d3.select(plot_contents).style("display", show ? "initial" : "none");
+    
+    result.update(result.plot_data);
+  });
+
+  if (include_brush) {
+    const brush = add_brushX(result, {svg, ...figure_options});
+    result.addEventListener("input", function(){
+      const {selection} = result.value;
+      if (selection) {
+        const x0 = selection[0] * (width - marginLeft - marginRight) + marginLeft;
+        const x1 = selection[1] * (width - marginLeft - marginRight) + marginLeft;
+        svg.call(brush.move, [x0, x1], false);
+      } else {
+        svg.call(brush.move, null, false);
+      }
+    });
+  }
+
+  return result;
+}
+
+function setup_plot_figure({x_label, y_label, x_format, y_format, width, height, marginTop, marginRight, marginBottom, marginLeft}){
+    // Create the SVG container.
+  const svg = d3.create("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .attr("viewBox", [0, 0, width, height])
+    .attr("style", `max-width: 100%; height: auto; overflow: visible;`);
+
+  // Add the horizontal axis.
+  const horizontal_axis = svg.append("g")
+    .attr("transform", `translate(0,${height - marginBottom})`)
+    .call(g => g.append("text")
+      .attr("x", width - marginRight)
+      .attr("y", marginBottom)
+      .attr("fill", "currentColor")
+      .attr("text-anchor", "end")
+      .text(`→ ${x_label}`));
+
+  // Add the vertical axis.
+  const vertical_axis = svg.append("g")
+    .attr("transform", `translate(${marginLeft},0)`)
+    .call(g => g.append("text")
+      .attr("x", -marginLeft)
+      .attr("y", 10)
+      .attr("fill", "currentColor")
+      .attr("text-anchor", "start")
+      .text(`↑ ${y_label}`));
+
+
+  const plot_root = svg.append("g")
+    .attr("clip-path", `inset(${marginTop - 2}px ${marginRight - 2}px ${marginBottom - 2}px ${marginLeft - 2}px) view-box`)
+    .attr("fill", "none")
+    .attr("stroke-width", 1.5)
+    .attr("stroke-linejoin", "round")
+    .attr("stroke-linecap", "round");
+
+
+  // Create the positional scales.
+  const x_scale = d3.scaleLinear()
+    .range([marginLeft, width - marginRight]);
+
+  const y_scale = d3.scaleLinear()
+    .range([height - marginBottom, marginTop]);
+
+  return {svg, plot_root, x_scale, y_scale, horizontal_axis, vertical_axis};
+}
+
+export function add_brushX(plot, {
+  svg,
+  width, marginLeft, marginRight,
+}) {
+  const brush = d3.brushX().on("start brush end", ({selection, sourceEvent}) => {
+    // Skip updating if moved programmatically (null sourceEvent).
+    if (!sourceEvent) return;
+    
+    sourceEvent.stopPropagation();
+    
+    if (selection) {
+      let [x0, x1] = selection;
+      let selection_width = x1 - x0;
+      // Keep the brush within the plot area.
+      if (x0 < marginLeft) {
+        x0 = marginLeft;
+        if (selection_width > width - marginLeft - marginRight) {
+          selection_width = width - marginLeft - marginRight;
+        } 
+        x1 = x0 + selection_width;
+        svg.call(brush.move, [x0, x1]);
+      } 
+      
+      if (x1 > width - marginRight) {
+        x1 = width - marginRight;
+        x0 = x1 - selection_width;
+        svg.call(brush.move, [x0, x1]);
+      }
+      
+      // Convert to fraction of the x plot area.
+      const x0_fraction = (x0 - marginLeft) / (width - marginLeft - marginRight);
+      const x1_fraction = (x1 - marginLeft) / (width - marginLeft - marginRight);
+      
+      selection = [x0_fraction, x1_fraction];
+      merge_input_value(plot, {selection});
+    } else {
+      selection = undefined;
+      merge_input_value(plot, {selection});
+    }
+  });
+  svg.call(brush);
+
+  return brush;
+}
+
+export function add_crosshair(plot, {
+  svg, plot_root, x_format, y_format, x_label, y_label, 
+  width, height, marginLeft, marginRight, marginTop, marginBottom,
+}) {
   const font_size = 14;
 
   // Add an invisible layer for the interactive tip.

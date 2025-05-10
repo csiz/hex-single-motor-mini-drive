@@ -25,6 +25,7 @@ Motor Driving Data
   <span>${time_period_input}</span>
   <span>${time_offset_input}</span>
   <span>${plot_options_input}</span>
+  <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
@@ -479,17 +480,15 @@ const time_period_input = Inputs.range([1, max_time_period], {
   step: 0.5,
   label: "Time window Duration (ms):",
 });
-const time_period = Generators.input(time_period_input);
 
 const time_offset_input = Inputs.range([0, 1.0], {
-  value: 0.0, 
+  value: 1.0, 
   step: 0.01,
-  label: "Time window Rewind (ms):",
+  label: "Time window Offset (ms):",
 });
 d3.select(time_offset_input).select("div").style("width", "640px");
 d3.select(time_offset_input).select("input[type=range]").style("width", "100em");
 
-const time_offset = Generators.input(time_offset_input);
 
 const plot_options_input = Inputs.checkbox(
   ["Connected lines"],
@@ -502,6 +501,58 @@ const plot_options_input = Inputs.checkbox(
 const plot_options = Generators.input(plot_options_input);
 
 
+const timeline_position_input = plot_line({
+  subtitle: "Time Window Selection",
+  description: "Select the time window to plot; drag or resize. Click to see all.",
+  width: 1200, height: 150,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Electric position (degrees)",
+  y_domain: [-180, 180],
+  y: "motor_angle", 
+  color: colors.motor_angle,
+  include_brush: true,
+});
+
+const timeline_position = Generators.input(timeline_position_input);
+
+timeline_position_input.addEventListener("input", function(){
+  const {selection} = timeline_position_input.value;  
+  if (selection){
+    time_period_input.value = (selection[1] - selection[0]) * max_time_period;
+    const max_choice = (max_time_period - time_period_input.value) / max_time_period;
+    time_offset_input.value = selection[0] / max_choice;
+  } else {
+    time_period_input.value = max_time_period;
+    time_offset_input.value = 0;
+  }
+});
+
+function merge_timeline_inputs(){
+  const max_choice = (max_time_period - time_period_input.value) / max_time_period;
+
+  merge_input_value(timeline_position_input, {
+    selection: time_period_input.value === max_time_period ? null : [
+      time_offset_input.value * max_choice,
+      time_offset_input.value * max_choice + (time_period_input.value / max_time_period),
+    ],
+  });
+}
+
+time_period_input.addEventListener("input", merge_timeline_inputs);
+time_offset_input.addEventListener("input", merge_timeline_inputs);
+merge_timeline_inputs();
+
+```
+
+```js
+const data_time_end = (data.length == 0 ? 0 : data[data.length - 1].time);
+const data_time_start = data_time_end - max_time_period;
+
+timeline_position_input.update({
+  data: sparsify(data.filter((d) => d.time >= data_time_start)), 
+  x_domain: [data_time_start, data_time_end],
+});
 ```
 
 
@@ -718,21 +769,15 @@ autosave_inputs({
 ```
 
 
-```js
-const time_end = (data.length == 0 ? 0 : data[data.length - 1].time) - max_time_period * time_offset;
 
-const time_domain = [time_end - time_period, time_end];
+```js
+
+const time_domain = !timeline_position.selection ? [data_time_start, data_time_end] : [
+  timeline_position.selection[0] * max_time_period + data_time_start,
+  timeline_position.selection[1] * max_time_period + data_time_start,
+];
 
 const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
-
-// TODO: make brush input for the time window
-
-
-const max_plot_points = 720;
-
-const plot_points_skip = Math.ceil(data_in_time_window.length / max_plot_points);
-
-const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip === 0);
 
 [
   plot_runtime_stats,
@@ -746,8 +791,7 @@ const selected_data = data_in_time_window.filter((d, i) => i % plot_points_skip 
   plot_dq0_voltages,
   plot_inferred_voltages,
   plot_pwm_settings,
-].forEach((plot) => plot.update({data: selected_data, x_domain: time_domain}));
-
+].forEach((plot) => plot.update({data: sparsify(data_in_time_window), x_domain: time_domain}));
 
 ```
 
@@ -1528,17 +1572,25 @@ autosave_inputs({
 // Imports
 // -------
 
-import {plot_lines, setup_faint_area, horizontal_step} from "./components/plotting_utils.js";
+import {plot_lines, plot_line, setup_faint_area, horizontal_step} from "./components/plotting_utils.js";
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
 import * as motor from "./components/usb_motor_controller.js";
 
-import {enabled_checkbox, autosave_inputs, any_checked_input} from "./components/input_utils.js";
+import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
 import {process_readout_with_calibration, cycles_per_millisecond, millis_per_cycle, online_map, online_function_chain, current_calibration_default} from "./components/readout_processing.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
 import {MAX_TIMEOUT, PWM_BASE, PWM_PERIOD, HISTORY_SIZE} from "./components/motor_driver_constants.js";
+
+
+// Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.
+function sparsify(data, target_points = 1080){
+  const max_plot_points = target_points;
+  const plot_points_skip = Math.ceil(data.length / max_plot_points);
+  return data.filter((d, i) => i % plot_points_skip === 0);
+}
 
 ```
