@@ -348,7 +348,7 @@ export function setup_faint_area({y0, y1}){
   };
 }
 
-export function draw_v_line({data, x_value, x_scale, y_scale, color}){
+export function draw_v_line({x_value, x_scale, y_scale, color}){
   return d3.select(this).append("line")
     .attr("stroke-width", 3)
     .attr("stroke", color)
@@ -358,7 +358,14 @@ export function draw_v_line({data, x_value, x_scale, y_scale, color}){
     .attr("x2", x_scale(x_value));
 }
 
-
+export function setup_v_line({x_value, dasharray = undefined}){
+  return function(draw_data){
+    draw_v_line.call(this, {
+      ...draw_data, 
+      x_value: x_value(draw_data),
+    }).attr("stroke-dasharray", dasharray ?? null);
+  };
+}
 
 
 // Custom d3.curve to plot unconnected horizontal steps for each data point.

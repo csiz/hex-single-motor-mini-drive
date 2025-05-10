@@ -189,12 +189,10 @@ const truncated_normal_plot = plot_lines({
   channels: [
     {
       y: "pdf_μ", label: "PDF μ", color: colors.u,
-      draw_extra: function(draw_data){
-        draw_v_line.call(this, {
-          ...draw_data, 
-          x_value: draw_data.truncated_normal_position
-        }).attr("stroke-dasharray", "2,5");
-      },
+      draw_extra: setup_v_line({
+        x_value: (draw_data) => draw_data.truncated_normal_position,
+        dasharray: "2,5",
+      }),
     },
     {
       y: "untriggered_pdf_μ", label: "PDF μ (bounded)", color: d3.color(colors.u).darker(1),
@@ -205,21 +203,17 @@ const truncated_normal_plot = plot_lines({
     },
     {
       y: "pdf_a", label: "PDF a", color: colors.a,
-      draw_extra: function(draw_data){
-        draw_v_line.call(this, {
-          ...draw_data, 
-          x_value: draw_data.truncated_normal_lower
-        }).attr("stroke-dasharray", "2,7");
-      },
+      draw_extra: setup_v_line({
+        x_value: (draw_data) => draw_data.truncated_normal_lower,
+        dasharray: "2,9",
+      }),
     },
     {
       y: "pdf_b", label: "PDF b", color: colors.b,
-      draw_extra: function(draw_data){
-        draw_v_line.call(this, {
-          ...draw_data, 
-          x_value: draw_data.truncated_normal_upper
-        }).attr("stroke-dasharray", "2,7");
-      },
+      draw_extra: setup_v_line({
+        x_value: (draw_data) => draw_data.truncated_normal_upper,
+        dasharray: "2,7"
+      }),
     },
     {y: "cdf_a", label: "CDF a", color: d3.color(colors.a).darker(1)},
     {y: "cdf_b", label: "CDF b", color: d3.color(colors.b).darker(1)},
@@ -232,7 +226,7 @@ autosave_inputs({truncated_normal_plot});
 
 ```js
 
-import {plot_lines, setup_faint_area, horizontal_step, draw_v_line} from "./components/plotting_utils.js";
+import {plot_lines, setup_faint_area, horizontal_step, setup_v_line} from "./components/plotting_utils.js";
 import {autosave_inputs} from "./components/input_utils.js";
 import {cdf_normal, pdf_normal} from "./components/stats_utils.js";
 
