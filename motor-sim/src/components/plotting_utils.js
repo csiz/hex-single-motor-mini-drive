@@ -23,8 +23,9 @@ export function plot_lines({
   curve = d3.curveLinear,
   default_shown_marks = undefined,
   default_show = true,
+  include_crosshair = true,
 }){
-  const font_size = 14;
+  const dimensions = {width, height, marginTop, marginRight, marginBottom, marginLeft};
 
   const initial_value = {
     show: default_show,
@@ -76,13 +77,6 @@ export function plot_lines({
       .attr("text-anchor", "start")
       .text(`↑ ${y_label}`));
 
-  // Create the positional scales.
-  const x_scale = d3.scaleLinear()
-    .range([marginLeft, width - marginRight]);
-
-  const y_scale = d3.scaleLinear()
-    .range([height - marginBottom, marginTop]);
-
 
 
   const plot_root = svg.append("g")
@@ -93,8 +87,123 @@ export function plot_lines({
     .attr("stroke-linecap", "round");
 
 
+  // Create the positional scales.
+  const x_scale = d3.scaleLinear()
+    .range([marginLeft, width - marginRight]);
+
+  const y_scale = d3.scaleLinear()
+    .range([height - marginBottom, marginTop]);
+
+    
+  const plot_contents = html`<div>${description_element}${marks_checkboxes}${svg.node()}</div>`;
+
+
+  // Build the final figure.
+  
+  const result = html`<figure>${subtitle_checkbox}${plot_contents}</figure>`;
+
+
+  result.value = initial_value;
+
+  result.plot_data = {data, x_domain, y_domain};
+
+  result.shown_data = undefined;
+
+  result.update = (draw_data) => {
+    if (!result.value.show) return;
+
+    result.plot_data = {...result.plot_data, ...draw_data};
+
+    // Get latest values.
+    const {data, x_domain, y_domain} = result.plot_data;
+
+
+    if (!data || data.length === 0) {
+      plot_root.selectAll("g").remove();
+      return;
+    }
+
+    const shown_channels = channels.filter(({label}) => result.value.shown_marks.includes(label));
+    
+    const x_values = data.map((d, i, data) => pick_value(x, d, i, data));
+
+    // Update the scales with potentionally new domains.
+    if (x_domain) {
+      x_scale.domain(x_domain);
+    } else {
+      x_scale.domain(d3.extent(x_values)).nice();
+    }
+
+    if (y_domain) {
+      y_scale.domain(y_domain);
+    } else {
+      const min_y_value = d3.min(shown_channels, ({y}) => d3.min(data, (d, i, data) => pick_value(y, d, i, data)));
+      const max_y_value = d3.max(shown_channels, ({y}) => d3.max(data, (d, i, data) => pick_value(y, d, i, data)));
+      y_scale.domain([min_y_value, max_y_value]).nice();
+    }
+
+
+    horizontal_axis.call(d3.axisBottom(x_scale).ticks(width / 80).tickSizeOuter(0));
+    vertical_axis.call(d3.axisLeft(y_scale).ticks(height / 40).tickSizeOuter(0)).call(g => g.select(".domain").remove());
+
+    // Add the common x selector and data to each channel; so we can use a generalized function to draw them.
+    result.shown_data = shown_channels.map(channel => ({...channel, x, ...result.plot_data, x_scale, y_scale, curve}));
+
+    // Redraw channels.
+    plot_root.selectAll("g")
+      .data(result.shown_data)
+      .join("g").each(function(channel_data){
+        // Clear previous glyphs.
+        d3.select(this).selectChildren().remove();
+
+        // Draw the lines.
+        draw_line.call(this, channel_data);
+
+        channel_data.draw_extra?.call(this, channel_data);
+      });
+  };
+
+  
+  result.update(result.plot_data);
+  
+  
+  subtitle_checkbox.addEventListener("input", (event) => {
+    const show = subtitle_checkbox.value.length > 0;
+    merge_input_value(result, {show});
+    event.stopPropagation();
+  });
+  
+  marks_checkboxes.addEventListener("input", (event) => {
+    const shown_marks = marks_checkboxes.value;
+    merge_input_value(result, {shown_marks});
+    event.stopPropagation();
+  });
+  
+  result.addEventListener("input", function(){
+    const {show, shown_marks} = result.value;
+    
+    // Update the dependent inputs; without triggering the event listeners so we don't loop.
+    subtitle_checkbox.value = show ? [subtitle] : [];
+    marks_checkboxes.value = shown_marks;
+    
+    d3.select(plot_contents).style("display", show ? "initial" : "none");
+    
+    result.update(result.plot_data);
+  });
+
+  // Add the crosshair if requested.
+  if (include_crosshair) {
+    add_crosshair(result, {svg, plot_root, x_format, y_format, x_label, y_label, ...dimensions});
+  }
+
+  return result;
+}
+
+export function add_crosshair(plot, {svg, plot_root, x_format, y_format, x_label, y_label, width, height, marginLeft, marginRight, marginTop, marginBottom}){
+  const font_size = 14;
+
   // Add an invisible layer for the interactive tip.
-  const tip = svg.append("g")
+  const tip = svg.insert("g", ":first-child")
     .attr("display", "none");
 
   const circle = tip.append("circle")
@@ -136,83 +245,14 @@ export function plot_lines({
     .attr("x", width - marginRight)
     .attr("y", marginTop - 5);
 
-    
-  const plot_details = html`<div>${description_element}${marks_checkboxes}${svg.node()}</div>`;
-
-
-  // Build the final figure.
   
-  const result = html`<figure>${subtitle_checkbox}${plot_details}</figure>`;
-  
-  result.value = initial_value;
-  
-  let plot_data = {data, x_domain, y_domain};
-
-  let shown_data = undefined;
-
-  result.update = (draw_data) => {
-    if (!result.value.show) return;
-
-    plot_data = {...plot_data, ...draw_data};
-
-    // Get latest values.
-    const {data, x_domain, y_domain} = plot_data;
-
-
-    if (!data || data.length === 0) {
-      plot_root.selectAll("g").remove();
-      return;
-    }
-
-    const shown_channels = channels.filter(({label}) => result.value.shown_marks.includes(label));
-    
-    const x_values = data.map((d, i, data) => pick_value(x, d, i, data));
-
-    // Update the scales with potentionally new domains.
-    if (x_domain) {
-      x_scale.domain(x_domain);
-    } else {
-      x_scale.domain(d3.extent(x_values)).nice();
-    }
-
-    if (y_domain) {
-      y_scale.domain(y_domain);
-    } else {
-      const min_y_value = d3.min(shown_channels, ({y}) => d3.min(data, (d, i, data) => pick_value(y, d, i, data)));
-      const max_y_value = d3.max(shown_channels, ({y}) => d3.max(data, (d, i, data) => pick_value(y, d, i, data)));
-      y_scale.domain([min_y_value, max_y_value]).nice();
-    }
-
-
-    horizontal_axis.call(d3.axisBottom(x_scale).ticks(width / 80).tickSizeOuter(0));
-    vertical_axis.call(d3.axisLeft(y_scale).ticks(height / 40).tickSizeOuter(0)).call(g => g.select(".domain").remove());
-
-    // Add the common x selector and data to each channel; so we can use a generalized function to draw them.
-    shown_data = shown_channels.map(channel => ({...channel, x, ...plot_data, x_scale, y_scale, curve}));
-
-    // Redraw channels.
-    plot_root.selectAll("g")
-      .data(shown_data)
-      .join("g").each(function(channel_data){
-        // Clear previous glyphs.
-        d3.select(this).selectChildren().remove();
-
-        // Draw the lines.
-        draw_line.call(this, channel_data);
-
-        channel_data.draw_extra?.call(this, channel_data);
-      });
-  };
-
-  result.update(plot_data);
-
   // When the pointer moves, find the closest point, update the interactive tip, and highlight
   // the corresponding line.
   svg.on("pointermove", (event) => {
     const [xm, ym] = d3.pointer(event);
-    if (!shown_data || shown_data.length == 0) return;
+    if (!plot.shown_data || plot.shown_data.length == 0) return;
 
-    const [x_i, y_i] = min_index_2d(shown_data.map(({x, y, x_scale, y_scale, data}) => {
+    const [x_i, y_i] = min_index_2d(plot.shown_data.map(({x, y, x_scale, y_scale, data}) => {
       return data.map((d, i) => {
         const coord_x = x_scale(pick_value(x, d, i, data));
         const coord_y = y_scale(pick_value(y, d, i, data));
@@ -220,12 +260,11 @@ export function plot_lines({
       });
     }));
 
-    const {x, y, color, label, x_scale, y_scale, data} = shown_data[y_i];
+    const {x, y, color, label, x_scale, y_scale, data} = plot.shown_data[y_i];
     
     // Mute all other lines and raise the selected one.
-    plot_root.selectAll("g")
-      .attr("opacity", (channel) => channel.label === label ? null : 0.3)
-      .filter((channel) => channel.label === label).raise();
+    plot_root.selectAll("g").attr("opacity", (channel) => channel.label === label ? null : 0.3);
+      
 
     const value_x = pick_value(x, data[x_i], x_i, data);
     const value_y = pick_value(y, data[x_i], x_i, data);
@@ -275,33 +314,6 @@ export function plot_lines({
     plot_root.selectAll("g").attr("opacity", null);
     tip.attr("display", "none");
   });
-
-
-  subtitle_checkbox.addEventListener("input", (event) => {
-    const show = subtitle_checkbox.value.length > 0;
-    merge_input_value(result, {show});
-    event.stopPropagation();
-  });
-
-  marks_checkboxes.addEventListener("input", (event) => {
-    const shown_marks = marks_checkboxes.value;
-    merge_input_value(result, {shown_marks});
-    event.stopPropagation();
-  });
-
-  result.addEventListener("input", function(){
-    const {show, shown_marks} = result.value;
-    
-    // Update the dependent inputs; without triggering the event listeners so we don't loop.
-    subtitle_checkbox.value = show ? [subtitle] : [];
-    marks_checkboxes.value = shown_marks;
-
-    d3.select(plot_details).style("display", show ? "initial" : "none");
-
-    result.update(plot_data);
-  });
-
-  return result;
 }
 
 
