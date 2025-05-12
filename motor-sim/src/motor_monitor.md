@@ -1596,14 +1596,14 @@ import {plot_lines, plot_line, setup_faint_area, horizontal_step} from "./compon
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
-import * as motor from "./components/usb_motor_controller.js";
+import * as motor from "./components/motor_controller.js";
 
 import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
 import {process_readout_with_calibration, cycles_per_millisecond, millis_per_cycle, online_map, online_function_chain, current_calibration_default} from "./components/readout_processing.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
-import {MAX_TIMEOUT, ANGLE_BASE, PWM_BASE, PWM_PERIOD, HISTORY_SIZE} from "./components/motor_driver_constants.js";
+import {MAX_TIMEOUT, ANGLE_BASE, PWM_BASE, PWM_PERIOD, HISTORY_SIZE} from "./components/motor_constants.js";
 
 
 // Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.

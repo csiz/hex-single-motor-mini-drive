@@ -1,4 +1,4 @@
-import {PWM_BASE} from "./motor_driver_constants.js";
+import {PWM_BASE} from "./motor_constants.js";
 
 // USB serial port commands
 // ------------------------

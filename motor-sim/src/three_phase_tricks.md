@@ -35,7 +35,7 @@ rotating phasor frame).
 
 ```js
 
-import {ANGLE_BASE, PWM_BASE} from "./components/motor_driver_constants.js";
+import {angle_base, pwm_base} from "./components/motor_constants.js";
 
 const phi = d3.range(ANGLE_BASE).map(x => 2 * Math.PI * x / ANGLE_BASE);
 const phases = phi.map(t => {

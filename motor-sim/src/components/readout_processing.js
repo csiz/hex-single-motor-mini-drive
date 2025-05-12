@@ -1,5 +1,5 @@
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees} from "./angular_math.js";
-import {calculate_temperature, calculate_voltage, READOUT_BASE, ANGLE_BASE} from "./motor_driver_constants.js";
+import {calculate_temperature, calculate_voltage, READOUT_BASE, ANGLE_BASE} from "./motor_constants.js";
   
 
 // PWM motor cycles per millisecond.
