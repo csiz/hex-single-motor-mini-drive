@@ -36,7 +36,7 @@ extern uint16_t hold_w_pwm_duty;
 
 extern uint16_t pwm_command;
 
-extern uint8_t leading_angle;
+extern int16_t leading_angle;
 
 extern PWMSchedule const* schedule_queued;
 
@@ -44,6 +44,10 @@ extern PWMSchedule const* schedule_queued;
 extern PWMSchedule const* schedule_active;
 extern size_t schedule_counter;
 extern size_t schedule_stage;
+
+
+// Current calibration factors.
+extern CurrentCalibration current_calibration;
 
 
 // Count down until the timeout expires; return true if the timeout expired.
@@ -101,16 +105,16 @@ static inline void update_motor_sector(const uint8_t hall_sector, const uint16_t
     enable_motor_outputs();
 }
 
-static inline void update_motor_smooth(const bool angle_valid, const uint8_t angle, const int direction){
+static inline void update_motor_smooth(const bool angle_valid, const int angle, const int direction){
     if(update_and_check_timeout()) return motor_break();
     
     if (not angle_valid) return motor_break();
 
-    const int target_angle = (256 + static_cast<int>(angle) + direction * static_cast<int>(leading_angle)) % 256;
+    const int target_angle = normalize_angle(angle + direction * leading_angle);
 
     const uint16_t voltage_phase_u = phases_waveform[target_angle];
-    const uint16_t voltage_phase_v = phases_waveform[(target_angle + 256 - 85) % 256];
-    const uint16_t voltage_phase_w = phases_waveform[(target_angle + 256 - 170) % 256];
+    const uint16_t voltage_phase_v = phases_waveform[normalize_angle(target_angle - third_circle)];
+    const uint16_t voltage_phase_w = phases_waveform[normalize_angle(target_angle - two_thirds_circle)];
 
     set_motor_u_pwm_duty(voltage_phase_u * pwm_command / PWM_BASE);
     set_motor_v_pwm_duty(voltage_phase_v * pwm_command / PWM_BASE);

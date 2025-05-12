@@ -1,5 +1,5 @@
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees} from "./angular_math.js";
-import {calculate_temperature, calculate_voltage, READOUT_BASE} from "./motor_driver_constants.js";
+import {calculate_temperature, calculate_voltage, READOUT_BASE, ANGLE_BASE} from "./motor_driver_constants.js";
   
 
 // PWM motor cycles per millisecond.
@@ -345,12 +345,13 @@ function annotate_readout({current_calibration_factors}){
       vcc_voltage: calculate_voltage(curr.vcc_readout),
       temperature: calculate_temperature(curr.temperature_readout),
       u_readout, v_readout, w_readout, 
-      motor_angle: normalize_degrees(curr.motor_angle * 360 / 256),
+      motor_angle: normalize_degrees(curr.motor_angle * 360 / ANGLE_BASE),
       motor_speed_std: Math.sqrt(curr.motor_speed_variance),
       u, v, w, 
       ref_diff,  sum, 
       current_alpha, current_beta, 
       current_angle: current_angle * 180 / Math.PI, 
+      motor_current_angle: normalize_degrees(curr.motor_current_angle * 360 / ANGLE_BASE),
       current_magnitude, 
       hall_u_as_angle: hall_u_as_angle === null ? null : hall_u_as_angle * 180 / Math.PI, 
       hall_v_as_angle: hall_v_as_angle === null ? null : hall_v_as_angle * 180 / Math.PI, 

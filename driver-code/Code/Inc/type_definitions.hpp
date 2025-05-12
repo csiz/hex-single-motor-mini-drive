@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 
 // PWM schedule
 // ------------
@@ -26,17 +27,22 @@ using PWMSchedule = PWMStage[SCHEDULE_SIZE];
 // ------------------------
 
 struct Readout{
+    uint32_t pwm_commands;
     uint16_t readout_number;
     uint16_t u_readout;
     uint16_t v_readout;
     uint16_t w_readout;
     uint16_t ref_readout;
     uint16_t position;
-    uint32_t pwm_commands;
+    int16_t speed;
+    int16_t vcc_voltage;
+    int16_t torque;
+    int16_t hold;
+    int16_t total_power;
+    int16_t resistive_power;
 };
 
-struct FullReadout{
-    Readout readout;
+struct FullReadout : public Readout {
     uint16_t tick_rate;
     uint16_t adc_update_rate;
     uint16_t hall_unobserved_rate;
@@ -45,6 +51,8 @@ struct FullReadout{
     uint16_t vcc_voltage;
     int16_t cycle_start_tick;
     int16_t cycle_end_tick;
+    int16_t current_angle;
+    int16_t current_angle_stdev;
 };
 
 
@@ -58,16 +66,20 @@ struct CommandHeader {
     uint16_t leading_angle;
 };
 
-struct CurrentFactors {
-    uint16_t u_pos_factor;
-    uint16_t u_neg_factor;
-    uint16_t v_pos_factor;
-    uint16_t v_neg_factor;
-    uint16_t w_pos_factor;
-    uint16_t w_neg_factor;
+struct CurrentCalibration {
+    int16_t u_factor;
+    int16_t v_factor;
+    int16_t w_factor;
 };
 
-struct TriggerAngles {
-    uint16_t trigger_angle[6][2];
-    uint16_t trigger_angle_variance[6][2];
+using TriggerAngles = std::array<std::array<int16_t, 2>, 6>;
+using TriggerAngleVariances = std::array<std::array<int16_t, 2>, 6>;
+using CenterAngles = std::array<int16_t, 6>;
+using CenterVariances = std::array<int16_t, 6>;
+
+struct PositionCalibration {
+    TriggerAngles trigger_angles;
+    TriggerAngleVariances trigger_angle_variances;
+    CenterAngles sector_center_angles;
+    CenterVariances sector_center_variances;
 };

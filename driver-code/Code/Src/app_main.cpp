@@ -56,40 +56,6 @@ const uint32_t USB_TIMEOUT = 500;
 // won't spin the motor at all (lies! we can use a small on time to
 // bias the motor to make it easy to turn by the load).
 
-// Phase Currents
-// --------------
-
-float current_u = 0;
-float current_v = 0;
-float current_w = 0;
-
-// Compute motor phase currents using latest ADC readouts. 
-void calculate_motor_phase_currents_gated(){
-    // TODO: rework
-    return;
-
-    // Get the latest readout; we have to gate the ADC interrupt so we copy a consistent readout.
-    NVIC_DisableIRQ(ADC1_2_IRQn);
-    const Readout readout = get_latest_readout();
-    NVIC_EnableIRQ(ADC1_2_IRQn);
-
-    const int32_t readout_diff_u = readout.u_readout - readout.ref_readout;
-    const int32_t readout_diff_v = readout.v_readout - readout.ref_readout;
-    const int32_t readout_diff_w = readout.w_readout - readout.ref_readout;
-
-    // The amplifier voltage output is specified by the formula:
-    //     Vout = (Iload * Rsense * GAIN) + Vref
-    // Therefore:
-    //     Iload = (Vout - Vref) / (Rsense * GAIN)
-    // Where:
-    //     Vout = adc_current_readout / adc_max_value * adc_voltage_reference;
-
-    current_u = readout_diff_u * current_conversion;
-    current_v = readout_diff_v * current_conversion;
-    current_w = readout_diff_w * current_conversion;
-}
-
-
 
 void app_init() {
 
@@ -235,12 +201,12 @@ bool handle_command(CommandBuffer const & buffer) {
             return true;
 
         case SET_CURRENT_FACTORS:            
-            /* CurrentFactors factors = */ parse_current_factors(usb_command_buffer);
+            /* CurrentFactors factors = */ parse_current_calibration(usb_command_buffer);
             // TODO: update current factors
             return true;
 
         case SET_TRIGGER_ANGLES:
-            /* TriggerAngles angles = */ parse_trigger_angles(usb_command_buffer);
+            /* TriggerAngles angles = */ parse_position_calibration(usb_command_buffer);
             // TODO: update trigger angles
             return true;
 
@@ -312,12 +278,14 @@ void usb_queue_response(){
         
         // Send the full readout to the host.
         uint8_t full_readout_data[full_readout_size] = {0};
-        FullReadout full_readout = {
-            .readout = get_latest_readout(),
-        };
+
+        // Disable the ADC interrupt while we read the latest readout.
+        NVIC_DisableIRQ(ADC1_2_IRQn);
+        FullReadout full_readout = {get_latest_readout()};
+        NVIC_EnableIRQ(ADC1_2_IRQn);
         
         // We have already sent this readout; don't send it again.
-        if (usb_stream_last_sent == full_readout.readout.readout_number) return;
+        if (usb_stream_last_sent == full_readout.readout_number) return;
         
         full_readout.tick_rate = static_cast<int>(tick_rate);
         full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
@@ -327,12 +295,14 @@ void usb_queue_response(){
         full_readout.vcc_voltage = get_vcc_voltage();
         full_readout.cycle_start_tick = get_cycle_start_tick();
         full_readout.cycle_end_tick = get_cycle_end_tick();
-        
+        full_readout.current_angle = get_current_angle();
+        full_readout.current_angle_stdev = get_current_angle_stdev();
+
         write_full_readout(full_readout_data, full_readout);
         
         usb_queue_send(full_readout_data, full_readout_size);
         
-        usb_stream_last_sent = full_readout.readout.readout_number;
+        usb_stream_last_sent = full_readout.readout_number;
     }
 }
 

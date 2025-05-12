@@ -83,8 +83,8 @@ static inline void reset_command_buffer(CommandBuffer & buffer) {
 bool buffer_command(CommandBuffer & buffer, int receive_function(uint8_t * buf, uint16_t len));
 
 CommandHeader parse_command_header(CommandBuffer const & buffer);
-CurrentFactors parse_current_factors(CommandBuffer const & buffer);
-TriggerAngles parse_trigger_angles(CommandBuffer const & buffer);
+CurrentCalibration parse_current_calibration(CommandBuffer const & buffer);
+PositionCalibration parse_position_calibration(CommandBuffer const & buffer);
 
 
 // Sending data

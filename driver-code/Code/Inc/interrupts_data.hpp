@@ -16,6 +16,8 @@ uint16_t get_vcc_voltage();
 int16_t get_cycle_start_tick();
 int16_t get_cycle_end_tick();
 
+int16_t get_current_angle();
+int16_t get_current_angle_stdev();
 
 // Data queue
 // ----------

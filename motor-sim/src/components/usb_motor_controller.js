@@ -349,29 +349,18 @@ export class MotorController {
 }
 
 
-const readout_size = 16;
+const readout_size = 28;
 
 function parse_readout(data_view){
   let offset = 0;
-  const readout_number = data_view.getUint16(offset);
-  offset += 2;
-  const position = data_view.getUint16(offset);
-  offset += 2;
-  // The first 3 bits are the hall sensor state.
-  const hall_u = (position >> 13) & 0b1;
-  const hall_v = (position >> 14) & 0b1;
-  const hall_w = (position >> 15) & 0b1;
-  const motor_angle_valid = (position >> 12) & 0b1;
-  const motor_angle = position & 0xFF;
   
+  // Get the PWM commands.
   const pwm_commands = data_view.getUint32(offset);
   offset += 4;
-
-  const u_pwm = Math.floor(pwm_commands / PWM_BASE / PWM_BASE) % PWM_BASE;
-  const v_pwm = Math.floor(pwm_commands / PWM_BASE) % PWM_BASE;
-  const w_pwm = pwm_commands % PWM_BASE;
-
-
+  // Get the readout number, a counter that increments with each readout & PWM cycle.
+  const readout_number = data_view.getUint16(offset);
+  offset += 2;
+  // Get the raw readout values.
   const u_readout = data_view.getUint16(offset);
   offset += 2;
   const v_readout = data_view.getUint16(offset);
@@ -380,6 +369,39 @@ function parse_readout(data_view){
   offset += 2;
   const ref_readout = data_view.getUint16(offset);
   offset += 2;
+  // Get motor angle and hall sensor data.
+  const position_data = data_view.getUint16(offset);
+  offset += 2;
+
+  const speed = data_view.getInt16(offset);
+  offset += 2;
+  const vcc_voltage = data_view.getUint16(offset);
+  offset += 2;
+  const torque = data_view.getInt16(offset);
+  offset += 2;
+  const hold = data_view.getInt16(offset);
+  offset += 2;
+  const total_power = data_view.getInt16(offset);
+  offset += 2;
+  const resistive_power = data_view.getInt16(offset);
+  offset += 2;
+
+
+  // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*PWM_BASE + pwm_v)*PWM_BASE + pwm_w
+  const u_pwm = Math.floor(pwm_commands / PWM_BASE / PWM_BASE) % PWM_BASE;
+  const v_pwm = Math.floor(pwm_commands / PWM_BASE) % PWM_BASE;
+  const w_pwm = pwm_commands % PWM_BASE;
+
+  // The first 3 bits are the hall sensor state.
+  const hall_u = (position_data >> 13) & 0b1;
+  const hall_v = (position_data >> 14) & 0b1;
+  const hall_w = (position_data >> 15) & 0b1;
+  // The next bit is the motor angle valid flag.
+  const motor_angle_valid = (position_data >> 12) & 0b1;
+  // The last 10 bits are the motor angle. Representing range from 0 to 360 degrees,
+  // where 0 means the rotor is aligned by holding positive current on the U phase.
+  const motor_angle = position_data & 0x3FF;
+
 
 
   return {
@@ -397,10 +419,16 @@ function parse_readout(data_view){
     hall_w,
     motor_angle_valid,
     motor_angle,
+    speed,
+    vcc_voltage,
+    torque,
+    hold,
+    total_power,
+    resistive_power,
   };
 }
 
-const full_readout_size = 16+16;
+const full_readout_size = readout_size + 20;
 
 function parse_full_readout(data_view){
   const readout = parse_readout(data_view);
@@ -422,6 +450,11 @@ function parse_full_readout(data_view){
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
+  const motor_current_angle = data_view.getInt16(offset);
+  offset += 2;
+  const motor_current_angle_stdev = data_view.getInt16(offset);
+  offset += 2;
+
   return {
     ...readout,
     code: FULL_READOUT,
@@ -433,6 +466,8 @@ function parse_full_readout(data_view){
     vcc_readout,
     cycle_start_tick,
     cycle_end_tick,
+    motor_current_angle,
+    motor_current_angle_stdev,
   };
 }
 

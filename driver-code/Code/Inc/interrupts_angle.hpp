@@ -38,6 +38,9 @@ extern int angular_speed_at_observation;
 // Variance of the angular speed at the last observation.
 extern int angular_speed_variance_at_observation;
 
+// Position calibration data. These are the trigger angles for each hall sensor output.
+extern PositionCalibration position_calibration;
+
 
 static inline void increment_time_since_observation(){
     // Check if we had a new hall sensor observation.
@@ -108,7 +111,7 @@ static inline void update_position_unobserved(){
 
     const int next_sector = (hall_sector_base + hall_sector + direction) % hall_sector_base;
 
-    const int trigger_angle = sector_transition_angles[next_sector][direction_index];
+    const int trigger_angle = position_calibration.trigger_angles[next_sector][direction_index];
 
     const int distance_to_trigger = signed_angle(trigger_angle - angle_at_observation);
     
@@ -118,8 +121,8 @@ static inline void update_position_unobserved(){
 
     if (time_since_observation >= max_time_between_observations) {
         // We haven't observed the hall sensors for a while; we need to reset the position estimate.
-        angle_at_observation = sector_center_angles[hall_sector];
-        angle_variance_at_observation = sector_center_variances[hall_sector];
+        angle_at_observation = position_calibration.sector_center_angles[hall_sector];
+        angle_variance_at_observation = position_calibration.sector_center_variances[hall_sector];
         angular_speed_at_observation = initial_angular_speed;
         angular_speed_variance_at_observation = initial_angular_speed_variance;
     }
@@ -148,8 +151,8 @@ static inline void update_position_observation(){
         previous_hall_sector = hall_sector;
 
         // Reset position tracking to the sector center; our best guess.
-        angle_at_observation = sector_center_angles[hall_sector];
-        angle_variance_at_observation = sector_center_variances[hall_sector];
+        angle_at_observation = position_calibration.sector_center_angles[hall_sector];
+        angle_variance_at_observation = position_calibration.sector_center_variances[hall_sector];
         angular_speed_at_observation = initial_angular_speed;
         angular_speed_variance_at_observation = initial_angular_speed_variance;
 
@@ -171,9 +174,9 @@ static inline void update_position_observation(){
 
     // Get data about this transition from the calibration table.
 
-    const int trigger_angle = sector_transition_angles[hall_sector][direction_index];
-    const int trigger_variance = sector_transition_variances[hall_sector][direction_index];
-    const int sector_variance = sector_center_variances[hall_sector];
+    const int trigger_angle = position_calibration.trigger_angles[hall_sector][direction_index];
+    const int trigger_variance = position_calibration.trigger_angle_variances[hall_sector][direction_index];
+    const int sector_variance = position_calibration.sector_center_variances[hall_sector];
 
     // Change coordinates with angle as the center. The next trigger is always close to the current 
     // angle (max distance between sectors is 120 degrees). On the other hand the distance since

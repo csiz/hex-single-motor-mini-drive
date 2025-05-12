@@ -65,9 +65,10 @@ export function plot_lines({
   result.shown_data = undefined;
 
   result.update = (draw_data) => {
-    if (!result.value.show) return;
-
+    // Remember plot data even if we don't show the plot.
     result.plot_data = {...result.plot_data, ...draw_data};
+    
+    if (!result.value.show) return;
 
     // Get latest values.
     const {data, x_domain, y_domain} = result.plot_data;

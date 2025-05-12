@@ -56,6 +56,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "Code/Src/interface.cpp"
     "Code/Src/error_handler.cpp"
     "Code/Src/user_data.cpp"
+    "Code/Src/integer_math.cpp"
 )
 
 # Add include paths

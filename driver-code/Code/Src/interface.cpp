@@ -11,12 +11,10 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
     size_t offset = 0;
     write_uint16(buffer + offset, READOUT);
     offset += 2;
-    write_uint16(buffer + offset, readout.readout_number);
-    offset += 2;
-    write_uint16(buffer + offset, readout.position);
-    offset += 2;
     write_uint32(buffer + offset, readout.pwm_commands);
     offset += 4;
+    write_uint16(buffer + offset, readout.readout_number);
+    offset += 2;
     write_uint16(buffer + offset, readout.u_readout);
     offset += 2;
     write_uint16(buffer + offset, readout.v_readout);
@@ -25,6 +23,20 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.ref_readout);
     offset += 2;
+    write_uint16(buffer + offset, readout.position);
+    offset += 2;
+    write_int16(buffer + offset, readout.speed);
+    offset += 2;
+    write_uint16(buffer + offset, readout.vcc_voltage);
+    offset += 2;
+    write_int16(buffer + offset, readout.torque);
+    offset += 2;
+    write_int16(buffer + offset, readout.hold);
+    offset += 2;
+    write_int16(buffer + offset, readout.total_power);
+    offset += 2;
+    write_int16(buffer + offset, readout.resistive_power);
+    offset += 2;
 
     // Check if we wrote the correct number of bytes.
     if (offset != readout_size) error();
@@ -32,7 +44,7 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
 
 void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     size_t offset = 0;
-    write_readout(buffer + offset, readout.readout);
+    write_readout(buffer + offset, static_cast<Readout>(readout));
     offset += readout_size;
 
     // Overwrite command code.
@@ -56,6 +68,12 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.cycle_end_tick);
     offset += 2;
+
+    write_int16(buffer + offset, readout.current_angle);
+    offset += 2;
+    write_int16(buffer + offset, readout.current_angle_stdev);
+    offset += 2;
+
 
     // Check if we wrote the correct number of bytes.
     if (offset != full_readout_size) error();
@@ -89,10 +107,10 @@ bool buffer_command(CommandBuffer & buffer, int receive_function(uint8_t *buf, u
     // Expect additional bytes for the commands below.
     switch (code){
         case SET_CURRENT_FACTORS:
-            buffer.bytes_expected = sizeof(CurrentFactors) - bytes_extra;
+            buffer.bytes_expected = sizeof(CurrentCalibration) - bytes_extra;
             break;
         case SET_TRIGGER_ANGLES:
-            buffer.bytes_expected = sizeof(TriggerAngles) - bytes_extra;
+            buffer.bytes_expected = sizeof(PositionCalibration) - bytes_extra;
             break;
         default:
             // ALl other commands fit into the command header; and were therefore received.
@@ -122,55 +140,57 @@ CommandHeader parse_command_header(CommandBuffer const & buffer) {
     return { code, timeout, pwm, leading_angle };
 }
 
-CurrentFactors parse_current_factors(CommandBuffer const & buffer) {
-    if(buffer.index < command_header_size + sizeof(CurrentFactors)) error();
+CurrentCalibration parse_current_calibration(CommandBuffer const & buffer) {
+    if(buffer.index < command_header_size + sizeof(CurrentCalibration)) error();
 
     // Skip the command header.
     uint8_t const * data = buffer.data + command_header_size;
 
-    CurrentFactors factors = {};
+    CurrentCalibration factors = {};
 
-    factors.u_pos_factor = read_uint16(data);
+    factors.u_factor = read_int16(data);
     data += 2;
-    factors.u_neg_factor = read_uint16(data);
+    factors.v_factor = read_int16(data);
     data += 2;
-    factors.v_pos_factor = read_uint16(data);
-    data += 2;
-    factors.v_neg_factor = read_uint16(data);
-    data += 2;
-    factors.w_pos_factor = read_uint16(data);
-    data += 2;
-    factors.w_neg_factor = read_uint16(data);
+    factors.w_factor = read_int16(data);
     data += 2;
 
-    if (data - (buffer.data + command_header_size) != sizeof(CurrentFactors)) error();
+    if (data - (buffer.data + command_header_size) != sizeof(CurrentCalibration)) error();
     
     return factors;
 }
 
-TriggerAngles parse_trigger_angles(CommandBuffer const & buffer) {
-    if(buffer.index < command_header_size + sizeof(TriggerAngles)) error();
+PositionCalibration parse_position_calibration(CommandBuffer const & buffer) {
+    if(buffer.index < command_header_size + sizeof(PositionCalibration)) error();
 
     // Skip the command header.
     uint8_t const * data = buffer.data + command_header_size;
 
-    TriggerAngles angles = {};
+    PositionCalibration angles = {};
 
     for (int i = 0; i < 6; i++){
-        angles.trigger_angle[i][0] = read_uint16(data);
+        angles.trigger_angles[i][0] = read_int16(data);
         data += 2;
-        angles.trigger_angle[i][1] = read_uint16(data);
+        angles.trigger_angles[i][1] = read_int16(data);
         data += 2;
     }
 
     for (int i = 0; i < 6; i++){
-        angles.trigger_angle_variance[i][0] = read_uint16(data);
+        angles.trigger_angle_variances[i][0] = read_int16(data);
         data += 2;
-        angles.trigger_angle_variance[i][1] = read_uint16(data);
+        angles.trigger_angle_variances[i][1] = read_int16(data);
+        data += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        angles.sector_center_angles[i] = read_int16(data);
+        data += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        angles.sector_center_variances[i] = read_int16(data);
         data += 2;
     }
 
-    if (data - (buffer.data + command_header_size) != sizeof(TriggerAngles)) error();
+    if (data - (buffer.data + command_header_size) != sizeof(PositionCalibration)) error();
     
     return angles;
 }

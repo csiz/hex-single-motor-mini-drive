@@ -1,9 +1,11 @@
 // Motor driver constants copied from the C++ code.
 
+export const ANGLE_BASE = 1024;
+
 export const PWM_BASE = 1536; // 0x0600
 export const PWM_PERIOD = 2 * PWM_BASE;
 export const MAX_TIMEOUT = 0xFFFF; 
-export const HISTORY_SIZE = 420;
+export const HISTORY_SIZE = 360;
 export const READOUT_BASE = 0x10000;
 
 export const V_REF = 3.3; // V

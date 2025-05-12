@@ -27,6 +27,7 @@ Motor Driving Data
   <span>${plot_options_input}</span>
   <span>${timeline_position_input}</span>
 </div>
+<div class="card tight">${plot_power}</div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
@@ -289,8 +290,7 @@ function update_data (new_data){
 
 const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
 const command_pwm = Math.floor(command_pwm_fraction * PWM_BASE);
-const command_leading_angle = Math.floor(256 + 256 * command_leading_angle_degrees / 360) % 256;
-
+const command_leading_angle = Math.floor(ANGLE_BASE + ANGLE_BASE * command_leading_angle_degrees / 360) % ANGLE_BASE;
 
 async function command(command, options = {}){
   if (!motor_controller) return;
@@ -560,6 +560,23 @@ timeline_position_input.update({
 
 const curve = plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step;
 
+const plot_power = plot_lines({
+  subtitle: "Power",
+  description: "Power consumed by motor.",
+  width: 1200, height: 150,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Power (W)",
+  channels: [
+    {y: "total_power", label: "Total Power", color: colors.sum},
+    {y: "torque", label: "Torque", color: colors.motor_angle},
+    {y: "hold", label: "Hold", color: colors.current_angle},
+    {y: "resistive_power", label: "Resistive Power", color: colors.current_magnitude},
+  ],
+  curve,
+});
+
+
 const plot_runtime_stats = plot_lines({
   subtitle: "Motor driver runtime stats",
   description: "Timing data for the motor driver interrupt routines and the main loop.",
@@ -612,6 +629,7 @@ const plot_electric_position = plot_lines({
       }),
     },
     {y: "motor_angle", label: "Motor Angle", color: colors.motor_angle},
+    {y: "motor_current_angle", label: "Motor Current Angle", color: colors.current_angle},
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage (Park) Angle", color: colors.voltage_angle},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
@@ -753,6 +771,7 @@ const plot_pwm_settings = plot_lines({
 
 
 autosave_inputs({
+  plot_power,
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
@@ -780,6 +799,7 @@ const time_domain = !timeline_position.selection ? [data_time_start, data_time_e
 const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
 
 [
+  plot_power,
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
@@ -1583,7 +1603,7 @@ import {process_readout_with_calibration, cycles_per_millisecond, millis_per_cyc
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
-import {MAX_TIMEOUT, PWM_BASE, PWM_PERIOD, HISTORY_SIZE} from "./components/motor_driver_constants.js";
+import {MAX_TIMEOUT, ANGLE_BASE, PWM_BASE, PWM_PERIOD, HISTORY_SIZE} from "./components/motor_driver_constants.js";
 
 
 // Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.

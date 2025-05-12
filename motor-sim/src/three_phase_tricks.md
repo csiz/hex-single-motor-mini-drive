@@ -29,15 +29,20 @@ rotating phasor frame).
 </div>
 
 <pre>${phases_wave_form_lookup_table}</pre>
-
+<pre>${sin_lookup_table}</pre>
 </main>
 
 
 ```js
 
-const phi = d3.range(256).map(x => 2 * Math.PI * x / 256);
+import {ANGLE_BASE, PWM_BASE} from "./components/motor_driver_constants.js";
+
+const phi = d3.range(ANGLE_BASE).map(x => 2 * Math.PI * x / ANGLE_BASE);
 const phases = phi.map(t => {
   const deg = t * 180 / Math.PI;
+
+  const sin = Math.sin(t);
+
   const u = Math.cos(t);
   const v = Math.cos(t + 2 * Math.PI / 3);
   const w = Math.cos(t + 4 * Math.PI / 3);
@@ -55,7 +60,7 @@ const phases = phi.map(t => {
   const adj_u = u + adj;
   const adj_v = v + adj;
   const adj_w = w + adj;
-  return {deg, u, v, w, adj: -adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w, uv, vw, wu};
+  return {sin, deg, u, v, w, adj: -adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w, uv, vw, wu};
 });
 
 const max_adj = d3.max(phases, d => d.adj_u);
@@ -101,4 +106,7 @@ const phases_rebased_plot = Plot.plot({
 // Print the lookup table in chunks of 16 elements per line; indenting each line by a tab character.
 const chunk_size = 16;
 const phases_chunked = Array.from({length: Math.ceil(phases.length / chunk_size)}, (_, i) => phases.slice(i * chunk_size, i * chunk_size + chunk_size));
-const phases_wave_form_lookup_table = `const uint16_t phases_waveform[256] = {\n\t${phases_chunked.map(chunk => chunk.map(d => (d.adj_u / max_adj * 1536).toFixed(0).padStart(4, " ")).join(', ')).join(',\n\t')}\n};`;
+
+const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${ANGLE_BASE}] = {\n    ${phases_chunked.map(chunk => chunk.map(d => (d.adj_u / max_adj * PWM_BASE).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
+
+const sin_lookup_table = `const uint16_t sin_lookup[${ANGLE_BASE}] = {\n    ${phases_chunked.map(chunk => chunk.map(d => (d.sin * ANGLE_BASE).toFixed(0).padStart(5, " ")).join(', ')).join(',\n    ')}\n};`;

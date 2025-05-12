@@ -12,3 +12,5 @@ int angle_at_observation = 0;
 int angle_variance_at_observation = 0;
 int angular_speed_at_observation = 0;
 int angular_speed_variance_at_observation = 0;
+
+PositionCalibration position_calibration = default_position_calibration;

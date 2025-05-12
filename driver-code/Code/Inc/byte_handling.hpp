@@ -34,3 +34,10 @@ static inline uint16_t read_uint16(uint8_t const * buf) {
     value |= buf[1];
     return value;
 }
+
+static inline int16_t read_int16(uint8_t const * buf) {
+    int16_t value = 0;
+    value |= buf[0] << 8;
+    value |= buf[1];
+    return value;
+}
