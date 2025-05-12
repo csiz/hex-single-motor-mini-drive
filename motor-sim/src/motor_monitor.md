@@ -162,7 +162,7 @@ async function connect_motor_controller(){
   try {
     await disconnect_motor_controller(false);
 
-    motor_controller.value = await motor.connect_usb_motor_controller();
+    motor_controller.value = await connect_usb_motor_controller();
 
     connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
@@ -210,7 +210,7 @@ const command_pwm_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: 
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
-const command_timeout_slider = Inputs.range([0, MAX_TIMEOUT*millis_per_cycle], {value: 2000, step: 5, label: "Command timeout (ms):"});
+const command_timeout_slider = Inputs.range([0, max_timeout*millis_per_cycle], {value: 2000, step: 5, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
@@ -289,8 +289,8 @@ function update_data (new_data){
 
 
 const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
-const command_pwm = Math.floor(command_pwm_fraction * PWM_BASE);
-const command_leading_angle = Math.floor(ANGLE_BASE + ANGLE_BASE * command_leading_angle_degrees / 360) % ANGLE_BASE;
+const command_pwm = Math.floor(command_pwm_fraction * pwm_base);
+const command_leading_angle = Math.floor(angle_base + angle_base * command_leading_angle_degrees / 360) % angle_base;
 
 async function command(command, options = {}){
   if (!motor_controller) return;
@@ -308,8 +308,7 @@ function command_and_stream(delay_ms, command, options = {}){
 
   latest_stream_timeout = setTimeout(async function(){
     try {
-      await motor_controller.send_command({command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options});
-  
+
       let data = [];
       let prev_readout = undefined;
       function readout_callback(raw_readout){
@@ -319,11 +318,12 @@ function command_and_stream(delay_ms, command, options = {}){
         if (data.length > max_data_size) data = data.slice(-target_data_size);
         update_data(data);
       }
+
       // Start reading the data stream.
-      await motor_controller.stream_readouts({
-        readout_callback,
-        ...options,
-      });
+      await motor_controller.command_and_stream(
+        {command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options},
+        {readout_callback, ...options});
+
     } catch (error) {
       console.error("Error streaming data:", error);
     }
@@ -333,13 +333,13 @@ function command_and_stream(delay_ms, command, options = {}){
 const data_request_buttons = Inputs.button(
   [
     ["ADC snapshot", function(){
-      command_and_stream(0, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+      command_and_stream(0, command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
     }],
     ["ADC stream", function(){
-      command_and_stream(0, motor.STREAM_FULL_READOUTS, {expected_code: motor.FULL_READOUT, command_timeout: 1});
+      command_and_stream(0, command_codes.STREAM_FULL_READOUTS, {expected_code: command_codes.FULL_READOUT, command_timeout: 1});
     }],
     ["STOP stream", async function(){
-      await command(motor.STREAM_FULL_READOUTS, {command_timeout: 0});
+      await command(command_codes.STREAM_FULL_READOUTS, {command_timeout: 0});
     }],
   ],
   {label: "Read data"},
@@ -350,46 +350,46 @@ d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 const test_buttons = Inputs.button(
   [
     ["Test all permutations", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_ALL_PERMUTATIONS);
+      command_and_stream(0, command_codes.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
     ["Test ground short", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_GROUND_SHORT);
+      command_and_stream(0, command_codes.SET_STATE_TEST_GROUND_SHORT);
     }],
     ["Test positive short", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_POSITIVE_SHORT);
+      command_and_stream(0, command_codes.SET_STATE_TEST_POSITIVE_SHORT);
     }],
     ["Test U directions", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_U_DIRECTIONS);
+      command_and_stream(0, command_codes.SET_STATE_TEST_U_DIRECTIONS);
     }],
     ["Test U increasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_U_INCREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_U_INCREASING);
     }],
     ["Test U decreasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_U_DECREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_U_DECREASING);
     }],
     ["Test V increasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_W_DECREASING);
     }],
     ["Test V increasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_V_INCREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_V_DECREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_W_INCREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", function(){
-      command_and_stream(0, motor.SET_STATE_TEST_W_DECREASING);
+      command_and_stream(0, command_codes.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Test sequence"},
@@ -397,7 +397,7 @@ const test_buttons = Inputs.button(
 
 function snapshot_if_checked(delay_ms){
   if (command_options.includes("Take snapshot after command")){
-    command_and_stream(delay_ms, motor.GET_READOUTS_SNAPSHOT, {expected_messages: HISTORY_SIZE});
+    command_and_stream(delay_ms, command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
   }
 }
 
@@ -407,51 +407,51 @@ d3.select(test_buttons).selectAll("button").style("height", "4em");
 const command_buttons = Inputs.button(
   [
     ["Stop", async function(){
-      await command(motor.SET_STATE_OFF);
+      await command(command_codes.SET_STATE_OFF);
       snapshot_if_checked(0);
     }],
     ["Drive +", async function(){
-      await command(motor.SET_STATE_DRIVE_POS);
+      await command(command_codes.SET_STATE_DRIVE_POS);
       snapshot_if_checked(500);
     }],
     ["Drive -", async function(){
-      await command(motor.SET_STATE_DRIVE_NEG);
+      await command(command_codes.SET_STATE_DRIVE_NEG);
       snapshot_if_checked(500);
     }],
     ["Drive smooth +", async function(){
-      await command(motor.SET_STATE_DRIVE_SMOOTH_POS);
+      await command(command_codes.SET_STATE_DRIVE_SMOOTH_POS);
       snapshot_if_checked(500);
     }],
     ["Drive smooth -", async function(){
-      await command(motor.SET_STATE_DRIVE_SMOOTH_NEG);
+      await command(command_codes.SET_STATE_DRIVE_SMOOTH_NEG);
       snapshot_if_checked(500);
     }],
     ["Freewheel", async function(){
-      await command(motor.SET_STATE_FREEWHEEL);
+      await command(command_codes.SET_STATE_FREEWHEEL);
       snapshot_if_checked(0);
     }],
     ["Hold U positive", async function(){
-      await command(motor.SET_STATE_HOLD_U_POSITIVE);
+      await command(command_codes.SET_STATE_HOLD_U_POSITIVE);
       snapshot_if_checked(500);
     }],
     ["Hold V positive", async function(){
-      await command(motor.SET_STATE_HOLD_V_POSITIVE);
+      await command(command_codes.SET_STATE_HOLD_V_POSITIVE);
       snapshot_if_checked(500);
     }],
     ["Hold W positive", async function(){
-      await command(motor.SET_STATE_HOLD_W_POSITIVE);
+      await command(command_codes.SET_STATE_HOLD_W_POSITIVE);
       snapshot_if_checked(500);
     }],
     ["Hold U negative", async function(){
-      await command(motor.SET_STATE_HOLD_U_NEGATIVE);
+      await command(command_codes.SET_STATE_HOLD_U_NEGATIVE);
       snapshot_if_checked(500);
     }],
     ["Hold V negative", async function(){
-      await command(motor.SET_STATE_HOLD_V_NEGATIVE);
+      await command(command_codes.SET_STATE_HOLD_V_NEGATIVE);
       snapshot_if_checked(500);
     }],
     ["Hold W negative", async function(){
-      await command(motor.SET_STATE_HOLD_W_NEGATIVE);
+      await command(command_codes.SET_STATE_HOLD_W_NEGATIVE);
       snapshot_if_checked(500);
     }],
   ],
@@ -472,7 +472,7 @@ d3.select(command_buttons).selectAll("button").style("height", "4em");
 
 const max_time_period = 2000; // ms
 
-const history_duration = Math.ceil(HISTORY_SIZE * millis_per_cycle);
+const history_duration = Math.ceil(history_size * millis_per_cycle);
 
 const time_period_input = Inputs.range([1, max_time_period], {
   value: history_duration,
@@ -562,7 +562,7 @@ const curve = plot_options.includes("Connected lines") ? d3.curveStep : horizont
 
 const plot_power = plot_lines({
   subtitle: "Power",
-  description: "Power consumed by motor.",
+  description: "Power consumed by command_codes.",
   width: 1200, height: 150,
   x: "time",
   x_label: "Time (ms)",
@@ -600,12 +600,12 @@ const plot_cycle_loop_stats = plot_lines({
   x: "time",
   x_label: "Time (ms)",
   y_label: "PWM counter value",
-  y_domain: [0, PWM_PERIOD],
+  y_domain: [0, pwm_period],
   channels: [
     {y: "cycle_start_tick", label: "Tick at start", color: colors.u},
     {y: "cycle_end_tick", label: "Tick at end", color: colors.v},
-    {y: (d) => (PWM_PERIOD + d.cycle_end_tick - d.cycle_start_tick) % PWM_PERIOD , label: "Cycle duration", color: colors.w},
-    {y: (d) => d.cycle_start_tick - PWM_BASE, label: "Ticks at start since mid cycle", color: d3.color(colors.u).brighter(1)},
+    {y: (d) => (pwm_period + d.cycle_end_tick - d.cycle_start_tick) % pwm_period , label: "Cycle duration", color: colors.w},
+    {y: (d) => d.cycle_start_tick - pwm_base, label: "Ticks at start since mid cycle", color: d3.color(colors.u).brighter(1)},
   ],
   curve,
 });
@@ -760,7 +760,7 @@ const plot_pwm_settings = plot_lines({
   x: "time",
   x_label: "Time (ms)",
   y_label: "PWM",
-  y_domain: [0, PWM_BASE],
+  y_domain: [0, pwm_base],
   channels: [
     {y: "u_pwm", label: "PWM U", color: colors.u},
     {y: "v_pwm", label: "PWM V", color: colors.v},
@@ -851,35 +851,35 @@ async function run_position_calibration(){
   const drive_time = 200;
   const drive_timeout = Math.floor((drive_time + 300) * cycles_per_millisecond);
 
-  const drive_strength = Math.floor(PWM_BASE * 2 / 10);
+  const drive_strength = Math.floor(pwm_base * 2 / 10);
   const drive_options = {command_timeout: drive_timeout, command_pwm: drive_strength};
 
   const test_options = {command_timeout: 0, command_pwm: 0};
 
-  await motor_controller.send_command({command: motor.SET_STATE_DRIVE_POS, ...drive_options});  
+  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_POS, ...drive_options});  
   await wait(drive_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_GROUND_SHORT, ...test_options});
-
-  const drive_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
+  const drive_positive = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
+    {expected_messages: history_size}));
 
   console.info("Drive positive done");
 
-  await motor_controller.send_command({command: motor.SET_STATE_DRIVE_NEG, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_NEG, ...drive_options});
   await wait(drive_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_GROUND_SHORT, ...test_options});
-  
-  const drive_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
-  
-  
+  const drive_negative = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
+    {expected_messages: history_size}));
+
+
   console.info("Drive negative done");
 
   console.info("Position calibration done");
 
-  if (drive_positive.length != HISTORY_SIZE) {
+  if (drive_positive.length != history_size) {
     console.error("Drive positive data is not valid", drive_positive);
     return;
   }
-  if (drive_negative.length != HISTORY_SIZE) {
+  if (drive_negative.length != history_size) {
     console.error("Drive negative data is not valid", drive_negative);
     return;
   }
@@ -923,7 +923,7 @@ const position_calibration_pos_plot = plot_lines({
   subtitle: "Electric position | drive positive then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x_domain: [0, history_size * millis_per_cycle],
   y_domain: [-180, 180],
   x: "time",
   x_label: "Time (ms)",
@@ -950,7 +950,7 @@ const position_calibration_pos_speed_plot = plot_lines({
   subtitle: "Rotor Speed | drive positive then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x_domain: [0, history_size * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -972,7 +972,7 @@ const position_calibration_neg_plot = plot_lines({
   subtitle: "Electric position | drive negative then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x_domain: [0, history_size * millis_per_cycle],
   y_domain: [-180, 180],
   x: "time",
   x_label: "Time (ms)",
@@ -998,7 +998,7 @@ const position_calibration_neg_speed_plot = plot_lines({
   subtitle: "Rotor Speed | drive negative then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x_domain: [0, history_size * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -1128,7 +1128,7 @@ let current_calibration_results = Mutable();
 let current_calibration = Mutable();
 let current_calibration_stats = Mutable();
 
-const short_duration = HISTORY_SIZE / 12 * millis_per_cycle;
+const short_duration = history_size / 12 * millis_per_cycle;
 
 const current_calibration_zones = [
   {pwm: 0.1, settle_start: short_duration * 1.4, settle_end: short_duration * 1.95},
@@ -1221,7 +1221,7 @@ function update_current_calibration_results(calibration_data){
 
   if (valid_calibration_results.length == 0) return;
 
-  const calibration_stats = d3.range(HISTORY_SIZE).map((i) => {
+  const calibration_stats = d3.range(history_size).map((i) => {
     return {
       time: valid_calibration_results[0][i].time,
       target: d3.mean(valid_calibration_results, (data) => data[i].target),
@@ -1292,7 +1292,7 @@ async function run_current_calibration(){
   
   const settle_time = 100;
   const settle_timeout = Math.floor((settle_time + 300) * cycles_per_millisecond);
-  const settle_strength = Math.floor(PWM_BASE * 2 / 10);
+  const settle_strength = Math.floor(pwm_base * 2 / 10);
 
   const drive_options = {command_timeout: settle_timeout, command_pwm: settle_strength};
   const test_options = {command_timeout: 0, command_pwm: 0};
@@ -1301,81 +1301,81 @@ async function run_current_calibration(){
 
   // Note: hold pwm is clamped by the motor driver
 
-  await motor_controller.send_command({command: motor.SET_STATE_HOLD_U_POSITIVE, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_POSITIVE, ...drive_options});
   await wait(settle_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_U_INCREASING, ...test_options});
-
-  const u_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
+  const u_positive = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_U_INCREASING, ...test_options},
+    {expected_messages: history_size}));
 
   console.info("U positive done");
 
-  await motor_controller.send_command({command: motor.SET_STATE_HOLD_W_NEGATIVE, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_W_DECREASING, ...test_options});
-
-  const w_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
+  const w_negative = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_W_DECREASING, ...test_options},
+    {expected_messages: history_size}));
 
   console.info("W negative done");
 
-  await motor_controller.send_command({command: motor.SET_STATE_HOLD_V_POSITIVE, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_POSITIVE, ...drive_options});
   await wait(settle_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_V_INCREASING, ...test_options});
-
-  const v_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
+  const v_positive = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_V_INCREASING, ...test_options},
+    {expected_messages: history_size}));
 
   console.info("V positive done");
 
-  await motor_controller.send_command({command: motor.SET_STATE_HOLD_U_NEGATIVE, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_U_DECREASING, ...test_options});
-
-  const u_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
+  const u_negative = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_U_DECREASING, ...test_options},
+    {expected_messages: history_size}));
 
   console.info("U negative done");
 
-  await motor_controller.send_command({command: motor.SET_STATE_HOLD_W_POSITIVE, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_POSITIVE, ...drive_options});
   await wait(settle_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_W_INCREASING, ...test_options});
-
-  const w_positive = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
+  const w_positive = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_W_INCREASING, ...test_options},
+    {expected_messages: history_size}));
 
   console.info("W positive done");
 
-  await motor_controller.send_command({command: motor.SET_STATE_HOLD_V_NEGATIVE, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  await motor_controller.send_command({command: motor.SET_STATE_TEST_V_DECREASING, ...test_options});
-
-  const v_negative = calculate_data_stats(await motor_controller.get_readouts({expected_messages: HISTORY_SIZE}));
+  const v_negative = calculate_data_stats(await motor_controller.command_and_read(
+    {command: command_codes.SET_STATE_TEST_V_DECREASING, ...test_options},
+    {expected_messages: history_size}));
 
   console.info("V negative done");
 
   // Check all calibration data is complete.
-  if (u_positive.length !== HISTORY_SIZE) {
+  if (u_positive.length !== history_size) {
     console.error("U positive calibration data incomplete", u_positive);
     return;
   }
-  if (u_negative.length !== HISTORY_SIZE) {
+  if (u_negative.length !== history_size) {
     console.error("U negative calibration data incomplete", u_negative);
     return;
   }
-  if (v_positive.length !== HISTORY_SIZE) {
+  if (v_positive.length !== history_size) {
     console.error("V positive calibration data incomplete", v_positive);
     return;
   }
-  if (v_negative.length !== HISTORY_SIZE) {
+  if (v_negative.length !== history_size) {
     console.error("V negative calibration data incomplete", v_negative);
     return;
   }
-  if (w_positive.length !== HISTORY_SIZE) {
+  if (w_positive.length !== history_size) {
     console.error("W positive calibration data incomplete", w_positive);
     return;
   }
-  if (w_negative.length !== HISTORY_SIZE) {
+  if (w_negative.length !== history_size) {
     console.error("W negative calibration data incomplete", w_negative);
     return;
   }
 
-  const targets = d3.range(HISTORY_SIZE).map((i) => {
+  const targets = d3.range(history_size).map((i) => {
     const t = i * millis_per_cycle;
     const zone = current_calibration_zones.filter((zone) => zone.settle_start <= t && t <= zone.settle_end);
 
@@ -1388,7 +1388,7 @@ async function run_current_calibration(){
   });
 
   // Make a new table with each calibration phase as a column.
-  const calibration_data = d3.range(HISTORY_SIZE).map((i) => {
+  const calibration_data = d3.range(history_size).map((i) => {
     return {
       time: u_positive[i].time,
       target: targets[i],
@@ -1433,7 +1433,7 @@ const current_calibration_plot = plot_lines({
   subtitle: "Current Calibration",
   description: "Current calibration results for each phase.",
   width: 1200, height: 400,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x_domain: [0, history_size * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1499,7 +1499,7 @@ const current_calibration_positive_mean_plot = plot_lines({
   subtitle: "Mean Response - Positive",
   description: "Current calibration mean results for each phase driven positive.",
   width: 1200, height: 300,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x_domain: [0, history_size * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1541,7 +1541,7 @@ const current_calibration_negative_mean_plot = plot_lines({
   subtitle: "Mean Response - Negative (inverted)",
   description: "Current calibration mean results for each phase driven negative.",
   width: 1200, height: 300,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x_domain: [0, history_size * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1596,14 +1596,14 @@ import {plot_lines, plot_line, setup_faint_area, horizontal_step} from "./compon
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
-import * as motor from "./components/motor_controller.js";
+import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
 
 import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
 import {process_readout_with_calibration, cycles_per_millisecond, millis_per_cycle, online_map, online_function_chain, current_calibration_default} from "./components/readout_processing.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
-import {MAX_TIMEOUT, ANGLE_BASE, PWM_BASE, PWM_PERIOD, HISTORY_SIZE} from "./components/motor_constants.js";
+import {max_timeout, angle_base, pwm_base, pwm_period, history_size} from "./components/motor_constants.js";
 
 
 // Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.

@@ -1,5 +1,5 @@
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees} from "./angular_math.js";
-import {calculate_temperature, calculate_voltage, READOUT_BASE, ANGLE_BASE} from "./motor_constants.js";
+import {calculate_temperature, calculate_voltage, readout_base, angle_base} from "./motor_constants.js";
   
 
 // PWM motor cycles per millisecond.
@@ -296,7 +296,7 @@ function accumulate_position_from_hall(prev, curr){
 
 function annotate_readout({current_calibration_factors}){
   return function(prev, curr){
-    const readout_diff = !prev ? 0 : (READOUT_BASE + curr.readout_number - prev.readout_number) % READOUT_BASE;
+    const readout_diff = !prev ? 0 : (readout_base + curr.readout_number - prev.readout_number) % readout_base;
     const readout_index = !prev ? 0 : prev.readout_index + readout_diff;
 
     const time = readout_index * millis_per_cycle;
@@ -345,13 +345,13 @@ function annotate_readout({current_calibration_factors}){
       vcc_voltage: calculate_voltage(curr.vcc_readout),
       temperature: calculate_temperature(curr.temperature_readout),
       u_readout, v_readout, w_readout, 
-      motor_angle: normalize_degrees(curr.motor_angle * 360 / ANGLE_BASE),
+      motor_angle: normalize_degrees(curr.motor_angle * 360 / angle_base),
       motor_speed_std: Math.sqrt(curr.motor_speed_variance),
       u, v, w, 
       ref_diff,  sum, 
       current_alpha, current_beta, 
       current_angle: current_angle * 180 / Math.PI, 
-      motor_current_angle: normalize_degrees(curr.motor_current_angle * 360 / ANGLE_BASE),
+      motor_current_angle: normalize_degrees(curr.motor_current_angle * 360 / angle_base),
       current_magnitude, 
       hall_u_as_angle: hall_u_as_angle === null ? null : hall_u_as_angle * 180 / Math.PI, 
       hall_v_as_angle: hall_v_as_angle === null ? null : hall_v_as_angle * 180 / Math.PI, 
