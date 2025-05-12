@@ -68,7 +68,7 @@ int16_t get_current_angle_stdev(){
 }
 
 // Data queue
-Readout readout_history[HISTORY_SIZE] = {};
+Readout readout_history[history_size] = {};
 size_t readout_history_write_index = 0;
 size_t readout_history_read_index = 0;
 
@@ -77,7 +77,7 @@ void readout_history_reset() {
     readout_history_read_index = 0;
 }
 bool readout_history_full(){
-    return readout_history_write_index >= HISTORY_SIZE;
+    return readout_history_write_index >= history_size;
 }
 bool readout_history_available(){
     return readout_history_read_index < readout_history_write_index;
@@ -86,12 +86,12 @@ Readout readout_history_pop(){
     Readout readout = readout_history[readout_history_read_index];
     readout_history_read_index += 1;
     // Reset both indexes if we have sent the whole history.
-    if (readout_history_read_index >= HISTORY_SIZE) readout_history_reset();
+    if (readout_history_read_index >= history_size) readout_history_reset();
     return readout;
 }
 
 static inline bool readout_history_push(Readout const & readout){
-    if (readout_history_write_index >= HISTORY_SIZE) return false;
+    if (readout_history_write_index >= history_size) return false;
     readout_history[readout_history_write_index] = readout;
     readout_history_write_index += 1;
     return true;
@@ -107,12 +107,12 @@ static inline void pwm_cycle_and_adc_update(){
 
 
     // Check what time it is on the PWM cycle.
-    cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (PWM_PERIOD - LL_TIM_GetCounter(TIM1));
+    cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
     
     increment_time_since_observation();
 
     // Write the previous pwm duty cycle to this readout, it should have been active during the prior to the ADC sampling.
-    latest_readout.pwm_commands = get_motor_u_pwm_duty() * PWM_BASE * PWM_BASE + get_motor_v_pwm_duty() * PWM_BASE + get_motor_w_pwm_duty();
+    latest_readout.pwm_commands = get_motor_u_pwm_duty() * pwm_base * pwm_base + get_motor_v_pwm_duty() * pwm_base + get_motor_w_pwm_duty();
     
     // Write the current readout index.
     latest_readout.readout_number = adc_update_number;
@@ -196,7 +196,7 @@ static inline void pwm_cycle_and_adc_update(){
     latest_readout.total_power = vcc_voltage * (
         u_current * get_motor_u_pwm_duty() + 
         v_current * get_motor_v_pwm_duty() + 
-        w_current * get_motor_w_pwm_duty()) / PWM_BASE;
+        w_current * get_motor_w_pwm_duty()) / pwm_base;
 
     latest_readout.resistive_power = phase_int_resistance * (
         u_current * u_current + 
@@ -239,7 +239,7 @@ static inline void pwm_cycle_and_adc_update(){
 
 
 
-    cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (PWM_PERIOD - LL_TIM_GetCounter(TIM1));
+    cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
 }
 
 // Interrupt handlers
@@ -382,7 +382,7 @@ void enable_timers(){
     // 
     // Use the TIM1 channel 4 to generate an event a short time before the counter reaches
     // the auto reload value. This event triggers the ADC to read the motor phase currents.
-    const uint16_t injected_conversion_start = PWM_BASE - SAMPLE_LEAD_TIME;
+    const uint16_t injected_conversion_start = pwm_base - sample_lead_time;
     LL_TIM_OC_SetCompareCH4(TIM1, injected_conversion_start);
 
     // It appears that the countermode is being ignored for the external ADC triggering.

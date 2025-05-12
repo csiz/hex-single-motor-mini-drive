@@ -60,7 +60,7 @@ const uint32_t USB_TIMEOUT = 500;
 void app_init() {
 
     // Setup PWM settings.
-    LL_TIM_SetAutoReload(TIM1, PWM_AUTORELOAD); // 72MHz / 1536 / 2 = 23.4KHz
+    LL_TIM_SetAutoReload(TIM1, pwm_autoreload); // 72MHz / 1536 / 2 = 23.4KHz
 
     // Set which interrupts to handle.
     interrupts_init();
@@ -88,7 +88,7 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     usb_wait_full_history = true;
 
     // Stop adding readouts to the queue until the test starts in the interrupt handler.
-    usb_readouts_to_send = HISTORY_SIZE;
+    usb_readouts_to_send = history_size;
 
     // Start the test schedule.
     motor_start_schedule(schedule);
@@ -115,7 +115,7 @@ bool handle_command(CommandBuffer const & buffer) {
             readout_history_reset();
             // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
             usb_wait_full_history = true;
-            usb_readouts_to_send = HISTORY_SIZE;
+            usb_readouts_to_send = history_size;
             return true;
 
         // Turn off the motor driver.

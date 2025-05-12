@@ -7,7 +7,7 @@
 
 
 // Data storage available.
-const size_t HISTORY_SIZE = 360;
+const size_t history_size = 360;
 
 
 // Current constants
@@ -40,33 +40,33 @@ const int16_t phase_int_resistance = static_cast<int16_t>(phase_resistance);
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 12MHz (72MHz / 6). A cycle is 6 ticks.
 
 // Temperature ADC conversion time: 12.5 cycles + 71.5 cycles = 84 cycles = 7us.
-const uint16_t TEMP_SAMPLE_TIME = (71.5 + 12.5)*6;
+const uint16_t temperature_sample_time = (71.5 + 12.5)*6;
 // Current ADC conversion time: 12.5 cycles + 1.5 cycles = 14 cycles = 1.16us.
-const uint16_t CURR_SAMPLE_TIME = (1.5 + 12.5)*6;
+const uint16_t current_sample_time = (1.5 + 12.5)*6;
 
-const uint16_t CURR_SAMPLE_LEAD_TIME = (1.5 + 12.5 + 1.5)*6 / 2;
+const uint16_t current_sample_lead_time = (1.5 + 12.5 + 1.5)*6 / 2;
 
 // The ADC will read the temperature first then 2 phase currents; try to time the sampling 
 // time of the phase currents symmetrically around the peak of the PWM cycle.
-const int16_t SAMPLE_LEAD_TIME = TEMP_SAMPLE_TIME + CURR_SAMPLE_LEAD_TIME;
+const int16_t sample_lead_time = temperature_sample_time + current_sample_lead_time;
 
 
 // Motor PWM constants
 // -------------------
 
-const uint16_t PWM_AUTORELOAD = 1535;
-const uint16_t PWM_BASE = PWM_AUTORELOAD + 1;
-const uint16_t PWM_PERIOD = 2 * PWM_BASE; // 3072 ticks = 42.7us @ 72MHz = 23.4KHz
+const uint16_t pwm_autoreload = 1535;
+const uint16_t pwm_base = pwm_autoreload + 1;
+const uint16_t pwm_period = 2 * pwm_base; // 3072 ticks = 42.7us @ 72MHz = 23.4KHz
 
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
-const uint16_t MIN_BOOTSTRAP_DUTY = 16; // 16/72MHz = 222ns
+const uint16_t minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
 
-const uint16_t PWM_MAX = PWM_BASE - (CURR_SAMPLE_LEAD_TIME > MIN_BOOTSTRAP_DUTY ? CURR_SAMPLE_LEAD_TIME : MIN_BOOTSTRAP_DUTY); 
+const uint16_t pwm_max = pwm_base - (current_sample_lead_time > minimum_bootstrap_duty ? current_sample_lead_time : minimum_bootstrap_duty); 
 
-const uint16_t PWM_MAX_HOLD = PWM_BASE * 2 / 10;
+const uint16_t pwm_max_hold = pwm_base * 2 / 10;
 
-const uint16_t MAX_TIMEOUT = 0xFFFF;
+const uint16_t max_timeout = 0xFFFF;
 
 
 
@@ -75,22 +75,22 @@ const uint16_t MAX_TIMEOUT = 0xFFFF;
 
 // Motor voltage fraction for the 6-step commutation.
 const uint16_t motor_sector_driving_pos[6][3] = {
-    {0,        PWM_BASE, 0       },
-    {0,        PWM_BASE, PWM_BASE},
-    {0,        0,        PWM_BASE},
-    {PWM_BASE, 0,        PWM_BASE},
-    {PWM_BASE, 0,        0       },
-    {PWM_BASE, PWM_BASE, 0       },
+    {0,        pwm_base, 0       },
+    {0,        pwm_base, pwm_base},
+    {0,        0,        pwm_base},
+    {pwm_base, 0,        pwm_base},
+    {pwm_base, 0,        0       },
+    {pwm_base, pwm_base, 0       },
 };
 
 // Surpirsingly good schedule for the 6-step commutation.
 const uint16_t motor_sector_driving_neg[6][3] {
-    {0,        0,        PWM_BASE},
-    {PWM_BASE, 0,        PWM_BASE},
-    {PWM_BASE, 0,        0       },
-    {PWM_BASE, PWM_BASE, 0       },
-    {0,        PWM_BASE, 0       },
-    {0,        PWM_BASE, PWM_BASE},
+    {0,        0,        pwm_base},
+    {pwm_base, 0,        pwm_base},
+    {pwm_base, 0,        0       },
+    {pwm_base, pwm_base, 0       },
+    {0,        pwm_base, 0       },
+    {0,        pwm_base, pwm_base},
 };
 
 
@@ -171,7 +171,7 @@ const int ticks_per_millisecond = 72'000;
 // Our time units per millisecond. Helpful scaling factor for the constants below.
 const int time_units_per_millisecond = ticks_per_millisecond / ticks_per_time_units; 
 // Time units per PWM cycle (2x because it counts up then down).
-const int time_increment_per_cycle = 2 * static_cast<int>(PWM_BASE) / ticks_per_time_units;
+const int time_increment_per_cycle = 2 * static_cast<int>(pwm_base) / ticks_per_time_units;
 
 // Another scaling factor: speed = distances * scale / time; acceleration = speed_change * scale;
 const int scale = 128;

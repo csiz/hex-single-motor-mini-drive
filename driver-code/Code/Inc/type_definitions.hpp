@@ -16,10 +16,10 @@ struct PWMStage {
 };
 
 // Number of steps in test schedules.
-const size_t SCHEDULE_SIZE = 12;
+const size_t schedule_size = 12;
 
 // Motor driving PWM schedule.
-using PWMSchedule = PWMStage[SCHEDULE_SIZE];
+using PWMSchedule = PWMStage[schedule_size];
 
 
 

@@ -98,9 +98,9 @@ static inline void update_motor_sector(const uint8_t hall_sector, const uint16_t
     const uint16_t voltage_phase_w = motor_sector_driving_table[hall_sector][2];
 
 
-    set_motor_u_pwm_duty(voltage_phase_u * pwm_command / PWM_BASE);
-    set_motor_v_pwm_duty(voltage_phase_v * pwm_command / PWM_BASE);
-    set_motor_w_pwm_duty(voltage_phase_w * pwm_command / PWM_BASE);
+    set_motor_u_pwm_duty(voltage_phase_u * pwm_command / pwm_base);
+    set_motor_v_pwm_duty(voltage_phase_v * pwm_command / pwm_base);
+    set_motor_w_pwm_duty(voltage_phase_w * pwm_command / pwm_base);
 
     enable_motor_outputs();
 }
@@ -116,9 +116,9 @@ static inline void update_motor_smooth(const bool angle_valid, const int angle, 
     const uint16_t voltage_phase_v = phases_waveform[normalize_angle(target_angle - third_circle)];
     const uint16_t voltage_phase_w = phases_waveform[normalize_angle(target_angle - two_thirds_circle)];
 
-    set_motor_u_pwm_duty(voltage_phase_u * pwm_command / PWM_BASE);
-    set_motor_v_pwm_duty(voltage_phase_v * pwm_command / PWM_BASE);
-    set_motor_w_pwm_duty(voltage_phase_w * pwm_command / PWM_BASE);
+    set_motor_u_pwm_duty(voltage_phase_u * pwm_command / pwm_base);
+    set_motor_v_pwm_duty(voltage_phase_v * pwm_command / pwm_base);
+    set_motor_w_pwm_duty(voltage_phase_w * pwm_command / pwm_base);
 
     enable_motor_outputs();
 }
@@ -143,7 +143,7 @@ static inline void update_motor_schedule(){
     }
 
     // Check if we reached the end of the schedule; and stop.
-    if (schedule_stage >= SCHEDULE_SIZE) {
+    if (schedule_stage >= schedule_size) {
         schedule_active = nullptr;   
         return motor_break();
     }
