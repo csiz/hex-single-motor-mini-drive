@@ -1,4 +1,5 @@
 import {parser_mapping, command_codes, serialise_command} from "./motor_interface.js";
+import {current_calibration_default, position_calibration_default} from "./motor_constants.js";
 
 export { command_codes };
 
@@ -89,6 +90,9 @@ export class MotorController {
 
     this.receive_rate_timescale = 0.5; // seconds
     this.receive_rate_min_period = 0.050; // seconds
+
+    this.current_calibration = current_calibration_default;
+    this.position_calibration = position_calibration_default;
   }
 
 
@@ -171,7 +175,7 @@ export class MotorController {
         // Wait for enough data to parse the message.
         if (byte_array.length < offset + 2 + data_size) break;
         
-        const response = parse_func(new DataView(byte_array.buffer, offset + 2, data_size));
+        const response = parse_func.call(this, new DataView(byte_array.buffer, offset + 2, data_size));
         offset += data_size + 2;
 
         this._onmessage(response);

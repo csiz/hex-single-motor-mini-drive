@@ -1,3 +1,4 @@
+
 function mean(values) {
   if (values.length === 0) return 0;
   return values.reduce((a, b) => a + b, 0) / values.length;
@@ -21,6 +22,11 @@ export function circular_stats_degrees(values){
     circular_mean,
     circular_std,
   };
+}
+
+export function radians_to_degrees(radians){
+  if (radians === undefined || radians === null) return radians;
+  return radians * 180 / Math.PI;
 }
 
 export function normalize_degrees(a){

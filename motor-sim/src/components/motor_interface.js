@@ -1,4 +1,13 @@
-import {pwm_base} from './motor_constants.js';
+import {pwm_base, angle_base, current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage} from './motor_constants.js';
+import {matrix_multiply} from './math_utils.js';
+import {normalize_degrees, radians_to_degrees} from './angular_math.js';
+
+const pi = Math.PI;
+
+const power_invariant_simplified_clarke_matrix = [
+  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
+  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
+];
 
 export const command_codes = {
   READOUT: 0x2020,
@@ -58,7 +67,7 @@ function parse_readout(data_view){
 
   const speed = data_view.getInt16(offset);
   offset += 2;
-  const vcc_voltage = data_view.getUint16(offset);
+  const vcc_readout = data_view.getUint16(offset);
   offset += 2;
   const torque = data_view.getInt16(offset);
   offset += 2;
@@ -86,22 +95,57 @@ function parse_readout(data_view){
   const motor_angle = position_data & 0x3FF;
 
 
+  const ref_diff = current_conversion * (ref_readout - expected_ref_readout);
+
+  const u_uncalibrated = -current_conversion * (u_readout - ref_readout);
+  // Flip the sign of V because we accidentally wired it the other way. Oopsie doopsie.
+  const v_uncalibrated = +current_conversion * (v_readout - ref_readout);
+  const w_uncalibrated = -current_conversion * (w_readout - ref_readout);
+
+  const u_calibrated = u_uncalibrated * this.current_calibration.u_positive;
+  const v_calibrated = v_uncalibrated * this.current_calibration.v_positive;
+  const w_calibrated = w_uncalibrated * this.current_calibration.w_positive;
+
+
+  const sum = u_calibrated + v_calibrated + w_calibrated;
+
+  const u = u_calibrated - sum / 3.0;
+  const v = v_calibrated - sum / 3.0;
+  const w = w_calibrated - sum / 3.0;
+
+  const [current_alpha, current_beta] = matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
+
+  const current_angle = Math.atan2(current_beta, current_alpha);
+  const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
+
+  // Approximate the angle for the 6 sectors of the hall sensor.
+  const ε = 0.1;
+  const hall_u_as_angle = hall_u ? hall_v ? +pi/3 -ε : hall_w ? -pi/3 +ε : 0.0 : null;
+  const hall_v_as_angle = hall_v ? hall_u ? +pi/3 +ε : hall_w ? +pi -ε : +2*pi/3 : null;
+  const hall_w_as_angle = hall_w ? hall_v ? -pi +ε : hall_u ? -pi/3 -ε : -2*pi/3 : null;
+
+  const vcc_voltage = calculate_voltage(vcc_readout);
+
 
   return {
     code: command_codes.READOUT,
     readout_number,
-    u_readout,
-    v_readout,
-    w_readout,
+    u_readout, v_readout, w_readout,
     ref_readout,
-    u_pwm,
-    v_pwm,
-    w_pwm,
-    hall_u,
-    hall_v,
-    hall_w,
+    ref_diff,
+    u, v, w,
+    u_uncalibrated, v_uncalibrated, w_uncalibrated,
+    sum,
+    current_alpha, current_beta,
+    current_angle: radians_to_degrees(current_angle),
+    current_magnitude,
+    u_pwm, v_pwm, w_pwm,
+    hall_u, hall_v, hall_w,
+    hall_u_as_angle: radians_to_degrees(hall_u_as_angle),
+    hall_v_as_angle: radians_to_degrees(hall_v_as_angle),
+    hall_w_as_angle: radians_to_degrees(hall_w_as_angle),
     motor_angle_valid,
-    motor_angle,
+    motor_angle: normalize_degrees(motor_angle * 360 / angle_base),
     speed,
     vcc_voltage,
     torque,
@@ -114,7 +158,7 @@ function parse_readout(data_view){
 const full_readout_size = readout_size + 20;
 
 function parse_full_readout(data_view){
-  const readout = parse_readout(data_view);
+  const readout = parse_readout.call(this, data_view);
   let offset = readout_size;
   const tick_rate = data_view.getUint16(offset);
   offset += 2;
@@ -138,6 +182,10 @@ function parse_full_readout(data_view){
   const motor_current_angle_stdev = data_view.getInt16(offset);
   offset += 2;
 
+  const vcc_voltage = calculate_voltage(vcc_readout);
+  const temperature = calculate_temperature(temperature_readout);
+
+
   return {
     ...readout,
     code: command_codes.FULL_READOUT,
@@ -145,11 +193,11 @@ function parse_full_readout(data_view){
     adc_update_rate,
     hall_unobserved_rate,
     hall_observed_rate,
-    temperature_readout,
-    vcc_readout,
+    temperature,
+    vcc_voltage,
     cycle_start_tick,
     cycle_end_tick,
-    motor_current_angle,
+    motor_current_angle: normalize_degrees(motor_current_angle * 360 / angle_base),
     motor_current_angle_stdev,
   };
 }

@@ -1,4 +1,5 @@
 // Motor driver constants copied from the C++ code.
+import {normalize_degrees} from "./angular_math.js";
 
 export const angle_base = 1024;
 
@@ -23,4 +24,48 @@ export function calculate_temperature(adc_reading){
 
 export function calculate_voltage(adc_reading){
   return adc_reading * voltage_reference / adc_base / VCC_divider;
+}
+
+export const adc_voltage_reference = 3.3;
+export const motor_shunt_resistance = 0.010;
+export const amplifier_gain = 20.0;
+export const current_conversion = adc_voltage_reference / (adc_base * motor_shunt_resistance * amplifier_gain);
+
+export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
+
+
+export const current_calibration_default = {
+  u_positive: 1.0,
+  u_negative: 1.0,
+  v_positive: 1.0,
+  v_negative: 1.0,
+  w_positive: 1.0,
+  w_negative: 1.0,
+};
+
+
+const hall_hysterisis = 10;
+const transition_std = 15;
+
+export const position_calibration_default = {
+  sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
+  sector_center_std: [30, 30, 30, 30, 30, 30],
+  sector_transition_degrees: [
+    [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
+    [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
+    [+ 90 + hall_hysterisis / 2, +150 - hall_hysterisis / 2],
+    [+150 + hall_hysterisis / 2, -150 - hall_hysterisis / 2],
+    [-150 + hall_hysterisis / 2, - 90 - hall_hysterisis / 2],
+    [- 90 + hall_hysterisis / 2, - 30 - hall_hysterisis / 2],
+  ],
+  sector_transition_std: [
+    [transition_std, transition_std],
+    [transition_std, transition_std],
+    [transition_std, transition_std],
+    [transition_std, transition_std],
+    [transition_std, transition_std],
+    [transition_std, transition_std],
+  ],
+  accel_std: 360.0 / 5.0 / 50.0, // acceleration distribution up to (360 degrees per 5ms) per 50ms.
+  initial_angular_speed_std: 0.05 * 360,
 }

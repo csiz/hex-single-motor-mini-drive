@@ -164,6 +164,8 @@ async function connect_motor_controller(){
 
     motor_controller.value = await connect_usb_motor_controller();
 
+    motor_controller.value.current_calibration = get_stored_or_default("current_calibration", current_calibration_default);
+
     connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
     await motor_controller.value.reading_loop(display_connection_stats);
@@ -222,42 +224,6 @@ const command_leading_angle_degrees = Generators.input(command_leading_angle_sli
 
 
 ```js
-
-// Load Calibration
-// ----------------
-
-
-function load_current_calibration_factors(){
-  return get_stored_or_default("current_calibration", current_calibration_default);
-}
-
-// Load or make default calibration
-const saved_current_calibration_factors = load_current_calibration_factors();
-
-let current_calibration_factors = Mutable(saved_current_calibration_factors);
-
-function update_current_calibration_factors(new_calibration_factors){
-  current_calibration_factors.value = new_calibration_factors;
-}
-
-function reload_current_calibration_factors(){
-  update_current_calibration_factors(load_current_calibration_factors());
-}
-
-function save_current_calibration_factors(){
-  localStorage.setItem("current_calibration", JSON.stringify(current_calibration_factors.value));
-}
-
-function reset_current_calibration_factors(){
-  localStorage.removeItem("current_calibration");
-  update_current_calibration_factors(current_calibration_default);
-}
-```
-
-
-```js
-
-const process_readout = process_readout_with_calibration({current_calibration_factors});
 
 function calculate_data_stats(raw_readout_data){
   return online_map(raw_readout_data, process_readout);
@@ -1267,14 +1233,13 @@ const current_calibration_buttons = Inputs.button(
     }],
     ["Save Current Factors", function(){
       if (!calculated_current_calibration_factors) return;
-      update_current_calibration_factors(calculated_current_calibration_factors);
-      save_current_calibration_factors();
-    }],
-    ["Reload Current Factors", function(){
-      reload_current_calibration_factors();
+      if (!motor_controller) return;
+      motor_controller.current_calibration = calculated_current_calibration_factors;
+      localStorage.setItem("current_calibration", JSON.stringify(motor_controller.current_calibration));
     }],
     ["Reset Current Factors", function(){
-      reset_current_calibration_factors();
+      localStorage.removeItem("current_calibration");
+      motor_controller.current_calibration = current_calibration_default;
     }],
   ],
   {label: "Collect current calibration data"},
@@ -1392,12 +1357,12 @@ async function run_current_calibration(){
     return {
       time: u_positive[i].time,
       target: targets[i],
-      u_positive: u_positive[i].u_readout,
-      u_negative: -u_negative[i].u_readout,
-      v_positive: v_positive[i].v_readout,
-      v_negative: -v_negative[i].v_readout,
-      w_positive: w_positive[i].w_readout,
-      w_negative: -w_negative[i].w_readout,
+      u_positive: u_positive[i].u_uncalibrated,
+      u_negative: -u_negative[i].u_uncalibrated,
+      v_positive: v_positive[i].v_uncalibrated,
+      v_negative: -v_negative[i].v_uncalibrated,
+      w_positive: w_positive[i].w_uncalibrated,
+      w_negative: -w_negative[i].w_uncalibrated,
     };
   });
 
@@ -1596,14 +1561,14 @@ import {plot_lines, plot_line, setup_faint_area, horizontal_step} from "./compon
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
-import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
 
 import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
-import {process_readout_with_calibration, cycles_per_millisecond, millis_per_cycle, online_map, online_function_chain, current_calibration_default} from "./components/readout_processing.js";
+import {process_readout, cycles_per_millisecond, millis_per_cycle, online_map, online_function_chain} from "./components/readout_processing.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
-import {max_timeout, angle_base, pwm_base, pwm_period, history_size} from "./components/motor_constants.js";
+import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
+import {max_timeout, angle_base, pwm_base, pwm_period, history_size, current_calibration_default} from "./components/motor_constants.js";
 
 
 // Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.

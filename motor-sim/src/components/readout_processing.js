@@ -1,6 +1,6 @@
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees} from "./angular_math.js";
-import {calculate_temperature, calculate_voltage, readout_base, angle_base} from "./motor_constants.js";
-  
+import {readout_base, position_calibration_default} from "./motor_constants.js";
+import {matrix_multiply, interpolate_linear} from "./math_utils.js";
 
 // PWM motor cycles per millisecond.
 export const cycles_per_millisecond = 23400.0 / 1000.0; // 23400 cycles per second
@@ -8,30 +8,12 @@ export const cycles_per_millisecond = 23400.0 / 1000.0; // 23400 cycles per seco
 // Millisecond (fractions) per PWM motor cycle.
 export const millis_per_cycle = 1.0/cycles_per_millisecond;
 
-const adc_voltage_reference = 3.3;
-const motor_shunt_resistance = 0.010;
-const amplifier_gain = 20.0;
-const adc_max_value = 0xFFF;
-const current_conversion = adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
 const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 const phase_resistance = 2.0; // 2.0 Ohm
 
-const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
-
-const pi = Math.PI;
 
 const std_99_z_score = 2.575829; // 99% confidence interval for normal distribution
-
-
-export const current_calibration_default = {
-  u_positive: 1.0,
-  u_negative: 1.0,
-  v_positive: 1.0,
-  v_negative: 1.0,
-  w_positive: 1.0,
-  w_negative: 1.0,
-};
 
 
 
@@ -61,25 +43,12 @@ export function online_function_chain(...online_functions){
 // Calculate Data
 // --------------
 
-function matrix_multiply(m, v){
-  // Return the matrix-vector product of a 3x3 matrix and a 3-vector.
-  return m.map((row) => row.reduce((sum, x, i) => sum + x * v[i], 0));
-}
 
 const power_invariant_clarke_matrix = [
   [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
   [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
   [1/Math.sqrt(3), 1/Math.sqrt(3), 1/Math.sqrt(3)],
 ];
-
-const power_invariant_simplified_clarke_matrix = [
-  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
-  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
-];
-
-function interpolate_linear(a, b, fraction){
-  return a + (b - a) * fraction;
-}
 
 
 
@@ -96,28 +65,7 @@ function hall_sector({hall_u, hall_v, hall_w}){
   }
 }
 
-const sector_center_degrees = [0, 60, 120, 180, 240, 300].map(normalize_degrees);
-const sector_center_std = [30, 30, 30, 30, 30, 30];
-const hall_hysterisis = 10;
-const transition_std = 15;
-const sector_transition_degrees = [
-  [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
-  [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
-  [+ 90 + hall_hysterisis / 2, +150 - hall_hysterisis / 2],
-  [+150 + hall_hysterisis / 2, -150 - hall_hysterisis / 2],
-  [-150 + hall_hysterisis / 2, - 90 - hall_hysterisis / 2],
-  [- 90 + hall_hysterisis / 2, - 30 - hall_hysterisis / 2],
-];
-const sector_transition_std = [
-  [transition_std, transition_std],
-  [transition_std, transition_std],
-  [transition_std, transition_std],
-  [transition_std, transition_std],
-  [transition_std, transition_std],
-  [transition_std, transition_std],
-];
-const accel_std = 360.0 / 5.0 / 50.0; // acceleration distribution up to (360 degrees per 5ms) per 50ms.
-const initial_angular_speed_std = 0.05 * 360;
+const {sector_center_degrees, sector_center_std, sector_transition_degrees, sector_transition_std, accel_std, initial_angular_speed_std} = position_calibration_default;
 
 function shortest_distance_mod_6(a, b){
   const diff = (b + 12 - a) % 6;
@@ -294,71 +242,20 @@ function accumulate_position_from_hall(prev, curr){
   }
 }
 
-function annotate_readout({current_calibration_factors}){
-  return function(prev, curr){
-    const readout_diff = !prev ? 0 : (readout_base + curr.readout_number - prev.readout_number) % readout_base;
-    const readout_index = !prev ? 0 : prev.readout_index + readout_diff;
+function annotate_readout(prev, curr){
+  const readout_diff = !prev ? 0 : (readout_base + curr.readout_number - prev.readout_number) % readout_base;
+  const readout_index = !prev ? 0 : prev.readout_index + readout_diff;
 
-    const time = readout_index * millis_per_cycle;
+  const time = readout_index * millis_per_cycle;
 
-    const u_readout = -current_conversion * (curr.u_readout - curr.ref_readout);
-    // Flip the sign of V because we accidentally wired it the other way. Oopsie doopsie.
-    const v_readout = +current_conversion * (curr.v_readout - curr.ref_readout);
-    const w_readout = -current_conversion * (curr.w_readout - curr.ref_readout);
-    const ref_diff = current_conversion * (curr.ref_readout - expected_ref_readout);
-
-    const calibrated_u = u_readout * (u_readout >= 0 ? 
-      current_calibration_factors.u_positive :
-      current_calibration_factors.u_negative);
-
-    const calibrated_v = v_readout * (v_readout >= 0 ?
-      current_calibration_factors.v_positive :
-      current_calibration_factors.v_negative);
-
-    const calibrated_w = w_readout * (w_readout >= 0 ?
-      current_calibration_factors.w_positive :
-      current_calibration_factors.w_negative);
-
-    const sum = calibrated_u + calibrated_v + calibrated_w;
-
-    const u = calibrated_u - sum / 3.0;
-    const v = calibrated_v - sum / 3.0;
-    const w = calibrated_w - sum / 3.0;
-
-    const [current_alpha, current_beta] = matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
-
-    const current_angle = Math.atan2(current_beta, current_alpha);
-    const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
-
-    // Approximate the angle for the 6 sectors of the hall sensor.
-    const ε = 0.1;
-    const hall_u_as_angle = curr.hall_u ? curr.hall_v ? +pi/3 -ε : curr.hall_w ? -pi/3 +ε : 0.0 : null;
-    const hall_v_as_angle = curr.hall_v ? curr.hall_u ? +pi/3 +ε : curr.hall_w ? +pi -ε : +2*pi/3 : null;
-    const hall_w_as_angle = curr.hall_w ? curr.hall_v ? -pi +ε : curr.hall_u ? -pi/3 -ε : -2*pi/3 : null;
-
-
-    return {
-      ...curr,
-      time,
-      readout_index,
-      readout_diff,
-      vcc_voltage: calculate_voltage(curr.vcc_readout),
-      temperature: calculate_temperature(curr.temperature_readout),
-      u_readout, v_readout, w_readout, 
-      motor_angle: normalize_degrees(curr.motor_angle * 360 / angle_base),
-      motor_speed_std: Math.sqrt(curr.motor_speed_variance),
-      u, v, w, 
-      ref_diff,  sum, 
-      current_alpha, current_beta, 
-      current_angle: current_angle * 180 / Math.PI, 
-      motor_current_angle: normalize_degrees(curr.motor_current_angle * 360 / angle_base),
-      current_magnitude, 
-      hall_u_as_angle: hall_u_as_angle === null ? null : hall_u_as_angle * 180 / Math.PI, 
-      hall_v_as_angle: hall_v_as_angle === null ? null : hall_v_as_angle * 180 / Math.PI, 
-      hall_w_as_angle: hall_w_as_angle === null ? null : hall_w_as_angle * 180 / Math.PI,
-    };
-  }
+  return {
+    ...curr,
+    time,
+    readout_index,
+    readout_diff,
+  };
 }
+
 
 
 const derivative_start_index = 8;
@@ -406,10 +303,8 @@ function compute_derivatives(prev, curr, i){
   };
 }
 
-export function process_readout_with_calibration({current_calibration_factors}){
-  return online_function_chain(
-    annotate_readout({current_calibration_factors}),
-    accumulate_position_from_hall,
-    compute_derivatives,
-  );
-}
+export const process_readout = online_function_chain(
+  annotate_readout,
+  accumulate_position_from_hall,
+  compute_derivatives,
+);
