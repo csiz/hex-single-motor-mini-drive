@@ -281,7 +281,7 @@ void usb_queue_response(){
 
         // Disable the ADC interrupt while we read the latest readout.
         NVIC_DisableIRQ(ADC1_2_IRQn);
-        FullReadout full_readout = {get_latest_readout()};
+        FullReadout full_readout = get_readout();
         NVIC_EnableIRQ(ADC1_2_IRQn);
         
         // We have already sent this readout; don't send it again.
@@ -291,12 +291,6 @@ void usb_queue_response(){
         full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
         full_readout.hall_unobserved_rate = static_cast<int>(hall_unobserved_rate);
         full_readout.hall_observed_rate = static_cast<int>(hall_observed_rate);
-        full_readout.temperature = get_temperature();
-        full_readout.vcc_voltage = get_vcc_voltage();
-        full_readout.cycle_start_tick = get_cycle_start_tick();
-        full_readout.cycle_end_tick = get_cycle_end_tick();
-        full_readout.current_angle = get_current_angle();
-        full_readout.current_angle_stdev = get_current_angle_stdev();
 
         write_full_readout(full_readout_data, full_readout);
         
@@ -311,7 +305,7 @@ void app_tick() {
     tick_number += 1;
 
     // Show the current hall sensor state on the LEDs.
-    const uint8_t hall_state = (get_latest_readout().position >> 13 & 0b111);
+    const uint8_t hall_state = (get_readout().position >> 13 & 0b111);
     set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
 
 

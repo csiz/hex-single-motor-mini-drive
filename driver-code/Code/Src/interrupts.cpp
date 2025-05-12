@@ -33,39 +33,12 @@ uint32_t get_hall_observed_number(){
     return hall_observed_number;
 }
 
-int16_t cycle_start_tick = 0;
-int16_t get_cycle_start_tick(){
-    return cycle_start_tick;
-}
-int16_t cycle_end_tick = 0;
-int16_t get_cycle_end_tick(){
-    return cycle_end_tick;
-}
-
 // Electrical state
-Readout latest_readout = {};
-Readout get_latest_readout(){
-    return latest_readout;
+FullReadout readout = {};
+FullReadout get_readout(){
+    return readout;
 }
 
-uint16_t temperature = 0;
-uint16_t get_temperature(){
-    return temperature;
-}
-uint16_t vcc_voltage = 0;
-uint16_t get_vcc_voltage(){
-    return vcc_voltage;
-}
-
-int16_t current_angle = 0;
-int16_t get_current_angle(){
-    return current_angle;
-}
-
-int16_t current_angle_stdev = 0;
-int16_t get_current_angle_stdev(){
-    return current_angle_stdev;
-}
 
 // Data queue
 Readout readout_history[history_size] = {};
@@ -107,15 +80,15 @@ static inline void pwm_cycle_and_adc_update(){
 
 
     // Check what time it is on the PWM cycle.
-    cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
+    readout.cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
     
     increment_time_since_observation();
 
     // Write the previous pwm duty cycle to this readout, it should have been active during the prior to the ADC sampling.
-    latest_readout.pwm_commands = get_motor_u_pwm_duty() * pwm_base * pwm_base + get_motor_v_pwm_duty() * pwm_base + get_motor_w_pwm_duty();
+    readout.pwm_commands = get_motor_u_pwm_duty() * pwm_base * pwm_base + get_motor_v_pwm_duty() * pwm_base + get_motor_w_pwm_duty();
     
     // Write the current readout index.
-    latest_readout.readout_number = adc_update_number;
+    readout.readout_number = adc_update_number;
     
     // U and W phases are measured at the same time, followed by V and the reference voltage.
     // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
@@ -125,32 +98,32 @@ static inline void pwm_cycle_and_adc_update(){
     // For reference a PWM period is 1536 ticks, so the PWM frequency is 72MHz / 1536 / 2 = 23.4KHz.
     // The PWM period lasts 1/23.4KHz = 42.7us.
     
-    latest_readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
+    readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
     // Note: in the v0 board the V phase shunt is connected in reverse to the current sense amplifier.
-    latest_readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3);
+    readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3);
     
-    latest_readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
-    latest_readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
+    readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
+    readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
     
 
     const uint16_t new_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
-    latest_readout.vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+    const uint16_t new_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
 
-    temperature = (new_temperature * 1 + temperature * 15) / 16;
-    vcc_voltage = (latest_readout.vcc_voltage * 4 + vcc_voltage * 12) / 16;
+    readout.temperature = (new_temperature * 1 + readout.temperature * 15) / 16;
+    readout.vcc_voltage = (new_vcc_voltage * 4 + readout.vcc_voltage * 12) / 16;
 
 
     const int angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / scale);
     
-    latest_readout.position = (angle & 0x3FF) | (hall_state << 13) | angle_valid << 12;
+    readout.position = (angle & 0x3FF) | (hall_state << 13) | angle_valid << 12;
 
-    latest_readout.speed = angular_speed_at_observation;
+    readout.speed = angular_speed_at_observation;
     
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
-    const int scaled_u_current = -(latest_readout.u_readout - latest_readout.ref_readout) * current_calibration.u_factor / calibration_base;
+    const int scaled_u_current = -(readout.u_readout - readout.ref_readout) * current_calibration.u_factor / calibration_base;
     // Flip the sign of V because we accidentally wired it the other way (the right way...). Oopsie doopsie.
-    const int scaled_v_current = +(latest_readout.v_readout - latest_readout.ref_readout) * current_calibration.v_factor / calibration_base;
-    const int scaled_w_current = -(latest_readout.w_readout - latest_readout.ref_readout) * current_calibration.w_factor / calibration_base;
+    const int scaled_v_current = +(readout.v_readout - readout.ref_readout) * current_calibration.v_factor / calibration_base;
+    const int scaled_w_current = -(readout.w_readout - readout.ref_readout) * current_calibration.w_factor / calibration_base;
     
     // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
     const int avg = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;
@@ -183,22 +156,22 @@ static inline void pwm_cycle_and_adc_update(){
         w_current * -sin_lookup[normalize_angle(angle - two_thirds_circle)] / angle_base);
 
 
-    latest_readout.torque = beta_current;
+    readout.torque = beta_current;
 
-    latest_readout.hold = alpha_current;
+    readout.hold = alpha_current;
     
 
     const auto [current_angle_error, current_magnitude] = atan2_integer(beta_current, alpha_current);
 
-    current_angle = normalize_angle(angle + current_angle_error);
+    readout.current_angle = normalize_angle(angle + current_angle_error);
 
 
-    latest_readout.total_power = vcc_voltage * (
+    readout.total_power = readout.vcc_voltage * (
         u_current * get_motor_u_pwm_duty() + 
         v_current * get_motor_v_pwm_duty() + 
         w_current * get_motor_w_pwm_duty()) / pwm_base;
 
-    latest_readout.resistive_power = phase_int_resistance * (
+    readout.resistive_power = phase_int_resistance * (
         u_current * u_current + 
         v_current * v_current + 
         w_current * w_current) / 256;
@@ -235,11 +208,11 @@ static inline void pwm_cycle_and_adc_update(){
     // Send data to the main loop after updating the PWM registers; the queue access might be slow.
     
     // Try to write the latest readout if there's space.
-    readout_history_push(latest_readout);
+    readout_history_push(readout);
 
 
 
-    cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
+    readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
 }
 
 // Interrupt handlers
