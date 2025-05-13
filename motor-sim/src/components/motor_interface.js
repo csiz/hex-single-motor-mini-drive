@@ -1,3 +1,5 @@
+import {process_readout} from './motor_observer.js';  
+
 import {
   millis_per_cycle, pwm_base, angle_base, readout_base, 
   current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage,
@@ -139,7 +141,7 @@ function parse_readout(data_view, previous_readout){
   const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
   const time = readout_index * millis_per_cycle;
 
-  return {
+  const readout = {
     code: command_codes.READOUT,
     readout_number,
     readout_index, time,
@@ -160,6 +162,8 @@ function parse_readout(data_view, previous_readout){
     total_power,
     resistive_power,
   };
+
+  return process_readout.call(this, readout, previous_readout);
 }
 
 const full_readout_size = readout_size + 20;

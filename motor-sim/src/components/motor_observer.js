@@ -229,21 +229,18 @@ function accumulate_position_from_hall(curr, prev){
 
 
 function compute_derivatives(readout, previous_readout){
-  if (!previous_readout) return readout;
-
   const {u, v, w} = readout;
-  const {u: prev_u, v: prev_v, w: prev_w} = previous_readout;
 
   const [current_alpha, current_beta] = clarke_transform(u, v, w);
 
   const current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
   const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
-
   
+  if (!previous_readout) return readout;
+  const {u: prev_u, v: prev_v, w: prev_w} = previous_readout;
+
   // Time units are milliseconds.
   const dt = readout.time - previous_readout.time;
-
-  const current_angular_speed = normalize_degrees(readout.current_angle - previous_readout.current_angle) / dt;
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
   const u_L_voltage = (u - prev_u) / dt * 1000 * phase_inductance;
@@ -268,7 +265,6 @@ function compute_derivatives(readout, previous_readout){
     ...readout,
     current_alpha, current_beta,
     current_angle, current_magnitude,
-    current_angular_speed,
     u_voltage, v_voltage, w_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,
     voltage_alpha, voltage_beta,

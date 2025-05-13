@@ -102,9 +102,9 @@ const colors = {
   voltage_angle: d3.color("rgb(102, 166, 30)").darker(1),
   angle_if_breaking: d3.color("rgb(102, 166, 30)").darker(2),
   angular_speed: "black",
-  current_angular_speed: "rgb(27, 158, 119)",
   current_alpha: "rgb(199, 0, 57)",
   current_beta: "rgb(26, 82, 118)",
+  other: "rgb(27, 158, 119)",
 };
 
 
@@ -224,14 +224,6 @@ const command_leading_angle_degrees = Generators.input(command_leading_angle_sli
 
 
 ```js
-
-function calculate_data_stats(raw_readout_data){
-  return online_map(raw_readout_data, process_readout);
-}
-```
-
-
-```js
 // Data stream output
 // ------------------
 
@@ -242,8 +234,14 @@ const max_data_size = 2 * target_data_size;
 
 let data = Mutable([]);
 
-function update_data (new_data){
-  data.value = new_data;
+function reset_data(){
+  data.value = [];
+};
+
+function push_data(readout){
+  data.value.push(readout);
+  if (data.value.length > max_data_size) data.value = data.value.slice(-target_data_size);
+  data.value = data.value;
 };
 
 ```
@@ -274,21 +272,11 @@ function command_and_stream(delay_ms, command, options = {}){
 
   latest_stream_timeout = setTimeout(async function(){
     try {
-
-      let data = [];
-      let prev_readout = undefined;
-      function readout_callback(raw_readout){
-        const readout = process_readout(raw_readout, prev_readout);
-        data.push(readout);
-        prev_readout = readout;
-        if (data.length > max_data_size) data = data.slice(-target_data_size);
-        update_data(data);
-      }
-
+      reset_data();
       // Start reading the data stream.
       await motor_controller.command_and_stream(
         {command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options},
-        {readout_callback, ...options});
+        {readout_callback: push_data, ...options});
 
     } catch (error) {
       console.error("Error streaming data:", error);
@@ -613,7 +601,6 @@ const plot_speed = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
   channels: [
-    {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
       draw_extra: setup_faint_area({
@@ -824,17 +811,17 @@ async function run_position_calibration(){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_POS, ...drive_options});  
   await wait(drive_time);
-  const drive_positive = calculate_data_stats(await motor_controller.command_and_read(
+  const drive_positive = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
   console.info("Drive positive done");
 
   await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_NEG, ...drive_options});
   await wait(drive_time);
-  const drive_negative = calculate_data_stats(await motor_controller.command_and_read(
+  const drive_negative = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
 
   console.info("Drive negative done");
@@ -921,7 +908,6 @@ const position_calibration_pos_speed_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
   channels: [
-    {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed, 
       draw_extra: setup_faint_area({
@@ -969,7 +955,6 @@ const position_calibration_neg_speed_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
   channels: [
-    {y: "current_angular_speed", label: "Current Speed", color: colors.current_angular_speed},
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
       draw_extra: setup_faint_area({
@@ -1268,49 +1253,49 @@ async function run_current_calibration(){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const u_positive = calculate_data_stats(await motor_controller.command_and_read(
+  const u_positive = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_U_INCREASING, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
   console.info("U positive done");
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const w_negative = calculate_data_stats(await motor_controller.command_and_read(
+  const w_negative = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_W_DECREASING, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
   console.info("W negative done");
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const v_positive = calculate_data_stats(await motor_controller.command_and_read(
+  const v_positive = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_V_INCREASING, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
   console.info("V positive done");
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const u_negative = calculate_data_stats(await motor_controller.command_and_read(
+  const u_negative = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_U_DECREASING, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
   console.info("U negative done");
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const w_positive = calculate_data_stats(await motor_controller.command_and_read(
+  const w_positive = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_W_INCREASING, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
   console.info("W positive done");
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const v_negative = calculate_data_stats(await motor_controller.command_and_read(
+  const v_negative = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_V_DECREASING, ...test_options},
-    {expected_messages: history_size}));
+    {expected_messages: history_size});
 
   console.info("V negative done");
 
@@ -1558,16 +1543,19 @@ autosave_inputs({
 // -------
 
 import {plot_lines, plot_line, setup_faint_area, horizontal_step} from "./components/plotting_utils.js";
+
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
+
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
+
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
 
 import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
-import {process_readout, online_map, online_function_chain} from "./components/readout_processing.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
 import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
+
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, current_calibration_default,
