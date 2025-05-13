@@ -2,12 +2,6 @@ import {interpolate_degrees, shortest_distance_degrees, normalize_degrees} from 
 import {readout_base, position_calibration_default} from "./motor_constants.js";
 import {matrix_multiply, interpolate_linear} from "./math_utils.js";
 
-// PWM motor cycles per millisecond.
-export const cycles_per_millisecond = 23400.0 / 1000.0; // 23400 cycles per second
-
-// Millisecond (fractions) per PWM motor cycle.
-export const millis_per_cycle = 1.0/cycles_per_millisecond;
-
 
 const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 const phase_resistance = 2.0; // 2.0 Ohm
@@ -22,21 +16,21 @@ export function online_map(array, online_fn){
   if (array.length == 0) return [];
 
   const result = new Array(array.length);
-  let previous = online_fn(undefined, array[0], 0, array);
+  let previous = online_fn(array[0], undefined);
   result[0] = previous;
   for (let i = 1; i < array.length; i++){
-    previous = online_fn(previous, array[i], i, array);
+    previous = online_fn(array[i], previous);
     result[i] = previous;
   }
   return result;
 }
 
 export function online_function_chain(...online_functions){
-  return function(previous, current, i, array){
+  return function(value, previous){
     for (const fn of online_functions){
-      current = fn(previous, current, i, array);
+      value = fn(value, previous);
     }
-    return current;
+    return value;
   };
 }
 
@@ -52,18 +46,7 @@ const power_invariant_clarke_matrix = [
 
 
 
-function hall_sector({hall_u, hall_v, hall_w}){
-  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
-  switch(hall_state){
-    case 0b001: return 0;
-    case 0b011: return 1;
-    case 0b010: return 2;
-    case 0b110: return 3;
-    case 0b100: return 4;
-    case 0b101: return 5;
-    default: return null;
-  }
-}
+
 
 const {sector_center_degrees, sector_center_std, sector_transition_degrees, sector_transition_std, accel_std, initial_angular_speed_std} = position_calibration_default;
 
@@ -78,7 +61,7 @@ function product_of_normals({mean_a, std_a, mean_b, std_b}){
   return {mean, std};
 }
 
-function product_normals_2({mean_a, variance_a, mean_b, variance_b}){
+function product_of_normals_by_variance({mean_a, variance_a, mean_b, variance_b}){
   const mean = (mean_a * variance_b + mean_b * variance_a) / (variance_a + variance_b);
   const variance = (variance_a * variance_b) / (variance_a + variance_b);
   return {mean, variance};
@@ -88,8 +71,8 @@ function add_std(...std_values){
   return Math.sqrt(std_values.reduce((sum, std) => sum + std * std, 0));
 }
 
-function accumulate_position_from_hall(prev, curr){
-  const sector = hall_sector(curr);
+function accumulate_position_from_hall(curr, prev){
+  const sector = curr.hall_sector;
 
   if (!prev) return {
     ...curr,
@@ -242,27 +225,10 @@ function accumulate_position_from_hall(prev, curr){
   }
 }
 
-function annotate_readout(prev, curr){
-  const readout_diff = !prev ? 0 : (readout_base + curr.readout_number - prev.readout_number) % readout_base;
-  const readout_index = !prev ? 0 : prev.readout_index + readout_diff;
-
-  const time = readout_index * millis_per_cycle;
-
-  return {
-    ...curr,
-    time,
-    readout_index,
-    readout_diff,
-  };
-}
 
 
-
-const derivative_start_index = 8;
-
-
-function compute_derivatives(prev, curr, i){
-  if (i < derivative_start_index) return curr;
+function compute_derivatives(curr, prev){
+  if (!prev) return curr;
   
   // Time units are milliseconds.
   const dt = curr.time - prev.time;
@@ -304,7 +270,6 @@ function compute_derivatives(prev, curr, i){
 }
 
 export const process_readout = online_function_chain(
-  annotate_readout,
   accumulate_position_from_hall,
   compute_derivatives,
 );

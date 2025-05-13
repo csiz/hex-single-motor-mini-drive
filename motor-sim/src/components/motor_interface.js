@@ -1,4 +1,7 @@
-import {pwm_base, angle_base, current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage} from './motor_constants.js';
+import {
+  millis_per_cycle, pwm_base, angle_base, readout_base, 
+  current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage,
+} from './motor_constants.js';
 import {matrix_multiply} from './math_utils.js';
 import {normalize_degrees, radians_to_degrees} from './angular_math.js';
 
@@ -41,9 +44,22 @@ export const command_codes = {
   SET_STATE_DRIVE_SMOOTH_NEG: 0x4031,
 }
 
+function get_hall_sector({hall_u, hall_v, hall_w}){
+  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
+  switch(hall_state){
+    case 0b001: return 0;
+    case 0b011: return 1;
+    case 0b010: return 2;
+    case 0b110: return 3;
+    case 0b100: return 4;
+    case 0b101: return 5;
+    default: return null;
+  }
+}
+
 const readout_size = 28;
 
-function parse_readout(data_view){
+function parse_readout(data_view, previous_readout){
   let offset = 0;
   
   // Get the PWM commands.
@@ -88,6 +104,9 @@ function parse_readout(data_view){
   const hall_u = (position_data >> 13) & 0b1;
   const hall_v = (position_data >> 14) & 0b1;
   const hall_w = (position_data >> 15) & 0b1;
+
+  const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
+
   // The next bit is the motor angle valid flag.
   const motor_angle_valid = (position_data >> 12) & 0b1;
   // The last 10 bits are the motor angle. Representing range from 0 to 360 degrees,
@@ -126,10 +145,15 @@ function parse_readout(data_view){
 
   const vcc_voltage = calculate_voltage(vcc_readout);
 
+  // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
+  const readout_diff = !previous_readout ? 0 : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
+  const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
+  const time = readout_index * millis_per_cycle;
 
   return {
     code: command_codes.READOUT,
     readout_number,
+    readout_index, time,
     u_readout, v_readout, w_readout,
     ref_readout,
     ref_diff,
@@ -140,7 +164,7 @@ function parse_readout(data_view){
     current_angle: radians_to_degrees(current_angle),
     current_magnitude,
     u_pwm, v_pwm, w_pwm,
-    hall_u, hall_v, hall_w,
+    hall_u, hall_v, hall_w, hall_sector,
     hall_u_as_angle: radians_to_degrees(hall_u_as_angle),
     hall_v_as_angle: radians_to_degrees(hall_v_as_angle),
     hall_w_as_angle: radians_to_degrees(hall_w_as_angle),
@@ -157,8 +181,8 @@ function parse_readout(data_view){
 
 const full_readout_size = readout_size + 20;
 
-function parse_full_readout(data_view){
-  const readout = parse_readout.call(this, data_view);
+function parse_full_readout(data_view, previous_readout){
+  const readout = parse_readout.call(this, data_view, previous_readout);
   let offset = readout_size;
   const tick_rate = data_view.getUint16(offset);
   offset += 2;

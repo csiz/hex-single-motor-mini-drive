@@ -1,3 +1,4 @@
+import {wait} from "./async_utils.js";
 import {parser_mapping, command_codes, serialise_command} from "./motor_interface.js";
 import {current_calibration_default, position_calibration_default} from "./motor_constants.js";
 
@@ -85,6 +86,7 @@ export class MotorController {
     this._promised_readouts = null;
     this._onmessage = null;
     this._onerror = null;
+    this._last_message = null;
 
     this._expected_code = 0;
 
@@ -129,6 +131,9 @@ export class MotorController {
     let last_received_time = Date.now();
     let receive_rate = 0.0;
 
+    this._last_message = null;
+    let last_message_time = Date.now();
+
     let byte_array = new Uint8Array();
 
     while (true) {
@@ -138,10 +143,35 @@ export class MotorController {
         break;
       }
 
+      bytes_received += chunk.length;
+      last_bytes_received += chunk.length;
+
+      const now = Date.now();
+      // Cap the minimum time since last message to avoid division by zero.
+      const time_since_last = (now - last_received_time) / 1000.0;
+
+      if(time_since_last < this.receive_rate_min_period) {
+
+        // Wait for more data before updating the rate.
+        status_callback({bytes_received, bytes_discarded, receive_rate});
+
+      } else {
+        // Update the rate only if we have received data since the last update. 
+        receive_rate = last_bytes_received == 0 ? receive_rate :
+          exponential_average(last_bytes_received / time_since_last, receive_rate, time_since_last, this.receive_rate_timescale);
+
+        last_bytes_received = 0;
+        last_received_time = now;
+
+        status_callback({bytes_received, bytes_discarded, receive_rate});
+      }
+
       // If we're not expecting any messages, just ignore the data.
       if (this._promised_readouts == null || this._expected_code == 0) {
         bytes_discarded += chunk.length;
         byte_array = new Uint8Array();
+        this._last_message = null;
+        last_message_time = Date.now();
         continue;
       }
 
@@ -175,36 +205,17 @@ export class MotorController {
         // Wait for enough data to parse the message.
         if (byte_array.length < offset + 2 + data_size) break;
         
-        const response = parse_func.call(this, new DataView(byte_array.buffer, offset + 2, data_size));
+        const message = parse_func.call(this, new DataView(byte_array.buffer, offset + 2, data_size), this._last_message);
+        this._last_message = message;
+        last_message_time = Date.now();
         offset += data_size + 2;
 
-        this._onmessage(response);
+        this._onmessage(message);
       }
 
       byte_array = byte_array.slice(offset);
 
-      bytes_received += chunk.length;
-      last_bytes_received += chunk.length;
 
-      const now = Date.now();
-      // Cap the minimum time since last message to avoid division by zero.
-      const time_since_last = (now - last_received_time) / 1000.0;
-
-      if(time_since_last < this.receive_rate_min_period) {
-
-        // Wait for more data before updating the rate.
-        status_callback({bytes_received, bytes_discarded, receive_rate});
-
-      } else {
-        // Update the rate only if we have received data since the last update. 
-        receive_rate = last_bytes_received == 0 ? receive_rate :
-          exponential_average(last_bytes_received / time_since_last, receive_rate, time_since_last, this.receive_rate_timescale);
-
-        last_bytes_received = 0;
-        last_received_time = now;
-
-        status_callback({bytes_received, bytes_discarded, receive_rate});
-      }
     }
 
     await this.forget();
@@ -220,6 +231,7 @@ export class MotorController {
   async cancel_previous_request() {
 
     if (this._promised_readouts != null) {
+
       // Chuck an error to the previous listener to resolve the 
       this._onerror(new Error("Overriding Request"));
       try {
@@ -228,6 +240,14 @@ export class MotorController {
         if (error.message != "Overriding Request") throw error;
       }
     }
+  }
+
+  reset_request() {
+    this._expected_code = 0;
+    this._last_message = null;
+    this._promised_readouts = null;
+    this._onmessage = null;
+    this._onerror = null;
   }
 
   /* Get a snapshot of the last N messages from the motor driver. */
@@ -267,9 +287,7 @@ export class MotorController {
       return await data_promise;
     } finally {
       clearTimeout(timeout_id);
-      this._promised_readouts = null;
-      this._onmessage = null;
-      this._onerror = null;
+      this.reset_request();
     }
   }
 
@@ -309,32 +327,8 @@ export class MotorController {
       if (error.message != "Overriding Request") throw error;
     } finally {
       clearTimeout(timeout_id);
-      this._promised_readouts = null;
-      this._expected_code = 0;
-      this._onmessage = null;
-      this._onerror = null;
+      this.reset_request();
     }
   }
 }
 
-
-// Utility functions
-// -----------------
-
-/* Wait milliseconds. */
-export function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/* Make promise timeout after milliseconds. */
-export function timeout_promise(promise, timeout) {
-  let timeout_id;
-
-  const timed_reject = new Promise((resolve, reject)=>{
-    timeout_id = setTimeout(() => {
-      reject(new Error("Timeout"));
-    }, timeout);
-  });
-
-  return Promise.race([promise, timed_reject]).finally(() => { clearTimeout(timeout_id); });
-}

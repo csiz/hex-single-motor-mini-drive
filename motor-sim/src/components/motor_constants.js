@@ -1,6 +1,13 @@
 // Motor driver constants copied from the C++ code.
 import {normalize_degrees} from "./angular_math.js";
 
+// PWM motor cycles per millisecond.
+export const cycles_per_millisecond = 23437.5 / 1000.0; // 23437.5 cycles per second: 72MHz / (2*1536) / 1000.0
+
+// Millisecond (fractions) per PWM motor cycle.
+export const millis_per_cycle = 1.0/cycles_per_millisecond;
+
+
 export const angle_base = 1024;
 
 export const pwm_base = 1536; // 0x0600

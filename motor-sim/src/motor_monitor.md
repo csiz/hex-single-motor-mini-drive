@@ -278,7 +278,7 @@ function command_and_stream(delay_ms, command, options = {}){
       let data = [];
       let prev_readout = undefined;
       function readout_callback(raw_readout){
-        const readout = process_readout(prev_readout, raw_readout, data.length, data);
+        const readout = process_readout(raw_readout, prev_readout);
         data.push(readout);
         prev_readout = readout;
         if (data.length > max_data_size) data = data.slice(-target_data_size);
@@ -999,8 +999,8 @@ function extract_hall_switching_events(data){
     const prev = data[i - 1];
     const angle_if_breaking = interpolate_degrees(prev.angle_if_breaking, d.angle_if_breaking, 0.5);
 
-    const prev_sector = prev.sector;
-    const next_sector = d.sector;
+    const prev_sector = prev.hall_sector;
+    const next_sector = d.hall_sector;
 
     if (prev_sector == null || next_sector == null) return [];
 
@@ -1563,12 +1563,15 @@ import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
 
 import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
-import {process_readout, cycles_per_millisecond, millis_per_cycle, online_map, online_function_chain} from "./components/readout_processing.js";
+import {process_readout, online_map, online_function_chain} from "./components/readout_processing.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
 import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
-import {max_timeout, angle_base, pwm_base, pwm_period, history_size, current_calibration_default} from "./components/motor_constants.js";
+import {
+  cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
+  history_size, current_calibration_default,
+} from "./components/motor_constants.js";
 
 
 // Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.
