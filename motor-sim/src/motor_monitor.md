@@ -46,7 +46,7 @@ Position Calibration Procedures
 
 <div class="card tight">
   <div>${position_calibration_buttons}</div>
-  <div>Number of calibration data sets: ${position_calibration_results.length}</div>
+  <div>Number of calibration data sets: ${position_calibration.results.length}</div>
 </div>
 <div class="card tight">
   <h3>Position Calibration Results</h3>
@@ -56,7 +56,7 @@ Position Calibration Procedures
   <div>${position_calibration_neg_plot}</div>
   <div>${position_calibration_neg_speed_plot}</div>
   <div>${position_calibration_table}</div>
-  <div>${position_calibration_hall_details_table}</div>
+  <div>${position_calibration_transitions_table}</div>
   <div>${position_calibration_hysterisis_table}</div>
 </div>
 
@@ -774,19 +774,23 @@ const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.tim
 // Position Calibration
 // --------------------
 
-let position_calibration_results = Mutable();
+let position_calibration = Mutable({
+  results: [],
+  stats: [],
+  transitions: [],
+  hysterisis: [],
+});
 
-function store_position_calibration_results(calibration_data){
-  position_calibration_results.value = [...position_calibration_results.value ?? [], calibration_data];
-}
-```
 
-```js
 const position_calibration_buttons = Inputs.button(
   [
     ["Start Position Calibration", async function(){
+      if (!motor_controller) return;
+
       for (let i = 0; i < 10; i++){
-        await run_position_calibration();
+        const results = [...position_calibration.value.results, await run_position_calibration(motor_controller)];
+        const {stats, transitions, hysterisis} = compute_position_calibration(results);
+        position_calibration.value = {results, stats, transitions, hysterisis};
       }
     }],
   ],
@@ -796,83 +800,34 @@ const position_calibration_buttons = Inputs.button(
 d3.select(position_calibration_buttons).style("width", "100%");
 
 
-async function run_position_calibration(){
-  if (!motor_controller) return;
-
-  console.info("Position calibration starting");
-  
-  const drive_time = 200;
-  const drive_timeout = Math.floor((drive_time + 300) * cycles_per_millisecond);
-
-  const drive_strength = Math.floor(pwm_base * 2 / 10);
-  const drive_options = {command_timeout: drive_timeout, command_pwm: drive_strength};
-
-  const test_options = {command_timeout: 0, command_pwm: 0};
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_POS, ...drive_options});  
-  await wait(drive_time);
-  const drive_positive = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
-    {expected_messages: history_size});
-
-  console.info("Drive positive done");
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_NEG, ...drive_options});
-  await wait(drive_time);
-  const drive_negative = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
-    {expected_messages: history_size});
-
-
-  console.info("Drive negative done");
-
-  console.info("Position calibration done");
-
-  if (drive_positive.length != history_size) {
-    console.error("Drive positive data is not valid", drive_positive);
-    return;
-  }
-  if (drive_negative.length != history_size) {
-    console.error("Drive negative data is not valid", drive_negative);
-    return;
-  }
-
-  const position_calibration_data = {
-    drive_positive,
-    drive_negative,
-    concatenated: [
-      ...drive_positive.map(d => ({...d, direction: "positive"})),
-      ...drive_negative.map(d => ({...d, direction: "negative"})),
-    ],
-  };
-  
-  store_position_calibration_results(position_calibration_data);
-}
 ```
 
 
 ```js
 const position_calibration_result_to_display_input = Inputs.select(
-  d3.range(0, position_calibration_results.length),
+  d3.range(0, position_calibration.results.length),
   {
-    value: position_calibration_results.length - 1,
+    value: position_calibration.results.length - 1,
     label: "Select position calibration data set:",
   },
 );
 const position_calibration_result_to_display = Generators.input(position_calibration_result_to_display_input);
+
+
+const position_calibration_table = Inputs.table(position_calibration.stats, {rows: 12+1});
+
+const position_calibration_transitions_table = Inputs.table(position_calibration.transitions, {rows: 6+1});
+
+const position_calibration_hysterisis_table = Inputs.table(position_calibration.hysterisis, {rows: 3+1});
 ```
 
 
 ```js
 
-const position_calibration_selected_result = position_calibration_results[position_calibration_result_to_display];
-const position_calibration_detailed_result = {
-  drive_positive: position_calibration_selected_result.drive_positive,
-  drive_negative: position_calibration_selected_result.drive_negative,
-};
+const position_calibration_selected_result = position_calibration.results[position_calibration_result_to_display];
 
 const position_calibration_pos_plot = plot_lines({
-  data: position_calibration_detailed_result.drive_positive,
+  data: position_calibration_selected_result?.drive_positive,
   subtitle: "Electric position | drive positive then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
@@ -899,7 +854,7 @@ const position_calibration_pos_plot = plot_lines({
 
 
 const position_calibration_pos_speed_plot = plot_lines({
-  data: position_calibration_detailed_result.drive_positive,
+  data: position_calibration_selected_result?.drive_positive,
   subtitle: "Rotor Speed | drive positive then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
@@ -920,7 +875,7 @@ const position_calibration_pos_speed_plot = plot_lines({
 });
 
 const position_calibration_neg_plot = plot_lines({
-  data: position_calibration_detailed_result.drive_negative,
+  data: position_calibration_selected_result?.drive_negative,
   subtitle: "Electric position | drive negative then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
@@ -946,7 +901,7 @@ const position_calibration_neg_plot = plot_lines({
 });
 
 const position_calibration_neg_speed_plot = plot_lines({
-  data: position_calibration_detailed_result.drive_negative,
+  data: position_calibration_selected_result?.drive_negative,
   subtitle: "Rotor Speed | drive negative then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
@@ -972,100 +927,8 @@ autosave_inputs({
   position_calibration_neg_plot,
   position_calibration_neg_speed_plot,
 });
-```
 
-```js
 
-// Store the inferred angle for every hall sensor switching event.
-function extract_hall_switching_events(data){
-  return data.flatMap((d, i) => {
-    if (d.angle_if_breaking == null) return [];
-    if (i == 0) return [];
-    const prev = data[i - 1];
-    const angle_if_breaking = interpolate_degrees(prev.angle_if_breaking, d.angle_if_breaking, 0.5);
-
-    const prev_sector = prev.hall_sector;
-    const next_sector = d.hall_sector;
-
-    if (prev_sector == null || next_sector == null) return [];
-
-    if (prev_sector == next_sector) return [];
-
-    return [{time: d.time, angle_if_breaking, switching: `hall_sector_${prev_sector}_to_${next_sector}`}];
-
-  });
-}
-
-const position_calibration_switching_events = position_calibration_results.flatMap((calibration_data) => {
-  return extract_hall_switching_events(calibration_data.concatenated);
-});
-
-const position_calibration_switching_angles = position_calibration_switching_events.reduce((acc, d) => {
-  acc[d.switching]?.push(d.angle_if_breaking);
-  return acc;
-}, {
-  hall_sector_5_to_0: [],
-  hall_sector_0_to_1: [],
-  hall_sector_1_to_2: [],
-  hall_sector_2_to_3: [],
-  hall_sector_3_to_4: [],
-  hall_sector_4_to_5: [],
-
-  hall_sector_1_to_0: [], 
-  hall_sector_2_to_1: [],
-  hall_sector_3_to_2: [],
-  hall_sector_4_to_3: [],
-  hall_sector_5_to_4: [],
-  hall_sector_0_to_5: [],
-});
-
-const position_calibration_statistics = Object.entries(position_calibration_switching_angles).map(([key, values]) => {
-  const { circular_mean: mean, circular_std: std } = circular_stats_degrees(values);
-  return {key, n: values.length, mean, std};
-});
-
-const position_calibration_table = Inputs.table(position_calibration_statistics, {rows: 12+1});
-
-```
-
-```js
-
-const position_calibration_hall_details = [
-  ["drive_positive_hall_u", "hall_sector_4_to_5", "hall_sector_1_to_2"],
-  ["drive_negative_hall_u", "hall_sector_5_to_4", "hall_sector_2_to_1"],
-  ["drive_positive_hall_v", "hall_sector_0_to_1", "hall_sector_3_to_4"],
-  ["drive_negative_hall_v", "hall_sector_1_to_0", "hall_sector_4_to_3"],
-  ["drive_positive_hall_w", "hall_sector_2_to_3", "hall_sector_5_to_0"],
-  ["drive_negative_hall_w", "hall_sector_3_to_2", "hall_sector_0_to_5"],
-].map(([key, a_key, b_key]) => {
-  const a_stats = position_calibration_statistics.find(d => d.key === a_key);
-  const b_stats = position_calibration_statistics.find(d => d.key === b_key);
-
-  const a = a_stats.mean;
-  const b = b_stats.mean;
-
-  const diff = (b - a + 360) % 360;
-  const location = interpolate_degrees(a, b, 0.5);
-  const err = diff - 180;
-  return {key, a, b, diff, location, err};
-});
-
-const position_calibration_hall_details_table = Inputs.table(position_calibration_hall_details, {rows: 6+1});
-
-const position_calibration_hysterisis = [
-  ["hysterisis_hall_u", "drive_negative_hall_u", "drive_positive_hall_u"],
-  ["hysterisis_hall_v", "drive_negative_hall_v", "drive_positive_hall_v"],
-  ["hysterisis_hall_w", "drive_negative_hall_w", "drive_positive_hall_w"],
-].map(([key, a_key, b_key]) => {
-  const a_stats = position_calibration_hall_details.find(d => d.key === a_key);
-  const b_stats = position_calibration_hall_details.find(d => d.key === b_key);
-  const hysterisis = shortest_distance_degrees(a_stats.location, b_stats.location);
-  const mid_location = interpolate_degrees(a_stats.location, b_stats.location, 0.5);
-
-  return {key, hysterisis, mid_location};
-});
-
-const position_calibration_hysterisis_table = Inputs.table(position_calibration_hysterisis, {rows: 3+1});
 ```
 
 
@@ -1292,6 +1155,8 @@ import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circu
 import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
 
 import {run_current_calibration, compute_current_calibration, max_calibration_current} from "./components/motor_current_calibration.js";
+
+import {run_position_calibration, compute_position_calibration} from "./components/motor_position_calibration.js";
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 

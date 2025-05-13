@@ -132,7 +132,7 @@ export async function run_current_calibration(motor_controller){
   });
 
   // Make a new table with each calibration phase as a column.
-  const calibration_data = d3.range(history_size).map((i) => {
+  const current_calibration_data = d3.range(history_size).map((i) => {
     return {
       time: u_positive[i].time,
       target: targets[i],
@@ -147,7 +147,7 @@ export async function run_current_calibration(motor_controller){
 
   console.info("Current calibration done");
 
-  return calibration_data;
+  return current_calibration_data;
 }
 
 
