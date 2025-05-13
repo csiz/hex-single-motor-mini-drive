@@ -66,7 +66,7 @@ Current Calibration Procedures
 
 <div class="card tight">
   <div>${current_calibration_buttons}</div>
-  <div>Number of calibration data sets: ${current_calibration_results.length}</div>
+  <div>Number of calibration data sets: ${current_calibration.results.length}</div>
 </div>
 <div class="card tight">
   <h3>Current Calibration Results</h3>
@@ -1073,303 +1073,59 @@ const position_calibration_hysterisis_table = Inputs.table(position_calibration_
 // Current calibration
 // -------------------
 
-let calculated_current_calibration_factors = Mutable(null);
-
-let current_calibration_results = Mutable();
-let current_calibration = Mutable();
-let current_calibration_stats = Mutable();
-
-const short_duration = history_size / 12 * millis_per_cycle;
-
-const current_calibration_zones = [
-  {pwm: 0.1, settle_start: short_duration * 1.4, settle_end: short_duration * 1.95},
-  {pwm: 0.2, settle_start: short_duration * 2.4, settle_end: short_duration * 2.95},
-  {pwm: 0.3, settle_start: short_duration * 3.4, settle_end: short_duration * 3.95},
-  {pwm: 0.4, settle_start: short_duration * 4.4, settle_end: short_duration * 4.95},
-  {pwm: 0.5, settle_start: short_duration * 5.4, settle_end: short_duration * 5.95},
-  {pwm: 0.6, settle_start: short_duration * 6.4, settle_end: short_duration * 6.95},
-  {pwm: 0.7, settle_start: short_duration * 7.4, settle_end: short_duration * 7.95},
-  {pwm: 0.8, settle_start: short_duration * 8.4, settle_end: short_duration * 8.95},
-  {pwm: 0.9, settle_start: short_duration * 9.4, settle_end: short_duration * 9.95},
-];
-
-
-const drive_resistance = 2.0; // 2.0 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
-const drive_voltage = 10.0; // 10.0 V // TODO: get it from the chip
-
-
-const calibration_reference = drive_voltage / drive_resistance;
-
-const current_calibration_points = 32;
-const current_calibration_reading_points = even_spacing(calibration_reference, current_calibration_points / 2 + 1);
-const current_calibration_targets = current_calibration_zones.map((zone) => zone.pwm * calibration_reference);
-
-
-function compute_current_calibration(calibration_data){
-  
-  const calibration_data_by_zone = current_calibration_zones.map((zone) => {
-    return calibration_data.filter((d) => d.time > zone.settle_start && d.time < zone.settle_end);
-  });
-
-  function compute_zone_calibration({measurements, targets}){
-    // Make sure the lengths are equal.
-    if (measurements.length !== targets.length) throw new Error("Data length mismatch");
-
-    const factor = d3.mean(targets, (target, i) => target / measurements[i]); 
-    
-    const slow_calibration = piecewise_linear({
-      X: [0.0, ...measurements.map((x) => x)], 
-      Y: [0.0, ...targets.map((y) => y / factor)],
-    });
-
-    // Recalibrate to evenly spaced points for fast processing.
-
-    const Y = current_calibration_reading_points.map((x) => slow_calibration(x));
-
-    const func = even_piecewise_linear({x_min: 0, x_max: calibration_reference, Y});
-
-    const sample = current_calibration_reading_points.map((x) => ({reading: x, target: func(x)}));
-    
-    return {
-      measurements,
-      targets,
-      factor,
-      func,
-      sample,
-    };
-  }
-
-  function compute_phase_calibration(phase_selector){    
-    return compute_zone_calibration({
-      measurements: calibration_data_by_zone.map((zone_data) => d3.mean(zone_data, (d) => d[phase_selector])),
-      targets: current_calibration_targets,
-    });
-  }
-
-  return {
-    u_positive: compute_phase_calibration("u_positive"),
-    u_negative: compute_phase_calibration("u_negative"),
-    v_positive: compute_phase_calibration("v_positive"),
-    v_negative: compute_phase_calibration("v_negative"),
-    w_positive: compute_phase_calibration("w_positive"),
-    w_negative: compute_phase_calibration("w_negative"),
-  };
-}
-
-function update_current_calibration_results(calibration_data){
-
-  current_calibration_results.value = [...current_calibration_results.value ?? [], calibration_data];
-
-  const valid_calibration_results = current_calibration_results.value.filter((calibration_data, i) => {
-    try {
-      compute_current_calibration(calibration_data);
-      return true;
-    } catch (e) {
-      console.error(`Invalid calibration data (index ${i}); error: ${e}`);
-      return false;
-    }
-  });
-
-  if (valid_calibration_results.length == 0) return;
-
-  const calibration_stats = d3.range(history_size).map((i) => {
-    return {
-      time: valid_calibration_results[0][i].time,
-      target: d3.mean(valid_calibration_results, (data) => data[i].target),
-      u_positive: d3.mean(valid_calibration_results, (data) => data[i].u_positive),
-      u_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].u_positive),
-      u_negative: d3.mean(valid_calibration_results, (data) => data[i].u_negative),
-      u_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].u_negative),
-      v_positive: d3.mean(valid_calibration_results, (data) => data[i].v_positive),
-      v_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].v_positive),
-      v_negative: d3.mean(valid_calibration_results, (data) => data[i].v_negative),
-      v_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].v_negative),
-      w_positive: d3.mean(valid_calibration_results, (data) => data[i].w_positive),
-      w_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].w_positive),
-      w_negative: d3.mean(valid_calibration_results, (data) => data[i].w_negative),
-      w_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].w_negative),
-    };
-  });
-
-  const calibration = compute_current_calibration(calibration_stats);
-
-  current_calibration.value = calibration;
-  
-  current_calibration_stats.value = calibration_stats;
-
-  calculated_current_calibration_factors.value = {
-    u_positive: calibration.u_positive.factor,
-    u_negative: calibration.u_negative.factor,
-    v_positive: calibration.v_positive.factor,
-    v_negative: calibration.v_negative.factor,
-    w_positive: calibration.w_positive.factor,
-    w_negative: calibration.w_negative.factor,
-  };
-}
-
-```
-
-```js
 
 const current_calibration_buttons = Inputs.button(
   [
-    ["Start Current Calibration", async function(){
-      await run_current_calibration();
+    ["Start Current Calibration", async function(value){
+      value = await value;
+      if (!motor_controller) return value;
+      const calibration_data = await run_current_calibration(motor_controller);
+      const results = [...value.results, calibration_data];
+      const {stats, samples, factors, funcs} = compute_current_calibration(results);
+
+      return {results, stats, samples, factors, funcs};
     }],
-    ["Save Current Factors", function(){
-      if (!calculated_current_calibration_factors) return;
-      if (!motor_controller) return;
-      motor_controller.current_calibration = calculated_current_calibration_factors;
+    ["Save Current Factors", async function(value){
+      value = await value;
+      if (!value.factors) return value;
+      if (!motor_controller) return value;
+      motor_controller.current_calibration = value.factors;
       localStorage.setItem("current_calibration", JSON.stringify(motor_controller.current_calibration));
+      return value;
     }],
-    ["Reset Current Factors", function(){
+    ["Reset Current Factors", async function(value){
+      value = await value;
       localStorage.removeItem("current_calibration");
-      motor_controller.current_calibration = current_calibration_default;
+      if (!motor_controller) {
+        motor_controller.current_calibration = current_calibration_default;
+      }
+      return {results: [], ...compute_current_calibration([])};
     }],
   ],
-  {label: "Collect current calibration data"},
+  {
+    label: "Collect current calibration data",
+    value: {results: [], ...compute_current_calibration([])}
+  },
 );
 
 d3.select(current_calibration_buttons).style("width", "100%");
+
+const current_calibration = Generators.input(current_calibration_buttons);
 ```
 
-
-```js
-
-
-async function run_current_calibration(){
-  if (!motor_controller) return;
-  
-  const settle_time = 100;
-  const settle_timeout = Math.floor((settle_time + 300) * cycles_per_millisecond);
-  const settle_strength = Math.floor(pwm_base * 2 / 10);
-
-  const drive_options = {command_timeout: settle_timeout, command_pwm: settle_strength};
-  const test_options = {command_timeout: 0, command_pwm: 0};
-
-  console.info("Current calibration starting");
-
-  // Note: hold pwm is clamped by the motor driver
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_POSITIVE, ...drive_options});
-  await wait(settle_time);
-  const u_positive = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_U_INCREASING, ...test_options},
-    {expected_messages: history_size});
-
-  console.info("U positive done");
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_NEGATIVE, ...drive_options});
-  await wait(settle_time);
-  const w_negative = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_W_DECREASING, ...test_options},
-    {expected_messages: history_size});
-
-  console.info("W negative done");
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_POSITIVE, ...drive_options});
-  await wait(settle_time);
-  const v_positive = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_V_INCREASING, ...test_options},
-    {expected_messages: history_size});
-
-  console.info("V positive done");
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_NEGATIVE, ...drive_options});
-  await wait(settle_time);
-  const u_negative = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_U_DECREASING, ...test_options},
-    {expected_messages: history_size});
-
-  console.info("U negative done");
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_POSITIVE, ...drive_options});
-  await wait(settle_time);
-  const w_positive = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_W_INCREASING, ...test_options},
-    {expected_messages: history_size});
-
-  console.info("W positive done");
-
-  await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_NEGATIVE, ...drive_options});
-  await wait(settle_time);
-  const v_negative = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_V_DECREASING, ...test_options},
-    {expected_messages: history_size});
-
-  console.info("V negative done");
-
-  // Check all calibration data is complete.
-  if (u_positive.length !== history_size) {
-    console.error("U positive calibration data incomplete", u_positive);
-    return;
-  }
-  if (u_negative.length !== history_size) {
-    console.error("U negative calibration data incomplete", u_negative);
-    return;
-  }
-  if (v_positive.length !== history_size) {
-    console.error("V positive calibration data incomplete", v_positive);
-    return;
-  }
-  if (v_negative.length !== history_size) {
-    console.error("V negative calibration data incomplete", v_negative);
-    return;
-  }
-  if (w_positive.length !== history_size) {
-    console.error("W positive calibration data incomplete", w_positive);
-    return;
-  }
-  if (w_negative.length !== history_size) {
-    console.error("W negative calibration data incomplete", w_negative);
-    return;
-  }
-
-  const targets = d3.range(history_size).map((i) => {
-    const t = i * millis_per_cycle;
-    const zone = current_calibration_zones.filter((zone) => zone.settle_start <= t && t <= zone.settle_end);
-
-    if (zone.length == 0) return null;
-    if (zone.length > 1) {
-      console.error("Multiple zones found", zone);
-      return null;
-    }
-    return zone[0].pwm * calibration_reference;
-  });
-
-  // Make a new table with each calibration phase as a column.
-  const calibration_data = d3.range(history_size).map((i) => {
-    return {
-      time: u_positive[i].time,
-      target: targets[i],
-      u_positive: u_positive[i].u_uncalibrated,
-      u_negative: -u_negative[i].u_uncalibrated,
-      v_positive: v_positive[i].v_uncalibrated,
-      v_negative: -v_negative[i].v_uncalibrated,
-      w_positive: w_positive[i].w_uncalibrated,
-      w_negative: -w_negative[i].w_uncalibrated,
-    };
-  });
-
-  console.info("Current calibration done");
-  
-  update_current_calibration_results(calibration_data);
-}
-
-```
 
 
 ```js
 
 // Write out the current calibration results in copyable format.
 const current_calibration_table = html`<div>Phase correction factors:</div>
-  <pre>calculated_factors = ${JSON.stringify(calculated_current_calibration_factors, null, 2)}</pre>`;
+  <pre>calculated_factors = ${JSON.stringify(current_calibration.factors, null, 2)}</pre>`;
 
 
 // Select which of the calibration runs to display.
 
-const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration_results.length), {
-  value: current_calibration_results.length - 1,
+const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration.results.length), {
+  value: current_calibration.results.length - 1,
   label: "Select calibration result to display:",
 });
 const current_calibration_result_to_display = Generators.input(current_calibration_result_to_display_input);
@@ -1379,7 +1135,7 @@ const current_calibration_result_to_display = Generators.input(current_calibrati
 ```js
 
 const current_calibration_plot = plot_lines({
-  data: current_calibration_results[current_calibration_result_to_display],
+  data: current_calibration.results[current_calibration_result_to_display],
   subtitle: "Current Calibration",
   description: "Current calibration results for each phase.",
   width: 1200, height: 400,
@@ -1402,34 +1158,13 @@ const current_calibration_plot = plot_lines({
   ],
 });
 
-autosave_inputs({
-  current_calibration_plot,
-});
-```
-
-
-
-```js
-
-const calibration_samples = current_calibration_reading_points.map((x, i) => {
-  return {
-    reading: x,
-    target: x,
-    u_positive: current_calibration.u_positive.sample[i].target,
-    u_negative: current_calibration.u_negative.sample[i].target,
-    v_positive: current_calibration.v_positive.sample[i].target,
-    v_negative: current_calibration.v_negative.sample[i].target,
-    w_positive: current_calibration.w_positive.sample[i].target,
-    w_negative: current_calibration.w_negative.sample[i].target,
-  };
-});
 
 const current_calibration_interpolate_plot = plot_lines({
-  data: calibration_samples,
+  data: current_calibration.samples,
   subtitle: "Current Calibration Interpolation",
   description: "Current calibration interpolation results for each phase.",
   width: 1200, height: 400,
-  x_domain: [0, calibration_reference],
+  x_domain: [0, max_calibration_current],
   x: "reading",
   x_label: "Current Reading (A)",
   y_label: "Current Estimate (A)",
@@ -1445,7 +1180,7 @@ const current_calibration_interpolate_plot = plot_lines({
 });
 
 const current_calibration_positive_mean_plot = plot_lines({
-  data: current_calibration_stats,
+  data: current_calibration.stats,
   subtitle: "Mean Response - Positive",
   description: "Current calibration mean results for each phase driven positive.",
   width: 1200, height: 300,
@@ -1487,7 +1222,7 @@ const current_calibration_positive_mean_plot = plot_lines({
 });
 
 const current_calibration_negative_mean_plot = plot_lines({
-  data: current_calibration_stats,
+  data: current_calibration.stats,
   subtitle: "Mean Response - Negative (inverted)",
   description: "Current calibration mean results for each phase driven negative.",
   width: 1200, height: 300,
@@ -1529,6 +1264,7 @@ const current_calibration_negative_mean_plot = plot_lines({
 });
 
 autosave_inputs({
+  current_calibration_plot,
   current_calibration_interpolate_plot,
   current_calibration_positive_mean_plot,
   current_calibration_negative_mean_plot,
@@ -1548,13 +1284,14 @@ import {localStorage, get_stored_or_default, clear_stored_data} from "./componen
 
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 
-import {even_spacing, piecewise_linear, even_piecewise_linear} from "./components/math_utils.js";
 
 import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 
 import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
+
+import {run_current_calibration, compute_current_calibration, max_calibration_current} from "./components/motor_current_calibration.js";
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
