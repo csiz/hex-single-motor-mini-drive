@@ -1,13 +1,7 @@
-import {interpolate_degrees, shortest_distance_degrees, normalize_degrees} from "./angular_math.js";
-import {readout_base, position_calibration_default} from "./motor_constants.js";
-import {matrix_multiply, interpolate_linear} from "./math_utils.js";
+import {position_calibration_default} from "./motor_constants.js";
 
-
-const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
-const phase_resistance = 2.0; // 2.0 Ohm
-
-
-const std_99_z_score = 2.575829; // 99% confidence interval for normal distribution
+import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, radians_to_degrees} from "./angular_math.js";
+import {interpolate_linear, matrix_multiply} from "./math_utils.js";
 
 
 
@@ -37,6 +31,13 @@ export function online_function_chain(...online_functions){
 // Calculate Data
 // --------------
 
+const {sector_center_degrees, sector_center_std, sector_transition_degrees, sector_transition_std, accel_std, initial_angular_speed_std} = position_calibration_default;
+
+const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
+const phase_resistance = 2.0; // 2.0 Ohm
+
+
+const std_99_z_score = 2.575829; // 99% confidence interval for normal distribution
 
 const power_invariant_clarke_matrix = [
   [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
@@ -44,11 +45,11 @@ const power_invariant_clarke_matrix = [
   [1/Math.sqrt(3), 1/Math.sqrt(3), 1/Math.sqrt(3)],
 ];
 
+const power_invariant_simplified_clarke_matrix = power_invariant_clarke_matrix.slice(0, 2);
 
-
-
-
-const {sector_center_degrees, sector_center_std, sector_transition_degrees, sector_transition_std, accel_std, initial_angular_speed_std} = position_calibration_default;
+function clarke_transform(u, v, w){
+  return matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
+}
 
 function shortest_distance_mod_6(a, b){
   const diff = (b + 12 - a) % 6;
@@ -227,49 +228,56 @@ function accumulate_position_from_hall(curr, prev){
 
 
 
-function compute_derivatives(curr, prev){
-  if (!prev) return curr;
+function compute_derivatives(readout, previous_readout){
+  if (!previous_readout) return readout;
+
+  const {u, v, w} = readout;
+  const {u: prev_u, v: prev_v, w: prev_w} = previous_readout;
+
+  const [current_alpha, current_beta] = clarke_transform(u, v, w);
+
+  const current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
+  const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
+
   
   // Time units are milliseconds.
-  const dt = curr.time - prev.time;
+  const dt = readout.time - previous_readout.time;
 
-  const current_angular_speed = normalize_degrees(curr.current_angle - prev.current_angle) / dt;
+  const current_angular_speed = normalize_degrees(readout.current_angle - previous_readout.current_angle) / dt;
+
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = (curr.u - prev.u) / dt * 1000 * phase_inductance;
-  const v_L_voltage = (curr.v - prev.v) / dt * 1000 * phase_inductance;
-  const w_L_voltage = (curr.w - prev.w) / dt * 1000 * phase_inductance;
+  const u_L_voltage = (u - prev_u) / dt * 1000 * phase_inductance;
+  const v_L_voltage = (v - prev_v) / dt * 1000 * phase_inductance;
+  const w_L_voltage = (w - prev_w) / dt * 1000 * phase_inductance;
+
+  const u_voltage = u_L_voltage + phase_resistance * u;
+  const v_voltage = v_L_voltage + phase_resistance * v;
+  const w_voltage = w_L_voltage + phase_resistance * w;
+
+
+  const [voltage_alpha, voltage_beta] = clarke_transform(u_voltage, v_voltage, w_voltage);
+
+  const voltage_angle = radians_to_degrees(Math.atan2(voltage_beta, voltage_alpha));
   
-  const u_voltage = u_L_voltage === null ? null : u_L_voltage + phase_resistance * curr.u;
-  const v_voltage = v_L_voltage === null ? null : v_L_voltage + phase_resistance * curr.v;
-  const w_voltage = w_L_voltage === null ? null : w_L_voltage + phase_resistance * curr.w;
+  const voltage_magnitude = Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
 
-  const any_null = current_angular_speed === null || u_L_voltage === null || v_L_voltage === null || w_L_voltage === null;
-
-  const [voltage_alpha, voltage_beta] = any_null ? [null, null] : matrix_multiply(power_invariant_clarke_matrix, [u_voltage, v_voltage, w_voltage]);
-  const voltage_angle = any_null ? null : Math.atan2(voltage_beta, voltage_alpha);
+  const angle_if_breaking = normalize_degrees(voltage_angle + (readout.speed > 0 ? +90 : -90));
   
-  const voltage_magnitude = any_null ? null : Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
-
-  const angle_if_breaking = any_null ? null : ((voltage_angle + (current_angular_speed > 0 ? +Math.PI / 2.0 : -Math.PI / 2.0)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
 
   return {
-    ...curr,
+    ...readout,
+    current_alpha, current_beta,
+    current_angle, current_magnitude,
     current_angular_speed,
-    u_voltage,
-    v_voltage,
-    w_voltage,
-    u_L_voltage,
-    v_L_voltage,
-    w_L_voltage,
-    voltage_alpha,
-    voltage_beta,
-    voltage_angle: voltage_angle === null ? null : voltage_angle * 180 / Math.PI,
-    voltage_magnitude,
-    angle_if_breaking: angle_if_breaking === null ? null : angle_if_breaking * 180 / Math.PI,
+    u_voltage, v_voltage, w_voltage,
+    u_L_voltage, v_L_voltage, w_L_voltage,
+    voltage_alpha, voltage_beta,
+    voltage_angle, voltage_magnitude,
+    angle_if_breaking,
   };
 }
 
 export const process_readout = online_function_chain(
-  accumulate_position_from_hall,
   compute_derivatives,
+  accumulate_position_from_hall,
 );
