@@ -229,7 +229,7 @@ function accumulate_position_from_hall(curr, prev){
 
 
 function compute_derivatives(readout, previous_readout){
-  const {u, v, w} = readout;
+  const {u, v, w, hall_sector} = readout;
 
   const [current_alpha, current_beta] = clarke_transform(u, v, w);
 
@@ -237,7 +237,8 @@ function compute_derivatives(readout, previous_readout){
   const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
   
   if (!previous_readout) return readout;
-  const {u: prev_u, v: prev_v, w: prev_w} = previous_readout;
+
+  const {u: prev_u, v: prev_v, w: prev_w, hall_sector: prev_hall_sector} = previous_readout;
 
   // Time units are milliseconds.
   const dt = readout.time - previous_readout.time;
@@ -258,6 +259,8 @@ function compute_derivatives(readout, previous_readout){
   
   const voltage_magnitude = Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
 
+  const is_hall_transition = prev_hall_sector != hall_sector;
+
   const angle_if_breaking = normalize_degrees(voltage_angle + (readout.speed > 0 ? +90 : -90));
   
 
@@ -270,6 +273,7 @@ function compute_derivatives(readout, previous_readout){
     voltage_alpha, voltage_beta,
     voltage_angle, voltage_magnitude,
     angle_if_breaking,
+    is_hall_transition,
   };
 }
 

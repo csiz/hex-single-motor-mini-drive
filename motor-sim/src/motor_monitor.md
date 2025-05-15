@@ -6,6 +6,7 @@ title: Motor monitor
 Motor Commands
 --------------
 
+
 <div>${connect_buttons}</div>
 <div>${connection_status}</div>
 <div>${data_request_buttons}</div>
@@ -55,9 +56,15 @@ Position Calibration Procedures
   <div>${position_calibration_pos_speed_plot}</div>
   <div>${position_calibration_neg_plot}</div>
   <div>${position_calibration_neg_speed_plot}</div>
-  <div>${position_calibration_table}</div>
+  <p>Angles where the hall sensors toggle states (hall sector transitions):</p>
   <div>${position_calibration_transitions_table}</div>
-  <div>${position_calibration_hysterisis_table}</div>
+  <p>Mid points of the hall sensor sectors:</p>
+  <div>${position_calibration_centers_table}</div>
+  <h3>Position Calibration Statistics</h3>
+  <p>Hall sensor transitions when driving in the positive direction vs the negative direction:</p>
+  <div>${position_calibration_sensor_spans_table}</div>
+  <p>Hall sensor hysterisis (difference between the positive and negative transition) & actual locations (ideally they are 0, 120 -120 degrees):</p>
+  <div>${position_calibration_sensor_locations_table}</div>
 </div>
 
 
@@ -778,12 +785,7 @@ const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.tim
 // Position Calibration
 // --------------------
 
-let position_calibration = Mutable({
-  results: [],
-  stats: [],
-  transitions: [],
-  hysterisis: [],
-});
+let position_calibration = Mutable({results: [], ...compute_position_calibration([])});
 
 
 const position_calibration_buttons = Inputs.button(
@@ -793,8 +795,8 @@ const position_calibration_buttons = Inputs.button(
 
       for (let i = 0; i < 10; i++){
         const results = [...position_calibration.value.results, await run_position_calibration(motor_controller)];
-        const {stats, transitions, hysterisis} = compute_position_calibration(results);
-        position_calibration.value = {results, stats, transitions, hysterisis};
+        const position_results = compute_position_calibration(results);
+        position_calibration.value = {results, ...position_results};
       }
     }],
   ],
@@ -818,11 +820,13 @@ const position_calibration_result_to_display_input = Inputs.select(
 const position_calibration_result_to_display = Generators.input(position_calibration_result_to_display_input);
 
 
-const position_calibration_table = Inputs.table(position_calibration.stats, {rows: 12+1});
+const position_calibration_transitions_table = Inputs.table(Object.values(position_calibration.transition_stats), {rows: 12+1});
 
-const position_calibration_transitions_table = Inputs.table(position_calibration.transitions, {rows: 6+1});
+const position_calibration_centers_table = Inputs.table(Object.values(position_calibration.center_angles), {rows: 6+1});
 
-const position_calibration_hysterisis_table = Inputs.table(position_calibration.hysterisis, {rows: 3+1});
+const position_calibration_sensor_spans_table = Inputs.table(Object.values(position_calibration.sensor_spans), {rows: 6+1});
+
+const position_calibration_sensor_locations_table = Inputs.table(Object.values(position_calibration.sensor_locations), {rows: 3+1});
 ```
 
 

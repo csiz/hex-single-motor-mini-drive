@@ -1,7 +1,9 @@
 import {pwm_base, cycles_per_millisecond, history_size} from "./motor_constants.js";
 import {command_codes} from "./motor_interface.js";
 import {wait} from "./async_utils.js";
-import {circular_stats_degrees, interpolate_degrees, shortest_distance_degrees} from "./angular_math.js";
+import {circular_stats_degrees, interpolate_degrees, shortest_distance_degrees, positive_distance_degrees} from "./angular_math.js";
+import * as d3 from "d3";
+
 
 export async function run_position_calibration(motor_controller) {
 
@@ -52,94 +54,89 @@ export async function run_position_calibration(motor_controller) {
 }
 
 // Store the inferred angle for every hall sensor switching event.
-function extract_hall_switching_events(data){
-  return data.flatMap((d, i) => {
-    if (d.angle_if_breaking == null) return [];
-    if (i == 0) return [];
-
-    const prev = data[i - 1];
-
-    const prev_sector = prev.hall_sector;
-    const next_sector = d.hall_sector;
-
-    if (prev_sector == null || next_sector == null) return [];
-
-    if (prev_sector == next_sector) return [];
-
-    return [{time: d.time, angle_if_breaking: d.angle_if_breaking, switching: `hall_sector_${prev_sector}_to_${next_sector}`}];
-
-  });
+function extract_hall_transitions(data){
+  return data.filter(d => d.is_hall_transition && d.speed != 0).map(d => ({
+    time: d.time,
+    angle: d.angle_if_breaking,
+    transition: `drive_${d.speed > 0 ? "positive" : "negative"}_sector_${d.hall_sector}`,
+  }));
 }
 
 export function compute_position_calibration(calibration_results){
+  if (!calibration_results || calibration_results.length == 0) {
+    return {
+      transition_stats: [],
+      sensor_spans: [],
+      center_angles: [],
+      sensor_locations: [],
+    };
+  }
 
-  const switching_events = calibration_results.flatMap((calibration_data) => {
+  const hall_transitions = calibration_results.flatMap((calibration_data) => {
     return [
-      ...extract_hall_switching_events(calibration_data.drive_positive),
-      ...extract_hall_switching_events(calibration_data.drive_negative),
+      ...extract_hall_transitions(calibration_data.drive_positive),
+      ...extract_hall_transitions(calibration_data.drive_negative),
     ];
   });
+  
 
-  const switching_angles = switching_events.reduce((acc, d) => {
-    acc[d.switching]?.push(d.angle_if_breaking);
-    return acc;
-  }, {
-    hall_sector_5_to_0: [],
-    hall_sector_0_to_1: [],
-    hall_sector_1_to_2: [],
-    hall_sector_2_to_3: [],
-    hall_sector_3_to_4: [],
-    hall_sector_4_to_5: [],
+  const transition_angles = hall_transitions.reduce((result, d) => {
+    let transitions = result[d.transition] ?? [];
+    transitions.push(d.angle);
+    result[d.transition] = transitions;
+    return result;
+  }, {});
 
-    hall_sector_1_to_0: [], 
-    hall_sector_2_to_1: [],
-    hall_sector_3_to_2: [],
-    hall_sector_4_to_3: [],
-    hall_sector_5_to_4: [],
-    hall_sector_0_to_5: [],
-  });
+  const transition_stats = Object.fromEntries(Object.entries(transition_angles).map(([transition, values]) => {
+        const {mean, stdev} = circular_stats_degrees(values);
 
-  const stats = Object.entries(switching_angles).map(([key, values]) => {
-    const {circular_mean: mean, circular_std: std} = circular_stats_degrees(values);
-    return {key, n: values.length, mean, std};
-  });
+    return [transition, {transition, n: values.length, mean, stdev}];
+  }));
 
-  const transitions = [
-    ["drive_positive_hall_u", "hall_sector_4_to_5", "hall_sector_1_to_2"],
-    ["drive_negative_hall_u", "hall_sector_5_to_4", "hall_sector_2_to_1"],
-    ["drive_positive_hall_v", "hall_sector_0_to_1", "hall_sector_3_to_4"],
-    ["drive_negative_hall_v", "hall_sector_1_to_0", "hall_sector_4_to_3"],
-    ["drive_positive_hall_w", "hall_sector_2_to_3", "hall_sector_5_to_0"],
-    ["drive_negative_hall_w", "hall_sector_3_to_2", "hall_sector_0_to_5"],
-  ].map(([key, a_key, b_key]) => {
-    const a_stats = stats.find(d => d.key === a_key);
-    const b_stats = stats.find(d => d.key === b_key);
+  const center_angles = Object.fromEntries(d3.range(0, 6).map(sector => {
+    const pos_transition = transition_stats[`drive_positive_sector_${sector}`]?.mean;
+    const neg_transition = transition_stats[`drive_negative_sector_${sector}`]?.mean;
+    const center = interpolate_degrees(pos_transition, neg_transition, 0.5);
+    const stdev = positive_distance_degrees(pos_transition, neg_transition) / 2;
+    const hall_sector = `sector_${sector}`;
+    return [hall_sector, {hall_sector, pos_transition, neg_transition, center, stdev}];
+  }));
 
-    const a = a_stats.mean;
-    const b = b_stats.mean;
 
-    const diff = (b - a + 360) % 360;
-    const location = interpolate_degrees(a, b, 0.5);
-    const err = diff - 180;
-    return {key, a, b, diff, location, err};
-  });
+  const sensor_spans = Object.fromEntries([
+    ["drive_positive_hall_u", "drive_positive_sector_5", "drive_positive_sector_2"],
+    ["drive_negative_hall_u", "drive_negative_sector_4", "drive_negative_sector_1"],
+    ["drive_positive_hall_v", "drive_positive_sector_1", "drive_positive_sector_4"],
+    ["drive_negative_hall_v", "drive_negative_sector_0", "drive_negative_sector_3"],
+    ["drive_positive_hall_w", "drive_positive_sector_3", "drive_positive_sector_0"],
+    ["drive_negative_hall_w", "drive_negative_sector_2", "drive_negative_sector_5"],
+  ].map(([hall_transition, left_trigger, right_trigger]) => {
+    const left_transition = transition_stats[left_trigger]?.mean;
+    const right_transition = transition_stats[right_trigger]?.mean;
 
-  const hysterisis = [
-    ["hysterisis_hall_u", "drive_negative_hall_u", "drive_positive_hall_u"],
-    ["hysterisis_hall_v", "drive_negative_hall_v", "drive_positive_hall_v"],
-    ["hysterisis_hall_w", "drive_negative_hall_w", "drive_positive_hall_w"],
-  ].map(([key, a_key, b_key]) => {
-    const a_stats = transitions.find(d => d.key === a_key);
-    const b_stats = transitions.find(d => d.key === b_key);
-    const hysterisis = shortest_distance_degrees(a_stats.location, b_stats.location);
-    const mid_location = interpolate_degrees(a_stats.location, b_stats.location, 0.5);
+    const location = interpolate_degrees(left_transition, right_transition, 0.5);
+    const hall_on_span = positive_distance_degrees(left_transition, right_transition);
+    const sensing_overshoot = hall_on_span - 180;
+    return [hall_transition, {hall_transition, left_transition, right_transition, location, hall_on_span, sensing_overshoot}];
+  }));
 
-    return {key, hysterisis, mid_location};
-  });
+  const sensor_locations = Object.fromEntries([
+    ["hall_u", "drive_negative_hall_u", "drive_positive_hall_u"],
+    ["hall_v", "drive_negative_hall_v", "drive_positive_hall_v"],
+    ["hall_w", "drive_negative_hall_w", "drive_positive_hall_w"],
+  ].map(([hall_sensor, neg_transition, pos_transition]) => {
+    const neg_sensor_span = sensor_spans[neg_transition];
+    const pos_sensor_span = sensor_spans[pos_transition];
+    const hysterisis = positive_distance_degrees(neg_sensor_span.location, pos_sensor_span.location);
+    const mid_location = interpolate_degrees(neg_sensor_span.location, pos_sensor_span.location, 0.5);
+
+    return [hall_sensor, {hall_sensor, hysterisis, mid_location}];
+  }));
 
   return {
-    stats,
-    transitions,
-    hysterisis,
+    transition_stats,
+    center_angles,
+    sensor_spans,
+    sensor_locations,
   };
 }
