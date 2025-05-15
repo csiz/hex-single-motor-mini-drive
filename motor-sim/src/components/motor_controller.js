@@ -1,6 +1,6 @@
 import {wait} from "./async_utils.js";
 import {parser_mapping, command_codes, serialise_command} from "./motor_interface.js";
-import {current_calibration_default, position_calibration_default} from "./motor_constants.js";
+import {current_calibration_default, position_calibration_default, history_size} from "./motor_constants.js";
 
 export { command_codes };
 
@@ -13,7 +13,7 @@ export const USBD_PID_FS = 56988;
 
 // Other internal constants
 
-const max_wrong_code = 256;
+const max_wrong_code = history_size + 256;
 
 
 // Serial Port Management
@@ -183,16 +183,29 @@ export class MotorController {
 
         const code = message_header.getUint16(0);
         if (code != this._expected_code) {
-          // Search each byte until we find the expected code.
-          offset += 1;
+          // Check if it's a valid message code.
+          const {data_size} = parser_mapping[code] || {data_size: null};
+          if (data_size != null){
+            // Skip this message and continue.
+            offset += 2 + data_size;
+            bytes_discarded += 2 + data_size;
+          } else {
+            // Search each byte until we find the expected code.
+            offset += 1;
+            bytes_discarded += 1;
+          }
+
           wrong_code_count += 1;
-          bytes_discarded += 1;
+
           if (wrong_code_count > max_wrong_code) {
-            this._onerror(new Error(`Could not find expected message code: ${this._expected_code}`));
+            this._onerror(new Error(`Could not find expected message code: 0x${this._expected_code.toString(16)}`));
             break;
           }
           continue;
         }
+
+        // Reset the wrong code count if we find the expected code.
+        wrong_code_count = 0;
 
         const {parse_func, data_size} = parser_mapping[code] || {parse_func: null, data_size: 0};
         if (parse_func === null) {
@@ -253,7 +266,7 @@ export class MotorController {
   /* Get a snapshot of the last N messages from the motor driver. */
   async command_and_read(command_options, {expected_code = command_codes.READOUT, expected_messages = HISTORY_SIZE, response_timeout = 500}) {
 
-    this.cancel_previous_request();
+    await this.cancel_previous_request();
 
     let timeout_id;
     
@@ -297,7 +310,7 @@ export class MotorController {
     driver takes too long to respond. The generator yields an array of messages.
   */
   async command_and_stream(command_options, {readout_callback, expected_code = command_codes.READOUT, response_timeout = 500}) {
-    this.cancel_previous_request();
+    await this.cancel_previous_request();
 
     let timeout_id;
     

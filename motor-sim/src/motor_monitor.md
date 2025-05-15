@@ -9,8 +9,8 @@ Motor Commands
 <div>${connect_buttons}</div>
 <div>${connection_status}</div>
 <div>${data_request_buttons}</div>
-<div>${test_buttons}</div>
 <div>${command_options_input}</div>
+<div>${test_buttons}</div>
 <div>${command_buttons}</div>
 <div>
   ${command_pwm_slider}
@@ -301,59 +301,63 @@ const data_request_buttons = Inputs.button(
 
 d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 
+
+function snapshot_if_checked(delay_ms, code = null){
+  if (command_options.includes("Take snapshot after command")){
+    command_and_stream(delay_ms, code ?? command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
+  } else {
+    if (code) command(code);
+  }
+}
+
 const test_buttons = Inputs.button(
   [
     ["Test all permutations", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_ALL_PERMUTATIONS);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
     ["Test ground short", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_GROUND_SHORT);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_GROUND_SHORT);
     }],
     ["Test positive short", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_POSITIVE_SHORT);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_POSITIVE_SHORT);
     }],
     ["Test U directions", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_U_DIRECTIONS);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_U_DIRECTIONS);
     }],
     ["Test U increasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_U_INCREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_U_INCREASING);
     }],
     ["Test U decreasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_U_DECREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_U_DECREASING);
     }],
     ["Test V increasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_V_INCREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_V_DECREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_W_INCREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_W_DECREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_DECREASING);
     }],
     ["Test V increasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_V_INCREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_V_DECREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_W_INCREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", function(){
-      command_and_stream(0, command_codes.SET_STATE_TEST_W_DECREASING);
+      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Test sequence"},
 );
 
-function snapshot_if_checked(delay_ms){
-  if (command_options.includes("Take snapshot after command")){
-    command_and_stream(delay_ms, command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
-  }
-}
 
 
 d3.select(test_buttons).selectAll("button").style("height", "4em");
