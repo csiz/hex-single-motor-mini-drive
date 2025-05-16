@@ -1,7 +1,7 @@
 import {process_readout} from './motor_observer.js';  
 
 import {
-  millis_per_cycle, pwm_base, angle_base, readout_base, 
+  millis_per_cycle, pwm_base, angle_base, readout_base, time_units_per_millisecond, speed_scale, 
   current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage,
 } from './motor_constants.js';
 
@@ -78,7 +78,7 @@ function parse_readout(data_view, previous_readout){
   const position_readout = data_view.getUint16(offset);
   offset += 2;
 
-  const speed = data_view.getInt16(offset);
+  const angular_speed_readout = data_view.getInt16(offset);
   offset += 2;
   const vcc_readout = data_view.getUint16(offset);
   offset += 2;
@@ -105,10 +105,12 @@ function parse_readout(data_view, previous_readout){
   const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
 
   // The next bit is the motor angle valid flag.
-  const motor_angle_valid = (position_readout >> 12) & 0b1;
+  const angle_valid = (position_readout >> 12) & 0b1;
   // The last 10 bits are the motor angle. Representing range from 0 to 360 degrees,
   // where 0 means the rotor is aligned by holding positive current on the U phase.
-  const motor_angle = normalize_degrees((position_readout & 0x3FF) * 360 / angle_base);
+  const angle = normalize_degrees((position_readout & 0x3FF) * 360 / angle_base);
+  
+  const angular_speed = angular_speed_readout * 360 / angle_base * time_units_per_millisecond / speed_scale;
 
   const ref_diff = current_conversion * (ref_readout - expected_ref_readout);
 
@@ -154,8 +156,7 @@ function parse_readout(data_view, previous_readout){
     u_pwm, v_pwm, w_pwm,
     hall_u, hall_v, hall_w, hall_sector,
     hall_u_as_angle, hall_v_as_angle, hall_w_as_angle,
-    motor_angle_valid, motor_angle,
-    speed,
+    angle_valid, angle, angular_speed,
     vcc_voltage,
     torque,
     hold,

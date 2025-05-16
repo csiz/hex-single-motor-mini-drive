@@ -53,8 +53,8 @@ export async function run_position_calibration(motor_controller) {
   return position_calibration_data;
 }
 
-function transition_string(speed, hall_sector){
-  return `drive_${speed > 0 ? "positive" : "negative"}_sector_${hall_sector}`;
+function transition_string(angular_speed, hall_sector){
+  return `drive_${angular_speed > 0 ? "positive" : "negative"}_sector_${hall_sector}`;
 }
 
 const transition_from_string = Object.fromEntries(d3.range(0, 6).flatMap(hall_sector => {
@@ -66,10 +66,10 @@ const transition_from_string = Object.fromEntries(d3.range(0, 6).flatMap(hall_se
 
 // Store the inferred angle for every hall sensor switching event.
 function extract_hall_transitions(data){
-  return data.filter(d => d.is_hall_transition && d.speed !== null && !isNaN(d.speed) && d.speed != 0 ).map(d => ({
+  return data.filter(d => d.is_hall_transition && d.angular_speed !== null && !isNaN(d.angular_speed) && d.angular_speed != 0 ).map(d => ({
     time: d.time,
     angle: d.angle_if_breaking,
-    transition: transition_string(d.speed, d.hall_sector),
+    transition: transition_string(d.angular_speed, d.hall_sector),
   }));
 }
 

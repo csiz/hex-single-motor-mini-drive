@@ -108,14 +108,15 @@ const colors = {
   v: "rgb(217, 95, 2)",
   w: "rgb(231, 41, 138)",
   ref_diff: "rgb(102, 102, 102)",
-  sum: "black",
-  angle: "black",
-  motor_angle: "rgb(39, 163, 185)",
+  sum: "rgb(0, 0, 0)",
+  web_angle: "rgb(178, 228, 0)",
+  angle: "rgb(39, 163, 185)",
   current_magnitude: "rgb(197, 152, 67)",
   current_angle: "rgb(102, 166, 30)",
   voltage_angle: d3.color("rgb(102, 166, 30)").darker(1),
   angle_if_breaking: d3.color("rgb(102, 166, 30)").darker(2),
-  angular_speed: "black",
+  angular_speed: "rgb(41, 194, 173)",
+  web_angular_speed: "rgb(156, 196, 47)",
   current_alpha: "rgb(199, 0, 57)",
   current_beta: "rgb(26, 82, 118)",
   other: "rgb(27, 158, 119)",
@@ -482,8 +483,8 @@ const timeline_position_input = plot_line({
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
   y_domain: [-180, 180],
-  y: "motor_angle", 
-  color: colors.motor_angle,
+  y: "angle", 
+  color: colors.angle,
   include_brush: true,
 });
 
@@ -542,7 +543,7 @@ const plot_power = plot_lines({
   y_label: "Power (W)",
   channels: [
     {y: "total_power", label: "Total Power", color: colors.sum},
-    {y: "torque", label: "Torque", color: colors.motor_angle},
+    {y: "torque", label: "Torque", color: colors.angle},
     {y: "hold", label: "Hold", color: colors.current_angle},
     {y: "resistive_power", label: "Resistive Power", color: colors.current_magnitude},
   ],
@@ -601,7 +602,13 @@ const plot_electric_position = plot_lines({
         y1: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
       }),
     },
-    {y: "motor_angle", label: "Motor Angle", color: colors.motor_angle},
+    {
+      y: "web_angle", label: "Web Angle", color: colors.web_angle,
+      draw_extra: setup_faint_area({
+        y0: (d) => d.web_angle - stdev_95_z_score * d.web_angle_stdev, 
+        y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
+      }),
+    },
     {y: "motor_current_angle", label: "Motor Current Angle", color: colors.current_angle},
     {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage (Park) Angle", color: colors.voltage_angle},
@@ -625,6 +632,13 @@ const plot_speed = plot_lines({
       draw_extra: setup_faint_area({
         y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev, 
         y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
+      }),
+    },
+    {
+      y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
+      draw_extra: setup_faint_area({
+        y0: d => d.web_angular_speed - stdev_95_z_score * d.web_angular_speed_stdev,
+        y1: d => d.web_angular_speed + stdev_95_z_score * d.web_angular_speed_stdev,
       }),
     },
   ],
@@ -895,6 +909,13 @@ const position_calibration_pos_plot = plot_lines({
         y2: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
       }),
     },
+    {
+      y: "web_angle", label: "Web Angle", color: colors.web_angle,
+      draw_extra: setup_faint_area({
+        y0: (d) => d.web_angle - stdev_95_z_score * d.web_angle_stdev, 
+        y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
+      }),
+    },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: colors.angle_if_breaking},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
@@ -921,6 +942,13 @@ const position_calibration_pos_speed_plot = plot_lines({
         y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
       }),
     },
+    {
+      y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
+      draw_extra: setup_faint_area({
+        y0: d => d.web_angular_speed - stdev_95_z_score * d.web_angular_speed_stdev,
+        y1: d => d.web_angular_speed + stdev_95_z_score * d.web_angular_speed_stdev,
+      }),
+    },
   ],
   curve: d3.curveStep,
 });
@@ -941,6 +969,13 @@ const position_calibration_neg_plot = plot_lines({
       draw_extra: setup_faint_area({
         y1: (d) => d.angle - stdev_95_z_score * d.angle_stdev,
         y2: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
+      }),
+    },
+    {
+      y: "web_angle", label: "Web Angle", color: colors.web_angle,
+      draw_extra: setup_faint_area({
+        y0: (d) => d.web_angle - stdev_95_z_score * d.web_angle_stdev, 
+        y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
       }),
     },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
@@ -966,6 +1001,13 @@ const position_calibration_neg_speed_plot = plot_lines({
       draw_extra: setup_faint_area({
         y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev,
         y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
+      }),
+    },
+    {
+      y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
+      draw_extra: setup_faint_area({
+        y0: d => d.web_angular_speed - stdev_95_z_score * d.web_angular_speed_stdev,
+        y1: d => d.web_angular_speed + stdev_95_z_score * d.web_angular_speed_stdev,
       }),
     },
   ],

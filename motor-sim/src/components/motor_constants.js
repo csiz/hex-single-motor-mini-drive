@@ -7,8 +7,14 @@ export const cycles_per_millisecond = 23437.5 / 1000.0; // 23437.5 cycles per se
 // Millisecond (fractions) per PWM motor cycle.
 export const millis_per_cycle = 1.0/cycles_per_millisecond;
 
+const ticks_per_time_units = 256;
+const ticks_per_millisecond = 72000;
+export const time_units_per_millisecond = Math.floor(ticks_per_millisecond / ticks_per_time_units);
 
 export const angle_base = 1024;
+
+// Scale to keep motor speed in numerical range for 32 bit arithmetic.
+export const speed_scale = 128;
 
 export const pwm_base = 1536; // 0x0600
 export const pwm_period = 2 * pwm_base;
