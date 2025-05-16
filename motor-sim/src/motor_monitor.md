@@ -179,6 +179,7 @@ async function connect_motor_controller(){
     motor_controller.value = await connect_usb_motor_controller();
 
     motor_controller.value.current_calibration = get_stored_or_default("current_calibration", current_calibration_default);
+    motor_controller.value.position_calibration = get_stored_or_default("position_calibration", position_calibration_default);
 
     connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
@@ -792,26 +793,48 @@ const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.tim
 // Position Calibration
 // --------------------
 
-let position_calibration = Mutable({results: [], ...compute_position_calibration([])});
-
 
 const position_calibration_buttons = Inputs.button(
   [
-    ["Start Position Calibration", async function(){
+    ["Start Position Calibration", async function(value){
+      value = await value;
+      
       if (!motor_controller) return;
 
-      for (let i = 0; i < 10; i++){
-        const results = [...position_calibration.value.results, await run_position_calibration(motor_controller)];
-        const position_results = compute_position_calibration(results);
-        position_calibration.value = {results, ...position_results};
+      for (let i = 0; i < 5; i++){
+        const results = [...value.results, await run_position_calibration(motor_controller)];
+        value = {results, ...compute_position_calibration(results)};
       }
+
+      return value;
+    }],
+    ["Save Position Calibration", async function(value){
+      value = await value;
+      if (!value.position_calibration) return value;
+      if (!motor_controller) return value;
+      motor_controller.position_calibration = value.position_calibration;
+      localStorage.setItem("position_calibration", JSON.stringify(motor_controller.position_calibration));
+      return value;
+    }],
+    ["Reset Position Calibration", async function(value){
+      value = await value;
+      localStorage.removeItem("position_calibration");
+      if (motor_controller) {
+        motor_controller.position_calibration = position_calibration_default;
+      }
+      return {results: [], ...compute_position_calibration([])};
     }],
   ],
-  {label: "Collect position calibration data"},
+  {
+    label: "Collect position calibration data",
+    value: {results: [], ...compute_position_calibration([])},
+  },
 );
 
 d3.select(position_calibration_buttons).style("width", "100%");
 
+
+const position_calibration = Generators.input(position_calibration_buttons);
 
 ```
 
@@ -835,11 +858,17 @@ const position_calibration_sensor_spans_table = Inputs.table(Object.values(posit
 
 const position_calibration_sensor_locations_table = Inputs.table(Object.values(position_calibration.sensor_locations), {rows: 3+1});
 
-
 // Write out the position calibration results in copyable format.
-const position_calibration_table = position_calibration.position_calibration === null ? 
-  `position_calibration = null` :
-  `position_calibration = {\n  ${Object.entries(position_calibration.position_calibration).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(",\n  ")},\n}`;
+function print_position_calibration(position_calibration){
+  if (!position_calibration) return "null";
+  return `{\n  ${Object.entries(position_calibration).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(",\n  ")},\n}`;
+}
+
+const position_calibration_table = position_calibration.position_calibration ? 
+  `calculated_position_calibration = ${print_position_calibration(position_calibration.position_calibration)}` :
+  motor_controller?.position_calibration ?
+  `loaded_position_calibration = ${print_position_calibration(motor_controller.position_calibration)}` :
+  `default_position_calibration = ${print_position_calibration(position_calibration_default)}`;
 
 ```
 
@@ -1003,8 +1032,11 @@ const current_calibration = Generators.input(current_calibration_buttons);
 ```js
 
 // Write out the current calibration results in copyable format.
-const current_calibration_table = `current_calibration = ${JSON.stringify(current_calibration.current_calibration, null, 2)}`;
-
+const current_calibration_table = current_calibration.current_calibration ? 
+  `calculated_current_calibration = ${JSON.stringify(current_calibration.current_calibration, null, 2)}` :
+  motor_controller?.current_calibration ?
+  `loaded_current_calibration = ${JSON.stringify(motor_controller.current_calibration, null, 2)}` :
+  `default_current_calibration = ${JSON.stringify(current_calibration_default, null, 2)}`;
 
 // Select which of the calibration runs to display.
 
@@ -1181,7 +1213,7 @@ import {run_position_calibration, compute_position_calibration} from "./componen
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
-  history_size, current_calibration_default,
+  history_size, current_calibration_default, position_calibration_default,
 } from "./components/motor_constants.js";
 
 

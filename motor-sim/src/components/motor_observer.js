@@ -22,7 +22,7 @@ export function online_map(array, online_fn){
 export function online_function_chain(...online_functions){
   return function(value, previous){
     for (const fn of online_functions){
-      value = fn(value, previous);
+      value = fn.call(this, value, previous);
     }
     return value;
   };
@@ -31,7 +31,6 @@ export function online_function_chain(...online_functions){
 // Calculate Data
 // --------------
 
-const {sector_center_degrees, sector_center_stdev, sector_transition_degrees, sector_transition_stdev, accel_stdev, initial_angular_speed_stdev} = position_calibration_default;
 
 const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 const phase_resistance = 2.0; // 2.0 Ohm
@@ -73,6 +72,9 @@ function add_stdev(...std_values){
 }
 
 function accumulate_position_from_hall(curr, prev){
+  const {sector_center_degrees, sector_center_stdev, sector_transition_degrees, sector_transition_stdev, accel_stdev, initial_angular_speed_stdev} = this.position_calibration;
+
+
   const sector = curr.hall_sector;
 
   if (!prev) return {

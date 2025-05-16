@@ -80,6 +80,7 @@ export function compute_position_calibration(calibration_results){
       sensor_spans: [],
       center_angles: [],
       sensor_locations: [],
+      position_calibration: null,
     };
   }
 
