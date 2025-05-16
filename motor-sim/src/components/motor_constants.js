@@ -52,11 +52,11 @@ export const current_calibration_default = {
 
 
 const hall_hysterisis = 10;
-const transition_std = 15;
+const transition_stdev = 15;
 
 export const position_calibration_default = {
   sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
-  sector_center_std: [30, 30, 30, 30, 30, 30],
+  sector_center_stdev: [30, 30, 30, 30, 30, 30],
   sector_transition_degrees: [
     [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
     [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
@@ -65,14 +65,14 @@ export const position_calibration_default = {
     [-150 + hall_hysterisis / 2, - 90 - hall_hysterisis / 2],
     [- 90 + hall_hysterisis / 2, - 30 - hall_hysterisis / 2],
   ],
-  sector_transition_std: [
-    [transition_std, transition_std],
-    [transition_std, transition_std],
-    [transition_std, transition_std],
-    [transition_std, transition_std],
-    [transition_std, transition_std],
-    [transition_std, transition_std],
+  sector_transition_stdev: [
+    [transition_stdev, transition_stdev],
+    [transition_stdev, transition_stdev],
+    [transition_stdev, transition_stdev],
+    [transition_stdev, transition_stdev],
+    [transition_stdev, transition_stdev],
+    [transition_stdev, transition_stdev],
   ],
-  accel_std: 360.0 / 5.0 / 50.0, // acceleration distribution up to (360 degrees per 5ms) per 50ms.
-  initial_angular_speed_std: 0.05 * 360,
+  accel_stdev: 360.0 / 5.0 / 50.0, // acceleration distribution up to (360 degrees per 5ms) per 50ms.
+  initial_angular_speed_stdev: 0.05 * 360,
 }

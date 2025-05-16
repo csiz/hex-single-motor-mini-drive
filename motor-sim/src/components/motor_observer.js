@@ -31,13 +31,13 @@ export function online_function_chain(...online_functions){
 // Calculate Data
 // --------------
 
-const {sector_center_degrees, sector_center_std, sector_transition_degrees, sector_transition_std, accel_std, initial_angular_speed_std} = position_calibration_default;
+const {sector_center_degrees, sector_center_stdev, sector_transition_degrees, sector_transition_stdev, accel_stdev, initial_angular_speed_stdev} = position_calibration_default;
 
 const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 const phase_resistance = 2.0; // 2.0 Ohm
 
 
-const std_99_z_score = 2.575829; // 99% confidence interval for normal distribution
+const stdev_99_z_score = 2.575829; // 99% confidence interval for normal distribution
 
 const power_invariant_clarke_matrix = [
   [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
@@ -58,8 +58,8 @@ function shortest_distance_mod_6(a, b){
 
 function product_of_normals({mean_a, std_a, mean_b, std_b}){
   const mean = (mean_a * std_b * std_b + mean_b * std_a * std_a) / (std_a * std_a + std_b * std_b);
-  const std = Math.sqrt((std_a * std_a * std_b * std_b) / (std_a * std_a + std_b * std_b));
-  return {mean, std};
+  const stdev = Math.sqrt((std_a * std_a * std_b * std_b) / (std_a * std_a + std_b * std_b));
+  return {mean, stdev};
 }
 
 function product_of_normals_by_variance({mean_a, variance_a, mean_b, variance_b}){
@@ -68,8 +68,8 @@ function product_of_normals_by_variance({mean_a, variance_a, mean_b, variance_b}
   return {mean, variance};
 }
 
-function add_std(...std_values){
-  return Math.sqrt(std_values.reduce((sum, std) => sum + std * std, 0));
+function add_stdev(...std_values){
+  return Math.sqrt(std_values.reduce((sum, stdev) => sum + stdev * stdev, 0));
 }
 
 function accumulate_position_from_hall(curr, prev){
@@ -79,16 +79,16 @@ function accumulate_position_from_hall(curr, prev){
     ...curr,
     sector,
     angle: sector_center_degrees[sector],
-    angle_std: sector_center_std[sector],
+    angle_stdev: sector_center_stdev[sector],
     angular_speed: 0,
-    angular_speed_std: initial_angular_speed_std,
+    angular_speed_stdev: initial_angular_speed_stdev,
 
     obs_time: curr.time,
     obs_sector: sector,
     obs_angle: sector_center_degrees[sector],
-    obs_angle_std: sector_center_std[sector],
+    obs_angle_stdev: sector_center_stdev[sector],
     obs_angular_speed: 0,
-    obs_angular_speed_std: initial_angular_speed_std,
+    obs_angular_speed_stdev: initial_angular_speed_stdev,
   }
   
   const dt = curr.time - prev.obs_time;
@@ -98,7 +98,7 @@ function accumulate_position_from_hall(curr, prev){
     const direction = Math.sign(shortest_distance_mod_6(prev.sector, sector));
 
     const trigger_angle = sector_transition_degrees[sector][direction >= 0 ? 0 : 1];
-    const trigger_angle_std = sector_transition_std[sector][direction >= 0 ? 0 : 1];
+    const trigger_angle_stdev = sector_transition_stdev[sector][direction >= 0 ? 0 : 1];
 
     const distance_to_trigger = shortest_distance_degrees(prev.obs_angle, trigger_angle);
 
@@ -106,14 +106,14 @@ function accumulate_position_from_hall(curr, prev){
     const estimated_distance_error = distance_to_trigger - estimated_distance;
     const estimated_speed_error = estimated_distance_error / dt;
 
-    const estimated_distance_std = add_std(prev.obs_angle_std, prev.obs_angular_speed_std * dt, accel_std * dt * dt / 5.0);
-    const estimated_speed_error_std = add_std(estimated_distance_std / dt, trigger_angle_std / dt);
+    const estimated_distance_stdev = add_stdev(prev.obs_angle_stdev, prev.obs_angular_speed_stdev * dt, accel_stdev * dt * dt / 5.0);
+    const estimated_speed_error_stdev = add_stdev(estimated_distance_stdev / dt, trigger_angle_stdev / dt);
     
-    const {mean: distance_adjustment, std: angle_std} = product_of_normals({
+    const {mean: distance_adjustment, stdev: angle_stdev} = product_of_normals({
       mean_a: 0.0,
-      std_a: estimated_distance_std,
+      std_a: estimated_distance_stdev,
       mean_b: estimated_distance_error,
-      std_b: trigger_angle_std,
+      std_b: trigger_angle_stdev,
     });
 
     const kalman_angle = normalize_degrees(prev.obs_angle + estimated_distance + distance_adjustment);
@@ -122,13 +122,13 @@ function accumulate_position_from_hall(curr, prev){
     // to update the angle we cross 180 degrees and our math switches sign. To avoid that we need to keep the 
     // angle near the trigger. The formula below handles the lower bound of the trigger angle; the upper bound
     // is handled by capping the speed above.
-    const angle = kalman_angle + direction * Math.max(direction * normalize_degrees(trigger_angle - direction * std_99_z_score * trigger_angle_std - kalman_angle), 0);
+    const angle = kalman_angle + direction * Math.max(direction * normalize_degrees(trigger_angle - direction * stdev_99_z_score * trigger_angle_stdev - kalman_angle), 0);
 
-    const {mean: speed_adjustment, std: angular_speed_std} = product_of_normals({
+    const {mean: speed_adjustment, stdev: angular_speed_stdev} = product_of_normals({
       mean_a: 0.0,
-      std_a: prev.obs_angular_speed_std + 0.5 * accel_std * dt,
+      std_a: prev.obs_angular_speed_stdev + 0.5 * accel_stdev * dt,
       mean_b: estimated_speed_error,
-      std_b: estimated_speed_error_std,
+      std_b: estimated_speed_error_stdev,
     });
 
     const angular_speed = prev.obs_angular_speed + speed_adjustment;
@@ -137,16 +137,16 @@ function accumulate_position_from_hall(curr, prev){
       ...curr,
       sector,
       angle,
-      angle_std,
+      angle_stdev,
       angular_speed,
-      angular_speed_std,
+      angular_speed_stdev,
 
       obs_time: curr.time,
       obs_sector: sector,
       obs_angle: angle,
-      obs_angle_std: angle_std,
+      obs_angle_stdev: angle_stdev,
       obs_angular_speed: angular_speed,
-      obs_angular_speed_std: angular_speed_std,
+      obs_angular_speed_stdev: angular_speed_stdev,
     };
   } else {
     // If we didn't switch sectors, then we need to carry on with our previous estimate, but adjusted...
@@ -155,15 +155,15 @@ function accumulate_position_from_hall(curr, prev){
 
     const estimated_distance = prev.obs_angular_speed * dt;
 
-    const estimated_distance_std = add_std(prev.obs_angle_std, prev.obs_angular_speed_std * dt, accel_std * dt * dt / 2.0);
+    const estimated_distance_stdev = add_stdev(prev.obs_angle_stdev, prev.obs_angular_speed_stdev * dt, accel_stdev * dt * dt / 2.0);
 
     const next_sector = positive_direction ? (prev.obs_sector + 1) % 6 : (prev.obs_sector - 1 + 6) % 6;
     const next_transition_angle = sector_transition_degrees[next_sector][positive_direction ? 0 : 1];
-    const next_transition_angle_std = sector_transition_std[next_sector][positive_direction ? 0 : 1];
+    const next_transition_angle_stdev = sector_transition_stdev[next_sector][positive_direction ? 0 : 1];
     // Cap the position in the 95% confidence interval before the next transition. We cross
     // this threshold when distance_to_next_transition is negative. Also the adjustement
     // depends on the direction of travel.
-    const distance_to_next_transition = direction * shortest_distance_degrees(prev.obs_angle, next_transition_angle) + std_99_z_score * next_transition_angle_std;
+    const distance_to_next_transition = direction * shortest_distance_degrees(prev.obs_angle, next_transition_angle) + stdev_99_z_score * next_transition_angle_stdev;
     
     const distance_overshoot = Math.max(direction * estimated_distance - distance_to_next_transition, 0);
     const distance_adjustment = direction * Math.min(distance_to_next_transition - direction * estimated_distance, 0);
@@ -174,19 +174,19 @@ function accumulate_position_from_hall(curr, prev){
     const p_stopped_in_current_sector = distance_overshoot < 90 ? 0.0 : Math.min(1.0, (distance_overshoot - 90) / 45);
 
     const current_sector_angle = sector_center_degrees[prev.obs_sector];
-    const current_sector_angle_std = sector_center_std[prev.obs_sector];
+    const current_sector_angle_stdev = sector_center_stdev[prev.obs_sector];
 
     const angle = interpolate_degrees(estimated_angle, current_sector_angle, p_stopped_in_current_sector);
-    const angle_std = interpolate_linear(estimated_distance_std, current_sector_angle_std, p_stopped_in_current_sector);
+    const angle_stdev = interpolate_linear(estimated_distance_stdev, current_sector_angle_stdev, p_stopped_in_current_sector);
 
     const calculated_spin = shortest_distance_degrees(prev.obs_angle, angle) / dt;
-    const calculated_spin_std = (angle_std + prev.obs_angle_std) / dt;
+    const calculated_spin_stdev = (angle_stdev + prev.obs_angle_stdev) / dt;
 
-    const {mean: angular_speed, std: angular_speed_std} = product_of_normals({
+    const {mean: angular_speed, stdev: angular_speed_stdev} = product_of_normals({
       mean_a: calculated_spin,
-      std_a: calculated_spin_std,
+      std_a: calculated_spin_stdev,
       mean_b: prev.obs_angular_speed,
-      std_b: prev.obs_angular_speed_std + accel_std * dt,
+      std_b: prev.obs_angular_speed_stdev + accel_stdev * dt,
     });
 
     if (p_stopped_in_current_sector >= 0.99){
@@ -194,16 +194,16 @@ function accumulate_position_from_hall(curr, prev){
         ...curr,
         sector,
         angle,
-        angle_std,
+        angle_stdev,
         angular_speed: 0,
-        angular_speed_std: initial_angular_speed_std,
+        angular_speed_stdev: initial_angular_speed_stdev,
 
         obs_time: curr.time,
         obs_sector: sector,
         obs_angle: angle,
-        obs_angle_std: angle_std,
+        obs_angle_stdev: angle_stdev,
         obs_angular_speed: 0,
-        obs_angular_speed_std: initial_angular_speed_std,
+        obs_angular_speed_stdev: initial_angular_speed_stdev,
       };
     } else {
       
@@ -211,16 +211,16 @@ function accumulate_position_from_hall(curr, prev){
         ...curr,
         sector,
         angle,
-        angle_std,
+        angle_stdev,
         angular_speed,
-        angular_speed_std,
+        angular_speed_stdev,
 
         obs_time: prev.obs_time,
         obs_sector: prev.obs_sector,
         obs_angle: prev.obs_angle,
-        obs_angle_std: prev.obs_angle_std,
+        obs_angle_stdev: prev.obs_angle_stdev,
         obs_angular_speed: prev.obs_angular_speed,
-        obs_angular_speed_std: prev.obs_angular_speed_std,
+        obs_angular_speed_stdev: prev.obs_angular_speed_stdev,
       };
     }
   }

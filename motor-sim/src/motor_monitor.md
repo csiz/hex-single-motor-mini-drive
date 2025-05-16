@@ -93,7 +93,7 @@ Current Calibration Procedures
 
 ```js
 
-const std_95_z_score = 1.959964; // 95% confidence interval for normal distribution
+const stdev_95_z_score = 1.959964; // 95% confidence interval for normal distribution
 
 
 const colors = {
@@ -589,8 +589,8 @@ const plot_electric_position = plot_lines({
     {
       y: "angle", label: "Angle", color: colors.angle,
       draw_extra: setup_faint_area({
-        y0: (d) => d.angle - std_95_z_score * d.angle_std, 
-        y1: (d) => d.angle + std_95_z_score * d.angle_std,
+        y0: (d) => d.angle - stdev_95_z_score * d.angle_stdev, 
+        y1: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
       }),
     },
     {y: "motor_angle", label: "Motor Angle", color: colors.motor_angle},
@@ -615,8 +615,8 @@ const plot_speed = plot_lines({
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
       draw_extra: setup_faint_area({
-        y0: d => d.angular_speed - std_95_z_score * d.angular_speed_std, 
-        y1: d => d.angular_speed + std_95_z_score * d.angular_speed_std,
+        y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev, 
+        y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
       }),
     },
   ],
@@ -848,8 +848,8 @@ const position_calibration_pos_plot = plot_lines({
     {
       y: "angle", label: "Angle", color: colors.angle,
       draw_extra: setup_faint_area({
-        y1: (d) => d.angle - std_95_z_score * d.angle_std,
-        y2: (d) => d.angle + std_95_z_score * d.angle_std,
+        y1: (d) => d.angle - stdev_95_z_score * d.angle_stdev,
+        y2: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
       }),
     },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: colors.angle_if_breaking},
@@ -874,8 +874,8 @@ const position_calibration_pos_speed_plot = plot_lines({
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed, 
       draw_extra: setup_faint_area({
-        y0: d => d.angular_speed - std_95_z_score * d.angular_speed_std, 
-        y1: d => d.angular_speed + std_95_z_score * d.angular_speed_std,
+        y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev, 
+        y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
       }),
     },
   ],
@@ -896,8 +896,8 @@ const position_calibration_neg_plot = plot_lines({
     {
       y: "angle", label: "Angle", color: colors.angle, 
       draw_extra: setup_faint_area({
-        y1: (d) => d.angle - std_95_z_score * d.angle_std,
-        y2: (d) => d.angle + std_95_z_score * d.angle_std,
+        y1: (d) => d.angle - stdev_95_z_score * d.angle_stdev,
+        y2: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
       }),
     },
     {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
@@ -921,8 +921,8 @@ const position_calibration_neg_speed_plot = plot_lines({
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
       draw_extra: setup_faint_area({
-        y0: d => d.angular_speed - std_95_z_score * d.angular_speed_std,
-        y1: d => d.angular_speed + std_95_z_score * d.angular_speed_std,
+        y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev,
+        y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
       }),
     },
   ],
@@ -1063,24 +1063,24 @@ const current_calibration_positive_mean_plot = plot_lines({
     {
       y: "u_positive", 
       draw_extra: setup_faint_area({
-        y0: d => d.u_positive - d.u_positive_std * std_95_z_score,
-        y1: d => d.u_positive + d.u_positive_std * std_95_z_score,
+        y0: d => d.u_positive - d.u_positive_stdev * stdev_95_z_score,
+        y1: d => d.u_positive + d.u_positive_stdev * stdev_95_z_score,
       }),
       label: "U positive mean", color: colors.u,
     },
     {
       y: "v_positive",
       draw_extra: setup_faint_area({
-        y0: d => d.v_positive - d.v_positive_std * std_95_z_score,
-        y1: d => d.v_positive + d.v_positive_std * std_95_z_score,
+        y0: d => d.v_positive - d.v_positive_stdev * stdev_95_z_score,
+        y1: d => d.v_positive + d.v_positive_stdev * stdev_95_z_score,
       }),
       label: "V positive mean", color: colors.v,
     },
     {
       y: "w_positive",
       draw_extra: setup_faint_area({
-        y0: d => d.w_positive - d.w_positive_std * std_95_z_score,
-        y1: d => d.w_positive + d.w_positive_std * std_95_z_score,
+        y0: d => d.w_positive - d.w_positive_stdev * stdev_95_z_score,
+        y1: d => d.w_positive + d.w_positive_stdev * stdev_95_z_score,
       }),
       label: "W positive mean", color: colors.w,
     },
@@ -1105,24 +1105,24 @@ const current_calibration_negative_mean_plot = plot_lines({
     {
       y: "u_negative", 
       draw_extra: setup_faint_area({
-        y0: d => d.u_negative - d.u_negative_std * std_95_z_score,
-        y1: d => d.u_negative + d.u_negative_std * std_95_z_score,
+        y0: d => d.u_negative - d.u_negative_stdev * stdev_95_z_score,
+        y1: d => d.u_negative + d.u_negative_stdev * stdev_95_z_score,
       }),
       label: "U negative mean", color: colors.u,
     },
     {
       y: "v_negative",
       draw_extra: setup_faint_area({
-        y0: d => d.v_negative - d.v_negative_std * std_95_z_score,
-        y1: d => d.v_negative + d.v_negative_std * std_95_z_score,
+        y0: d => d.v_negative - d.v_negative_stdev * stdev_95_z_score,
+        y1: d => d.v_negative + d.v_negative_stdev * stdev_95_z_score,
       }),
       label: "V negative mean", color: colors.v,
     },
     {
       y: "w_negative",
       draw_extra: setup_faint_area({
-        y0: d => d.w_negative - d.w_negative_std * std_95_z_score,
-        y1: d => d.w_negative + d.w_negative_std * std_95_z_score,
+        y0: d => d.w_negative - d.w_negative_stdev * stdev_95_z_score,
+        y1: d => d.w_negative + d.w_negative_stdev * stdev_95_z_score,
       }),
       label: "W negative mean", color: colors.w,
     },
