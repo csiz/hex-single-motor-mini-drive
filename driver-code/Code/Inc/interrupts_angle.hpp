@@ -114,8 +114,8 @@ static inline void update_position_unobserved(){
     const int trigger_angle = position_calibration.trigger_angles[next_sector][direction_index];
 
     const int distance_to_trigger = signed_angle(trigger_angle - angle_at_observation);
-    
-    const int max_abs_speed = direction * (distance_to_trigger + direction * sector_transition_confidence) * scale / time;
+
+    const int max_abs_speed = direction * (distance_to_trigger + direction * sector_transition_confidence) * speed_scale / time;
 
     angular_speed_at_observation = direction * clip_to(0, max_abs_speed, direction * angular_speed_at_observation);
 
@@ -194,39 +194,39 @@ static inline void update_position_observation(){
     // on the observation time such that we don't overshoot the trigger angle by more than the sector confidence.
 
     // Calculate the maximum allowed speed while handling the direction sign.
-    const int max_abs_speed = direction * (distance_to_trigger + direction * sector_transition_confidence) * scale / time;
+    const int max_abs_speed = direction * (distance_to_trigger + direction * sector_transition_confidence) * speed_scale / time;
 
     // Clip the angular speed to the maximum allowed speed; we also clip it so it does't go backwards. A positive
     // sector transition necesarily implies a positive speed of the rotor.
     const int clipped_angular_speed = direction * clip_to(0, max_abs_speed, direction * angular_speed_at_observation);
 
     // The distance traveled is the speed * time divided by our extra scaling factor (for integer math precision).
-    const int estimated_distance = clipped_angular_speed * time / scale;
-    
+    const int estimated_distance = clipped_angular_speed * time / speed_scale;
+
     // Get the error in our estimate.
     const int estimated_distance_error = distance_to_trigger - estimated_distance;
 
     // Get the speed error.
-    const int estimated_speed_error = scale * estimated_distance_error / time;
-    
-    // Precompute the square of time and downscale by our magic scale to keep it within integer arithmetic bounds.
-    const int square_time_div_square_scale = clip_to(1, max_16bit, time * time / square_scale);
+    const int estimated_speed_error = speed_scale * estimated_distance_error / time;
 
+    // Precompute the square of time and downscale by our magic scale to keep it within integer arithmetic bounds.
+    const int square_time_div_square_speed_scale = clip_to(1, max_16bit, time * time / square_speed_scale);
+    const int square_time_div_square_accel_scale = clip_to(1, max_16bit, time * time / square_accel_scale);
     // Calculate the variances.
 
     // The angular speed variance increases with acceleration over time.
     const int angular_speed_variance = min(max_16bit,
-        angular_speed_variance_at_observation + angular_acceleration_variance_div_4 * square_time_div_square_scale);
+        angular_speed_variance_at_observation + angular_acceleration_variance_div_4 * square_time_div_square_accel_scale);
     
     // The distance variance does not depend on the trigger variance as we're treating it as a coordinate change.
     // This is the variance of the estimated angle! It depends on the last angle and speed variances.
-    const int estimated_distance_variance = min(max_16bit, 
-        angle_variance_at_observation + square_time_div_square_scale * angular_speed_variance);
-    
+    const int estimated_distance_variance = min(max_16bit,
+        angle_variance_at_observation + square_time_div_square_speed_scale * angular_speed_variance);
+
     // Variance of the speed error. This is the variance of our predicted speed. It depends on the estimate of the
     // last angle, the trigger angle, and the previous speed variance.
     const int estimated_speed_error_variance = min(max_16bit, 
-        angular_speed_variance + (angle_variance_at_observation + trigger_variance) / square_time_div_square_scale);
+        angular_speed_variance + (angle_variance_at_observation + trigger_variance) / square_time_div_square_speed_scale);
 
     // Adjust the distance using the kalman gain. This is actually the new mean of a product of gaussians.
     const int distance_adjustment = (estimated_distance_error * estimated_distance_variance) / (estimated_distance_variance + trigger_variance);

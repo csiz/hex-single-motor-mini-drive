@@ -167,7 +167,7 @@ function parse_readout(data_view, previous_readout){
   return process_readout.call(this, readout, previous_readout);
 }
 
-const full_readout_size = readout_size + 20;
+const full_readout_size = readout_size + 24;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
@@ -196,10 +196,17 @@ function parse_full_readout(data_view, previous_readout){
   const motor_current_angle_stdev = data_view.getInt16(offset);
   offset += 2;
 
+  const angle_variance = data_view.getInt16(offset);
+  offset += 2;
+  const angular_speed_variance = data_view.getInt16(offset);
+  offset += 2;
+
   const motor_current_angle = normalize_degrees(motor_current_angle_readout * 360 / angle_base);
   const vcc_voltage = calculate_voltage(vcc_readout);
   const temperature = calculate_temperature(temperature_readout);
 
+  const angle_stdev = Math.sqrt(angle_variance) * 360 / angle_base;
+  const angular_speed_stdev = Math.sqrt(angular_speed_variance) * 360 / angle_base * time_units_per_millisecond / speed_scale;
 
   return {
     ...readout,
@@ -215,6 +222,8 @@ function parse_full_readout(data_view, previous_readout){
     cycle_end_tick,
     motor_current_angle,
     motor_current_angle_stdev,
+    angle_stdev,
+    angular_speed_stdev,
   };
 }
 

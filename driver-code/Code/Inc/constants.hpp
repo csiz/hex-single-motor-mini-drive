@@ -173,13 +173,16 @@ const int time_units_per_millisecond = ticks_per_millisecond / ticks_per_time_un
 // Time units per PWM cycle (2x because it counts up then down).
 const int time_increment_per_cycle = 2 * static_cast<int>(pwm_base) / ticks_per_time_units;
 
-// Another scaling factor: speed = distances * scale / time; acceleration = speed_change * scale;
-const int scale = 128;
-// Precomputed square of scale.
-const int square_scale = square(scale);
+// Another scaling factor: speed = distances * speed_scale / time; acceleration = speed_change * accel_scale;
+const int speed_scale = 128;
+// Precomputed square of speed_scale.
+const int accel_scale = 128;
+
+const int square_speed_scale = square(speed_scale);
+const int square_accel_scale = square(accel_scale);
 
 // Reference for the maximum speed we should be able to represent.
-const int max_speed = 20 * scale * angle_base / time_units_per_millisecond;
+const int max_speed = 20 * speed_scale * angle_base / time_units_per_millisecond;
 
 // The maximum time in our time units before we can no longer safely square the value.
 // 
@@ -194,10 +197,10 @@ const int max_time_between_observations = 100 * time_units_per_millisecond;
 // Initial speed estimate.
 const int initial_angular_speed = 0;
 // Start with a high speed variance.
-const int initial_angular_speed_variance = square(scale * angle_base * 30 / 360 / time_units_per_millisecond);
+const int initial_angular_speed_variance = square(speed_scale * angle_base * 30 / 360 / time_units_per_millisecond);
 
 // Precalculate the acceleration variance divided by 4. Note the scaled is squared twice.
-const int angular_acceleration_variance_div_4 = square(square_scale * angle_base / 1 / 50 / time_units_per_millisecond / time_units_per_millisecond) / 4;
+const int angular_acceleration_variance_div_4 = square(accel_scale * speed_scale * angle_base / 1 / 50 / time_units_per_millisecond / time_units_per_millisecond) / 4;
 
 // Maximum distance to a trigger angle. Don't let the estimated angle deviate
 // from the hall sensor angle by more than this value to keep the estimate

@@ -34,7 +34,7 @@ struct Readout{
     uint16_t w_readout;
     uint16_t ref_readout;
     uint16_t position;
-    int16_t speed;
+    int16_t angular_speed;
     int16_t vcc_voltage;
     int16_t torque;
     int16_t hold;
@@ -53,6 +53,8 @@ struct FullReadout : public Readout {
     int16_t cycle_end_tick;
     int16_t current_angle;
     int16_t current_angle_stdev;
+    int16_t angle_variance;
+    int16_t angular_speed_variance;
 };
 
 

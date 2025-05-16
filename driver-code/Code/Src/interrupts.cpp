@@ -113,11 +113,13 @@ static inline void pwm_cycle_and_adc_update(){
     readout.vcc_voltage = (new_vcc_voltage * 4 + readout.vcc_voltage * 12) / 16;
 
 
-    const int angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / scale);
+    const int angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / speed_scale);
     
     readout.position = (angle & 0x3FF) | (hall_state << 13) | angle_valid << 12;
 
-    readout.speed = angular_speed_at_observation;
+    readout.angular_speed = angular_speed_at_observation;
+    readout.angle_variance = angle_variance_at_observation;
+    readout.angular_speed_variance = angular_speed_variance_at_observation;
     
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
     const int scaled_u_current = -(readout.u_readout - readout.ref_readout) * current_calibration.u_factor / calibration_base;

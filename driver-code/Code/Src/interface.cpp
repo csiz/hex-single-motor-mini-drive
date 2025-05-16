@@ -25,7 +25,7 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.position);
     offset += 2;
-    write_int16(buffer + offset, readout.speed);
+    write_int16(buffer + offset, readout.angular_speed);
     offset += 2;
     write_uint16(buffer + offset, readout.vcc_voltage);
     offset += 2;
@@ -72,6 +72,11 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.current_angle);
     offset += 2;
     write_int16(buffer + offset, readout.current_angle_stdev);
+    offset += 2;
+
+    write_int16(buffer + offset, readout.angle_variance);
+    offset += 2;
+    write_int16(buffer + offset, readout.angular_speed_variance);
     offset += 2;
 
 
