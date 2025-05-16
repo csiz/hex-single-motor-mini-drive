@@ -51,6 +51,10 @@ Position Calibration Procedures
 </div>
 <div class="card tight">
   <h3>Position Calibration Results</h3>
+  <div>
+    <p>Position calibration angles:</p>
+    <pre>${position_calibration_table}</pre>
+  </div>
   <div>${position_calibration_result_to_display_input}</div>
   <div>${position_calibration_pos_plot}</div>
   <div>${position_calibration_pos_speed_plot}</div>
@@ -77,7 +81,10 @@ Current Calibration Procedures
 </div>
 <div class="card tight">
   <h3>Current Calibration Results</h3>
-  <div>${current_calibration_table}</div>
+  <div>
+    <p>Phase correction factors:</p>
+    <pre>${current_calibration_table}</pre>
+  </div>
   <div>${current_calibration_interpolate_plot}</div>
   <div>${current_calibration_result_to_display_input}</div>
   <div>${current_calibration_plot}</div>
@@ -827,6 +834,13 @@ const position_calibration_centers_table = Inputs.table(Object.values(position_c
 const position_calibration_sensor_spans_table = Inputs.table(Object.values(position_calibration.sensor_spans), {rows: 6+1});
 
 const position_calibration_sensor_locations_table = Inputs.table(Object.values(position_calibration.sensor_locations), {rows: 3+1});
+
+
+// Write out the position calibration results in copyable format.
+const position_calibration_table = position_calibration.position_calibration === null ? 
+  `position_calibration = null` :
+  `position_calibration = {\n  ${Object.entries(position_calibration.position_calibration).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(",\n  ")},\n}`;
+
 ```
 
 
@@ -952,19 +966,19 @@ const current_calibration_buttons = Inputs.button(
       if (!motor_controller) return value;
       const calibration_data = await run_current_calibration(motor_controller);
       const results = [...value.results, calibration_data];
-      const {stats, samples, factors, funcs} = compute_current_calibration(results);
+      const {stats, samples, current_calibration, funcs} = compute_current_calibration(results);
 
-      return {results, stats, samples, factors, funcs};
+      return {results, stats, samples, current_calibration, funcs};
     }],
-    ["Save Current Factors", async function(value){
+    ["Save Current Calibration", async function(value){
       value = await value;
-      if (!value.factors) return value;
+      if (!value.current_calibration) return value;
       if (!motor_controller) return value;
-      motor_controller.current_calibration = value.factors;
+      motor_controller.current_calibration = value.current_calibration;
       localStorage.setItem("current_calibration", JSON.stringify(motor_controller.current_calibration));
       return value;
     }],
-    ["Reset Current Factors", async function(value){
+    ["Reset Current Calibration", async function(value){
       value = await value;
       localStorage.removeItem("current_calibration");
       if (!motor_controller) {
@@ -989,8 +1003,7 @@ const current_calibration = Generators.input(current_calibration_buttons);
 ```js
 
 // Write out the current calibration results in copyable format.
-const current_calibration_table = html`<div>Phase correction factors:</div>
-  <pre>calculated_factors = ${JSON.stringify(current_calibration.factors, null, 2)}</pre>`;
+const current_calibration_table = `current_calibration = ${JSON.stringify(current_calibration.current_calibration, null, 2)}`;
 
 
 // Select which of the calibration runs to display.

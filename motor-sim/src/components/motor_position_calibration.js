@@ -1,7 +1,7 @@
-import {pwm_base, cycles_per_millisecond, history_size} from "./motor_constants.js";
+import {pwm_base, cycles_per_millisecond, history_size, position_calibration_default} from "./motor_constants.js";
 import {command_codes} from "./motor_interface.js";
 import {wait} from "./async_utils.js";
-import {circular_stats_degrees, interpolate_degrees, shortest_distance_degrees, positive_distance_degrees} from "./angular_math.js";
+import {circular_stats_degrees, interpolate_degrees, positive_distance_degrees} from "./angular_math.js";
 import * as d3 from "d3";
 
 
@@ -53,12 +53,23 @@ export async function run_position_calibration(motor_controller) {
   return position_calibration_data;
 }
 
+function transition_string(speed, hall_sector){
+  return `drive_${speed > 0 ? "positive" : "negative"}_sector_${hall_sector}`;
+}
+
+const transition_from_string = Object.fromEntries(d3.range(0, 6).flatMap(hall_sector => {
+  return [
+    [`drive_positive_sector_${hall_sector}`, {direction: 0, hall_sector}],
+    [`drive_negative_sector_${hall_sector}`, {direction: 1, hall_sector}],
+  ];
+}));
+
 // Store the inferred angle for every hall sensor switching event.
 function extract_hall_transitions(data){
-  return data.filter(d => d.is_hall_transition && d.speed != 0).map(d => ({
+  return data.filter(d => d.is_hall_transition && d.speed !== null && !isNaN(d.speed) && d.speed != 0 ).map(d => ({
     time: d.time,
     angle: d.angle_if_breaking,
-    transition: `drive_${d.speed > 0 ? "positive" : "negative"}_sector_${d.hall_sector}`,
+    transition: transition_string(d.speed, d.hall_sector),
   }));
 }
 
@@ -88,19 +99,20 @@ export function compute_position_calibration(calibration_results){
   }, {});
 
   const transition_stats = Object.fromEntries(Object.entries(transition_angles).map(([transition, values]) => {
-        const {mean, stdev} = circular_stats_degrees(values);
+    const {mean, stdev} = circular_stats_degrees(values);
 
     return [transition, {transition, n: values.length, mean, stdev}];
   }));
 
-  const center_angles = Object.fromEntries(d3.range(0, 6).map(sector => {
-    const pos_transition = transition_stats[`drive_positive_sector_${sector}`]?.mean;
-    const neg_transition = transition_stats[`drive_negative_sector_${sector}`]?.mean;
+  const center_angles = Object.fromEntries(d3.range(0, 6).map(hall_sector => {
+    const pos_transition = transition_stats[`drive_positive_sector_${hall_sector}`]?.mean;
+    const neg_transition = transition_stats[`drive_negative_sector_${hall_sector}`]?.mean;
     const center = interpolate_degrees(pos_transition, neg_transition, 0.5);
     const stdev = positive_distance_degrees(pos_transition, neg_transition) / 2;
-    const hall_sector = `sector_${sector}`;
-    return [hall_sector, {hall_sector, pos_transition, neg_transition, center, stdev}];
+    const sector_string = `sector_${hall_sector}`;
+    return [sector_string, {sector_string, hall_sector, pos_transition, neg_transition, center, stdev}];
   }));
+
 
 
   const sensor_spans = Object.fromEntries([
@@ -133,10 +145,50 @@ export function compute_position_calibration(calibration_results){
     return [hall_sensor, {hall_sensor, hysterisis, mid_location}];
   }));
 
+
+  // Extract the calibration data for the position calibration.
+  
+  let sector_center_degrees = Array(6).fill(null);
+  let sector_center_stdev = Array(6).fill(null);
+  let sector_transition_degrees = Array.from(Array(6), () => Array(2).fill(null));
+  let sector_transition_stdev = Array.from(Array(6), () => Array(2).fill(null));
+
+  Object.values(center_angles).forEach(({hall_sector, center, stdev}) => {
+    sector_center_degrees[hall_sector] = center;
+    sector_center_stdev[hall_sector] = stdev;
+  });
+
+  Object.values(transition_stats).forEach(({transition, mean, stdev}) => {
+    const {direction, hall_sector} = transition_from_string[transition];
+    sector_transition_degrees[hall_sector][direction] = mean;
+    sector_transition_stdev[hall_sector][direction] = stdev;
+  });
+
+  // Check that all values are set.
+  const null_centers = sector_center_degrees.includes(null) || sector_center_stdev.includes(null)
+  const null_transitions = sector_transition_degrees.flat().includes(null) || sector_transition_stdev.flat().includes(null);
+    
+  if (null_centers) {
+    console.error("Sector center degrees or stdev are not set", sector_center_degrees, sector_center_stdev);
+  }
+  if (null_transitions) {
+    console.error("Sector transition degrees or stdev are not set", sector_transition_degrees, sector_transition_stdev);
+  }
+
+  const position_calibration = (null_transitions || null_centers) ? null : {
+    sector_center_degrees,
+    sector_center_stdev,
+    sector_transition_degrees,
+    sector_transition_stdev,
+    accel_stdev: position_calibration_default.accel_stdev,
+    initial_angular_speed_stdev: position_calibration_default.initial_angular_speed_stdev,
+  };
+
   return {
     transition_stats,
     center_angles,
     sensor_spans,
     sensor_locations,
+    position_calibration,
   };
 }

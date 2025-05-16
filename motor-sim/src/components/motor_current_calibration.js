@@ -220,8 +220,8 @@ export function compute_current_calibration(calibration_results){
   if (valid_calibration_results.length == 0) return {
     stats: [],
     samples: [],
-    factors: null,
-    funcs: null,
+    current_calibration: null,
+    calibration_funcs: null,
   };
 
   const stats = d3.range(history_size).map((i) => {
@@ -258,7 +258,7 @@ export function compute_current_calibration(calibration_results){
     };
   });
 
-  const factors = {
+  const current_calibration = {
     u_positive: calibration.u_positive.factor,
     u_negative: calibration.u_negative.factor,
     v_positive: calibration.v_positive.factor,
@@ -267,7 +267,7 @@ export function compute_current_calibration(calibration_results){
     w_negative: calibration.w_negative.factor,
   };
 
-  const funcs = {
+  const calibration_funcs = {
     u_positive: calibration.u_positive.func,
     u_negative: calibration.u_negative.func,
     v_positive: calibration.v_positive.func,
@@ -279,8 +279,8 @@ export function compute_current_calibration(calibration_results){
   return {
     stats,
     samples,
-    factors,
-    funcs,
+    current_calibration,
+    calibration_funcs,
   };
 }
 
