@@ -167,6 +167,7 @@ static inline void pwm_cycle_and_adc_update(){
 
     readout.current_angle = normalize_angle(angle + current_angle_error);
 
+    // TODO: compute current_angle_variance based on the past angle estimates.
 
     readout.total_power = readout.vcc_voltage * (
         u_current * get_motor_u_pwm_duty() + 

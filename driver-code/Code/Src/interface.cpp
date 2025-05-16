@@ -71,12 +71,12 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
 
     write_int16(buffer + offset, readout.current_angle);
     offset += 2;
-    write_int16(buffer + offset, readout.current_angle_stdev);
+    write_uint16(buffer + offset, readout.current_angle_variance);
     offset += 2;
 
-    write_int16(buffer + offset, readout.angle_variance);
+    write_uint16(buffer + offset, readout.angle_variance);
     offset += 2;
-    write_int16(buffer + offset, readout.angular_speed_variance);
+    write_uint16(buffer + offset, readout.angular_speed_variance);
     offset += 2;
 
 
