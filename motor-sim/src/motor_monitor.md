@@ -6,6 +6,7 @@ title: Motor monitor
 Motor Commands
 --------------
 
+<!-- TODO: get and set calibration buttons -->
 
 <div>${connect_buttons}</div>
 <div>${connection_status}</div>
@@ -54,6 +55,8 @@ Position Calibration Procedures
   <div>
     <p>Position calibration angles:</p>
     <pre>${position_calibration_table}</pre>
+    <p>Active position calibration angles:</p>
+    <pre>${active_position_calibration_table}</pre>
   </div>
   <div>${position_calibration_result_to_display_input}</div>
   <div>${position_calibration_pos_plot}</div>
@@ -82,8 +85,10 @@ Current Calibration Procedures
 <div class="card tight">
   <h3>Current Calibration Results</h3>
   <div>
-    <p>Phase correction factors:</p>
+    <p>Phase current correction factors:</p>
     <pre>${current_calibration_table}</pre>
+    <p>Active phase current correction factors:</p>
+    <pre>${active_current_calibration_table}</pre>
   </div>
   <div>${current_calibration_interpolate_plot}</div>
   <div>${current_calibration_result_to_display_input}</div>
@@ -177,14 +182,21 @@ async function connect_motor_controller(){
   try {
     await disconnect_motor_controller(false);
 
-    motor_controller.value = await connect_usb_motor_controller();
-
-    motor_controller.value.current_calibration = get_stored_or_default("current_calibration", current_calibration_default);
-    motor_controller.value.position_calibration = get_stored_or_default("position_calibration", position_calibration_default);
+    const new_controller = await connect_usb_motor_controller();
 
     connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
-    await motor_controller.value.reading_loop(display_connection_stats);
+
+    // Wait for the reading loop and calibrations in parallel.
+    await Promise.all([
+      new_controller.reading_loop(display_connection_stats),
+      (async function(){
+        await new_controller.load_position_calibration();
+        await new_controller.load_current_calibration();
+        motor_controller.value = new_controller;
+      })(),
+    ]);
+
   } catch (error) {
     motor_controller.value = null;
 
@@ -807,13 +819,23 @@ const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.tim
 // Position Calibration
 // --------------------
 
+// Write out the position calibration results in copyable format.
+function print_position_calibration(position_calibration){
+  if (!position_calibration) return "null";
+  return `{\n  ${Object.entries(position_calibration).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(",\n  ")},\n}`;
+}
 
-const position_calibration_buttons = Inputs.button(
+function stringify_active_position_calibration() {
+  return `motor_controller.position_calibration = ${print_position_calibration(motor_controller?.position_calibration)}`;
+}
+
+const active_position_calibration_table =  Mutable(stringify_active_position_calibration());
+
+const default_position_calibration_result = {results: [], ...compute_position_calibration([])};
+
+const position_calibration_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
   [
-    ["Start Position Calibration", async function(value){
-      value = await value;
-      
-      if (!motor_controller) return;
+    ["Start Position Calibration", wait_previous(async function(value){
 
       for (let i = 0; i < 5; i++){
         const results = [...value.results, await run_position_calibration(motor_controller)];
@@ -821,34 +843,43 @@ const position_calibration_buttons = Inputs.button(
       }
 
       return value;
-    }],
-    ["Save Position Calibration", async function(value){
-      value = await value;
+    })],
+    ["Reset Results", wait_previous(async function(value){
+      return default_position_calibration_result;
+    })],
+    ["Use Locally", wait_previous(async function(value){
       if (!value.position_calibration) return value;
-      if (!motor_controller) return value;
       motor_controller.position_calibration = value.position_calibration;
-      localStorage.setItem("position_calibration", JSON.stringify(motor_controller.position_calibration));
+      active_position_calibration_table.value = stringify_active_position_calibration();
       return value;
-    }],
-    ["Reset Position Calibration", async function(value){
-      value = await value;
-      localStorage.removeItem("position_calibration");
-      if (motor_controller) {
-        motor_controller.position_calibration = position_calibration_default;
-      }
-      return {results: [], ...compute_position_calibration([])};
-    }],
+    })],
+    ["Use Default Locally", wait_previous(async function(value){
+      motor_controller.position_calibration = position_calibration_default;
+      active_position_calibration_table.value = stringify_active_position_calibration();
+      return value;
+    })],
+    ["Upload to Driver", wait_previous(async function(value){
+      const position_calibration = value.position_calibration ?? motor_controller.position_calibration;
+      await motor_controller.upload_position_calibration(position_calibration);
+      active_position_calibration_table.value = stringify_active_position_calibration();
+      return value;
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_position_calibration();
+      active_position_calibration_table.value = stringify_active_position_calibration();
+      return value;
+    })],
   ],
   {
     label: "Collect position calibration data",
-    value: {results: [], ...compute_position_calibration([])},
+    value: default_position_calibration_result,
   },
 );
 
 d3.select(position_calibration_buttons).style("width", "100%");
 
 
-const position_calibration = Generators.input(position_calibration_buttons);
+const position_calibration = !motor_controller ? default_position_calibration_result : Generators.input(position_calibration_buttons);
 
 ```
 
@@ -872,18 +903,9 @@ const position_calibration_sensor_spans_table = Inputs.table(Object.values(posit
 
 const position_calibration_sensor_locations_table = Inputs.table(Object.values(position_calibration.sensor_locations), {rows: 3+1});
 
-// Write out the position calibration results in copyable format.
-function print_position_calibration(position_calibration){
-  if (!position_calibration) return "null";
-  return `{\n  ${Object.entries(position_calibration).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(",\n  ")},\n}`;
-}
 
-const position_calibration_table = position_calibration.position_calibration ? 
-  `calculated_position_calibration = ${print_position_calibration(position_calibration.position_calibration)}` :
-  motor_controller?.position_calibration ?
-  `loaded_position_calibration = ${print_position_calibration(motor_controller.position_calibration)}` :
-  `default_position_calibration = ${print_position_calibration(position_calibration_default)}`;
 
+const position_calibration_table = `position_calibration = ${print_position_calibration(position_calibration?.position_calibration)}`;
 ```
 
 
@@ -1029,44 +1051,58 @@ autosave_inputs({
 // Current calibration
 // -------------------
 
+function stringify_active_current_calibration() {
+  return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
+}
 
-const current_calibration_buttons = Inputs.button(
+const active_current_calibration_table =  Mutable(stringify_active_current_calibration());
+
+const default_current_calibration_result = {results: [], ...compute_current_calibration([])};
+
+const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
-    ["Start Current Calibration", async function(value){
-      value = await value;
-      if (!motor_controller) return value;
+    ["Start Current Calibration", wait_previous(async function(value){
       const calibration_data = await run_current_calibration(motor_controller);
       const results = [...value.results, calibration_data];
       const {stats, samples, current_calibration, funcs} = compute_current_calibration(results);
 
       return {results, stats, samples, current_calibration, funcs};
-    }],
-    ["Save Current Calibration", async function(value){
-      value = await value;
+    })],
+    ["Reset Results", wait_previous(async function(value){
+      return default_current_calibration_result;
+    })],
+    ["Use Locally", wait_previous(async function(value){
       if (!value.current_calibration) return value;
-      if (!motor_controller) return value;
       motor_controller.current_calibration = value.current_calibration;
-      localStorage.setItem("current_calibration", JSON.stringify(motor_controller.current_calibration));
+      active_current_calibration_table.value = stringify_active_current_calibration();
       return value;
-    }],
-    ["Reset Current Calibration", async function(value){
-      value = await value;
-      localStorage.removeItem("current_calibration");
-      if (!motor_controller) {
-        motor_controller.current_calibration = current_calibration_default;
-      }
-      return {results: [], ...compute_current_calibration([])};
-    }],
+    })],
+    ["Use Default Locally", wait_previous(async function(value){
+      motor_controller.current_calibration = current_calibration_default;
+      active_current_calibration_table.value = stringify_active_current_calibration();
+      return value;
+    })],
+    ["Upload to Driver", wait_previous(async function(value){
+      const current_calibration = value.current_calibration ?? motor_controller.current_calibration;
+      await motor_controller.upload_current_calibration(current_calibration);
+      active_current_calibration_table.value = stringify_active_current_calibration();
+      return value;
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_current_calibration();
+      active_current_calibration_table.value = stringify_active_current_calibration();
+      return value;
+    })],
   ],
   {
-    label: "Collect current calibration data",
-    value: {results: [], ...compute_current_calibration([])}
+    label: "Current Calibration",
+    value: default_current_calibration_result
   },
 );
 
 d3.select(current_calibration_buttons).style("width", "100%");
 
-const current_calibration = Generators.input(current_calibration_buttons);
+const current_calibration = !motor_controller ? default_current_calibration_result : Generators.input(current_calibration_buttons);
 ```
 
 
@@ -1074,11 +1110,7 @@ const current_calibration = Generators.input(current_calibration_buttons);
 ```js
 
 // Write out the current calibration results in copyable format.
-const current_calibration_table = current_calibration.current_calibration ? 
-  `calculated_current_calibration = ${JSON.stringify(current_calibration.current_calibration, null, 2)}` :
-  motor_controller?.current_calibration ?
-  `loaded_current_calibration = ${JSON.stringify(motor_controller.current_calibration, null, 2)}` :
-  `default_current_calibration = ${JSON.stringify(current_calibration_default, null, 2)}`;
+const current_calibration_table = `current_calibration = ${JSON.stringify(current_calibration?.current_calibration, null, 2)}`;
 
 // Select which of the calibration runs to display.
 
@@ -1243,7 +1275,7 @@ import {localStorage, get_stored_or_default, clear_stored_data} from "./componen
 import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
 
 
-import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value} from "./components/input_utils.js";
+import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value, wait_previous} from "./components/input_utils.js";
 
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
 

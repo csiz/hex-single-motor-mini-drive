@@ -235,11 +235,12 @@ export class MotorController {
   }
 
   /* Send a command to the motor driver. */
-  async send_command({command, command_timeout, command_pwm, command_leading_angle = 0}) {
+  async send_command({command, command_timeout = 0, command_pwm = 0, command_leading_angle = 0, additional_data = undefined}) {
     if (!this._port.writable) return;
-    const buffer = serialise_command({command, command_timeout, command_pwm, command_leading_angle});
+    const buffer = serialise_command({command, command_timeout, command_pwm, command_leading_angle, additional_data});
     await this._writer.write(buffer);
   }
+
 
   async cancel_previous_request() {
 
@@ -341,6 +342,59 @@ export class MotorController {
     } finally {
       clearTimeout(timeout_id);
       this.reset_request();
+    }
+  }
+
+  async load_current_calibration(){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.GET_CURRENT_FACTORS}, 
+        {expected_code: command_codes.CURRENT_FACTORS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid current calibration data");
+      this.current_calibration = data[0];
+    } catch (error) {
+      console.error("Error loading current calibration:", error);
+    }
+  }
+
+  async load_position_calibration(){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.GET_TRIGGER_ANGLES}, 
+        {expected_code: command_codes.TRIGGER_ANGLES, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid position calibration data");
+      this.position_calibration = data[0];
+    } catch (error) {
+      console.error("Error loading position calibration:", error);
+    }
+  }
+  
+
+  async upload_current_calibration(current_calibration){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.SET_CURRENT_FACTORS, additional_data: current_calibration}, 
+        {expected_code: command_codes.CURRENT_FACTORS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid current calibration data");
+      this.current_calibration = data[0];
+    } catch (error) {
+      console.error("Error uploading current calibration:", error);
+    }
+  }
+
+  async upload_position_calibration(position_calibration){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.SET_TRIGGER_ANGLES, additional_data: position_calibration}, 
+        {expected_code: command_codes.TRIGGER_ANGLES, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid position calibration data");
+      this.position_calibration = data[0];
+    } catch (error) {
+      console.error("Error uploading position calibration:", error);
     }
   }
 }

@@ -196,11 +196,6 @@ const int max_time_between_observations = 100 * time_units_per_millisecond;
 
 // Initial speed estimate.
 const int initial_angular_speed = 0;
-// Start with a high speed variance.
-const int initial_angular_speed_variance = square(speed_scale * angle_base * 30 / 360 / time_units_per_millisecond);
-
-// Precalculate the acceleration variance divided by 4. Note the scaled is squared twice.
-const int angular_acceleration_variance_div_4 = square(accel_scale * speed_scale * angle_base / 1 / 50 / time_units_per_millisecond / time_units_per_millisecond) / 4;
 
 // Maximum distance to a trigger angle. Don't let the estimated angle deviate
 // from the hall sensor angle by more than this value to keep the estimate
@@ -218,7 +213,7 @@ const int hysterisis = 5 * angle_base / 360;
 const PositionCalibration default_position_calibration = {
     // The angle at which we transition to this sector. The first is when rotating in the
     // positive direction; second for the negative direction.
-    .trigger_angles = {{
+    .sector_transition_angles = {{
         {330 * angle_base / 360 + hysterisis,  30 * angle_base / 360 - hysterisis},
         { 30 * angle_base / 360 + hysterisis,  90 * angle_base / 360 - hysterisis},
         { 90 * angle_base / 360 + hysterisis, 150 * angle_base / 360 - hysterisis},
@@ -227,7 +222,7 @@ const PositionCalibration default_position_calibration = {
         {270 * angle_base / 360 + hysterisis, 330 * angle_base / 360 - hysterisis},     
     }},
     // Variance of each sector transition; we can calibrate it.
-    .trigger_angle_variances = {{
+    .sector_transition_variances = {{
         {default_sector_transition_variance, default_sector_transition_variance},
         {default_sector_transition_variance, default_sector_transition_variance},
         {default_sector_transition_variance, default_sector_transition_variance},
@@ -253,16 +248,18 @@ const PositionCalibration default_position_calibration = {
         default_sector_center_variance,
         default_sector_center_variance,
     }},
+    .initial_angular_speed_variance = square(speed_scale * angle_base * 30 / 360 / time_units_per_millisecond),
+    // Precalculate the acceleration divided by 2 variance. Note we use both scales.
+    .angular_acceleration_div_2_variance = square(accel_scale * speed_scale * angle_base / 2 / 50 / time_units_per_millisecond / time_units_per_millisecond / 2),
 };
 
-const int16_t calibration_base = 256;
+const int16_t current_calibration_base = 1024;
 
 const CurrentCalibration default_current_calibration = {
-    .u_factor = calibration_base,
-    .v_factor = calibration_base,
-    .w_factor = calibration_base,
+    .u_factor = current_calibration_base,
+    .v_factor = current_calibration_base,
+    .w_factor = current_calibration_base,
 };
-
 
 
 

@@ -118,7 +118,7 @@ bool buffer_command(CommandBuffer & buffer, int receive_function(uint8_t *buf, u
             buffer.bytes_expected = sizeof(PositionCalibration) - bytes_extra;
             break;
         default:
-            // ALl other commands fit into the command header; and were therefore received.
+            // ALl other commands fit into the command header; and were therefore fully received.
             break;
     }
 
@@ -142,7 +142,7 @@ CommandHeader parse_command_header(CommandBuffer const & buffer) {
 
     if (data - buffer.data != command_header_size) error();
 
-    return { code, timeout, pwm, leading_angle };
+    return CommandHeader { code, timeout, pwm, leading_angle };
 }
 
 CurrentCalibration parse_current_calibration(CommandBuffer const & buffer) {
@@ -160,9 +160,24 @@ CurrentCalibration parse_current_calibration(CommandBuffer const & buffer) {
     factors.w_factor = read_int16(data);
     data += 2;
 
-    if (data - (buffer.data + command_header_size) != sizeof(CurrentCalibration)) error();
-    
+    if (data - buffer.data != command_header_size + sizeof(CurrentCalibration)) error();
+
     return factors;
+}
+
+void write_current_calibration(uint8_t * buffer, CurrentCalibration const & factors) {
+    size_t offset = 0;
+    write_uint16(buffer + offset, CURRENT_FACTORS);
+    offset += 2;
+    write_int16(buffer + offset, factors.u_factor);
+    offset += 2;
+    write_int16(buffer + offset, factors.v_factor);
+    offset += 2;
+    write_int16(buffer + offset, factors.w_factor);
+    offset += 2;
+
+    // Check if we wrote the correct number of bytes.
+    if (offset != current_calibration_size) error();
 }
 
 PositionCalibration parse_position_calibration(CommandBuffer const & buffer) {
@@ -171,33 +186,74 @@ PositionCalibration parse_position_calibration(CommandBuffer const & buffer) {
     // Skip the command header.
     uint8_t const * data = buffer.data + command_header_size;
 
-    PositionCalibration angles = {};
+    PositionCalibration position_calibration = {};
 
     for (int i = 0; i < 6; i++){
-        angles.trigger_angles[i][0] = read_int16(data);
+        position_calibration.sector_transition_angles[i][0] = read_uint16(data);
         data += 2;
-        angles.trigger_angles[i][1] = read_int16(data);
-        data += 2;
-    }
-
-    for (int i = 0; i < 6; i++){
-        angles.trigger_angle_variances[i][0] = read_int16(data);
-        data += 2;
-        angles.trigger_angle_variances[i][1] = read_int16(data);
-        data += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        angles.sector_center_angles[i] = read_int16(data);
-        data += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        angles.sector_center_variances[i] = read_int16(data);
+        position_calibration.sector_transition_angles[i][1] = read_uint16(data);
         data += 2;
     }
 
-    if (data - (buffer.data + command_header_size) != sizeof(PositionCalibration)) error();
-    
-    return angles;
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_transition_variances[i][0] = read_uint16(data);
+        data += 2;
+        position_calibration.sector_transition_variances[i][1] = read_uint16(data);
+        data += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_center_angles[i] = read_uint16(data);
+        data += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_center_variances[i] = read_uint16(data);
+        data += 2;
+    }
+
+    position_calibration.initial_angular_speed_variance = read_uint16(data);
+    data += 2;
+    position_calibration.angular_acceleration_div_2_variance = read_uint16(data);
+    data += 2;
+
+    if (data - buffer.data != command_header_size + sizeof(PositionCalibration)) error();
+
+    return position_calibration;
+}
+
+void write_position_calibration(uint8_t * buffer, PositionCalibration const & position_calibration) {
+    size_t offset = 0;
+    write_uint16(buffer + offset, TRIGGER_ANGLES);
+    offset += 2;
+
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_transition_angles[i][0]);
+        offset += 2;
+        write_uint16(buffer + offset, position_calibration.sector_transition_angles[i][1]);
+        offset += 2;
+    }
+
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_transition_variances[i][0]);
+        offset += 2;
+        write_uint16(buffer + offset, position_calibration.sector_transition_variances[i][1]);
+        offset += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_center_angles[i]);
+        offset += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_center_variances[i]);
+        offset += 2;
+    }
+
+    write_uint16(buffer + offset, position_calibration.initial_angular_speed_variance);
+    offset += 2;
+    write_uint16(buffer + offset, position_calibration.angular_acceleration_div_2_variance);
+    offset += 2;
+
+    // Check if we wrote the correct number of bytes.
+    if (offset != position_calibration_size) error();
 }
 
 

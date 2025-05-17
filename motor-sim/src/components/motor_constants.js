@@ -1,5 +1,5 @@
 // Motor driver constants copied from the C++ code.
-import {normalize_degrees} from "./angular_math.js";
+import {normalize_degrees, positive_degrees} from "./angular_math.js";
 
 // PWM motor cycles per millisecond.
 export const cycles_per_millisecond = 23437.5 / 1000.0; // 23437.5 cycles per second: 72MHz / (2*1536) / 1000.0
@@ -13,8 +13,38 @@ export const time_units_per_millisecond = Math.floor(ticks_per_millisecond / tic
 
 export const angle_base = 1024;
 
+export function degrees_to_angle_units(degrees){
+  // Convert degrees to angle units.
+  return Math.floor(positive_degrees(degrees) * angle_base / 360.0);
+}
+
+export function unbounded_angle_units_to_degrees(angle){
+  return angle * 360.0 / angle_base
+}
+export function angle_units_to_degrees(angle){
+  return normalize_degrees(unbounded_angle_units_to_degrees(angle));
+}
+
+
+
 // Scale to keep motor speed in numerical range for 32 bit arithmetic.
 export const speed_scale = 128;
+
+export function speed_units_to_degrees_per_millisecond(speed){
+  return unbounded_angle_units_to_degrees(speed) * time_units_per_millisecond / speed_scale
+}
+
+export function degrees_per_millisecond_to_speed_units(speed){
+  return Math.floor(degrees_to_angle_units(speed) * speed_scale / time_units_per_millisecond);
+}
+
+export const accel_scale = 128;
+export function acceleration_units_to_degrees_per_millisecond2(acceleration_div_2){
+  return unbounded_angle_units_to_degrees(acceleration_div_2 * 2) * time_units_per_millisecond * time_units_per_millisecond / speed_scale / accel_scale;
+}
+export function degrees_per_millisecond2_to_acceleration_units(acceleration){
+  return Math.floor(degrees_to_angle_units(acceleration) * speed_scale * accel_scale / time_units_per_millisecond / time_units_per_millisecond / 2);
+}
 
 export const pwm_base = 1536; // 0x0600
 export const pwm_period = 2 * pwm_base;
@@ -46,14 +76,12 @@ export const current_conversion = adc_voltage_reference / (adc_base * motor_shun
 
 export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
 
+export const current_calibration_base = 1024; // Base for fixed point multiplication.
 
 export const current_calibration_default = {
-  u_positive: 1.0,
-  u_negative: 1.0,
-  v_positive: 1.0,
-  v_negative: 1.0,
-  w_positive: 1.0,
-  w_negative: 1.0,
+  u_factor: 1.0,
+  v_factor: 1.0,
+  w_factor: 1.0,
 };
 
 
@@ -61,8 +89,6 @@ const hall_hysterisis = 10;
 const transition_stdev = 15;
 
 export const position_calibration_default = {
-  sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
-  sector_center_stdev: [30, 30, 30, 30, 30, 30],
   sector_transition_degrees: [
     [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
     [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
@@ -79,6 +105,8 @@ export const position_calibration_default = {
     [transition_stdev, transition_stdev],
     [transition_stdev, transition_stdev],
   ],
-  accel_stdev: 360.0 / 5.0 / 50.0, // acceleration distribution up to (360 degrees per 5ms) per 50ms.
-  initial_angular_speed_stdev: 0.05 * 360,
+  sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
+  sector_center_stdev: [30, 30, 30, 30, 30, 30],
+  initial_angular_speed_stdev: 30.0, // 30 degrees per ms
+  angular_acceleration_stdev: 360.0 / 2.0 / 50.0, // acceleration distribution up to (360 degrees per 5ms) per 50ms.
 }

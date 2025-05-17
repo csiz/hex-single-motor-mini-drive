@@ -177,12 +177,12 @@ export function compute_position_calibration(calibration_results){
   }
 
   const position_calibration = (null_transitions || null_centers) ? null : {
-    sector_center_degrees,
-    sector_center_stdev,
     sector_transition_degrees,
     sector_transition_stdev,
-    accel_stdev: position_calibration_default.accel_stdev,
+    sector_center_degrees,
+    sector_center_stdev,
     initial_angular_speed_stdev: position_calibration_default.initial_angular_speed_stdev,
+    angular_acceleration_stdev: position_calibration_default.angular_acceleration_stdev,
   };
 
   return {

@@ -22,7 +22,7 @@ const current_calibration_zones = [
 
 
 const drive_resistance = 2.0; // 2.0 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
-const drive_voltage = 12.0; // 12.0 V // TODO: get it from the chip
+const drive_voltage = 11.0; // 12.0 V // TODO: get it from the chip
 
 
 export const max_calibration_current = drive_voltage / drive_resistance;
@@ -259,12 +259,9 @@ export function compute_current_calibration(calibration_results){
   });
 
   const current_calibration = {
-    u_positive: calibration.u_positive.factor,
-    u_negative: calibration.u_negative.factor,
-    v_positive: calibration.v_positive.factor,
-    v_negative: calibration.v_negative.factor,
-    w_positive: calibration.w_positive.factor,
-    w_negative: calibration.w_negative.factor,
+    u_factor: (calibration.u_positive.factor + calibration.u_negative.factor) / 2,
+    v_factor: (calibration.v_positive.factor + calibration.v_negative.factor) / 2,
+    w_factor: (calibration.w_positive.factor + calibration.w_negative.factor) / 2,
   };
 
   const calibration_funcs = {

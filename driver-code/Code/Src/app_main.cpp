@@ -5,6 +5,8 @@
 #include "interrupts.hpp"
 #include "interrupts_data.hpp"
 #include "interface.hpp"
+#include "interrupts_angle.hpp"
+#include "interrupts_motor.hpp"
 
 #include "error_handler.hpp"
 #include "constants.hpp"
@@ -42,6 +44,9 @@ uint16_t usb_stream_last_sent = 0;
 uint16_t usb_readouts_to_send = 0;
 bool usb_wait_full_history = false;
 
+bool usb_reply_current_factors = false;
+bool usb_reply_trigger_angles = false;
+
 
 // Time of last USB packet sent; used to detect timeouts.
 uint32_t usb_last_send = 0;
@@ -49,12 +54,6 @@ uint32_t usb_last_send = 0;
 // Maximum time to wait for a USB packet to be sent.
 const uint32_t USB_TIMEOUT = 500;
 
-
-
-// TODO: enable DMA channel 1 for ADC1 reading temperature and voltage.
-// TODO: also need to set a minium on time for MOSFET driving, too little 
-// won't spin the motor at all (lies! we can use a small on time to
-// bias the motor to make it easy to turn by the load).
 
 
 void app_init() {
@@ -201,13 +200,20 @@ bool handle_command(CommandBuffer const & buffer) {
             return true;
 
         case SET_CURRENT_FACTORS:            
-            /* CurrentFactors factors = */ parse_current_calibration(usb_command_buffer);
-            // TODO: update current factors
+            current_calibration = parse_current_calibration(usb_command_buffer);
+            usb_reply_current_factors = true;
             return true;
 
         case SET_TRIGGER_ANGLES:
-            /* TriggerAngles angles = */ parse_position_calibration(usb_command_buffer);
-            // TODO: update trigger angles
+            position_calibration = parse_position_calibration(usb_command_buffer);
+            usb_reply_trigger_angles = true;
+            return true;
+
+        case GET_CURRENT_FACTORS:
+            usb_reply_current_factors = true;
+            return true;
+        case GET_TRIGGER_ANGLES:
+            usb_reply_trigger_angles = true;
             return true;
 
         // Don't use a default case so we can catch unhandled commands.
@@ -251,6 +257,32 @@ void usb_queue_response(){
             // We have not filled the queue yet; don't send readouts.
             return;
         }
+    }
+
+    // Send current factors if requested.
+    if (usb_reply_current_factors) {
+        if(not usb_check_queue(current_calibration_size)) return;
+        
+        // Send the current factors to the host.
+        uint8_t current_factors_data[current_calibration_size] = {0};
+        write_current_calibration(current_factors_data, current_calibration);
+        
+        usb_queue_send(current_factors_data, current_calibration_size);
+        
+        usb_reply_current_factors = false;
+    }
+
+    // Send trigger angles if requested.
+    if (usb_reply_trigger_angles) {
+        if(not usb_check_queue(position_calibration_size)) return;
+        
+        // Send the trigger angles to the host.
+        uint8_t trigger_angles_data[position_calibration_size] = {0};
+        write_position_calibration(trigger_angles_data, position_calibration);
+        
+        usb_queue_send(trigger_angles_data, position_calibration_size);
+        
+        usb_reply_trigger_angles = false;
     }
     
     // Send readouts if requested; up to an arbitrary number of readouts so we don't block for long.

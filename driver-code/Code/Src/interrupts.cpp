@@ -122,10 +122,10 @@ static inline void pwm_cycle_and_adc_update(){
     readout.angular_speed_variance = angular_speed_variance_at_observation;
     
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
-    const int scaled_u_current = -(readout.u_readout - readout.ref_readout) * current_calibration.u_factor / calibration_base;
+    const int scaled_u_current = -(readout.u_readout - readout.ref_readout) * current_calibration.u_factor / current_calibration_base;
     // Flip the sign of V because we accidentally wired it the other way (the right way...). Oopsie doopsie.
-    const int scaled_v_current = +(readout.v_readout - readout.ref_readout) * current_calibration.v_factor / calibration_base;
-    const int scaled_w_current = -(readout.w_readout - readout.ref_readout) * current_calibration.w_factor / calibration_base;
+    const int scaled_v_current = +(readout.v_readout - readout.ref_readout) * current_calibration.v_factor / current_calibration_base;
+    const int scaled_w_current = -(readout.w_readout - readout.ref_readout) * current_calibration.w_factor / current_calibration_base;
     
     // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
     const int avg = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;

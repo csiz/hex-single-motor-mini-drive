@@ -47,6 +47,10 @@ enum CommandCode : uint16_t {
 
     SET_CURRENT_FACTORS = 0x4040,
     SET_TRIGGER_ANGLES = 0x4041,
+    CURRENT_FACTORS = 0x4042,
+    TRIGGER_ANGLES = 0x4043,
+    GET_CURRENT_FACTORS = 0x4044,
+    GET_TRIGGER_ANGLES = 0x4045,
 };
 
 
@@ -90,8 +94,15 @@ PositionCalibration parse_position_calibration(CommandBuffer const & buffer);
 // Sending data
 // ------------
 
+
 const size_t readout_size = 2 + sizeof(Readout);
 void write_readout(uint8_t * buffer, Readout const & readout);
 
 const size_t full_readout_size = 2 + sizeof(FullReadout);
 void write_full_readout(uint8_t * buffer, FullReadout const & full_readout);
+
+const size_t current_calibration_size = 2 + sizeof(CurrentCalibration);
+void write_current_calibration(uint8_t * buffer, CurrentCalibration const & factors);
+
+const size_t position_calibration_size = 2 + sizeof(PositionCalibration);
+void write_position_calibration(uint8_t * buffer, PositionCalibration const & position_calibration);

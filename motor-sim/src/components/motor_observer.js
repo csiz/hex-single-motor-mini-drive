@@ -1,5 +1,3 @@
-import {position_calibration_default} from "./motor_constants.js";
-
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, radians_to_degrees} from "./angular_math.js";
 import {interpolate_linear, matrix_multiply} from "./math_utils.js";
 
@@ -72,7 +70,7 @@ function add_stdev(...std_values){
 }
 
 function accumulate_position_from_hall(readout, prev_readout){
-  const {sector_center_degrees, sector_center_stdev, sector_transition_degrees, sector_transition_stdev, accel_stdev, initial_angular_speed_stdev} = this.position_calibration;
+  const {sector_center_degrees, sector_center_stdev, sector_transition_degrees, sector_transition_stdev, angular_acceleration_stdev, initial_angular_speed_stdev} = this.position_calibration;
   
   const {time, hall_sector} = readout;
 
@@ -106,7 +104,7 @@ function accumulate_position_from_hall(readout, prev_readout){
     const estimated_distance_error = distance_to_trigger - estimated_distance;
     const estimated_speed_error = estimated_distance_error / dt;
 
-    const estimated_distance_stdev = add_stdev(prev_readout.obs_angle_stdev, prev_readout.obs_angular_speed_stdev * dt, accel_stdev * dt * dt / 5.0);
+    const estimated_distance_stdev = add_stdev(prev_readout.obs_angle_stdev, prev_readout.obs_angular_speed_stdev * dt, angular_acceleration_stdev * dt * dt / 4.0);
     const estimated_speed_error_stdev = add_stdev(estimated_distance_stdev / dt, trigger_angle_stdev / dt);
     
     const {mean: distance_adjustment, stdev: web_angle_stdev} = product_of_normals({
@@ -126,7 +124,7 @@ function accumulate_position_from_hall(readout, prev_readout){
 
     const {mean: speed_adjustment, stdev: web_angular_speed_stdev} = product_of_normals({
       mean_a: 0.0,
-      std_a: prev_readout.obs_angular_speed_stdev + 0.5 * accel_stdev * dt,
+      std_a: prev_readout.obs_angular_speed_stdev + 0.5 * angular_acceleration_stdev * dt,
       mean_b: estimated_speed_error,
       std_b: estimated_speed_error_stdev,
     });
@@ -154,7 +152,7 @@ function accumulate_position_from_hall(readout, prev_readout){
 
     const estimated_distance = prev_readout.obs_angular_speed * dt;
 
-    const estimated_distance_stdev = add_stdev(prev_readout.obs_angle_stdev, prev_readout.obs_angular_speed_stdev * dt, accel_stdev * dt * dt / 2.0);
+    const estimated_distance_stdev = add_stdev(prev_readout.obs_angle_stdev, prev_readout.obs_angular_speed_stdev * dt, angular_acceleration_stdev * dt * dt / 2.0);
 
     const next_sector = positive_direction ? (prev_readout.obs_sector + 1) % 6 : (prev_readout.obs_sector - 1 + 6) % 6;
     const next_transition_angle = sector_transition_degrees[next_sector][positive_direction ? 0 : 1];
@@ -185,7 +183,7 @@ function accumulate_position_from_hall(readout, prev_readout){
       mean_a: calculated_spin,
       std_a: calculated_spin_stdev,
       mean_b: prev_readout.obs_angular_speed,
-      std_b: prev_readout.obs_angular_speed_stdev + accel_stdev * dt,
+      std_b: prev_readout.obs_angular_speed_stdev + angular_acceleration_stdev * dt,
     });
 
     if (p_stopped_in_current_sector >= 0.99){

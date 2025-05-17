@@ -36,3 +36,10 @@ export function autosave_inputs(inputs, delay_millis = 100){
     set_input_value(input, get_stored_or_default(key, input.value));
   });
 }
+
+export function wait_previous(async_function){
+  return async function(value){
+    value = await value;
+    return await async_function(value);
+  }
+}

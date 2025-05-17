@@ -74,14 +74,16 @@ struct CurrentCalibration {
     int16_t w_factor;
 };
 
-using TriggerAngles = std::array<std::array<int16_t, 2>, 6>;
-using TriggerAngleVariances = std::array<std::array<int16_t, 2>, 6>;
-using CenterAngles = std::array<int16_t, 6>;
-using CenterVariances = std::array<int16_t, 6>;
+using TriggerAngles = std::array<std::array<uint16_t, 2>, 6>;
+using TriggerAngleVariances = std::array<std::array<uint16_t, 2>, 6>;
+using CenterAngles = std::array<uint16_t, 6>;
+using CenterVariances = std::array<uint16_t, 6>;
 
 struct PositionCalibration {
-    TriggerAngles trigger_angles;
-    TriggerAngleVariances trigger_angle_variances;
+    TriggerAngles sector_transition_angles;
+    TriggerAngleVariances sector_transition_variances;
     CenterAngles sector_center_angles;
     CenterVariances sector_center_variances;
+    uint16_t initial_angular_speed_variance;
+    uint16_t angular_acceleration_div_2_variance;
 };
