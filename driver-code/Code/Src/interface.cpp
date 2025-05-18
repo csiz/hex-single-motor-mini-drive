@@ -84,141 +84,21 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     if (offset != full_readout_size) error();
 }
 
-
-// Receive data
-// ------------
-
-
-bool buffer_command(CommandBuffer & buffer, int receive_function(uint8_t *buf, uint16_t len)){
-    // Make sure the buffer is ready to receive data.
-    if (buffer.bytes_expected == 0) error();
-
-    const int bytes_received = receive_function(buffer.data + buffer.index, buffer.bytes_expected);
-
-    // We've received too much data.
-    if (bytes_received > buffer.bytes_expected) error();
-
-    buffer.index += bytes_received;
-    buffer.bytes_expected -= bytes_received;
-
-    // Wait for more data if we don't have a command header yet.
-    if (buffer.index < command_header_size) return false;
-
-    const int bytes_extra = buffer.index - command_header_size;
-        
-    // The first number is the command code, the remainder is the command data.
-    const uint16_t code = read_uint16(buffer.data);
-
-    // Expect additional bytes for the commands below.
-    switch (code){
-        case SET_CURRENT_FACTORS:
-            buffer.bytes_expected = sizeof(CurrentCalibration) - bytes_extra;
-            break;
-        case SET_TRIGGER_ANGLES:
-            buffer.bytes_expected = sizeof(PositionCalibration) - bytes_extra;
-            break;
-        default:
-            // ALl other commands fit into the command header; and were therefore fully received.
-            break;
-    }
-
-    // We can now check if we have received a complete command.
-    return buffer.bytes_expected == 0;
-}
-
-CommandHeader parse_command_header(CommandBuffer const & buffer) {
-    if(buffer.index < command_header_size) error();
-
-    uint8_t const * data = buffer.data;
-
-    const uint16_t code = read_uint16(data);
-    data += 2;
-    const uint16_t timeout = read_uint16(data);
-    data += 2;
-    const uint16_t pwm = read_uint16(data);
-    data += 2;
-    const uint16_t leading_angle = read_uint16(data);
-    data += 2;
-
-    if (data - buffer.data != command_header_size) error();
-
-    return CommandHeader { code, timeout, pwm, leading_angle };
-}
-
-CurrentCalibration parse_current_calibration(CommandBuffer const & buffer) {
-    if(buffer.index < command_header_size + sizeof(CurrentCalibration)) error();
-
-    // Skip the command header.
-    uint8_t const * data = buffer.data + command_header_size;
-
-    CurrentCalibration factors = {};
-
-    factors.u_factor = read_int16(data);
-    data += 2;
-    factors.v_factor = read_int16(data);
-    data += 2;
-    factors.w_factor = read_int16(data);
-    data += 2;
-
-    if (data - buffer.data != command_header_size + sizeof(CurrentCalibration)) error();
-
-    return factors;
-}
-
-void write_current_calibration(uint8_t * buffer, CurrentCalibration const & factors) {
+void write_current_calibration(uint8_t * data, CurrentCalibration const & factors) {
     size_t offset = 0;
-    write_uint16(buffer + offset, CURRENT_FACTORS);
+    write_uint16(data + offset, CURRENT_FACTORS);
     offset += 2;
-    write_int16(buffer + offset, factors.u_factor);
+    write_int16(data + offset, factors.u_factor);
     offset += 2;
-    write_int16(buffer + offset, factors.v_factor);
+    write_int16(data + offset, factors.v_factor);
     offset += 2;
-    write_int16(buffer + offset, factors.w_factor);
+    write_int16(data + offset, factors.w_factor);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
     if (offset != current_calibration_size) error();
 }
 
-PositionCalibration parse_position_calibration(CommandBuffer const & buffer) {
-    if(buffer.index < command_header_size + sizeof(PositionCalibration)) error();
-
-    // Skip the command header.
-    uint8_t const * data = buffer.data + command_header_size;
-
-    PositionCalibration position_calibration = {};
-
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_transition_angles[i][0] = read_uint16(data);
-        data += 2;
-        position_calibration.sector_transition_angles[i][1] = read_uint16(data);
-        data += 2;
-    }
-
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_transition_variances[i][0] = read_uint16(data);
-        data += 2;
-        position_calibration.sector_transition_variances[i][1] = read_uint16(data);
-        data += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_center_angles[i] = read_uint16(data);
-        data += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_center_variances[i] = read_uint16(data);
-        data += 2;
-    }
-
-    position_calibration.initial_angular_speed_variance = read_uint16(data);
-    data += 2;
-    position_calibration.angular_acceleration_div_2_variance = read_uint16(data);
-    data += 2;
-
-    if (data - buffer.data != command_header_size + sizeof(PositionCalibration)) error();
-
-    return position_calibration;
-}
 
 void write_position_calibration(uint8_t * buffer, PositionCalibration const & position_calibration) {
     size_t offset = 0;
@@ -255,5 +135,163 @@ void write_position_calibration(uint8_t * buffer, PositionCalibration const & po
     // Check if we wrote the correct number of bytes.
     if (offset != position_calibration_size) error();
 }
+
+// Receive data
+// ------------
+
+static inline int get_message_size(uint16_t code) {
+    switch (code) {
+        case STREAM_FULL_READOUTS:
+        case GET_READOUTS_SNAPSHOT:
+        case SET_STATE_OFF:
+        case SET_STATE_DRIVE_POS:
+        case SET_STATE_TEST_ALL_PERMUTATIONS:
+        case SET_STATE_DRIVE_NEG:
+        case SET_STATE_FREEWHEEL:
+        case SET_STATE_TEST_GROUND_SHORT:
+        case SET_STATE_TEST_POSITIVE_SHORT:
+        case SET_STATE_TEST_U_DIRECTIONS:
+        case SET_STATE_TEST_U_INCREASING:
+        case SET_STATE_TEST_U_DECREASING:
+        case SET_STATE_TEST_V_INCREASING:
+        case SET_STATE_TEST_V_DECREASING:
+        case SET_STATE_TEST_W_INCREASING:
+        case SET_STATE_TEST_W_DECREASING:
+        case SET_STATE_HOLD_U_POSITIVE:
+        case SET_STATE_HOLD_V_POSITIVE:
+        case SET_STATE_HOLD_W_POSITIVE:
+        case SET_STATE_HOLD_U_NEGATIVE:
+        case SET_STATE_HOLD_V_NEGATIVE:
+        case SET_STATE_HOLD_W_NEGATIVE:
+        case SET_STATE_DRIVE_SMOOTH_POS:
+        case SET_STATE_DRIVE_SMOOTH_NEG:
+        case GET_CURRENT_FACTORS:
+        case GET_TRIGGER_ANGLES:
+            return min_message_size;
+        
+        case SET_CURRENT_FACTORS:
+            return current_calibration_size;
+        case SET_TRIGGER_ANGLES:
+            return position_calibration_size;
+
+        default:
+            // Unknown message; we don't know how many bytes to expect.
+            return -1;
+    }
+}
+
+
+bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t *buf, uint16_t len)){
+    // Make sure the buffer is ready to receive data.
+    if (buffer.bytes_expected == 0) error();
+
+    const int bytes_received = receive_function(buffer.data + buffer.write_index, buffer.bytes_expected);
+
+    // We've received too much data.
+    if (bytes_received > buffer.bytes_expected) error();
+
+    buffer.write_index += bytes_received;
+
+    // Wait for more data if we don't have a command header yet.
+    if (buffer.write_index < header_size) return false;
+
+    // The first number is the command code, the remainder is the command data.
+    const uint16_t code = read_uint16(buffer.data);
+
+    const int expected_size = get_message_size(code);
+
+    if (expected_size < 0) {
+        // Unknown command. Discard the buffer.
+        reset_command_buffer(buffer);
+        // Notify the caller that we have an error.
+        return true;
+    }
+
+    buffer.bytes_expected = expected_size - buffer.write_index;
+
+    if (buffer.bytes_expected < 0) error();
+
+    return false;
+}
+
+BasicCommand parse_basic_command(uint8_t const * data, size_t size) {
+    if(size < basic_command_size) error();
+
+    size_t offset = 0;
+
+    const uint16_t code = read_uint16(data + offset);
+    offset += 2;
+    const uint16_t timeout = read_uint16(data + offset);
+    offset += 2;
+    const uint16_t pwm = read_uint16(data + offset);
+    offset += 2;
+    const uint16_t leading_angle = read_uint16(data + offset);
+    offset += 2;
+
+    if (offset != basic_command_size) error();
+
+    return BasicCommand { code, timeout, pwm, leading_angle };
+}
+
+CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) {
+    if(size < current_calibration_size) error();
+
+    CurrentCalibration current_calibration = {};
+
+    size_t offset = header_size;
+
+    current_calibration.u_factor = read_int16(data + offset);
+    offset += 2;
+    current_calibration.v_factor = read_int16(data + offset);
+    offset += 2;
+    current_calibration.w_factor = read_int16(data + offset);
+    offset += 2;
+
+    if (offset != current_calibration_size) error();
+
+    return current_calibration;
+}
+
+
+PositionCalibration parse_position_calibration(uint8_t const * data, size_t size) {
+    if(size < position_calibration_size) error();
+
+    size_t offset = header_size;
+
+    PositionCalibration position_calibration = {};
+
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_transition_angles[i][0] = read_uint16(data + offset);
+        offset += 2;
+        position_calibration.sector_transition_angles[i][1] = read_uint16(data + offset);
+        offset += 2;
+    }
+
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_transition_variances[i][0] = read_uint16(data + offset);
+        offset += 2;
+        position_calibration.sector_transition_variances[i][1] = read_uint16(data + offset);
+        offset += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_center_angles[i] = read_uint16(data + offset);
+        offset += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_center_variances[i] = read_uint16(data + offset);
+        offset += 2;
+    }
+
+    position_calibration.initial_angular_speed_variance = read_uint16(data + offset);
+    offset += 2;
+    position_calibration.angular_acceleration_div_2_variance = read_uint16(data + offset);
+    offset += 2;
+
+    if (offset != position_calibration_size) error();
+
+    return position_calibration;
+}
+
+
 
 

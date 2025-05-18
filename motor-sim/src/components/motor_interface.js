@@ -302,14 +302,17 @@ function parse_position_calibration(data_view){
   };
 }
 
-function serialise_current_calibration(current_calibration) {
+function serialise_set_current_calibration(current_calibration) {
   const {u_factor, v_factor, w_factor} = current_calibration;
   
   let buffer = new Uint8Array(current_calibration_size);
 
   let view = new DataView(buffer.buffer);
-  
   let offset = 0;
+
+  view.setUint16(0, command_codes.SET_CURRENT_FACTORS);
+  offset += 2;
+
   view.setInt16(offset, Math.floor(u_factor * current_calibration_base));
   offset += 2;
   view.setInt16(offset, Math.floor(v_factor * current_calibration_base));
@@ -324,7 +327,7 @@ function square(x){
   return x * x;
 }
 
-function serialise_position_calibration(position_calibration) {
+function serialise_set_position_calibration(position_calibration) {
   const {
     sector_transition_degrees, sector_transition_stdev, sector_center_degrees, sector_center_stdev,
     initial_angular_speed_stdev, angular_acceleration_stdev,
@@ -335,6 +338,8 @@ function serialise_position_calibration(position_calibration) {
   let view = new DataView(buffer.buffer);
 
   let offset = 0;
+  view.setUint16(offset, command_codes.SET_TRIGGER_ANGLES);
+  offset += 2;
 
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 2; j++) {
@@ -371,8 +376,8 @@ function serialise_position_calibration(position_calibration) {
 }
 
 export const serialiser_mapping = {
-  [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_current_calibration, extra_size: current_calibration_size},
-  [command_codes.SET_TRIGGER_ANGLES]: {serialise_func: serialise_position_calibration, extra_size: position_calibration_size},
+  [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_set_current_calibration},
+  [command_codes.SET_TRIGGER_ANGLES]: {serialise_func: serialise_set_position_calibration},
 };
 
 export const parser_mapping = {
@@ -383,12 +388,16 @@ export const parser_mapping = {
 };
 
 
-export const command_header_size = 8;
+const basic_command_size = 8;
 
 export function serialise_command({command, command_timeout = 0, command_pwm = 0, command_leading_angle = 0, additional_data = undefined}) {
-  const {serialise_func, extra_size} = serialiser_mapping[command] ?? {serialise_func: null, extra_size: 0};
+  const {serialise_func} = serialiser_mapping[command] ?? {serialise_func: null};
 
-  let buffer = new Uint8Array(command_header_size + extra_size);
+  // Serialise the command with a special serialiser if it exists.
+  if (serialise_func) return serialise_func.call(this, additional_data);
+
+  // Otherwise, serialise a basic command.
+  let buffer = new Uint8Array(basic_command_size);
 
   let view = new DataView(buffer.buffer);
   let offset = 0;
@@ -400,12 +409,6 @@ export function serialise_command({command, command_timeout = 0, command_pwm = 0
   offset += 2;
   view.setUint16(offset, command_leading_angle);
   offset += 2;
-
-  if (serialise_func) {
-    const additional_buffer = serialise_func.call(this, additional_data);
-    buffer.set(additional_buffer, offset);
-    offset += additional_buffer.length;
-  }
 
   return buffer;
 }

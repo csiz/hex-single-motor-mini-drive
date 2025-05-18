@@ -36,7 +36,9 @@ float adc_update_rate = 0.0f;
 float hall_unobserved_rate = 0.0f;
 float hall_observed_rate = 0.0f;
 
-CommandBuffer usb_command_buffer = {};
+MessageBuffer usb_receive_buffer = {};
+
+uint8_t usb_response_buffer[max_message_size] = {0};
 
 uint16_t usb_stream_state = 0;
 uint16_t usb_stream_last_sent = 0;
@@ -94,8 +96,8 @@ static inline void motor_start_test(PWMSchedule const& schedule){
 }
 
 
-bool handle_command(CommandBuffer const & buffer) {
-    const CommandHeader command = parse_command_header(buffer);
+bool handle_command(MessageBuffer const & buffer) {
+    const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
     switch (command.code) {
         case NULL_COMMAND:
@@ -200,12 +202,12 @@ bool handle_command(CommandBuffer const & buffer) {
             return true;
 
         case SET_CURRENT_FACTORS:            
-            current_calibration = parse_current_calibration(usb_command_buffer);
+            current_calibration = parse_current_calibration(buffer.data, buffer.write_index);
             usb_reply_current_factors = true;
             return true;
 
         case SET_TRIGGER_ANGLES:
-            position_calibration = parse_position_calibration(usb_command_buffer);
+            position_calibration = parse_position_calibration(buffer.data, buffer.write_index);
             usb_reply_trigger_angles = true;
             return true;
 
@@ -246,7 +248,9 @@ inline void usb_queue_send(uint8_t * data, size_t len_to_send) {
     usb_last_send = HAL_GetTick();
 }
 
+
 void usb_queue_response(){
+
     // Check if we have to wait for the queue to fill before sending readouts.
     // This is used to prevent sending readouts while the motor is commutating.
     if (usb_wait_full_history) {
@@ -264,11 +268,11 @@ void usb_queue_response(){
         if(not usb_check_queue(current_calibration_size)) return;
         
         // Send the current factors to the host.
-        uint8_t current_factors_data[current_calibration_size] = {0};
-        write_current_calibration(current_factors_data, current_calibration);
-        
-        usb_queue_send(current_factors_data, current_calibration_size);
-        
+
+        write_current_calibration(usb_response_buffer, current_calibration);
+
+        usb_queue_send(usb_response_buffer, current_calibration_size);
+
         usb_reply_current_factors = false;
     }
 
@@ -277,14 +281,12 @@ void usb_queue_response(){
         if(not usb_check_queue(position_calibration_size)) return;
         
         // Send the trigger angles to the host.
-        uint8_t trigger_angles_data[position_calibration_size] = {0};
-        write_position_calibration(trigger_angles_data, position_calibration);
-        
-        usb_queue_send(trigger_angles_data, position_calibration_size);
-        
+        write_position_calibration(usb_response_buffer, position_calibration);
+        usb_queue_send(usb_response_buffer, position_calibration_size);
+
         usb_reply_trigger_angles = false;
     }
-    
+
     // Send readouts if requested; up to an arbitrary number of readouts so we don't block for long.
     while(usb_readouts_to_send > 0){
         // Check if we can enqueue the readout to the USB buffer.
@@ -294,11 +296,10 @@ void usb_queue_response(){
         if (not readout_history_available()) return readout_history_reset();
         
         // Send the readout to the host.
-        uint8_t readout_data[readout_size] = {0};
-        write_readout(readout_data, readout_history_pop());
-        
+        write_readout(usb_response_buffer, readout_history_pop());
+
         // We checked whether we can send, we should always succeed.
-        usb_queue_send(readout_data, readout_size);
+        usb_queue_send(usb_response_buffer, readout_size);
 
         // Readout added to the USB buffer.
         usb_readouts_to_send -= 1;
@@ -308,9 +309,6 @@ void usb_queue_response(){
     if(usb_stream_state){
         if (not usb_check_queue(full_readout_size)) return;
         
-        // Send the full readout to the host.
-        uint8_t full_readout_data[full_readout_size] = {0};
-
         // Disable the ADC interrupt while we read the latest readout.
         NVIC_DisableIRQ(ADC1_2_IRQn);
         FullReadout full_readout = get_readout();
@@ -324,10 +322,9 @@ void usb_queue_response(){
         full_readout.hall_unobserved_rate = static_cast<int>(hall_unobserved_rate);
         full_readout.hall_observed_rate = static_cast<int>(hall_observed_rate);
 
-        write_full_readout(full_readout_data, full_readout);
-        
-        usb_queue_send(full_readout_data, full_readout_size);
-        
+        write_full_readout(usb_response_buffer, full_readout);
+        usb_queue_send(usb_response_buffer, full_readout_size);
+
         usb_stream_last_sent = full_readout.readout_number;
     }
 }
@@ -377,15 +374,18 @@ void app_tick() {
     usb_com_send();
 
     // Buffer the command from USB and handle it when it's complete.
-    if (buffer_command(usb_command_buffer, usb_com_recv)){
+    if (buffer_command(usb_receive_buffer, usb_com_recv)){
+        // Invalid command; reset the USB buffers.
+        usb_com_reset();
+    }
+
+    // Handle the command if we received enough data.
+    if (usb_receive_buffer.bytes_expected == 0) {
         // Handle the complete command.
-        if (not handle_command(usb_command_buffer)){
-            // Invalid command; reset the USB buffers.
-            usb_com_reset();
-        }
+        handle_command(usb_receive_buffer);
 
         // Reset the command buffer for the next command.
-        reset_command_buffer(usb_command_buffer);
+        reset_command_buffer(usb_receive_buffer);
     }
     
     // Queue the state readouts on the USB buffer.

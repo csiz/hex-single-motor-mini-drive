@@ -3,14 +3,14 @@
 #include "type_definitions.hpp"
 
 #include <cstdint>
-#include <cstring>
 
 
 // Interface command codes
 // -----------------------
 
+
 // These are the command codes that are used to identify the command type sent over the wire.
-enum CommandCode : uint16_t {
+enum MessageCode : uint16_t {
     NULL_COMMAND = 0x0000,
 
     READOUT = 0x2020,
@@ -54,28 +54,38 @@ enum CommandCode : uint16_t {
 };
 
 
+// Expected data sizes
+// -------------------
+
+// Command header size (the command code).
+const size_t header_size = 2;
+
+const size_t basic_command_size = sizeof(BasicCommand); // Note; basic command includes the header code.
+
+const size_t readout_size = header_size + sizeof(Readout);
+const size_t full_readout_size = header_size + sizeof(FullReadout);
+const size_t current_calibration_size = header_size + sizeof(CurrentCalibration);
+const size_t position_calibration_size = header_size + sizeof(PositionCalibration);
+
+
+const size_t max_message_size = 128;
+const size_t min_message_size = 8;
+
 
 // Command buffer
 // --------------
 
 // Buffer parts of commands until they are complete.
-
-const size_t command_header_size = sizeof(CommandHeader);
-const size_t max_command_size = 128;
-
-struct CommandBuffer {
-    uint8_t data[max_command_size] = {};
-    size_t index = 0;
-    int bytes_expected = command_header_size;
+struct MessageBuffer {
+    uint8_t data[max_message_size] = {};
+    size_t write_index = 0;
+    int bytes_expected = min_message_size;
 };
 
-static inline void reset_command_buffer(CommandBuffer & buffer) {
-    // Clear the buffer with memset to avoid stale data.
-    memset(buffer.data, 0, sizeof(buffer.data));
-    buffer.index = 0;
-    buffer.bytes_expected = command_header_size;
+static inline void reset_command_buffer(MessageBuffer & buffer) {
+    buffer.write_index = 0;
+    buffer.bytes_expected = min_message_size;
 }
-
 
 // Receiving commands
 // ------------------
@@ -84,25 +94,22 @@ static inline void reset_command_buffer(CommandBuffer & buffer) {
 // 
 // Use a data stream with a receive function that takes a buffer and a length as
 // arguments and returns the number of bytes received. Can receive partial commands.
-bool buffer_command(CommandBuffer & buffer, int receive_function(uint8_t * buf, uint16_t len));
+bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t * buf, uint16_t len));
 
-CommandHeader parse_command_header(CommandBuffer const & buffer);
-CurrentCalibration parse_current_calibration(CommandBuffer const & buffer);
-PositionCalibration parse_position_calibration(CommandBuffer const & buffer);
+BasicCommand parse_basic_command(uint8_t const * data, size_t size);
+CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size);
+PositionCalibration parse_position_calibration(uint8_t const * data, size_t size);
 
 
 // Sending data
 // ------------
 
 
-const size_t readout_size = 2 + sizeof(Readout);
 void write_readout(uint8_t * buffer, Readout const & readout);
 
-const size_t full_readout_size = 2 + sizeof(FullReadout);
 void write_full_readout(uint8_t * buffer, FullReadout const & full_readout);
 
-const size_t current_calibration_size = 2 + sizeof(CurrentCalibration);
-void write_current_calibration(uint8_t * buffer, CurrentCalibration const & factors);
+void write_current_calibration(uint8_t * data, CurrentCalibration const & factors);
 
-const size_t position_calibration_size = 2 + sizeof(PositionCalibration);
-void write_position_calibration(uint8_t * buffer, PositionCalibration const & position_calibration);
+void write_position_calibration(uint8_t * data, PositionCalibration const & position_calibration);
+

@@ -61,7 +61,7 @@ struct FullReadout : public Readout {
 // Command data structures
 // -----------------------
 
-struct CommandHeader {
+struct BasicCommand {
     uint16_t code;
     uint16_t timeout;
     uint16_t pwm;
