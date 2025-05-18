@@ -183,14 +183,14 @@ export class MotorController {
 
         const code = message_header.getUint16(0);
 
-        const {parse_func, data_size} = parser_mapping[code] ?? {parse_func: null, data_size: null};
+        const {parse_func, message_size} = parser_mapping[code] ?? {parse_func: null, message_size: null};
 
         if (code != this._expected_code) {
           // Check if it's a valid message code.
-          if (data_size != null){
+          if (message_size != null){
             // Skip this message and continue.
-            offset += header_size + data_size;
-            bytes_discarded += header_size + data_size;
+            offset += message_size;
+            bytes_discarded += message_size;
           } else {
             // Search each byte until we find the expected code.
             offset += 1;
@@ -219,12 +219,12 @@ export class MotorController {
         }
 
         // Wait for enough data to parse the message; break inner loop and await another read.
-        if (byte_array.length < offset + header_size + data_size) break;
+        if (byte_array.length < offset + message_size) break;
 
         // We have enough data to parse the message; parse it.
-        const message = parse_func.call(this, new DataView(byte_array.buffer, offset + header_size, data_size), this._last_message);
+        const message = parse_func.call(this, new DataView(byte_array.buffer, offset, message_size), this._last_message);
         // Only advance the offset once we parsed the message (we need to keep collecting data until then).
-        offset += header_size + data_size;
+        offset += message_size;
 
         // Keep track of receive rate statistics.
         this._last_message = message;

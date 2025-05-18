@@ -64,10 +64,10 @@ function get_hall_sector({hall_u, hall_v, hall_w}){
   }
 }
 
-const readout_size = 28;
+const readout_size = 30;
 
 function parse_readout(data_view, previous_readout){
-  let offset = 0;
+  let offset = header_size;
   
   // Get the PWM commands.
   const pwm_commands = data_view.getUint32(offset);
@@ -176,7 +176,7 @@ function parse_readout(data_view, previous_readout){
   return process_readout.call(this, readout, previous_readout);
 }
 
-const full_readout_size = readout_size + 24;
+const full_readout_size = 54;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
@@ -238,9 +238,10 @@ function parse_full_readout(data_view, previous_readout){
 
 
 
-const current_calibration_size = 6;
+const current_calibration_size = 8;
+
 function parse_current_calibration(data_view){
-  let offset = 0;
+  let offset = header_size;
   const u_factor = data_view.getInt16(offset) / current_calibration_base;
   offset += 2;
   const v_factor = data_view.getInt16(offset) / current_calibration_base;
@@ -255,27 +256,10 @@ function parse_current_calibration(data_view){
   };
 }
 
-export function serialise_current_calibration(current_calibration) {
-  const {u_factor, v_factor, w_factor} = current_calibration;
-  
-  let buffer = new Uint8Array(current_calibration_size);
 
-  let view = new DataView(buffer.buffer);
-  
-  let offset = 0;
-  view.setInt16(offset, Math.floor(u_factor * current_calibration_base));
-  offset += 2;
-  view.setInt16(offset, Math.floor(v_factor * current_calibration_base));
-  offset += 2;
-  view.setInt16(offset, Math.floor(w_factor * current_calibration_base));
-  offset += 2;
-
-  return buffer;
-}
-
-const position_calibration_size = 76;
+const position_calibration_size = 78;
 function parse_position_calibration(data_view){
-  let offset = 0;
+  let offset = header_size;
   const sector_transition_degrees = Array.from(Array(6), () => Array.from(Array(2), () => {
     const value = data_view.getUint16(offset);
     offset += 2;
@@ -318,11 +302,29 @@ function parse_position_calibration(data_view){
   };
 }
 
+function serialise_current_calibration(current_calibration) {
+  const {u_factor, v_factor, w_factor} = current_calibration;
+  
+  let buffer = new Uint8Array(current_calibration_size);
+
+  let view = new DataView(buffer.buffer);
+  
+  let offset = 0;
+  view.setInt16(offset, Math.floor(u_factor * current_calibration_base));
+  offset += 2;
+  view.setInt16(offset, Math.floor(v_factor * current_calibration_base));
+  offset += 2;
+  view.setInt16(offset, Math.floor(w_factor * current_calibration_base));
+  offset += 2;
+
+  return buffer;
+}
+
 function square(x){
   return x * x;
 }
 
-export function serialise_position_calibration(position_calibration) {
+function serialise_position_calibration(position_calibration) {
   const {
     sector_transition_degrees, sector_transition_stdev, sector_center_degrees, sector_center_stdev,
     initial_angular_speed_stdev, angular_acceleration_stdev,
@@ -374,14 +376,15 @@ export const serialiser_mapping = {
 };
 
 export const parser_mapping = {
-  [command_codes.READOUT]: {parse_func: parse_readout, data_size: readout_size},
-  [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, data_size: full_readout_size},
-  [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, data_size: current_calibration_size},
-  [command_codes.TRIGGER_ANGLES]: {parse_func: parse_position_calibration, data_size: position_calibration_size},
+  [command_codes.READOUT]: {parse_func: parse_readout, message_size: readout_size},
+  [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
+  [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
+  [command_codes.TRIGGER_ANGLES]: {parse_func: parse_position_calibration, message_size: position_calibration_size},
 };
 
 
 export const command_header_size = 8;
+
 export function serialise_command({command, command_timeout = 0, command_pwm = 0, command_leading_angle = 0, additional_data = undefined}) {
   const {serialise_func, extra_size} = serialiser_mapping[command] ?? {serialise_func: null, extra_size: 0};
 
