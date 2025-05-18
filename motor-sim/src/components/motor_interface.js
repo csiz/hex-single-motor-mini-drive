@@ -10,7 +10,7 @@ import {
 
 import {normalize_degrees} from './angular_math.js';
 
-
+export const header_size = 2; // 2 bytes
 
 export const command_codes = {
   READOUT: 0x2020,
@@ -154,7 +154,6 @@ function parse_readout(data_view, previous_readout){
   const time = readout_index * millis_per_cycle;
 
   const readout = {
-    code: command_codes.READOUT,
     readout_number,
     readout_index, time,
     u_readout, v_readout, w_readout,
@@ -222,8 +221,6 @@ function parse_full_readout(data_view, previous_readout){
 
   return {
     ...readout,
-    // Overwrite the readout code with the full readout code.
-    code: command_codes.FULL_READOUT,
     tick_rate,
     adc_update_rate,
     hall_unobserved_rate,
@@ -252,7 +249,6 @@ function parse_current_calibration(data_view){
   offset += 2;
 
   return {
-    code: command_codes.CURRENT_FACTORS,
     u_factor,
     v_factor,
     w_factor,
@@ -313,7 +309,6 @@ function parse_position_calibration(data_view){
   offset += 2;
 
   return {
-    code: command_codes.TRIGGER_ANGLES,
     sector_transition_degrees,
     sector_transition_stdev,
     sector_center_degrees,

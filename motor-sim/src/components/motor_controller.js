@@ -1,5 +1,5 @@
 import {wait} from "./async_utils.js";
-import {parser_mapping, command_codes, serialise_command} from "./motor_interface.js";
+import {parser_mapping, command_codes, serialise_command, header_size} from "./motor_interface.js";
 import {current_calibration_default, position_calibration_default, history_size} from "./motor_constants.js";
 
 export { command_codes };
@@ -178,17 +178,19 @@ export class MotorController {
       byte_array = byte_array.length == 0 ? chunk : new Uint8Array([...byte_array, ...chunk]);
       let offset = 0;
 
-      while (byte_array.length >= offset + 2) {
-        const message_header = new DataView(byte_array.buffer, offset, 2);
+      while (byte_array.length >= offset + header_size) {
+        const message_header = new DataView(byte_array.buffer, offset, header_size);
 
         const code = message_header.getUint16(0);
+
+        const {parse_func, data_size} = parser_mapping[code] ?? {parse_func: null, data_size: null};
+
         if (code != this._expected_code) {
           // Check if it's a valid message code.
-          const {data_size} = parser_mapping[code] || {data_size: null};
           if (data_size != null){
             // Skip this message and continue.
-            offset += 2 + data_size;
-            bytes_discarded += 2 + data_size;
+            offset += header_size + data_size;
+            bytes_discarded += header_size + data_size;
           } else {
             // Search each byte until we find the expected code.
             offset += 1;
@@ -204,31 +206,36 @@ export class MotorController {
           continue;
         }
 
-        // Reset the wrong code count if we find the expected code.
+        // We found the expected message code; reset the wrong code count.
         wrong_code_count = 0;
 
-        const {parse_func, data_size} = parser_mapping[code] || {parse_func: null, data_size: 0};
-        if (parse_func === null) {
+        // Ensure we have a parsing function for the message code.
+        if (!parse_func) {
+          // We might reach this point if the user requested an unknown code; and we somehow received it.
           const error = new Error(`Unknown message code: ${code}`);
           console.error(error.message);
           this._onerror(error);
           throw error;
         }
 
-        // Wait for enough data to parse the message.
-        if (byte_array.length < offset + 2 + data_size) break;
-        
-        const message = parse_func.call(this, new DataView(byte_array.buffer, offset + 2, data_size), this._last_message);
+        // Wait for enough data to parse the message; break inner loop and await another read.
+        if (byte_array.length < offset + header_size + data_size) break;
+
+        // We have enough data to parse the message; parse it.
+        const message = parse_func.call(this, new DataView(byte_array.buffer, offset + header_size, data_size), this._last_message);
+        // Only advance the offset once we parsed the message (we need to keep collecting data until then).
+        offset += header_size + data_size;
+
+        // Keep track of receive rate statistics.
         this._last_message = message;
         last_message_time = Date.now();
-        offset += data_size + 2;
 
+        // Return the message to the caller.
         this._onmessage(message);
       }
-
-      byte_array = byte_array.slice(offset);
-
-
+      
+      // Slice our buffer once we have processed all the messages.
+      if (offset) byte_array = byte_array.slice(offset);
     }
 
     await this.forget();
