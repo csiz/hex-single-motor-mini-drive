@@ -15,6 +15,7 @@ void motor_break();
 void motor_freewheel();
 void motor_start_schedule(const PWMSchedule & schedule);
 
+bool is_motor_stopped();
 
 // Test procedures
 // ---------------

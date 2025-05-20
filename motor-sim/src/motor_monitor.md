@@ -101,6 +101,15 @@ Current Calibration Procedures
 </div>
 
 
+Flash Data Storage
+------------------
+
+<div class="card tight">
+  <p>Commit the uploaded calibration data to flash memory.</p>
+  <div>${flash_buttons}</div>
+</div>
+
+
 </main>
 
 ```js
@@ -1259,6 +1268,21 @@ autosave_inputs({
   current_calibration_positive_mean_plot,
   current_calibration_negative_mean_plot,
 });
+
+```
+
+
+```js
+const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
+  [
+    ["Commit to Flash", async function(){
+      await motor_controller.send_command({command: command_codes.SAVE_SETTINGS_TO_FLASH});
+    }],
+  ],
+  {
+    label: "Flash Memory",
+  },
+);
 
 ```
 

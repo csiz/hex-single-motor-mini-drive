@@ -1,5 +1,8 @@
 #include "interrupts_angle.hpp"
 
+#include "user_data.hpp"
+
+
 uint8_t hall_state = 0b000;
 uint8_t hall_sector = 0;
 uint8_t previous_hall_sector = 0;
@@ -13,4 +16,4 @@ int angle_variance_at_observation = 0;
 int angular_speed_at_observation = 0;
 int angular_speed_variance_at_observation = 0;
 
-PositionCalibration position_calibration = default_position_calibration;
+PositionCalibration position_calibration = get_position_calibration();

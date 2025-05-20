@@ -1,5 +1,7 @@
 #include "interrupts_motor.hpp"
 
+#include "user_data.hpp"
+
 DriverState driver_state = DriverState::OFF;
 
 uint16_t hold_u_pwm_duty = 0;
@@ -19,5 +21,5 @@ size_t schedule_counter = 0;
 size_t schedule_stage = 0;
 
 
-CurrentCalibration current_calibration = default_current_calibration;
+CurrentCalibration current_calibration = get_current_calibration();
 

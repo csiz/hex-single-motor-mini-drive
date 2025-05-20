@@ -16,6 +16,7 @@
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
+#include <stm32f1xx_hal.h>
 
 #include <cstdlib>
 #include <cmath>
@@ -52,6 +53,12 @@ bool usb_reply_trigger_angles = false;
 
 // Time of last USB packet sent; used to detect timeouts.
 uint32_t usb_last_send = 0;
+
+// Time of the last USB packet received; used to detect timeouts.
+uint32_t usb_last_receive_time = 0;
+
+// Index of the last partial message received; used to detect timeouts.
+size_t usb_last_receive_index = 0;
 
 // Maximum time to wait for a USB packet to be sent.
 const uint32_t USB_TIMEOUT = 500;
@@ -99,130 +106,146 @@ static inline void motor_start_test(PWMSchedule const& schedule){
 bool handle_command(MessageBuffer const & buffer) {
     const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-    switch (command.code) {
+    switch (static_cast<MessageCode>(command.code)) {
         case NULL_COMMAND:
             // No command received; ignore it.
             return true;
 
-        // Send the whole history buffer over USB.
         case STREAM_FULL_READOUTS:
+            // Cotinuously stream data if timeout > 0.
             usb_stream_state = command.timeout;
-            return true;
+            return false;
 
         case GET_READOUTS_SNAPSHOT:
-            // Cancel streaming.
+            // Cancel streaming; so we can take a data snapshot without interruptions.
             usb_stream_state = 0;
             
             readout_history_reset();
             // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
             usb_wait_full_history = true;
             usb_readouts_to_send = history_size;
-            return true;
+            return false;
 
         // Turn off the motor driver.
         case SET_STATE_OFF:
             motor_break();
-            return true;
+            return false;
             
         // Measure the motor phase currents.
         
         case SET_STATE_TEST_ALL_PERMUTATIONS:
             motor_start_test(test_all_permutations);
-            return true;
+            return false;
         case SET_STATE_TEST_GROUND_SHORT:
             motor_start_test(test_ground_short);
-            return true;
+            return false;
         case SET_STATE_TEST_POSITIVE_SHORT:
             motor_start_test(test_positive_short);
-            return true;
+            return false;
         case SET_STATE_TEST_U_DIRECTIONS:
             motor_start_test(test_u_directions);
-            return true;
+            return false;
 
         case SET_STATE_TEST_U_INCREASING:
             motor_start_test(test_u_increasing);
-            return true;
+            return false;
         case SET_STATE_TEST_U_DECREASING:
             motor_start_test(test_u_decreasing);
-            return true;
+            return false;
         case SET_STATE_TEST_V_INCREASING:
             motor_start_test(test_v_increasing);
-            return true;
+            return false;
         case SET_STATE_TEST_V_DECREASING:
             motor_start_test(test_v_decreasing);
-            return true;
+            return false;
         case SET_STATE_TEST_W_INCREASING:
             motor_start_test(test_w_increasing);
-            return true;
+            return false;
         case SET_STATE_TEST_W_DECREASING:
             motor_start_test(test_w_decreasing);
-            return true;
+            return false;
 
         // Drive the motor.
         case SET_STATE_DRIVE_POS:
             motor_drive_pos(command.pwm, command.timeout);
-            return true;
+            return false;
         case SET_STATE_DRIVE_NEG:
             motor_drive_neg(command.pwm, command.timeout);
-            return true;
+            return false;
         case SET_STATE_DRIVE_SMOOTH_POS:
             motor_drive_smooth_pos(command.pwm, command.timeout, command.leading_angle);
-            return true;
+            return false;
         case SET_STATE_DRIVE_SMOOTH_NEG:
             motor_drive_smooth_neg(command.pwm, command.timeout, command.leading_angle);
-            return true;
+            return false;
 
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
             motor_freewheel();
-            return true;
+            return false;
 
         case SET_STATE_HOLD_U_POSITIVE:
             motor_hold(command.pwm, 0, 0, command.timeout);
-            return true;
+            return false;
 
         case SET_STATE_HOLD_V_POSITIVE:
             motor_hold(0, command.pwm, 0, command.timeout);
-            return true;
+            return false;
 
         case SET_STATE_HOLD_W_POSITIVE:
             motor_hold(0, 0, command.pwm, command.timeout);
-            return true;
+            return false;
 
         case SET_STATE_HOLD_U_NEGATIVE:
             motor_hold(0, command.pwm, command.pwm, command.timeout);
-            return true;
+            return false;
 
         case SET_STATE_HOLD_V_NEGATIVE:
             motor_hold(command.pwm, 0, command.pwm, command.timeout);
-            return true;
+            return false;
 
         case SET_STATE_HOLD_W_NEGATIVE:
             motor_hold(command.pwm, command.pwm, 0, command.timeout);
-            return true;
+            return false;
 
-        case SET_CURRENT_FACTORS:            
+        case SET_CURRENT_FACTORS:
             current_calibration = parse_current_calibration(buffer.data, buffer.write_index);
             usb_reply_current_factors = true;
-            return true;
+            return false;
 
         case SET_TRIGGER_ANGLES:
             position_calibration = parse_position_calibration(buffer.data, buffer.write_index);
             usb_reply_trigger_angles = true;
-            return true;
+            return false;
 
         case GET_CURRENT_FACTORS:
             usb_reply_current_factors = true;
-            return true;
+            return false;
         case GET_TRIGGER_ANGLES:
             usb_reply_trigger_angles = true;
-            return true;
+            return false;
 
-        // Don't use a default case so we can catch unhandled commands.
+        case SAVE_SETTINGS_TO_FLASH:
+            if(is_motor_stopped()){
+                save_settings_to_flash(current_calibration, position_calibration);
+
+                current_calibration = get_current_calibration();
+                position_calibration = get_position_calibration();
+                
+                return false;
+            } else {
+                return true;
+            }
+
+        case CURRENT_FACTORS:
+        case TRIGGER_ANGLES:
+        case READOUT:
+        case FULL_READOUT:
+            return false;
     }
 
-    // If we get here, we have an unknown command.
-    return false;
+    // If we get here, we have an unknown command code.
+    return true;
 }
 
 inline bool usb_check_queue(size_t len_to_send) {
@@ -329,6 +352,40 @@ void usb_queue_response(){
     }
 }
 
+void usb_receive_command(){
+    // Buffer the command from USB and handle it when it's complete.
+    if (buffer_command(usb_receive_buffer, usb_com_recv)){
+        // Invalid command; reset the USB buffers.
+        usb_com_reset();
+    }
+
+    // Checck if we received any command data at all, skip if not.
+    if (usb_receive_buffer.write_index == 0) return;
+
+    // Check if we received a complete command in the buffer.
+    if (usb_receive_buffer.bytes_expected == 0) {
+        // Handle the complete command.
+        if(handle_command(usb_receive_buffer)){
+            // Invalid command; reset the USB buffers.
+            usb_com_reset();
+        }
+
+        // Reset the command buffer for the next command.
+        reset_command_buffer(usb_receive_buffer);
+
+        // Reset the receive index to 0 indicating we have no partial command.
+        usb_last_receive_index = 0;
+
+    } else if (usb_receive_buffer.write_index > usb_last_receive_index) {
+        // We have received new data for a partial command.
+        usb_last_receive_time = HAL_GetTick();
+        usb_last_receive_index = usb_receive_buffer.write_index;
+    } else if (HAL_GetTick() - usb_last_receive_time > USB_TIMEOUT) {
+        // We have not received new data for a while; reset the command buffer.
+        usb_com_reset();
+    }
+}
+
 
 void app_tick() {
     tick_number += 1;
@@ -373,20 +430,8 @@ void app_tick() {
     // Send USB data from the buffer.
     usb_com_send();
 
-    // Buffer the command from USB and handle it when it's complete.
-    if (buffer_command(usb_receive_buffer, usb_com_recv)){
-        // Invalid command; reset the USB buffers.
-        usb_com_reset();
-    }
-
-    // Handle the command if we received enough data.
-    if (usb_receive_buffer.bytes_expected == 0) {
-        // Handle the complete command.
-        handle_command(usb_receive_buffer);
-
-        // Reset the command buffer for the next command.
-        reset_command_buffer(usb_receive_buffer);
-    }
+    // Read and execute commands from USB.
+    usb_receive_command();
     
     // Queue the state readouts on the USB buffer.
     usb_queue_response();
@@ -395,5 +440,6 @@ void app_tick() {
     // USB module sends 64 byte packets while we computed stuff.
     usb_com_send();
 }
+
 
 

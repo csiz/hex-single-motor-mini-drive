@@ -51,7 +51,10 @@ enum MessageCode : uint16_t {
     TRIGGER_ANGLES = 0x4043,
     GET_CURRENT_FACTORS = 0x4044,
     GET_TRIGGER_ANGLES = 0x4045,
+
+    SAVE_SETTINGS_TO_FLASH = 0x4080,
 };
+
 
 
 // Expected data sizes
@@ -70,6 +73,8 @@ const size_t position_calibration_size = header_size + sizeof(PositionCalibratio
 
 const size_t max_message_size = 128;
 const size_t min_message_size = 8;
+
+
 
 
 // Command buffer

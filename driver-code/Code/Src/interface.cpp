@@ -139,8 +139,11 @@ void write_position_calibration(uint8_t * buffer, PositionCalibration const & po
 // Receive data
 // ------------
 
+// Message size for each command code that we can receive.
 static inline int get_message_size(uint16_t code) {
-    switch (code) {
+    switch (static_cast<MessageCode>(code)) {
+        case NULL_COMMAND:
+            return -1;
         case STREAM_FULL_READOUTS:
         case GET_READOUTS_SNAPSHOT:
         case SET_STATE_OFF:
@@ -167,6 +170,7 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_DRIVE_SMOOTH_NEG:
         case GET_CURRENT_FACTORS:
         case GET_TRIGGER_ANGLES:
+        case SAVE_SETTINGS_TO_FLASH:
             return min_message_size;
         
         case SET_CURRENT_FACTORS:
@@ -174,10 +178,18 @@ static inline int get_message_size(uint16_t code) {
         case SET_TRIGGER_ANGLES:
             return position_calibration_size;
 
-        default:
-            // Unknown message; we don't know how many bytes to expect.
-            return -1;
+        case READOUT:
+            return readout_size;
+        case FULL_READOUT:
+            return full_readout_size;
+        case CURRENT_FACTORS:
+            return current_calibration_size;
+        case TRIGGER_ANGLES:
+            return position_calibration_size;
     }
+
+    // Unknown message.
+    return -1;
 }
 
 

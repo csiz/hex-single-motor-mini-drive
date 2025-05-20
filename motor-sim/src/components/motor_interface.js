@@ -49,6 +49,8 @@ export const command_codes = {
   TRIGGER_ANGLES: 0x4043,
   GET_CURRENT_FACTORS: 0x4044,
   GET_TRIGGER_ANGLES: 0x4045,
+
+  SAVE_SETTINGS_TO_FLASH: 0x4080,
 }
 
 function get_hall_sector({hall_u, hall_v, hall_w}){

@@ -4,6 +4,11 @@
 
 #include "error_handler.hpp"
 
+bool is_motor_stopped(){
+    // Check if the motor is stopped.
+    return (driver_state == DriverState::OFF) || (driver_state == DriverState::FREEWHEEL);
+}
+
 void motor_break(){
     // Short all motor phases to ground.
     set_motor_u_pwm_duty(0);
