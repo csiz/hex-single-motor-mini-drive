@@ -68,7 +68,7 @@ const transition_from_string = Object.fromEntries(d3.range(0, 6).flatMap(hall_se
 function extract_hall_transitions(data){
   return data.filter(d => d.is_hall_transition && d.angular_speed !== null && !isNaN(d.angular_speed) && d.angular_speed != 0 ).map(d => ({
     time: d.time,
-    angle: d.angle_if_breaking,
+    angle: d.angle_from_emf,
     transition: transition_string(d.angular_speed, d.hall_sector),
   }));
 }

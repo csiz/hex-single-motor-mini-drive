@@ -106,11 +106,13 @@ static inline void pwm_cycle_and_adc_update(){
     readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
     
 
-    const uint16_t new_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
-    const uint16_t new_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+    const uint16_t instant_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+    readout.instant_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
 
-    readout.temperature = (new_temperature * 1 + readout.temperature * 15) / 16;
-    readout.vcc_voltage = (new_vcc_voltage * 4 + readout.vcc_voltage * 12) / 16;
+    // Note the reference voltage is only connected to the current sense amplifier, not the
+    // microcontroller. The ADC reference voltage is 3.3V.
+    readout.temperature = (instant_temperature * 1 + readout.temperature * 15) / 16;
+    readout.vcc_voltage = (readout.instant_vcc_voltage * 4 + readout.vcc_voltage * 12) / 16;
 
 
     const int angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / speed_scale);
@@ -163,11 +165,11 @@ static inline void pwm_cycle_and_adc_update(){
     readout.hold = alpha_current;
     
 
-    const auto [current_angle_error, current_magnitude] = atan2_integer(beta_current, alpha_current);
+    const auto [current_angle_offset, current_magnitude] = atan2_integer(beta_current, alpha_current);
 
-    readout.current_angle = normalize_angle(angle + current_angle_error);
+    readout.current_angle_offset = current_angle_offset;
 
-    // TODO: compute current_angle_variance based on the past angle estimates.
+    // TODO: compute current_angle_offset_variance based on the past angle estimates.
 
     readout.total_power = readout.vcc_voltage * (
         u_current * get_motor_u_pwm_duty() + 

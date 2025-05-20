@@ -31,7 +31,7 @@ export function online_function_chain(...online_functions){
 
 
 const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
-const phase_resistance = 2.0; // 2.0 Ohm
+const phase_resistance = 2.00 * 2/3; // 2.00 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
 
 
 const stdev_99_z_score = 2.575829; // 99% confidence interval for normal distribution
@@ -224,7 +224,7 @@ function accumulate_position_from_hall(readout, prev_readout){
 
 
 function compute_derivatives(readout, previous_readout){
-  const {u, v, w, hall_sector} = readout;
+  const {u, v, w, hall_sector, u_drive_voltage, v_drive_voltage, w_drive_voltage} = readout;
 
   const [current_alpha, current_beta] = clarke_transform(u, v, w);
 
@@ -233,7 +233,7 @@ function compute_derivatives(readout, previous_readout){
   
   if (!previous_readout) return readout;
 
-  const {u: prev_u, v: prev_v, w: prev_w, hall_sector: prev_hall_sector} = previous_readout;
+  const {u: prev_u, v: prev_v, w: prev_w, hall_sector: prev_hall_sector, voltage_angle: prev_voltage_angle} = previous_readout;
 
   // Time units are milliseconds.
   const dt = readout.time - previous_readout.time;
@@ -243,20 +243,21 @@ function compute_derivatives(readout, previous_readout){
   const v_L_voltage = (v - prev_v) / dt * 1000 * phase_inductance;
   const w_L_voltage = (w - prev_w) / dt * 1000 * phase_inductance;
 
-  const u_voltage = u_L_voltage + phase_resistance * u;
-  const v_voltage = v_L_voltage + phase_resistance * v;
-  const w_voltage = w_L_voltage + phase_resistance * w;
-
+  const u_voltage = u_L_voltage + phase_resistance * u - u_drive_voltage;
+  const v_voltage = v_L_voltage + phase_resistance * v - v_drive_voltage;
+  const w_voltage = w_L_voltage + phase_resistance * w - w_drive_voltage;
 
   const [voltage_alpha, voltage_beta] = clarke_transform(u_voltage, v_voltage, w_voltage);
 
   const voltage_angle = radians_to_degrees(Math.atan2(voltage_beta, voltage_alpha));
+
+  const angular_speed_from_emf = normalize_degrees(voltage_angle - prev_voltage_angle) / dt;
   
   const voltage_magnitude = Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
 
   const is_hall_transition = prev_hall_sector != hall_sector;
 
-  const angle_if_breaking = normalize_degrees(voltage_angle + (readout.angular_speed > 0 ? +90 : -90));
+  const angle_from_emf = normalize_degrees(voltage_angle + (readout.angular_speed >= 0 ? +90 : -90));
   
 
   return {
@@ -267,7 +268,7 @@ function compute_derivatives(readout, previous_readout){
     u_L_voltage, v_L_voltage, w_L_voltage,
     voltage_alpha, voltage_beta,
     voltage_angle, voltage_magnitude,
-    angle_if_breaking,
+    angle_from_emf, angular_speed_from_emf,
     is_hall_transition,
   };
 }

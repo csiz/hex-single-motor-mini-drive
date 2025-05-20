@@ -26,13 +26,14 @@ Motor Driving Data
 <p>Controls for the plotting time window:</p>
   <span>${time_period_input}</span>
   <span>${time_offset_input}</span>
-  <span>${plot_options_input}</span>
+  <span>${plot_curve_input}</span>
   <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${plot_power}</div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
+<div class="card tight">${plot_electric_offsets}</div>
 <div class="card tight">${plot_speed}</div>
 <div class="card tight">${plot_measured_voltage}</div>
 <div class="card tight">${plot_measured_temperature}</div>
@@ -128,7 +129,7 @@ const colors = {
   current_magnitude: "rgb(197, 152, 67)",
   current_angle: "rgb(102, 166, 30)",
   voltage_angle: d3.color("rgb(102, 166, 30)").darker(1),
-  angle_if_breaking: d3.color("rgb(102, 166, 30)").darker(2),
+  angle_from_emf: d3.color("rgb(102, 166, 30)").darker(2),
   angular_speed: "rgb(41, 194, 173)",
   web_angular_speed: "rgb(156, 196, 47)",
   current_alpha: "rgb(199, 0, 57)",
@@ -249,7 +250,7 @@ const command_pwm_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: 
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
-const command_timeout_slider = Inputs.range([0, max_timeout*millis_per_cycle], {value: 2000, step: 5, label: "Command timeout (ms):"});
+const command_timeout_slider = Inputs.range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
@@ -485,15 +486,21 @@ d3.select(time_offset_input).select("div").style("width", "640px");
 d3.select(time_offset_input).select("input[type=range]").style("width", "100em");
 
 
-const plot_options_input = Inputs.checkbox(
-  ["Connected lines"],
+const plot_curve_input = Inputs.radio(new Map([
+  ["Connected steps", d3.curveStep],
+  ["Interrupted steps", horizontal_step],
+  ["Linear", d3.curveLinear],
+  ["Smooth", d3.curveCatmullRom],
+  ["Step after", d3.curveStepAfter],
+  ["Step before", d3.curveStepBefore],
+  ]),
   {
-    value: ["Connected lines"],
-    label: "Plot options:",
+    value: d3.curveStep, 
+    label: "Drawing options:",
   },
 );
 
-const plot_options = Generators.input(plot_options_input);
+const plot_curve = Generators.input(plot_curve_input);
 
 
 const timeline_position_input = plot_line({
@@ -553,7 +560,7 @@ timeline_position_input.update({
 
 ```js
 
-const curve = plot_options.includes("Connected lines") ? d3.curveStep : horizontal_step;
+const curve = plot_curve;
 
 const plot_power = plot_lines({
   subtitle: "Power",
@@ -630,9 +637,9 @@ const plot_electric_position = plot_lines({
         y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
       }),
     },
-    {y: "motor_current_angle", label: "Motor Current Angle", color: colors.current_angle},
-    {y: "current_angle", label: "Current (Park) Angle", color: colors.current_angle},
-    {y: "voltage_angle", label: "Voltage (Park) Angle", color: colors.voltage_angle},
+    {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
+    {y: "current_angle", label: "Current Angle", color: colors.current_angle},
+    {y: "voltage_angle", label: "Voltage Angle", color: colors.voltage_angle},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
@@ -640,10 +647,25 @@ const plot_electric_position = plot_lines({
   curve,
 });
 
+const plot_electric_offsets = plot_lines({
+  subtitle: "Electric Offsets",
+  description: "Offsets for the electric angles.",
+  width: 1200, height: 150,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Angle (degrees)",
+  channels: [
+    {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
+    {y: ({angle_from_emf, angle}) => normalize_degrees(angle_from_emf - angle), label: "Angle error from EMF", color: colors.angle_from_emf},
+    {y: ({web_angle, angle}) => normalize_degrees(web_angle - angle), label: "Angle error from web", color: colors.web_angle},
+  ],
+  curve,
+});
+
 const plot_speed = plot_lines({
   subtitle: "Rotor Speed",
   description: "Angular speed of the rotor in degrees per millisecond.",
-  width: 1200, height: 150,
+  width: 1200, height: 300,
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -662,6 +684,7 @@ const plot_speed = plot_lines({
         y1: d => d.web_angular_speed + stdev_95_z_score * d.web_angular_speed_stdev,
       }),
     },
+    {y: "angular_speed_from_emf", label: "Angular Speed from EMF", color: colors.angle_from_emf},
   ],
   curve,
 });
@@ -675,7 +698,8 @@ const plot_measured_voltage = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "vcc_voltage", label: "VCC Voltage (V)", color: colors.v},
+    {y: "instant_vcc_voltage", label: "VCC Voltage", color: colors.u},
+    {y: "vcc_voltage", label: "Avg VCC Voltage", color: colors.v},
   ],
   curve,
 });
@@ -721,7 +745,7 @@ const plot_dq0_currents = plot_lines({
   channels: [
     {y: "current_alpha", label: "Current Alpha", color: colors.current_alpha},
     {y: "current_beta", label: "Current Beta", color: colors.current_beta},
-    {y: "current_magnitude", label: "Current (Park) Magnitude", color: colors.current_magnitude},
+    {y: "current_magnitude", label: "Current Magnitude", color: colors.current_magnitude},
   ],
   curve,
 });
@@ -736,7 +760,7 @@ const plot_dq0_voltages = plot_lines({
   channels: [
     {y: "voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
     {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
-    {y: "voltage_magnitude", label: "Voltage (Park) Magnitude", color: colors.current_magnitude},
+    {y: "voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
   ],
   curve,
 });
@@ -756,6 +780,9 @@ const plot_inferred_voltages = plot_lines({
     {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
     {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
+    {y: "u_drive_voltage", label: "Drive Voltage U", color: d3.color(colors.u).darker(1)},
+    {y: "v_drive_voltage", label: "Drive Voltage V", color: d3.color(colors.v).darker(1)},
+    {y: "w_drive_voltage", label: "Drive Voltage W", color: d3.color(colors.w).darker(1)},
   ],
   curve,
 });
@@ -782,6 +809,7 @@ autosave_inputs({
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
+  plot_electric_offsets,
   plot_speed,
   plot_measured_voltage,
   plot_measured_temperature,
@@ -810,6 +838,7 @@ const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.tim
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
+  plot_electric_offsets,
   plot_speed,
   plot_measured_voltage,
   plot_measured_temperature,
@@ -947,7 +976,7 @@ const position_calibration_pos_plot = plot_lines({
         y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
       }),
     },
-    {y: "angle_if_breaking", label: "Angle If Breaking", color: colors.angle_if_breaking},
+    {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
@@ -1009,7 +1038,7 @@ const position_calibration_neg_plot = plot_lines({
         y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
       }),
     },
-    {y: "angle_if_breaking", label: "Angle If Breaking", color: d3.color(colors.current_angle).darker(2)},
+    {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},

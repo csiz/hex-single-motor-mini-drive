@@ -92,7 +92,7 @@ function parse_readout(data_view, previous_readout){
 
   const angular_speed_readout = data_view.getInt16(offset);
   offset += 2;
-  const vcc_readout = data_view.getUint16(offset);
+  const instant_vcc_readout = data_view.getUint16(offset);
   offset += 2;
   const torque = data_view.getInt16(offset);
   offset += 2;
@@ -104,10 +104,18 @@ function parse_readout(data_view, previous_readout){
   offset += 2;
 
 
+  const instant_vcc_voltage = calculate_voltage(instant_vcc_readout);
+
   // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
   const u_pwm = Math.floor(pwm_commands / pwm_base / pwm_base) % pwm_base;
   const v_pwm = Math.floor(pwm_commands / pwm_base) % pwm_base;
   const w_pwm = pwm_commands % pwm_base;
+
+  const vcc = instant_vcc_voltage;
+
+  const u_drive_voltage = ((u_pwm - v_pwm) - (w_pwm - u_pwm)) / 3 * vcc / pwm_base;
+  const v_drive_voltage = ((v_pwm - w_pwm) - (u_pwm - v_pwm)) / 3 * vcc / pwm_base;
+  const w_drive_voltage = ((w_pwm - u_pwm) - (v_pwm - w_pwm)) / 3 * vcc / pwm_base;
 
   // The first 3 bits are the hall sensor state.
   const hall_u = (position_readout >> 13) & 0b1;
@@ -148,8 +156,6 @@ function parse_readout(data_view, previous_readout){
   const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
-  const vcc_voltage = calculate_voltage(vcc_readout);
-
   // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
   const readout_diff = !previous_readout ? 0 : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
   const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
@@ -165,10 +171,11 @@ function parse_readout(data_view, previous_readout){
     u_uncalibrated, v_uncalibrated, w_uncalibrated,
     sum,
     u_pwm, v_pwm, w_pwm,
+    u_drive_voltage, v_drive_voltage, w_drive_voltage,
     hall_u, hall_v, hall_w, hall_sector,
     hall_u_as_angle, hall_v_as_angle, hall_w_as_angle,
     angle_valid, angle, angular_speed,
-    vcc_voltage,
+    instant_vcc_voltage,
     torque,
     hold,
     total_power,
@@ -202,9 +209,9 @@ function parse_full_readout(data_view, previous_readout){
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
-  const motor_current_angle_readout = data_view.getInt16(offset);
+  const current_angle_offset_readout = data_view.getInt16(offset);
   offset += 2;
-  const motor_current_angle_variance = data_view.getUint16(offset);
+  const current_angle_offset_variance = data_view.getUint16(offset);
   offset += 2;
 
   const angle_variance = data_view.getUint16(offset);
@@ -212,8 +219,8 @@ function parse_full_readout(data_view, previous_readout){
   const angular_speed_variance = data_view.getUint16(offset);
   offset += 2;
 
-  const motor_current_angle = angle_units_to_degrees(motor_current_angle_readout);
-  const motor_current_angle_stdev = unbounded_angle_units_to_degrees(Math.sqrt(motor_current_angle_variance));
+  const current_angle_offset = angle_units_to_degrees(current_angle_offset_readout);
+  const current_angle_offset_stdev = unbounded_angle_units_to_degrees(Math.sqrt(current_angle_offset_variance));
   
   const vcc_voltage = calculate_voltage(vcc_readout);
   const temperature = calculate_temperature(temperature_readout);
@@ -231,8 +238,8 @@ function parse_full_readout(data_view, previous_readout){
     vcc_voltage,
     cycle_start_tick,
     cycle_end_tick,
-    motor_current_angle,
-    motor_current_angle_stdev,
+    current_angle_offset,
+    current_angle_offset_stdev,
     angle_stdev,
     angular_speed_stdev,
   };
