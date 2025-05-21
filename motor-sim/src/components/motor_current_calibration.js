@@ -1,9 +1,10 @@
-import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size} from "./motor_constants.js";
+import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance} from "./motor_constants.js";
 import {command_codes} from "./motor_interface.js";
 import {wait} from "./async_utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./math_utils.js";
 
 import * as d3 from "d3";
+import _ from "lodash";
 
 
 const short_duration = history_size / 12 * millis_per_cycle;
@@ -21,16 +22,14 @@ const current_calibration_zones = [
 ];
 
 
-const drive_resistance = 2.0; // 2.0 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
-const drive_voltage = 11.0; // 12.0 V // TODO: get it from the chip
+const drive_resistance = phase_resistance * 3/2; // 3/2 because we drive 1 phase and tie the other 2 phases.
+const max_drive_voltage = 12.0;
 
 
-export const max_calibration_current = drive_voltage / drive_resistance;
+export const max_calibration_current = max_drive_voltage / drive_resistance;
 
 const current_calibration_points = 32;
 const current_calibration_reading_points = even_spacing(max_calibration_current, current_calibration_points / 2 + 1);
-const current_calibration_targets = current_calibration_zones.map((zone) => zone.pwm * max_calibration_current);
-
 
 export async function run_current_calibration(motor_controller){
 
@@ -119,33 +118,48 @@ export async function run_current_calibration(motor_controller){
     return;
   }
 
-  const targets = d3.range(history_size).map((i) => {
-    const t = i * millis_per_cycle;
-    const zone = current_calibration_zones.filter((zone) => zone.settle_start <= t && t <= zone.settle_end);
-
-    if (zone.length == 0) return null;
-    if (zone.length > 1) {
-      console.error("Multiple zones found", zone);
-      return null;
-    }
-    return zone[0].pwm * max_calibration_current;
-  });
 
   // Make a new table with each calibration phase as a column.
   const current_calibration_data = d3.range(history_size).map((i) => {
-    return {
-      time: u_positive[i].time,
-      target: targets[i],
+    const time = i * millis_per_cycle;
+    const zones = current_calibration_zones.filter((zone) => zone.settle_start <= time && time <= zone.settle_end);
+
+    if (zones.length > 1) throw new Error("Multiple zones found");
+    
+    function get_expected_current(voltage){
+      if (zones.length == 0) return null;
+      const zone = zones[0];
+      return zone.pwm * voltage / drive_resistance;
+    }
+
+    let result = {
+      time,
       u_positive: u_positive[i].u_uncalibrated,
+      u_positive_expected: get_expected_current(u_positive[i].instant_vcc_voltage),
       u_negative: -u_negative[i].u_uncalibrated,
+      u_negative_expected: get_expected_current(u_negative[i].instant_vcc_voltage),
       v_positive: v_positive[i].v_uncalibrated,
+      v_positive_expected: get_expected_current(v_positive[i].instant_vcc_voltage),
       v_negative: -v_negative[i].v_uncalibrated,
+      v_negative_expected: get_expected_current(v_negative[i].instant_vcc_voltage),
       w_positive: w_positive[i].w_uncalibrated,
+      w_positive_expected: get_expected_current(w_positive[i].instant_vcc_voltage),
       w_negative: -w_negative[i].w_uncalibrated,
+      w_negative_expected: get_expected_current(w_negative[i].instant_vcc_voltage),
     };
+
+    const target = zones.length == 0 ? null : d3.mean(Object.values(_.pick(
+        result, 
+        "u_positive_expected", "u_negative_expected", 
+        "v_positive_expected", "v_negative_expected", 
+        "w_positive_expected", "w_negative_expected",
+      )));
+    result.target = target;
+
+    return result;
   });
 
-  console.info("Current calibration done");
+  console.info("Current calibration done", current_calibration_data);
 
   return current_calibration_data;
 }
@@ -186,10 +200,10 @@ function compute_calibration_instance(calibration_data){
     };
   }
 
-  function compute_phase_calibration(phase_selector){    
+  function compute_phase_calibration(phase_selector){
     return compute_zone_calibration({
       measurements: calibration_data_by_zone.map((zone_data) => d3.mean(zone_data, (d) => d[phase_selector])),
-      targets: current_calibration_targets,
+      targets: calibration_data_by_zone.map((zone_data) => d3.mean(zone_data, (d) => d[`${phase_selector}_expected`])),
     });
   }
 
@@ -229,16 +243,22 @@ export function compute_current_calibration(calibration_results){
       time: valid_calibration_results[0][i].time,
       target: d3.mean(valid_calibration_results, (data) => data[i].target),
       u_positive: d3.mean(valid_calibration_results, (data) => data[i].u_positive),
+      u_positive_expected: d3.mean(valid_calibration_results, (data) => data[i].u_positive_expected),
       u_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].u_positive),
       u_negative: d3.mean(valid_calibration_results, (data) => data[i].u_negative),
+      u_negative_expected: d3.mean(valid_calibration_results, (data) => data[i].u_negative_expected),
       u_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].u_negative),
       v_positive: d3.mean(valid_calibration_results, (data) => data[i].v_positive),
+      v_positive_expected: d3.mean(valid_calibration_results, (data) => data[i].v_positive_expected),
       v_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].v_positive),
       v_negative: d3.mean(valid_calibration_results, (data) => data[i].v_negative),
+      v_negative_expected: d3.mean(valid_calibration_results, (data) => data[i].v_negative_expected),
       v_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].v_negative),
       w_positive: d3.mean(valid_calibration_results, (data) => data[i].w_positive),
+      w_positive_expected: d3.mean(valid_calibration_results, (data) => data[i].w_positive_expected),
       w_positive_std: d3.deviation(valid_calibration_results, (data) => data[i].w_positive),
       w_negative: d3.mean(valid_calibration_results, (data) => data[i].w_negative),
+      w_negative_expected: d3.mean(valid_calibration_results, (data) => data[i].w_negative_expected),
       w_negative_std: d3.deviation(valid_calibration_results, (data) => data[i].w_negative),
     };
   });

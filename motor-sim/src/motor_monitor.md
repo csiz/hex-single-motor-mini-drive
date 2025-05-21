@@ -638,7 +638,7 @@ const plot_electric_position = plot_lines({
       }),
     },
     {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
-    {y: "current_angle", label: "Current Angle", color: colors.current_angle},
+    {y: "current_angle", label: "Web Current Angle", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage Angle", color: colors.voltage_angle},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
@@ -656,6 +656,7 @@ const plot_electric_offsets = plot_lines({
   y_label: "Angle (degrees)",
   channels: [
     {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
+    {y: ({current_angle, angle_from_emf}) => normalize_degrees(current_angle - angle_from_emf), label: "Web Current Angle Offset", color: colors.other},
     {y: ({angle_from_emf, angle}) => normalize_degrees(angle_from_emf - angle), label: "Angle error from EMF", color: colors.angle_from_emf},
     {y: ({web_angle, angle}) => normalize_degrees(web_angle - angle), label: "Angle error from web", color: colors.web_angle},
   ],

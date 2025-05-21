@@ -1,6 +1,18 @@
 // Motor driver constants copied from the C++ code.
 import {normalize_degrees, positive_degrees} from "./angular_math.js";
 
+// Motor phase constants
+// ---------------------
+
+// Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
+export const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
+
+// Resistance per phase in Ohms. Assuming the motor is a 3 phase star connected motor.
+export const phase_resistance = 2.00 * 2/3; // 2.00 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
+
+// Timing constants
+// ----------------
+
 // PWM motor cycles per millisecond.
 export const cycles_per_millisecond = 23437.5 / 1000.0; // 23437.5 cycles per second: 72MHz / (2*1536) / 1000.0
 
@@ -10,6 +22,9 @@ export const millis_per_cycle = 1.0/cycles_per_millisecond;
 const ticks_per_time_units = 256;
 const ticks_per_millisecond = 72000;
 export const time_units_per_millisecond = Math.floor(ticks_per_millisecond / ticks_per_time_units);
+
+// Angle units
+// -----------
 
 export const angle_base = 1024;
 
@@ -25,7 +40,8 @@ export function angle_units_to_degrees(angle){
   return normalize_degrees(unbounded_angle_units_to_degrees(angle));
 }
 
-
+// Speed and acceleration units
+// ----------------------------
 
 // Scale to keep motor speed in numerical range for 32 bit arithmetic.
 export const speed_scale = 128;
@@ -45,6 +61,9 @@ export function acceleration_units_to_degrees_per_millisecond2(acceleration_div_
 export function degrees_per_millisecond2_to_acceleration_units(acceleration){
   return Math.floor(degrees_to_angle_units(acceleration) * speed_scale * accel_scale / time_units_per_millisecond / time_units_per_millisecond / 2);
 }
+
+// Motor control constants
+// -----------------------
 
 export const pwm_base = 1536; // 0x0600
 export const pwm_period = 2 * pwm_base;

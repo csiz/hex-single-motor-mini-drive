@@ -1,7 +1,7 @@
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, radians_to_degrees} from "./angular_math.js";
 import {interpolate_linear, matrix_multiply} from "./math_utils.js";
 
-
+import {phase_inductance, phase_resistance} from "./motor_constants.js";
 
 
 export function online_map(array, online_fn){
@@ -28,10 +28,6 @@ export function online_function_chain(...online_functions){
 
 // Calculate Data
 // --------------
-
-
-const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
-const phase_resistance = 2.00 * 2/3; // 2.00 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
 
 
 const stdev_99_z_score = 2.575829; // 99% confidence interval for normal distribution
