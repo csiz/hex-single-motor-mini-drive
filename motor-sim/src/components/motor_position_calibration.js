@@ -34,8 +34,7 @@ export async function run_position_calibration(motor_controller) {
 
   console.info("Drive negative done");
 
-  console.info("Position calibration done");
-
+  
   if (drive_positive.length != history_size) {
     console.error("Drive positive data is not valid", drive_positive);
     return;
@@ -44,11 +43,13 @@ export async function run_position_calibration(motor_controller) {
     console.error("Drive negative data is not valid", drive_negative);
     return;
   }
-
+  
   const position_calibration_data = {
     drive_positive,
     drive_negative,
   };
+
+  console.info("Position calibration done", position_calibration_data);
 
   return position_calibration_data;
 }

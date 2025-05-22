@@ -114,9 +114,11 @@ function parse_readout(data_view, previous_readout){
 
   const vcc = instant_vcc_voltage;
 
-  const u_drive_voltage = ((u_pwm - v_pwm) - (w_pwm - u_pwm)) / 3 * vcc / pwm_base;
-  const v_drive_voltage = ((v_pwm - w_pwm) - (u_pwm - v_pwm)) / 3 * vcc / pwm_base;
-  const w_drive_voltage = ((w_pwm - u_pwm) - (v_pwm - w_pwm)) / 3 * vcc / pwm_base;
+  const avg_pwm = (u_pwm + v_pwm + w_pwm) / 3;
+
+  const u_drive_voltage = (u_pwm - avg_pwm) * vcc / pwm_base;
+  const v_drive_voltage = (v_pwm - avg_pwm) * vcc / pwm_base;
+  const w_drive_voltage = (w_pwm - avg_pwm) * vcc / pwm_base;
 
   // The first 3 bits are the hall sensor state.
   const hall_u = (position_readout >> 13) & 0b1;

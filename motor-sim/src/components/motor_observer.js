@@ -233,6 +233,7 @@ function compute_derivative_info(readout, previous_readout){
     u: prev_u, v: prev_v, w: prev_w, 
     hall_sector: prev_hall_sector, 
     voltage_angle: prev_voltage_angle,
+    u_drive_voltage: prev_u_drive_voltage, v_drive_voltage: prev_v_drive_voltage, w_drive_voltage: prev_w_drive_voltage,
   } = previous_readout;
 
   // Time units are milliseconds.
@@ -245,9 +246,9 @@ function compute_derivative_info(readout, previous_readout){
   const v_L_voltage = (v - prev_v) / dt * 1000 * phase_inductance;
   const w_L_voltage = (w - prev_w) / dt * 1000 * phase_inductance;
 
-  const u_voltage = u_L_voltage + phase_resistance * u - u_drive_voltage;
-  const v_voltage = v_L_voltage + phase_resistance * v - v_drive_voltage;
-  const w_voltage = w_L_voltage + phase_resistance * w - w_drive_voltage;
+  const u_voltage = u_L_voltage + phase_resistance * u - (u_drive_voltage + prev_u_drive_voltage) / 2;
+  const v_voltage = v_L_voltage + phase_resistance * v - (v_drive_voltage + prev_v_drive_voltage) / 2;
+  const w_voltage = w_L_voltage + phase_resistance * w - (w_drive_voltage + prev_w_drive_voltage) / 2;
 
   const [voltage_alpha, voltage_beta] = clarke_transform(u_voltage, v_voltage, w_voltage);
 
