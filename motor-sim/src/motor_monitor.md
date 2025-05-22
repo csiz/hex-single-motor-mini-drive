@@ -38,9 +38,10 @@ Motor Driving Data
 <div class="card tight">${plot_measured_voltage}</div>
 <div class="card tight">${plot_measured_temperature}</div>
 <div class="card tight">${plot_measured_current}</div>
+<div class="card tight">${plot_voltages}</div>
+<div class="card tight">${plot_inferred_voltages}</div>
 <div class="card tight">${plot_dq0_currents}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
-<div class="card tight">${plot_inferred_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 
 
@@ -741,6 +742,44 @@ const plot_measured_current = plot_lines({
   curve,
 });
 
+
+const plot_voltages = plot_lines({
+  subtitle: "Voltages",
+  description: "Measured voltage values for each phase.",
+  width: 1200, height: 300,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Voltage (V)",
+  channels: [
+    {y: "u_drive_voltage", label: "Drive Voltage U", color: colors.u},
+    {y: "v_drive_voltage", label: "Drive Voltage V", color: colors.v},
+    {y: "w_drive_voltage", label: "Drive Voltage W", color: colors.w},
+    {y: "u_R_voltage", label: "Resistive Voltage U", color: d3.color(colors.u).darker(1)},
+    {y: "v_R_voltage", label: "Resistive Voltage V", color: d3.color(colors.v).darker(1)},
+    {y: "w_R_voltage", label: "Resistive Voltage W", color: d3.color(colors.w).darker(1)},
+  ],
+  curve,
+});
+
+const plot_inferred_voltages = plot_lines({
+  subtitle: "Inferred Voltage",
+  description: html`Inferred EMF voltage values for each phase: ${tex`V_{emf} = IR + L(dI/dt) - V_{drive}`}.`,
+  width: 1200, height: 300,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Voltage (V)",
+  channels: [
+    {y: "u_voltage", label: "EMF Voltage U", color: colors.u},
+    {y: "v_voltage", label: "EMF Voltage V", color: colors.v},
+    {y: "w_voltage", label: "EMF Voltage W", color: colors.w},
+    {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
+    {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
+    {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
+  ],
+  curve,
+});
+
+
 const plot_dq0_currents = plot_lines({
   subtitle: "DQ0 Currents",
   description: "DQ0 currents after Clarke and Park (direct-quadrature-zero) transforming the measured currents.",
@@ -767,31 +806,6 @@ const plot_dq0_voltages = plot_lines({
     {y: "voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
     {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
     {y: "voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
-  ],
-  curve,
-});
-
-
-const plot_inferred_voltages = plot_lines({
-  subtitle: "Inferred Voltage",
-  description: html`Inferred EMF voltage values for each phase: ${tex`V_{emf} = IR + L(dI/dt) - V_{drive}`}.`,
-  width: 1200, height: 300,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Voltage (V)",
-  channels: [
-    {y: "u_voltage", label: "EMF Voltage U", color: colors.u},
-    {y: "v_voltage", label: "EMF Voltage V", color: colors.v},
-    {y: "w_voltage", label: "EMF Voltage W", color: colors.w},
-    {y: "u_R_voltage", label: "Resistive Voltage U", color: d3.color(colors.u).brighter(2)},
-    {y: "v_R_voltage", label: "Resistive Voltage V", color: d3.color(colors.v).brighter(2)},
-    {y: "w_R_voltage", label: "Resistive Voltage W", color: d3.color(colors.w).brighter(2)},
-    {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
-    {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
-    {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
-    {y: "u_drive_voltage", label: "Drive Voltage U", color: d3.color(colors.u).darker(1)},
-    {y: "v_drive_voltage", label: "Drive Voltage V", color: d3.color(colors.v).darker(1)},
-    {y: "w_drive_voltage", label: "Drive Voltage W", color: d3.color(colors.w).darker(1)},
   ],
   curve,
 });
@@ -823,9 +837,10 @@ autosave_inputs({
   plot_measured_voltage,
   plot_measured_temperature,
   plot_measured_current,
+  plot_voltages,
+  plot_inferred_voltages,
   plot_dq0_currents,
   plot_dq0_voltages,
-  plot_inferred_voltages,
   plot_pwm_settings,
 });
 
@@ -860,9 +875,10 @@ const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.tim
   plot_measured_voltage,
   plot_measured_temperature,
   plot_measured_current,
+  plot_voltages,
+  plot_inferred_voltages,
   plot_dq0_currents,
   plot_dq0_voltages,
-  plot_inferred_voltages,
   plot_pwm_settings,
 ].forEach((plot) => plot.update({data: sparsify(data_in_time_window), x_domain: time_domain}));
 
