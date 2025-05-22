@@ -236,6 +236,7 @@ function compute_derivative_info(readout, previous_readout){
   const {
     u: prev_u, v: prev_v, w: prev_w, 
     hall_sector: prev_hall_sector, 
+    angle: prev_angle,
     voltage_angle: prev_voltage_angle,
     u_drive_voltage: prev_u_drive_voltage, v_drive_voltage: prev_v_drive_voltage, w_drive_voltage: prev_w_drive_voltage,
   } = previous_readout;
@@ -278,16 +279,26 @@ function compute_derivative_info(readout, previous_readout){
   
   const voltage_magnitude = Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
 
+  const {average: voltage_magnitude_avg, stdev: voltage_magnitude_stdev} = exp_stats(
+    voltage_magnitude,
+    {
+      average: previous_readout.voltage_magnitude_avg,
+      stdev: previous_readout.voltage_magnitude_stdev,
+    },
+  );
+
   const is_hall_transition = prev_hall_sector != hall_sector;
+
+  const transition_correction = is_hall_transition ? shortest_distance_degrees(angle, prev_angle) : 0;
 
   const angle_from_emf = normalize_degrees(voltage_angle + (readout.angular_speed >= 0 ? +90 : -90));
 
   const angle_diff_to_emf = shortest_distance_degrees(angle_from_emf, angle);
 
   const {average: angle_diff_to_emf_avg, stdev: angle_diff_to_emf_stdev} = exp_stats(
-    angle_diff_to_emf, 
+    angle_diff_to_emf,
     {
-      average: previous_readout.angle_diff_to_emf_avg, 
+      average: normalize_degrees(previous_readout.angle_diff_to_emf_avg - transition_correction),
       stdev: previous_readout.angle_diff_to_emf_stdev,
     },
   );
@@ -297,7 +308,7 @@ function compute_derivative_info(readout, previous_readout){
   const {average: web_current_angle_offset_avg, stdev: web_current_angle_offset_stdev} = exp_stats(
     web_current_angle_offset, 
     {
-      average: previous_readout.web_current_angle_offset_avg, 
+      average: normalize_degrees(previous_readout.web_current_angle_offset_avg + transition_correction),
       stdev: previous_readout.web_current_angle_offset_stdev,
     },
   );
@@ -316,7 +327,7 @@ function compute_derivative_info(readout, previous_readout){
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,
     voltage_alpha, voltage_beta,
-    voltage_angle, voltage_magnitude,
+    voltage_angle, voltage_magnitude, voltage_magnitude_avg, voltage_magnitude_stdev,
     angle_from_emf,
     angular_speed_from_emf, angular_speed_from_emf_avg, angular_speed_from_emf_stdev,
     angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,

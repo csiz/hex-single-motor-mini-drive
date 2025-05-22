@@ -429,27 +429,27 @@ const command_buttons = Inputs.button(
     }],
     ["Hold U positive", async function(){
       await command(command_codes.SET_STATE_HOLD_U_POSITIVE);
-      snapshot_if_checked(500);
+      snapshot_if_checked(0);
     }],
     ["Hold V positive", async function(){
       await command(command_codes.SET_STATE_HOLD_V_POSITIVE);
-      snapshot_if_checked(500);
+      snapshot_if_checked(0);
     }],
     ["Hold W positive", async function(){
       await command(command_codes.SET_STATE_HOLD_W_POSITIVE);
-      snapshot_if_checked(500);
+      snapshot_if_checked(0);
     }],
     ["Hold U negative", async function(){
       await command(command_codes.SET_STATE_HOLD_U_NEGATIVE);
-      snapshot_if_checked(500);
+      snapshot_if_checked(0);
     }],
     ["Hold V negative", async function(){
       await command(command_codes.SET_STATE_HOLD_V_NEGATIVE);
-      snapshot_if_checked(500);
+      snapshot_if_checked(0);
     }],
     ["Hold W negative", async function(){
       await command(command_codes.SET_STATE_HOLD_W_NEGATIVE);
-      snapshot_if_checked(500);
+      snapshot_if_checked(0);
     }],
   ],
   {label: "Commands"},
@@ -806,6 +806,10 @@ const plot_dq0_voltages = plot_lines({
     {y: "voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
     {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
     {y: "voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
+    {
+      y: "voltage_magnitude_avg", label: "Voltage Magnitude 0.5ms average", color: d3.color(colors.current_magnitude).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.voltage_magnitude_stdev}),
+    }
   ],
   curve,
 });
