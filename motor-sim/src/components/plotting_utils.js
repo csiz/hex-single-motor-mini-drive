@@ -5,6 +5,7 @@ import * as d3 from "d3";
 
 import {merge_input_value} from "./input_utils.js";
 
+import {valid_number} from "./math_utils.js";
 
 export function plot_lines({
   data = [],
@@ -503,7 +504,7 @@ export function draw_line({data, x, y, x_scale, y_scale, curve, color}) {
     .x((d, i, data) => x_scale(pick_value(x, d, i, data)))
     .y((d, i, data) => y_scale(pick_value(y, d, i, data)))
     .curve(curve)
-    .defined((d, i, data) => d != null && not_nan_or_null(pick_value(y, d, i, data)));
+    .defined((d, i, data) => d != null && valid_number(pick_value(y, d, i, data)));
 
   return d3.select(this).append("path")
     .style("stroke", color)
@@ -516,7 +517,7 @@ export function draw_area({data, x, y0, y1, x_scale, y_scale, curve, color}) {
     .y0((d, i, data) => y_scale(pick_value(y0, d, i, data)))
     .y1((d, i, data) => y_scale(pick_value(y1, d, i, data)))
     .curve(curve)
-    .defined((d, i, data) => d != null && not_nan_or_null(pick_value(y0, d, i, data)) && not_nan_or_null(pick_value(y1, d, i, data)));
+    .defined((d, i, data) => d != null && valid_number(pick_value(y0, d, i, data)) && valid_number(pick_value(y1, d, i, data)));
 
   return d3.select(this).append("path")
     .style("fill", color)
@@ -642,9 +643,4 @@ function pick_value(value, d, i, data) {
   } else {
     return value;
   }
-}
-
-// Check if a value is neither NaN nor null.
-function not_nan_or_null(d) {
-  return d != null && !isNaN(d);
 }

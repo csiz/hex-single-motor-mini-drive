@@ -252,8 +252,16 @@ function compute_derivative_info(readout, previous_readout){
   const [voltage_alpha, voltage_beta] = clarke_transform(u_voltage, v_voltage, w_voltage);
 
   const voltage_angle = radians_to_degrees(Math.atan2(voltage_beta, voltage_alpha));
+  
+  const angular_speed_from_emf = shortest_distance_degrees(prev_voltage_angle, voltage_angle) / dt;
 
-  const angular_speed_from_emf = normalize_degrees(voltage_angle - prev_voltage_angle) / dt;
+  const {average: angular_speed_from_emf_avg, stdev: angular_speed_from_emf_stdev} = exp_stats(
+    angular_speed_from_emf, 
+    {
+      average: previous_readout.angular_speed_from_emf_avg, 
+      stdev: previous_readout.angular_speed_from_emf_stdev,
+    },
+  );
   
   const voltage_magnitude = Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
 
@@ -279,9 +287,9 @@ function compute_derivative_info(readout, previous_readout){
     u_L_voltage, v_L_voltage, w_L_voltage,
     voltage_alpha, voltage_beta,
     voltage_angle, voltage_magnitude,
-    angle_from_emf, angular_speed_from_emf,
-    angle_diff_to_emf,
-    angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
+    angle_from_emf,
+    angular_speed_from_emf, angular_speed_from_emf_avg, angular_speed_from_emf_stdev,
+    angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
     is_hall_transition,
   };
 }

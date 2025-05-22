@@ -80,11 +80,15 @@ export function exponential_averager(time_since_last, alpha_time) {
 export function exponential_stats(time_since_last, alpha_time) {
   const exp_avg = exponential_averager(time_since_last, alpha_time);
   return function(new_value, {average, stdev}) {
-    const first_value = (average === undefined || stdev === undefined);
+    const first_value = !(valid_number(average) && valid_number(stdev));
 
     return first_value ? {average: new_value, stdev: Math.abs(new_value)} : {
       average: exp_avg(new_value, average),
       stdev: Math.sqrt(exp_avg(square(new_value - average), square(stdev))),
     };
   }
+}
+
+export function valid_number(value) {
+  return (typeof value === "number" && !isNaN(value) && isFinite(value));
 }

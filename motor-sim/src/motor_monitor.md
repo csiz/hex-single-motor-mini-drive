@@ -628,11 +628,11 @@ const plot_electric_position = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {
-      y: "web_angle", label: "Web Angle", color: colors.web_angle,
+      y: "web_angle", label: "Angle (computed online)", color: colors.web_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
     },
     {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
-    {y: "current_angle", label: "Web Current Angle", color: colors.current_angle},
+    {y: "current_angle", label: "Current Angle (computed online)", color: colors.current_angle},
     {y: "voltage_angle", label: "Voltage Angle", color: colors.voltage_angle},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
@@ -650,13 +650,13 @@ const plot_electric_offsets = plot_lines({
   y_label: "Angle (degrees)",
   channels: [
     {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
-    {y: ({current_angle, angle_from_emf}) => normalize_degrees(current_angle - angle_from_emf), label: "Web Current Angle Offset", color: colors.other},
+    {y: ({current_angle, angle_from_emf}) => normalize_degrees(current_angle - angle_from_emf), label: "Current Angle diff to EMF", color: colors.other},
     {y: "angle_diff_to_emf", label: "Angle diff to EMF", color: colors.angle_from_emf},
     {
       y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 0.5ms average", color: d3.color(colors.angle_from_emf).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_diff_to_emf_stdev}),
     },
-    {y: ({web_angle, angle}) => normalize_degrees(web_angle - angle), label: "Angle diff to web", color: colors.web_angle},
+    {y: ({web_angle, angle}) => normalize_degrees(web_angle - angle), label: "Angle diff to online", color: colors.web_angle},
   ],
   curve,
 });
@@ -674,10 +674,14 @@ const plot_speed = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
     {
-      y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
+      y: "web_angular_speed", label: "Angular Speed (computed online)", color: colors.web_angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
     },
     {y: "angular_speed_from_emf", label: "Angular Speed from EMF", color: colors.angle_from_emf},
+    {
+      y: "angular_speed_from_emf_avg", label: "Angular Speed from EMF 0.5ms average", color: colors.angle_from_emf,
+      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_from_emf_stdev}),
+    },
   ],
   curve,
 });
@@ -968,7 +972,7 @@ const position_calibration_pos_plot = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {
-      y: "web_angle", label: "Web Angle", color: colors.web_angle,
+      y: "web_angle", label: "Angle (computed online)", color: colors.web_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
     },
     {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
@@ -995,7 +999,7 @@ const position_calibration_pos_speed_plot = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
     {
-      y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
+      y: "web_angular_speed", label: "Angular Speed (computed online)", color: colors.web_angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
     },
   ],
@@ -1018,7 +1022,7 @@ const position_calibration_neg_plot = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {
-      y: "web_angle", label: "Web Angle", color: colors.web_angle,
+      y: "web_angle", label: "Angle (computed online)", color: colors.web_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
     },
     {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
@@ -1044,7 +1048,7 @@ const position_calibration_neg_speed_plot = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
     {
-      y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
+      y: "web_angular_speed", label: "Angular Speed (computed online)", color: colors.web_angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
     },
   ],
