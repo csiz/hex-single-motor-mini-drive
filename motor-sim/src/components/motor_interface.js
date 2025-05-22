@@ -9,6 +9,7 @@ import {
 } from './motor_constants.js';
 
 import {normalize_degrees} from './angular_math.js';
+import {square} from './math_utils.js';
 
 export const header_size = 2; // 2 bytes
 
@@ -330,10 +331,6 @@ function serialise_set_current_calibration(current_calibration) {
   offset += 2;
 
   return buffer;
-}
-
-function square(x){
-  return x * x;
 }
 
 function serialise_set_position_calibration(position_calibration) {

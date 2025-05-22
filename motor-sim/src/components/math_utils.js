@@ -59,4 +59,32 @@ export function even_piecewise_linear({x_min, x_max, Y}) {
     return slopes[i] * x + intercepts[i];
   };
 }
-  
+
+export function square(x) {
+  return x * x;
+}
+
+export function exponential_average(new_value, old_value, time_since_last, alpha_time) {
+  const alpha = Math.exp(-time_since_last / alpha_time);
+  return new_value * (1 - alpha) + old_value * alpha;
+}
+
+export function exponential_averager(time_since_last, alpha_time) {
+  const alpha = Math.exp(-time_since_last / alpha_time);
+
+  return function(new_value, old_value) {
+    return new_value * (1 - alpha) + old_value * alpha;
+  };
+}
+
+export function exponential_stats(time_since_last, alpha_time) {
+  const exp_avg = exponential_averager(time_since_last, alpha_time);
+  return function(new_value, {average, stdev}) {
+    const first_value = (average === undefined || stdev === undefined);
+
+    return first_value ? {average: new_value, stdev: Math.abs(new_value)} : {
+      average: exp_avg(new_value, average),
+      stdev: Math.sqrt(exp_avg(square(new_value - average), square(stdev))),
+    };
+  }
+}

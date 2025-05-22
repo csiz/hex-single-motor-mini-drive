@@ -523,9 +523,22 @@ export function draw_area({data, x, y0, y1, x_scale, y_scale, curve, color}) {
     .attr("d", make_area(data));
 }
 
-export function setup_faint_area({y0, y1}){
+export function setup_faint_area({y0, y1, opacity = 0.1}){
   return function(draw_data){
-    draw_area.call(this, {...draw_data, y0, y1}).style("fill-opacity", 0.2);
+    draw_area.call(this, {...draw_data, y0, y1}).style("fill-opacity", opacity);
+  };
+}
+
+const stdev_95_z_score = 1.959964; // 95% confidence interval for normal distribution
+
+export function setup_stdev_95({stdev, opacity = 0.1}) {
+  return function(draw_data){
+    const {y} = draw_data;
+    draw_area.call(this, {
+      ...draw_data,
+      y0: (d, i, data) => pick_value(y, d, i, data) - stdev_95_z_score * pick_value(stdev, d, i, data),
+      y1: (d, i, data) => pick_value(y, d, i, data) + stdev_95_z_score * pick_value(stdev, d, i, data)
+    }).style("fill-opacity", opacity);
   };
 }
 

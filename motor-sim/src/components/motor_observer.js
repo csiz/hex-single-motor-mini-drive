@@ -1,5 +1,5 @@
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, radians_to_degrees} from "./angular_math.js";
-import {interpolate_linear, matrix_multiply} from "./math_utils.js";
+import {interpolate_linear, matrix_multiply, exponential_averager, square, exponential_stats} from "./math_utils.js";
 
 import {phase_inductance, phase_resistance} from "./motor_constants.js";
 
@@ -219,8 +219,8 @@ function accumulate_position_from_hall(readout, prev_readout){
 
 
 
-function compute_derivatives(readout, previous_readout){
-  const {u, v, w, hall_sector, u_drive_voltage, v_drive_voltage, w_drive_voltage} = readout;
+function compute_derivative_info(readout, previous_readout){
+  const {u, v, w, hall_sector, angle, u_drive_voltage, v_drive_voltage, w_drive_voltage} = readout;
 
   const [current_alpha, current_beta] = clarke_transform(u, v, w);
 
@@ -229,10 +229,16 @@ function compute_derivatives(readout, previous_readout){
   
   if (!previous_readout) return readout;
 
-  const {u: prev_u, v: prev_v, w: prev_w, hall_sector: prev_hall_sector, voltage_angle: prev_voltage_angle} = previous_readout;
+  const {
+    u: prev_u, v: prev_v, w: prev_w, 
+    hall_sector: prev_hall_sector, 
+    voltage_angle: prev_voltage_angle,
+  } = previous_readout;
 
   // Time units are milliseconds.
   const dt = readout.time - previous_readout.time;
+
+  const exp_stats = exponential_stats(dt, 0.5);
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
   const u_L_voltage = (u - prev_u) / dt * 1000 * phase_inductance;
@@ -254,7 +260,16 @@ function compute_derivatives(readout, previous_readout){
   const is_hall_transition = prev_hall_sector != hall_sector;
 
   const angle_from_emf = normalize_degrees(voltage_angle + (readout.angular_speed >= 0 ? +90 : -90));
-  
+
+  const angle_diff_to_emf = shortest_distance_degrees(angle_from_emf, angle);
+
+  const {average: angle_diff_to_emf_avg, stdev: angle_diff_to_emf_stdev} = exp_stats(
+    angle_diff_to_emf, 
+    {
+      average: previous_readout.angle_diff_to_emf_avg, 
+      stdev: previous_readout.angle_diff_to_emf_stdev,
+    },
+  );
 
   return {
     ...readout,
@@ -265,11 +280,13 @@ function compute_derivatives(readout, previous_readout){
     voltage_alpha, voltage_beta,
     voltage_angle, voltage_magnitude,
     angle_from_emf, angular_speed_from_emf,
+    angle_diff_to_emf,
+    angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
     is_hall_transition,
   };
 }
 
 export const process_readout = online_function_chain(
-  compute_derivatives,
+  compute_derivative_info,
   accumulate_position_from_hall,
 );

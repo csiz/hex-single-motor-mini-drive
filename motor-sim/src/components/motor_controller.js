@@ -1,4 +1,5 @@
 import {wait} from "./async_utils.js";
+import {exponential_average} from "./math_utils.js";
 import {parser_mapping, command_codes, serialise_command, header_size} from "./motor_interface.js";
 import {current_calibration_default, position_calibration_default, history_size} from "./motor_constants.js";
 
@@ -66,11 +67,6 @@ export async function connect_usb_motor_controller(){
   if (!port.writable) throw new Error("Port unwritable");
 
   return new MotorController(port);
-}
-
-function exponential_average(new_value, old_value, time_since_last, alpha_time) {
-  const alpha = Math.exp(-time_since_last / alpha_time);
-  return new_value * (1 - alpha) + old_value * alpha;
 }
 
 

@@ -128,8 +128,8 @@ const colors = {
   angle: "rgb(39, 163, 185)",
   current_magnitude: "rgb(197, 152, 67)",
   current_angle: "rgb(102, 166, 30)",
-  voltage_angle: d3.color("rgb(102, 166, 30)").darker(1),
-  angle_from_emf: d3.color("rgb(102, 166, 30)").darker(2),
+  voltage_angle: "rgb(0, 185, 124)",
+  angle_from_emf: "rgb(166, 30, 132)",
   angular_speed: "rgb(41, 194, 173)",
   web_angular_speed: "rgb(156, 196, 47)",
   current_alpha: "rgb(199, 0, 57)",
@@ -466,11 +466,11 @@ d3.select(command_buttons).selectAll("button").style("height", "4em");
 // Plotting
 // --------
 
-const max_time_period = 2000; // ms
+const max_timeline_period = 2000; // ms
 
 const history_duration = Math.ceil(history_size * millis_per_cycle);
 
-const time_period_input = Inputs.range([1, max_time_period], {
+const time_period_input = Inputs.range([1, max_timeline_period], {
   value: history_duration,
   transform: Math.log,
   step: 0.5,
@@ -521,22 +521,22 @@ const timeline_position = Generators.input(timeline_position_input);
 timeline_position_input.addEventListener("input", function(){
   const {selection} = timeline_position_input.value;  
   if (selection){
-    time_period_input.value = (selection[1] - selection[0]) * max_time_period;
-    const max_choice = (max_time_period - time_period_input.value) / max_time_period;
+    time_period_input.value = (selection[1] - selection[0]) * max_timeline_period;
+    const max_choice = (max_timeline_period - time_period_input.value) / max_timeline_period;
     time_offset_input.value = selection[0] / max_choice;
   } else {
-    time_period_input.value = max_time_period;
+    time_period_input.value = max_timeline_period;
     time_offset_input.value = 0;
   }
 });
 
 function merge_timeline_inputs(){
-  const max_choice = (max_time_period - time_period_input.value) / max_time_period;
+  const max_choice = (max_timeline_period - time_period_input.value) / max_timeline_period;
 
   merge_input_value(timeline_position_input, {
-    selection: time_period_input.value === max_time_period ? null : [
+    selection: time_period_input.value === max_timeline_period ? null : [
       time_offset_input.value * max_choice,
-      time_offset_input.value * max_choice + (time_period_input.value / max_time_period),
+      time_offset_input.value * max_choice + (time_period_input.value / max_timeline_period),
     ],
   });
 }
@@ -548,12 +548,12 @@ merge_timeline_inputs();
 ```
 
 ```js
-const data_time_end = (data.length == 0 ? 0 : data[data.length - 1].time);
-const data_time_start = data_time_end - max_time_period;
+const timeline_end = data.length == 0 ? 0 : data[data.length - 1].time;
+const timeline_start = timeline_end - max_timeline_period;
 
 timeline_position_input.update({
-  data: sparsify(data.filter((d) => d.time >= data_time_start)), 
-  x_domain: [data_time_start, data_time_end],
+  data: sparsify(data.filter((d) => d.time >= timeline_start)), 
+  x_domain: [timeline_start, timeline_end],
 });
 ```
 
@@ -625,17 +625,11 @@ const plot_electric_position = plot_lines({
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
-      draw_extra: setup_faint_area({
-        y0: (d) => d.angle - stdev_95_z_score * d.angle_stdev, 
-        y1: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {
       y: "web_angle", label: "Web Angle", color: colors.web_angle,
-      draw_extra: setup_faint_area({
-        y0: (d) => d.web_angle - stdev_95_z_score * d.web_angle_stdev, 
-        y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
     },
     {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
     {y: "current_angle", label: "Web Current Angle", color: colors.current_angle},
@@ -657,8 +651,12 @@ const plot_electric_offsets = plot_lines({
   channels: [
     {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
     {y: ({current_angle, angle_from_emf}) => normalize_degrees(current_angle - angle_from_emf), label: "Web Current Angle Offset", color: colors.other},
-    {y: ({angle_from_emf, angle}) => normalize_degrees(angle_from_emf - angle), label: "Angle error from EMF", color: colors.angle_from_emf},
-    {y: ({web_angle, angle}) => normalize_degrees(web_angle - angle), label: "Angle error from web", color: colors.web_angle},
+    {y: "angle_diff_to_emf", label: "Angle diff to EMF", color: colors.angle_from_emf},
+    {
+      y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 0.5ms average", color: d3.color(colors.angle_from_emf).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.angle_diff_to_emf_stdev}),
+    },
+    {y: ({web_angle, angle}) => normalize_degrees(web_angle - angle), label: "Angle diff to web", color: colors.web_angle},
   ],
   curve,
 });
@@ -673,17 +671,11 @@ const plot_speed = plot_lines({
   channels: [
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
-      draw_extra: setup_faint_area({
-        y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev, 
-        y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
     {
       y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
-      draw_extra: setup_faint_area({
-        y0: d => d.web_angular_speed - stdev_95_z_score * d.web_angular_speed_stdev,
-        y1: d => d.web_angular_speed + stdev_95_z_score * d.web_angular_speed_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
     },
     {y: "angular_speed_from_emf", label: "Angular Speed from EMF", color: colors.angle_from_emf},
   ],
@@ -738,7 +730,7 @@ const plot_measured_current = plot_lines({
 
 const plot_dq0_currents = plot_lines({
   subtitle: "DQ0 Currents",
-  description: "DQ0 currents after Clarke and Park transforming the measured currents.",
+  description: "DQ0 currents after Clarke and Park (direct-quadrature-zero) transforming the measured currents.",
   width: 1200, height: 400,
   x: "time",
   x_label: "Time (ms)",
@@ -753,7 +745,7 @@ const plot_dq0_currents = plot_lines({
 
 const plot_dq0_voltages = plot_lines({
   subtitle: "DQ0 Voltages",
-  description: "DQ0 voltages after Clarke and Park transforming the inferred voltages.",
+  description: "DQ0 voltages after Clarke and Park (direct-quadrature-zero) transforming the inferred voltages.",
   width: 1200, height: 400,
   x: "time",
   x_label: "Time (ms)",
@@ -769,15 +761,15 @@ const plot_dq0_voltages = plot_lines({
 
 const plot_inferred_voltages = plot_lines({
   subtitle: "Inferred Voltage",
-  description: html`Inferred voltage values for each phase: ${tex`V = IR + L(dI/dt)`}.`,
+  description: html`Inferred EMF voltage values for each phase: ${tex`V_{emf} = IR + L(dI/dt) - V_{drive}`}.`,
   width: 1200, height: 300,
   x: "time",
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "u_voltage", label: "Voltage U", color: colors.u},
-    {y: "v_voltage", label: "Voltage V", color: colors.v},
-    {y: "w_voltage", label: "Voltage W", color: colors.w},
+    {y: "u_voltage", label: "EMF Voltage U", color: colors.u},
+    {y: "v_voltage", label: "EMF Voltage V", color: colors.v},
+    {y: "w_voltage", label: "EMF Voltage W", color: colors.w},
     {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
     {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
@@ -827,10 +819,18 @@ autosave_inputs({
 
 ```js
 
-const time_domain = !timeline_position.selection ? [data_time_start, data_time_end] : [
-  timeline_position.selection[0] * max_time_period + data_time_start,
-  timeline_position.selection[1] * max_time_period + data_time_start,
+
+const data_time_end = timeline_end;
+const data_time_start = data.length == 0 ? 0 : Math.max(data[0].time, timeline_start);
+
+const time_domain_wanted = !timeline_position.selection ? [data_time_start, data_time_end] : [
+  timeline_position.selection[0] * max_timeline_period + timeline_start,
+  timeline_position.selection[1] * max_timeline_period + timeline_start,
 ];
+
+const is_data_wanted_visible = data_time_start < time_domain_wanted[1] && data_time_end > time_domain_wanted[0];
+
+const time_domain = is_data_wanted_visible ? time_domain_wanted : [data_time_start, data_time_end];
 
 const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
 
@@ -965,17 +965,11 @@ const position_calibration_pos_plot = plot_lines({
   channels: [
     {
       y: "angle", label: "Angle", color: colors.angle,
-      draw_extra: setup_faint_area({
-        y1: (d) => d.angle - stdev_95_z_score * d.angle_stdev,
-        y2: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {
       y: "web_angle", label: "Web Angle", color: colors.web_angle,
-      draw_extra: setup_faint_area({
-        y0: (d) => d.web_angle - stdev_95_z_score * d.web_angle_stdev, 
-        y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
     },
     {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
@@ -997,18 +991,12 @@ const position_calibration_pos_speed_plot = plot_lines({
   y_label: "Angular Speed (degrees/ms)",
   channels: [
     {
-      y: "angular_speed", label: "Angular Speed", color: colors.angular_speed, 
-      draw_extra: setup_faint_area({
-        y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev, 
-        y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
-      }),
+      y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
+      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
     {
       y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
-      draw_extra: setup_faint_area({
-        y0: d => d.web_angular_speed - stdev_95_z_score * d.web_angular_speed_stdev,
-        y1: d => d.web_angular_speed + stdev_95_z_score * d.web_angular_speed_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
     },
   ],
   curve: d3.curveStep,
@@ -1026,18 +1014,12 @@ const position_calibration_neg_plot = plot_lines({
   y_label: "Electric position (degrees)",
   channels: [
     {
-      y: "angle", label: "Angle", color: colors.angle, 
-      draw_extra: setup_faint_area({
-        y1: (d) => d.angle - stdev_95_z_score * d.angle_stdev,
-        y2: (d) => d.angle + stdev_95_z_score * d.angle_stdev,
-      }),
+      y: "angle", label: "Angle", color: colors.angle,
+      draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {
       y: "web_angle", label: "Web Angle", color: colors.web_angle,
-      draw_extra: setup_faint_area({
-        y0: (d) => d.web_angle - stdev_95_z_score * d.web_angle_stdev, 
-        y1: (d) => d.web_angle + stdev_95_z_score * d.web_angle_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
     },
     {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
@@ -1059,17 +1041,11 @@ const position_calibration_neg_speed_plot = plot_lines({
   channels: [
     {
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
-      draw_extra: setup_faint_area({
-        y0: d => d.angular_speed - stdev_95_z_score * d.angular_speed_stdev,
-        y1: d => d.angular_speed + stdev_95_z_score * d.angular_speed_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
     {
       y: "web_angular_speed", label: "Web Angular Speed", color: colors.web_angular_speed,
-      draw_extra: setup_faint_area({
-        y0: d => d.web_angular_speed - stdev_95_z_score * d.web_angular_speed_stdev,
-        y1: d => d.web_angular_speed + stdev_95_z_score * d.web_angular_speed_stdev,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
     },
   ],
   curve: d3.curveStep,
@@ -1220,26 +1196,17 @@ const current_calibration_positive_mean_plot = plot_lines({
   channels: [
     {
       y: "u_positive", 
-      draw_extra: setup_faint_area({
-        y0: d => d.u_positive - d.u_positive_stdev * stdev_95_z_score,
-        y1: d => d.u_positive + d.u_positive_stdev * stdev_95_z_score,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.u_positive_stdev}),
       label: "U positive mean", color: colors.u,
     },
     {
       y: "v_positive",
-      draw_extra: setup_faint_area({
-        y0: d => d.v_positive - d.v_positive_stdev * stdev_95_z_score,
-        y1: d => d.v_positive + d.v_positive_stdev * stdev_95_z_score,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.v_positive_stdev}),
       label: "V positive mean", color: colors.v,
     },
     {
       y: "w_positive",
-      draw_extra: setup_faint_area({
-        y0: d => d.w_positive - d.w_positive_stdev * stdev_95_z_score,
-        y1: d => d.w_positive + d.w_positive_stdev * stdev_95_z_score,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.w_positive_stdev}),
       label: "W positive mean", color: colors.w,
     },
     {
@@ -1262,26 +1229,17 @@ const current_calibration_negative_mean_plot = plot_lines({
   channels: [
     {
       y: "u_negative", 
-      draw_extra: setup_faint_area({
-        y0: d => d.u_negative - d.u_negative_stdev * stdev_95_z_score,
-        y1: d => d.u_negative + d.u_negative_stdev * stdev_95_z_score,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.u_negative_stdev}),
       label: "U negative mean", color: colors.u,
     },
     {
       y: "v_negative",
-      draw_extra: setup_faint_area({
-        y0: d => d.v_negative - d.v_negative_stdev * stdev_95_z_score,
-        y1: d => d.v_negative + d.v_negative_stdev * stdev_95_z_score,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.v_negative_stdev}),
       label: "V negative mean", color: colors.v,
     },
     {
       y: "w_negative",
-      draw_extra: setup_faint_area({
-        y0: d => d.w_negative - d.w_negative_stdev * stdev_95_z_score,
-        y1: d => d.w_negative + d.w_negative_stdev * stdev_95_z_score,
-      }),
+      draw_extra: setup_stdev_95({stdev: (d) => d.w_negative_stdev}),
       label: "W negative mean", color: colors.w,
     },
     {
@@ -1322,7 +1280,7 @@ const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` :
 // Imports
 // -------
 
-import {plot_lines, plot_line, setup_faint_area, horizontal_step} from "./components/plotting_utils.js";
+import {plot_lines, plot_line, setup_faint_area, horizontal_step, setup_stdev_95} from "./components/plotting_utils.js";
 
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 
