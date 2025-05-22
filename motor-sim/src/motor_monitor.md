@@ -565,7 +565,7 @@ const curve = plot_curve;
 const plot_power = plot_lines({
   subtitle: "Power",
   description: "Power consumed by command_codes.",
-  width: 1200, height: 150,
+  width: 1200, height: 300,
   x: "time",
   x_label: "Time (ms)",
   y_label: "Power (W)",
@@ -574,6 +574,11 @@ const plot_power = plot_lines({
     {y: "torque", label: "Torque", color: colors.angle},
     {y: "hold", label: "Hold", color: colors.current_angle},
     {y: "resistive_power", label: "Resistive Power", color: colors.current_magnitude},
+
+    {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
+    {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
+    {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},
+    {y: "web_inductive_power", label: "Inductive Power (computed online)", color: colors.w},
   ],
   curve,
 });
@@ -631,9 +636,9 @@ const plot_electric_position = plot_lines({
       y: "web_angle", label: "Angle (computed online)", color: colors.web_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
     },
-    {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
+    {y: "angle_from_emf", label: "Angle infered from EMF", color: colors.angle_from_emf},
     {y: "current_angle", label: "Current Angle (computed online)", color: colors.current_angle},
-    {y: "voltage_angle", label: "Voltage Angle", color: colors.voltage_angle},
+    {y: "voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
@@ -650,7 +655,11 @@ const plot_electric_offsets = plot_lines({
   y_label: "Angle (degrees)",
   channels: [
     {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
-    {y: ({current_angle, angle_from_emf}) => normalize_degrees(current_angle - angle_from_emf), label: "Current Angle diff to EMF", color: colors.other},
+    {y: "web_current_angle_offset", label: "Current Angle Offset (computed online)", color: colors.angle},
+    {
+      y: "web_current_angle_offset_avg", label: "Current Angle Offset 0.5ms average", color: d3.color(colors.angle).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_current_angle_offset_stdev}),
+    },
     {y: "angle_diff_to_emf", label: "Angle diff to EMF", color: colors.angle_from_emf},
     {
       y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 0.5ms average", color: d3.color(colors.angle_from_emf).brighter(1),
@@ -774,6 +783,9 @@ const plot_inferred_voltages = plot_lines({
     {y: "u_voltage", label: "EMF Voltage U", color: colors.u},
     {y: "v_voltage", label: "EMF Voltage V", color: colors.v},
     {y: "w_voltage", label: "EMF Voltage W", color: colors.w},
+    {y: "u_R_voltage", label: "Resistive Voltage U", color: d3.color(colors.u).brighter(2)},
+    {y: "v_R_voltage", label: "Resistive Voltage V", color: d3.color(colors.v).brighter(2)},
+    {y: "w_R_voltage", label: "Resistive Voltage W", color: d3.color(colors.w).brighter(2)},
     {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
     {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
