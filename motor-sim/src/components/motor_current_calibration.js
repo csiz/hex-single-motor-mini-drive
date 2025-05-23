@@ -1,4 +1,4 @@
-import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance} from "./motor_constants.js";
+import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance, max_calibration_current} from "./motor_constants.js";
 import {command_codes} from "./motor_interface.js";
 import {wait} from "./async_utils.js";
 import {even_spacing, piecewise_linear, even_piecewise_linear} from "./math_utils.js";
@@ -10,23 +10,18 @@ import _ from "lodash";
 const short_duration = history_size / 12 * millis_per_cycle;
 
 const current_calibration_zones = [
-  {pwm: 0.1, settle_start: short_duration * 1.4, settle_end: short_duration * 1.95},
-  {pwm: 0.2, settle_start: short_duration * 2.4, settle_end: short_duration * 2.95},
-  {pwm: 0.3, settle_start: short_duration * 3.4, settle_end: short_duration * 3.95},
-  {pwm: 0.4, settle_start: short_duration * 4.4, settle_end: short_duration * 4.95},
-  {pwm: 0.5, settle_start: short_duration * 5.4, settle_end: short_duration * 5.95},
-  {pwm: 0.6, settle_start: short_duration * 6.4, settle_end: short_duration * 6.95},
-  {pwm: 0.7, settle_start: short_duration * 7.4, settle_end: short_duration * 7.95},
-  {pwm: 0.8, settle_start: short_duration * 8.4, settle_end: short_duration * 8.95},
-  {pwm: 0.9, settle_start: short_duration * 9.4, settle_end: short_duration * 9.95},
+  {pwm: 0.1, start: short_duration * 1.0, settle_start: short_duration * 1.4, settle_end: short_duration * 1.95},
+  {pwm: 0.2, start: short_duration * 2.0, settle_start: short_duration * 2.4, settle_end: short_duration * 2.95},
+  {pwm: 0.3, start: short_duration * 3.0, settle_start: short_duration * 3.4, settle_end: short_duration * 3.95},
+  {pwm: 0.4, start: short_duration * 4.0, settle_start: short_duration * 4.4, settle_end: short_duration * 4.95},
+  {pwm: 0.5, start: short_duration * 5.0, settle_start: short_duration * 5.4, settle_end: short_duration * 5.95},
+  {pwm: 0.6, start: short_duration * 6.0, settle_start: short_duration * 6.4, settle_end: short_duration * 6.95},
+  {pwm: 0.7, start: short_duration * 7.0, settle_start: short_duration * 7.4, settle_end: short_duration * 7.95},
+  {pwm: 0.8, start: short_duration * 8.0, settle_start: short_duration * 8.4, settle_end: short_duration * 8.95},
+  {pwm: 0.9, start: short_duration * 9.0, settle_start: short_duration * 9.4, settle_end: short_duration * 9.95},
 ];
 
 
-const drive_resistance = phase_resistance * 3/2; // 3/2 because we drive 1 phase and tie the other 2 phases.
-const max_drive_voltage = 12.0;
-
-
-export const max_calibration_current = max_drive_voltage / drive_resistance;
 
 const current_calibration_points = 32;
 const current_calibration_reading_points = even_spacing(max_calibration_current, current_calibration_points / 2 + 1);
@@ -119,33 +114,30 @@ export async function run_current_calibration(motor_controller){
   }
 
 
-  // Make a new table with each calibration phase as a column.
+  // Make a new table with each calibration's measured phase current and 
+  // expected phase current inferred from the driver voltage and known
+  // phase resistance (in v0 the shunt resistors vary +-50% after soldering
+  // we should buy better current shunts, or maybe just bigger footprint).
   const current_calibration_data = d3.range(history_size).map((i) => {
     const time = i * millis_per_cycle;
     const zones = current_calibration_zones.filter((zone) => zone.settle_start <= time && time <= zone.settle_end);
 
     if (zones.length > 1) throw new Error("Multiple zones found");
     
-    function get_expected_current(voltage){
-      if (zones.length == 0) return null;
-      const zone = zones[0];
-      return zone.pwm * voltage / drive_resistance;
-    }
-
     let result = {
       time,
-      u_positive: u_positive[i].u_uncalibrated,
-      u_positive_expected: get_expected_current(u_positive[i].instant_vcc_voltage),
+      u_positive: +u_positive[i].u_uncalibrated,
+      u_positive_expected: +u_positive[i].u_drive_voltage / phase_resistance,
       u_negative: -u_negative[i].u_uncalibrated,
-      u_negative_expected: get_expected_current(u_negative[i].instant_vcc_voltage),
-      v_positive: v_positive[i].v_uncalibrated,
-      v_positive_expected: get_expected_current(v_positive[i].instant_vcc_voltage),
+      u_negative_expected: -u_negative[i].u_drive_voltage / phase_resistance,
+      v_positive: +v_positive[i].v_uncalibrated,
+      v_positive_expected: +v_positive[i].v_drive_voltage / phase_resistance,
       v_negative: -v_negative[i].v_uncalibrated,
-      v_negative_expected: get_expected_current(v_negative[i].instant_vcc_voltage),
-      w_positive: w_positive[i].w_uncalibrated,
-      w_positive_expected: get_expected_current(w_positive[i].instant_vcc_voltage),
+      v_negative_expected: -v_negative[i].v_drive_voltage / phase_resistance,
+      w_positive: +w_positive[i].w_uncalibrated,
+      w_positive_expected: +w_positive[i].w_drive_voltage / phase_resistance,
       w_negative: -w_negative[i].w_uncalibrated,
-      w_negative_expected: get_expected_current(w_negative[i].instant_vcc_voltage),
+      w_negative_expected: -w_negative[i].w_drive_voltage / phase_resistance,
     };
 
     const target = zones.length == 0 ? null : d3.mean(Object.values(_.pick(
@@ -190,7 +182,7 @@ function compute_calibration_instance(calibration_data){
     const func = even_piecewise_linear({x_min: 0, x_max: max_calibration_current, Y});
 
     const sample = current_calibration_reading_points.map((x) => ({reading: x, target: func(x)}));
-    
+
     return {
       measurements,
       targets,

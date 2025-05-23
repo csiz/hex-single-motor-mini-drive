@@ -1343,13 +1343,13 @@ import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circu
 
 import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
 
-import {run_current_calibration, compute_current_calibration, max_calibration_current} from "./components/motor_current_calibration.js";
+import {run_current_calibration, compute_current_calibration} from "./components/motor_current_calibration.js";
 
 import {run_position_calibration, compute_position_calibration} from "./components/motor_position_calibration.js";
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
-  history_size, current_calibration_default, position_calibration_default,
+  history_size, current_calibration_default, position_calibration_default, max_calibration_current,
 } from "./components/motor_constants.js";
 
 

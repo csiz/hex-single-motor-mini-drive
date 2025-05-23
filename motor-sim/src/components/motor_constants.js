@@ -4,6 +4,7 @@ import {normalize_degrees, positive_degrees} from "./angular_math.js";
 // Motor phase constants
 // ---------------------
 
+
 // Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
 export const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
 
@@ -92,6 +93,12 @@ export const adc_voltage_reference = 3.3;
 export const motor_shunt_resistance = 0.010;
 export const amplifier_gain = 20.0;
 export const current_conversion = adc_voltage_reference / (adc_base * motor_shunt_resistance * amplifier_gain);
+
+// Maximum current we can measure in Amperes.
+export const max_measurable_current = adc_base * current_conversion / 2; // Halved because we can measure negative current too.
+
+// Maximum current for which to compute calibration values. Extrapolate for higher currents.
+export const max_calibration_current = 6.0;
 
 export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
 
