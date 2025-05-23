@@ -437,7 +437,7 @@ export function add_crosshair(plot, {
       return data.map((d, i) => {
         const coord_x = x_scale(pick_value(x, d, i, data));
         const coord_y = y_scale(pick_value(y, d, i, data));
-        return Math.hypot(coord_x - xm, coord_y - ym);
+        return Math.hypot(5*(coord_x - xm), coord_y - ym);
       });
     }));
     if (!min_index) return;
@@ -628,7 +628,7 @@ export function horizontal_step_after(context) {
 // Get the 2d coordiates of the minimum value in a 2d array.
 function min_index_2d(array2d) {
   const min_indexes = array2d.map((array) => d3.minIndex(array));
-  const y_index = d3.minIndex(min_indexes, (min_i, i) => min_i > 0 ? array2d[i][min_i] : undefined);
+  const y_index = d3.minIndex(min_indexes, (min_i, i) => min_i >= 0 ? array2d[i][min_i] : undefined);
   if (y_index === undefined || y_index < 0) return undefined;
   const x_index = min_indexes[y_index];
   return [x_index, y_index];
