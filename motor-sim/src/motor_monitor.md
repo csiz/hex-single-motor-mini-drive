@@ -472,7 +472,7 @@ const max_timeline_period = 2000; // ms
 const history_duration = Math.ceil(history_size * millis_per_cycle);
 
 const time_period_input = Inputs.range([1, max_timeline_period], {
-  value: history_duration,
+  value: max_timeline_period,
   transform: Math.log,
   step: 0.5,
   label: "Time window Duration (ms):",
@@ -549,13 +549,58 @@ merge_timeline_inputs();
 ```
 
 ```js
+function filter_window(data, time_domain){
+  return data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
+}
+
+// Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.
+function sparsify(data, target_points = 1080){
+  const max_plot_points = target_points;
+  const plot_points_skip = Math.ceil(data.length / max_plot_points);
+  return data.filter(({readout_index}) => readout_index % plot_points_skip === 0);
+}
+
 const timeline_end = data.length == 0 ? 0 : data[data.length - 1].time;
-const timeline_start = timeline_end - max_timeline_period;
+const timeline_start = data.length == 0 ? -16 : Math.max(data[0].time, timeline_end - max_timeline_period);
+const timeline_period = timeline_end - timeline_start;
+const timeline_domain = [timeline_start, timeline_end];
 
 timeline_position_input.update({
-  data: sparsify(data.filter((d) => d.time >= timeline_start)), 
-  x_domain: [timeline_start, timeline_end],
+  data: sparsify(filter_window(data, timeline_domain)), 
+  x_domain: timeline_domain,
 });
+
+
+const selected_time_domain = !timeline_position.selection ? [timeline_start, timeline_end] : [
+  timeline_position.selection[0] * timeline_period + timeline_start,
+  timeline_position.selection[1] * timeline_period + timeline_start,
+];
+
+
+const data_in_time_window = sparsify(filter_window(data, selected_time_domain));
+
+const monitoring_plots = [
+  plot_power,
+  plot_runtime_stats,
+  plot_cycle_loop_stats,
+  plot_electric_position,
+  plot_electric_offsets,
+  plot_speed,
+  plot_measured_voltage,
+  plot_measured_temperature,
+  plot_measured_current,
+  plot_voltages,
+  plot_inferred_voltages,
+  plot_dq0_currents,
+  plot_dq0_voltages,
+  plot_pwm_settings,
+];
+
+monitoring_plots.forEach((plot) => plot.update({
+  data: data_in_time_window, 
+  x_domain: selected_time_domain,
+}));
+
 ```
 
 
@@ -571,15 +616,19 @@ const plot_power = plot_lines({
   x_label: "Time (ms)",
   y_label: "Power (W)",
   channels: [
+    {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
+    {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
+    {
+      y: "web_emf_power_avg", label: "EMF Power 0.5ms average", color: d3.color(colors.u).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_power_stdev}),
+    },
+    {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},
+    {y: "web_inductive_power", label: "Inductive Power (computed online)", color: colors.w},
+
     {y: "total_power", label: "Total Power", color: colors.sum},
     {y: "torque", label: "Torque", color: colors.angle},
     {y: "hold", label: "Hold", color: colors.current_angle},
     {y: "resistive_power", label: "Resistive Power", color: colors.current_magnitude},
-
-    {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
-    {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
-    {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},
-    {y: "web_inductive_power", label: "Inductive Power (computed online)", color: colors.w},
   ],
   curve,
 });
@@ -852,41 +901,6 @@ autosave_inputs({
 
 
 
-```js
-
-
-const data_time_end = timeline_end;
-const data_time_start = data.length == 0 ? 0 : Math.max(data[0].time, timeline_start);
-
-const time_domain_wanted = !timeline_position.selection ? [data_time_start, data_time_end] : [
-  timeline_position.selection[0] * max_timeline_period + timeline_start,
-  timeline_position.selection[1] * max_timeline_period + timeline_start,
-];
-
-const is_data_wanted_visible = data_time_start < time_domain_wanted[1] && data_time_end > time_domain_wanted[0];
-
-const time_domain = is_data_wanted_visible ? time_domain_wanted : [data_time_start, data_time_end];
-
-const data_in_time_window = data.filter((d) => d.time >= time_domain[0] && d.time <= time_domain[1]);
-
-[
-  plot_power,
-  plot_runtime_stats,
-  plot_cycle_loop_stats,
-  plot_electric_position,
-  plot_electric_offsets,
-  plot_speed,
-  plot_measured_voltage,
-  plot_measured_temperature,
-  plot_measured_current,
-  plot_voltages,
-  plot_inferred_voltages,
-  plot_dq0_currents,
-  plot_dq0_voltages,
-  plot_pwm_settings,
-].forEach((plot) => plot.update({data: sparsify(data_in_time_window), x_domain: time_domain}));
-
-```
 
 
 
@@ -1339,11 +1353,5 @@ import {
 } from "./components/motor_constants.js";
 
 
-// Pick evenly spaced data points to pass to the plot; we can't draw more pixels than we have.
-function sparsify(data, target_points = 1080){
-  const max_plot_points = target_points;
-  const plot_points_skip = Math.ceil(data.length / max_plot_points);
-  return data.filter((d, i) => i % plot_points_skip === 0);
-}
 
 ```

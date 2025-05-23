@@ -318,6 +318,14 @@ function compute_derivative_info(readout, previous_readout){
   const web_resistive_power = (square(u) * phase_resistance + square(v) * phase_resistance + square(w) * phase_resistance);
   const web_inductive_power = (u * u_L_voltage + v * v_L_voltage + w * w_L_voltage);
 
+  const {average: web_emf_power_avg, stdev: web_emf_power_stdev} = exp_stats(
+    web_emf_power,
+    {
+      average: previous_readout.web_emf_power_avg,
+      stdev: previous_readout.web_emf_power_stdev,
+    },
+  );
+
   return {
     ...readout,
     current_alpha, current_beta,
@@ -333,7 +341,7 @@ function compute_derivative_info(readout, previous_readout){
     angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
     is_hall_transition,
     web_total_power,
-    web_emf_power,
+    web_emf_power, web_emf_power_avg, web_emf_power_stdev,
     web_resistive_power,
     web_inductive_power,
   };
