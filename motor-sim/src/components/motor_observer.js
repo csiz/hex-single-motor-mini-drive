@@ -254,9 +254,9 @@ function compute_derivative_info(readout, previous_readout){
 
   const exp_stats = exponential_stats(dt, 0.5);
 
-  u_diff_uncalibrated = (u_uncalibrated - prev_u_uncalibrated) / dt;
-  v_diff_uncalibrated = (v_uncalibrated - prev_v_uncalibrated) / dt;
-  w_diff_uncalibrated = (w_uncalibrated - prev_w_uncalibrated) / dt;
+  const u_diff_uncalibrated = (u_uncalibrated - prev_u_uncalibrated) / dt;
+  const v_diff_uncalibrated = (v_uncalibrated - prev_v_uncalibrated) / dt;
+  const w_diff_uncalibrated = (w_uncalibrated - prev_w_uncalibrated) / dt;
 
   const mid_u_drive_voltage = (u_drive_voltage + prev_u_drive_voltage) / 2;
   const mid_v_drive_voltage = (v_drive_voltage + prev_v_drive_voltage) / 2;
