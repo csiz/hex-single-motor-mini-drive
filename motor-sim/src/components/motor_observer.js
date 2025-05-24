@@ -220,7 +220,12 @@ function accumulate_position_from_hall(readout, prev_readout){
 
 
 function compute_derivative_info(readout, previous_readout){
-  const {u, v, w, hall_sector, angle, u_drive_voltage, v_drive_voltage, w_drive_voltage} = readout;
+  const {
+    hall_sector, angle, 
+    u, v, w, 
+    u_drive_voltage, v_drive_voltage, w_drive_voltage,
+    u_uncalibrated, v_uncalibrated, w_uncalibrated,
+  } = readout;
 
   const [current_alpha, current_beta] = clarke_transform(u, v, w);
 
@@ -231,10 +236,13 @@ function compute_derivative_info(readout, previous_readout){
     ...readout,
     current_alpha, current_beta,
     current_angle, current_magnitude,
+    // TODO: need to get this from the driver, track it directly since we need it anyway.
+    u_diff_uncalibrated: 0.0, v_diff_uncalibrated: 0.0, w_diff_uncalibrated: 0.0,
   };
 
   const {
-    u: prev_u, v: prev_v, w: prev_w, 
+    u: prev_u, v: prev_v, w: prev_w,
+    u_uncalibrated: prev_u_uncalibrated, v_uncalibrated: prev_v_uncalibrated, w_uncalibrated: prev_w_uncalibrated,
     hall_sector: prev_hall_sector, 
     angle: prev_angle,
     voltage_angle: prev_voltage_angle,
@@ -245,6 +253,10 @@ function compute_derivative_info(readout, previous_readout){
   const dt = readout.time - previous_readout.time;
 
   const exp_stats = exponential_stats(dt, 0.5);
+
+  u_diff_uncalibrated = (u_uncalibrated - prev_u_uncalibrated) / dt;
+  v_diff_uncalibrated = (v_uncalibrated - prev_v_uncalibrated) / dt;
+  w_diff_uncalibrated = (w_uncalibrated - prev_w_uncalibrated) / dt;
 
   const mid_u_drive_voltage = (u_drive_voltage + prev_u_drive_voltage) / 2;
   const mid_v_drive_voltage = (v_drive_voltage + prev_v_drive_voltage) / 2;
@@ -331,6 +343,7 @@ function compute_derivative_info(readout, previous_readout){
     current_alpha, current_beta,
     current_angle, current_magnitude, 
     web_current_angle_offset, web_current_angle_offset_avg, web_current_angle_offset_stdev,
+    u_diff_uncalibrated, v_diff_uncalibrated, w_diff_uncalibrated,
     u_voltage, v_voltage, w_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,

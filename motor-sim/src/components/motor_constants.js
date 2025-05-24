@@ -11,6 +11,9 @@ export const phase_inductance = 0.000_145; // 290 uH measured with LCR meter acr
 // Resistance per phase in Ohms. Assuming the motor is a 3 phase star connected motor.
 export const phase_resistance = 2.00 * 2/3; // 2.00 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
 
+// Time constant of the phase inductor circuit.
+export const phase_time_constant = phase_inductance / phase_resistance;
+
 // Timing constants
 // ----------------
 
