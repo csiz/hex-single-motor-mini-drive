@@ -44,6 +44,30 @@ Motor Driving Data
 <div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 
+Current Calibration Procedures
+------------------------------
+
+<div class="card tight">
+  <div>${current_calibration_buttons}</div>
+  <div>Number of calibration data sets: ${current_calibration.results.length}</div>
+</div>
+<div class="card tight">
+  <h3>Current Calibration Results</h3>
+  <div>
+    <p>Phase current correction factors:</p>
+    <pre>${current_calibration_table}</pre>
+    <p>Active phase current correction factors:</p>
+    <pre>${active_current_calibration_table}</pre>
+  </div>
+  <div>${current_calibration_result_to_display_input}</div>
+  <div>${current_calibration_plot}</div>
+</div>
+<div class="card tight">  
+  <h3>Current Calibration Statistics</h3>
+  <div>${current_calibration_positive_mean_plot}</div>
+  <div>${current_calibration_negative_mean_plot}</div>
+</div>
+
 
 Position Calibration Procedures
 -------------------------------
@@ -76,32 +100,6 @@ Position Calibration Procedures
   <div>${position_calibration_sensor_locations_table}</div>
 </div>
 
-
-Current Calibration Procedures
-------------------------------
-
-<div class="card tight">
-  <div>${current_calibration_buttons}</div>
-  <div>Number of calibration data sets: ${current_calibration.results.length}</div>
-</div>
-<div class="card tight">
-  <h3>Current Calibration Results</h3>
-  <div>
-    <p>Phase current correction factors:</p>
-    <pre>${current_calibration_table}</pre>
-    <p>Active phase current correction factors:</p>
-    <pre>${active_current_calibration_table}</pre>
-  </div>
-  <div>${current_calibration_factors_plot}</div>
-  <div>${current_calibration_transitions_plot}</div>
-  <div>${current_calibration_result_to_display_input}</div>
-  <div>${current_calibration_plot}</div>
-</div>
-<div class="card tight">  
-  <h3>Current Calibration Statistics</h3>
-  <div>${current_calibration_positive_mean_plot}</div>
-  <div>${current_calibration_negative_mean_plot}</div>
-</div>
 
 
 Flash Data Storage
@@ -903,6 +901,182 @@ autosave_inputs({
 
 
 
+```js
+// Current calibration
+// -------------------
+
+function stringify_active_current_calibration() {
+  return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
+}
+
+const active_current_calibration_table =  Mutable(stringify_active_current_calibration());
+
+const default_current_calibration_result = {results: [], ...compute_current_calibration([])};
+
+const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
+  [
+    ["Start Current Calibration", wait_previous(async function(value){
+      const calibration_data = await run_current_calibration(motor_controller);
+      const results = [...value.results, calibration_data];
+      return {results, ...compute_current_calibration(results)};
+    })],
+    ["Reset Results", wait_previous(async function(value){
+      return default_current_calibration_result;
+    })],
+    ["Use Locally", wait_previous(async function(value){
+      if (!value.current_calibration) return value;
+      motor_controller.current_calibration = value.current_calibration;
+      active_current_calibration_table.value = stringify_active_current_calibration();
+      return value;
+    })],
+    ["Use Default Locally", wait_previous(async function(value){
+      motor_controller.current_calibration = current_calibration_default;
+      active_current_calibration_table.value = stringify_active_current_calibration();
+      return value;
+    })],
+    ["Upload to Driver", wait_previous(async function(value){
+      const current_calibration = value.current_calibration ?? motor_controller.current_calibration;
+      await motor_controller.upload_current_calibration(current_calibration);
+      active_current_calibration_table.value = stringify_active_current_calibration();
+      return value;
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_current_calibration();
+      active_current_calibration_table.value = stringify_active_current_calibration();
+      return value;
+    })],
+  ],
+  {
+    label: "Current Calibration",
+    value: default_current_calibration_result
+  },
+);
+
+d3.select(current_calibration_buttons).style("width", "100%");
+
+const current_calibration = !motor_controller ? default_current_calibration_result : Generators.input(current_calibration_buttons);
+```
+
+
+
+```js
+
+// Write out the current calibration results in copyable format.
+const current_calibration_table = `current_calibration = ${JSON.stringify(current_calibration?.current_calibration, null, 2)}`;
+
+// Select which of the calibration runs to display.
+
+const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration.results.length), {
+  value: current_calibration.results.length - 1,
+  label: "Select calibration result to display:",
+});
+const current_calibration_result_to_display = Generators.input(current_calibration_result_to_display_input);
+
+```
+
+```js
+
+const current_calibration_plot = plot_lines({
+  data: current_calibration.results[current_calibration_result_to_display]?.sample,
+  subtitle: "Current Calibration",
+  description: "Current calibration results for each phase.",
+  width: 1200, height: 400,
+  x_domain: [0, history_size * millis_per_cycle],
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channels: [
+    {y: "u_positive", label: "U positive", color: colors.u},
+    {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
+    {y: "v_positive", label: "V positive", color: colors.v},
+    {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
+    {y: "w_positive", label: "W positive", color: colors.w},
+    {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
+    {
+      y: "expected",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "expected"}),
+      label: "Expected", color: "gray",
+    }
+  ],
+});
+
+
+
+const current_calibration_positive_mean_plot = plot_lines({
+  data: current_calibration.stats,
+  subtitle: "Mean Response - Positive",
+  description: "Current calibration mean results for each phase driven positive.",
+  width: 1200, height: 300,
+  x_domain: [0, history_size * millis_per_cycle],
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channels: [
+    {
+      y: "u_positive", 
+      draw_extra: setup_stdev_95({stdev: "u_positive_stdev"}),
+      label: "U positive mean", color: colors.u,
+    },
+    {
+      y: "v_positive",
+      draw_extra: setup_stdev_95({stdev: "v_positive_stdev"}),
+      label: "V positive mean", color: colors.v,
+    },
+    {
+      y: "w_positive",
+      draw_extra: setup_stdev_95({stdev: "w_positive_stdev"}),
+      label: "W positive mean", color: colors.w,
+    },
+    {
+      y: "expected",
+      draw_extra: setup_stdev_95({stdev: "expected_stdev"}),
+      label: "Expected", color: "gray",
+    },
+  ],
+});
+
+const current_calibration_negative_mean_plot = plot_lines({
+  data: current_calibration.stats,
+  subtitle: "Mean Response - Negative (inverted)",
+  description: "Current calibration mean results for each phase driven negative.",
+  width: 1200, height: 300,
+  x_domain: [0, history_size * millis_per_cycle],
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current (A)",
+  channels: [
+    {
+      y: "u_negative", 
+      draw_extra: setup_stdev_95({stdev: "u_negative_stdev"}),
+      label: "U negative mean", color: colors.u,
+    },
+    {
+      y: "v_negative",
+      draw_extra: setup_stdev_95({stdev: "v_negative_stdev"}),
+      label: "V negative mean", color: colors.v,
+    },
+    {
+      y: "w_negative",
+      draw_extra: setup_stdev_95({stdev: "w_negative_stdev"}),
+      label: "W negative mean", color: colors.w,
+    },
+    {
+      y: "expected",
+      draw_extra: setup_stdev_95({stdev: "expected_stdev"}),
+      label: "Expected", color: "gray",
+    },
+  ],
+});
+
+autosave_inputs({
+  current_calibration_plot,
+  current_calibration_positive_mean_plot,
+  current_calibration_negative_mean_plot,
+});
+
+```
+
+
 
 
 ```js
@@ -1109,236 +1283,6 @@ autosave_inputs({
   position_calibration_neg_speed_plot,
 });
 
-
-```
-
-
-```js
-// Current calibration
-// -------------------
-
-function stringify_active_current_calibration() {
-  return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
-}
-
-const active_current_calibration_table =  Mutable(stringify_active_current_calibration());
-
-const default_current_calibration_result = {results: [], ...compute_current_calibration([])};
-
-const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
-  [
-    ["Start Current Calibration", wait_previous(async function(value){
-      const calibration_data = await run_current_calibration(motor_controller);
-      const results = [...value.results, calibration_data];
-      return {results, ...compute_current_calibration(results)};
-    })],
-    ["Reset Results", wait_previous(async function(value){
-      return default_current_calibration_result;
-    })],
-    ["Use Locally", wait_previous(async function(value){
-      if (!value.current_calibration) return value;
-      motor_controller.current_calibration = value.current_calibration;
-      active_current_calibration_table.value = stringify_active_current_calibration();
-      return value;
-    })],
-    ["Use Default Locally", wait_previous(async function(value){
-      motor_controller.current_calibration = current_calibration_default;
-      active_current_calibration_table.value = stringify_active_current_calibration();
-      return value;
-    })],
-    ["Upload to Driver", wait_previous(async function(value){
-      const current_calibration = value.current_calibration ?? motor_controller.current_calibration;
-      await motor_controller.upload_current_calibration(current_calibration);
-      active_current_calibration_table.value = stringify_active_current_calibration();
-      return value;
-    })],
-    ["Reload from Driver", wait_previous(async function(value){
-      await motor_controller.load_current_calibration();
-      active_current_calibration_table.value = stringify_active_current_calibration();
-      return value;
-    })],
-  ],
-  {
-    label: "Current Calibration",
-    value: default_current_calibration_result
-  },
-);
-
-d3.select(current_calibration_buttons).style("width", "100%");
-
-const current_calibration = !motor_controller ? default_current_calibration_result : Generators.input(current_calibration_buttons);
-```
-
-
-
-```js
-
-// Write out the current calibration results in copyable format.
-const current_calibration_table = `current_calibration = ${JSON.stringify(current_calibration?.current_calibration, null, 2)}`;
-
-// Select which of the calibration runs to display.
-
-const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration.results.length), {
-  value: current_calibration.results.length - 1,
-  label: "Select calibration result to display:",
-});
-const current_calibration_result_to_display = Generators.input(current_calibration_result_to_display_input);
-
-```
-
-```js
-
-const current_calibration_plot = plot_lines({
-  data: current_calibration.results[current_calibration_result_to_display],
-  subtitle: "Current Calibration",
-  description: "Current calibration results for each phase.",
-  width: 1200, height: 400,
-  x_domain: [0, history_size * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Current (A)",
-  channels: [
-    {y: "u_positive", label: "U positive", color: colors.u},
-    {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
-    {y: "v_positive", label: "V positive", color: colors.v},
-    {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
-    {y: "w_positive", label: "W positive", color: colors.w},
-    {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
-    {
-      y: "expected",
-      draw_extra: setup_faint_area({y0: 0.0, y1: "expected"}),
-      label: "Expected", color: "gray",
-    }
-  ],
-});
-
-
-const current_calibration_factors_plot = plot_lines({
-  data: current_calibration.secondary_factors,
-  subtitle: "Current Calibration Secondary Factors",
-  description: "Secondary factors to refine the current readings depending on magnitude.",
-  width: 1200, height: 400,
-  x_domain: [0, max_calibration_current],
-  x: "reading",
-  x_label: "Current Reading (A)",
-  y_label: "Secondary Factor (unitless)",
-  channels: [
-    {y: "u_positive", label: "U positive", color: colors.u},
-    {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
-    {y: "v_positive", label: "V positive", color: colors.v},
-    {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
-    {y: "w_positive", label: "W positive", color: colors.w},
-    {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
-    {y: "expected", label: "Expected", color: "gray"},
-  ],
-});
-
-function transparent(color, opacity = 0.2){
-  color = d3.color(color);
-  color.opacity = opacity;
-  return color;
-}
-
-const current_calibration_transitions_plot = plot_lines({
-  data: current_calibration.transition_stats,
-  subtitle: "Current Calibration Transitions",
-  description: "Current response to step changes in driving voltage.",
-  width: 1200, height: 300,
-  x_domain: [0, current_calibration.transition_stats?.length * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Relative response (unitless)",
-  channels: [
-    {
-      y: "u_positive", label: "U positive", color: colors.u,
-      draw_extra: function (draw_data){
-        for (let zone_i = 0; zone_i < current_calibration_zones.length; zone_i++){
-          draw_line.call(this, {...draw_data, y: (d) => d.u_positive_by_zone[zone_i], color: transparent(colors.u)});
-        }
-        setup_stdev_95({stdev: (d) => d.u_positive_stdev}).call(this, draw_data);
-      }
-    },
-    {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
-    {y: "v_positive", label: "V positive", color: colors.v},
-    {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
-    {y: "w_positive", label: "W positive", color: colors.w},
-    {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
-  ],
-});
-
-const current_calibration_positive_mean_plot = plot_lines({
-  data: current_calibration.stats,
-  subtitle: "Mean Response - Positive",
-  description: "Current calibration mean results for each phase driven positive.",
-  width: 1200, height: 300,
-  x_domain: [0, history_size * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Current (A)",
-  channels: [
-    {
-      y: "u_positive", 
-      draw_extra: setup_stdev_95({stdev: (d) => d.u_positive_stdev}),
-      label: "U positive mean", color: colors.u,
-    },
-    {
-      y: "v_positive",
-      draw_extra: setup_stdev_95({stdev: (d) => d.v_positive_stdev}),
-      label: "V positive mean", color: colors.v,
-    },
-    {
-      y: "w_positive",
-      draw_extra: setup_stdev_95({stdev: (d) => d.w_positive_stdev}),
-      label: "W positive mean", color: colors.w,
-    },
-    {
-      y: "expected",
-      draw_extra: setup_faint_area({y0: 0.0, y1: "expected"}),
-      label: "Expected", color: "gray",
-    },
-  ],
-});
-
-const current_calibration_negative_mean_plot = plot_lines({
-  data: current_calibration.stats,
-  subtitle: "Mean Response - Negative (inverted)",
-  description: "Current calibration mean results for each phase driven negative.",
-  width: 1200, height: 300,
-  x_domain: [0, history_size * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Current (A)",
-  channels: [
-    {
-      y: "u_negative", 
-      draw_extra: setup_stdev_95({stdev: (d) => d.u_negative_stdev}),
-      label: "U negative mean", color: colors.u,
-    },
-    {
-      y: "v_negative",
-      draw_extra: setup_stdev_95({stdev: (d) => d.v_negative_stdev}),
-      label: "V negative mean", color: colors.v,
-    },
-    {
-      y: "w_negative",
-      draw_extra: setup_stdev_95({stdev: (d) => d.w_negative_stdev}),
-      label: "W negative mean", color: colors.w,
-    },
-    {
-      y: "expected",
-      draw_extra: setup_faint_area({y0: 0.0, y1: "expected"}),
-      label: "Expected", color: "gray",
-    },
-  ],
-});
-
-autosave_inputs({
-  current_calibration_plot,
-  current_calibration_factors_plot,
-  current_calibration_transitions_plot,
-  current_calibration_positive_mean_plot,
-  current_calibration_negative_mean_plot,
-});
 
 ```
 

@@ -125,141 +125,49 @@ export async function run_current_calibration(motor_controller){
   // expected phase current inferred from the driver voltage and known
   // phase resistance (in v0 the shunt resistors vary +-50% after soldering
   // we should buy better current shunts, or maybe just bigger footprint).
-  const current_calibration_data = d3.range(history_size).map((i) => {
+  const sample = d3.range(history_size).map((i) => {
     const time = i * millis_per_cycle;
-    const zones = current_calibration_zones.filter((zone) => zone.settle_start <= time && time <= zone.settle_end);
 
-    if (zones.length > 1) throw new Error("Multiple zones found");
-    
-    let result = {
+    const expected = d3.mean([
+      +u_positive[i].u_drive_voltage,
+      -u_negative[i].u_drive_voltage,
+      +v_positive[i].v_drive_voltage,
+      -v_negative[i].v_drive_voltage,
+      +w_positive[i].w_drive_voltage,
+      -w_negative[i].w_drive_voltage,
+    ]) / phase_resistance;
+
+    return {
       time,
+      expected,
       u_positive: +u_positive[i].u_uncalibrated,
-      u_positive_expected: +u_positive[i].u_drive_voltage / phase_resistance,
       u_negative: -u_negative[i].u_uncalibrated,
-      u_negative_expected: -u_negative[i].u_drive_voltage / phase_resistance,
       v_positive: +v_positive[i].v_uncalibrated,
-      v_positive_expected: +v_positive[i].v_drive_voltage / phase_resistance,
       v_negative: -v_negative[i].v_uncalibrated,
-      v_negative_expected: -v_negative[i].v_drive_voltage / phase_resistance,
       w_positive: +w_positive[i].w_uncalibrated,
-      w_positive_expected: +w_positive[i].w_drive_voltage / phase_resistance,
       w_negative: -w_negative[i].w_uncalibrated,
-      w_negative_expected: -w_negative[i].w_drive_voltage / phase_resistance,
     };
-
-    const expected = zones.length == 0 ? null : d3.mean(Object.values(_.pick(
-        result, 
-        "u_positive_expected", "u_negative_expected", 
-        "v_positive_expected", "v_negative_expected", 
-        "w_positive_expected", "w_negative_expected",
-      )));
-    result.expected = expected;
-
-    return result;
   });
+
+  
+  const current_calibration_data = {
+    sample,
+    u_positive,
+    u_negative,
+    v_positive,
+    v_negative,
+    w_positive,
+    w_negative,
+  };
+
 
   console.info("Current calibration done", current_calibration_data);
 
   return current_calibration_data;
 }
 
-function almost_equal(a, b){
-  return Math.abs(a - b) < 0.000_000_1;
-}
-
 function compute_calibration_instance(calibration_data){
-  
-  const settled_zones = current_calibration_zones.map((zone) => {
-    return calibration_data.filter((d) => d.time > zone.settle_start && d.time < zone.settle_end);
-  });
 
-  const transition_zones = current_calibration_zones.map((zone) => {
-    return calibration_data.filter((d) => d.time > zone.start && d.time < zone.settle_start);
-  });
-
-  function compute_phase_calibration(phase_selector){
-    const zone_stats = settled_zones.map((zone_data) => {
-      const settled_current = d3.mean(zone_data, (d) => d[phase_selector]);
-      const expected_current = d3.mean(zone_data, (d) => d[`${phase_selector}_expected`]);
-      const adjustment_factor = expected_current / settled_current;
-      return {
-        settled_current,
-        expected_current,
-        adjustment_factor,
-      };
-    });
-
-    const factor = d3.mean(zone_stats, (d) => d.adjustment_factor);
-
-    const transition_data = transition_zones.map((zone_data, zone_i) => {
-      if (zone_data.length == 0) throw new Error("No transition data found");
-
-      const expected_change = zone_stats[zone_i].expected_current - (zone_i === 0 ? 0.0 : zone_stats[zone_i - 1].expected_current);
-      const adjustment_factor = zone_stats[zone_i].adjustment_factor;
-
-      const start_time = zone_data[0].time;
-
-      return zone_data.map((d) => {
-        const actual = d[phase_selector] * adjustment_factor;
-        const expected = d[`${phase_selector}_expected`];
-        const diff_to_expected = actual - expected;
-        return {
-          relative_diff: zone_i >= 6 ? null : diff_to_expected / expected_change,
-          time: d.time - start_time,
-          actual,
-          expected,
-        };
-      });
-    });
-
-    const transition_stats = transition_times.map((time, time_i) => {
-      // Ensure all times match up.
-      transition_data.forEach((zone_data) => {
-        if (!almost_equal(zone_data[time_i]?.time, time)) throw new Error(`Transition time mismatch: ${zone_data[time_i]?.time} != ${time}`);
-      });
-
-      return {
-        time,
-        relative_diff: d3.mean(transition_data, (zone_data) => zone_data[time_i]?.relative_diff),
-        relative_diff_stdev: d3.deviation(transition_data, (zone_data) => zone_data[time_i]?.relative_diff),
-      };
-    });
-
-    const slow_func = piecewise_linear({
-      X: [0.0, ...zone_stats.map((d) => d.settled_current)],
-      Y: [0.0, ...zone_stats.map((d) => d.expected_current)],
-    });
-
-    // Recalibrate to evenly spaced points for fast processing.
-    const func = even_piecewise_linear({
-      x_min: 0, x_max: max_calibration_current,
-      Y: current_calibration_reading_points.map(slow_func),
-    });
-
-    const sample = current_calibration_reading_points.map((x) => ({
-      reading: x,
-      calibrated: func(x),
-      secondary_factor: x == 0 ? 1 : func(x) / (factor * x),
-    }));
-
-    return {
-      zone_stats,
-      transition_data,
-      transition_stats,
-      factor,
-      func,
-      sample,
-    };
-  }
-
-  return {
-    u_positive: compute_phase_calibration("u_positive"),
-    u_negative: compute_phase_calibration("u_negative"),
-    v_positive: compute_phase_calibration("v_positive"),
-    v_negative: compute_phase_calibration("v_negative"),
-    w_positive: compute_phase_calibration("w_positive"),
-    w_negative: compute_phase_calibration("w_negative"),
-  };
 }
 
 
@@ -278,96 +186,40 @@ export function compute_current_calibration(calibration_results){
 
   if (valid_calibration_results.length == 0) return {
     stats: [],
-    samples: [],
     current_calibration: null,
-    calibration_funcs: null,
   };
   
   const stats = d3.range(history_size).map((i) => {
     return {
-      time: valid_calibration_results[0][i].time,
-      expected: d3.mean(valid_calibration_results, (data) => data[i].expected),
-      u_positive: d3.mean(valid_calibration_results, (data) => data[i].u_positive),
-      u_positive_expected: d3.mean(valid_calibration_results, (data) => data[i].u_positive_expected),
-      u_positive_stdev: d3.deviation(valid_calibration_results, (data) => data[i].u_positive),
-      u_negative: d3.mean(valid_calibration_results, (data) => data[i].u_negative),
-      u_negative_expected: d3.mean(valid_calibration_results, (data) => data[i].u_negative_expected),
-      u_negative_stdev: d3.deviation(valid_calibration_results, (data) => data[i].u_negative),
-      v_positive: d3.mean(valid_calibration_results, (data) => data[i].v_positive),
-      v_positive_expected: d3.mean(valid_calibration_results, (data) => data[i].v_positive_expected),
-      v_positive_stdev: d3.deviation(valid_calibration_results, (data) => data[i].v_positive),
-      v_negative: d3.mean(valid_calibration_results, (data) => data[i].v_negative),
-      v_negative_expected: d3.mean(valid_calibration_results, (data) => data[i].v_negative_expected),
-      v_negative_stdev: d3.deviation(valid_calibration_results, (data) => data[i].v_negative),
-      w_positive: d3.mean(valid_calibration_results, (data) => data[i].w_positive),
-      w_positive_expected: d3.mean(valid_calibration_results, (data) => data[i].w_positive_expected),
-      w_positive_stdev: d3.deviation(valid_calibration_results, (data) => data[i].w_positive),
-      w_negative: d3.mean(valid_calibration_results, (data) => data[i].w_negative),
-      w_negative_expected: d3.mean(valid_calibration_results, (data) => data[i].w_negative_expected),
-      w_negative_stdev: d3.deviation(valid_calibration_results, (data) => data[i].w_negative),
+      time: i * millis_per_cycle,
+      expected: d3.mean(valid_calibration_results, ({sample}) => sample[i].expected),
+      expected_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].expected),
+      u_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].u_positive),
+      u_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].u_positive),
+      u_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].u_negative),
+      u_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].u_negative),
+      v_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].v_positive),
+      v_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].v_positive),
+      v_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].v_negative),
+      v_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].v_negative),
+      w_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].w_positive),
+      w_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].w_positive),
+      w_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].w_negative),
+      w_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].w_negative),
     };
   });
 
-  const calibration = compute_calibration_instance(stats);
-
-  const secondary_factors = current_calibration_reading_points.map((x, i) => {
-    return {
-      reading: x,
-      expected: 1.0,
-      u_positive: calibration.u_positive.sample[i].secondary_factor,
-      u_negative: calibration.u_negative.sample[i].secondary_factor,
-      v_positive: calibration.v_positive.sample[i].secondary_factor,
-      v_negative: calibration.v_negative.sample[i].secondary_factor,
-      w_positive: calibration.w_positive.sample[i].secondary_factor,
-      w_negative: calibration.w_negative.sample[i].secondary_factor,
-    };
-  });
   
-  const current_calibration = {
-    u_factor: (calibration.u_positive.factor + calibration.u_negative.factor) / 2,
-    v_factor: (calibration.v_positive.factor + calibration.v_negative.factor) / 2,
-    w_factor: (calibration.w_positive.factor + calibration.w_negative.factor) / 2,
-  };
-
-  const calibration_funcs = {
-    u_positive: calibration.u_positive.func,
-    u_negative: calibration.u_negative.func,
-    v_positive: calibration.v_positive.func,
-    v_negative: calibration.v_negative.func,
-    w_positive: calibration.w_positive.func,
-    w_negative: calibration.w_negative.func,
-  };
-
-  const transition_stats = transition_times.map((time, i) => {
-    return {
-      time,
-      u_positive: calibration.u_positive.transition_stats[i].relative_diff,
-      u_positive_stdev: calibration.u_positive.transition_stats[i].relative_diff_stdev,
-      u_positive_by_zone: calibration.u_positive.transition_data.map((zone_data) => zone_data[i].relative_diff),
-      u_negative: calibration.u_negative.transition_stats[i].relative_diff,
-      u_negative_stdev: calibration.u_negative.transition_stats[i].relative_diff_stdev,
-      u_negative_by_zone: calibration.u_negative.transition_data.map((zone_data) => zone_data[i].relative_diff),
-      v_positive: calibration.v_positive.transition_stats[i].relative_diff,
-      v_positive_stdev: calibration.v_positive.transition_stats[i].relative_diff_stdev,
-      v_positive_by_zone: calibration.v_positive.transition_data.map((zone_data) => zone_data[i].relative_diff),
-      v_negative: calibration.v_negative.transition_stats[i].relative_diff,
-      v_negative_stdev: calibration.v_negative.transition_stats[i].relative_diff_stdev,
-      v_negative_by_zone: calibration.v_negative.transition_data.map((zone_data) => zone_data[i].relative_diff),
-      w_positive: calibration.w_positive.transition_stats[i].relative_diff,
-      w_positive_stdev: calibration.w_positive.transition_stats[i].relative_diff_stdev,
-      w_positive_by_zone: calibration.w_positive.transition_data.map((zone_data) => zone_data[i].relative_diff),
-      w_negative: calibration.w_negative.transition_stats[i].relative_diff,
-      w_negative_stdev: calibration.w_negative.transition_stats[i].relative_diff_stdev,
-      w_negative_by_zone: calibration.w_negative.transition_data.map((zone_data) => zone_data[i].relative_diff),
-    };
-  });
+  const current_calibration = null;
+  // {
+  //   u_factor: (calibration.u_positive.factor + calibration.u_negative.factor) / 2,
+  //   v_factor: (calibration.v_positive.factor + calibration.v_negative.factor) / 2,
+  //   w_factor: (calibration.w_positive.factor + calibration.w_negative.factor) / 2,
+  // };
 
   return {
     stats,
-    secondary_factors,
     current_calibration,
-    calibration_funcs,
-    transition_stats,
   };
 }
 
