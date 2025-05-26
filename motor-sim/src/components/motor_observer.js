@@ -1,30 +1,10 @@
 import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, radians_to_degrees} from "./angular_math.js";
 import {interpolate_linear, matrix_multiply, exponential_averager, square, exponential_stats} from "./math_utils.js";
+import {product_of_normals, add_stdev} from "./stats_utils.js";
+import {online_map, online_function_chain} from "./data_utils.js";
 
 import {phase_inductance, phase_resistance} from "./motor_constants.js";
 
-
-export function online_map(array, online_fn){
-  if (array.length == 0) return [];
-
-  const result = new Array(array.length);
-  let previous = online_fn(array[0], undefined);
-  result[0] = previous;
-  for (let i = 1; i < array.length; i++){
-    previous = online_fn(array[i], previous);
-    result[i] = previous;
-  }
-  return result;
-}
-
-export function online_function_chain(...online_functions){
-  return function(value, previous){
-    for (const fn of online_functions){
-      value = fn.call(this, value, previous);
-    }
-    return value;
-  };
-}
 
 // Calculate Data
 // --------------
@@ -49,21 +29,6 @@ function shortest_distance_mod_6(a, b){
   return diff > 3 ? diff - 6 : diff;
 }
 
-function product_of_normals({mean_a, std_a, mean_b, std_b}){
-  const mean = (mean_a * std_b * std_b + mean_b * std_a * std_a) / (std_a * std_a + std_b * std_b);
-  const stdev = Math.sqrt((std_a * std_a * std_b * std_b) / (std_a * std_a + std_b * std_b));
-  return {mean, stdev};
-}
-
-function product_of_normals_by_variance({mean_a, variance_a, mean_b, variance_b}){
-  const mean = (mean_a * variance_b + mean_b * variance_a) / (variance_a + variance_b);
-  const variance = (variance_a * variance_b) / (variance_a + variance_b);
-  return {mean, variance};
-}
-
-function add_stdev(...std_values){
-  return Math.sqrt(std_values.reduce((sum, stdev) => sum + stdev * stdev, 0));
-}
 
 function accumulate_position_from_hall(readout, prev_readout){
   const {sector_center_degrees, sector_center_stdev, sector_transition_degrees, sector_transition_stdev, angular_acceleration_stdev, initial_angular_speed_stdev} = this.position_calibration;
@@ -105,9 +70,9 @@ function accumulate_position_from_hall(readout, prev_readout){
     
     const {mean: distance_adjustment, stdev: web_angle_stdev} = product_of_normals({
       mean_a: 0.0,
-      std_a: estimated_distance_stdev,
+      stdev_a: estimated_distance_stdev,
       mean_b: estimated_distance_error,
-      std_b: trigger_angle_stdev,
+      stdev_b: trigger_angle_stdev,
     });
 
     const kalman_angle = normalize_degrees(prev_readout.obs_angle + estimated_distance + distance_adjustment);
@@ -120,9 +85,9 @@ function accumulate_position_from_hall(readout, prev_readout){
 
     const {mean: speed_adjustment, stdev: web_angular_speed_stdev} = product_of_normals({
       mean_a: 0.0,
-      std_a: prev_readout.obs_angular_speed_stdev + 0.5 * angular_acceleration_stdev * dt,
+      stdev_a: prev_readout.obs_angular_speed_stdev + 0.5 * angular_acceleration_stdev * dt,
       mean_b: estimated_speed_error,
-      std_b: estimated_speed_error_stdev,
+      stdev_b: estimated_speed_error_stdev,
     });
 
     const web_angular_speed = prev_readout.obs_angular_speed + speed_adjustment;
@@ -177,9 +142,9 @@ function accumulate_position_from_hall(readout, prev_readout){
 
     const {mean: web_angular_speed, stdev: web_angular_speed_stdev} = product_of_normals({
       mean_a: calculated_spin,
-      std_a: calculated_spin_stdev,
+      stdev_a: calculated_spin_stdev,
       mean_b: prev_readout.obs_angular_speed,
-      std_b: prev_readout.obs_angular_speed_stdev + angular_acceleration_stdev * dt,
+      stdev_b: prev_readout.obs_angular_speed_stdev + angular_acceleration_stdev * dt,
     });
 
     if (p_stopped_in_current_sector >= 0.99){
@@ -343,6 +308,7 @@ function compute_derivative_info(readout, previous_readout){
     current_alpha, current_beta,
     current_angle, current_magnitude, 
     web_current_angle_offset, web_current_angle_offset_avg, web_current_angle_offset_stdev,
+    mid_u_drive_voltage, mid_v_drive_voltage, mid_w_drive_voltage,
     u_diff_uncalibrated, v_diff_uncalibrated, w_diff_uncalibrated,
     u_voltage, v_voltage, w_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,

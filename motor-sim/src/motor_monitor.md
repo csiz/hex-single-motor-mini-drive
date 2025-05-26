@@ -61,6 +61,14 @@ Current Calibration Procedures
   </div>
   <div>${current_calibration_result_to_display_input}</div>
   <div>${current_calibration_plot}</div>
+  <div>${current_calibration_optimization_iteration_input}</div>
+  <div>${current_calibration_optimization_phase_input}</div>
+  <div>${current_calibration_optimizing_plot}</div>
+  <div>${current_calibration_optimizing_gradients_plot}</div>
+  <div>
+    <p>Current calibration factors at displayed iteration:</p>
+    <pre>${current_calibration_iteration_table}</pre>
+  </div>
 </div>
 <div class="card tight">  
   <h3>Current Calibration Statistics</h3>
@@ -482,9 +490,12 @@ const time_offset_input = Inputs.range([0, 1.0], {
   step: 0.01,
   label: "Time window Offset (ms):",
 });
-d3.select(time_offset_input).select("div").style("width", "640px");
-d3.select(time_offset_input).select("input[type=range]").style("width", "100em");
-
+d3.select(time_offset_input)
+  .style("width", "100%")
+  .call(form => {
+    form.select("input[type=number]").style("width", "7em");
+    form.select("input[type=range]").style("width", "640px");
+  });
 
 const plot_curve_input = Inputs.radio(new Map([
   ["Connected steps", d3.curveStep],
@@ -971,13 +982,56 @@ const current_calibration_result_to_display_input = Inputs.select(d3.range(curre
   label: "Select calibration result to display:",
 });
 const current_calibration_result_to_display = Generators.input(current_calibration_result_to_display_input);
+```
+
+```js
+const current_calibration_result = current_calibration.results[current_calibration_result_to_display];
+
+const current_calibration_iterations = current_calibration_result?.iterations ?? [];
+
+// Select the optimization iteration to display.
+const current_calibration_optimization_iteration_input = !current_calibration_result ? 
+  html`<p>No optimization iterations available.</p>` : 
+  Inputs.range(
+    [0, current_calibration_iterations.length - 1], {
+    step: 1,
+    label: "Select optimization iteration to display:",
+  });
+
+d3.select(current_calibration_optimization_iteration_input)
+  .style("width", "100%")
+  .call(form => {
+    form.select("input[type=number]").style("width", "7em");
+    form.select("input[type=range]").style("width", "640px");
+  });
+
+const current_calibration_optimization_phase_input = Inputs.radio(
+  new Map([
+    ["U positive", "u_positive_gradients"],
+    ["U negative", "u_negative_gradients"],
+    ["V positive", "v_positive_gradients"],
+    ["V negative", "v_negative_gradients"],
+    ["W positive", "w_positive_gradients"],
+    ["W negative", "w_negative_gradients"],
+  ]),
+  {
+    label: "Select calibration phase to display:",
+  },
+);
+
+const current_calibration_optimization_iteration = Generators.input(current_calibration_optimization_iteration_input);
+const current_calibration_optimization_phase = Generators.input(current_calibration_optimization_phase_input);
+
+set_input_value(current_calibration_optimization_iteration_input, current_calibration_iterations?.length - 1);
+set_input_value(current_calibration_optimization_phase_input, "u_positive_gradients");
 
 ```
 
 ```js
 
+
 const current_calibration_plot = plot_lines({
-  data: current_calibration.results[current_calibration_result_to_display]?.sample,
+  data: current_calibration_result?.sample,
   subtitle: "Current Calibration",
   description: "Current calibration results for each phase.",
   width: 1200, height: 400,
@@ -986,12 +1040,12 @@ const current_calibration_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Current (A)",
   channels: [
-    {y: "u_positive", label: "U positive", color: colors.u},
-    {y: "u_negative", label: "U negative", color: d3.color(colors.u).darker(1)},
-    {y: "v_positive", label: "V positive", color: colors.v},
-    {y: "v_negative", label: "V negative", color: d3.color(colors.v).darker(1)},
-    {y: "w_positive", label: "W positive", color: colors.w},
-    {y: "w_negative", label: "W negative", color: d3.color(colors.w).darker(1)},
+    {y: "u_positive_uncalibrated_current", label: "U positive", color: colors.u},
+    {y: "u_negative_uncalibrated_current", label: "U negative", color: d3.color(colors.u).darker(1)},
+    {y: "v_positive_uncalibrated_current", label: "V positive", color: colors.v},
+    {y: "v_negative_uncalibrated_current", label: "V negative", color: d3.color(colors.v).darker(1)},
+    {y: "w_positive_uncalibrated_current", label: "W positive", color: colors.w},
+    {y: "w_negative_uncalibrated_current", label: "W negative", color: d3.color(colors.w).darker(1)},
     {
       y: "expected",
       draw_extra: setup_faint_area({y0: 0.0, y1: "expected"}),
@@ -1000,7 +1054,53 @@ const current_calibration_plot = plot_lines({
   ],
 });
 
+const current_calibration_iteration = current_calibration_iterations[current_calibration_optimization_iteration];
+const current_calibration_gradients = current_calibration_iteration?.[current_calibration_optimization_phase];
 
+// Write out the current calibration results in copyable format.
+const current_calibration_iteration_table = `iteration_current_calibration = ${JSON.stringify(current_calibration_iterations[current_calibration_optimization_iteration]?.current_calibration, null, 2)}`;
+
+const current_calibration_optimizing_plot = plot_lines({
+  data: current_calibration_gradients,
+  subtitle: "Current Calibration - Optimizing resistance & inductance",
+  description: "Current calibration optimization results for each phase.",
+  width: 1200, height: 300,
+  x_domain: [0, history_size * millis_per_cycle],
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Voltage (V)",
+  channels: [
+    {y: "resistance_drop", label: "Resistance Drop", color: colors.u},
+    {y: "inductance_drop", label: "Inductance Drop", color: colors.v},
+    {y: "drive_voltage", label: "Drive Voltage", color: colors.w},
+    {
+      y: "residual",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "residual"}),
+      label: "Residual", color: "grey",
+    },
+  ],
+});
+
+const current_calibration_optimizing_gradients_plot = plot_lines({
+  data: current_calibration_gradients,
+  subtitle: "Current Calibration - resistance & inductance gradients",
+  description: "Current calibration optimization results for each phase.",
+  width: 1200, height: 300,
+  x_domain: [0, history_size * millis_per_cycle],
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Factor Change",
+  channels: [
+    {
+      y: "current_factor_gradient", label: "Current Factor Gradient", color: colors.u,
+      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.current_factor_variance)}),
+    },
+    {
+      y: "inductance_factor_gradient", label: "Inductance Factor Gradient", color: colors.v,
+      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.inductance_factor_variance)}),
+    },
+  ],
+});
 
 const current_calibration_positive_mean_plot = plot_lines({
   data: current_calibration.stats,
@@ -1070,6 +1170,8 @@ const current_calibration_negative_mean_plot = plot_lines({
 
 autosave_inputs({
   current_calibration_plot,
+  current_calibration_optimizing_plot,
+  current_calibration_optimizing_gradients_plot,
   current_calibration_positive_mean_plot,
   current_calibration_negative_mean_plot,
 });

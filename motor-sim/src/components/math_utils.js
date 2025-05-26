@@ -92,3 +92,7 @@ export function exponential_stats(time_since_last, alpha_time) {
 export function valid_number(value) {
   return (typeof value === "number" && !isNaN(value) && isFinite(value));
 }
+
+export function invalid_to_zero(value) {
+  return valid_number(value) ? value : 0;
+}

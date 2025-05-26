@@ -1,7 +1,9 @@
-import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance, max_calibration_current} from "./motor_constants.js";
+import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance, phase_inductance} from "./motor_constants.js";
 import {command_codes} from "./motor_interface.js";
 import {wait} from "./async_utils.js";
-import {even_spacing, piecewise_linear, even_piecewise_linear} from "./math_utils.js";
+import {square, invalid_to_zero} from "./math_utils.js";
+import {zip_records} from "./data_utils.js";
+import {product_of_normals} from "./stats_utils.js";
 
 import * as d3 from "d3";
 import _ from "lodash";
@@ -10,7 +12,9 @@ import _ from "lodash";
 const short_duration = history_size / 12 * millis_per_cycle;
 const settling_time = short_duration * 0.4;
 const settling_end = short_duration * 0.95;
-const transition_times = d3.range(0.0, settling_time - millis_per_cycle, millis_per_cycle);
+
+const calibration_start = short_duration * 0.5;
+const calibration_end = short_duration * 10.5;
 
 export const current_calibration_zones = [
   {pwm: 0.1, start: short_duration * 1.0},
@@ -30,8 +34,6 @@ export const current_calibration_zones = [
 
 
 
-const current_calibration_points = 32;
-const current_calibration_reading_points = even_spacing(max_calibration_current, current_calibration_points / 2 + 1);
 
 export async function run_current_calibration(motor_controller){
 
@@ -48,7 +50,7 @@ export async function run_current_calibration(motor_controller){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const u_positive = await motor_controller.command_and_read(
+  const u_positive_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_U_INCREASING, ...test_options},
     {expected_messages: history_size});
 
@@ -56,7 +58,7 @@ export async function run_current_calibration(motor_controller){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const w_negative = await motor_controller.command_and_read(
+  const w_negative_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_W_DECREASING, ...test_options},
     {expected_messages: history_size});
 
@@ -64,7 +66,7 @@ export async function run_current_calibration(motor_controller){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const v_positive = await motor_controller.command_and_read(
+  const v_positive_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_V_INCREASING, ...test_options},
     {expected_messages: history_size});
 
@@ -72,7 +74,7 @@ export async function run_current_calibration(motor_controller){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const u_negative = await motor_controller.command_and_read(
+  const u_negative_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_U_DECREASING, ...test_options},
     {expected_messages: history_size});
 
@@ -80,7 +82,7 @@ export async function run_current_calibration(motor_controller){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const w_positive = await motor_controller.command_and_read(
+  const w_positive_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_W_INCREASING, ...test_options},
     {expected_messages: history_size});
 
@@ -88,68 +90,102 @@ export async function run_current_calibration(motor_controller){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const v_negative = await motor_controller.command_and_read(
+  const v_negative_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_V_DECREASING, ...test_options},
     {expected_messages: history_size});
 
   console.info("V negative done");
 
+  const times = d3.range(history_size).map((i) => i * millis_per_cycle);
+
   // Check all calibration data is complete.
-  if (u_positive.length !== history_size) {
-    console.error("U positive calibration data incomplete", u_positive);
+  if (u_positive_readout.length !== history_size) {
+    console.error("U positive calibration data incomplete", u_positive_readout);
     return;
   }
-  if (u_negative.length !== history_size) {
-    console.error("U negative calibration data incomplete", u_negative);
+  if (u_negative_readout.length !== history_size) {
+    console.error("U negative calibration data incomplete", u_negative_readout);
     return;
   }
-  if (v_positive.length !== history_size) {
-    console.error("V positive calibration data incomplete", v_positive);
+  if (v_positive_readout.length !== history_size) {
+    console.error("V positive calibration data incomplete", v_positive_readout);
     return;
   }
-  if (v_negative.length !== history_size) {
-    console.error("V negative calibration data incomplete", v_negative);
+  if (v_negative_readout.length !== history_size) {
+    console.error("V negative calibration data incomplete", v_negative_readout);
     return;
   }
-  if (w_positive.length !== history_size) {
-    console.error("W positive calibration data incomplete", w_positive);
+  if (w_positive_readout.length !== history_size) {
+    console.error("W positive calibration data incomplete", w_positive_readout);
     return;
   }
-  if (w_negative.length !== history_size) {
-    console.error("W negative calibration data incomplete", w_negative);
+  if (w_negative_readout.length !== history_size) {
+    console.error("W negative calibration data incomplete", w_negative_readout);
     return;
   }
 
+  const u_positive = u_positive_readout.map((d) => ({
+    time: d.time,
+    drive_voltage: d.mid_u_drive_voltage,
+    uncalibrated_current: d.u_uncalibrated,
+    diff_uncalibrated_current: d.u_diff_uncalibrated,
+  }));
+  const u_negative = u_negative_readout.map((d) => ({
+    time: d.time,
+    drive_voltage: -d.mid_u_drive_voltage,
+    uncalibrated_current: -d.u_uncalibrated,
+    diff_uncalibrated_current: -d.u_diff_uncalibrated,
+  }));
+  const v_positive = v_positive_readout.map((d) => ({
+    time: d.time,
+    drive_voltage: d.mid_v_drive_voltage,
+    uncalibrated_current: d.v_uncalibrated,
+    diff_uncalibrated_current: d.v_diff_uncalibrated,
+  }));
+  const v_negative = v_negative_readout.map((d) => ({
+    time: d.time,
+    drive_voltage: -d.mid_v_drive_voltage,
+    uncalibrated_current: -d.v_uncalibrated,
+    diff_uncalibrated_current: -d.v_diff_uncalibrated,
+  }));
+  const w_positive = w_positive_readout.map((d) => ({
+    time: d.time,
+    drive_voltage: d.mid_w_drive_voltage,
+    uncalibrated_current: d.w_uncalibrated,
+    diff_uncalibrated_current: d.w_diff_uncalibrated,
+  }));
+  const w_negative = w_negative_readout.map((d) => ({
+    time: d.time,
+    drive_voltage: -d.mid_w_drive_voltage,
+    uncalibrated_current: -d.w_uncalibrated,
+    diff_uncalibrated_current: -d.w_diff_uncalibrated,
+  }));
 
-  // Make a new table with each calibration's measured phase current and 
+  const expected_current = times.map((t, i) => {
+    return d3.mean([
+      u_positive[i].drive_voltage,
+      u_negative[i].drive_voltage,
+      v_positive[i].drive_voltage,
+      v_negative[i].drive_voltage,
+      w_positive[i].drive_voltage,
+      w_negative[i].drive_voltage,
+    ]) / phase_resistance;
+  });
+
+
+  // Make a new table with each calibration's measured phase current and
   // expected phase current inferred from the driver voltage and known
   // phase resistance (in v0 the shunt resistors vary +-50% after soldering
   // we should buy better current shunts, or maybe just bigger footprint).
-  const sample = d3.range(history_size).map((i) => {
-    const time = i * millis_per_cycle;
-
-    const expected = d3.mean([
-      +u_positive[i].u_drive_voltage,
-      -u_negative[i].u_drive_voltage,
-      +v_positive[i].v_drive_voltage,
-      -v_negative[i].v_drive_voltage,
-      +w_positive[i].w_drive_voltage,
-      -w_negative[i].w_drive_voltage,
-    ]) / phase_resistance;
-
-    return {
-      time,
-      expected,
-      u_positive: +u_positive[i].u_uncalibrated,
-      u_negative: -u_negative[i].u_uncalibrated,
-      v_positive: +v_positive[i].v_uncalibrated,
-      v_negative: -v_negative[i].v_uncalibrated,
-      w_positive: +w_positive[i].w_uncalibrated,
-      w_negative: -w_negative[i].w_uncalibrated,
-    };
+  const sample = zip_records({
+    "time": times,
+    "expected": expected_current,
+    u_positive, u_negative,
+    v_positive, v_negative,
+    w_positive, w_negative,
   });
 
-  
+
   const current_calibration_data = {
     sample,
     u_positive,
@@ -158,6 +194,11 @@ export async function run_current_calibration(motor_controller){
     v_negative,
     w_positive,
     w_negative,
+    ...compute_calibration_instance({
+      u_positive, u_negative,
+      v_positive, v_negative,
+      w_positive, w_negative,
+    })
   };
 
 
@@ -166,23 +207,173 @@ export async function run_current_calibration(motor_controller){
   return current_calibration_data;
 }
 
-function compute_calibration_instance(calibration_data){
 
+function compute_gradients({current_factor, inductance_factor}, data){
+
+  return data.filter((d) => d.time >= calibration_start && d.time <= calibration_end).map((d) => {
+    const {drive_voltage, uncalibrated_current, diff_uncalibrated_current} = d;
+
+
+    const resistance_drop = current_factor * uncalibrated_current * phase_resistance;
+    const inductance_drop = inductance_factor * current_factor * diff_uncalibrated_current * 1000 * phase_inductance;
+
+    const residual = resistance_drop + inductance_drop - drive_voltage;
+
+    const loss = square(residual);
+
+    const resistance_weight = (Math.abs(resistance_drop) < 0.1 || Math.abs(inductance_drop / resistance_drop) > 0.2) ? 0.0 : 1.0;
+
+    const inductance_weight = (Math.abs(resistance_drop) < 0.1) ? 0.0 : Math.min(1.0, square(inductance_drop / resistance_drop));
+
+    const current_factor_gradient = invalid_to_zero(loss * current_factor / (residual * 2 * (resistance_drop + inductance_drop)));
+    const inductance_factor_gradient = invalid_to_zero(loss * inductance_factor / (residual * 2 * inductance_drop));
+
+    const current_factor_variance = square(current_factor_gradient);
+    const inductance_factor_variance = square(inductance_factor_gradient);
+
+    return {
+      ...d,
+      resistance_drop,
+      inductance_drop,
+      residual,
+
+      loss,
+      current_factor_gradient: current_factor_gradient * resistance_weight, 
+      inductance_factor_gradient: inductance_factor_gradient * inductance_weight,
+      current_factor_variance: current_factor_variance * resistance_weight, 
+      inductance_factor_variance: inductance_factor_variance * inductance_weight,
+      resistance_weight, inductance_weight,
+    };
+  });
+}
+
+function multi_mean(array_of_arrays, value_fn) {
+  return d3.mean(array_of_arrays, (array) => {
+    return d3.mean(array, value_fn);
+  });
+}
+
+function compute_calibration_instance({u_positive, u_negative, v_positive, v_negative, w_positive, w_negative}){
+
+  let u_factor = 1.0;
+  let v_factor = 1.0;
+  let w_factor = 1.0;
+  let inductance_factor = 1.0;
+
+  const learning_rate = 0.20;
+  const max_iterations = 500;
+  const stability_threshold = 0.000_01;
+
+  let iterations = [];
+  for (let i = 0; i < max_iterations; i++) {
+    const u_positive_gradients = compute_gradients({current_factor: u_factor, inductance_factor}, u_positive);
+    const u_negative_gradients = compute_gradients({current_factor: u_factor, inductance_factor}, u_negative);
+    const v_positive_gradients = compute_gradients({current_factor: v_factor, inductance_factor}, v_positive);
+    const v_negative_gradients = compute_gradients({current_factor: v_factor, inductance_factor}, v_negative);
+    const w_positive_gradients = compute_gradients({current_factor: w_factor, inductance_factor}, w_positive);
+    const w_negative_gradients = compute_gradients({current_factor: w_factor, inductance_factor}, w_negative);
+
+    const u_gradients = [u_positive_gradients, u_negative_gradients];
+    const v_gradients = [v_positive_gradients, v_negative_gradients];
+    const w_gradients = [w_positive_gradients, w_negative_gradients];
+    const all_gradients = [...u_gradients, ...v_gradients, ...w_gradients];
+
+    const u_resistance_weight = multi_mean(u_gradients, (d) => d.resistance_weight);
+    const v_resistance_weight = multi_mean(v_gradients, (d) => d.resistance_weight);
+    const w_resistance_weight = multi_mean(w_gradients, (d) => d.resistance_weight);
+
+    const u_factor_gradient = multi_mean(u_gradients, (d) => d.current_factor_gradient) / u_resistance_weight;
+    const v_factor_gradient = multi_mean(v_gradients, (d) => d.current_factor_gradient) / v_resistance_weight;
+    const w_factor_gradient = multi_mean(w_gradients, (d) => d.current_factor_gradient) / w_resistance_weight;
+
+    const inductance_weight = multi_mean(all_gradients, (d) => d.inductance_weight);
+    const inductance_factor_gradient = multi_mean(all_gradients, (d) => d.inductance_factor_gradient) / inductance_weight;
+
+    const u_factor_stdev = Math.sqrt(multi_mean(u_gradients, (d) => d.current_factor_variance) / u_resistance_weight);
+    const v_factor_stdev = Math.sqrt(multi_mean(v_gradients, (d) => d.current_factor_variance) / v_resistance_weight);
+    const w_factor_stdev = Math.sqrt(multi_mean(w_gradients, (d) => d.current_factor_variance) / w_resistance_weight);
+
+    const inductance_factor_stdev = Math.sqrt(multi_mean(all_gradients, (d) => d.inductance_factor_variance) / inductance_weight);
+
+    const u_factor_change = learning_rate * u_factor_gradient;
+    const v_factor_change = learning_rate * v_factor_gradient;
+    const w_factor_change = learning_rate * w_factor_gradient;
+    const inductance_factor_change = learning_rate * inductance_factor_gradient;
+
+    u_factor -= u_factor_change;
+    v_factor -= v_factor_change;
+    w_factor -= w_factor_change;
+    inductance_factor -= inductance_factor_change;
+
+    iterations.push({
+      iteration: i,
+      current_calibration: {
+        u_factor, v_factor, w_factor, inductance_factor, 
+        u_factor_stdev, v_factor_stdev, w_factor_stdev, inductance_factor_stdev,
+        u_resistance_weight, v_resistance_weight, w_resistance_weight, inductance_weight,
+      },
+      u_factor_gradient, v_factor_gradient, w_factor_gradient, inductance_factor_gradient,
+      u_positive_gradients,
+      u_negative_gradients,
+      v_positive_gradients,
+      v_negative_gradients,
+      w_positive_gradients,
+      w_negative_gradients,
+    });
+
+    // Stop iterating if all changes are under the threshold.
+    const is_stable = (
+      Math.abs(u_factor_change) < stability_threshold &&
+      Math.abs(v_factor_change) < stability_threshold &&
+      Math.abs(w_factor_change) < stability_threshold &&
+      Math.abs(inductance_factor_change) < stability_threshold
+    );
+
+    const is_invalid = (
+      u_resistance_weight < 0.2 ||
+      v_resistance_weight < 0.2 ||
+      w_resistance_weight < 0.2 ||
+      inductance_weight < 0.01
+    );
+
+    if (is_invalid) {
+      console.warn("Current calibration was not valid, is there enough voltage applied to the motor driver?");
+      return {
+        iterations,
+        current_calibration: null,
+      }
+    }
+
+    if (is_stable) {
+      return {
+        iterations,
+        current_calibration: {
+          u_factor,
+          u_factor_stdev, 
+          v_factor,
+          v_factor_stdev, 
+          w_factor,
+          w_factor_stdev, 
+          inductance_factor,
+          inductance_factor_stdev,
+        }
+      };
+    }
+  }
+
+  // If we reach here, the calibration did not converge.
+  console.warn("Current calibration did not converge in the maximum number of iterations.");
+
+  return {
+    iterations,
+    current_calibration: null,
+  };
 }
 
 
 export function compute_current_calibration(calibration_results){
 
-
-  const valid_calibration_results = calibration_results.filter((calibration_data, i) => {
-    try {
-      compute_calibration_instance(calibration_data);
-      return true;
-    } catch (e) {
-      console.error(`Invalid calibration data (index ${i}); error: ${e}`);
-      return false;
-    }
-  });
+  const valid_calibration_results = calibration_results.filter(({current_calibration}) => current_calibration);
 
   if (valid_calibration_results.length == 0) return {
     stats: [],
@@ -194,28 +385,63 @@ export function compute_current_calibration(calibration_results){
       time: i * millis_per_cycle,
       expected: d3.mean(valid_calibration_results, ({sample}) => sample[i].expected),
       expected_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].expected),
-      u_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].u_positive),
-      u_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].u_positive),
-      u_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].u_negative),
-      u_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].u_negative),
-      v_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].v_positive),
-      v_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].v_positive),
-      v_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].v_negative),
-      v_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].v_negative),
-      w_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].w_positive),
-      w_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].w_positive),
-      w_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].w_negative),
-      w_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].w_negative),
+      u_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].u_positive_uncalibrated_current),
+      u_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].u_positive_uncalibrated_current), 
+      u_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].u_negative_uncalibrated_current),
+      u_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].u_negative_uncalibrated_current),
+      v_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].v_positive_uncalibrated_current),
+      v_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].v_positive_uncalibrated_current),
+      v_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].v_negative_uncalibrated_current),
+      v_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].v_negative_uncalibrated_current),
+      w_positive: d3.mean(valid_calibration_results, ({sample}) => sample[i].w_positive_uncalibrated_current),
+      w_positive_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].w_positive_uncalibrated_current),
+      w_negative: d3.mean(valid_calibration_results, ({sample}) => sample[i].w_negative_uncalibrated_current),
+      w_negative_stdev: d3.deviation(valid_calibration_results, ({sample}) => sample[i].w_negative_uncalibrated_current),
     };
   });
 
-  
-  const current_calibration = null;
-  // {
-  //   u_factor: (calibration.u_positive.factor + calibration.u_negative.factor) / 2,
-  //   v_factor: (calibration.v_positive.factor + calibration.v_negative.factor) / 2,
-  //   w_factor: (calibration.w_positive.factor + calibration.w_negative.factor) / 2,
-  // };
+  const current_calibration = valid_calibration_results.map((d) => d.current_calibration).reduce((acc, current_calibration) => {
+
+    const {mean: u_factor, stdev: u_factor_stdev} = product_of_normals({
+      mean_a: acc.u_factor, 
+      stdev_a: acc.u_factor_stdev, 
+      mean_b: current_calibration.u_factor, 
+      stdev_b: current_calibration.u_factor_stdev
+    });
+
+    const {mean: v_factor, stdev: v_factor_stdev} = product_of_normals({
+      mean_a: acc.v_factor, 
+      stdev_a: acc.v_factor_stdev, 
+      mean_b: current_calibration.v_factor, 
+      stdev_b: current_calibration.v_factor_stdev
+    });
+
+    const {mean: w_factor, stdev: w_factor_stdev} = product_of_normals({
+      mean_a: acc.w_factor, 
+      stdev_a: acc.w_factor_stdev, 
+      mean_b: current_calibration.w_factor, 
+      stdev_b: current_calibration.w_factor_stdev
+    });
+
+    const {mean: inductance_factor, stdev: inductance_factor_stdev} = product_of_normals({
+      mean_a: acc.inductance_factor, 
+      stdev_a: acc.inductance_factor_stdev, 
+      mean_b: current_calibration.inductance_factor, 
+      stdev_b: current_calibration.inductance_factor_stdev
+    });
+
+    return {
+      u_factor,
+      u_factor_stdev,
+      v_factor,
+      v_factor_stdev,
+      w_factor,
+      w_factor_stdev,
+      inductance_factor,
+      inductance_factor_stdev,
+    };
+  });
+
 
   return {
     stats,

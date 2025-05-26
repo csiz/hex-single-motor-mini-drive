@@ -100,9 +100,6 @@ export const current_conversion = adc_voltage_reference / (adc_base * motor_shun
 // Maximum current we can measure in Amperes.
 export const max_measurable_current = adc_base * current_conversion / 2; // Halved because we can measure negative current too.
 
-// Maximum current for which to compute calibration values. Extrapolate for higher currents.
-export const max_calibration_current = 4.0;
-
 export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
 
 export const current_calibration_base = 1024; // Base for fixed point multiplication.
