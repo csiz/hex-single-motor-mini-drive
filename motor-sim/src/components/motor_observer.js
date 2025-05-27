@@ -228,9 +228,9 @@ function compute_derivative_info(readout, previous_readout){
   const mid_w_drive_voltage = (w_drive_voltage + prev_w_drive_voltage) / 2;
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = (u - prev_u) / dt * 1000 * phase_inductance;
-  const v_L_voltage = (v - prev_v) / dt * 1000 * phase_inductance;
-  const w_L_voltage = (w - prev_w) / dt * 1000 * phase_inductance;
+  const u_L_voltage = (u - prev_u) / dt * 1000 * phase_inductance * this.current_calibration.inductance_factor;
+  const v_L_voltage = (v - prev_v) / dt * 1000 * phase_inductance * this.current_calibration.inductance_factor;
+  const w_L_voltage = (w - prev_w) / dt * 1000 * phase_inductance * this.current_calibration.inductance_factor;
 
   const u_R_voltage = phase_resistance * u;
   const v_R_voltage = phase_resistance * v;

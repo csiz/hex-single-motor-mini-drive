@@ -94,6 +94,8 @@ void write_current_calibration(uint8_t * data, CurrentCalibration const & factor
     offset += 2;
     write_int16(data + offset, factors.w_factor);
     offset += 2;
+    write_int16(data + offset, factors.inductance_factor);
+    offset += 2;
 
     // Check if we wrote the correct number of bytes.
     if (offset != current_calibration_size) error();
@@ -257,6 +259,8 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
     current_calibration.v_factor = read_int16(data + offset);
     offset += 2;
     current_calibration.w_factor = read_int16(data + offset);
+    offset += 2;
+    current_calibration.inductance_factor = read_int16(data + offset);
     offset += 2;
 
     if (offset != current_calibration_size) error();

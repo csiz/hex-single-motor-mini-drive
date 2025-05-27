@@ -250,7 +250,7 @@ function parse_full_readout(data_view, previous_readout){
 
 
 
-const current_calibration_size = 8;
+const current_calibration_size = 10;
 
 function parse_current_calibration(data_view){
   let offset = header_size;
@@ -261,10 +261,14 @@ function parse_current_calibration(data_view){
   const w_factor = data_view.getInt16(offset) / current_calibration_base;
   offset += 2;
 
+  const inductance_factor = data_view.getInt16(offset) / current_calibration_base;
+  offset += 2;
+
   return {
     u_factor,
     v_factor,
     w_factor,
+    inductance_factor,
   };
 }
 
@@ -315,7 +319,7 @@ function parse_position_calibration(data_view){
 }
 
 function serialise_set_current_calibration(current_calibration) {
-  const {u_factor, v_factor, w_factor} = current_calibration;
+  const {u_factor, v_factor, w_factor, inductance_factor} = current_calibration;
   
   let buffer = new Uint8Array(current_calibration_size);
 
@@ -330,6 +334,8 @@ function serialise_set_current_calibration(current_calibration) {
   view.setInt16(offset, Math.floor(v_factor * current_calibration_base));
   offset += 2;
   view.setInt16(offset, Math.floor(w_factor * current_calibration_base));
+  offset += 2;
+  view.setInt16(offset, Math.floor(inductance_factor * current_calibration_base));
   offset += 2;
 
   return buffer;

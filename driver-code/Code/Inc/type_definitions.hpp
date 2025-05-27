@@ -72,6 +72,7 @@ struct CurrentCalibration {
     int16_t u_factor;
     int16_t v_factor;
     int16_t w_factor;
+    int16_t inductance_factor;
 };
 
 using TriggerAngles = std::array<std::array<uint16_t, 2>, 6>;

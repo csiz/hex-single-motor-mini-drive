@@ -259,6 +259,7 @@ const CurrentCalibration default_current_calibration = {
     .u_factor = current_calibration_base,
     .v_factor = current_calibration_base,
     .w_factor = current_calibration_base,
+    .inductance_factor = current_calibration_base,
 };
 
 

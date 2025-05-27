@@ -108,6 +108,7 @@ export const current_calibration_default = {
   u_factor: 1.0,
   v_factor: 1.0,
   w_factor: 1.0,
+  inductance_factor: 1.0,
 };
 
 
