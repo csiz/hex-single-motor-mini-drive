@@ -70,6 +70,9 @@ static inline bool readout_history_push(Readout const & readout){
     return true;
 }
 
+uint16_t prev_u_pwm_duty = 0;
+uint16_t prev_v_pwm_duty = 0;
+uint16_t prev_w_pwm_duty = 0;
 
 
 // Critical function!! 23KHz PWM cycle
@@ -84,9 +87,24 @@ static inline void pwm_cycle_and_adc_update(){
     
     increment_time_since_observation();
 
-    // Write the previous pwm duty cycle to this readout, it should have been active during the prior to the ADC sampling.
-    readout.pwm_commands = get_motor_u_pwm_duty() * pwm_base * pwm_base + get_motor_v_pwm_duty() * pwm_base + get_motor_w_pwm_duty();
     
+    // Get the pwm duty cycle to this readout, it should have been active during the half period before the ADC sampling.
+    const uint16_t active_u_pwm_duty = get_motor_u_pwm_duty();
+    const uint16_t active_v_pwm_duty = get_motor_v_pwm_duty();
+    const uint16_t active_w_pwm_duty = get_motor_w_pwm_duty();
+    
+    // We read the current at the halfway point of the PWM cycle. It is
+    // most accurate to use the average PWM of the last 2 duty cycles. 
+    readout.pwm_commands = (
+        (prev_u_pwm_duty + active_u_pwm_duty) / 2 * pwm_base * pwm_base + 
+        (prev_v_pwm_duty + active_v_pwm_duty) / 2 * pwm_base + 
+        (prev_w_pwm_duty + active_w_pwm_duty) / 2
+    );
+
+    prev_u_pwm_duty = active_u_pwm_duty;
+    prev_v_pwm_duty = active_v_pwm_duty;
+    prev_w_pwm_duty = active_w_pwm_duty;
+
     // Write the current readout index.
     readout.readout_number = adc_update_number;
     

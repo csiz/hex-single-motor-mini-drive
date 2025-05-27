@@ -126,37 +126,37 @@ export async function run_current_calibration(motor_controller){
 
   const u_positive = u_positive_readout.map((d) => ({
     time: d.time,
-    drive_voltage: d.mid_u_drive_voltage,
+    drive_voltage: d.u_drive_voltage,
     uncalibrated_current: d.u_readout,
     uncalibrated_current_diff: d.u_readout_diff,
   }));
   const u_negative = u_negative_readout.map((d) => ({
     time: d.time,
-    drive_voltage: -d.mid_u_drive_voltage,
+    drive_voltage: -d.u_drive_voltage,
     uncalibrated_current: -d.u_readout,
     uncalibrated_current_diff: -d.u_readout_diff,
   }));
   const v_positive = v_positive_readout.map((d) => ({
     time: d.time,
-    drive_voltage: d.mid_v_drive_voltage,
+    drive_voltage: d.v_drive_voltage,
     uncalibrated_current: d.v_readout,
     uncalibrated_current_diff: d.v_readout_diff,
   }));
   const v_negative = v_negative_readout.map((d) => ({
     time: d.time,
-    drive_voltage: -d.mid_v_drive_voltage,
+    drive_voltage: -d.v_drive_voltage,
     uncalibrated_current: -d.v_readout,
     uncalibrated_current_diff: -d.v_readout_diff,
   }));
   const w_positive = w_positive_readout.map((d) => ({
     time: d.time,
-    drive_voltage: d.mid_w_drive_voltage,
+    drive_voltage: d.w_drive_voltage,
     uncalibrated_current: d.w_readout,
     uncalibrated_current_diff: d.w_readout_diff,
   }));
   const w_negative = w_negative_readout.map((d) => ({
     time: d.time,
-    drive_voltage: -d.mid_w_drive_voltage,
+    drive_voltage: -d.w_drive_voltage,
     uncalibrated_current: -d.w_readout,
     uncalibrated_current_diff: -d.w_readout_diff,
   }));
