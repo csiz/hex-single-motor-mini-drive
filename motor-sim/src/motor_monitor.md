@@ -831,9 +831,9 @@ const plot_inferred_voltages = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "u_voltage", label: "EMF Voltage U", color: colors.u},
-    {y: "v_voltage", label: "EMF Voltage V", color: colors.v},
-    {y: "w_voltage", label: "EMF Voltage W", color: colors.w},
+    {y: "u_emf_voltage", label: "EMF Voltage U", color: colors.u},
+    {y: "v_emf_voltage", label: "EMF Voltage V", color: colors.v},
+    {y: "w_emf_voltage", label: "EMF Voltage W", color: colors.w},
     {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
     {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
@@ -865,12 +865,12 @@ const plot_dq0_voltages = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
-    {y: "voltage_beta", label: "Voltage Beta", color: colors.current_beta},
-    {y: "voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
+    {y: "emf_voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
+    {y: "emf_voltage_beta", label: "Voltage Beta", color: colors.current_beta},
+    {y: "emf_voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
     {
-      y: "voltage_magnitude_avg", label: "Voltage Magnitude 0.5ms average", color: d3.color(colors.current_magnitude).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.voltage_magnitude_stdev}),
+      y: "emf_voltage_magnitude_avg", label: "Voltage Magnitude 0.5ms average", color: d3.color(colors.current_magnitude).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_magnitude_stdev}),
     }
   ],
   curve,

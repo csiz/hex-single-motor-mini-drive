@@ -96,3 +96,15 @@ export function valid_number(value) {
 export function invalid_to_zero(value) {
   return valid_number(value) ? value : 0;
 }
+
+const power_invariant_clarke_matrix = [
+  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
+  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
+  [1/Math.sqrt(3), 1/Math.sqrt(3), 1/Math.sqrt(3)],
+];
+
+const power_invariant_simplified_clarke_matrix = power_invariant_clarke_matrix.slice(0, 2);
+
+export function clarke_transform(u, v, w){
+  return matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
+}

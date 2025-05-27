@@ -6,10 +6,14 @@ import {
   angle_units_to_degrees, degrees_to_angle_units, current_calibration_base, unbounded_angle_units_to_degrees,
   speed_units_to_degrees_per_millisecond, degrees_per_millisecond_to_speed_units,
   acceleration_units_to_degrees_per_millisecond2, degrees_per_millisecond2_to_acceleration_units,
+  phase_resistance, phase_inductance, 
 } from './motor_constants.js';
 
-import {normalize_degrees} from './angular_math.js';
-import {square} from './math_utils.js';
+import {normalize_degrees, radians_to_degrees} from './angular_math.js';
+import {square, clarke_transform} from './math_utils.js';
+
+
+
 
 export const header_size = 2; // 2 bytes
 
@@ -134,12 +138,20 @@ function parse_readout(data_view, previous_readout){
   const scaled_u_current = u_readout * this.current_calibration.u_factor;
   const scaled_v_current = v_readout * this.current_calibration.v_factor;
   const scaled_w_current = w_readout * this.current_calibration.w_factor;
-
   const avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3.0;
 
   const u_current = scaled_u_current - avg_current;
   const v_current = scaled_v_current - avg_current;
   const w_current = scaled_w_current - avg_current;
+
+  
+  const [current_alpha, current_beta] = clarke_transform(u_current, v_current, w_current);
+  const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
+
+  const web_current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
+  const web_current_angle_offset = normalize_degrees(web_current_angle - angle);
+
+  
 
   // Approximate the angle for the 6 sectors of the hall sensor.
   const ε = 2;
@@ -152,21 +164,65 @@ function parse_readout(data_view, previous_readout){
   const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
   const time = readout_index * millis_per_cycle;
 
+  const scaled_u_current_diff = u_readout_diff * this.current_calibration.u_factor;
+  const scaled_v_current_diff = v_readout_diff * this.current_calibration.v_factor;
+  const scaled_w_current_diff = w_readout_diff * this.current_calibration.w_factor;
+  const avg_current_diff = (scaled_u_current_diff + scaled_v_current_diff + scaled_w_current_diff) / 3.0;
+  
+  const u_current_diff = scaled_u_current_diff - avg_current_diff;
+  const v_current_diff = scaled_v_current_diff - avg_current_diff;
+  const w_current_diff = scaled_w_current_diff - avg_current_diff;
+
+  // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
+  const u_L_voltage = u_current_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor;
+  const v_L_voltage = v_current_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor;
+  const w_L_voltage = w_current_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor;
+
+  const u_R_voltage = phase_resistance * u_current;
+  const v_R_voltage = phase_resistance * v_current;
+  const w_R_voltage = phase_resistance * w_current;
+
+  const u_emf_voltage = -u_drive_voltage + u_L_voltage + u_R_voltage;
+  const v_emf_voltage = -v_drive_voltage + v_L_voltage + v_R_voltage;
+  const w_emf_voltage = -w_drive_voltage + w_L_voltage + w_R_voltage;
+
+  const [emf_voltage_alpha, emf_voltage_beta] = clarke_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage);
+
+  const emf_voltage_angle = radians_to_degrees(Math.atan2(emf_voltage_beta, emf_voltage_alpha));
+  const emf_voltage_magnitude = Math.sqrt(emf_voltage_alpha * emf_voltage_alpha + emf_voltage_beta * emf_voltage_beta);
+
+  const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
+  const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
+  const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
+  const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
+
+
+
   const readout = {
     readout_number,
     readout_index, time,
     u_readout, v_readout, w_readout,
     u_readout_diff, v_readout_diff, w_readout_diff,
     ref_readout,
-    u_current, v_current, w_current,
-    avg_current,
+    u_current, v_current, w_current, avg_current,
+    current_alpha, current_beta,  current_magnitude,
+    web_current_angle, web_current_angle_offset,
+    u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
+    u_emf_voltage, v_emf_voltage, w_emf_voltage,
+    u_R_voltage, v_R_voltage, w_R_voltage,
+    u_L_voltage, v_L_voltage, w_L_voltage,
     hall_u, hall_v, hall_w, hall_sector,
     hall_u_as_angle, hall_v_as_angle, hall_w_as_angle,
     angle_valid, angle, angular_speed,
     instant_vcc_voltage,
     current_angle_offset,
+    emf_voltage_alpha, emf_voltage_beta, emf_voltage_angle, emf_voltage_magnitude,
+    web_total_power,
+    web_emf_power,
+    web_resistive_power,
+    web_inductive_power,
   };
 
   return process_readout.call(this, readout, previous_readout);

@@ -3,7 +3,6 @@ import {interpolate_linear, matrix_multiply, exponential_averager, square, expon
 import {product_of_normals, add_stdev} from "./stats_utils.js";
 import {online_map, online_function_chain} from "./data_utils.js";
 
-import {phase_inductance, phase_resistance} from "./motor_constants.js";
 
 
 // Calculate Data
@@ -12,17 +11,6 @@ import {phase_inductance, phase_resistance} from "./motor_constants.js";
 
 const stdev_99_z_score = 2.575829; // 99% confidence interval for normal distribution
 
-const power_invariant_clarke_matrix = [
-  [Math.sqrt(2/3), -0.5 * Math.sqrt(2/3), -0.5 * Math.sqrt(2/3)],
-  [0, Math.sqrt(2)/2, -Math.sqrt(2)/2],
-  [1/Math.sqrt(3), 1/Math.sqrt(3), 1/Math.sqrt(3)],
-];
-
-const power_invariant_simplified_clarke_matrix = power_invariant_clarke_matrix.slice(0, 2);
-
-function clarke_transform(u, v, w){
-  return matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
-}
 
 function shortest_distance_mod_6(a, b){
   const diff = (b + 12 - a) % 6;
@@ -185,70 +173,57 @@ function accumulate_position_from_hall(readout, prev_readout){
 
 
 function compute_derivative_info(readout, previous_readout){
+  if (!previous_readout) return readout;
+  
   const {
-    hall_sector, angle, 
-    u_current, v_current, w_current, 
-    u_readout_diff, v_readout_diff, w_readout_diff,
-    u_drive_voltage, v_drive_voltage, w_drive_voltage,
+    time,
+    hall_sector, 
+    angle, 
+    web_current_angle_offset,
+    web_emf_power,
+    emf_voltage_angle,
+    emf_voltage_magnitude, 
   } = readout;
 
-  const [current_alpha, current_beta] = clarke_transform(u_current, v_current, w_current);
-
-  const web_current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
-  const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
-  
-  if (!previous_readout) return {
-    ...readout,
-    current_alpha, current_beta,
-    web_current_angle, current_magnitude,
-  };
-
   const {
+    time: prev_time,
     hall_sector: prev_hall_sector, 
     angle: prev_angle,
-    voltage_angle: prev_voltage_angle,
+    emf_voltage_angle: prev_emf_voltage_angle,
+    angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
+    angular_speed_from_emf_stdev: prev_angular_speed_from_emf_stdev,
+    emf_voltage_magnitude_avg: prev_emf_voltage_magnitude_avg,
+    emf_voltage_magnitude_stdev: prev_emf_voltage_magnitude_stdev,
+    angle_diff_to_emf_avg: prev_angle_diff_to_emf_avg,
+    angle_diff_to_emf_stdev: prev_angle_diff_to_emf_stdev,
+    web_current_angle_offset_avg: prev_web_current_angle_offset_avg,
+    web_current_angle_offset_stdev: prev_web_current_angle_offset_stdev,
+    web_emf_power_avg: prev_web_emf_power_avg,
+    web_emf_power_stdev: prev_web_emf_power_stdev,
   } = previous_readout;
 
   // Time units are milliseconds.
-  const dt = readout.time - previous_readout.time;
+  const dt = time - prev_time;
 
   const exp_stats = exponential_stats(dt, 0.5);
 
 
-  // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_readout_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor * this.current_calibration.u_factor;
-  const v_L_voltage = v_readout_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor * this.current_calibration.v_factor;
-  const w_L_voltage = w_readout_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor * this.current_calibration.w_factor;
-
-  const u_R_voltage = phase_resistance * u_current;
-  const v_R_voltage = phase_resistance * v_current;
-  const w_R_voltage = phase_resistance * w_current;
-
-  const u_voltage = -u_drive_voltage + u_L_voltage + u_R_voltage;
-  const v_voltage = -v_drive_voltage + v_L_voltage + v_R_voltage;
-  const w_voltage = -w_drive_voltage + w_L_voltage + w_R_voltage;
-
-  const [voltage_alpha, voltage_beta] = clarke_transform(u_voltage, v_voltage, w_voltage);
-
-  const voltage_angle = radians_to_degrees(Math.atan2(voltage_beta, voltage_alpha));
-  
-  const angular_speed_from_emf = shortest_distance_degrees(prev_voltage_angle, voltage_angle) / dt;
+  const angular_speed_from_emf = shortest_distance_degrees(prev_emf_voltage_angle, emf_voltage_angle) / dt;
 
   const {average: angular_speed_from_emf_avg, stdev: angular_speed_from_emf_stdev} = exp_stats(
     angular_speed_from_emf, 
     {
-      average: previous_readout.angular_speed_from_emf_avg, 
-      stdev: previous_readout.angular_speed_from_emf_stdev,
+      average: prev_angular_speed_from_emf_avg, 
+      stdev: prev_angular_speed_from_emf_stdev,
     },
   );
   
-  const voltage_magnitude = Math.sqrt(voltage_alpha * voltage_alpha + voltage_beta * voltage_beta);
 
-  const {average: voltage_magnitude_avg, stdev: voltage_magnitude_stdev} = exp_stats(
-    voltage_magnitude,
+  const {average: emf_voltage_magnitude_avg, stdev: emf_voltage_magnitude_stdev} = exp_stats(
+    emf_voltage_magnitude,
     {
-      average: previous_readout.voltage_magnitude_avg,
-      stdev: previous_readout.voltage_magnitude_stdev,
+      average: prev_emf_voltage_magnitude_avg,
+      stdev: prev_emf_voltage_magnitude_stdev,
     },
   );
 
@@ -256,59 +231,45 @@ function compute_derivative_info(readout, previous_readout){
 
   const transition_correction = is_hall_transition ? shortest_distance_degrees(angle, prev_angle) : 0;
 
-  const angle_from_emf = normalize_degrees(voltage_angle + (readout.angular_speed >= 0 ? +90 : -90));
+  const angle_from_emf = normalize_degrees(emf_voltage_angle + (readout.angular_speed >= 0 ? +90 : -90));
 
   const angle_diff_to_emf = shortest_distance_degrees(angle_from_emf, angle);
 
   const {average: angle_diff_to_emf_avg, stdev: angle_diff_to_emf_stdev} = exp_stats(
     angle_diff_to_emf,
     {
-      average: normalize_degrees(previous_readout.angle_diff_to_emf_avg - transition_correction),
-      stdev: previous_readout.angle_diff_to_emf_stdev,
+      average: normalize_degrees(prev_angle_diff_to_emf_avg - transition_correction),
+      stdev: prev_angle_diff_to_emf_stdev,
     },
   );
 
-  const web_current_angle_offset = shortest_distance_degrees(angle, web_current_angle);
 
   const {average: web_current_angle_offset_avg, stdev: web_current_angle_offset_stdev} = exp_stats(
     web_current_angle_offset, 
     {
-      average: normalize_degrees(previous_readout.web_current_angle_offset_avg + transition_correction),
-      stdev: previous_readout.web_current_angle_offset_stdev,
+      average: normalize_degrees(prev_web_current_angle_offset_avg + transition_correction),
+      stdev: prev_web_current_angle_offset_stdev,
     },
   );
 
-  const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
-  const web_emf_power = -(u_current * u_voltage + v_current * v_voltage + w_current * w_voltage);
-  const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
-  const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
   const {average: web_emf_power_avg, stdev: web_emf_power_stdev} = exp_stats(
     web_emf_power,
     {
-      average: previous_readout.web_emf_power_avg,
-      stdev: previous_readout.web_emf_power_stdev,
+      average: prev_web_emf_power_avg,
+      stdev: prev_web_emf_power_stdev,
     },
   );
 
   return {
     ...readout,
-    current_alpha, current_beta,
-    web_current_angle, current_magnitude, 
-    web_current_angle_offset, web_current_angle_offset_avg, web_current_angle_offset_stdev,
-    u_voltage, v_voltage, w_voltage,
-    u_R_voltage, v_R_voltage, w_R_voltage,
-    u_L_voltage, v_L_voltage, w_L_voltage,
-    voltage_alpha, voltage_beta,
-    voltage_angle, voltage_magnitude, voltage_magnitude_avg, voltage_magnitude_stdev,
+    web_current_angle_offset_avg, web_current_angle_offset_stdev,
+    emf_voltage_magnitude_avg, emf_voltage_magnitude_stdev,
+    is_hall_transition,
     angle_from_emf,
     angular_speed_from_emf, angular_speed_from_emf_avg, angular_speed_from_emf_stdev,
     angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
-    is_hall_transition,
-    web_total_power,
-    web_emf_power, web_emf_power_avg, web_emf_power_stdev,
-    web_resistive_power,
-    web_inductive_power,
+    web_emf_power_avg, web_emf_power_stdev,
   };
 }
 
