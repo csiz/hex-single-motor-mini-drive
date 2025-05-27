@@ -119,6 +119,16 @@ Flash Data Storage
 </div>
 
 
+Unit Tests
+----------
+
+<div class="card tight">
+  <p>Run the unit tests for the motor controller. These tests focus on internal math functions.</p>
+  <div>${unit_test_buttons}</div>
+  <div>${unit_test_results}</div>
+</div>
+
+
 </main>
 
 ```js
@@ -1406,7 +1416,66 @@ const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` :
 
 ```
 
+```js
+let unit_test_results = Mutable([]);
 
+async function command_unit_test(test_code, subtitle, expected){
+
+  const output = (await motor_controller.command_and_read(
+    {command: test_code},
+    {expected_messages: 1, expected_code: command_codes.UNIT_TEST_OUTPUT},
+  ))[0];
+
+  const passed = output == expected;
+
+  // Display the output and expected result side by side underneath a title with the 
+  // test name and whether it passed or failed. Use pre tags for the output and expected values.
+  const displayed_result = html`<div>
+    <h3>${subtitle} : ${passed ? 
+      html`<span style='color: green;'>PASS</span>` : 
+      html`<span style='color: red;'>FAIL</span>`
+    }</h3>
+    ${passed ? "" : html`
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em;">
+        <div>
+          <strong>Output:</strong> <pre>${output}</pre>
+        </div>
+        <div>
+          <strong>Expected:</strong> <pre>${expected}</pre>
+        </div>
+      </div>`
+    }
+    </div>`;
+
+  unit_test_results.value = [...unit_test_results.value, displayed_result];
+
+  return passed;
+}
+
+const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
+  [
+    ["Run All Tests", async function(){
+      unit_test_results.value = [];
+
+      let all_passed = true;
+
+      all_passed &= await command_unit_test(command_codes.RUN_UNIT_TEST_ATAN, "Integer atan2", unit_test_atan_expected);
+
+      unit_test_results.value = [
+        html`<h3>${all_passed ? 
+          html`<span style='color: green;'>All tests passed!</span>` : 
+          html`<span style='color: red;'>Some tests failed!</span>`
+        }</h3>`,
+        ...unit_test_results.value,
+      ];
+    }],
+  ],
+  {
+    label: "Unit Test Functions",
+  },
+);
+
+```
 
 ```js
 // Imports
@@ -1434,6 +1503,6 @@ import {
   history_size, current_calibration_default, position_calibration_default, max_calibration_current,
 } from "./components/motor_constants.js";
 
-
+import {unit_test_atan_expected} from "./components/motor_unit_tests.js";
 
 ```

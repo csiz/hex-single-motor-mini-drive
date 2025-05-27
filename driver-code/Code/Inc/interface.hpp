@@ -53,6 +53,9 @@ enum MessageCode : uint16_t {
     GET_TRIGGER_ANGLES = 0x4045,
 
     SAVE_SETTINGS_TO_FLASH = 0x4080,
+
+    UNIT_TEST_OUTPUT = 0x5040,
+    RUN_UNIT_TEST_ATAN = 0x5041,
 };
 
 
@@ -71,9 +74,8 @@ const size_t current_calibration_size = header_size + sizeof(CurrentCalibration)
 const size_t position_calibration_size = header_size + sizeof(PositionCalibration);
 
 
-const size_t max_message_size = 128;
+const size_t max_message_size = 256;
 const size_t min_message_size = 8;
-
 
 
 
@@ -118,3 +120,5 @@ void write_current_calibration(uint8_t * data, CurrentCalibration const & factor
 
 void write_position_calibration(uint8_t * data, PositionCalibration const & position_calibration);
 
+// The unit test will write directly to the buffer.
+const size_t unit_test_size = max_message_size;

@@ -131,3 +131,6 @@ static inline std::pair<int16_t, int16_t> atan2_integer(int16_t y_coord, int16_t
 
     return {final_angle_units, magnitude};
 }
+
+
+void unit_test_atan(char * buffer, size_t max_size);

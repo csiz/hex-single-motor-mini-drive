@@ -182,6 +182,7 @@ static inline int get_message_size(uint16_t code) {
         case GET_CURRENT_FACTORS:
         case GET_TRIGGER_ANGLES:
         case SAVE_SETTINGS_TO_FLASH:
+        case RUN_UNIT_TEST_ATAN:
             return min_message_size;
         
         case SET_CURRENT_FACTORS:
@@ -197,6 +198,9 @@ static inline int get_message_size(uint16_t code) {
             return current_calibration_size;
         case TRIGGER_ANGLES:
             return position_calibration_size;
+
+        case UNIT_TEST_OUTPUT:
+            return unit_test_size;
     }
 
     // Unknown message.

@@ -56,7 +56,12 @@ export const command_codes = {
   GET_TRIGGER_ANGLES: 0x4045,
 
   SAVE_SETTINGS_TO_FLASH: 0x4080,
+
+  UNIT_TEST_OUTPUT: 0x5040,
+  RUN_UNIT_TEST_ATAN: 0x5041,
+  
 }
+
 
 function get_hall_sector({hall_u, hall_v, hall_w}){
   const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
@@ -363,9 +368,18 @@ function parse_position_calibration(data_view){
   };
 }
 
+const unit_test_size = 256;
+function parse_unit_test_output(data_view) {
+  // Get the length of the null terminated string.
+  let len = 0;
+  while (data_view.getUint8(header_size + len) !== 0 && len < unit_test_size - header_size) len++;
+  // Return the output as an utf-8 string.
+  return new TextDecoder().decode(data_view.buffer.slice(header_size, header_size + len));
+}
+
 function serialise_set_current_calibration(current_calibration) {
   const {u_factor, v_factor, w_factor, inductance_factor} = current_calibration;
-  
+
   let buffer = new Uint8Array(current_calibration_size);
 
   let view = new DataView(buffer.buffer);
@@ -444,6 +458,7 @@ export const parser_mapping = {
   [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
   [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
   [command_codes.TRIGGER_ANGLES]: {parse_func: parse_position_calibration, message_size: position_calibration_size},
+  [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},
 };
 
 

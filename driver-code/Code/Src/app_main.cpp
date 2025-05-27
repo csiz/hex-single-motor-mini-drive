@@ -8,6 +8,8 @@
 #include "interrupts_angle.hpp"
 #include "interrupts_motor.hpp"
 
+#include "byte_handling.hpp"
+#include "integer_math.hpp"
 #include "error_handler.hpp"
 #include "constants.hpp"
 #include "io.hpp"
@@ -20,6 +22,7 @@
 
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 
 
 
@@ -49,6 +52,9 @@ bool usb_wait_full_history = false;
 
 bool usb_reply_current_factors = false;
 bool usb_reply_trigger_angles = false;
+
+uint8_t usb_unit_test_buffer[unit_test_size] = {0};
+bool usb_reply_unit_test = false;
 
 
 // Time of last USB packet sent; used to detect timeouts.
@@ -100,6 +106,24 @@ static inline void motor_start_test(PWMSchedule const& schedule){
 
     // Start the test schedule.
     motor_start_schedule(schedule);
+}
+
+// Run a unit test that takes a function pointer to a test function (which itself takes a buffer).
+inline bool run_unit_test( void (*test_function)(char * buffer, size_t max_size)) {
+    if (usb_reply_unit_test) return true; // We are already running a unit test.
+
+    // Clear the USB buffer.
+    memset(usb_unit_test_buffer, 0, unit_test_size);
+
+    write_uint16(usb_unit_test_buffer, MessageCode::UNIT_TEST_OUTPUT); // Write the command code to the buffer.
+
+    // Run the test function and write the results to the USB buffer.
+    test_function(reinterpret_cast<char *>(usb_unit_test_buffer + header_size), unit_test_size - header_size);
+
+    // Set the flag to indicate that we have a unit test result ready to send.
+    usb_reply_unit_test = true;
+
+    return false;
 }
 
 
@@ -237,11 +261,17 @@ bool handle_command(MessageBuffer const & buffer) {
                 return true;
             }
 
+        // We shouldn't receive these messages; the driver only sends them.
         case CURRENT_FACTORS:
         case TRIGGER_ANGLES:
         case READOUT:
         case FULL_READOUT:
-            return false;
+        case UNIT_TEST_OUTPUT:
+            return true;
+
+        case RUN_UNIT_TEST_ATAN:
+            return run_unit_test(unit_test_atan);
+            
     }
 
     // If we get here, we have an unknown command code.
@@ -284,6 +314,17 @@ void usb_queue_response(){
             // We have not filled the queue yet; don't send readouts.
             return;
         }
+    }
+
+    // Send unit test response if requested.
+    if (usb_reply_unit_test) {
+        if (not usb_check_queue(unit_test_size)) return;
+        // The unit test should have filled the buffer with data; send it all.
+        usb_queue_send(usb_unit_test_buffer, unit_test_size);
+
+        // Reset the unit test buffer; using C memory functions.
+        std::memset(usb_unit_test_buffer, 0, unit_test_size);
+        usb_reply_unit_test = false;
     }
 
     // Send current factors if requested.
