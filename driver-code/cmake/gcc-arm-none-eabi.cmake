@@ -36,7 +36,8 @@ if(CMAKE_BUILD_TYPE MATCHES Release)
 endif()
 
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} -x assembler-with-cpp -MMD -MP")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fno-rtti -fno-exceptions -fno-threadsafe-statics -Wno-register -Werror=switch")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++23 -fno-rtti -fno-exceptions -fno-threadsafe-statics -Wno-register -Werror=switch")
+
 
 set(CMAKE_C_LINK_FLAGS "${TARGET_FLAGS}")
 set(CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS} -T \"${CMAKE_SOURCE_DIR}/STM32F103C8Tx_FLASH.ld\"")
