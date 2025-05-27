@@ -187,27 +187,23 @@ function accumulate_position_from_hall(readout, prev_readout){
 function compute_derivative_info(readout, previous_readout){
   const {
     hall_sector, angle, 
-    u, v, w, 
+    u_current, v_current, w_current, 
+    u_readout_diff, v_readout_diff, w_readout_diff,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
-    u_uncalibrated, v_uncalibrated, w_uncalibrated,
   } = readout;
 
-  const [current_alpha, current_beta] = clarke_transform(u, v, w);
+  const [current_alpha, current_beta] = clarke_transform(u_current, v_current, w_current);
 
-  const current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
+  const web_current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
   const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
   
   if (!previous_readout) return {
     ...readout,
     current_alpha, current_beta,
-    current_angle, current_magnitude,
-    // TODO: need to get this from the driver, track it directly since we need it anyway.
-    u_diff_uncalibrated: 0.0, v_diff_uncalibrated: 0.0, w_diff_uncalibrated: 0.0,
+    web_current_angle, current_magnitude,
   };
 
   const {
-    u: prev_u, v: prev_v, w: prev_w,
-    u_uncalibrated: prev_u_uncalibrated, v_uncalibrated: prev_v_uncalibrated, w_uncalibrated: prev_w_uncalibrated,
     hall_sector: prev_hall_sector, 
     angle: prev_angle,
     voltage_angle: prev_voltage_angle,
@@ -219,22 +215,18 @@ function compute_derivative_info(readout, previous_readout){
 
   const exp_stats = exponential_stats(dt, 0.5);
 
-  const u_diff_uncalibrated = (u_uncalibrated - prev_u_uncalibrated) / dt;
-  const v_diff_uncalibrated = (v_uncalibrated - prev_v_uncalibrated) / dt;
-  const w_diff_uncalibrated = (w_uncalibrated - prev_w_uncalibrated) / dt;
-
   const mid_u_drive_voltage = (u_drive_voltage + prev_u_drive_voltage) / 2;
   const mid_v_drive_voltage = (v_drive_voltage + prev_v_drive_voltage) / 2;
   const mid_w_drive_voltage = (w_drive_voltage + prev_w_drive_voltage) / 2;
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = (u - prev_u) / dt * 1000 * phase_inductance * this.current_calibration.inductance_factor;
-  const v_L_voltage = (v - prev_v) / dt * 1000 * phase_inductance * this.current_calibration.inductance_factor;
-  const w_L_voltage = (w - prev_w) / dt * 1000 * phase_inductance * this.current_calibration.inductance_factor;
+  const u_L_voltage = u_readout_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor * this.current_calibration.u_factor;
+  const v_L_voltage = v_readout_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor * this.current_calibration.v_factor;
+  const w_L_voltage = w_readout_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor * this.current_calibration.w_factor;
 
-  const u_R_voltage = phase_resistance * u;
-  const v_R_voltage = phase_resistance * v;
-  const w_R_voltage = phase_resistance * w;
+  const u_R_voltage = phase_resistance * u_current;
+  const v_R_voltage = phase_resistance * v_current;
+  const w_R_voltage = phase_resistance * w_current;
 
   const u_voltage = -mid_u_drive_voltage + u_L_voltage + u_R_voltage;
   const v_voltage = -mid_v_drive_voltage + v_L_voltage + v_R_voltage;
@@ -280,7 +272,7 @@ function compute_derivative_info(readout, previous_readout){
     },
   );
 
-  const web_current_angle_offset = shortest_distance_degrees(angle, current_angle);
+  const web_current_angle_offset = shortest_distance_degrees(angle, web_current_angle);
 
   const {average: web_current_angle_offset_avg, stdev: web_current_angle_offset_stdev} = exp_stats(
     web_current_angle_offset, 
@@ -290,10 +282,10 @@ function compute_derivative_info(readout, previous_readout){
     },
   );
 
-  const web_total_power = -(u * mid_u_drive_voltage + v * mid_v_drive_voltage + w * mid_w_drive_voltage);
-  const web_emf_power = -(u * u_voltage + v * v_voltage + w * w_voltage);
-  const web_resistive_power = (square(u) * phase_resistance + square(v) * phase_resistance + square(w) * phase_resistance);
-  const web_inductive_power = (u * u_L_voltage + v * v_L_voltage + w * w_L_voltage);
+  const web_total_power = -(u_current * mid_u_drive_voltage + v_current * mid_v_drive_voltage + w_current * mid_w_drive_voltage);
+  const web_emf_power = -(u_current * u_voltage + v_current * v_voltage + w_current * w_voltage);
+  const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
+  const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
   const {average: web_emf_power_avg, stdev: web_emf_power_stdev} = exp_stats(
     web_emf_power,
@@ -306,10 +298,9 @@ function compute_derivative_info(readout, previous_readout){
   return {
     ...readout,
     current_alpha, current_beta,
-    current_angle, current_magnitude, 
+    web_current_angle, current_magnitude, 
     web_current_angle_offset, web_current_angle_offset_avg, web_current_angle_offset_stdev,
     mid_u_drive_voltage, mid_v_drive_voltage, mid_w_drive_voltage,
-    u_diff_uncalibrated, v_diff_uncalibrated, w_diff_uncalibrated,
     u_voltage, v_voltage, w_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,

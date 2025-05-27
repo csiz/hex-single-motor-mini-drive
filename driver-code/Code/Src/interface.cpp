@@ -15,27 +15,28 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
     offset += 4;
     write_uint16(buffer + offset, readout.readout_number);
     offset += 2;
-    write_uint16(buffer + offset, readout.u_readout);
+    write_int16(buffer + offset, readout.u_readout);
     offset += 2;
-    write_uint16(buffer + offset, readout.v_readout);
+    write_int16(buffer + offset, readout.v_readout);
     offset += 2;
-    write_uint16(buffer + offset, readout.w_readout);
+    write_int16(buffer + offset, readout.w_readout);
     offset += 2;
     write_uint16(buffer + offset, readout.ref_readout);
     offset += 2;
+    write_int16(buffer + offset, readout.u_readout_diff);
+    offset += 2;
+    write_int16(buffer + offset, readout.v_readout_diff);
+    offset += 2;
+    write_int16(buffer + offset, readout.w_readout_diff);
+    offset += 2;
+
     write_uint16(buffer + offset, readout.position);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed);
     offset += 2;
     write_uint16(buffer + offset, readout.instant_vcc_voltage);
     offset += 2;
-    write_int16(buffer + offset, readout.torque);
-    offset += 2;
-    write_int16(buffer + offset, readout.hold);
-    offset += 2;
-    write_int16(buffer + offset, readout.total_power);
-    offset += 2;
-    write_int16(buffer + offset, readout.resistive_power);
+    write_int16(buffer + offset, readout.current_angle_offset);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -69,7 +70,7 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.cycle_end_tick);
     offset += 2;
 
-    write_int16(buffer + offset, readout.current_angle_offset);
+    write_int16(buffer + offset, readout.current_angle);
     offset += 2;
     write_uint16(buffer + offset, readout.current_angle_offset_variance);
     offset += 2;
@@ -79,6 +80,14 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_uint16(buffer + offset, readout.angular_speed_variance);
     offset += 2;
 
+    write_int16(buffer + offset, readout.total_power);
+    offset += 2;
+    write_int16(buffer + offset, readout.resistive_power);
+    offset += 2;
+    write_int16(buffer + offset, readout.emf_power);
+    offset += 2;
+    write_int16(buffer + offset, readout.inductive_power);
+    offset += 2;
 
     // Check if we wrote the correct number of bytes.
     if (offset != full_readout_size) error();

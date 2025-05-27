@@ -79,79 +79,67 @@ function parse_readout(data_view, previous_readout){
   const readout_number = data_view.getUint16(offset);
   offset += 2;
   // Get the raw readout values.
-  const u_readout = data_view.getUint16(offset);
+  const u_readout = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const v_readout = data_view.getUint16(offset);
+  const v_readout = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const w_readout = data_view.getUint16(offset);
+  const w_readout = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const ref_readout = data_view.getUint16(offset);
+  const ref_readout = current_conversion * (data_view.getUint16(offset) - expected_ref_readout);
   offset += 2;
+  const u_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
+  offset += 2;
+  const v_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
+  offset += 2;
+  const w_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
+  offset += 2;
+
   // Get motor angle and hall sensor data.
-  const position_readout = data_view.getUint16(offset);
+  const position_bytes = data_view.getUint16(offset);
   offset += 2;
 
-  const angular_speed_readout = data_view.getInt16(offset);
+  const angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const instant_vcc_readout = data_view.getUint16(offset);
+  const instant_vcc_voltage = calculate_voltage(data_view.getUint16(offset));
   offset += 2;
-  const torque = data_view.getInt16(offset);
-  offset += 2;
-  const hold = data_view.getInt16(offset);
-  offset += 2;
-  const total_power = data_view.getInt16(offset);
-  offset += 2;
-  const resistive_power = data_view.getInt16(offset);
+  const current_angle_offset = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
 
-
-  const instant_vcc_voltage = calculate_voltage(instant_vcc_readout);
 
   // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
   const u_pwm = Math.floor(pwm_commands / pwm_base / pwm_base) % pwm_base;
   const v_pwm = Math.floor(pwm_commands / pwm_base) % pwm_base;
   const w_pwm = pwm_commands % pwm_base;
 
-  const vcc = instant_vcc_voltage;
-
   const avg_pwm = (u_pwm + v_pwm + w_pwm) / 3;
 
-  const u_drive_voltage = (u_pwm - avg_pwm) * vcc / pwm_base;
-  const v_drive_voltage = (v_pwm - avg_pwm) * vcc / pwm_base;
-  const w_drive_voltage = (w_pwm - avg_pwm) * vcc / pwm_base;
+  const u_drive_voltage = (u_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
+  const v_drive_voltage = (v_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
+  const w_drive_voltage = (w_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
 
   // The first 3 bits are the hall sensor state.
-  const hall_u = (position_readout >> 13) & 0b1;
-  const hall_v = (position_readout >> 14) & 0b1;
-  const hall_w = (position_readout >> 15) & 0b1;
+  const hall_u = (position_bytes >> 13) & 0b1;
+  const hall_v = (position_bytes >> 14) & 0b1;
+  const hall_w = (position_bytes >> 15) & 0b1;
 
   const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
 
   // The next bit is the motor angle valid flag.
-  const angle_valid = (position_readout >> 12) & 0b1;
+  const angle_valid = (position_bytes >> 12) & 0b1;
   // The last 10 bits are the motor angle. Representing range from 0 to 360 degrees,
   // where 0 means the rotor is aligned by holding positive current on the U phase.
-  const angle = angle_units_to_degrees(position_readout & 0x3FF);
-
-  const angular_speed = speed_units_to_degrees_per_millisecond(angular_speed_readout);
-
-  const ref_diff = current_conversion * (ref_readout - expected_ref_readout);
-
-  const u_uncalibrated = -current_conversion * (u_readout - ref_readout);
-  // Flip the sign of V because we accidentally wired it the other way. Oopsie doopsie.
-  const v_uncalibrated = +current_conversion * (v_readout - ref_readout);
-  const w_uncalibrated = -current_conversion * (w_readout - ref_readout);
-
-  const u_calibrated = u_uncalibrated * this.current_calibration.u_factor;
-  const v_calibrated = v_uncalibrated * this.current_calibration.v_factor;
-  const w_calibrated = w_uncalibrated * this.current_calibration.w_factor;
+  const angle = angle_units_to_degrees(position_bytes & 0x3FF);
 
 
-  const sum = u_calibrated + v_calibrated + w_calibrated;
+  const scaled_u_current = u_readout * this.current_calibration.u_factor;
+  const scaled_v_current = v_readout * this.current_calibration.v_factor;
+  const scaled_w_current = w_readout * this.current_calibration.w_factor;
 
-  const u = u_calibrated - sum / 3.0;
-  const v = v_calibrated - sum / 3.0;
-  const w = w_calibrated - sum / 3.0;
+  const avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3.0;
+
+  const u_current = scaled_u_current - avg_current;
+  const v_current = scaled_v_current - avg_current;
+  const w_current = scaled_w_current - avg_current;
 
   // Approximate the angle for the 6 sectors of the hall sensor.
   const ε = 2;
@@ -168,27 +156,23 @@ function parse_readout(data_view, previous_readout){
     readout_number,
     readout_index, time,
     u_readout, v_readout, w_readout,
+    u_readout_diff, v_readout_diff, w_readout_diff,
     ref_readout,
-    ref_diff,
-    u, v, w,
-    u_uncalibrated, v_uncalibrated, w_uncalibrated,
-    sum,
+    u_current, v_current, w_current,
+    avg_current,
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
     hall_u, hall_v, hall_w, hall_sector,
     hall_u_as_angle, hall_v_as_angle, hall_w_as_angle,
     angle_valid, angle, angular_speed,
     instant_vcc_voltage,
-    torque,
-    hold,
-    total_power,
-    resistive_power,
+    current_angle_offset,
   };
 
   return process_readout.call(this, readout, previous_readout);
 }
 
-const full_readout_size = 54;
+const full_readout_size = 62;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
@@ -203,33 +187,34 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const hall_observed_rate = data_view.getUint16(offset);
   offset += 2;
-  const temperature_readout = data_view.getUint16(offset);
+  const temperature = calculate_temperature(data_view.getUint16(offset));
   offset += 2;
-  const vcc_readout = data_view.getUint16(offset);
+  const vcc_voltage = calculate_voltage(data_view.getUint16(offset));
   offset += 2;
   const cycle_start_tick = data_view.getInt16(offset);
   offset += 2;
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
-  const current_angle_offset_readout = data_view.getInt16(offset);
+  const current_angle = angle_units_to_degrees(data_view.getUint16(offset));
   offset += 2;
-  const current_angle_offset_variance = data_view.getUint16(offset);
-  offset += 2;
-
-  const angle_variance = data_view.getUint16(offset);
-  offset += 2;
-  const angular_speed_variance = data_view.getUint16(offset);
+  const current_angle_offset_stdev = unbounded_angle_units_to_degrees(Math.sqrt(data_view.getUint16(offset)));
   offset += 2;
 
-  const current_angle_offset = angle_units_to_degrees(current_angle_offset_readout);
-  const current_angle_offset_stdev = unbounded_angle_units_to_degrees(Math.sqrt(current_angle_offset_variance));
+  const angle_stdev = unbounded_angle_units_to_degrees(Math.sqrt(data_view.getUint16(offset)));
+  offset += 2;
+  const angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getUint16(offset)));
+  offset += 2;
+
+  const total_power = data_view.getInt16(offset);
+  offset += 2;
+  const resistive_power = data_view.getInt16(offset);
+  offset += 2;
+  const emf_power = data_view.getInt16(offset);
+  offset += 2;
+  const inductive_power = data_view.getInt16(offset);
+  offset += 2;
   
-  const vcc_voltage = calculate_voltage(vcc_readout);
-  const temperature = calculate_temperature(temperature_readout);
-
-  const angle_stdev = unbounded_angle_units_to_degrees(Math.sqrt(angle_variance));
-  const angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(angular_speed_variance));
 
   return {
     ...readout,
@@ -241,10 +226,14 @@ function parse_full_readout(data_view, previous_readout){
     vcc_voltage,
     cycle_start_tick,
     cycle_end_tick,
-    current_angle_offset,
+    current_angle,
     current_angle_offset_stdev,
     angle_stdev,
     angular_speed_stdev,
+    total_power,
+    resistive_power,
+    emf_power,
+    inductive_power,
   };
 }
 

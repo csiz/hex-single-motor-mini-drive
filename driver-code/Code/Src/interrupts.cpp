@@ -97,14 +97,29 @@ static inline void pwm_cycle_and_adc_update(){
     
     // For reference a PWM period is 1536 ticks, so the PWM frequency is 72MHz / 1536 / 2 = 23.4KHz.
     // The PWM period lasts 1/23.4KHz = 42.7us.
+
+    const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
+
+    readout.ref_readout = ref_readout;
     
-    readout.u_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
-    // Note: in the v0 board the V phase shunt is connected in reverse to the current sense amplifier.
-    readout.v_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3);
-    
-    readout.w_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2);
-    readout.ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
-    
+    // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
+    const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout);
+    // Flip the sign of V because we accidentally wired it the other way (the right way...). Oopsie doopsie.
+    const int v_readout = +(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout);
+    const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2) - ref_readout);
+
+    const int u_readout_diff = u_readout - readout.u_readout;
+    const int v_readout_diff = v_readout - readout.v_readout;
+    const int w_readout_diff = w_readout - readout.w_readout;
+
+    readout.u_readout = u_readout;
+    readout.v_readout = v_readout;
+    readout.w_readout = w_readout;
+
+    readout.u_readout_diff = u_readout_diff;
+    readout.v_readout_diff = v_readout_diff;
+    readout.w_readout_diff = w_readout_diff;
+
 
     const uint16_t instant_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
     readout.instant_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
@@ -122,19 +137,20 @@ static inline void pwm_cycle_and_adc_update(){
     readout.angular_speed = angular_speed_at_observation;
     readout.angle_variance = angle_variance_at_observation;
     readout.angular_speed_variance = angular_speed_variance_at_observation;
-    
-    // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
-    const int scaled_u_current = -(readout.u_readout - readout.ref_readout) * current_calibration.u_factor / current_calibration_base;
-    // Flip the sign of V because we accidentally wired it the other way (the right way...). Oopsie doopsie.
-    const int scaled_v_current = +(readout.v_readout - readout.ref_readout) * current_calibration.v_factor / current_calibration_base;
-    const int scaled_w_current = -(readout.w_readout - readout.ref_readout) * current_calibration.w_factor / current_calibration_base;
-    
-    // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
-    const int avg = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;
 
-    const int u_current = scaled_u_current - avg;
-    const int v_current = scaled_v_current - avg;
-    const int w_current = scaled_w_current - avg;
+    
+    const int scaled_u_current = u_readout * current_calibration.u_factor / current_calibration_base;
+    const int scaled_v_current = v_readout * current_calibration.v_factor / current_calibration_base;
+    const int scaled_w_current = w_readout * current_calibration.w_factor / current_calibration_base;
+
+    // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
+    const int avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;
+
+    const int u_current = scaled_u_current - avg_current;
+    const int v_current = scaled_v_current - avg_current;
+    const int w_current = scaled_w_current - avg_current;
+
+    // TODO: also correct the diffs for the average offset?
 
     
     // Calculate the park transformed currents (unscaled).
@@ -160,14 +176,15 @@ static inline void pwm_cycle_and_adc_update(){
         w_current * -sin_lookup[normalize_angle(angle - two_thirds_circle)] / angle_base);
 
 
-    readout.torque = beta_current;
-
-    readout.hold = alpha_current;
+    // TODO: these 2 are not correct, figure out the proper units.
+    readout.emf_power = beta_current;
+    readout.inductive_power = alpha_current;
     
 
     const auto [current_angle_offset, current_magnitude] = atan2_integer(beta_current, alpha_current);
 
     readout.current_angle_offset = current_angle_offset;
+    readout.current_angle = normalize_angle(angle + current_angle_offset);
 
     // TODO: compute current_angle_offset_variance based on the past angle estimates.
 

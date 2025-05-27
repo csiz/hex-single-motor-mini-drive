@@ -127,38 +127,38 @@ export async function run_current_calibration(motor_controller){
   const u_positive = u_positive_readout.map((d) => ({
     time: d.time,
     drive_voltage: d.mid_u_drive_voltage,
-    uncalibrated_current: d.u_uncalibrated,
-    diff_uncalibrated_current: d.u_diff_uncalibrated,
+    uncalibrated_current: d.u_readout,
+    uncalibrated_current_diff: d.u_readout_diff,
   }));
   const u_negative = u_negative_readout.map((d) => ({
     time: d.time,
     drive_voltage: -d.mid_u_drive_voltage,
-    uncalibrated_current: -d.u_uncalibrated,
-    diff_uncalibrated_current: -d.u_diff_uncalibrated,
+    uncalibrated_current: -d.u_readout,
+    uncalibrated_current_diff: -d.u_readout_diff,
   }));
   const v_positive = v_positive_readout.map((d) => ({
     time: d.time,
     drive_voltage: d.mid_v_drive_voltage,
-    uncalibrated_current: d.v_uncalibrated,
-    diff_uncalibrated_current: d.v_diff_uncalibrated,
+    uncalibrated_current: d.v_readout,
+    uncalibrated_current_diff: d.v_readout_diff,
   }));
   const v_negative = v_negative_readout.map((d) => ({
     time: d.time,
     drive_voltage: -d.mid_v_drive_voltage,
-    uncalibrated_current: -d.v_uncalibrated,
-    diff_uncalibrated_current: -d.v_diff_uncalibrated,
+    uncalibrated_current: -d.v_readout,
+    uncalibrated_current_diff: -d.v_readout_diff,
   }));
   const w_positive = w_positive_readout.map((d) => ({
     time: d.time,
     drive_voltage: d.mid_w_drive_voltage,
-    uncalibrated_current: d.w_uncalibrated,
-    diff_uncalibrated_current: d.w_diff_uncalibrated,
+    uncalibrated_current: d.w_readout,
+    uncalibrated_current_diff: d.w_readout_diff,
   }));
   const w_negative = w_negative_readout.map((d) => ({
     time: d.time,
     drive_voltage: -d.mid_w_drive_voltage,
-    uncalibrated_current: -d.w_uncalibrated,
-    diff_uncalibrated_current: -d.w_diff_uncalibrated,
+    uncalibrated_current: -d.w_readout,
+    uncalibrated_current_diff: -d.w_readout_diff,
   }));
 
   const expected_current = times.map((t, i) => {
@@ -211,11 +211,11 @@ export async function run_current_calibration(motor_controller){
 function compute_gradients({current_factor, inductance_factor}, data){
 
   return data.filter((d) => d.time >= calibration_start && d.time <= calibration_end).map((d) => {
-    const {drive_voltage, uncalibrated_current, diff_uncalibrated_current} = d;
+    const {drive_voltage, uncalibrated_current, uncalibrated_current_diff} = d;
 
 
     const resistance_drop = current_factor * uncalibrated_current * phase_resistance;
-    const inductance_drop = inductance_factor * current_factor * diff_uncalibrated_current * 1000 * phase_inductance;
+    const inductance_drop = inductance_factor * current_factor * uncalibrated_current_diff * 1000 * phase_inductance;
 
     const residual = resistance_drop + inductance_drop - drive_voltage;
 

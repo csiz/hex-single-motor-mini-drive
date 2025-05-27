@@ -29,17 +29,17 @@ using PWMSchedule = PWMStage[schedule_size];
 struct Readout{
     uint32_t pwm_commands;
     uint16_t readout_number;
-    uint16_t u_readout;
-    uint16_t v_readout;
-    uint16_t w_readout;
+    int16_t u_readout;
+    int16_t v_readout;
+    int16_t w_readout;
     uint16_t ref_readout;
+    int16_t u_readout_diff;
+    int16_t v_readout_diff;
+    int16_t w_readout_diff;
     uint16_t position;
     int16_t angular_speed;
     int16_t instant_vcc_voltage;
-    int16_t torque;
-    int16_t hold;
-    int16_t total_power;
-    int16_t resistive_power;
+    int16_t current_angle_offset;
 };
 
 struct FullReadout : public Readout {
@@ -51,10 +51,14 @@ struct FullReadout : public Readout {
     uint16_t vcc_voltage;
     int16_t cycle_start_tick;
     int16_t cycle_end_tick;
-    int16_t current_angle_offset;
+    int16_t current_angle;
     uint16_t current_angle_offset_variance;
     uint16_t angle_variance;
     uint16_t angular_speed_variance;
+    int16_t total_power;
+    int16_t resistive_power;
+    int16_t emf_power;
+    int16_t inductive_power;
 };
 
 
