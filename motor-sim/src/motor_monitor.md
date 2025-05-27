@@ -1432,7 +1432,7 @@ async function command_unit_test(test_code, subtitle, expected){
   // test name and whether it passed or failed. Use pre tags for the output and expected values.
   const displayed_result = html`<div>
     <h3>${subtitle} : ${passed ? 
-      html`<span style='color: green;'>PASS</span>` : 
+      html`<span style='color: steelblue;'>PASS</span>` : 
       html`<span style='color: red;'>FAIL</span>`
     }</h3>
     ${passed ? "" : html`
@@ -1463,7 +1463,7 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
 
       unit_test_results.value = [
         html`<h3>${all_passed ? 
-          html`<span style='color: green;'>All tests passed!</span>` : 
+          html`<span style='color: steelblue;'>All tests passed!</span>` : 
           html`<span style='color: red;'>Some tests failed!</span>`
         }</h3>`,
         ...unit_test_results.value,
