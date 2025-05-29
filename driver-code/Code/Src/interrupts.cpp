@@ -157,16 +157,16 @@ static inline void pwm_cycle_and_adc_update(){
     readout.angular_speed_variance = angular_speed_variance_at_observation;
 
     
-    const auto scaled_u_current = floaty_current_calibration.u_factor * u_readout;
-    const auto scaled_v_current = floaty_current_calibration.v_factor * v_readout;
-    const auto scaled_w_current = floaty_current_calibration.w_factor * w_readout;
+    const int scaled_u_current = u_readout * current_calibration.u_factor / current_calibration_base;
+    const int scaled_v_current = v_readout * current_calibration.v_factor / current_calibration_base;
+    const int scaled_w_current = w_readout * current_calibration.w_factor / current_calibration_base;
 
     // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
-    const auto avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;
+    const int avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;
 
-    const auto u_current = scaled_u_current - avg_current;
-    const auto v_current = scaled_v_current - avg_current;
-    const auto w_current = scaled_w_current - avg_current;
+    const int u_current = scaled_u_current - avg_current;
+    const int v_current = scaled_v_current - avg_current;
+    const int w_current = scaled_w_current - avg_current;
 
     // TODO: also correct the diffs for the average offset?
 
@@ -183,40 +183,39 @@ static inline void pwm_cycle_and_adc_update(){
     // the deviation between the real and target angle even when we can't sense the real angle.
 
     // For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
-    const auto alpha_current = (
+    const int alpha_current = (
         u_current * sin_lookup[normalize_angle(angle + quarter_circle)] / angle_base +
         v_current * sin_lookup[normalize_angle(angle + quarter_circle - third_circle)] / angle_base +
         w_current * sin_lookup[normalize_angle(angle + quarter_circle - two_thirds_circle)] / angle_base);
 
-    const auto beta_current = (
+    const int beta_current = (
         u_current * -sin_lookup[angle] / angle_base +
         v_current * -sin_lookup[normalize_angle(angle - third_circle)] / angle_base +
         w_current * -sin_lookup[normalize_angle(angle - two_thirds_circle)] / angle_base);
 
 
     // TODO: these 2 are not correct, figure out the proper units.
-    readout.emf_power = value_of_inty_float(alpha_current);
-    readout.inductive_power = value_of_inty_float(beta_current);
+    readout.emf_power = beta_current;
+    readout.inductive_power = alpha_current;
     
 
-    const auto [current_angle_offset, current_magnitude] = atan2_integer(
-        value_of_inty_float(beta_current), value_of_inty_float(alpha_current));
+    const auto [current_angle_offset, current_magnitude] = atan2_integer(beta_current, alpha_current);
 
     readout.current_angle_offset = current_angle_offset;
     readout.current_angle = normalize_angle(angle + current_angle_offset);
 
     // TODO: compute current_angle_offset_variance based on the past angle estimates.
 
-    readout.total_power = value_of_inty_float(readout.vcc_voltage * (
+    readout.total_power = readout.vcc_voltage * (
         u_current * get_motor_u_pwm_duty() + 
         v_current * get_motor_v_pwm_duty() + 
-        w_current * get_motor_w_pwm_duty()) / pwm_base);
+        w_current * get_motor_w_pwm_duty()) / pwm_base;
 
-    readout.resistive_power = value_of_inty_float(phase_int_resistance * (
+    readout.resistive_power = phase_int_resistance * (
         u_current * u_current + 
         v_current * v_current + 
-        w_current * w_current) / 256);
-
+        w_current * w_current) / 256;
+     
 
     // Update motor control.
     switch (driver_state) {

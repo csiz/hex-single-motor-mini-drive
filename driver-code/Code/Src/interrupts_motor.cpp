@@ -22,4 +22,4 @@ size_t schedule_stage = 0;
 
 
 CurrentCalibration current_calibration = get_current_calibration();
-FloatyCurrentCalibration floaty_current_calibration = make_floaty_current_calibration(current_calibration);
+

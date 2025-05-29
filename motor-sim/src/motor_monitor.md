@@ -1419,12 +1419,7 @@ const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` :
 ```js
 let unit_test_results = Mutable([]);
 
-async function command_unit_test(subtitle, test_code){
-  const expected = unit_test_expected[test_code];
-  if (!expected) {
-    console.warn(`No expected output for unit test: ${test_code}`);
-    return false;
-  }
+async function command_unit_test(test_code, subtitle, expected){
 
   const output = (await motor_controller.command_and_read(
     {command: test_code},
@@ -1464,10 +1459,7 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
 
       let all_passed = true;
 
-      all_passed &= await command_unit_test(
-        "Integer atan2", command_codes.RUN_UNIT_TEST_ATAN);
-      all_passed &= await command_unit_test(
-        "Integer arithmetic", command_codes.RUN_UNIT_TEST_INTEGER_ARITHMETIC);
+      all_passed &= await command_unit_test(command_codes.RUN_UNIT_TEST_ATAN, "Integer atan2", unit_test_atan_expected);
 
       unit_test_results.value = [
         html`<h3>${all_passed ? 
@@ -1511,6 +1503,6 @@ import {
   history_size, current_calibration_default, position_calibration_default, max_calibration_current,
 } from "./components/motor_constants.js";
 
-import {unit_test_expected} from "./components/motor_unit_tests.js";
+import {unit_test_atan_expected} from "./components/motor_unit_tests.js";
 
 ```

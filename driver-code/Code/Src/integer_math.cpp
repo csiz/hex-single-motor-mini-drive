@@ -73,29 +73,3 @@ void unit_test_atan(char * buffer, size_t max_size) {
             angle_7, mag_7,
             angle_8, mag_8);
 }
-
-void unit_test_integer_arithmetic(char * buffer, size_t max_size) {
-    const auto a = make_inty_float(6.86f);
-    const auto b = make_inty_float(-3.14f);
-    const auto percent = make_inty_float(0.01f); // 1% for scaling
-
-    const auto add_result = a + b;
-    const auto sub_result = a - b;
-    const auto mul_result = a * b;
-    const auto div_result = a / b;
-    
-    // Print including the sign.
-    sniprintf(buffer, max_size,
-            "a = (%d, %d, %d) ~ (%d)\n"
-            "b = (%d, %d, %d) ~ (%d)\n"
-            "a + b = (%d, %d, %d) ~ (%d)\n"
-            "a - b = (%d, %d, %d) ~ (%d)\n"
-            "a * b = (%d, %d, %d) ~ (%d)\n"
-            "a / b = (%d, %d, %d) ~ (%d)\n",
-            a.mantissa, a.sign, a.exponent, value_of_inty_float(a / percent),
-            b.mantissa, b.sign, b.exponent, value_of_inty_float(b / percent),
-            add_result.mantissa, add_result.sign, add_result.exponent, value_of_inty_float(add_result / percent),
-            sub_result.mantissa, sub_result.sign, sub_result.exponent, value_of_inty_float(sub_result / percent),
-            mul_result.mantissa, mul_result.sign, mul_result.exponent, value_of_inty_float(mul_result / percent),
-            div_result.mantissa, div_result.sign, div_result.exponent, value_of_inty_float(div_result / percent));
-}

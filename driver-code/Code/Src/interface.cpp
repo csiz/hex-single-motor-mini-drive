@@ -183,7 +183,6 @@ static inline int get_message_size(uint16_t code) {
         case GET_TRIGGER_ANGLES:
         case SAVE_SETTINGS_TO_FLASH:
         case RUN_UNIT_TEST_ATAN:
-        case RUN_UNIT_TEST_INTEGER_ARITHMETIC:
             return min_message_size;
         
         case SET_CURRENT_FACTORS:

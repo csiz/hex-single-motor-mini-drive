@@ -59,7 +59,7 @@ export const command_codes = {
 
   UNIT_TEST_OUTPUT: 0x5040,
   RUN_UNIT_TEST_ATAN: 0x5041,
-  RUN_UNIT_TEST_INTEGER_ARITHMETIC: 0x5042,
+  
 }
 
 

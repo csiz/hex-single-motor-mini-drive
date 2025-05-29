@@ -271,9 +271,7 @@ bool handle_command(MessageBuffer const & buffer) {
 
         case RUN_UNIT_TEST_ATAN:
             return run_unit_test(unit_test_atan);
-        case RUN_UNIT_TEST_INTEGER_ARITHMETIC:
-            return run_unit_test(unit_test_integer_arithmetic);
-
+            
     }
 
     // If we get here, we have an unknown command code.
