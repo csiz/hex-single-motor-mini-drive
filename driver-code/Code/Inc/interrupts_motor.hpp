@@ -4,6 +4,8 @@
 
 #include "motor_control.hpp"
 
+#include "integer_math.hpp"
+
 #include "constants.hpp"
 #include "type_definitions.hpp"
 #include "error_handler.hpp"
@@ -48,6 +50,24 @@ extern size_t schedule_stage;
 
 // Current calibration factors.
 extern CurrentCalibration current_calibration;
+
+struct FloatyCurrentCalibration {
+    IntyFloat u_factor;
+    IntyFloat v_factor;
+    IntyFloat w_factor;
+    IntyFloat inductance_factor;
+};
+
+static inline FloatyCurrentCalibration make_floaty_current_calibration(const CurrentCalibration & calibration) {
+    return FloatyCurrentCalibration {
+        .u_factor = make_inty_float(current_conversion * calibration.u_factor / current_calibration_base),
+        .v_factor = make_inty_float(current_conversion * calibration.v_factor / current_calibration_base),
+        .w_factor = make_inty_float(current_conversion * calibration.w_factor / current_calibration_base),
+        .inductance_factor = make_inty_float(current_conversion * calibration.inductance_factor / current_calibration_base),
+    };
+}
+
+extern FloatyCurrentCalibration floaty_current_calibration;
 
 
 // Count down until the timeout expires; return true if the timeout expired.
