@@ -184,14 +184,14 @@ static inline void pwm_cycle_and_adc_update(){
 
     // For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
     const int alpha_current = (
-        u_current * sin_lookup[normalize_angle(angle + quarter_circle)] / angle_base +
-        v_current * sin_lookup[normalize_angle(angle + quarter_circle - third_circle)] / angle_base +
-        w_current * sin_lookup[normalize_angle(angle + quarter_circle - two_thirds_circle)] / angle_base);
+        u_current * sin_lookup[normalize_angle(angle + quarter_circle)] / angle_units_per_circle +
+        v_current * sin_lookup[normalize_angle(angle + quarter_circle - third_circle)] / angle_units_per_circle +
+        w_current * sin_lookup[normalize_angle(angle + quarter_circle - two_thirds_circle)] / angle_units_per_circle);
 
     const int beta_current = (
-        u_current * -sin_lookup[angle] / angle_base +
-        v_current * -sin_lookup[normalize_angle(angle - third_circle)] / angle_base +
-        w_current * -sin_lookup[normalize_angle(angle - two_thirds_circle)] / angle_base);
+        u_current * -sin_lookup[angle] / angle_units_per_circle +
+        v_current * -sin_lookup[normalize_angle(angle - third_circle)] / angle_units_per_circle +
+        w_current * -sin_lookup[normalize_angle(angle - two_thirds_circle)] / angle_units_per_circle);
 
 
     // TODO: these 2 are not correct, figure out the proper units.

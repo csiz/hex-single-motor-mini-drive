@@ -49,7 +49,7 @@ static inline void increment_time_since_observation(){
         time_since_observation = 0;
     }
     // Increment the time since the last observation.
-    time_since_observation = min(time_since_observation + time_increment_per_cycle, max_time_between_observations);
+    time_since_observation = min(time_since_observation + time_units_per_cycle, max_time_between_observations);
         
 }
 
@@ -210,8 +210,8 @@ static inline void update_position_observation(){
     const int estimated_speed_error = speed_scale * estimated_distance_error / time;
 
     // Precompute the square of time and downscale by our magic scale to keep it within integer arithmetic bounds.
-    const int square_time_div_square_speed_scale = clip_to(1, max_16bit, time * time / square_speed_scale);
-    const int square_time_div_square_accel_scale = clip_to(1, max_16bit, time * time / square_accel_scale);
+    const int square_time_div_square_speed_scale = clip_to(1, max_16bit, square(time / speed_scale));
+    const int square_time_div_square_accel_scale = clip_to(1, max_16bit, square(time / accel_scale));
     // Calculate the variances.
 
     // The angular speed variance increases with acceleration over time.

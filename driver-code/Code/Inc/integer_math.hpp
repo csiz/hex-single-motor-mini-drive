@@ -117,12 +117,12 @@ static inline std::pair<int16_t, int16_t> atan2_integer(int16_t y_coord, int16_t
     } else if (x_is_negative && y_is_negative) {   // Quadrant 3 (x < 0, y < 0)
         final_angle_units = static_cast<int16_t>(half_circle + first_quadrant_angle_acc); // PI + alpha
     } else { // (!x_is_negative && y_is_negative)   // Quadrant 4 (x > 0, y < 0)
-        final_angle_units = static_cast<int16_t>(angle_base - first_quadrant_angle_acc); // 2*PI - alpha
+        final_angle_units = static_cast<int16_t>(angle_units_per_circle - first_quadrant_angle_acc); // 2*PI - alpha
     }
 
     // Normalize the angle to be strictly within [0, 1023]
     // (e.g., if 1024 - 0 results in 1024, it should be 0)
-    final_angle_units %= angle_base;
+    final_angle_units %= angle_units_per_circle;
 
 
     // Calculate magnitude: original_magnitude = current_x / K_gain
