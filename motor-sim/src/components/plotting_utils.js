@@ -7,6 +7,9 @@ import {merge_input_value} from "./input_utils.js";
 
 import {valid_number} from "./math_utils.js";
 
+const stdev_95_z_score = 1.959964; // 95% confidence interval for normal distribution
+const stdev_99_z_score = 2.575829; // 99% confidence interval for normal distribution
+
 export function plot_lines({
   data = [],
   x_domain = undefined,
@@ -530,8 +533,6 @@ export function setup_faint_area({y0, y1, opacity = 0.1}){
   };
 }
 
-const stdev_95_z_score = 1.959964; // 95% confidence interval for normal distribution
-
 export function setup_stdev_95({stdev, opacity = 0.1}) {
   return function(draw_data){
     const {y} = draw_data;
@@ -539,6 +540,17 @@ export function setup_stdev_95({stdev, opacity = 0.1}) {
       ...draw_data,
       y0: (d, i, data) => pick_value(y, d, i, data) - stdev_95_z_score * pick_value(stdev, d, i, data),
       y1: (d, i, data) => pick_value(y, d, i, data) + stdev_95_z_score * pick_value(stdev, d, i, data)
+    }).style("fill-opacity", opacity);
+  };
+}
+
+export function setup_stdev_99({stdev, opacity = 0.1}) {
+  return function(draw_data){
+    const {y} = draw_data;
+    draw_area.call(this, {
+      ...draw_data,
+      y0: (d, i, data) => pick_value(y, d, i, data) - stdev_99_z_score * pick_value(stdev, d, i, data),
+      y1: (d, i, data) => pick_value(y, d, i, data) + stdev_99_z_score * pick_value(stdev, d, i, data)
     }).style("fill-opacity", opacity);
   };
 }

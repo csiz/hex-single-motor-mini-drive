@@ -135,5 +135,5 @@ export const position_calibration_default = {
   sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
   sector_center_stdev: [30, 30, 30, 30, 30, 30],
   initial_angular_speed_stdev: 30.0, // 30 degrees per ms
-  angular_acceleration_stdev: 360.0 / 2.0 / 50.0, // acceleration distribution up to (360 degrees per 5ms) per 50ms.
+  angular_acceleration_stdev: 18.0, // acceleration distribution up to (degrees per ms^2).
 }

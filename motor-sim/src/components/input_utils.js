@@ -3,9 +3,22 @@ import {Generators} from "observablehq:stdlib";
 
 import {html} from "htl";
 
+import * as d3 from "d3";
 import _ from "lodash";
 
 import {set_stored, get_stored_or_default} from "./local_storage.js";
+
+export function inputs_wide_range(...args) {
+  const result = Inputs.range(...args);
+  d3.select(result)
+    .style("width", "100%")
+    .call(form => {
+      form.select("input[type=number]").style("width", "7em");
+      form.select("input[type=range]").style("width", "640px");
+    });
+    
+  return result;
+}
 
 export function enabled_checkbox(data, {...options}){
   return Inputs.checkbox(data, {value: data, ...options});

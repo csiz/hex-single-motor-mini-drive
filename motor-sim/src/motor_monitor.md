@@ -35,6 +35,7 @@ Motor Driving Data
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_electric_offsets}</div>
 <div class="card tight">${plot_speed}</div>
+<div class="card tight">${plot_acceleration}</div>
 <div class="card tight">${plot_measured_voltage}</div>
 <div class="card tight">${plot_measured_temperature}</div>
 <div class="card tight">${plot_measured_current}</div>
@@ -495,17 +496,11 @@ const time_period_input = Inputs.range([1, max_timeline_period], {
   label: "Time window Duration (ms):",
 });
 
-const time_offset_input = Inputs.range([0, 1.0], {
+const time_offset_input = inputs_wide_range([0, 1.0], {
   value: 1.0, 
   step: 0.01,
   label: "Time window Offset (ms):",
 });
-d3.select(time_offset_input)
-  .style("width", "100%")
-  .call(form => {
-    form.select("input[type=number]").style("width", "7em");
-    form.select("input[type=range]").style("width", "640px");
-  });
 
 const plot_curve_input = Inputs.radio(new Map([
   ["Connected steps", d3.curveStep],
@@ -606,6 +601,7 @@ const monitoring_plots = [
   plot_electric_position,
   plot_electric_offsets,
   plot_speed,
+  plot_acceleration,
   plot_measured_voltage,
   plot_measured_temperature,
   plot_measured_current,
@@ -765,6 +761,24 @@ const plot_speed = plot_lines({
   curve,
 });
 
+const plot_acceleration = plot_lines({
+  subtitle: "Rotor Acceleration",
+  description: "Angular acceleration of the rotor in degrees per millisecond squared.",
+  width: 1200, height: 300,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Angular Acceleration (degrees/ms²)",
+  channels: [
+    {y: "web_angular_acceleration", label: "Angular Acceleration (computed online)", color: colors.web_angular_speed},
+    {
+      y: "web_angular_acceleration_avg", label: "Angular Acceleration 2.0ms average", color: d3.color(colors.web_angular_speed).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_acceleration_stdev}),
+    },
+  ],
+  curve,
+});
+
+
 const plot_measured_voltage = plot_lines({
   subtitle: "Measured Voltage",
   description: "Measured voltage values for VCC.",
@@ -910,6 +924,7 @@ autosave_inputs({
   plot_electric_position,
   plot_electric_offsets,
   plot_speed,
+  plot_acceleration,
   plot_measured_voltage,
   plot_measured_temperature,
   plot_measured_current,
@@ -1005,18 +1020,12 @@ const current_calibration_iterations = current_calibration_result?.iterations ??
 // Select the optimization iteration to display.
 const current_calibration_optimization_iteration_input = !current_calibration_result ? 
   html`<p>No optimization iterations available.</p>` : 
-  Inputs.range(
+  inputs_wide_range(
     [0, current_calibration_iterations.length - 1], {
     step: 1,
     label: "Select optimization iteration to display:",
   });
 
-d3.select(current_calibration_optimization_iteration_input)
-  .style("width", "100%")
-  .call(form => {
-    form.select("input[type=number]").style("width", "7em");
-    form.select("input[type=range]").style("width", "640px");
-  });
 
 const current_calibration_optimization_phase_input = Inputs.radio(
   new Map([
@@ -1342,6 +1351,7 @@ const position_calibration_pos_speed_plot = plot_lines({
   curve: d3.curveStep,
 });
 
+
 const position_calibration_neg_plot = plot_lines({
   data: position_calibration_selected_result?.drive_negative,
   subtitle: "Electric position | drive negative then break",
@@ -1485,16 +1495,19 @@ import {plot_lines, plot_line, setup_faint_area, horizontal_step, setup_stdev_95
 
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 
-import {round, uint32_to_bytes, bytes_to_uint32, timeout_promise, wait, clean_id}  from "./components/utils.js";
+import {round, timeout_promise, wait}  from "./components/utils.js";
 
+import {
+  enabled_checkbox, autosave_inputs, any_checked_input, 
+  set_input_value, merge_input_value, wait_previous,
+  inputs_wide_range,  
+} from "./components/input_utils.js";
 
-import {enabled_checkbox, autosave_inputs, any_checked_input, set_input_value, merge_input_value, wait_previous} from "./components/input_utils.js";
-
-import {interpolate_degrees, shortest_distance_degrees, normalize_degrees, circular_stats_degrees} from "./components/angular_math.js";
+import {interpolate_degrees, normalize_degrees} from "./components/angular_math.js";
 
 import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
 
-import {run_current_calibration, compute_current_calibration, current_calibration_zones} from "./components/motor_current_calibration.js";
+import {run_current_calibration, compute_current_calibration} from "./components/motor_current_calibration.js";
 
 import {run_position_calibration, compute_position_calibration} from "./components/motor_position_calibration.js";
 

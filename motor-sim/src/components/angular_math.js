@@ -17,7 +17,7 @@ export function circular_stats_degrees(values){
 
   const stdev = Math.sqrt(
     d3.mean(values, (d) => {
-      const diff = shortest_distance_degrees(mean, d);
+      const diff = signed_distance_degrees(mean, d);
       return diff * diff;
     })
   );
@@ -41,7 +41,7 @@ export function positive_degrees(d){
   return (d % 360 + 360) % 360;
 }
 
-export function shortest_distance_degrees(a, b){
+export function signed_distance_degrees(a, b){
   return normalize_degrees(b - a);
 }
 
