@@ -41,14 +41,275 @@ extern bool angle_valid;
 // pole pairs, and the slot triplets, and the mechanical gear ratio.
 extern PositionStatistics electric_position;
 
+
 // Number of updates since we last seen a hall transition.
 extern int updates_since_last_hall_transition;
 
-// Last angle prediction error.
-extern PositionStatistics position_error;
 
 // Position calibration data. These are the trigger angles for each hall sensor output.
 extern PositionCalibration position_calibration;
+
+// Combine gaussian with mean a and variance a with gaussian with mean 0 and variance b.
+static inline int combined_gaussian_adjustment(int a, int variance_a, int variance_b){
+    // Magic value 0 for infinite variance return 0 error.
+    if (variance_a == 0) return 0;
+
+    const int variance_sum = variance_a + variance_b;
+    return (a * variance_b + variance_sum / 2) / variance_sum;
+}
+
+// Combine gaussians.
+static inline int combined_gaussian_mean(int a, int variance_a, int b, int variance_b){
+    const int variance_sum = variance_a + variance_b;
+    return (a * variance_b + b * variance_a + variance_sum / 2) / variance_sum;
+}
+
+
+static inline int combined_gaussian_variance(int variance_a, int variance_b){
+    // Magic value 0 for infinite variance; return prior variance unchanged.
+    if (variance_a == 0) return variance_b;
+
+    const int variance_sum = variance_a + variance_b;
+    // Round to nearest integer rather than floor.
+    return (variance_a * variance_b + variance_sum / 2) / variance_sum;
+}
+
+static inline PositionStatistics bayesian_update(
+    PositionStatistics const & prior, 
+    PositionStatistics const & measurement_error,
+    int max_angle_variance
+){
+    // Perform the Kalman filter update. We are finding the posterior distribution given our
+    // prior distribution (the predicted angle and speed) and the observation (the hall sensor trigger).
+    // We consider both inputs to be gaussian distributions, the result is also a gaussian distribution.
+    // 
+    // Note that we have changed coordinates so the predicted angle is 0 and so is the predicted speed.
+    // In this case we only need to adjust based on the distance error.
+    
+
+    // Adjust the distance using the kalman gain. This is actually the new mean of a product of gaussians.
+    const int distance_adjustment = combined_gaussian_adjustment(
+        measurement_error.angle,
+        measurement_error.angle_variance,
+        prior.angle_variance
+    );
+
+
+    // Update the position parameters.
+
+    // Adjust angle by at least 1 LSB in the direction of the error in case we rounded down to 0.
+    const int angle = normalize_angle(prior.angle + (distance_adjustment ? distance_adjustment : sign(measurement_error.angle)));
+
+    const int angle_variance = clip_to(
+        1, max_angle_variance,
+        combined_gaussian_variance(
+            measurement_error.angle_variance,
+            prior.angle_variance
+        )
+    );
+
+
+    // Similarly adjust the speed based on our new guess and previous variance.
+    const int speed_adjustment = combined_gaussian_adjustment(
+        measurement_error.angular_speed,
+        measurement_error.angular_speed_variance,
+        prior.angular_speed_variance
+    );
+
+    const int angular_speed = prior.angular_speed + (speed_adjustment ? speed_adjustment : sign(measurement_error.angular_speed));
+
+    const int angular_speed_variance = clip_to(
+        1, position_calibration.initial_angular_speed_variance,
+        combined_gaussian_variance(
+            measurement_error.angular_speed_variance,
+            prior.angular_speed_variance
+        )
+    );
+
+    return PositionStatistics{
+        .angle = angle,
+        .angle_variance = angle_variance,
+        .angular_speed = angular_speed,
+        .angular_speed_variance = angular_speed_variance
+    };
+}
+
+
+
+static inline PositionStatistics predict_position(PositionStatistics const & previous){
+    const int predicted_angular_speed = previous.angular_speed;
+
+    const int predicted_angular_speed_variance = min(
+        max_16bit,
+        previous.angular_speed_variance + 
+        position_calibration.angular_acceleration_div_2_variance / acceleration_variance_fixed_point + 1
+    );
+
+    const int predicted_angle = normalize_angle(
+        previous.angle + 
+        (previous.angular_speed + speed_fixed_point / 2) / speed_fixed_point
+    );
+
+    const int predicted_angle_variance = min(
+        max_16bit,
+        previous.angle_variance +
+        predicted_angular_speed_variance / speed_variance_fixed_point + 1
+    );
+
+    return PositionStatistics{
+        .angle = predicted_angle,
+        .angle_variance = predicted_angle_variance,
+        .angular_speed = predicted_angular_speed,
+        .angular_speed_variance = predicted_angular_speed_variance
+    };
+}
+
+static inline PositionStatistics compute_transition_error(
+    PositionStatistics const & predicted_position, 
+    const uint8_t hall_sector, 
+    const uint8_t previous_hall_sector,
+    const int updates_since_last_hall_transition
+) {
+    // We have a hall transition, we know our position crossed the trigger angle in the last cycle.
+
+
+    // Get the sector integer distance to determine the direction of rotation.
+    const int sector_distance = (9 + hall_sector - previous_hall_sector) % 6 - 3;
+    
+    // Positive rotations index the first element in the calibration table, negative the second.
+    const size_t direction_index = sector_distance >= 0 ? 0 : 1;
+    
+    
+    // Get data about this transition from the calibration table.
+    
+    const int hall_angle = position_calibration.sector_transition_angles[hall_sector][direction_index];
+    const int hall_variance = position_calibration.sector_transition_variances[hall_sector][direction_index];
+    
+    
+    // Change coordinates with predicted angle as the center. The predicted angle becomes the 0
+    // point and we'll calculate the trigger angle relative to it.
+    // 
+    // Note: Don't add up variances for the change of coordinates! It's just a math trick.
+    
+    // Calculate the prediction error for the angle.
+    const int angle_error = signed_angle(hall_angle - predicted_position.angle);
+
+    const int timing_variance = square(predicted_position.angular_speed) / angle_variance_to_square_speed + 1;
+
+    // The variance increases with angular speed as the transition could have occured at any point in the cycle.
+    const int angle_variance_error = min(max_16bit, hall_variance + timing_variance);
+
+    const int previous_hall_angle = position_calibration.sector_transition_angles[previous_hall_sector][direction_index];
+    const int previous_hall_angle_variance = position_calibration.sector_transition_variances[previous_hall_sector][direction_index];
+
+    const int sector_hall_distance = signed_angle(hall_angle - previous_hall_angle);
+    const int measured_speed = (
+        (sector_hall_distance * speed_fixed_point + updates_since_last_hall_transition / 2) / 
+        updates_since_last_hall_transition
+    );
+
+    const int speed_timing_error = measured_speed - predicted_position.angular_speed;
+    const int speed_timing_variance = min(
+        max_16bit,
+        (angle_variance_error + previous_hall_angle_variance) / updates_since_last_hall_transition +
+        updates_since_last_hall_transition * position_calibration.angular_acceleration_div_2_variance / acceleration_variance_fixed_point +
+        1
+    );
+
+    const int angle_change_error = angle_error * speed_fixed_point;
+    const int angle_change_variance = min(
+        max_16bit,
+        angle_variance_error * speed_variance_fixed_point
+    );
+
+    const int angular_speed_error = combined_gaussian_mean(
+        angle_change_error,
+        angle_change_variance,
+        speed_timing_error,
+        speed_timing_variance
+    );
+
+    const int angular_speed_variance_error = combined_gaussian_variance(
+        angle_change_variance,
+        speed_timing_variance
+    );
+
+    return PositionStatistics{
+        .angle = angle_error,
+        .angle_variance = angle_variance_error,
+        .angular_speed = angular_speed_error,
+        .angular_speed_variance = angular_speed_variance_error
+    };
+}
+
+static inline PositionStatistics compute_non_transition_error(
+    PositionStatistics const & predicted_position, 
+    const uint8_t hall_sector
+) {
+    // No transition seen yet; anticipate the next hall transition and compare to our predicted
+    // angle. If we should have crossed it by prediction then we should slow down our speed estimate.
+
+    const uint8_t next_hall_sector = predicted_position.angular_speed >= 0 ? 
+        ((hall_sector + 1) % hall_sector_base) : 
+        ((hall_sector + hall_sector_base - 1) % hall_sector_base);
+
+    const size_t direction_index = predicted_position.angular_speed >= 0 ? 0 : 1;
+
+    // Get the upcoming hall transition angle.
+    const int hall_angle = position_calibration.sector_transition_angles[next_hall_sector][direction_index];
+
+    // The variance of the upcoming transition doesn't depend on speed, because we haven't seen it yet.
+    const int hall_variance = position_calibration.sector_transition_variances[next_hall_sector][direction_index];
+
+    // Calculate the distance to the trigger angle.
+    const int distance_to_hall_angle = signed_angle(hall_angle - predicted_position.angle);
+
+    // The distance to the trigger encompases our uncertainty in the predicted angle.
+    const int distance_to_hall_angle_variance = min(max_16bit, predicted_position.angle_variance + hall_variance);
+    
+    // Grab data for the current hall sector; assume we are correcting towards the center.
+
+    const int distance_to_hall_center = signed_angle(position_calibration.sector_center_angles[hall_sector] - predicted_position.angle);
+    const int distance_to_hall_center_variance = position_calibration.sector_center_variances[hall_sector];
+
+
+    // Check if we are more than 2 standard deviations away from our prediction.
+    const bool tail_end = square(distance_to_hall_angle) > (16 * distance_to_hall_angle_variance * variance_divider);
+
+    // Check if the distance to the next hall angle is in the same direction as the predicted speed;
+    // in that case, we will eventually cross the angle if we keep going at the same speed.
+    const bool same_direction = (predicted_position.angular_speed * distance_to_hall_angle) >= 0;
+
+    if (same_direction) {
+        // No transition expected and no information gained; return magic variance 0 indicating infinity.
+        return PositionStatistics{
+            .angle = 0,
+            .angle_variance = 0,
+            .angular_speed = 0,
+            .angular_speed_variance = 0
+        };
+    } else {
+        // If we're moving past the next hall transition without seeing the transition; bring back towards the center.
+        return PositionStatistics{
+            .angle = distance_to_hall_center,
+            .angle_variance = (tail_end ? 1 : 2) * distance_to_hall_center_variance,
+            .angular_speed = distance_to_hall_angle * speed_fixed_point,
+            .angular_speed_variance = min(
+                max_16bit,
+                (tail_end ? 2 : 4) * (predicted_position.angular_speed_variance + default_sector_center_variance * speed_variance_fixed_point)
+            )
+        };
+    }
+}
+
+static inline PositionStatistics get_default_sector_position(const uint8_t hall_sector) {
+    return PositionStatistics{
+        .angle = position_calibration.sector_center_angles[hall_sector],
+        .angle_variance = position_calibration.sector_center_variances[hall_sector],
+        .angular_speed = 0,
+        .angular_speed_variance = position_calibration.initial_angular_speed_variance
+    };
+}
 
 
 // Read the hall sensors and update the motor rotation angle. Sensor chips might be: SS360NT (can't read the inprint clearly).
@@ -97,18 +358,6 @@ static inline void read_hall_sensors(){
     }
 }
 
-// Combine gaussian with mean a and variance a with gaussian with mean 0 and variance b.
-static inline int combined_gaussian_mean(int a, int variance_a, int variance_b){
-    const int variance_sum = variance_a + variance_b;
-    return (a * variance_b) / variance_sum;
-}
-
-static inline int combined_gaussian_variance(int variance_a, int variance_b){
-    const int variance_sum = variance_a + variance_b;
-    // Round to nearest integer rather than floor.
-    return (variance_a * variance_b + variance_sum / 2) / variance_sum;
-}
-
 // Update the position from the hall sensors. Use a kalman filter to estimate the position and speed.
 static inline void update_position(){
     read_hall_sensors();
@@ -124,228 +373,47 @@ static inline void update_position(){
 
     // Check if the previous sector was valid.
     if (previous_hall_sector >= hall_sector_base) {
+        // Reset position tracking to the sector center; our best guess.
+        electric_position = get_default_sector_position(hall_sector);
 
         // This is the first time we have a valid hall sector; we need to set the angle and the angular speed.
         previous_hall_sector = hall_sector;
-
-        // Reset position tracking to the sector center; our best guess.
-        electric_position.angle = position_calibration.sector_center_angles[hall_sector];
-        electric_position.angle_variance = position_calibration.sector_center_variances[hall_sector];
-        electric_position.angular_speed = 0;
-        electric_position.angular_speed_variance = position_calibration.initial_angular_speed_variance;
 
         angle_valid = true;
         return;
     }
 
     // We have a valid state; perform a Kalman filter prediction.
-    
-    // Apply the minimum amount of friction to bias speed towards 0.
-    const int predicted_angular_speed = electric_position.angular_speed; // - sign(electric_position.angular_speed);
-
-    const int predicted_angular_speed_variance = min(
-        max_16bit,
-        electric_position.angular_speed_variance + 
-        position_calibration.angular_acceleration_div_2_variance / acceleration_variance_fixed_point + 1
-    );
-
-    const int predicted_angle = normalize_angle(
-        electric_position.angle + 
-        (electric_position.angular_speed + speed_fixed_point / 2) / speed_fixed_point
-    );
-
-    const int predicted_angle_variance = min(
-        max_16bit,
-        electric_position.angle_variance +
-        predicted_angular_speed_variance / speed_variance_fixed_point + 1
-    );
-
+    const auto predicted_position = predict_position(electric_position);
 
     // Check if we've switched sectors.
     const bool is_hall_transition = (hall_sector != previous_hall_sector);
 
-    if (is_hall_transition) {
-        // We have a hall transition, we know our position crossed the trigger angle in the last cycle.
+    const int max_angle_variance = position_calibration.sector_center_variances[hall_sector];
 
-        // Get the sector integer distance to determine the direction of rotation.
-        const int sector_distance = (9 + hall_sector - previous_hall_sector) % 6 - 3;
-        
-        // Positive rotations index the first element in the calibration table, negative the second.
-        const size_t direction_index = sector_distance >= 0 ? 0 : 1;
-        
-        
-        // Get data about this transition from the calibration table.
-        
-        const int hall_angle = position_calibration.sector_transition_angles[hall_sector][direction_index];
-        const int hall_variance = position_calibration.sector_transition_variances[hall_sector][direction_index];
-        
-        
-        // Change coordinates with predicted angle as the center. The predicted angle becomes the 0
-        // point and we'll calculate the trigger angle relative to it.
-        // 
-        // Note: Don't add up variances for the change of coordinates! It's just a math trick.
-        
-        // Calculate the prediction error for the angle.
-        position_error.angle = signed_angle(hall_angle - predicted_angle);
 
-        const int timing_variance = square(predicted_angular_speed) / angle_variance_to_square_speed + 1;
-        
-        // The variance increases with angular speed as the transition could have occured at any point in the cycle.
-        position_error.angle_variance = min(max_16bit, hall_variance + timing_variance);
 
-        const int previous_hall_angle = position_calibration.sector_transition_angles[previous_hall_sector][direction_index];
+    const auto position_error = (is_hall_transition ? 
+        compute_transition_error(
+            predicted_position,
+            hall_sector,
+            previous_hall_sector,
+            updates_since_last_hall_transition) : 
+        compute_non_transition_error(
+            predicted_position,
+            hall_sector
+        )
+    );
 
-        const int sector_hall_distance = signed_angle(hall_angle - previous_hall_angle);
-        const int measured_speed = (
-            (sector_hall_distance * speed_fixed_point + updates_since_last_hall_transition / 2) / 
-            updates_since_last_hall_transition
-        );
+    electric_position = bayesian_update(predicted_position, position_error, max_angle_variance);
 
-        const int speed_timing_error = measured_speed - predicted_angular_speed;
-        const int speed_timing_variance = min(
-            max_16bit,
-            position_error.angle_variance / updates_since_last_hall_transition +
-            updates_since_last_hall_transition * position_calibration.angular_acceleration_div_2_variance / acceleration_variance_fixed_point +
-            1
-        );
-
-        const int angle_change_error = position_error.angle * speed_fixed_point;
-        const int angle_change_variance = min(
-            max_16bit,
-            position_error.angle_variance * speed_variance_fixed_point
-        );
-
-        position_error.angular_speed = speed_timing_variance > angle_change_variance ? 
-            angle_change_error : 
-            speed_timing_error;
-        position_error.angular_speed_variance = speed_timing_variance > angle_change_variance ? 
-            angle_change_variance : 
-            speed_timing_variance;
-
-        updates_since_last_hall_transition = 1;
-    } else {
-        // No transition seen yet; anticipate the next hall transition and compare to our predicted
-        // angle. If we should have crossed it by prediction then we should slow down our speed estimate.
-
-        updates_since_last_hall_transition = min(max_updates_between_transitions, updates_since_last_hall_transition + 1);
-    
-        const uint8_t next_hall_sector = predicted_angular_speed >= 0 ? 
-            ((hall_sector + 1) % hall_sector_base) : 
-            ((hall_sector + hall_sector_base - 1) % hall_sector_base);
-
-        const size_t direction_index = predicted_angular_speed >= 0 ? 0 : 1;
-
-        // Get the upcoming hall transition angle.
-        const int hall_angle = position_calibration.sector_transition_angles[next_hall_sector][direction_index];
-    
-        // The variance of the upcoming transition doesn't depend on speed, because we haven't seen it yet.
-        const int hall_variance = position_calibration.sector_transition_variances[next_hall_sector][direction_index];
-    
-        // Calculate the distance to the trigger angle.
-        const int distance_to_hall_angle = signed_angle(hall_angle - predicted_angle);
-    
-        // The distance to the trigger encompases our uncertainty in the predicted angle.
-        const int distance_to_hall_angle_variance = min(max_16bit, predicted_angle_variance + hall_variance);
-        
-        // Grab data for the current hall sector; assume we are correcting towards the center.
-    
-        const int distance_to_hall_center = signed_angle(position_calibration.sector_center_angles[hall_sector] - predicted_angle);
-        const int distance_to_hall_center_variance = position_calibration.sector_center_variances[hall_sector];
-    
-    
-        // Check if we are more than 2 standard deviations away from our prediction.
-        const bool tail_end = square(distance_to_hall_angle) > (4 * distance_to_hall_angle_variance * variance_divider);
-    
-        // Check if the distance to the next hall angle is in the same direction as the predicted speed;
-        // in that case, we will eventually cross the angle if we keep going at the same speed.
-        const bool same_direction = (predicted_angular_speed * distance_to_hall_angle) >= 0;
-        
-        if (same_direction) {
-            // No transition expected and no information gained; return magic variance 0 indicating infinity.
-            position_error.angle = 0;
-            position_error.angle_variance = 0;
-            position_error.angular_speed = 0;
-            position_error.angular_speed_variance = 0;
-        } else {
-            // If we're moving past the next hall transition without seeing the transition; bring back towards the center.
-            position_error.angle = distance_to_hall_center;
-            position_error.angle_variance = (tail_end ? 1 : 2) * distance_to_hall_center_variance;
-            // Distance to hall angle is opposite the speed; correct by this amount.
-            position_error.angular_speed = distance_to_hall_angle * speed_fixed_point;
-            position_error.angular_speed_variance = min(
-                max_16bit,
-                (tail_end ? 2 : 4) * (predicted_angular_speed_variance + distance_to_hall_angle_variance * speed_variance_fixed_point)
-            );
-        }
-    }
+    updates_since_last_hall_transition = (is_hall_transition ? 
+        1 :
+        min(max_updates_between_transitions, updates_since_last_hall_transition + 1)
+    );
     
     // Store the current hall sector.
     previous_hall_sector = hall_sector;
 
-    const int max_position_variance = position_calibration.sector_center_variances[hall_sector];
-
-    // Perform the Kalman filter update. We are finding the posterior distribution given our
-    // prior distribution (the predicted angle and speed) and the observation (the hall sensor trigger).
-    // We consider both inputs to be gaussian distributions, the result is also a gaussian distribution.
-    // 
-    // Note that we have changed coordinates so the predicted angle is 0 and so is the predicted speed.
-    // In this case we only need to adjust based on the distance error.
-    
-    if (not position_error.angle_variance) {
-        // Infinite variance, keep the prediction.
-        electric_position.angle = predicted_angle;
-        electric_position.angle_variance = clip_to(
-            1, max_position_variance,
-            predicted_angle_variance
-        );
-    } else {
-        // Adjust the distance using the kalman gain. This is actually the new mean of a product of gaussians.
-        const int distance_adjustment = combined_gaussian_mean(
-            position_error.angle,
-            position_error.angle_variance,
-            predicted_angle_variance
-        );
-
-
-        // Update the position parameters.
-    
-        // Adjust angle by at least 1 LSB in the direction of the error in case we rounded down to 0.
-        electric_position.angle = normalize_angle(predicted_angle + (distance_adjustment ? distance_adjustment : sign(position_error.angle)));
-
-        electric_position.angle_variance = clip_to(
-            1, max_position_variance,
-            combined_gaussian_variance(
-                position_error.angle_variance,
-                predicted_angle_variance
-            )
-        );
-    }
-
-
-    
-    if (not position_error.angular_speed_variance) {
-        // Infinite variance for the angular speed, keep the prediction.
-        electric_position.angular_speed = predicted_angular_speed;
-        electric_position.angular_speed_variance = clip_to(
-            1, position_calibration.initial_angular_speed_variance,
-            predicted_angular_speed_variance
-        );
-    } else {
-        // Similarly adjust the speed based on our new guess and previous variance.
-        const int speed_adjustment = combined_gaussian_mean(
-            position_error.angular_speed,
-            position_error.angular_speed_variance,
-            predicted_angular_speed_variance
-        );
-
-        electric_position.angular_speed = predicted_angular_speed + (speed_adjustment ? speed_adjustment : sign(position_error.angular_speed));
-
-        electric_position.angular_speed_variance = clip_to(
-            1, position_calibration.initial_angular_speed_variance,
-            combined_gaussian_variance(
-                position_error.angular_speed_variance,
-                predicted_angular_speed_variance
-            )
-        );
-    }
+    angle_valid = true;
 }

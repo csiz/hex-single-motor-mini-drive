@@ -16,14 +16,6 @@ PositionStatistics electric_position = {
     .angular_speed_variance = 0
 };
 
-PositionStatistics position_error = {
-    .angle = 0,
-    .angle_variance = 0,
-    .angular_speed = 0,
-    .angular_speed_variance = 0
-};
-
 int updates_since_last_hall_transition = 1;
 
-// TODO: reload from flash memory.
-PositionCalibration position_calibration = default_position_calibration; // get_position_calibration();
+PositionCalibration position_calibration = get_position_calibration();
