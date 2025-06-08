@@ -59,14 +59,14 @@ void motor_drive_pos(uint16_t pwm, uint16_t timeout){
 
 void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle){
     pwm_command = clip_to(0, pwm_max, pwm);
-    leading_angle = clip_to(0, angle_units_per_circle-1, new_leading_angle);
+    leading_angle = clip_to(0, angle_base-1, new_leading_angle);
     duration_till_timeout = clip_to(0, max_timeout, timeout);
     driver_state = DriverState::DRIVE_SMOOTH_POS;
 }
 
 void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle){
     pwm_command = clip_to(0, pwm_max, pwm);
-    leading_angle = clip_to(0, angle_units_per_circle-1, new_leading_angle);
+    leading_angle = clip_to(0, angle_base-1, new_leading_angle);
     duration_till_timeout = clip_to(0, max_timeout, timeout);
     driver_state = DriverState::DRIVE_SMOOTH_NEG;
 }

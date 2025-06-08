@@ -112,9 +112,9 @@ static inline void update_motor_smooth(const bool angle_valid, const int angle, 
 
     const int target_angle = normalize_angle(angle + direction * leading_angle);
 
-    const uint16_t voltage_phase_u = phases_waveform[target_angle];
-    const uint16_t voltage_phase_v = phases_waveform[normalize_angle(target_angle - third_circle)];
-    const uint16_t voltage_phase_w = phases_waveform[normalize_angle(target_angle - two_thirds_circle)];
+    const uint16_t voltage_phase_u = get_phase_pwm(target_angle);
+    const uint16_t voltage_phase_v = get_phase_pwm(target_angle - third_circle);
+    const uint16_t voltage_phase_w = get_phase_pwm(target_angle - two_thirds_circle);
 
     set_motor_u_pwm_duty(voltage_phase_u * pwm_command / pwm_base);
     set_motor_v_pwm_duty(voltage_phase_v * pwm_command / pwm_base);

@@ -4,16 +4,26 @@
 
 
 uint8_t hall_state = 0b000;
-uint8_t hall_sector = 0;
-uint8_t previous_hall_sector = 0;
+uint8_t hall_sector = hall_sector_base;
+uint8_t previous_hall_sector = hall_sector_base;
 
 bool angle_valid = false;
-int time_since_observation = 0;
-bool new_observation = false;
 
-int angle_at_observation = 0;
-int angle_variance_at_observation = 0;
-int angular_speed_at_observation = 0;
-int angular_speed_variance_at_observation = 0;
+PositionStatistics electric_position = {
+    .angle = 0,
+    .angle_variance = 0,
+    .angular_speed = 0,
+    .angular_speed_variance = 0
+};
 
-PositionCalibration position_calibration = get_position_calibration();
+PositionStatistics position_error = {
+    .angle = 0,
+    .angle_variance = 0,
+    .angular_speed = 0,
+    .angular_speed_variance = 0
+};
+
+int updates_since_last_hall_transition = 1;
+
+// TODO: reload from flash memory.
+PositionCalibration position_calibration = default_position_calibration; // get_position_calibration();

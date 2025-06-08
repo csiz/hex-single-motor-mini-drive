@@ -748,10 +748,12 @@ const plot_speed = plot_lines({
       y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
+    {y: "angular_speed_stdev", label: "Angular Speed Stdev", color: d3.color(colors.angular_speed).brighter(1)},
     {
       y: "web_angular_speed", label: "Angular Speed (computed online)", color: colors.web_angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
     },
+    {y: "web_angular_speed_stdev", label: "Angular Speed Stdev (computed online)", color: d3.color(colors.web_angular_speed).darker(1)},
     {y: "angular_speed_from_emf", label: "Angular Speed from EMF", color: colors.angle_from_emf},
     {
       y: "angular_speed_from_emf_avg", label: "Angular Speed from EMF 0.5ms average", color: colors.angle_from_emf,

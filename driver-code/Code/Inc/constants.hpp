@@ -14,51 +14,38 @@ const size_t history_size = 360;
 // ----------------
 
 // Maximum value we can use in signed 32 bit multiplication.
-const int max_16bit = 0x0000'8FFF;
-
-// Ticks per millisecond at 72MHz clock speed. Each tick is ~13.89ns.
-const int ticks_per_millisecond = 72'000;
-
-// Maximum time difference between two hall transitions to consider the 
-// motor moving. Above this value we assume the motor is stopped.
-const int max_delta_milliseconds = 15;
-
-// Minimum size of our time units so that we can square them with 32 bit signed integers.
-const int min_delta_ticks = ticks_per_millisecond * max_delta_milliseconds / max_16bit;
-
-// Conversion between ticks and time units.
-const int ticks_per_time_unit = 32;
-
-// Conversion between time units and seconds.
-const int time_units_per_second = ticks_per_millisecond * 1000 / ticks_per_time_unit;
-
-// Our time units per millisecond. Helpful scaling factor for other constants below.
-const int time_units_per_millisecond = time_units_per_second / 1000;
-
-const int max_delta_time_units = max_delta_milliseconds * time_units_per_millisecond;
+const int max_16bit = (1 << 15) - 1; // 32767
 
 // PWM base value; representing full on duty cycle.
 const uint16_t pwm_base = 1536;
 
-// Base and 1 over maximum value of the hall sector.
+// Base and number of hall sectors.
 const uint8_t hall_sector_base = 6;
 
-// Angle units of a full circle (tau = 2pi).
-const int angle_units_per_circle = 1024;
+// Angle units of a full circle: 1 angle unit = (tau = 2pi) / 1024.
+// 
+// Note that speed units and acceleration units are defined as angle units
+// per pwm cycle. This allows for easy maths during updates because the time
+// delta is always 1 pwm cycle per cycle.
+const int angle_base = 1024;
 
-// Scaling factor: speed = angle units * speed_scale / time units;
-const int speed_scale = 1024;
+// Round down angle units for the trig lookup tables. 14 to 10 bits.
+const int angle_lookup_divider = angle_base / 1024;
 
-// Speed units are defined as speed_scale * angle units / time units.
-const int speed_units_per_revolution_millisecond = speed_scale * angle_units_per_circle / time_units_per_millisecond;
+// The ADC has a 12-bit resolution.
+const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 
-// Minimum speed is related to the maximum time between hall transitions.
-// Considering the transition distance as 60 degees, we don't need to
-// represent speeds below this distance / max_delta_milliseconds.
-const int minimum_speed = speed_scale * (60 * angle_units_per_circle / 360) / (time_units_per_millisecond * max_delta_milliseconds);
+// Position constants
+// ------------------
 
-// Scaling factor: acceleration = speed_change * accel_scale;
-const int accel_scale = 128;
+// Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
+const int rotor_revolutions_per_electric = 4;
+
+// Gear ratio of our chosen motor.
+const int gear_ratio = 6 * 6 * 6;
+
+// Total ratio between the electrical angle and the output shaft angle.
+const int ratio = rotor_revolutions_per_electric * gear_ratio;
 
 
 // Current constants
@@ -67,31 +54,47 @@ const int accel_scale = 128;
 
 // Voltage reference for the ADC; it's a filtered 3.3V that powers the board.
 const float adc_voltage_reference = 3.3;
+
 // Shunt resistance for the motor phase current sensing is 10mOhm, 500mW resistor.
 const float motor_shunt_resistance = 0.010;
+
 // The voltage on the shunt resistor is amplified by INA4181 Bidirectional, Low and 
 // High Side Voltage Output, Current-Sense Amplifier.
 const float amplifier_gain = 20.0;
-// The ADC has a 12-bit resolution.
-const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
+
+
 // The formula that determines the current from the ADC readout: 
 //   Vout = (Iload * Rsense * GAIN) + Vref
 // And the conversion from the ADC readout is given by:
 //   Vout = adc_voltage_reference * (adc_current_readout / adc_max_value).
 // So the current is:
 //   Iload = (Vout - Vref) / (Rsense * GAIN) = adc_voltage_reference * (adc_readout_diff / adc_max_value) / (Rsense * GAIN).
-const float current_conversion = adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
+const float current_conversion_float = adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
-const int16_t current_units_per_amp = static_cast<int16_t>(1/current_conversion);
+// Current conversion: 1 current unit = 1/248 A.
+const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_float);
 
-const float phase_resistance = 2.0; // 2 Ohm resistance of the motor phase windings & mosfet.
+// Square of 1A in fixed point representation.
+const int square_current_fixed_point = square(current_fixed_point);
 
-const int16_t phase_int_resistance = static_cast<int16_t>(phase_resistance);
+// Resistance of the motor phase windings & mosfet; in Ohm.
+const float phase_resistance_float = 2.0;
+
+// Resistance conversion: 1 resistance unit = 1/1024 Ohm.
+const int resistance_fixed_point = 1024;
+
+// Phase resistance in fixed point representation.
+const int16_t phase_resistance = static_cast<int16_t>(phase_resistance_float * resistance_fixed_point);
+
+// Power conversion: 1 power unit = 1/256 W.
+const int power_fixed_point = 256;
+
 
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 12MHz (72MHz / 6). A cycle is 6 ticks.
 
 // Temperature ADC conversion time: 12.5 cycles + 71.5 cycles = 84 cycles = 7us.
 const uint16_t temperature_sample_time = (71.5 + 12.5)*6;
+
 // Current ADC conversion time: 12.5 cycles + 1.5 cycles = 14 cycles = 1.16us.
 const uint16_t current_sample_time = (1.5 + 12.5)*6;
 
@@ -102,24 +105,34 @@ const uint16_t current_sample_lead_time = (1.5 + 12.5 + 1.5)*6 / 2;
 const int16_t sample_lead_time = temperature_sample_time + current_sample_lead_time;
 
 
-// Motor PWM constants
-// -------------------
+// Timing and PWM constants
+// ------------------------
 
+// Ticks per second at 72MHz clock speed. Each tick is ~13.89ns.
+const int ticks_per_second = 72'000'000;
 
+// Auto-reload value for the PWM timer.
 const uint16_t pwm_autoreload = pwm_base - 1;
-const uint16_t pwm_period = 2 * pwm_base; // 3072 ticks = 42.7us @ 72MHz = 23.4KHz
 
-// Time units per PWM cycle (2x because it counts up then down).
-const int time_units_per_cycle = static_cast<int>(pwm_period) / ticks_per_time_unit;
+// Number of MCU clock ticks per PWM cycle; counting up then down.
+const uint16_t pwm_period = 2 * pwm_base; 
+
+// Number of PWM cycles per second: 3072 ticks = 42.7us @ 72MHz = 23.4KHz
+const int pwm_cycles_per_second = ticks_per_second / pwm_period;
 
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
 const uint16_t minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
 
-const uint16_t pwm_max = pwm_base - (current_sample_lead_time > minimum_bootstrap_duty ? current_sample_lead_time : minimum_bootstrap_duty); 
+// Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
+// bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
+// enough time to connect all low side mosfets to ground in order to sample phase currents.
+const uint16_t pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty); 
 
+// Maximum duty for hold commands.
 const uint16_t pwm_max_hold = pwm_base * 2 / 10;
 
+// Maximum time (in pwm cycles) while a command is in effect.
 const uint16_t max_timeout = 0xFFFF;
 
 
@@ -167,80 +180,115 @@ const uint16_t motor_sector_driving_neg[6][3] {
 
 
 // Half a circle (pi).
-const int half_circle = angle_units_per_circle / 2;
+const int half_circle = angle_base / 2;
 // 3/2 of a circle (3pi/2).
-const int one_and_half_circle = (3 * angle_units_per_circle) / 2;
+const int one_and_half_circle = (3 * angle_base) / 2;
 
 // 2/3 of a circle (2pi/3).
-const int two_thirds_circle = (2 * angle_units_per_circle) / 3;
+const int two_thirds_circle = (2 * angle_base) / 3;
 
 // 1/3 of a circle (pi/3).
-const int third_circle = angle_units_per_circle / 3;
+const int third_circle = angle_base / 3;
 
 // 3/4 of a circle (3pi/4).
-const int three_quarters_circle = (3 * angle_units_per_circle) / 4;
+const int three_quarters_circle = (3 * angle_base) / 4;
 
 // 1/4 of a circle (pi/4).
-const int quarter_circle = angle_units_per_circle / 4;
+const int quarter_circle = angle_base / 4;
 
 // Normalize to a positive angle (0 to 2pi).
 inline constexpr int normalize_angle(int angle){
-    return (angle + angle_units_per_circle) % angle_units_per_circle;
+    return (angle + angle_base) % angle_base;
 }
 // Normalize a 0 centerd angle; keeping its sign (-pi to pi).
 inline constexpr int signed_angle(int angle){
-    return (angle + one_and_half_circle) % angle_units_per_circle - half_circle;
+    return (angle + one_and_half_circle) % angle_base - half_circle;
 }
 
+// Scaling factor for variance.
+const int variance_divider = 4;
 
-
-
-
-
-// Reference for the maximum speed we should be able to represent.
-const int max_speed = 20 * speed_scale * angle_units_per_circle / time_units_per_millisecond;
-
-// The maximum time in our time units before we can no longer safely square the value.
-// 
-// Keep in mind that a single motor rotation takes at least 12 toggles (6 per electrical
-//  revolution * 2 poles per phase).
-const int max_time_between_observations = 100 * time_units_per_millisecond;
-
-
-// Note:
-// Speed and acceleration are written in degrees per ms and per ms^2 respectively.
-
-// Initial speed estimate.
-const int initial_angular_speed = 0;
-
-// Maximum distance to a trigger angle. Don't let the estimated angle deviate
-// from the hall sensor angle by more than this value to keep the estimate
-// within the half circle of the trigger so we don't switch sign.
-const int sector_transition_confidence = 20 * angle_units_per_circle / 360;
-
-// Maximum allowed variance; low enough so we can square the value without overflow.
-const int max_variance = square(60 * angle_units_per_circle / 360);
+// Note speed and acceleration are written in degrees per ms and per ms^2 respectively.
 
 // Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
-const int default_sector_transition_variance = square(5 * angle_units_per_circle / 360);
+const int default_sector_transition_variance = square(10 * angle_base / 360) / variance_divider;
+
 // Variance of a gaussian spread over the entire sector.
-const int default_sector_center_variance = square(30 * angle_units_per_circle / 360);
+const int default_sector_center_variance = square(30 * angle_base / 360) / variance_divider;
+
+// Ensure that our biggest variance is small enough to be usable in gaussian updates while staying < max_16bit.
+static_assert(default_sector_center_variance * 16 < max_16bit, "max_variance must be less than 32768 (max 16-bit signed int)");
 
 // The hall sensors trigger later than expected going each direction.
-const int hysterisis = 5 * angle_units_per_circle / 360;
+const int hysterisis = 5 * angle_base / 360;
 
-const int angular_acceleration_stdev = accel_scale * speed_scale * angle_units_per_circle / 2 / 50 / time_units_per_millisecond / time_units_per_millisecond;
+// Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
+const int max_rpm = 32'000 * rotor_revolutions_per_electric;
+
+// Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
+const int speed_fixed_point = 128;
+
+// Fixed point for speed variance with respect to angle units variance.
+const int speed_variance_fixed_point = 256;
+
+// Conversion factor between square speed and speed variance.
+const int speed_variance_to_square_speed = square(speed_fixed_point) / speed_variance_fixed_point * variance_divider;
+
+// Convesion factor between square angular velocity and angle variance.
+const int angle_variance_to_square_speed = speed_variance_to_square_speed * speed_variance_fixed_point;
+
+// Maximum angular speed that we can represent in the fixed point representation.
+const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
+
+// Cap the update counter between transitions; we'll consider the motor settled at this point.
+const int max_updates_between_transitions = 16384;
+
+// Minimum angular speed that we need to have to move at the max time between transitions.
+const int min_angular_speed = 60 * angle_base / 360 * speed_fixed_point / max_updates_between_transitions;
+
+static_assert(min_angular_speed > 0, "min_angular_speed must be greater than 0");
+static_assert(min_angular_speed < 4, "min_angular_speed should be quite low");
+
+// Minimum speed in rotor revolutions per minute (RPM) that we can represent with our units.
+const int min_rpm = min_angular_speed * pwm_cycles_per_second / angle_base * 60 / speed_fixed_point / rotor_revolutions_per_electric;
+
+static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
+
+
+// Variance of the speed in degrees per ms; converted to angle units per pwm cycle, all squared.
+const int default_speed_variance = square(15 * angle_base / 360 * 1000 * speed_fixed_point / pwm_cycles_per_second) / speed_variance_to_square_speed;
+
+static_assert(default_speed_variance < max_16bit, "default_speed_variance must be less than max_variance");
+
+// Acceleration fixed point with respect to speed units.
+const int acceleration_fixed_point = 32;
+
+// Fixed point for acceleration variance with respect to speed variance.
+const int acceleration_variance_fixed_point = 32;
+
+// Covnersion factor between square acceleration and acceleration variance.
+const int acceleration_variance_to_square_acceleration = square(acceleration_fixed_point) / acceleration_variance_fixed_point * speed_variance_to_square_speed;
+
+// Variance of the expected acceleration loads in degrees per ms^2; converted to acceleration units per pwm cycle, all squared.
+const int angular_acceleration_div_2_variance = (
+    square(
+        9 * angle_base / 360 * 
+        speed_fixed_point * 1000 / pwm_cycles_per_second * 
+        acceleration_fixed_point * 1000 / pwm_cycles_per_second / 
+        2
+    ) + acceleration_variance_to_square_acceleration / 2
+) / acceleration_variance_to_square_acceleration;
 
 const PositionCalibration default_position_calibration = {
     // The angle at which we transition to this sector. The first is when rotating in the
     // positive direction; second for the negative direction.
     .sector_transition_angles = {{
-        {330 * angle_units_per_circle / 360 + hysterisis,  30 * angle_units_per_circle / 360 - hysterisis},
-        { 30 * angle_units_per_circle / 360 + hysterisis,  90 * angle_units_per_circle / 360 - hysterisis},
-        { 90 * angle_units_per_circle / 360 + hysterisis, 150 * angle_units_per_circle / 360 - hysterisis},
-        {150 * angle_units_per_circle / 360 + hysterisis, 210 * angle_units_per_circle / 360 - hysterisis},
-        {210 * angle_units_per_circle / 360 + hysterisis, 270 * angle_units_per_circle / 360 - hysterisis},
-        {270 * angle_units_per_circle / 360 + hysterisis, 330 * angle_units_per_circle / 360 - hysterisis},     
+        {330 * angle_base / 360 + hysterisis,  30 * angle_base / 360 - hysterisis},
+        { 30 * angle_base / 360 + hysterisis,  90 * angle_base / 360 - hysterisis},
+        { 90 * angle_base / 360 + hysterisis, 150 * angle_base / 360 - hysterisis},
+        {150 * angle_base / 360 + hysterisis, 210 * angle_base / 360 - hysterisis},
+        {210 * angle_base / 360 + hysterisis, 270 * angle_base / 360 - hysterisis},
+        {270 * angle_base / 360 + hysterisis, 330 * angle_base / 360 - hysterisis},     
     }},
     // Variance of each sector transition; we can calibrate it.
     .sector_transition_variances = {{
@@ -253,12 +301,12 @@ const PositionCalibration default_position_calibration = {
     }},
     // The center of each hall sector; the motor should rest at these poles.
     .sector_center_angles = {{
-        (  0 * angle_units_per_circle / 360),
-        ( 60 * angle_units_per_circle / 360),
-        (120 * angle_units_per_circle / 360),
-        (180 * angle_units_per_circle / 360),
-        (240 * angle_units_per_circle / 360),
-        (300 * angle_units_per_circle / 360),
+        (  0 * angle_base / 360),
+        ( 60 * angle_base / 360),
+        (120 * angle_base / 360),
+        (180 * angle_base / 360),
+        (240 * angle_base / 360),
+        (300 * angle_base / 360),
     }},
     // Variance of the centers.
     .sector_center_variances = {{
@@ -269,21 +317,22 @@ const PositionCalibration default_position_calibration = {
         default_sector_center_variance,
         default_sector_center_variance,
     }},
-    .initial_angular_speed_variance = square(speed_scale * angle_units_per_circle * 30 / 360 / time_units_per_millisecond),
-    // Precalculate the acceleration divided by 2 variance. Note we use both scales.
-    .angular_acceleration_div_2_variance = square(angular_acceleration_stdev / 2),
+    .initial_angular_speed_variance = default_speed_variance,
+    // Precalculate the variance of the acceleration divided by 2.
+    .angular_acceleration_div_2_variance = angular_acceleration_div_2_variance,
 };
 
-const int16_t current_calibration_base = 1024;
+const int16_t current_calibration_fixed_point = 1024;
 
 const CurrentCalibration default_current_calibration = {
-    .u_factor = current_calibration_base,
-    .v_factor = current_calibration_base,
-    .w_factor = current_calibration_base,
-    .inductance_factor = current_calibration_base,
+    .u_factor = current_calibration_fixed_point,
+    .v_factor = current_calibration_fixed_point,
+    .w_factor = current_calibration_fixed_point,
+    .inductance_factor = current_calibration_fixed_point,
 };
 
 
+static_assert(angle_base == 1024, "angle_base must be 1024 for the sine and cosine lookup tables to work correctly");
 
 const uint16_t phases_waveform[1024] = {
     1330, 1335, 1340, 1344, 1349, 1353, 1358, 1362, 1366, 1371, 1375, 1379, 1383, 1387, 1391, 1395,
@@ -352,6 +401,10 @@ const uint16_t phases_waveform[1024] = {
     1399, 1395, 1391, 1387, 1383, 1379, 1375, 1371, 1366, 1362, 1358, 1353, 1349, 1344, 1340, 1335
 };
 
+static inline int16_t get_phase_pwm(const int16_t angle) {
+    return phases_waveform[normalize_angle(angle) / angle_lookup_divider];
+}
+
 const int16_t sin_lookup[1024] = {
         0,     6,    13,    19,    25,    31,    38,    44,    50,    57,    63,    69,    75,    82,    88,    94,
       100,   107,   113,   119,   125,   132,   138,   144,   150,   156,   163,   169,   175,   181,   187,   194,
@@ -418,3 +471,7 @@ const int16_t sin_lookup[1024] = {
      -200,  -194,  -187,  -181,  -175,  -169,  -163,  -156,  -150,  -144,  -138,  -132,  -125,  -119,  -113,  -107,
      -100,   -94,   -88,   -82,   -75,   -69,   -63,   -57,   -50,   -44,   -38,   -31,   -25,   -19,   -13,    -6
 };
+
+static inline int16_t get_sin(const int16_t angle) {
+    return sin_lookup[normalize_angle(angle) / angle_lookup_divider];
+}

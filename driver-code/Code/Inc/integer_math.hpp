@@ -33,7 +33,7 @@ inline constexpr int32_t internal_abs_int32(int32_t val) {
  * and the computed magnitude sqrt(x^2+y^2).
  * Uses only integer math operations.
  */
-static inline std::pair<int16_t, int16_t> atan2_integer(int16_t y_coord, int16_t x_coord) {
+static inline std::pair<int16_t, int16_t> int_atan2(int16_t y_coord, int16_t x_coord) {
     // Ensure atan2_init_tables() has been called once globally.
 
     int32_t x = x_coord; // Use 32-bit integers for intermediate calculations
@@ -117,12 +117,12 @@ static inline std::pair<int16_t, int16_t> atan2_integer(int16_t y_coord, int16_t
     } else if (x_is_negative && y_is_negative) {   // Quadrant 3 (x < 0, y < 0)
         final_angle_units = static_cast<int16_t>(half_circle + first_quadrant_angle_acc); // PI + alpha
     } else { // (!x_is_negative && y_is_negative)   // Quadrant 4 (x > 0, y < 0)
-        final_angle_units = static_cast<int16_t>(angle_units_per_circle - first_quadrant_angle_acc); // 2*PI - alpha
+        final_angle_units = static_cast<int16_t>(angle_base - first_quadrant_angle_acc); // 2*PI - alpha
     }
 
     // Normalize the angle to be strictly within [0, 1023]
     // (e.g., if 1024 - 0 results in 1024, it should be 0)
-    final_angle_units %= angle_units_per_circle;
+    final_angle_units %= angle_base;
 
 
     // Calculate magnitude: original_magnitude = current_x / K_gain
@@ -134,3 +134,26 @@ static inline std::pair<int16_t, int16_t> atan2_integer(int16_t y_coord, int16_t
 
 
 void unit_test_atan(char * buffer, size_t max_size);
+
+
+// Square root of integer (straight from https://en.wikipedia.org/wiki/Integer_square_root).
+static inline int int_sqrt(int s)
+{
+	// Zero yields zero
+    // One yields one
+	if (s <= 1) 
+		return s;
+
+    // Initial estimate (must be too high)
+	int x0 = s / 2;
+
+	// Update
+	int x1 = (x0 + s / x0) / 2;
+
+	while (x1 < x0)	// Bound check
+	{
+		x0 = x1;
+		x1 = (x0 + s / x0) / 2;
+	}		
+	return x0;
+}

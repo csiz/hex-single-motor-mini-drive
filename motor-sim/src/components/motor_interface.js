@@ -4,9 +4,17 @@ import {
   millis_per_cycle, pwm_base, readout_base,
   current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage,
   angle_units_to_degrees, degrees_to_angle_units, current_calibration_base, unbounded_angle_units_to_degrees,
-  speed_units_to_degrees_per_millisecond, degrees_per_millisecond_to_speed_units,
-  acceleration_units_to_degrees_per_millisecond2, degrees_per_millisecond2_to_acceleration_units,
-  phase_resistance, phase_inductance, 
+  speed_units_to_degrees_per_millisecond, 
+  degrees_per_millisecond_to_speed_units,
+  acceleration_units_to_degrees_per_millisecond2, 
+  degrees_per_millisecond2_to_acceleration_units,
+  variance_units_to_degrees_stdev,
+  degrees_stdev_to_variance_units,
+  speed_variance_to_degrees_per_millisecond_stdev,
+  degrees_per_millisecond_stdev_to_speed_variance,
+  acceleration_div_2_variance_to_degrees_per_millisecond2_stdev,
+  degrees_per_millisecond2_stdev_to_acceleration_div_2_variance,
+  phase_resistance, phase_inductance,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees} from './angular_math.js';
@@ -259,12 +267,12 @@ function parse_full_readout(data_view, previous_readout){
 
   const current_angle = angle_units_to_degrees(data_view.getUint16(offset));
   offset += 2;
-  const current_angle_offset_stdev = unbounded_angle_units_to_degrees(Math.sqrt(data_view.getUint16(offset)));
+  const current_angle_offset_stdev = variance_units_to_degrees_stdev(data_view.getUint16(offset));
   offset += 2;
 
-  const angle_stdev = unbounded_angle_units_to_degrees(Math.sqrt(data_view.getUint16(offset)));
+  const angle_stdev = variance_units_to_degrees_stdev(data_view.getUint16(offset));
   offset += 2;
-  const angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getUint16(offset)));
+  const angular_speed_stdev = speed_variance_to_degrees_per_millisecond_stdev(data_view.getUint16(offset));
   offset += 2;
 
   const total_power = data_view.getInt16(offset);
@@ -336,7 +344,7 @@ function parse_position_calibration(data_view){
     // We receive the variance, not the stdev.
     const value = data_view.getUint16(offset);
     offset += 2;
-    return angle_units_to_degrees(Math.sqrt(value));
+    return variance_units_to_degrees_stdev(value);
   }));
 
   const sector_center_degrees = Array.from(Array(6), () => {
@@ -349,13 +357,13 @@ function parse_position_calibration(data_view){
     // We receive the variance, not the stdev.
     const value = data_view.getUint16(offset);
     offset += 2;
-    return angle_units_to_degrees(Math.sqrt(value));
+    return variance_units_to_degrees_stdev(value);
   });
 
   // We receive the variance, not the stdev.
-  const initial_angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getUint16(offset)));
+  const initial_angular_speed_stdev = speed_variance_to_degrees_per_millisecond_stdev(data_view.getUint16(offset));
   offset += 2;
-  const angular_acceleration_stdev = acceleration_units_to_degrees_per_millisecond2(Math.sqrt(data_view.getUint16(offset)));
+  const angular_acceleration_stdev = acceleration_div_2_variance_to_degrees_per_millisecond2_stdev(data_view.getUint16(offset));
   offset += 2;
 
   return {
@@ -424,7 +432,7 @@ function serialise_set_position_calibration(position_calibration) {
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 2; j++) {
       // Send variance, not stdev.
-      view.setUint16(offset, square(degrees_to_angle_units(sector_transition_stdev[i][j])));
+      view.setUint16(offset, degrees_stdev_to_variance_units(sector_transition_stdev[i][j]));
       offset += 2;
     }
   }
@@ -436,13 +444,13 @@ function serialise_set_position_calibration(position_calibration) {
 
   for (let i = 0; i < 6; i++) {
     // Send variance, not stdev.
-    view.setUint16(offset, square(degrees_to_angle_units(sector_center_stdev[i])));
+    view.setUint16(offset, degrees_stdev_to_variance_units(sector_center_stdev[i]));
     offset += 2;
   }
 
-  view.setUint16(offset, square(degrees_per_millisecond_to_speed_units(initial_angular_speed_stdev)));
+  view.setUint16(offset, degrees_per_millisecond_stdev_to_speed_variance(initial_angular_speed_stdev));
   offset += 2;
-  view.setUint16(offset, square(degrees_per_millisecond2_to_acceleration_units(angular_acceleration_stdev)));
+  view.setUint16(offset, degrees_per_millisecond2_stdev_to_acceleration_div_2_variance(angular_acceleration_stdev));
   offset += 2;
 
   return buffer;

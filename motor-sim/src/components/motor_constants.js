@@ -17,15 +17,13 @@ export const phase_time_constant = phase_inductance / phase_resistance;
 // Timing constants
 // ----------------
 
+export const ticks_per_millisecond = 72000;
+
 // PWM motor cycles per millisecond.
 export const cycles_per_millisecond = 23437.5 / 1000.0; // 23437.5 cycles per second: 72MHz / (2*1536) / 1000.0
 
 // Millisecond (fractions) per PWM motor cycle.
 export const millis_per_cycle = 1.0/cycles_per_millisecond;
-
-const ticks_per_time_units = 256;
-const ticks_per_millisecond = 72000;
-export const time_units_per_millisecond = Math.floor(ticks_per_millisecond / ticks_per_time_units);
 
 // Angle units
 // -----------
@@ -34,7 +32,11 @@ export const angle_base = 1024;
 
 export function degrees_to_angle_units(degrees){
   // Convert degrees to angle units.
-  return Math.floor(positive_degrees(degrees) * angle_base / 360.0);
+  return Math.round(positive_degrees(degrees) * angle_base / 360.0);
+}
+
+export function unrounded_degrees_to_angle_units(degrees){
+  return degrees * angle_base / 360.0;
 }
 
 export function unbounded_angle_units_to_degrees(angle){
@@ -44,27 +46,69 @@ export function angle_units_to_degrees(angle){
   return normalize_degrees(unbounded_angle_units_to_degrees(angle));
 }
 
+export const variance_divider = 4;
+
+export const speed_fixed_point = 128;
+export const speed_variance_fixed_point = 256;
+
+export const acceleration_fixed_point = 32;
+export const acceleration_variance_fixed_point = 32;
+
 // Speed and acceleration units
 // ----------------------------
 
-// Scale to keep motor speed in numerical range for 32 bit arithmetic.
-export const speed_scale = 128;
+export function square(x){
+  return x * x;
+}
+
+export function variance_units_to_degrees_stdev(variance){
+  return unbounded_angle_units_to_degrees(Math.sqrt(variance * variance_divider));
+}
+
+export function degrees_stdev_to_variance_units(stdev){
+  return Math.round(square(unrounded_degrees_to_angle_units(stdev)) / variance_divider);
+}
 
 export function speed_units_to_degrees_per_millisecond(speed){
-  return unbounded_angle_units_to_degrees(speed) * time_units_per_millisecond / speed_scale
+  return unbounded_angle_units_to_degrees(speed / speed_fixed_point) * cycles_per_millisecond;
+}
+
+export function speed_variance_to_degrees_per_millisecond_stdev(variance){
+  return unbounded_angle_units_to_degrees(Math.sqrt(variance / speed_variance_fixed_point * variance_divider)) * cycles_per_millisecond;
 }
 
 export function degrees_per_millisecond_to_speed_units(speed){
-  return Math.floor(degrees_to_angle_units(speed) * speed_scale / time_units_per_millisecond);
+  return degrees_to_angle_units(speed * speed_fixed_point * millis_per_cycle);
 }
 
-export const accel_scale = 128;
-export function acceleration_units_to_degrees_per_millisecond2(acceleration_div_2){
-  return unbounded_angle_units_to_degrees(acceleration_div_2 * 2) * time_units_per_millisecond * time_units_per_millisecond / speed_scale / accel_scale;
+export function degrees_per_millisecond_stdev_to_speed_variance(stdev){
+  return Math.round(square(unrounded_degrees_to_angle_units(stdev * millis_per_cycle)) * speed_variance_fixed_point / variance_divider);
 }
+
+export function acceleration_units_to_degrees_per_millisecond2(acceleration){
+  return unbounded_angle_units_to_degrees(acceleration / acceleration_fixed_point / speed_fixed_point) * square(cycles_per_millisecond);
+}
+
+export function acceleration_div_2_variance_to_degrees_per_millisecond2_stdev(variance){
+  return (
+    unbounded_angle_units_to_degrees(2 * Math.sqrt(variance / acceleration_variance_fixed_point / speed_variance_fixed_point * variance_divider)) * 
+    square(cycles_per_millisecond)
+  );
+}
+
 export function degrees_per_millisecond2_to_acceleration_units(acceleration){
-  return Math.floor(degrees_to_angle_units(acceleration) * speed_scale * accel_scale / time_units_per_millisecond / time_units_per_millisecond / 2);
+  return degrees_to_angle_units(acceleration * square(millis_per_cycle)) * acceleration_fixed_point * speed_fixed_point;
 }
+
+export function degrees_per_millisecond2_stdev_to_acceleration_div_2_variance(stdev){
+  return Math.round(
+    square(unrounded_degrees_to_angle_units(stdev / 2 * square(millis_per_cycle))) * 
+    acceleration_variance_fixed_point * speed_variance_fixed_point / variance_divider
+  );
+}
+
+export const minimum_acceleration = acceleration_units_to_degrees_per_millisecond2(1);
+
 
 // Motor control constants
 // -----------------------
@@ -113,7 +157,7 @@ export const current_calibration_default = {
 
 
 const hall_hysterisis = 10;
-const transition_stdev = 15;
+const transition_stdev = 10;
 
 export const position_calibration_default = {
   sector_transition_degrees: [
@@ -134,6 +178,6 @@ export const position_calibration_default = {
   ],
   sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
   sector_center_stdev: [30, 30, 30, 30, 30, 30],
-  initial_angular_speed_stdev: 30.0, // 30 degrees per ms
-  angular_acceleration_stdev: 18.0, // acceleration distribution up to (degrees per ms^2).
+  initial_angular_speed_stdev: 15.0, // initial speed distribution degrees per ms
+  angular_acceleration_stdev: 9.0, // acceleration distribution up to (degrees per ms^2).
 }

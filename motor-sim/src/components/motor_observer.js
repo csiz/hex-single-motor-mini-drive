@@ -1,8 +1,8 @@
 import {signed_distance_degrees as signed_distance_degrees, normalize_degrees} from "./angular_math.js";
-import {exponential_averager, square, exponential_stats} from "./math_utils.js";
+import {exponential_averager, square, exponential_stats, valid_number} from "./math_utils.js";
 import {product_of_normals, add_stdev, weighted_product_of_normals, approx_cdf_normal} from "./stats_utils.js";
 import {online_map, online_function_chain} from "./data_utils.js";
-
+import {minimum_acceleration} from "./motor_constants.js";
 
 
 // Calculate Data
@@ -15,6 +15,11 @@ function signed_distance_mod_6(a, b){
   return diff > 3 ? diff - 6 : diff;
 }
 
+function diff_without_zero_crossing(x, dx){
+  const result = x - dx;
+  return result * x <= 0 ? 0 : result;
+}
+
 
 function accumulate_position_from_hall(readout, prev_readout){
   const {
@@ -25,7 +30,9 @@ function accumulate_position_from_hall(readout, prev_readout){
   
   const {time, hall_sector, is_hall_transition} = readout;
 
-  if (!prev_readout) return {
+  if (!valid_number(hall_sector)) return readout;
+
+  if (!prev_readout || !valid_number(prev_readout.hall_sector)) return {
     ...readout,
     web_angle: sector_center_degrees[hall_sector],
     web_angle_stdev: sector_center_stdev[hall_sector],
@@ -50,12 +57,13 @@ function accumulate_position_from_hall(readout, prev_readout){
   const direction = is_hall_transition ? signed_distance_mod_6(prev_hall_sector, hall_sector) : Math.sign(prev_web_angular_speed);
 
 
-
   // We want to avoid arithmetic around the angle wrap around points. Change coordinates
   // so our center lies on the predicted angle. Thus the predicted angle becomes 0 degrees
   // and all other angles are (signed) distances relative to it.
 
-  const predicted_distance = prev_web_angular_speed * dt;
+  const predicted_angular_speed = diff_without_zero_crossing(prev_web_angular_speed, Math.sign(prev_web_angular_speed) * minimum_acceleration * dt);
+
+  const predicted_distance = predicted_angular_speed * dt;
 
   const predicted_distance_stdev = add_stdev(
     prev_web_angle_stdev,
@@ -75,7 +83,7 @@ function accumulate_position_from_hall(readout, prev_readout){
   const {hall_angle, hall_stdev} = is_hall_transition ? {
     hall_angle: sector_transition_degrees[hall_sector][direction >= 0 ? 0 : 1],
     // The transition could have occured at any point in previous timestep.
-    hall_stdev: sector_transition_stdev[hall_sector][direction >= 0 ? 0 : 1] + Math.abs(0.5 * predicted_distance),
+    hall_stdev: sector_transition_stdev[hall_sector][direction >= 0 ? 0 : 1] + Math.abs(predicted_distance),
   } : {
     hall_angle: sector_transition_degrees[next_sector][direction >= 0 ? 0 : 1],
     hall_stdev: sector_transition_stdev[next_sector][direction >= 0 ? 0 : 1],
@@ -87,7 +95,7 @@ function accumulate_position_from_hall(readout, prev_readout){
   const distance_to_hall_angle_stdev = add_stdev(hall_stdev, predicted_distance_stdev);
 
   const evidence = is_hall_transition ? 1.0 : approx_cdf_normal(
-    prev_web_angular_speed >= 0 ? -distance_to_hall_angle : +distance_to_hall_angle,
+    predicted_angular_speed >= 0 ? -distance_to_hall_angle : +distance_to_hall_angle,
     0,
     distance_to_hall_angle_stdev,
   );
@@ -124,7 +132,7 @@ function accumulate_position_from_hall(readout, prev_readout){
     weight_b: evidence,
   });
 
-  const web_angular_speed = prev_web_angular_speed + speed_adjustment;
+  const web_angular_speed = predicted_angular_speed + speed_adjustment;
 
   const web_angular_acceleration = speed_adjustment / dt;
 
@@ -202,6 +210,8 @@ function compute_derivative_info(readout, previous_readout){
 
   const transition_correction = is_hall_transition ? signed_distance_degrees(angle, prev_angle) : 0;
 
+  // TODO: use the last hall transition direction instead of position derived data because we are calibrating
+  // the position algorithm. The algo might be in such a bad state that it doesn't give the correct direction.
   const angle_from_emf = normalize_degrees(emf_voltage_angle + (readout.angular_speed >= 0 ? +90 : -90));
 
   const angle_diff_to_emf = signed_distance_degrees(angle_from_emf, angle);

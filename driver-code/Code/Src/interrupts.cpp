@@ -85,8 +85,6 @@ static inline void pwm_cycle_and_adc_update(){
     // Check what time it is on the PWM cycle.
     readout.cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
     
-    increment_time_since_observation();
-
     
     // Get the pwm duty cycle to this readout, it should have been active during the half period before the ADC sampling.
     const uint16_t active_u_pwm_duty = get_motor_u_pwm_duty();
@@ -148,18 +146,19 @@ static inline void pwm_cycle_and_adc_update(){
     readout.vcc_voltage = (readout.instant_vcc_voltage * 4 + readout.vcc_voltage * 12) / 16;
 
 
-    const int angle = normalize_angle(angle_at_observation + angular_speed_at_observation * time_since_observation / speed_scale);
-    
-    readout.position = (angle & 0x3FF) | (hall_state << 13) | angle_valid << 12;
+    update_position();
 
-    readout.angular_speed = angular_speed_at_observation;
-    readout.angle_variance = angle_variance_at_observation;
-    readout.angular_speed_variance = angular_speed_variance_at_observation;
+
+    readout.position = (electric_position.angle & 0x3FF) | (hall_state << 13) | angle_valid << 12;
+    readout.angle_variance = electric_position.angle_variance;
+    
+    readout.angular_speed = electric_position.angular_speed;
+    readout.angular_speed_variance = electric_position.angular_speed_variance;
 
     
-    const int scaled_u_current = u_readout * current_calibration.u_factor / current_calibration_base;
-    const int scaled_v_current = v_readout * current_calibration.v_factor / current_calibration_base;
-    const int scaled_w_current = w_readout * current_calibration.w_factor / current_calibration_base;
+    const int scaled_u_current = u_readout * current_calibration.u_factor / current_calibration_fixed_point;
+    const int scaled_v_current = v_readout * current_calibration.v_factor / current_calibration_fixed_point;
+    const int scaled_w_current = w_readout * current_calibration.w_factor / current_calibration_fixed_point;
 
     // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
     const int avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;
@@ -184,14 +183,14 @@ static inline void pwm_cycle_and_adc_update(){
 
     // For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
     const int alpha_current = (
-        u_current * sin_lookup[normalize_angle(angle + quarter_circle)] / angle_units_per_circle +
-        v_current * sin_lookup[normalize_angle(angle + quarter_circle - third_circle)] / angle_units_per_circle +
-        w_current * sin_lookup[normalize_angle(angle + quarter_circle - two_thirds_circle)] / angle_units_per_circle);
+        u_current * get_sin(electric_position.angle + quarter_circle) / angle_base +
+        v_current * get_sin(electric_position.angle + quarter_circle - third_circle) / angle_base +
+        w_current * get_sin(electric_position.angle + quarter_circle - two_thirds_circle) / angle_base);
 
     const int beta_current = (
-        u_current * -sin_lookup[angle] / angle_units_per_circle +
-        v_current * -sin_lookup[normalize_angle(angle - third_circle)] / angle_units_per_circle +
-        w_current * -sin_lookup[normalize_angle(angle - two_thirds_circle)] / angle_units_per_circle);
+        u_current * -get_sin(electric_position.angle) / angle_base +
+        v_current * -get_sin(electric_position.angle - third_circle) / angle_base +
+        w_current * -get_sin(electric_position.angle - two_thirds_circle) / angle_base);
 
 
     // TODO: these 2 are not correct, figure out the proper units.
@@ -199,10 +198,10 @@ static inline void pwm_cycle_and_adc_update(){
     readout.inductive_power = alpha_current;
     
 
-    const auto [current_angle_offset, current_magnitude] = atan2_integer(beta_current, alpha_current);
+    const auto [current_angle_offset, current_magnitude] = int_atan2(beta_current, alpha_current);
 
     readout.current_angle_offset = current_angle_offset;
-    readout.current_angle = normalize_angle(angle + current_angle_offset);
+    readout.current_angle = normalize_angle(electric_position.angle + current_angle_offset);
 
     // TODO: compute current_angle_offset_variance based on the past angle estimates.
 
@@ -211,10 +210,10 @@ static inline void pwm_cycle_and_adc_update(){
         v_current * get_motor_v_pwm_duty() + 
         w_current * get_motor_w_pwm_duty()) / pwm_base;
 
-    readout.resistive_power = phase_int_resistance * (
+    readout.resistive_power = power_fixed_point * phase_resistance / resistance_fixed_point * (
         u_current * u_current + 
         v_current * v_current + 
-        w_current * w_current) / 256;
+        w_current * w_current) / square(current_fixed_point);
      
 
     // Update motor control.
@@ -235,10 +234,10 @@ static inline void pwm_cycle_and_adc_update(){
             update_motor_sector(hall_sector, motor_sector_driving_neg);
             break;
         case DriverState::DRIVE_SMOOTH_POS:
-            update_motor_smooth(angle_valid, angle, +1);
+            update_motor_smooth(angle_valid, electric_position.angle, +1);
             break;
         case DriverState::DRIVE_SMOOTH_NEG:
-            update_motor_smooth(angle_valid, angle, -1);
+            update_motor_smooth(angle_valid, electric_position.angle, -1);
             break;
         case DriverState::HOLD:
             update_motor_hold();
@@ -288,31 +287,37 @@ void tim2_global_handler(){
 
     // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
     if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
-        update_position_observation();
-
         hall_observed_number += 1;
         LL_TIM_ClearFlag_CC1(TIM2);
+
         if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
             // We have a hall sensor toggle and an update event at the same time; clear the update flag.
             LL_TIM_ClearFlag_UPDATE(TIM2);
         }
-    } else if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
+    }
+    
+    if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
         // We overflowed the timer; this means we haven't seen a hall sensor toggle in a while.
-        update_position_unobserved();
-
         hall_unobserved_number += 1;
         LL_TIM_ClearFlag_UPDATE(TIM2);
 
-    } else {
-        error();
     }
 }
 
 // Initializing ADC, interrupts and timers
 // ---------------------------------------
 
+// Write only variable, for funsies.
+volatile int write_only = 0;
+
 void initialize_angle_tracking(){
-    update_position_observation();
+    // Load the phase and sin tables into memory.
+    for (int i = 0; i < angle_base; i++) {
+        write_only = get_phase_pwm(i);
+        write_only = get_sin(i);
+    }
+
+    update_position();
 }
 
 void adc_init(){
