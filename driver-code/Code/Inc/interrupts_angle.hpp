@@ -24,6 +24,7 @@ extern uint8_t hall_sector;
 // Position tracking
 // -----------------
 
+// Track angle, angular speed and their uncertainties as gaussian distributions.
 struct PositionStatistics {
     int angle; // Estimated angle.
     int angle_variance; // Variance of the angle estimate.
@@ -31,6 +32,7 @@ struct PositionStatistics {
     int angular_speed_variance; // Variance of the angular speed estimate.
 };
 
+// Zeroes position statistics; also means infinite variance.
 const PositionStatistics null_position_statistics = {0};
 
 // Whether the position is valid.
@@ -54,13 +56,17 @@ static inline int combined_gaussian_adjustment(int a, int variance_a, int varian
     return (a * variance_b + variance_sum / 2) / variance_sum;
 }
 
-// Combine gaussians.
+// Combine gaussians; this is the product of two normal PDFs with means a and b 
+// and variances variance_a and variance_b. The result is a normal PDF with 
+// inbetween mean and better variance. The meaning of the product is the a PDF
+// representing the posterior distribution of the variable of interest assuming
+// both input distribtutions represent the same underlying variable.
 static inline int combined_gaussian_mean(int a, int variance_a, int b, int variance_b){
     const int variance_sum = variance_a + variance_b;
     return (a * variance_b + b * variance_a + variance_sum / 2) / variance_sum;
 }
 
-
+// Get the variance of the product of two normal PDFs.
 static inline int combined_gaussian_variance(int variance_a, int variance_b){
     // Magic value 0 for infinite variance; return prior variance unchanged.
     if (variance_a == 0) return variance_b;
@@ -70,15 +76,14 @@ static inline int combined_gaussian_variance(int variance_a, int variance_b){
     return (variance_a * variance_b + variance_sum / 2) / variance_sum;
 }
 
+// Perform the Kalman filter update. We are finding the posterior distribution given our
+// prior distribution (the predicted angle and speed) and the observation (the hall sensor trigger).
+// We consider both inputs to be gaussian distributions, the result is also a gaussian distribution.
 static inline PositionStatistics bayesian_update(
     PositionStatistics const & prior, 
     PositionStatistics const & measurement_error,
     int max_angle_variance
 ){
-    // Perform the Kalman filter update. We are finding the posterior distribution given our
-    // prior distribution (the predicted angle and speed) and the observation (the hall sensor trigger).
-    // We consider both inputs to be gaussian distributions, the result is also a gaussian distribution.
-    // 
     // Note that we have changed coordinates so the predicted angle is 0 and so is the predicted speed.
     // In this case we only need to adjust based on the distance error.
     
@@ -131,8 +136,11 @@ static inline PositionStatistics bayesian_update(
 }
 
 
-
+// Simple Euler iteration of the position based on the previous state.
 static inline PositionStatistics predict_position(PositionStatistics const & previous){
+    // We predict the position exactly once every cycle, thus we've chosen the time step dt = 1.
+    // Also note that we can only use integer arithmetic on the STM32F01x so we use fixed point math.
+
     const int predicted_angular_speed = previous.angular_speed;
 
     const int predicted_angular_speed_variance = min(
@@ -160,6 +168,7 @@ static inline PositionStatistics predict_position(PositionStatistics const & pre
     };
 }
 
+// Compute the error in the position when we see a hall sensor toggle.
 static inline PositionStatistics compute_transition_error(
     PositionStatistics const & predicted_position, 
     const uint8_t hall_sector, 
@@ -189,6 +198,9 @@ static inline PositionStatistics compute_transition_error(
     // Calculate the prediction error for the angle.
     const int angle_error = signed_angle(hall_angle - predicted_position.angle);
 
+    // We could track the timing of the hall sensor more accurately with the second interrupt, but then
+    // we'd need to perform a more complicated update. Since we omit it, we don't know when the transition
+    // occurred during the previous cycle; add the covariance between time and angle (it depends on speed).
     const int timing_variance = (
         predicted_position.angular_speed / speed_variance_to_square_speed * 
         predicted_position.angular_speed / speed_variance_fixed_point
@@ -206,6 +218,7 @@ static inline PositionStatistics compute_transition_error(
     };
 }
 
+// Calculate any adjustments when we don't have new hall data.
 static inline PositionStatistics compute_non_transition_error(
     PositionStatistics const & predicted_position, 
     const uint8_t hall_sector
@@ -217,6 +230,7 @@ static inline PositionStatistics compute_non_transition_error(
         ((hall_sector + 1) % hall_sector_base) : 
         ((hall_sector + hall_sector_base - 1) % hall_sector_base);
 
+    // Positive rotations index the first element in the calibration table, negative the second.
     const size_t direction_index = predicted_position.angular_speed >= 0 ? 0 : 1;
 
     // Get the upcoming hall transition angle.
@@ -249,19 +263,23 @@ static inline PositionStatistics compute_non_transition_error(
         return null_position_statistics;
 
     } else {
+        const int uncertainty = tail_end ? 1 : 2;
+
         // If we're moving past the next hall transition without seeing the transition; bring back towards the center.
         return PositionStatistics{
             .angle = distance_to_hall_center,
-            .angle_variance = (tail_end ? 1 : 2) * distance_to_hall_center_variance,
+            .angle_variance = uncertainty * distance_to_hall_center_variance,
             .angular_speed = distance_to_hall_angle * speed_fixed_point,
             .angular_speed_variance = min(
+                // We max out the variance every time at the moment.
                 max_16bit,
-                (tail_end ? 2 : 4) * (predicted_position.angular_speed_variance + default_sector_center_variance * speed_variance_fixed_point)
+                uncertainty * distance_to_hall_center_variance * speed_variance_fixed_point
             )
         };
     }
 }
 
+// Get the sector center position.
 static inline PositionStatistics get_default_sector_position(const uint8_t hall_sector) {
     return PositionStatistics{
         .angle = position_calibration.sector_center_angles[hall_sector],
@@ -271,7 +289,7 @@ static inline PositionStatistics get_default_sector_position(const uint8_t hall_
     };
 }
 
-
+// Update the predicted position based on the hall sensors (whether there's a reading or not).
 static inline PositionStatistics infer_position_from_hall_sensors(
     PositionStatistics const & predicted_position,
     const uint8_t hall_sector, 
