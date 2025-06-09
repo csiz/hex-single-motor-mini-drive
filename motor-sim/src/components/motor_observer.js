@@ -152,8 +152,11 @@ function accumulate_position_from_hall(readout, prev_readout){
 
 
 function compute_derivative_info(readout, previous_readout){
-  if (!previous_readout) return readout;
-  
+  if (!previous_readout) return {
+    ...readout,
+    direction: 0,
+  };
+
   const {
     time,
     hall_sector, 
@@ -167,6 +170,7 @@ function compute_derivative_info(readout, previous_readout){
   const {
     time: prev_time,
     hall_sector: prev_hall_sector, 
+    direction: prev_direction,
     angle: prev_angle,
     emf_voltage_angle: prev_emf_voltage_angle,
     angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
@@ -207,19 +211,18 @@ function compute_derivative_info(readout, previous_readout){
   );
 
   const is_hall_transition = prev_hall_sector != hall_sector;
+  const direction = is_hall_transition ? signed_distance_mod_6(prev_hall_sector, hall_sector) : prev_direction;
 
-  const transition_correction = is_hall_transition ? signed_distance_degrees(angle, prev_angle) : 0;
+  const diff_correction = signed_distance_degrees(angle, prev_angle);
 
-  // TODO: use the last hall transition direction instead of position derived data because we are calibrating
-  // the position algorithm. The algo might be in such a bad state that it doesn't give the correct direction.
-  const angle_from_emf = normalize_degrees(emf_voltage_angle + (readout.angular_speed >= 0 ? +90 : -90));
+  const angle_from_emf = normalize_degrees(emf_voltage_angle + (direction * 90));
 
   const angle_diff_to_emf = signed_distance_degrees(angle_from_emf, angle);
 
   const {average: angle_diff_to_emf_avg, stdev: angle_diff_to_emf_stdev} = exp_stats(
     angle_diff_to_emf,
     {
-      average: normalize_degrees(prev_angle_diff_to_emf_avg - transition_correction),
+      average: normalize_degrees(prev_angle_diff_to_emf_avg - diff_correction),
       stdev: prev_angle_diff_to_emf_stdev,
     },
   );
@@ -228,7 +231,7 @@ function compute_derivative_info(readout, previous_readout){
   const {average: web_current_angle_offset_avg, stdev: web_current_angle_offset_stdev} = exp_stats(
     web_current_angle_offset, 
     {
-      average: normalize_degrees(prev_web_current_angle_offset_avg + transition_correction),
+      average: normalize_degrees(prev_web_current_angle_offset_avg + diff_correction),
       stdev: prev_web_current_angle_offset_stdev,
     },
   );
@@ -247,6 +250,7 @@ function compute_derivative_info(readout, previous_readout){
     web_current_angle_offset_avg, web_current_angle_offset_stdev,
     emf_voltage_magnitude_avg, emf_voltage_magnitude_stdev,
     is_hall_transition,
+    direction,
     angle_from_emf,
     angular_speed_from_emf, angular_speed_from_emf_avg, angular_speed_from_emf_stdev,
     angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
