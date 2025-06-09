@@ -8,21 +8,13 @@
 
 #include <cstdint>
 
-// Hall sensors
-// ------------
-
-// Hall states as bits, 0b001 = hall 1, 0b010 = hall 2, 0b100 = hall 3.
-extern uint8_t hall_state;
-
-// The 6 valid configurations of hall sensors in trigonometric order.
-// 
-// The order is u, uv, v, vw, w, wu. Treat values outside the range as
-// invalid, the magnet is not present or the sensors are not ready.
-extern uint8_t hall_sector;
-
 
 // Position tracking
 // -----------------
+
+// Position calibration data. These are the trigger angles for each hall sensor output.
+extern PositionCalibration position_calibration;
+
 
 // Track angle, angular speed and their uncertainties as gaussian distributions.
 struct PositionStatistics {
@@ -35,17 +27,6 @@ struct PositionStatistics {
 // Zeroes position statistics; also means infinite variance.
 const PositionStatistics null_position_statistics = {0};
 
-// Whether the position is valid.
-extern bool angle_valid;
-
-// Best estimate of the **electric** angle and speed (that is the angle between the coil 
-// U and the magnetic North). The actual position of the output depends on the number of
-// pole pairs, and the slot triplets, and the mechanical gear ratio.
-extern PositionStatistics electric_position;
-
-
-// Position calibration data. These are the trigger angles for each hall sensor output.
-extern PositionCalibration position_calibration;
 
 // Combine gaussian with mean a and variance a with gaussian with mean 0 and variance b.
 static inline int combined_gaussian_adjustment(int a, int variance_a, int variance_b){
@@ -354,46 +335,10 @@ static inline uint8_t get_hall_sector(uint8_t hall_state){
             return 4;
         case 0b101: // hall U and hall W active; 300 degrees
             return 5;
-        case 0b111: // all hall sensors active; this would be quite unusual
-            error();
+        case 0b111: // all hall sensors active; this would be quite unusual; but carry on
             return hall_sector_base; // Out of range, indicates invalid.
         default:
             error(); // Invalid hall state.
             return hall_sector_base; // Out of range, indicates invalid.
     }
-}
-
-// Update the position from the hall sensors. Use a kalman filter to estimate the position and speed.
-static inline void update_position(){
-    // Predict the position based on the previous state.
-    const auto predicted_position = predict_position(electric_position);
-
-    // Read new data from the hall sensors.
-    hall_state = read_hall_sensors_state();
-
-    // Remember the previous hall sector to compute transitions.
-    const uint8_t previous_hall_sector = hall_sector;
-
-    // Update the sector variable.
-    hall_sector = get_hall_sector(hall_state);
-
-    // Check if the magnet is present.
-    angle_valid = hall_sector < hall_sector_base;
-
-    // We need 2 hall sector readings in a row to compute an update.
-    const bool previous_angle_valid = previous_hall_sector < hall_sector_base;
-
-    // Update the position; or reset to default.
-    electric_position = (angle_valid ? previous_angle_valid ? 
-        // Perform the Kalman filter update based on the hall sensor data.
-        infer_position_from_hall_sensors(
-            predicted_position,
-            hall_sector,
-            previous_hall_sector
-        ) : 
-        // If the previous sector was invalid; initialize the position.
-        get_default_sector_position(hall_sector) : 
-        // No valid sector; reset the position.
-        null_position_statistics
-    );
 }
