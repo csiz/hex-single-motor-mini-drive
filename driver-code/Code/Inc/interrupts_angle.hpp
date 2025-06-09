@@ -20,8 +20,6 @@ extern uint8_t hall_state;
 // invalid, the magnet is not present or the sensors are not ready.
 extern uint8_t hall_sector;
 
-// We need to keep track of the previous hall sector to determine the direction of rotation.
-extern uint8_t previous_hall_sector;
 
 // Position tracking
 // -----------------
@@ -32,6 +30,8 @@ struct PositionStatistics {
     int angular_speed; // Estimated angular speed.
     int angular_speed_variance; // Variance of the angular speed estimate.
 };
+
+const PositionStatistics null_position_statistics = {0};
 
 // Whether the position is valid.
 extern bool angle_valid;
@@ -246,12 +246,8 @@ static inline PositionStatistics compute_non_transition_error(
 
     if (same_direction) {
         // No transition expected and no information gained; return magic variance 0 indicating infinity.
-        return PositionStatistics{
-            .angle = 0,
-            .angle_variance = 0,
-            .angular_speed = 0,
-            .angular_speed_variance = 0
-        };
+        return null_position_statistics;
+
     } else {
         // If we're moving past the next hall transition without seeing the transition; bring back towards the center.
         return PositionStatistics{
@@ -276,8 +272,35 @@ static inline PositionStatistics get_default_sector_position(const uint8_t hall_
 }
 
 
+static inline PositionStatistics infer_position_from_hall_sensors(
+    PositionStatistics const & predicted_position,
+    const uint8_t hall_sector, 
+    const uint8_t previous_hall_sector
+) {
+    // Check if we've switched sectors.
+    const bool is_hall_transition = (hall_sector != previous_hall_sector);
+
+    // Calculate the error depending on whether we have a transition or not.
+    const auto position_error = (is_hall_transition ? 
+        compute_transition_error(
+            predicted_position,
+            hall_sector,
+            previous_hall_sector) : 
+        compute_non_transition_error(
+            predicted_position,
+            hall_sector
+        )
+    );
+
+    // Reference the maximum angle variance for this sector.
+    const int max_angle_variance = position_calibration.sector_center_variances[hall_sector];
+
+    // Update the position statistics by combining gaussian distributions (this is the Kalman update).
+    return bayesian_update(predicted_position, position_error, max_angle_variance);
+}
+
 // Read the hall sensors and update the motor rotation angle. Sensor chips might be: SS360NT (can't read the inprint clearly).
-static inline void read_hall_sensors(){
+static inline uint8_t read_hall_sensors_state(){
     // Grab the registers for the GPIO ports with the hall sensors.
 
     uint16_t gpio_A_inputs = LL_GPIO_ReadInputPort(GPIOA);
@@ -290,89 +313,73 @@ static inline void read_hall_sensors(){
 
     // Combine the hall sensor states into a single byte.
     // Note: Reorder the sensors according to the phase order; U on bit 0, V on bit 1, W on bit 2.
-    hall_state = hall_3 | (hall_1 << 1) | (hall_2 << 2);
+    const uint8_t hall_state = hall_3 | (hall_1 << 1) | (hall_2 << 2);
 
+    return hall_state;
+}
+
+// Mapping from hall state to sector number.
+static inline uint8_t get_hall_sector(uint8_t hall_state){
     // Get the hall sector from the state.
     switch (hall_state) {
         case 0b000: // no hall sensors; either it's not ready or no magnet
-            hall_sector = hall_sector_base; // Out of range, indicates invalid.
-            break;
+            return hall_sector_base; // Out of range, indicates invalid.
         case 0b001: // hall U active; 0 degrees
-            hall_sector = 0;
-            break;
+            return 0;
         case 0b011: // hall U and hall V active; 60 degrees
-            hall_sector = 1;
-            break;
+            return 1;
         case 0b010: // hall V active; 120 degrees
-            hall_sector = 2;
-            break;
+            return 2;
         case 0b110: // hall V and hall W active; 180 degrees
-            hall_sector = 3;
-            break;
+            return 3;
         case 0b100: // hall W active; 240 degrees
-            hall_sector = 4;
-            break;
+            return 4;
         case 0b101: // hall U and hall W active; 300 degrees
-            hall_sector = 5;
-            break;
+            return 5;
         case 0b111: // all hall sensors active; this would be quite unusual
-            hall_sector = hall_sector_base; // Out of range, indicates invalid.
             error();
-            break;
+            return hall_sector_base; // Out of range, indicates invalid.
+        default:
+            error(); // Invalid hall state.
+            return hall_sector_base; // Out of range, indicates invalid.
     }
 }
 
 // Update the position from the hall sensors. Use a kalman filter to estimate the position and speed.
 static inline void update_position(){
-    read_hall_sensors();
+    // Predict the position based on the previous state.
+    const auto predicted_position = predict_position(electric_position);
+
+    // Read new data from the hall sensors.
+    hall_state = read_hall_sensors_state();
+
+    // Remember the previous hall sector to compute transitions.
+    const uint8_t previous_hall_sector = hall_sector;
+
+    // Update the sector variable.
+    hall_sector = get_hall_sector(hall_state);
 
     // Check if the magnet is present.
     if (hall_sector >= hall_sector_base) {
-        previous_hall_sector = hall_sector_base; // Out of range, indicates invalid.
+
+        // No valid sector; reset the position.
+        electric_position = null_position_statistics;
         angle_valid = false;
-        return;
-    }
 
-    // The new hall sector is valid, let's calculate the angle.
-
-    // Check if the previous sector was valid.
-    if (previous_hall_sector >= hall_sector_base) {
-        // Reset position tracking to the sector center; our best guess.
+    } else if (previous_hall_sector >= hall_sector_base) {
+        
+        // If the previous sector was invalid; initialize the position.
         electric_position = get_default_sector_position(hall_sector);
-
-        // This is the first time we have a valid hall sector; we need to set the angle and the angular speed.
-        previous_hall_sector = hall_sector;
-
         angle_valid = true;
-        return;
-    }
 
-    // We have a valid state; perform a Kalman filter prediction.
-    const auto predicted_position = predict_position(electric_position);
+    } else {
 
-    // Check if we've switched sectors.
-    const bool is_hall_transition = (hall_sector != previous_hall_sector);
-
-    const int max_angle_variance = position_calibration.sector_center_variances[hall_sector];
-
-
-
-    const auto position_error = (is_hall_transition ? 
-        compute_transition_error(
+        // Perform the Kalman filter update based on the hall sensor data.
+        electric_position = infer_position_from_hall_sensors(
             predicted_position,
             hall_sector,
-            previous_hall_sector) : 
-        compute_non_transition_error(
-            predicted_position,
-            hall_sector
-        )
-    );
-
-    electric_position = bayesian_update(predicted_position, position_error, max_angle_variance);
-
-    
-    // Store the current hall sector.
-    previous_hall_sector = hall_sector;
-
-    angle_valid = true;
+            previous_hall_sector
+        );
+        angle_valid = true;
+    }
 }
