@@ -360,26 +360,22 @@ static inline void update_position(){
     hall_sector = get_hall_sector(hall_state);
 
     // Check if the magnet is present.
-    if (hall_sector >= hall_sector_base) {
+    angle_valid = hall_sector < hall_sector_base;
 
-        // No valid sector; reset the position.
-        electric_position = null_position_statistics;
-        angle_valid = false;
+    // We need 2 hall sector readings in a row to compute an update.
+    const bool previous_angle_valid = previous_hall_sector < hall_sector_base;
 
-    } else if (previous_hall_sector >= hall_sector_base) {
-        
-        // If the previous sector was invalid; initialize the position.
-        electric_position = get_default_sector_position(hall_sector);
-        angle_valid = true;
-
-    } else {
-
+    // Update the position; or reset to default.
+    electric_position = (angle_valid ? previous_angle_valid ? 
         // Perform the Kalman filter update based on the hall sensor data.
-        electric_position = infer_position_from_hall_sensors(
+        infer_position_from_hall_sensors(
             predicted_position,
             hall_sector,
             previous_hall_sector
-        );
-        angle_valid = true;
-    }
+        ) : 
+        // If the previous sector was invalid; initialize the position.
+        get_default_sector_position(hall_sector) : 
+        // No valid sector; reset the position.
+        null_position_statistics
+    );
 }
