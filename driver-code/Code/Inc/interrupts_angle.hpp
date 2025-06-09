@@ -42,10 +42,6 @@ extern bool angle_valid;
 extern PositionStatistics electric_position;
 
 
-// Number of updates since we last seen a hall transition.
-extern int updates_since_last_hall_transition;
-
-
 // Position calibration data. These are the trigger angles for each hall sensor output.
 extern PositionCalibration position_calibration;
 
@@ -167,8 +163,7 @@ static inline PositionStatistics predict_position(PositionStatistics const & pre
 static inline PositionStatistics compute_transition_error(
     PositionStatistics const & predicted_position, 
     const uint8_t hall_sector, 
-    const uint8_t previous_hall_sector,
-    const int updates_since_last_hall_transition
+    const uint8_t previous_hall_sector
 ) {
     // We have a hall transition, we know our position crossed the trigger angle in the last cycle.
 
@@ -194,51 +189,20 @@ static inline PositionStatistics compute_transition_error(
     // Calculate the prediction error for the angle.
     const int angle_error = signed_angle(hall_angle - predicted_position.angle);
 
-    const int timing_variance = square(predicted_position.angular_speed) / angle_variance_to_square_speed + 1;
+    const int timing_variance = (
+        predicted_position.angular_speed / speed_variance_to_square_speed * 
+        predicted_position.angular_speed / speed_variance_fixed_point
+    );
 
     // The variance increases with angular speed as the transition could have occured at any point in the cycle.
     const int angle_variance_error = min(max_16bit, hall_variance + timing_variance);
 
-    const int previous_hall_angle = position_calibration.sector_transition_angles[previous_hall_sector][direction_index];
-    const int previous_hall_angle_variance = position_calibration.sector_transition_variances[previous_hall_sector][direction_index];
-
-    const int sector_hall_distance = signed_angle(hall_angle - previous_hall_angle);
-    const int measured_speed = (
-        (sector_hall_distance * speed_fixed_point + updates_since_last_hall_transition / 2) / 
-        updates_since_last_hall_transition
-    );
-
-    const int speed_timing_error = measured_speed - predicted_position.angular_speed;
-    const int speed_timing_variance = min(
-        max_16bit,
-        (angle_variance_error + previous_hall_angle_variance) / updates_since_last_hall_transition +
-        updates_since_last_hall_transition * position_calibration.angular_acceleration_div_2_variance / acceleration_variance_fixed_point +
-        1
-    );
-
-    const int angle_change_error = angle_error * speed_fixed_point;
-    const int angle_change_variance = min(
-        max_16bit,
-        angle_variance_error * speed_variance_fixed_point
-    );
-
-    const int angular_speed_error = combined_gaussian_mean(
-        angle_change_error,
-        angle_change_variance,
-        speed_timing_error,
-        speed_timing_variance
-    );
-
-    const int angular_speed_variance_error = combined_gaussian_variance(
-        angle_change_variance,
-        speed_timing_variance
-    );
 
     return PositionStatistics{
         .angle = angle_error,
         .angle_variance = angle_variance_error,
-        .angular_speed = angular_speed_error,
-        .angular_speed_variance = angular_speed_variance_error
+        .angular_speed = angle_error * speed_fixed_point,
+        .angular_speed_variance = min(max_16bit, angle_variance_error * speed_variance_fixed_point)
     };
 }
 
@@ -397,8 +361,7 @@ static inline void update_position(){
         compute_transition_error(
             predicted_position,
             hall_sector,
-            previous_hall_sector,
-            updates_since_last_hall_transition) : 
+            previous_hall_sector) : 
         compute_non_transition_error(
             predicted_position,
             hall_sector
@@ -407,10 +370,6 @@ static inline void update_position(){
 
     electric_position = bayesian_update(predicted_position, position_error, max_angle_variance);
 
-    updates_since_last_hall_transition = (is_hall_transition ? 
-        1 :
-        min(max_updates_between_transitions, updates_since_last_hall_transition + 1)
-    );
     
     // Store the current hall sector.
     previous_hall_sector = hall_sector;

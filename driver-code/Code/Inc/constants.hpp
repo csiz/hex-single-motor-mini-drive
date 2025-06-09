@@ -234,9 +234,6 @@ const int speed_variance_fixed_point = 256;
 // Conversion factor between square speed and speed variance.
 const int speed_variance_to_square_speed = square(speed_fixed_point) / speed_variance_fixed_point * variance_divider;
 
-// Convesion factor between square angular velocity and angle variance.
-const int angle_variance_to_square_speed = speed_variance_to_square_speed * speed_variance_fixed_point;
-
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
 

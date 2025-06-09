@@ -16,6 +16,4 @@ PositionStatistics electric_position = {
     .angular_speed_variance = 0
 };
 
-int updates_since_last_hall_transition = 1;
-
 PositionCalibration position_calibration = get_position_calibration();
