@@ -20,7 +20,8 @@
     "d3-time-format": "^4.1.0",
     "format-si-prefix": "^0.3.2",
     "lodash": "^4.17.21",
-    "three": "^0.168.0"
+    "three": "^0.168.0",
+    "web-serial-polyfill": "^1.0.15"
   },
   "devDependencies": {
     "rimraf": "^5.0.5"

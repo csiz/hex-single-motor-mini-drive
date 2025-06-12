@@ -1,3 +1,5 @@
+import {serial as serial_polyfill} from "web-serial-polyfill";
+
 import {wait} from "./async_utils.js";
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, command_codes, serialise_command, header_size} from "./motor_interface.js";
@@ -16,13 +18,14 @@ export const USBD_PID_FS = 56988;
 
 const max_wrong_code = history_size + 256;
 
+const serial = navigator.serial ?? serial_polyfill;
 
 // Serial Port Management
 // ----------------------
 
 /* Get all ports that report as our motor driver. */
 async function grab_ports(){
-  const ports = await navigator.serial.getPorts();
+  const ports = await serial.getPorts();
   return ports.filter((port) => {
     const info = port.getInfo();
     return info.usbVendorId === USBD_VID && info.usbProductId === USBD_PID_FS;
@@ -33,7 +36,7 @@ async function grab_ports(){
 async function maybe_prompt_port(){
   const ports = await grab_ports();
   if (ports.length == 1) return ports[0];
-  return await navigator.serial.requestPort({filters: [{usbVendorId: USBD_VID, usbProductId: USBD_PID_FS}]});
+  return await serial.requestPort({filters: [{usbVendorId: USBD_VID, usbProductId: USBD_PID_FS}]});
 
 }
 
