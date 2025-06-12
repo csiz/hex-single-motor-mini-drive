@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          working-directory: motor-sim
+          cache-dependency-path: ./motor-sim/package-lock.json
           node-version: 22
           cache: npm
       - run: npm ci
