@@ -20,11 +20,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - run: cd motor-sim
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: cd motor-sim
       - run: npm ci
       - run: npm run build
       - uses: actions/configure-pages@v4
