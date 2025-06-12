@@ -18,9 +18,11 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+      defaults:
+        run: 
+          working-directory: motor-sim
     steps:
       - uses: actions/checkout@v4
-      - run: cd motor-sim
       - uses: actions/setup-node@v4
         with:
           node-version: 22
