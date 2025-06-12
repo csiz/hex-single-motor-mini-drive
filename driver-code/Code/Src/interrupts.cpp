@@ -72,7 +72,11 @@ static inline bool readout_history_push(Readout const & readout){
 // State Data
 // ----------
 
-MotorOutputs previous_motor_outputs;
+// We now set the motor outputs one turn delayed :( because our update takes more than half a PWM cycle.
+MotorOutputs previous_motor_outputs = {0, 0, 0};
+// The outputs 2 cycles ago.
+MotorOutputs previous_2_motor_outputs = {0, 0, 0};
+
 
 // Hall sensors
 // ------------
@@ -95,19 +99,19 @@ bool angle_valid = false;
 PositionStatistics electric_position = null_position_statistics;
 
 // Combine the motor duty cycles into a single 32-bit value; because it barely fits.
-static inline uint32_t encode_pwm_commands(MotorOutputs const & motor_outputs){
+static inline uint32_t encode_pwm_commands(MotorOutputs const & outputs){
     return (
-        motor_outputs.u_duty_cycle * pwm_base * pwm_base +
-        motor_outputs.v_duty_cycle * pwm_base +
-        motor_outputs.w_duty_cycle
+        outputs.u_duty_cycle * pwm_base * pwm_base +
+        outputs.v_duty_cycle * pwm_base +
+        outputs.w_duty_cycle
     );
 }
 
-static inline MotorOutputs mid_motor_outputs(MotorOutputs const & previous, MotorOutputs const & current){
+static inline MotorOutputs mid_motor_outputs(MotorOutputs const & a, MotorOutputs const & b){
     return MotorOutputs{
-        .u_duty_cycle = (previous.u_duty_cycle + current.u_duty_cycle) / 2,
-        .v_duty_cycle = (previous.v_duty_cycle + current.v_duty_cycle) / 2,
-        .w_duty_cycle = (previous.w_duty_cycle + current.w_duty_cycle) / 2
+        .u_duty_cycle = static_cast<uint16_t>((a.u_duty_cycle + b.u_duty_cycle) / 2),
+        .v_duty_cycle = static_cast<uint16_t>((a.v_duty_cycle + b.v_duty_cycle) / 2),
+        .w_duty_cycle = static_cast<uint16_t>((a.w_duty_cycle + b.w_duty_cycle) / 2)
     };
 }
 
@@ -125,7 +129,11 @@ static inline void pwm_cycle_and_adc_update(){
     
     // Get the pwm duty cycle to this readout, it should have been active during the half period before the ADC sampling.
     const auto active_motor_outputs = get_motor_outputs();
-    const auto motor_outputs = mid_motor_outputs(previous_motor_outputs, active_motor_outputs);
+
+    // If we managed to set the compare before the new cycle then it's the mid point; otherwise it's the previous outputs.
+    const auto motor_outputs = readout.cycle_end_tick < pwm_base ? 
+        previous_motor_outputs : 
+        mid_motor_outputs(previous_motor_outputs, active_motor_outputs);
     previous_motor_outputs = active_motor_outputs;
 
     
@@ -146,9 +154,8 @@ static inline void pwm_cycle_and_adc_update(){
     // The PWM period lasts 1/23.4KHz = 42.7us.
 
     const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
-
     readout.ref_readout = ref_readout;
-    
+
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
     const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout);
     // Flip the sign of V because we accidentally wired it the other way (the right way...). Oopsie doopsie.
@@ -169,12 +176,16 @@ static inline void pwm_cycle_and_adc_update(){
 
 
     const uint16_t instant_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
-    readout.instant_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+    const uint16_t instant_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+
+    readout.instant_vcc_voltage = instant_vcc_voltage;
 
     // Note the reference voltage is only connected to the current sense amplifier, not the
     // microcontroller. The ADC reference voltage is 3.3V.
-    readout.temperature = (instant_temperature * 1 + readout.temperature * 15) / 16;
-    readout.vcc_voltage = (readout.instant_vcc_voltage * 4 + readout.vcc_voltage * 12) / 16;
+    readout.temperature = round_div(instant_temperature * 1 + readout.temperature * 15, 16);
+
+    const int vcc_voltage = round_div(readout.instant_vcc_voltage * 4 + readout.vcc_voltage * 12, 16);
+    readout.vcc_voltage = vcc_voltage;
 
 
         // Predict the position based on the previous state.
@@ -215,18 +226,59 @@ static inline void pwm_cycle_and_adc_update(){
     readout.angular_speed = electric_position.angular_speed;
     readout.angular_speed_variance = electric_position.angular_speed_variance;
 
-    
-    const int scaled_u_current = u_readout * current_calibration.u_factor / current_calibration_fixed_point;
-    const int scaled_v_current = v_readout * current_calibration.v_factor / current_calibration_fixed_point;
-    const int scaled_w_current = w_readout * current_calibration.w_factor / current_calibration_fixed_point;
+
+    const int scaled_u_current = round_div(u_readout * current_calibration.u_factor, current_calibration_fixed_point);
+    const int scaled_v_current = round_div(v_readout * current_calibration.v_factor, current_calibration_fixed_point);
+    const int scaled_w_current = round_div(w_readout * current_calibration.w_factor, current_calibration_fixed_point);
 
     // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
-    const int avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3;
+    const int avg_current = round_div(scaled_u_current + scaled_v_current + scaled_w_current, 3);
 
     const int u_current = scaled_u_current - avg_current;
     const int v_current = scaled_v_current - avg_current;
     const int w_current = scaled_w_current - avg_current;
 
+
+    const int scaled_u_current_diff = signed_round_div(u_readout_diff * current_calibration.u_factor, current_calibration_fixed_point);
+    const int scaled_v_current_diff = signed_round_div(v_readout_diff * current_calibration.v_factor, current_calibration_fixed_point);
+    const int scaled_w_current_diff = signed_round_div(w_readout_diff * current_calibration.w_factor, current_calibration_fixed_point);
+    const int avg_current_diff = signed_round_div(scaled_u_current_diff + scaled_v_current_diff + scaled_w_current_diff, 3);
+
+    const int u_current_diff = scaled_u_current_diff - avg_current_diff;
+    const int v_current_diff = scaled_v_current_diff - avg_current_diff;
+    const int w_current_diff = scaled_w_current_diff - avg_current_diff;
+
+    const int diff_to_voltage = round_div(phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor, current_calibration_fixed_point);
+
+    const int u_inductor_voltage = signed_round_div(u_current_diff * diff_to_voltage, current_fixed_point);
+    const int v_inductor_voltage = signed_round_div(v_current_diff * diff_to_voltage, current_fixed_point);
+    const int w_inductor_voltage = signed_round_div(w_current_diff * diff_to_voltage, current_fixed_point);
+
+    const int u_resistive_voltage = round_div(
+        round_div(u_current * phase_resistance, resistance_fixed_point) * voltage_fixed_point, 
+        current_fixed_point
+    );
+    const int v_resistive_voltage = round_div(
+        round_div(v_current * phase_resistance, resistance_fixed_point) * voltage_fixed_point, 
+        current_fixed_point
+    );
+    const int w_resistive_voltage = round_div(
+        round_div(w_current * phase_resistance, resistance_fixed_point) * voltage_fixed_point, 
+        current_fixed_point
+    );
+
+    const int u_drive_voltage_scaled = round_div(motor_outputs.u_duty_cycle * vcc_voltage, pwm_base);
+    const int v_drive_voltage_scaled = round_div(motor_outputs.v_duty_cycle * vcc_voltage, pwm_base);
+    const int w_drive_voltage_scaled = round_div(motor_outputs.w_duty_cycle * vcc_voltage, pwm_base);
+    const int avg_drive_voltage = round_div(u_drive_voltage_scaled + v_drive_voltage_scaled + w_drive_voltage_scaled, 3);
+
+    const int u_drive_voltage = u_drive_voltage_scaled - avg_drive_voltage;
+    const int v_drive_voltage = v_drive_voltage_scaled - avg_drive_voltage;
+    const int w_drive_voltage = w_drive_voltage_scaled - avg_drive_voltage;
+
+    const int u_emf_voltage = u_resistive_voltage + u_inductor_voltage - u_drive_voltage;
+    const int v_emf_voltage = v_resistive_voltage + v_inductor_voltage - v_drive_voltage;
+    const int w_emf_voltage = w_resistive_voltage + w_inductor_voltage - w_drive_voltage;
 
     // Calculate the park transformed currents (unscaled).
     //
@@ -239,40 +291,84 @@ static inline void pwm_cycle_and_adc_update(){
     // angle estimate degrades to +-30 degrees. A holding current would exert a torque proportional to
     // the deviation between the real and target angle even when we can't sense the real angle.
 
-    // For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
+
     const int alpha_current = (
-        u_current * get_sin(electric_position.angle + quarter_circle) / angle_base +
-        v_current * get_sin(electric_position.angle + quarter_circle - third_circle) / angle_base +
-        w_current * get_sin(electric_position.angle + quarter_circle - two_thirds_circle) / angle_base);
+        u_current * get_cos(electric_position.angle) / angle_base +
+        v_current * get_cos(electric_position.angle - third_circle) / angle_base +
+        w_current * get_cos(electric_position.angle - two_thirds_circle) / angle_base
+    );
 
     const int beta_current = (
         u_current * -get_sin(electric_position.angle) / angle_base +
         v_current * -get_sin(electric_position.angle - third_circle) / angle_base +
-        w_current * -get_sin(electric_position.angle - two_thirds_circle) / angle_base);
+        w_current * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
+    );
+
+    const int alpha_emf_voltage = (
+        u_emf_voltage * get_cos(electric_position.angle) / angle_base +
+        v_emf_voltage * get_cos(electric_position.angle - third_circle) / angle_base +
+        w_emf_voltage * get_cos(electric_position.angle - two_thirds_circle) / angle_base
+    );
+
+    const int beta_emf_voltage = (
+        u_emf_voltage * -get_sin(electric_position.angle) / angle_base +
+        v_emf_voltage * -get_sin(electric_position.angle - third_circle) / angle_base +
+        w_emf_voltage * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
+    );
 
 
-    // TODO: these 2 are not correct, figure out the proper units.
-    readout.emf_power = beta_current;
-    readout.inductive_power = alpha_current;
-    
+
 
     const auto [current_angle_offset, current_magnitude] = int_atan2(beta_current, alpha_current);
 
     readout.current_angle_offset = current_angle_offset;
-    readout.current_angle = normalize_angle(electric_position.angle + current_angle_offset);
+    
+    const auto [emf_voltage_angle_offset, emf_magnitude] = int_atan2(beta_emf_voltage, alpha_emf_voltage);
+    
+    readout.emf_voltage_angle_offset = emf_voltage_angle_offset;
 
-    // TODO: compute current_angle_offset_variance based on the past angle estimates.
 
-    readout.total_power = readout.vcc_voltage * (
-        u_current * get_motor_u_pwm_duty() + 
-        v_current * get_motor_v_pwm_duty() + 
-        w_current * get_motor_w_pwm_duty()) / pwm_base;
+    readout.total_power = -signed_round_div(
+        power_fixed_point * signed_round_div(
+            u_current * u_drive_voltage + 
+            v_current * v_drive_voltage + 
+            w_current * w_drive_voltage,
+            voltage_fixed_point
+        ), 
+        current_fixed_point
+    );
 
-    readout.resistive_power = power_fixed_point * phase_resistance / resistance_fixed_point * (
-        u_current * u_current + 
-        v_current * v_current + 
-        w_current * w_current) / square(current_fixed_point);
-     
+    readout.resistive_power = round_div(
+        power_fixed_point * round_div(
+            u_current * u_resistive_voltage + 
+            v_current * v_resistive_voltage + 
+            w_current * w_resistive_voltage,
+            voltage_fixed_point
+        ), 
+        current_fixed_point
+    );
+
+    readout.emf_power = -signed_round_div(
+        power_fixed_point * signed_round_div(
+            u_current * u_emf_voltage + 
+            v_current * v_emf_voltage + 
+            w_current * w_emf_voltage,
+            voltage_fixed_point
+        ), 
+        current_fixed_point
+    );
+
+    readout.inductive_power = signed_round_div(
+        power_fixed_point * signed_round_div(
+            u_current * u_inductor_voltage + 
+            v_current * v_inductor_voltage + 
+            w_current * w_inductor_voltage,
+            voltage_fixed_point
+        ),
+        current_fixed_point
+    );
+    
+
 
     // Update motor control.
     switch (driver_state) {

@@ -8,6 +8,7 @@ import {
   degrees_per_millisecond_to_speed_units,
   acceleration_units_to_degrees_per_millisecond2, 
   degrees_per_millisecond2_to_acceleration_units,
+  convert_power_to_watts,
   variance_units_to_degrees_stdev,
   degrees_stdev_to_variance_units,
   speed_variance_to_degrees_per_millisecond_stdev,
@@ -157,6 +158,7 @@ function parse_readout(data_view, previous_readout){
   const v_current = scaled_v_current - avg_current;
   const w_current = scaled_w_current - avg_current;
 
+  const current_angle = normalize_degrees(current_angle_offset + angle);
   
   const [current_alpha, current_beta] = clarke_transform(u_current, v_current, w_current);
   const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
@@ -164,7 +166,6 @@ function parse_readout(data_view, previous_readout){
   const web_current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
   const web_current_angle_offset = normalize_degrees(web_current_angle - angle);
 
-  
 
   // Approximate the angle for the 6 sectors of the hall sensor.
   const ε = 2;
@@ -201,8 +202,8 @@ function parse_readout(data_view, previous_readout){
 
   const [emf_voltage_alpha, emf_voltage_beta] = clarke_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage);
 
-  const emf_voltage_angle = radians_to_degrees(Math.atan2(emf_voltage_beta, emf_voltage_alpha));
-  const emf_voltage_magnitude = Math.sqrt(emf_voltage_alpha * emf_voltage_alpha + emf_voltage_beta * emf_voltage_beta);
+  const web_emf_voltage_angle = radians_to_degrees(Math.atan2(emf_voltage_beta, emf_voltage_alpha));
+  const web_emf_voltage_magnitude = Math.sqrt(emf_voltage_alpha * emf_voltage_alpha + emf_voltage_beta * emf_voltage_beta);
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
   const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
@@ -218,7 +219,7 @@ function parse_readout(data_view, previous_readout){
     u_readout_diff, v_readout_diff, w_readout_diff,
     ref_readout,
     u_current, v_current, w_current, avg_current,
-    current_alpha, current_beta,  current_magnitude,
+    current_alpha, current_beta, current_angle, current_magnitude,
     web_current_angle, web_current_angle_offset,
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
@@ -231,7 +232,8 @@ function parse_readout(data_view, previous_readout){
     angle_valid, angle, angular_speed,
     instant_vcc_voltage,
     current_angle_offset,
-    emf_voltage_alpha, emf_voltage_beta, emf_voltage_angle, emf_voltage_magnitude,
+    emf_voltage_alpha, emf_voltage_beta, 
+    web_emf_voltage_angle, web_emf_voltage_magnitude,
     web_total_power,
     web_emf_power,
     web_resistive_power,
@@ -265,7 +267,7 @@ function parse_full_readout(data_view, previous_readout){
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
-  const current_angle = angle_units_to_degrees(data_view.getUint16(offset));
+  const emf_voltage_angle_offset = angle_units_to_degrees(data_view.getUint16(offset));
   offset += 2;
   const current_angle_offset_stdev = variance_units_to_degrees_stdev(data_view.getUint16(offset));
   offset += 2;
@@ -275,15 +277,16 @@ function parse_full_readout(data_view, previous_readout){
   const angular_speed_stdev = speed_variance_to_degrees_per_millisecond_stdev(data_view.getUint16(offset));
   offset += 2;
 
-  const total_power = data_view.getInt16(offset);
+  const total_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
-  const resistive_power = data_view.getInt16(offset);
+  const resistive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
-  const emf_power = data_view.getInt16(offset);
+  const emf_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
-  const inductive_power = data_view.getInt16(offset);
+  const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
-  
+
+  const emf_voltage_angle = normalize_degrees(emf_voltage_angle_offset + readout.angle);
 
   return {
     ...readout,
@@ -295,7 +298,8 @@ function parse_full_readout(data_view, previous_readout){
     vcc_voltage,
     cycle_start_tick,
     cycle_end_tick,
-    current_angle,
+    emf_voltage_angle,
+    emf_voltage_angle_offset,
     current_angle_offset_stdev,
     angle_stdev,
     angular_speed_stdev,

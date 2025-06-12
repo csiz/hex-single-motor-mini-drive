@@ -705,7 +705,7 @@ const plot_electric_position = plot_lines({
     {y: "angle_from_emf", label: "Angle infered from EMF", color: colors.angle_from_emf},
     {y: "current_angle", label: "Current Angle", color: colors.current_angle},
     {y: "web_current_angle", label: "Current Angle (computed online)", color: d3.color(colors.current_angle).brighter(1)},
-    {y: "voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
+    {y: "web_emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
     {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
@@ -727,6 +727,7 @@ const plot_electric_offsets = plot_lines({
       y: "web_current_angle_offset_avg", label: "Current Angle Offset 0.5ms average", color: d3.color(colors.angle).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_current_angle_offset_stdev}),
     },
+    {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset", color: colors.voltage_angle},
     {y: "angle_diff_to_emf", label: "Angle diff to EMF", color: colors.angle_from_emf},
     {
       y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 0.5ms average", color: d3.color(colors.angle_from_emf).brighter(1),
@@ -893,10 +894,10 @@ const plot_dq0_voltages = plot_lines({
   channels: [
     {y: "emf_voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
     {y: "emf_voltage_beta", label: "Voltage Beta", color: colors.current_beta},
-    {y: "emf_voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
+    {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.current_magnitude},
     {
-      y: "emf_voltage_magnitude_avg", label: "Voltage Magnitude 0.5ms average", color: d3.color(colors.current_magnitude).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_magnitude_stdev}),
+      y: "web_emf_voltage_magnitude_avg", label: "Voltage Magnitude 0.5ms average", color: d3.color(colors.current_magnitude).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_voltage_magnitude_stdev}),
     }
   ],
   curve,

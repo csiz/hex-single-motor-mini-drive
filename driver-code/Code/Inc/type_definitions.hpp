@@ -61,7 +61,7 @@ struct FullReadout : public Readout {
     uint16_t vcc_voltage;
     int16_t cycle_start_tick;
     int16_t cycle_end_tick;
-    int16_t current_angle;
+    int16_t emf_voltage_angle_offset;
     uint16_t current_angle_offset_variance;
     uint16_t angle_variance;
     uint16_t angular_speed_variance;

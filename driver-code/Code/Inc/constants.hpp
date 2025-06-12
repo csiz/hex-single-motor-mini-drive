@@ -48,8 +48,8 @@ const int gear_ratio = 6 * 6 * 6;
 const int ratio = rotor_revolutions_per_electric * gear_ratio;
 
 
-// Current constants
-// -----------------
+// Electric constants
+// ------------------
 
 
 // Voltage reference for the ADC; it's a filtered 3.3V that powers the board.
@@ -74,11 +74,20 @@ const float current_conversion_float = adc_voltage_reference / (adc_max_value * 
 // Current conversion: 1 current unit = 1/248 A.
 const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_float);
 
-// Square of 1A in fixed point representation.
-const int square_current_fixed_point = square(current_fixed_point);
 
 // Resistance of the motor phase windings & mosfet; in Ohm.
-const float phase_resistance_float = 2.0;
+// Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
+// 290 uH measured with LCR meter across phase pairs.
+const float phase_inductance_float = 0.000'145;
+
+const int inductance_fixed_point = 1 << 22;
+
+const int16_t phase_inductance = static_cast<int16_t>(phase_inductance_float * inductance_fixed_point);
+
+
+// Resistance of the motor phase windings & mosfet; in Ohm. Assuming the motor is a 3 phase star connected motor.
+const float phase_resistance_float = 2.00 * 2/3;
+
 
 // Resistance conversion: 1 resistance unit = 1/1024 Ohm.
 const int resistance_fixed_point = 1024;
@@ -86,9 +95,25 @@ const int resistance_fixed_point = 1024;
 // Phase resistance in fixed point representation.
 const int16_t phase_resistance = static_cast<int16_t>(phase_resistance_float * resistance_fixed_point);
 
+
+
+
+// Voltage divider between VCC and the ADC reference voltage: 10kohm/110kohm divider
+const float vcc_divider = 10.0/110.0;
+
+// Conversion factor for the voltage readout from the ADC.
+const float voltage_conversion_float = adc_voltage_reference / (adc_max_value * vcc_divider);
+
+// Voltage conversion: 1 voltage unit = 1/112 V.
+const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_float);
+
 // Power conversion: 1 power unit = 1/256 W.
 const int power_fixed_point = 256;
 
+
+
+// Timing and PWM constants
+// ------------------------
 
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 12MHz (72MHz / 6). A cycle is 6 ticks.
 
@@ -104,9 +129,6 @@ const uint16_t current_sample_lead_time = (1.5 + 12.5 + 1.5)*6 / 2;
 // time of the phase currents symmetrically around the peak of the PWM cycle.
 const int16_t sample_lead_time = temperature_sample_time + current_sample_lead_time;
 
-
-// Timing and PWM constants
-// ------------------------
 
 // Ticks per second at 72MHz clock speed. Each tick is ~13.89ns.
 const int ticks_per_second = 72'000'000;
@@ -136,6 +158,13 @@ const uint16_t pwm_max_hold = pwm_base * 2 / 10;
 const uint16_t max_timeout = 0xFFFF;
 
 
+// Time dependent constants
+// ------------------------
+
+const int phase_readout_diff_per_cycle_to_voltage = (
+    (pwm_cycles_per_second * phase_inductance * voltage_fixed_point + inductance_fixed_point / 2) / 
+    inductance_fixed_point
+);
 
 // Motor control tables
 // --------------------
@@ -471,4 +500,9 @@ const int16_t sin_lookup[1024] = {
 
 static inline int16_t get_sin(const int16_t angle) {
     return sin_lookup[normalize_angle(angle) / angle_lookup_divider];
+}
+
+// For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
+static inline int16_t get_cos(const int16_t angle) {
+    return sin_lookup[normalize_angle(angle + quarter_circle) / angle_lookup_divider];
 }

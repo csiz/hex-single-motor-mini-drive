@@ -162,19 +162,19 @@ function compute_derivative_info(readout, previous_readout){
     angle, 
     web_current_angle_offset,
     web_emf_power,
-    emf_voltage_angle,
-    emf_voltage_magnitude, 
+    web_emf_voltage_angle,
+    web_emf_voltage_magnitude, 
   } = readout;
 
   const {
     time: prev_time,
     hall_sector: prev_hall_sector, 
     direction: prev_direction,
-    emf_voltage_angle: prev_emf_voltage_angle,
+    web_emf_voltage_angle: prev_web_emf_voltage_angle,
     angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
     angular_speed_from_emf_stdev: prev_angular_speed_from_emf_stdev,
-    emf_voltage_magnitude_avg: prev_emf_voltage_magnitude_avg,
-    emf_voltage_magnitude_stdev: prev_emf_voltage_magnitude_stdev,
+    web_emf_voltage_magnitude_avg: prev_web_emf_voltage_magnitude_avg,
+    web_emf_voltage_magnitude_stdev: prev_web_emf_voltage_magnitude_stdev,
     angle_diff_to_emf_avg: prev_angle_diff_to_emf_avg,
     angle_diff_to_emf_stdev: prev_angle_diff_to_emf_stdev,
     web_current_angle_offset_avg: prev_web_current_angle_offset_avg,
@@ -189,7 +189,7 @@ function compute_derivative_info(readout, previous_readout){
   const exp_stats = exponential_stats(dt, 0.5);
 
 
-  const angular_speed_from_emf = normalize_degrees(emf_voltage_angle - prev_emf_voltage_angle) / dt;
+  const angular_speed_from_emf = normalize_degrees(web_emf_voltage_angle - prev_web_emf_voltage_angle) / dt;
 
   const {average: angular_speed_from_emf_avg, stdev: angular_speed_from_emf_stdev} = exp_stats(
     angular_speed_from_emf, 
@@ -200,11 +200,11 @@ function compute_derivative_info(readout, previous_readout){
   );
   
 
-  const {average: emf_voltage_magnitude_avg, stdev: emf_voltage_magnitude_stdev} = exp_stats(
-    emf_voltage_magnitude,
+  const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
+    web_emf_voltage_magnitude,
     {
-      average: prev_emf_voltage_magnitude_avg,
-      stdev: prev_emf_voltage_magnitude_stdev,
+      average: prev_web_emf_voltage_magnitude_avg,
+      stdev: prev_web_emf_voltage_magnitude_stdev,
     },
   );
 
@@ -212,7 +212,7 @@ function compute_derivative_info(readout, previous_readout){
 
   const direction = is_hall_transition ? hall_transition_direction(prev_hall_sector, hall_sector) : prev_direction;
 
-  const angle_from_emf = normalize_degrees(emf_voltage_angle + (direction * 90));
+  const angle_from_emf = normalize_degrees(web_emf_voltage_angle + (direction * 90));
 
   const angle_diff_to_emf = normalize_degrees(angle - angle_from_emf);
 
@@ -245,7 +245,7 @@ function compute_derivative_info(readout, previous_readout){
   return {
     ...readout,
     web_current_angle_offset_avg, web_current_angle_offset_stdev,
-    emf_voltage_magnitude_avg, emf_voltage_magnitude_stdev,
+    web_emf_voltage_magnitude_avg, web_emf_voltage_magnitude_stdev,
     is_hall_transition,
     direction,
     angle_from_emf,

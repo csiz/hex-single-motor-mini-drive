@@ -121,7 +121,7 @@ export const readout_base = 0x10000;
 
 export const voltage_reference = 3.3; // V
 export const adc_base = 4096; // 12 bits
-export const VCC_divider = 10.0/110.0; // 10k/110k divider
+export const vcc_divider = 10.0/110.0; // 10k/110k divider
 
 // Constants for the temperature sensor. This sensor isn't very accurate.
 export const voltage_at_reference_temperature = 1.43; // V (varies between 1.34 and 1.52)
@@ -133,13 +133,20 @@ export function calculate_temperature(adc_reading){
 }
 
 export function calculate_voltage(adc_reading){
-  return adc_reading * voltage_reference / adc_base / VCC_divider;
+  return adc_reading * voltage_reference / adc_base / vcc_divider;
 }
 
 export const adc_voltage_reference = 3.3;
 export const motor_shunt_resistance = 0.010;
 export const amplifier_gain = 20.0;
 export const current_conversion = adc_voltage_reference / (adc_base * motor_shunt_resistance * amplifier_gain);
+
+const power_fixed_point = 256; // Fixed point for power calculations.
+
+// Convert power units to Watts.
+export function convert_power_to_watts(power){
+  return power / power_fixed_point;
+}
 
 // Maximum current we can measure in Amperes.
 export const max_measurable_current = adc_base * current_conversion / 2; // Halved because we can measure negative current too.
