@@ -113,7 +113,7 @@ void interrupts_init(){
     LL_TIM_DisableIT_COM(TIM1);
 
 
-    // Enable TIM2 update interrupt. We need to count updates of TIM2 to measure slow motor 
+    // Enable TIM2 update interrupt. Count updates of TIM2 to measure slow motor 
     // speed in case the timer overflows before a toggle in the hall sensor.
     LL_TIM_EnableIT_UPDATE(TIM2);
     // Disable TIM2 trigger interrupt. It is triggered every reset and hall sensor toggle.

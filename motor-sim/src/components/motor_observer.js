@@ -1,4 +1,4 @@
-import {signed_distance_degrees as signed_distance_degrees, normalize_degrees} from "./angular_math.js";
+import {normalize_degrees} from "./angular_math.js";
 import {exponential_averager, square, exponential_stats, valid_number} from "./math_utils.js";
 import {product_of_normals, add_stdev, weighted_product_of_normals, approx_cdf_normal} from "./stats_utils.js";
 import {online_map, online_function_chain} from "./data_utils.js";
@@ -10,9 +10,8 @@ import {minimum_acceleration} from "./motor_constants.js";
 
 
 
-function signed_distance_mod_6(a, b){
-  const diff = (b + 12 - a) % 6;
-  return diff > 3 ? diff - 6 : diff;
+function hall_transition_direction(a, b){
+  return Math.sign((b + 9 - a) % 6 - 3);
 }
 
 function diff_without_zero_crossing(x, dx){
@@ -54,7 +53,7 @@ function accumulate_position_from_hall(readout, prev_readout){
   
   const dt = time - prev_time;
 
-  const direction = is_hall_transition ? signed_distance_mod_6(prev_hall_sector, hall_sector) : Math.sign(prev_web_angular_speed);
+  const direction = is_hall_transition ? hall_transition_direction(prev_hall_sector, hall_sector) : Math.sign(prev_web_angular_speed);
 
 
   // We want to avoid arithmetic around the angle wrap around points. Change coordinates
@@ -171,7 +170,6 @@ function compute_derivative_info(readout, previous_readout){
     time: prev_time,
     hall_sector: prev_hall_sector, 
     direction: prev_direction,
-    angle: prev_angle,
     emf_voltage_angle: prev_emf_voltage_angle,
     angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
     angular_speed_from_emf_stdev: prev_angular_speed_from_emf_stdev,
@@ -191,7 +189,7 @@ function compute_derivative_info(readout, previous_readout){
   const exp_stats = exponential_stats(dt, 0.5);
 
 
-  const angular_speed_from_emf = signed_distance_degrees(prev_emf_voltage_angle, emf_voltage_angle) / dt;
+  const angular_speed_from_emf = normalize_degrees(emf_voltage_angle - prev_emf_voltage_angle) / dt;
 
   const {average: angular_speed_from_emf_avg, stdev: angular_speed_from_emf_stdev} = exp_stats(
     angular_speed_from_emf, 
@@ -211,18 +209,17 @@ function compute_derivative_info(readout, previous_readout){
   );
 
   const is_hall_transition = prev_hall_sector != hall_sector;
-  const direction = is_hall_transition ? signed_distance_mod_6(prev_hall_sector, hall_sector) : prev_direction;
 
-  const diff_correction = signed_distance_degrees(angle, prev_angle);
+  const direction = is_hall_transition ? hall_transition_direction(prev_hall_sector, hall_sector) : prev_direction;
 
   const angle_from_emf = normalize_degrees(emf_voltage_angle + (direction * 90));
 
-  const angle_diff_to_emf = signed_distance_degrees(angle_from_emf, angle);
+  const angle_diff_to_emf = normalize_degrees(angle - angle_from_emf);
 
   const {average: angle_diff_to_emf_avg, stdev: angle_diff_to_emf_stdev} = exp_stats(
     angle_diff_to_emf,
     {
-      average: normalize_degrees(prev_angle_diff_to_emf_avg - diff_correction),
+      average: normalize_degrees(prev_angle_diff_to_emf_avg),
       stdev: prev_angle_diff_to_emf_stdev,
     },
   );
@@ -231,7 +228,7 @@ function compute_derivative_info(readout, previous_readout){
   const {average: web_current_angle_offset_avg, stdev: web_current_angle_offset_stdev} = exp_stats(
     web_current_angle_offset, 
     {
-      average: normalize_degrees(prev_web_current_angle_offset_avg + diff_correction),
+      average: normalize_degrees(prev_web_current_angle_offset_avg),
       stdev: prev_web_current_angle_offset_stdev,
     },
   );

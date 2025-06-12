@@ -1,7 +1,7 @@
 import {pwm_base, cycles_per_millisecond, history_size, position_calibration_default} from "./motor_constants.js";
 import {command_codes} from "./motor_interface.js";
 import {wait} from "./async_utils.js";
-import {circular_stats_degrees, interpolate_degrees, positive_distance_degrees} from "./angular_math.js";
+import {circular_stats_degrees, interpolate_degrees, positive_degrees} from "./angular_math.js";
 import * as d3 from "d3";
 
 
@@ -110,7 +110,7 @@ export function compute_position_calibration(calibration_results){
     const pos_transition = transition_stats[`drive_positive_sector_${hall_sector}`]?.mean;
     const neg_transition = transition_stats[`drive_negative_sector_${hall_sector}`]?.mean;
     const center = interpolate_degrees(pos_transition, neg_transition, 0.5);
-    const stdev = positive_distance_degrees(pos_transition, neg_transition) / 2;
+    const stdev = positive_degrees(neg_transition - pos_transition) / 2;
     const sector_string = `sector_${hall_sector}`;
     return [sector_string, {sector_string, hall_sector, pos_transition, neg_transition, center, stdev}];
   }));
@@ -129,7 +129,7 @@ export function compute_position_calibration(calibration_results){
     const right_transition = transition_stats[right_trigger]?.mean;
 
     const location = interpolate_degrees(left_transition, right_transition, 0.5);
-    const hall_on_span = positive_distance_degrees(left_transition, right_transition);
+    const hall_on_span = positive_degrees(right_transition - left_transition);
     const sensing_overshoot = hall_on_span - 180;
     return [hall_transition, {hall_transition, left_transition, right_transition, location, hall_on_span, sensing_overshoot}];
   }));
@@ -141,7 +141,7 @@ export function compute_position_calibration(calibration_results){
   ].map(([hall_sensor, neg_transition, pos_transition]) => {
     const neg_sensor_span = sensor_spans[neg_transition];
     const pos_sensor_span = sensor_spans[pos_transition];
-    const hysterisis = positive_distance_degrees(neg_sensor_span.location, pos_sensor_span.location);
+    const hysterisis = positive_degrees(pos_sensor_span.location - neg_sensor_span.location);
     const mid_location = interpolate_degrees(neg_sensor_span.location, pos_sensor_span.location, 0.5);
 
     return [hall_sensor, {hall_sensor, hysterisis, mid_location}];

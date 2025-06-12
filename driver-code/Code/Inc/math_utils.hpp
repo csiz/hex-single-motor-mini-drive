@@ -8,6 +8,7 @@ inline constexpr int square(int x){
     return x * x;
 }
 
+// Absolute value of a number (own constexpr function).
 inline constexpr int abs(int x){
     return x < 0 ? -x : x;
 }

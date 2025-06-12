@@ -17,7 +17,7 @@ export function circular_stats_degrees(values){
 
   const stdev = Math.sqrt(
     d3.mean(values, (d) => {
-      const diff = signed_distance_degrees(mean, d);
+      const diff = normalize_degrees(d - mean);
       return diff * diff;
     })
   );
@@ -41,16 +41,8 @@ export function positive_degrees(d){
   return (d % 360 + 360) % 360;
 }
 
-export function signed_distance_degrees(a, b){
-  return normalize_degrees(b - a);
-}
-
-export function positive_distance_degrees(a, b){
-  return positive_degrees(b - a);
-} 
-
 export function interpolate_degrees(a, b, fraction){
   // We always want to go counter-clockwise, so the difference must be positive.
-  const diff = positive_distance_degrees(a, b);
+  const diff = positive_degrees(b - a);
   return normalize_degrees(a + diff * fraction);
 }

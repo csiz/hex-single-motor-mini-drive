@@ -5,24 +5,47 @@
 #include <utility> // For std::pair
 
 #include "constants.hpp"
+#include "math_utils.hpp"
 
-// --- Constants and Look-Up Tables (LUTs) ---
+
+// --- Constants and Look-Up Tables ---
 const int ATAN2_CORDIC_ITERATIONS = 10; // Number of CORDIC iterations. Affects precision and gain.
-
-extern const std::array<int16_t, ATAN2_CORDIC_ITERATIONS> atan2_cordic_lut;
 
 // CORDIC gain K = product_{i=0 to N-1} sqrt(1 + 2^(-2i)).
 // We need 1/K for magnitude scaling.
 // (1/K) is pre-scaled by (1 << ATAN2_CORDIC_GAIN_SHIFT) for fixed-point multiplication.
 const int ATAN2_CORDIC_GAIN_SHIFT = 15;
-extern const int32_t atan2_cordic_inverse_gain_scaled;
 
+// Initializes the CORDIC look-up tables and precomputed gain.
+// 
+// This function MUST be called once globally before using atan2_cordic.
+// It uses floating-point math for table generation. 
+inline constexpr std::array<int16_t, ATAN2_CORDIC_ITERATIONS> make_atan2_cordic_lookup() {
+    std::array<int16_t, ATAN2_CORDIC_ITERATIONS> atan2_cordic_lookup;
 
+    for (int i = 0; i < ATAN2_CORDIC_ITERATIONS; ++i) {
+        // The angle output is in units where 1024 represents a full circle (2*PI radians).
+        // So, 1 angle unit = (2*PI)/1024 = PI/512 radians.
+        // The lookup table stores atan(2^-i) in these angle units.
+        // lookup_value = atan(2^-i) [radians] * (512 / PI) [units/radian]
+        atan2_cordic_lookup[i] = static_cast<int16_t>(round(atan(pow(2.0, -i)) * static_cast<float>(half_circle) / M_PI));
+    }
 
-// Helper for integer absolute value, as std::abs might not be constexpr or pull <cstdlib>
-inline constexpr int32_t internal_abs_int32(int32_t val) {
-    return (val < 0) ? -val : val;
+    return atan2_cordic_lookup;
 }
+
+inline constexpr int32_t make_atan2_cordic_inverse_gain_scaled() {
+    double K_gain = 1.0;
+    for (int i = 0; i < ATAN2_CORDIC_ITERATIONS; ++i) {
+        K_gain *= sqrt(1.0 + pow(2.0, -2.0 * i));
+    }
+    return static_cast<int32_t>(round((1.0 / K_gain) * (1 << ATAN2_CORDIC_GAIN_SHIFT)));
+}
+
+const int32_t atan2_cordic_inverse_gain_scaled = make_atan2_cordic_inverse_gain_scaled();
+
+const std::array<int16_t, ATAN2_CORDIC_ITERATIONS> atan2_cordic_lookup = make_atan2_cordic_lookup();
+
 
 /**
  * @brief Computes the 2-argument arctangent (atan2) using an integer CORDIC algorithm.
@@ -34,8 +57,7 @@ inline constexpr int32_t internal_abs_int32(int32_t val) {
  * Uses only integer math operations.
  */
 static inline std::pair<int16_t, int16_t> int_atan2(int16_t y_coord, int16_t x_coord) {
-    // Ensure atan2_init_tables() has been called once globally.
-
+    
     int32_t x = x_coord; // Use 32-bit integers for intermediate calculations
     int32_t y = y_coord;
 
@@ -72,8 +94,8 @@ static inline std::pair<int16_t, int16_t> int_atan2(int16_t y_coord, int16_t x_c
 
     // Use absolute values for the CORDIC vectoring stage.
     // This effectively processes the vector as if it's in the first quadrant.
-    int32_t current_x = internal_abs_int32(x);
-    int32_t current_y = internal_abs_int32(y);
+    int32_t current_x = abs(x);
+    int32_t current_y = abs(y);
     
     // Accumulated angle from CORDIC iterations (atan(abs_y / abs_x))
     // This will be in the range [0, 256] (representing 0 to 90 degrees).
@@ -97,11 +119,11 @@ static inline std::pair<int16_t, int16_t> int_atan2(int16_t y_coord, int16_t x_c
         if (y_previous_iter > 0) { // Rotate clockwise: (x', y') = (x + y*2^-i, y - x*2^-i)
             current_x = x_previous_iter + y_shifted;
             current_y = y_previous_iter - x_shifted;
-            first_quadrant_angle_acc += atan2_cordic_lut[i];
+            first_quadrant_angle_acc += atan2_cordic_lookup[i];
         } else if (y_previous_iter < 0) { // Rotate counter-clockwise: (x', y') = (x - y*2^-i, y + x*2^-i)
             current_x = x_previous_iter - y_shifted;
             current_y = y_previous_iter + x_shifted;
-            first_quadrant_angle_acc -= atan2_cordic_lut[i];
+            first_quadrant_angle_acc -= atan2_cordic_lookup[i];
         }
         // If y_previous_iter == 0, current_x, current_y, and angle_acc remain unchanged for this iteration.
     }

@@ -4,6 +4,16 @@
 #include <cstdint>
 #include <array>
 
+
+
+// Motor duty cycle (compare register values).
+struct MotorOutputs {
+    uint16_t u_duty_cycle;
+    uint16_t v_duty_cycle;
+    uint16_t w_duty_cycle;
+};
+
+
 // PWM schedule
 // ------------
 

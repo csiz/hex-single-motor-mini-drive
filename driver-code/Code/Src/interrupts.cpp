@@ -3,11 +3,10 @@
 #include "interrupts_angle.hpp"
 #include "interrupts_motor.hpp"
 
-#include "user_data.hpp"
-
 #include "io.hpp"
 #include "constants.hpp"
 #include "error_handler.hpp"
+#include "type_definitions.hpp"
 
 #include "integer_math.hpp"
 
@@ -73,9 +72,7 @@ static inline bool readout_history_push(Readout const & readout){
 // State Data
 // ----------
 
-uint16_t prev_u_pwm_duty = 0;
-uint16_t prev_v_pwm_duty = 0;
-uint16_t prev_w_pwm_duty = 0;
+MotorOutputs previous_motor_outputs;
 
 // Hall sensors
 // ------------
@@ -97,6 +94,23 @@ bool angle_valid = false;
 // pole pairs, and the slot triplets, and the mechanical gear ratio.
 PositionStatistics electric_position = null_position_statistics;
 
+// Combine the motor duty cycles into a single 32-bit value; because it barely fits.
+static inline uint32_t encode_pwm_commands(MotorOutputs const & motor_outputs){
+    return (
+        motor_outputs.u_duty_cycle * pwm_base * pwm_base +
+        motor_outputs.v_duty_cycle * pwm_base +
+        motor_outputs.w_duty_cycle
+    );
+}
+
+static inline MotorOutputs mid_motor_outputs(MotorOutputs const & previous, MotorOutputs const & current){
+    return MotorOutputs{
+        .u_duty_cycle = (previous.u_duty_cycle + current.u_duty_cycle) / 2,
+        .v_duty_cycle = (previous.v_duty_cycle + current.v_duty_cycle) / 2,
+        .w_duty_cycle = (previous.w_duty_cycle + current.w_duty_cycle) / 2
+    };
+}
+
 
 // Critical function!! 23KHz PWM cycle
 // -----------------------------------
@@ -110,25 +124,19 @@ static inline void pwm_cycle_and_adc_update(){
     
     
     // Get the pwm duty cycle to this readout, it should have been active during the half period before the ADC sampling.
-    const uint16_t active_u_pwm_duty = get_motor_u_pwm_duty();
-    const uint16_t active_v_pwm_duty = get_motor_v_pwm_duty();
-    const uint16_t active_w_pwm_duty = get_motor_w_pwm_duty();
+    const auto active_motor_outputs = get_motor_outputs();
+    const auto motor_outputs = mid_motor_outputs(previous_motor_outputs, active_motor_outputs);
+    previous_motor_outputs = active_motor_outputs;
+
     
     // We read the current at the halfway point of the PWM cycle. It is
     // most accurate to use the average PWM of the last 2 duty cycles. 
-    readout.pwm_commands = (
-        (prev_u_pwm_duty + active_u_pwm_duty) / 2 * pwm_base * pwm_base + 
-        (prev_v_pwm_duty + active_v_pwm_duty) / 2 * pwm_base + 
-        (prev_w_pwm_duty + active_w_pwm_duty) / 2
-    );
+    readout.pwm_commands = encode_pwm_commands(motor_outputs);
 
-    prev_u_pwm_duty = active_u_pwm_duty;
-    prev_v_pwm_duty = active_v_pwm_duty;
-    prev_w_pwm_duty = active_w_pwm_duty;
 
     // Write the current readout index.
     readout.readout_number = adc_update_number;
-    
+
     // U and W phases are measured at the same time, followed by V and the reference voltage.
     // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
     // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
