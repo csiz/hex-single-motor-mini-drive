@@ -104,10 +104,13 @@ The "problem" can be described using terms like:
 
 In essence, we're updating our beliefs about ${tex`X_0`} based on whether it "passed" or "failed" a test where the benchmark (${tex`X_1`}) was itself uncertain. The two posterior distributions represent our updated beliefs about ${tex`X_0`} in these two distinct scenarios.
 
-Enough with the maths, the plot below shows we should update our belief about the motor position in 3 cases:
-1. In case the left side hall sensor was triggered (transition to a), we should nudge the postion to the left if we're not already there.
-2. In case the right side hall sensor was triggered (transition to b), we should nudge the postion to the right if we're not already there.
-3. In case no hall sensor was triggered (no transition), we should nudge the position towards the center of the current hall sector.
+### The absence of evidence is evidence of the absence
+
+Enough with the maths, the plot below shows how we should update our belief about the motor position every motor cycle. First we predict the our prior for the motor position then we check if a hall transition was detected. 
+* If the detection matches our prediction, we gain little information, but confirm our prior is correct, thus the new estimate remains the same as the initial prediction.
+* When the prediction is wrong, we update the position for 2 cases:
+  1. If the hall transition was detected when we didn't predict it, the motor must have sped up towards the detected sector. The new position is close to the trigger point (the position between 2 sectors).
+  2. A transition was predicted but none was detected, then the motor must have slowed down. The updated position moves slightly towards the center of the current sector.
 
 <div class="card tight">
     <div>${bounded_example_input}</div>
@@ -118,11 +121,7 @@ Enough with the maths, the plot below shows we should update our belief about th
 Combining Normal Distributions
 ------------------------------
 
-Let's explore the behaviour of the normal distribution. In the first example we consider how to
-combine readings from two sources. If both readings are normally distributed, the combined reading
-will also be normally distributed. The probability density function (PDF) of the combined reading
-is the product of the PDFs of the two readings (normalized by the cumulative distribution function
-(CDF) of difference). The mean and variance of the combined reading is [1]:
+Back to math, now that we have a corrected estimate of the motor position we can update our prior belief to incorporate as much information that we have from our measurement (or lack of). According to Bayes' rule the likelihood of the real position is proportional to our prior PDF multiplied by the measurment PDF. There is a special case when both PDFs are Gaussian, the result is also a Gaussian distribution. This special case is the Kalman filter update step derived from first principles. The mathematics of the Kalman gain work out to the same value as the weighting factor we use to combine the two PDFs. The mean and variance of the combined reading are vizualized below [1]:
 
 ```tex
 \begin{align*}
@@ -155,6 +154,10 @@ References
 ----------
 
 * [1] [Products and Convolutions of Gaussian Probability Density Functions P.A. Bromiley](http://www.lucamartino.altervista.org/2003-003.pdf)
+* [2] [Kalman Filter - Wikipedia](https://en.wikipedia.org/wiki/Kalman_filter)
+* [3] [Bayesian Inference - Wikipedia](https://en.wikipedia.org/wiki/Bayesian_inference)
+* [4] [Probability distribution function - Wikipedia](https://en.wikipedia.org/wiki/Probability_distribution)
+* [5] [Normal distribution - Wikipedia](https://en.wikipedia.org/wiki/Normal_distribution)
 
 </main>
 
@@ -181,7 +184,7 @@ const span = domain[1] - domain[0];
 const position_input = inputs_wide_range(domain, {
   value: 0,
   step: 0.1,
-  label: "Estimated angle:",
+  label: "Prior angle:",
 });
 
 const position = Generators.input(position_input);
@@ -189,7 +192,7 @@ const position = Generators.input(position_input);
 const position_stdev_input = inputs_wide_range([0, span], {
   value: 15,
   step: 0.1,
-  label: "Estimated angle stdev:",
+  label: "Prior angle stdev:",
 });
 
 const position_stdev = Generators.input(position_stdev_input);
@@ -197,21 +200,21 @@ const position_stdev = Generators.input(position_stdev_input);
 const upper_input = inputs_wide_range([0, domain[1]], {
   value: 35,
   step: 0.1,
-  label: "Truncated normal next hall trigger:",
+  label: "Hall trigger b",
 });
 const upper = Generators.input(upper_input);
 
 const upper_stdev_input = inputs_wide_range([0, span / 10], {
   value: 3,
   step: 0.1,
-  label: "Truncated normal next hall trigger stdev:",
+  label: "Hall trigger b stdev:",
 });
 const upper_stdev = Generators.input(upper_stdev_input);
 
 const upper_weight_input = inputs_wide_range([0, 1], {
   value: 1.0,
   step: 0.01,
-  label: "Confidence next hall was triggered:",
+  label: "Confidence b should be triggered:",
 });
 
 const upper_weight = Generators.input(upper_weight_input);
@@ -219,7 +222,7 @@ const upper_weight = Generators.input(upper_weight_input);
 const lower_input = inputs_wide_range([domain[0], 0], {
   value: -35,
   step: 0.1,
-  label: "Truncated normal previous hall trigger:",
+  label: "Hall trigger a:",
 });
 
 const lower = Generators.input(lower_input);
@@ -227,7 +230,7 @@ const lower = Generators.input(lower_input);
 const lower_stdev_input = inputs_wide_range([0, span / 10], {
   value: 3,
   step: 0.1,
-  label: "Truncated normal previous hall trigger stdev:",
+  label: "Hall trigger a stdev:",
 });
 
 const lower_stdev = Generators.input(lower_stdev_input);
@@ -235,7 +238,7 @@ const lower_stdev = Generators.input(lower_stdev_input);
 const lower_weight_input = inputs_wide_range([0, 1], {
   value: 1.0,
   step: 0.01,
-  label: "Confidence previous hall was triggered:",
+  label: "Confidence a should be triggered:",
 });
 const lower_weight = Generators.input(lower_weight_input);
 
