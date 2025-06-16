@@ -27,7 +27,7 @@
 
 uint32_t tick_number = 0;
 uint32_t last_tick = 0;
-uint32_t last_adc_update = 0;
+uint16_t last_readout_number = 0;
 
 
 const uint32_t min_timing_period_millis = 50;
@@ -201,6 +201,23 @@ void app_init() {
     initialize_angle_tracking();
 }
 
+static inline void guarded_set_motor_state(MotorOutputs const& outputs, const DriverState state) {
+    // Disable the ADC interrupt while we read the latest readout.
+    NVIC_DisableIRQ(ADC1_2_IRQn);
+    set_motor_state(outputs, state);
+    NVIC_EnableIRQ(ADC1_2_IRQn);
+}
+
+static inline FullReadout guarded_get_readout() {
+    // Disable the ADC interrupt while we read the latest readout.
+    NVIC_DisableIRQ(ADC1_2_IRQn);
+    // We should read from the circular buffer without disabling interrupts 
+    // when we use a chip with more memory...
+    FullReadout readout = get_readout();
+    NVIC_EnableIRQ(ADC1_2_IRQn);
+    return readout;
+}
+
 static inline void motor_start_test(PWMSchedule const& schedule){
     // Clear the readouts buffer of old data.
     readout_history_reset();
@@ -212,7 +229,7 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     usb_readouts_to_send = history_size;
 
     // Start the test schedule.
-    motor_start_schedule(schedule);
+    guarded_set_motor_state(schedule[0], DriverState::SCHEDULE);
 }
 
 // Run a unit test that takes a function pointer to a test function (which itself takes a buffer).
@@ -259,7 +276,10 @@ bool handle_command(MessageBuffer const & buffer) {
 
         // Turn off the motor driver.
         case SET_STATE_OFF:
-            motor_break();
+            // Turn off unguarded immediately.
+            set_motor_break();
+            // Repeat command, with the interrupt guards.
+            guarded_set_motor_state(null_motor_outputs, DriverState::OFF);
             return false;
             
         // Measure the motor phase currents.
@@ -298,45 +318,51 @@ bool handle_command(MessageBuffer const & buffer) {
 
         // Drive the motor.
         case SET_STATE_DRIVE_POS:
-            motor_drive_pos(command.pwm, command.timeout);
+            set_pwm_target(command.pwm);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_POS);
             return false;
         case SET_STATE_DRIVE_NEG:
-            motor_drive_neg(command.pwm, command.timeout);
+            set_pwm_target(command.pwm);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_NEG);
             return false;
         case SET_STATE_DRIVE_SMOOTH_POS:
-            motor_drive_smooth_pos(command.pwm, command.timeout, command.leading_angle);
+            set_pwm_target(command.pwm);
+            set_leading_angle(command.leading_angle);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_SMOOTH_POS);
             return false;
         case SET_STATE_DRIVE_SMOOTH_NEG:
-            motor_drive_smooth_neg(command.pwm, command.timeout, command.leading_angle);
+            set_pwm_target(command.pwm);
+            set_leading_angle(command.leading_angle);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_SMOOTH_NEG);
             return false;
 
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
-            motor_freewheel();
+            guarded_set_motor_state(null_motor_outputs, DriverState::FREEWHEEL);
             return false;
 
         case SET_STATE_HOLD_U_POSITIVE:
-            motor_hold(command.pwm, 0, 0, command.timeout);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .u_duty = command.pwm }, DriverState::HOLD);
             return false;
 
         case SET_STATE_HOLD_V_POSITIVE:
-            motor_hold(0, command.pwm, 0, command.timeout);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .v_duty = command.pwm }, DriverState::HOLD);
             return false;
 
         case SET_STATE_HOLD_W_POSITIVE:
-            motor_hold(0, 0, command.pwm, command.timeout);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .w_duty = command.pwm }, DriverState::HOLD);
             return false;
 
         case SET_STATE_HOLD_U_NEGATIVE:
-            motor_hold(0, command.pwm, command.pwm, command.timeout);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .v_duty = command.pwm, .w_duty = command.pwm }, DriverState::HOLD);
             return false;
 
         case SET_STATE_HOLD_V_NEGATIVE:
-            motor_hold(command.pwm, 0, command.pwm, command.timeout);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .u_duty = command.pwm, .w_duty = command.pwm }, DriverState::HOLD);
             return false;
 
         case SET_STATE_HOLD_W_NEGATIVE:
-            motor_hold(command.pwm, command.pwm, 0, command.timeout);
+            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .u_duty = command.pwm, .v_duty = command.pwm }, DriverState::HOLD);
             return false;
 
         case SET_CURRENT_FACTORS:
@@ -409,7 +435,7 @@ inline void usb_queue_send(uint8_t * data, size_t len_to_send) {
 }
 
 
-void usb_queue_response(){
+void usb_queue_response(FullReadout const & full_readout) {
 
     // Check if we have to wait for the queue to fill before sending readouts.
     // This is used to prevent sending readouts while the motor is commutating.
@@ -480,18 +506,8 @@ void usb_queue_response(){
     if(usb_stream_state){
         if (not usb_check_queue(full_readout_size)) return;
         
-        // Disable the ADC interrupt while we read the latest readout.
-        NVIC_DisableIRQ(ADC1_2_IRQn);
-        // We should read from the circular buffer without disabling interrupts 
-        // when we use a chip with more memory...
-        FullReadout full_readout = get_readout();
-        NVIC_EnableIRQ(ADC1_2_IRQn);
-        
         // We have already sent this readout; don't send it again.
         if (usb_stream_last_sent == full_readout.readout_number) return;
-        
-        full_readout.tick_rate = static_cast<int>(tick_rate);
-        full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
 
         write_full_readout(usb_response_buffer, full_readout);
         usb_queue_send(usb_response_buffer, full_readout_size);
@@ -538,10 +554,7 @@ void usb_receive_command(){
 void app_tick() {
     tick_number += 1;
 
-    // Show the current hall sensor state on the LEDs.
-    const uint8_t hall_state = (get_readout().position >> 13 & 0b111);
-    set_LED_RGB_colours(hall_state & 0b001 ? 0x80 : 0, hall_state & 0b010 ? 0x40 : 0, hall_state & 0b100 ? 0x80 : 0);
-
+    FullReadout full_readout = guarded_get_readout();
 
     // Timing
     // ------
@@ -555,17 +568,16 @@ void app_tick() {
         
         float seconds = duration_since_timing_update / 1000.f;
 
-        const uint32_t adc_update_number = get_adc_update_number();
-
         tick_rate = (tick_number - last_tick) / seconds;
-        adc_update_rate = (adc_update_number - last_adc_update) / seconds;
+        adc_update_rate = (full_readout.readout_number - last_readout_number) / seconds;
 
 
         last_tick = tick_number;
-        last_adc_update = adc_update_number;
-    } 
+        last_readout_number = full_readout.readout_number;
+    }
 
-    
+    full_readout.tick_rate = static_cast<int>(tick_rate);
+    full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
 
     // USB comms
     // ---------
@@ -577,7 +589,7 @@ void app_tick() {
     usb_receive_command();
     
     // Queue the state readouts on the USB buffer.
-    usb_queue_response();
+    usb_queue_response(full_readout);
     
     // Send USB data from the buffer, twice per loop, hopefully the 
     // USB module sends 64 byte packets while we computed stuff.

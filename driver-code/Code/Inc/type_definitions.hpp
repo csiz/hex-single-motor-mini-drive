@@ -27,10 +27,12 @@ struct MotorOutputs {
     uint16_t w_duty; // PWM duty cycle for W phase.
 };
 
-
-// PWM schedule
-// ------------
-
+const MotorOutputs null_motor_outputs = {
+    .duration = 0,
+    .u_duty = 0,
+    .v_duty = 0,
+    .w_duty = 0
+};
 
 // Number of steps in test schedules.
 const size_t schedule_size = 12;

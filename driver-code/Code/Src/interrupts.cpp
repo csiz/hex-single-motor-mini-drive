@@ -17,18 +17,11 @@
 // Try really hard to keep interrupts fast. Use short inline functions that only rely 
 // on chip primitives; don't use division, multiplication, or floating point operations.
 
-// Timing data
-uint32_t adc_update_number = 0;
-uint32_t get_adc_update_number(){
-    return adc_update_number;
-}
-
-// Electrical state
+// Electrical and position state
 FullReadout readout = {};
 FullReadout get_readout(){
     return readout;
 }
-
 
 // Data queue
 Readout readout_history[history_size] = {};
@@ -63,12 +56,6 @@ static inline bool readout_history_push(Readout const & readout){
 // State Data
 // ----------
 
-const MotorOutputs null_motor_outputs = {
-    .duration = 0,
-    .u_duty = 0,
-    .v_duty = 0,
-    .w_duty = 0
-};
 
 // Currently active motor outputs.
 MotorOutputs active_motor_outputs = null_motor_outputs;
@@ -118,12 +105,25 @@ static inline MotorOutputs mid_motor_outputs(MotorOutputs const & a, MotorOutput
 
 
 
-// Motor driver state.
+// Motor driver state
+// ------------------
+
 DriverState driver_state = DriverState::OFF;
 
-uint16_t pwm_command = 0;
+uint16_t pwm_target = 0;
+
+void set_pwm_target(uint16_t pwm){
+    // Set the PWM target for the motor drive.
+    pwm_target = clip_to(0, pwm_max, pwm);
+}
 
 int16_t leading_angle = 0;
+
+void set_leading_angle(int16_t angle){
+    // Set the leading angle for the motor drive.
+    leading_angle = clip_to(0, angle_base-1, angle);
+}
+
 
 PWMSchedule const* schedule_queued = nullptr;
 
@@ -131,9 +131,6 @@ PWMSchedule const* schedule_queued = nullptr;
 PWMSchedule const* schedule_active = nullptr;
 size_t schedule_counter = 0;
 size_t schedule_stage = 0;
-
-
-
 
 static inline PWMSchedule const* get_and_reset_schedule_queued(){
     PWMSchedule const* schedule = schedule_queued;
@@ -149,102 +146,64 @@ bool is_motor_stopped(){
     return (driver_state == DriverState::OFF) || (driver_state == DriverState::FREEWHEEL);
 }
 
-void motor_break(){
-    // Short all motor phases to ground.
-    active_motor_outputs = set_motor_outputs(MotorOutputs{
-        .duration = 1,
-        .u_duty = 0,
-        .v_duty = 0,
-        .w_duty = 0
-    });
+void set_motor_state(MotorOutputs const & outputs, const DriverState state){
+    switch(state){
+        // Short all motor phases to ground quickly stopping the motor.
+        case DriverState::OFF:
+            active_motor_outputs = set_motor_outputs(null_motor_outputs);
+            enable_motor_outputs();
+            driver_state = DriverState::OFF;
+            return;
+        case DriverState::FREEWHEEL:
+            // Disable the motor outputs; leaving them floating voltage/tristate.
+            disable_motor_outputs();
+            active_motor_outputs = set_motor_outputs(null_motor_outputs);
+            driver_state = DriverState::FREEWHEEL;
+            return;
+        case DriverState::HOLD:
+            // Set the motor outputs to hold the current position.
+            active_motor_outputs = set_motor_outputs(MotorOutputs{
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, outputs.duration)),
+                .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, outputs.u_duty)),
+                .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, outputs.v_duty)),
+                .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, outputs.w_duty))
+            });
+            enable_motor_outputs();
+            driver_state = DriverState::HOLD;
+            return;
+        case DriverState::DRIVE_POS:
+        case DriverState::DRIVE_NEG:
+            // Set the motor outputs to drive the motor in the positive or negative direction.
+            active_motor_outputs = set_motor_outputs(MotorOutputs{
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, outputs.duration)),
+                .u_duty = 0,
+                .v_duty = 0,
+                .w_duty = 0
+            });
+            enable_motor_outputs();
+            driver_state = state;
+            return;
+        case DriverState::DRIVE_SMOOTH_POS:
+        case DriverState::DRIVE_SMOOTH_NEG:
+            // Set the motor outputs to drive the motor in the smooth position mode.
+            active_motor_outputs = set_motor_outputs(MotorOutputs{
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, outputs.duration)),
+                .u_duty = 0,
+                .v_duty = 0,
+                .w_duty = 0
+            });
+            enable_motor_outputs();
+            driver_state = state;
+            return;
+        case DriverState::SCHEDULE:
+            schedule_queued = reinterpret_cast<PWMSchedule const*>(&outputs);
+            driver_state = DriverState::SCHEDULE;
+            return;
+    }
 
-    // Immediately update and enable the motor outputs.
-    enable_motor_outputs();
-
-    driver_state = DriverState::OFF;
+    // We shouldn't reach here, enable compiler warnings!
+    return error();
 }
-
-void motor_freewheel(){
-    // Reset motor phases to 0.
-    active_motor_outputs = set_motor_outputs(null_motor_outputs);
-
-    // Disable the motor outputs; leaving them floating voltage/tristate.
-    disable_motor_outputs();
-
-    driver_state = DriverState::FREEWHEEL;
-}
-
-void motor_hold(uint16_t u_duty, uint16_t v_duty, uint16_t w_duty, uint16_t timeout){
-    active_motor_outputs = MotorOutputs{
-        .duration = static_cast<uint16_t>(clip_to(0, max_timeout, timeout)),
-        .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, u_duty)),
-        .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, v_duty)),
-        .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, w_duty))
-    };
-
-    driver_state = DriverState::HOLD;
-}
-
-
-void motor_drive_neg(uint16_t pwm, uint16_t timeout){
-    pwm_command = clip_to(0, pwm_max, pwm);
-    active_motor_outputs = MotorOutputs{
-        .duration = static_cast<uint16_t>(clip_to(0, max_timeout, timeout)),
-        .u_duty = 0,
-        .v_duty = 0,
-        .w_duty = 0
-    };
-    driver_state = DriverState::DRIVE_NEG;
-}
-
-void motor_drive_pos(uint16_t pwm, uint16_t timeout){
-    pwm_command = clip_to(0, pwm_max, pwm);
-    active_motor_outputs = MotorOutputs{
-        .duration = static_cast<uint16_t>(clip_to(0, max_timeout, timeout)),
-        .u_duty = 0,
-        .v_duty = 0,
-        .w_duty = 0
-    };
-    driver_state = DriverState::DRIVE_POS;
-}
-
-
-
-void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle){
-    pwm_command = clip_to(0, pwm_max, pwm);
-    leading_angle = clip_to(0, angle_base-1, new_leading_angle);
-    active_motor_outputs = MotorOutputs{
-        .duration = static_cast<uint16_t>(clip_to(0, max_timeout, timeout)),
-        .u_duty = 0,
-        .v_duty = 0,
-        .w_duty = 0
-    };
-    driver_state = DriverState::DRIVE_SMOOTH_POS;
-}
-
-void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout, uint16_t new_leading_angle){
-    pwm_command = clip_to(0, pwm_max, pwm);
-    leading_angle = clip_to(0, angle_base-1, new_leading_angle);
-    active_motor_outputs = MotorOutputs{
-        .duration = static_cast<uint16_t>(clip_to(0, max_timeout, timeout)),
-        .u_duty = 0,
-        .v_duty = 0,
-        .w_duty = 0
-    };
-    driver_state = DriverState::DRIVE_SMOOTH_NEG;
-}
-
-
-void motor_start_schedule(PWMSchedule const& schedule){
-    schedule_queued = &schedule;
-
-    driver_state = DriverState::SCHEDULE;
-}
-
-
-
-
-
 
 
 
@@ -253,14 +212,14 @@ static inline void update_motor_hold(){
     active_motor_outputs = set_motor_outputs(active_motor_outputs);
     enable_motor_outputs();
 
-    if (not active_motor_outputs.duration) return motor_break();
+    if (not active_motor_outputs.duration) return set_motor_break();
 }
 
 static inline void update_motor_sector(const uint8_t hall_sector, const uint16_t (* motor_sector_driving_table)[3]){
     if (motor_sector_driving_table == nullptr) return error();
     
     // Use the hall sensor state to determine the motor position and commutation.
-    if (hall_sector >= hall_sector_base) return motor_break();
+    if (hall_sector >= hall_sector_base) return set_motor_break();
 
 
     // Get the voltage for the three phases from the table.
@@ -271,14 +230,14 @@ static inline void update_motor_sector(const uint8_t hall_sector, const uint16_t
 
     active_motor_outputs = set_motor_outputs(MotorOutputs{
         .duration = active_motor_outputs.duration,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm_command / pwm_base),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_command / pwm_base),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_command / pwm_base)
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm_target / pwm_base),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_target / pwm_base),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_target / pwm_base)
     });
 
     enable_motor_outputs();
 
-    if (not active_motor_outputs.duration) return motor_break();
+    if (not active_motor_outputs.duration) return set_motor_break();
 }
 
 static inline void update_motor_smooth(
@@ -288,7 +247,7 @@ static inline void update_motor_smooth(
     const int current_angle_offset, 
     const int current_magnitude
 ){
-    if (not angle_valid) return motor_break();
+    if (not angle_valid) return set_motor_break();
 
     const int target_angle = normalize_angle(angle + direction * leading_angle);
 
@@ -298,14 +257,14 @@ static inline void update_motor_smooth(
 
     active_motor_outputs = set_motor_outputs(MotorOutputs{
         .duration = active_motor_outputs.duration,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm_command / pwm_base),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_command / pwm_base),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_command / pwm_base)
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm_target / pwm_base),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_target / pwm_base),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_target / pwm_base)
     });
 
     enable_motor_outputs();
 
-    if (not active_motor_outputs.duration) return motor_break();
+    if (not active_motor_outputs.duration) return set_motor_break();
 }
 
 // Quickly update the PWM settings from the test schedule.
@@ -330,7 +289,7 @@ static inline void update_motor_schedule(){
     // Check if we reached the end of the schedule; and stop.
     if (schedule_stage >= schedule_size) {
         schedule_active = nullptr;   
-        return motor_break();
+        return set_motor_break();
     }
 
     const PWMSchedule & schedule = *schedule_active;
@@ -349,11 +308,17 @@ static inline void update_motor_schedule(){
 
 
 
+// Interrupt handlers
+// ------------------
+
+// These functions are called by the autogenerated C code.
 
 // Critical function!! 23KHz PWM cycle
 // -----------------------------------
+// Process ADC readings for phase currents when the injected conversion is done.
+void adc_interrupt_handler(){
+    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) error(); 
 
-static inline void pwm_cycle_and_adc_update(){
     // Note: a single float assignment will costs us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
 
 
@@ -373,7 +338,7 @@ static inline void pwm_cycle_and_adc_update(){
 
 
     // Write the current readout index.
-    readout.readout_number = adc_update_number;
+    readout.readout_number = readout.readout_number + 1;
 
     // U and W phases are measured at the same time, followed by V and the reference voltage.
     // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
@@ -602,10 +567,12 @@ static inline void pwm_cycle_and_adc_update(){
     // Update motor control.
     switch (driver_state) {
         case DriverState::OFF:
-            motor_break();
+            active_motor_outputs = set_motor_outputs(null_motor_outputs);
+            enable_motor_outputs();
             break;
         case DriverState::FREEWHEEL:
-            motor_freewheel();
+            disable_motor_outputs();
+            active_motor_outputs = set_motor_outputs(null_motor_outputs);
             break;
         case DriverState::SCHEDULE:
             update_motor_schedule();
@@ -635,20 +602,7 @@ static inline void pwm_cycle_and_adc_update(){
 
 
     readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
-}
 
-// Interrupt handlers
-// ------------------
-
-// These functions are called by the autogenerated C code.
-
-void adc_interrupt_handler(){
-    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) error(); 
-
-    // Process ADC readings for phase currents when the injected conversion is done.
-    pwm_cycle_and_adc_update();
-
-    adc_update_number += 1;
     LL_ADC_ClearFlag_JEOS(ADC1);
 }
 
