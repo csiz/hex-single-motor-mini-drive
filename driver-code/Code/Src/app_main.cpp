@@ -29,16 +29,13 @@
 uint32_t tick_number = 0;
 uint32_t last_tick = 0;
 uint32_t last_adc_update = 0;
-uint32_t last_hall_unobserved = 0;
-uint32_t last_hall_observed = 0;
+
 
 const uint32_t min_timing_period_millis = 50;
 uint32_t last_tick_time_millis = 0;
 
 float tick_rate = 0.0f;
 float adc_update_rate = 0.0f;
-float hall_unobserved_rate = 0.0f;
-float hall_observed_rate = 0.0f;
 
 MessageBuffer usb_receive_buffer = {};
 
@@ -113,14 +110,14 @@ void interrupts_init(){
     LL_TIM_DisableIT_COM(TIM1);
 
 
-    // Enable TIM2 update interrupt. Count updates of TIM2 to measure slow motor 
+    // Disable TIM2 update interrupt. Count updates of TIM2 to measure slow motor 
     // speed in case the timer overflows before a toggle in the hall sensor.
-    LL_TIM_EnableIT_UPDATE(TIM2);
+    LL_TIM_DisableIT_UPDATE(TIM2);
     // Disable TIM2 trigger interrupt. It is triggered every reset and hall sensor toggle.
     LL_TIM_DisableIT_TRIG(TIM2);
     // Enable TIM2 channel 1 interrupt. It is triggered every hall sensor toggle; we can 
     // read the time from the last time the input changed.
-    LL_TIM_EnableIT_CC1(TIM2);
+    LL_TIM_DisableIT_CC1(TIM2);
     // Disable TIM2 channel 2 interrupt. We are ignoring the delayed trigger output from 
     // TIM2 as we will commutate faster than the hall sensor toggles. To use this effectively
     // we need to use the prescaler to slow the timer down; but then we lose resolution.
@@ -134,6 +131,7 @@ void interrupts_init(){
     // This setting is mostly here to document that in order to trigger commutations on TRGI 
     // we also need to enable preload for the motor ouput channel mode registers.
     LL_TIM_CC_DisablePreload(TIM1);
+
     // Don't allow TIM1 commutations to be triggered by TIM2 hall sensor toggles.
     LL_TIM_CC_SetUpdate(TIM1, LL_TIM_CCUPDATESOURCE_COMG_ONLY);
     
@@ -485,6 +483,8 @@ void usb_queue_response(){
         
         // Disable the ADC interrupt while we read the latest readout.
         NVIC_DisableIRQ(ADC1_2_IRQn);
+        // We should read from the circular buffer without disabling interrupts 
+        // when we use a chip with more memory...
         FullReadout full_readout = get_readout();
         NVIC_EnableIRQ(ADC1_2_IRQn);
         
@@ -493,8 +493,6 @@ void usb_queue_response(){
         
         full_readout.tick_rate = static_cast<int>(tick_rate);
         full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
-        full_readout.hall_unobserved_rate = static_cast<int>(hall_unobserved_rate);
-        full_readout.hall_observed_rate = static_cast<int>(hall_observed_rate);
 
         write_full_readout(usb_response_buffer, full_readout);
         usb_queue_send(usb_response_buffer, full_readout_size);
@@ -559,18 +557,13 @@ void app_tick() {
         float seconds = duration_since_timing_update / 1000.f;
 
         const uint32_t adc_update_number = get_adc_update_number();
-        const uint32_t hall_unobserved_number = get_hall_unobserved_number();
-        const uint32_t hall_observed_number = get_hall_observed_number();
-        
+
         tick_rate = (tick_number - last_tick) / seconds;
         adc_update_rate = (adc_update_number - last_adc_update) / seconds;
-        hall_unobserved_rate = (hall_unobserved_number - last_hall_unobserved) / seconds;
-        hall_observed_rate = (hall_observed_number - last_hall_observed) / seconds;
+
 
         last_tick = tick_number;
         last_adc_update = adc_update_number;
-        last_hall_unobserved = hall_unobserved_number;
-        last_hall_observed = hall_observed_number;
     } 
 
     

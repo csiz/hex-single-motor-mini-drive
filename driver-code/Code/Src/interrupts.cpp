@@ -23,14 +23,6 @@ uint32_t adc_update_number = 0;
 uint32_t get_adc_update_number(){
     return adc_update_number;
 }
-uint32_t hall_unobserved_number = 0;
-uint32_t get_hall_unobserved_number(){
-    return hall_unobserved_number;
-}
-uint32_t hall_observed_number = 0;
-uint32_t get_hall_observed_number(){
-    return hall_observed_number;
-}
 
 // Electrical state
 FullReadout readout = {};
@@ -74,9 +66,13 @@ static inline bool readout_history_push(Readout const & readout){
 
 // We now set the motor outputs one turn delayed :( because our update takes more than half a PWM cycle.
 MotorOutputs previous_motor_outputs = {0, 0, 0};
-// The outputs 2 cycles ago.
-MotorOutputs previous_2_motor_outputs = {0, 0, 0};
 
+const PIDGains current_phase_gains = {
+    .kp = 0,
+    .ki = 0,
+    .kd = 0
+};
+PIDControl current_phase_correction = {};
 
 // Hall sensors
 // ------------
@@ -304,28 +300,27 @@ static inline void pwm_cycle_and_adc_update(){
         w_current * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
     );
 
-    const int alpha_emf_voltage = (
-        u_emf_voltage * get_cos(electric_position.angle) / angle_base +
-        v_emf_voltage * get_cos(electric_position.angle - third_circle) / angle_base +
-        w_emf_voltage * get_cos(electric_position.angle - two_thirds_circle) / angle_base
-    );
-
-    const int beta_emf_voltage = (
-        u_emf_voltage * -get_sin(electric_position.angle) / angle_base +
-        v_emf_voltage * -get_sin(electric_position.angle - third_circle) / angle_base +
-        w_emf_voltage * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
-    );
-
-
-
-
     const auto [current_angle_offset, current_magnitude] = int_atan2(beta_current, alpha_current);
 
     readout.current_angle_offset = current_angle_offset;
+
+    // We definitely need the code below, but can't afford to run it on the STM32F103C8T6, need faster chip!
+
+    // const int alpha_emf_voltage = (
+    //     u_emf_voltage * get_cos(electric_position.angle) / angle_base +
+    //     v_emf_voltage * get_cos(electric_position.angle - third_circle) / angle_base +
+    //     w_emf_voltage * get_cos(electric_position.angle - two_thirds_circle) / angle_base
+    // );
+    //
+    // const int beta_emf_voltage = (
+    //     u_emf_voltage * -get_sin(electric_position.angle) / angle_base +
+    //     v_emf_voltage * -get_sin(electric_position.angle - third_circle) / angle_base +
+    //     w_emf_voltage * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
+    // );
+    //
+    // const auto [emf_voltage_angle_offset, emf_magnitude] = int_atan2(beta_emf_voltage, alpha_emf_voltage);
     
-    const auto [emf_voltage_angle_offset, emf_magnitude] = int_atan2(beta_emf_voltage, alpha_emf_voltage);
-    
-    readout.emf_voltage_angle_offset = emf_voltage_angle_offset;
+    // readout.emf_voltage_angle_offset = emf_voltage_angle_offset;
 
 
     readout.total_power = -signed_round_div(
@@ -430,18 +425,22 @@ void adc_interrupt_handler(){
 void tim1_update_interrupt_handler(){
     // We shouldn't trigger this, but including for documentation.
     error();
+    
     // Note, this updates on both up and down counting, get direction 
     // with: LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP;
 }
 
 
 void tim2_global_handler(){
+    // We shouldn't trigger this, but including for documentation.
+    error();
+
     // The TIM2 updates at a frequency of about 1KHz. Our motor might rotate slower than this
     // so we have to count updates (overflows) between hall sensor triggers.
 
     // The TIM2 channel 1 is triggered by the hall sensor toggles. Use it to measure motor rotation.
     if (LL_TIM_IsActiveFlag_CC1(TIM2)) {
-        hall_observed_number += 1;
+        // hall_observed_number += 1;
         LL_TIM_ClearFlag_CC1(TIM2);
 
         if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
@@ -452,7 +451,7 @@ void tim2_global_handler(){
     
     if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
         // We overflowed the timer; this means we haven't seen a hall sensor toggle in a while.
-        hall_unobserved_number += 1;
+        // hall_unobserved_number += 1;
         LL_TIM_ClearFlag_UPDATE(TIM2);
 
     }
