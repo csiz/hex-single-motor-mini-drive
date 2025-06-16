@@ -9,11 +9,6 @@
 #include <cstdint>
 
 
-// Position tracking
-// -----------------
-
-// Position calibration data. These are the trigger angles for each hall sensor output.
-extern PositionCalibration position_calibration;
 
 
 // Track angle, angular speed and their uncertainties as gaussian distributions.

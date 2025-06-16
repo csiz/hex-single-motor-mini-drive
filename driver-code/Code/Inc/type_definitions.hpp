@@ -5,31 +5,38 @@
 #include <array>
 
 
+// Driver State
+// ------------
+
+enum struct DriverState {
+    OFF,
+    FREEWHEEL,
+    DRIVE_POS,
+    DRIVE_NEG,
+    DRIVE_SMOOTH_POS,
+    DRIVE_SMOOTH_NEG,
+    HOLD,
+    SCHEDULE,
+};
 
 // Motor duty cycle (compare register values).
 struct MotorOutputs {
-    uint16_t u_duty_cycle;
-    uint16_t v_duty_cycle;
-    uint16_t w_duty_cycle;
+    uint16_t duration; // Duration in PWM cycles.
+    uint16_t u_duty; // PWM duty cycle for U phase.
+    uint16_t v_duty; // PWM duty cycle for V phase.
+    uint16_t w_duty; // PWM duty cycle for W phase.
 };
 
 
 // PWM schedule
 // ------------
 
-// Stage for a PWM test schedule.
-struct PWMStage {
-    uint16_t duration; // Duration in PWM cycles.
-    uint16_t u; // PWM duty cycle for U phase.
-    uint16_t v; // PWM duty cycle for V phase.
-    uint16_t w; // PWM duty cycle for W phase.
-};
 
 // Number of steps in test schedules.
 const size_t schedule_size = 12;
 
 // Motor driving PWM schedule.
-using PWMSchedule = PWMStage[schedule_size];
+using PWMSchedule = MotorOutputs[schedule_size];
 
 
 

@@ -50,13 +50,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "Code/Src/app_main.cpp"
     "Code/Src/io.cpp"
     "Code/Src/interrupts.cpp"
-    "Code/Src/interrupts_angle.cpp"
-    "Code/Src/interrupts_motor.cpp"
-    "Code/Src/motor_control.cpp"
     "Code/Src/interface.cpp"
     "Code/Src/error_handler.cpp"
     "Code/Src/user_data.cpp"
     "Code/Src/integer_math.cpp"
+    "Code/Src/interrupts_data.cpp"
 )
 
 # Add include paths

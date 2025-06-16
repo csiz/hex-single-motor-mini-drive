@@ -24,28 +24,32 @@ static inline void disable_motor_outputs(){
 }
 
 
-static inline MotorOutputs get_motor_outputs(){
-    return MotorOutputs{
-        .u_duty_cycle = static_cast<uint16_t>(LL_TIM_OC_GetCompareCH1(TIM1)),
-        .v_duty_cycle = static_cast<uint16_t>(LL_TIM_OC_GetCompareCH2(TIM1)),
-        .w_duty_cycle = static_cast<uint16_t>(LL_TIM_OC_GetCompareCH3(TIM1))
-    };
+static inline MotorOutputs set_motor_outputs(MotorOutputs const & outputs){
+    if (outputs.duration) {
+        LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty);
+        LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty);
+        LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty);
+        return MotorOutputs{
+            .duration = static_cast<uint16_t>(outputs.duration - 1),
+            .u_duty = outputs.u_duty,
+            .v_duty = outputs.v_duty,
+            .w_duty = outputs.w_duty
+        };
+    } else {
+        LL_TIM_OC_SetCompareCH1(TIM1, 0);
+        LL_TIM_OC_SetCompareCH2(TIM1, 0);
+        LL_TIM_OC_SetCompareCH3(TIM1, 0);
+        return MotorOutputs{
+            .duration = 0,
+            .u_duty = 0,
+            .v_duty = 0,
+            .w_duty = 0
+        };
+    }
 }
 
-static inline void set_motor_outputs(MotorOutputs const & outputs){
-    LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty_cycle);
-    LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty_cycle);
-    LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty_cycle);
-}
 
 
-static inline void set_motor_u_pwm_duty(uint32_t duty_cycle){
-    LL_TIM_OC_SetCompareCH1(TIM1, duty_cycle);
-}
-
-static inline uint32_t get_motor_u_pwm_duty(){
-    return LL_TIM_OC_GetCompareCH1(TIM1);
-}
 
 static inline void disable_motor_u_output(){
     LL_TIM_CC_DisableChannel(TIM1, pwm_u_enable_bits);
@@ -55,29 +59,12 @@ static inline void enable_motor_u_output(){
     LL_TIM_CC_EnableChannel(TIM1, pwm_u_enable_bits);
 }
 
-static inline void set_motor_v_pwm_duty(uint32_t duty_cycle){
-    LL_TIM_OC_SetCompareCH2(TIM1, duty_cycle);
-}
-
-static inline uint32_t get_motor_v_pwm_duty(){
-    return LL_TIM_OC_GetCompareCH2(TIM1);
-}
-
 static inline void disable_motor_v_output(){
     LL_TIM_CC_DisableChannel(TIM1, pwm_v_enable_bits);
 }
 
 static inline void enable_motor_v_output(){
     LL_TIM_CC_EnableChannel(TIM1, pwm_v_enable_bits);
-}
-
-
-static inline void set_motor_w_pwm_duty(uint32_t duty_cycle){
-    LL_TIM_OC_SetCompareCH3(TIM1, duty_cycle);
-}
-
-static inline uint32_t get_motor_w_pwm_duty(){
-    return LL_TIM_OC_GetCompareCH3(TIM1);
 }
 
 static inline void disable_motor_w_output(){

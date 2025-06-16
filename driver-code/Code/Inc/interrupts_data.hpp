@@ -6,9 +6,8 @@
 #include "type_definitions.hpp"
 
 
+
 uint32_t get_adc_update_number();
-uint32_t get_hall_unobserved_number();
-uint32_t get_hall_observed_number();
 FullReadout get_readout();
 
 
@@ -19,3 +18,36 @@ void readout_history_reset();
 bool readout_history_full();
 bool readout_history_available();
 Readout readout_history_pop();
+
+// Motor control
+// -------------
+
+// Short all motor phases to ground quickly stopping the motor.
+void motor_break();
+
+// Set the motor phases to freewheel, let motor coast.
+void motor_freewheel();
+
+// Check if motor is slowing/stopped (breaking or freewheeling).
+bool is_motor_stopped();
+
+// Functions to set motor driver state.
+
+void motor_drive_neg(uint16_t pwm, uint16_t timeout);
+void motor_drive_pos(uint16_t pwm, uint16_t timeout);
+void motor_drive_smooth_pos(uint16_t pwm, uint16_t timeout, uint16_t leading_angle);
+void motor_drive_smooth_neg(uint16_t pwm, uint16_t timeout, uint16_t leading_angle);
+void motor_hold(uint16_t u_duty, uint16_t v_duty, uint16_t w_duty, uint16_t timeout);
+void motor_start_schedule(const PWMSchedule & schedule);
+
+
+// Position tracking
+// -----------------
+
+// Position calibration data. These are the trigger angles for each hall sensor output.
+extern PositionCalibration position_calibration;
+
+
+// Current calibration factors.
+extern CurrentCalibration current_calibration;
+

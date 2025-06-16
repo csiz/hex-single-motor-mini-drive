@@ -5,8 +5,7 @@
 #include "interrupts.hpp"
 #include "interrupts_data.hpp"
 #include "interface.hpp"
-#include "interrupts_angle.hpp"
-#include "interrupts_motor.hpp"
+
 
 #include "byte_handling.hpp"
 #include "integer_math.hpp"
