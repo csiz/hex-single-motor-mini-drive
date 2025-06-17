@@ -63,6 +63,9 @@ export const command_codes = {
   TRIGGER_ANGLES: 0x4043,
   GET_CURRENT_FACTORS: 0x4044,
   GET_TRIGGER_ANGLES: 0x4045,
+  PID_PARAMETERS: 0x4046,
+  GET_PID_PARAMETERS: 0x4047,
+  SET_PID_PARAMETERS: 0x4048,
 
   SAVE_SETTINGS_TO_FLASH: 0x4080,
 
@@ -243,7 +246,7 @@ function parse_readout(data_view, previous_readout){
   return process_readout.call(this, readout, previous_readout);
 }
 
-const full_readout_size = 62;
+const full_readout_size = 66;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
@@ -253,10 +256,6 @@ function parse_full_readout(data_view, previous_readout){
   const tick_rate = data_view.getUint16(offset);
   offset += 2;
   const adc_update_rate = data_view.getUint16(offset);
-  offset += 2;
-  const hall_unobserved_rate = data_view.getUint16(offset);
-  offset += 2;
-  const hall_observed_rate = data_view.getUint16(offset);
   offset += 2;
   const temperature = calculate_temperature(data_view.getUint16(offset));
   offset += 2;
@@ -286,14 +285,21 @@ function parse_full_readout(data_view, previous_readout){
   const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
 
+  const current_angle_error = angle_units_to_degrees(data_view.getInt16(offset));
+  offset += 2;
+  const current_angle_control = angle_units_to_degrees(data_view.getInt16(offset));
+  offset += 2;
+  const current_angle_diff = angle_units_to_degrees(data_view.getInt16(offset));
+  offset += 2;
+  const current_angle_integral = angle_units_to_degrees(data_view.getInt16(offset));
+  offset += 2;
+
   const emf_voltage_angle = normalize_degrees(emf_voltage_angle_offset + readout.angle);
 
   return {
     ...readout,
     tick_rate,
     adc_update_rate,
-    hall_unobserved_rate,
-    hall_observed_rate,
     temperature,
     vcc_voltage,
     cycle_start_tick,
@@ -307,6 +313,10 @@ function parse_full_readout(data_view, previous_readout){
     resistive_power,
     emf_power,
     inductive_power,
+    current_angle_error,
+    current_angle_control,
+    current_angle_diff,
+    current_angle_integral,
   };
 }
 
@@ -377,6 +387,51 @@ function parse_position_calibration(data_view){
     sector_center_stdev,
     initial_angular_speed_stdev,
     angular_acceleration_stdev,
+  };
+}
+
+
+const pid_parameters_size = 34;
+function parse_pid_parameters(data_view) {
+  let offset = header_size;
+
+  const current_angle_gains = {
+    kp: data_view.getInt16(offset),
+    ki: data_view.getInt16(offset + 2),
+    kd: data_view.getInt16(offset + 4),
+    max_output: data_view.getInt16(offset + 6),
+  };
+  offset += 8;
+
+  const torque_gains = {
+    kp: data_view.getInt16(offset),
+    ki: data_view.getInt16(offset + 2),
+    kd: data_view.getInt16(offset + 4),
+    max_output: data_view.getInt16(offset + 6),
+  };
+  offset += 8;
+
+  const angular_speed_gains = {
+    kp: data_view.getInt16(offset),
+    ki: data_view.getInt16(offset + 2),
+    kd: data_view.getInt16(offset + 4),
+    max_output: data_view.getInt16(offset + 6),
+  };
+  offset += 8;
+
+  const position_gains = {
+    kp: data_view.getInt16(offset),
+    ki: data_view.getInt16(offset + 2),
+    kd: data_view.getInt16(offset + 4),
+    max_output: data_view.getInt16(offset + 6),
+  };
+  offset += 8;
+
+  return {
+    current_angle_gains,
+    torque_gains,
+    angular_speed_gains,
+    position_gains,
   };
 }
 
@@ -460,9 +515,36 @@ function serialise_set_position_calibration(position_calibration) {
   return buffer;
 }
 
+function serialise_set_pid_parameters(pid_parameters) {
+  const { current_angle_gains, torque_gains, angular_speed_gains, position_gains } = pid_parameters;
+
+  let buffer = new Uint8Array(pid_parameters_size);
+
+  let view = new DataView(buffer.buffer);
+  let offset = 0;
+
+  view.setUint16(offset, command_codes.SET_PID_PARAMETERS);
+  offset += 2;
+
+  // Serialise each set of gains.
+  for (const gains of [current_angle_gains, torque_gains, angular_speed_gains, position_gains]) {
+    view.setInt16(offset, gains.kp);
+    offset += 2;
+    view.setInt16(offset, gains.ki);
+    offset += 2;
+    view.setInt16(offset, gains.kd);
+    offset += 2;
+    view.setInt16(offset, gains.max_output);
+    offset += 2;
+  }
+
+  return buffer;
+}
+
 export const serialiser_mapping = {
   [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_set_current_calibration},
   [command_codes.SET_TRIGGER_ANGLES]: {serialise_func: serialise_set_position_calibration},
+  [command_codes.SET_PID_PARAMETERS]: {serialise_func: serialise_set_pid_parameters},
 };
 
 export const parser_mapping = {
@@ -470,6 +552,7 @@ export const parser_mapping = {
   [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
   [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
   [command_codes.TRIGGER_ANGLES]: {parse_func: parse_position_calibration, message_size: position_calibration_size},
+  [command_codes.PID_PARAMETERS]: {parse_func: parse_pid_parameters, message_size: pid_parameters_size},
   [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},
 };
 

@@ -51,6 +51,9 @@ enum MessageCode : uint16_t {
     TRIGGER_ANGLES = 0x4043,
     GET_CURRENT_FACTORS = 0x4044,
     GET_TRIGGER_ANGLES = 0x4045,
+    PID_PARAMETERS = 0x4046,
+    GET_PID_PARAMETERS = 0x4047,
+    SET_PID_PARAMETERS = 0x4048,
 
     SAVE_SETTINGS_TO_FLASH = 0x4080,
 
@@ -72,7 +75,7 @@ const size_t readout_size = header_size + sizeof(Readout);
 const size_t full_readout_size = header_size + sizeof(FullReadout);
 const size_t current_calibration_size = header_size + sizeof(CurrentCalibration);
 const size_t position_calibration_size = header_size + sizeof(PositionCalibration);
-
+const size_t pid_parameters_size = header_size + sizeof(PIDParameters);
 
 const size_t max_message_size = 256;
 const size_t min_message_size = 8;
@@ -106,7 +109,7 @@ bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t * buf, 
 BasicCommand parse_basic_command(uint8_t const * data, size_t size);
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size);
 PositionCalibration parse_position_calibration(uint8_t const * data, size_t size);
-
+PIDParameters parse_pid_parameters(uint8_t const * data, size_t size);
 
 // Sending data
 // ------------
@@ -119,6 +122,8 @@ void write_full_readout(uint8_t * buffer, FullReadout const & full_readout);
 void write_current_calibration(uint8_t * data, CurrentCalibration const & factors);
 
 void write_position_calibration(uint8_t * data, PositionCalibration const & position_calibration);
+
+void write_pid_parameters(uint8_t * buffer, PIDParameters const & parameters);
 
 // The unit test will write directly to the buffer.
 const size_t unit_test_size = max_message_size;

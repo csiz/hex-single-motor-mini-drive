@@ -155,7 +155,7 @@ export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should
 
 export const current_calibration_base = 1024; // Base for fixed point multiplication.
 
-export const current_calibration_default = {
+export const default_current_calibration = {
   u_factor: 1.0,
   v_factor: 1.0,
   w_factor: 1.0,
@@ -166,7 +166,7 @@ export const current_calibration_default = {
 const hall_hysterisis = 10;
 const transition_stdev = 10;
 
-export const position_calibration_default = {
+export const default_position_calibration = {
   sector_transition_degrees: [
     [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
     [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
@@ -188,3 +188,57 @@ export const position_calibration_default = {
   initial_angular_speed_stdev: 15.0, // initial speed distribution degrees per ms
   angular_acceleration_stdev: 9.0, // acceleration distribution up to (degrees per ms^2).
 }
+
+export const default_pid_parameters = {
+  "current_angle_gains": {
+    "kp": 16,
+    "ki": 4,
+    "kd": 8,
+    "max_output": 128
+  },
+  "torque_gains": {
+    "kp": 0,
+    "ki": 32,
+    "kd": 0,
+    "max_output": 2047
+  },
+  "angular_speed_gains": {
+    "kp": 133,
+    "ki": 16,
+    "kd": 8,
+    "max_output": 233
+  },
+  "position_gains": {
+    "kp": 128,
+    "ki": 16,
+    "kd": 8,
+    "max_output": 512
+  }
+};
+
+export const zero_pid_parameters = {
+  "current_angle_gains": {
+    "kp": 0,
+    "ki": 0,
+    "kd": 0,
+    "max_output": 0
+  },
+  "torque_gains": {
+    "kp": 0,
+    "ki": 0,
+    "kd": 0,
+    "max_output": 0
+  },
+  "angular_speed_gains": {
+    "kp": 0,
+    "ki": 0,
+    "kd": 0,
+    "max_output": 0
+  },
+  "position_gains": {
+    "kp": 0,
+    "ki": 0,
+    "kd": 0,
+    "max_output": 0
+  }
+};

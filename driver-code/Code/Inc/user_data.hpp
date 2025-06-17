@@ -16,5 +16,8 @@ CurrentCalibration get_current_calibration();
 // Load the position calibration from flash memory.
 PositionCalibration get_position_calibration();
 
+// Load the PID parameters from flash memory.
+PIDParameters get_pid_parameters();
+
 // Write all calibration data to flash memory. (Flash memory is erased by pages, so we need to re-write it all.)
 void save_settings_to_flash(CurrentCalibration const & current_calibration, PositionCalibration const & position_calibration);

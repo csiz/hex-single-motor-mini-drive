@@ -64,8 +64,6 @@ struct Readout{
 struct FullReadout : public Readout {
     uint16_t tick_rate;
     uint16_t adc_update_rate;
-    uint16_t hall_unobserved_rate;
-    uint16_t hall_observed_rate;
     uint16_t temperature;
     uint16_t vcc_voltage;
     int16_t cycle_start_tick;
@@ -78,6 +76,10 @@ struct FullReadout : public Readout {
     int16_t resistive_power;
     int16_t emf_power;
     int16_t inductive_power;
+    int16_t current_angle_error;
+    int16_t current_angle_control;
+    int16_t current_angle_diff;
+    int16_t current_angle_integral;
 };
 
 
@@ -110,4 +112,26 @@ struct PositionCalibration {
     CenterVariances sector_center_variances;
     uint16_t initial_angular_speed_variance;
     uint16_t angular_acceleration_div_2_variance;
+};
+
+
+struct PIDGains {
+    int16_t kp; // Proportional gain.
+    int16_t ki; // Integral gain.
+    int16_t kd; // Derivative gain.
+    int16_t max_output;
+};
+
+struct PIDControl {
+    int integral = 0; // Integral term.
+    int derivative = 0; // Derivative term.
+    int16_t previous_error = 0; // Previous error for derivative calculation.
+    int16_t output = 0; // Output value.
+};
+
+struct PIDParameters {
+    PIDGains current_angle_gains;
+    PIDGains torque_gains;
+    PIDGains angular_speed_gains;
+    PIDGains position_gains;
 };

@@ -1,4 +1,4 @@
-import {pwm_base, cycles_per_millisecond, history_size, position_calibration_default} from "./motor_constants.js";
+import {pwm_base, cycles_per_millisecond, history_size, default_position_calibration} from "./motor_constants.js";
 import {command_codes} from "./motor_interface.js";
 import {wait} from "./async_utils.js";
 import {circular_stats_degrees, interpolate_degrees, positive_degrees} from "./angular_math.js";
@@ -182,8 +182,8 @@ export function compute_position_calibration(calibration_results){
     sector_transition_stdev,
     sector_center_degrees,
     sector_center_stdev,
-    initial_angular_speed_stdev: position_calibration_default.initial_angular_speed_stdev,
-    angular_acceleration_stdev: position_calibration_default.angular_acceleration_stdev,
+    initial_angular_speed_stdev: default_position_calibration.initial_angular_speed_stdev,
+    angular_acceleration_stdev: default_position_calibration.angular_acceleration_stdev,
   };
 
   return {

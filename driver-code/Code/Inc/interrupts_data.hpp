@@ -49,7 +49,8 @@ void set_pwm_target(uint16_t pwm);
 // Position calibration data. These are the trigger angles for each hall sensor output.
 extern PositionCalibration position_calibration;
 
-
 // Current calibration factors.
 extern CurrentCalibration current_calibration;
 
+// PID control parameters.
+extern PIDParameters pid_parameters;

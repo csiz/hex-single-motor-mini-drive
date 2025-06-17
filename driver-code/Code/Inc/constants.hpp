@@ -357,6 +357,37 @@ const CurrentCalibration default_current_calibration = {
     .inductance_factor = current_calibration_fixed_point,
 };
 
+const int16_t gains_fixed_point = 1024;
+
+const PIDParameters default_pid_parameters = {
+    .current_angle_gains = PIDGains{
+        .kp = 16,
+        .ki = 4,
+        .kd = 8,
+        .max_output = quarter_circle / 2
+    },
+    .torque_gains = PIDGains{
+        .kp = 0,
+        .ki = gains_fixed_point / 32,
+        .kd = 0,
+        .max_output = adc_max_value / 2
+    },
+    .angular_speed_gains = PIDGains{
+        .kp = gains_fixed_point / 8,
+        .ki = gains_fixed_point / 64,
+        .kd = gains_fixed_point / 128,
+        .max_output = static_cast<int16_t>(sqrt(default_speed_variance * speed_variance_to_square_speed))
+    },
+    .position_gains = PIDGains{
+        .kp = gains_fixed_point / 8,
+        .ki = gains_fixed_point / 64,
+        .kd = gains_fixed_point / 128,
+        .max_output = half_circle
+    }
+};
+
+
+
 
 static_assert(angle_base == 1024, "angle_base must be 1024 for the sine and cosine lookup tables to work correctly");
 

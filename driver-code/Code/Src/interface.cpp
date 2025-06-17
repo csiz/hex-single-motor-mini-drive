@@ -56,10 +56,7 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.adc_update_rate);
     offset += 2;
-    write_uint16(buffer + offset, readout.hall_unobserved_rate);
-    offset += 2;
-    write_uint16(buffer + offset, readout.hall_observed_rate);
-    offset += 2;
+
 
     write_uint16(buffer + offset, readout.temperature);
     offset += 2;
@@ -87,6 +84,15 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.emf_power);
     offset += 2;
     write_int16(buffer + offset, readout.inductive_power);
+    offset += 2;
+
+    write_int16(buffer + offset, readout.current_angle_error);
+    offset += 2;
+    write_int16(buffer + offset, readout.current_angle_control);
+    offset += 2;
+    write_int16(buffer + offset, readout.current_angle_diff);
+    offset += 2;
+    write_int16(buffer + offset, readout.current_angle_integral);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -147,6 +153,52 @@ void write_position_calibration(uint8_t * buffer, PositionCalibration const & po
     if (offset != position_calibration_size) error();
 }
 
+void write_pid_parameters(uint8_t * buffer, PIDParameters const & parameters) {
+    size_t offset = 0;
+
+    write_uint16(buffer + offset, PID_PARAMETERS);
+    offset += 2;
+    
+    write_int16(buffer + offset, parameters.current_angle_gains.kp);
+    offset += 2;
+    write_int16(buffer + offset, parameters.current_angle_gains.ki);
+    offset += 2;
+    write_int16(buffer + offset, parameters.current_angle_gains.kd);
+    offset += 2;
+    write_int16(buffer + offset, parameters.current_angle_gains.max_output);
+    offset += 2;
+
+    write_int16(buffer + offset, parameters.torque_gains.kp);
+    offset += 2;
+    write_int16(buffer + offset, parameters.torque_gains.ki);
+    offset += 2;
+    write_int16(buffer + offset, parameters.torque_gains.kd);
+    offset += 2;
+    write_int16(buffer + offset, parameters.torque_gains.max_output);
+    offset += 2;
+
+    write_int16(buffer + offset, parameters.angular_speed_gains.kp);
+    offset += 2;
+    write_int16(buffer + offset, parameters.angular_speed_gains.ki);
+    offset += 2;
+    write_int16(buffer + offset, parameters.angular_speed_gains.kd);
+    offset += 2;
+    write_int16(buffer + offset, parameters.angular_speed_gains.max_output);
+    offset += 2;
+
+    write_int16(buffer + offset, parameters.position_gains.kp);
+    offset += 2;
+    write_int16(buffer + offset, parameters.position_gains.ki);
+    offset += 2;
+    write_int16(buffer + offset, parameters.position_gains.kd);
+    offset += 2;
+    write_int16(buffer + offset, parameters.position_gains.max_output);
+    offset += 2;
+
+    // Check if we wrote the correct number of bytes.
+    if (offset != pid_parameters_size) error();
+}
+
 // Receive data
 // ------------
 
@@ -181,6 +233,7 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_DRIVE_SMOOTH_NEG:
         case GET_CURRENT_FACTORS:
         case GET_TRIGGER_ANGLES:
+        case GET_PID_PARAMETERS:
         case SAVE_SETTINGS_TO_FLASH:
         case RUN_UNIT_TEST_ATAN:
             return min_message_size;
@@ -189,6 +242,8 @@ static inline int get_message_size(uint16_t code) {
             return current_calibration_size;
         case SET_TRIGGER_ANGLES:
             return position_calibration_size;
+        case SET_PID_PARAMETERS:
+            return pid_parameters_size;
 
         case READOUT:
             return readout_size;
@@ -198,6 +253,8 @@ static inline int get_message_size(uint16_t code) {
             return current_calibration_size;
         case TRIGGER_ANGLES:
             return position_calibration_size;
+        case PID_PARAMETERS:
+            return pid_parameters_size;
 
         case UNIT_TEST_OUTPUT:
             return unit_test_size;
@@ -322,5 +379,51 @@ PositionCalibration parse_position_calibration(uint8_t const * data, size_t size
 }
 
 
+PIDParameters parse_pid_parameters(uint8_t const * data, size_t size) {
+    if(size < pid_parameters_size) error();
 
+    size_t offset = header_size;
+
+    PIDParameters parameters = {};
+
+    parameters.current_angle_gains.kp = read_int16(data + offset);
+    offset += 2;
+    parameters.current_angle_gains.ki = read_int16(data + offset);
+    offset += 2;
+    parameters.current_angle_gains.kd = read_int16(data + offset);
+    offset += 2;
+    parameters.current_angle_gains.max_output = read_int16(data + offset);
+    offset += 2;
+
+    parameters.torque_gains.kp = read_int16(data + offset);
+    offset += 2;
+    parameters.torque_gains.ki = read_int16(data + offset);
+    offset += 2;
+    parameters.torque_gains.kd = read_int16(data + offset);
+    offset += 2;
+    parameters.torque_gains.max_output = read_int16(data + offset);
+    offset += 2;
+
+    parameters.angular_speed_gains.kp = read_int16(data + offset);
+    offset += 2;
+    parameters.angular_speed_gains.ki = read_int16(data + offset);
+    offset += 2;
+    parameters.angular_speed_gains.kd = read_int16(data + offset);
+    offset += 2;
+    parameters.angular_speed_gains.max_output = read_int16(data + offset);
+    offset += 2;
+
+    parameters.position_gains.kp = read_int16(data + offset);
+    offset += 2;
+    parameters.position_gains.ki = read_int16(data + offset);
+    offset += 2;
+    parameters.position_gains.kd = read_int16(data + offset);
+    offset += 2;
+    parameters.position_gains.max_output = read_int16(data + offset);
+    offset += 2;
+
+    if (offset != pid_parameters_size) error();
+
+    return parameters;
+}
 

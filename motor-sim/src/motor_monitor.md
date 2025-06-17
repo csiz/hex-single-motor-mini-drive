@@ -6,8 +6,6 @@ title: Motor monitor
 Motor Commands
 --------------
 
-<!-- TODO: get and set calibration buttons -->
-
 <div>${connect_buttons}</div>
 <div>${connection_status}</div>
 <div>${data_request_buttons}</div>
@@ -19,6 +17,7 @@ Motor Commands
   ${command_timeout_slider}
   ${command_leading_angle_slider}
 </div>
+
 
 Motor Driving Data
 ------------------
@@ -34,6 +33,7 @@ Motor Driving Data
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_electric_offsets}</div>
+<div class="card tight">${plot_current_angle_correction}</div>
 <div class="card tight">${plot_speed}</div>
 <div class="card tight">${plot_acceleration}</div>
 <div class="card tight">${plot_measured_voltage}</div>
@@ -44,6 +44,34 @@ Motor Driving Data
 <div class="card tight">${plot_dq0_currents}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
+
+
+Motor Control Parameters
+------------------------
+<div class="card tight">
+  <div>${pid_parameters_buttons}</div>
+
+  <h3>Active PID Parameters</h3>
+  <p>These are the currently active PID parameters for the motor controller.</p>
+  <pre>${active_pid_parameters_table}</pre>
+</div>
+
+<div class="card tight">
+  <h3>Current Angle Control</h3>
+  <div>${current_angle_gains_input}</div>
+</div>
+<div class="card tight">
+  <h3>Torque Control</h3>
+  <div>${torque_control_gains_input}</div>
+</div>
+<div class="card tight">
+  <h3>Angular Speed Control</h3>
+  <div>${angular_speed_control_gains_input}</div>
+</div>
+<div class="card tight">
+  <h3>Position Control</h3>
+  <div>${position_control_gains_input}</div>
+</div>
 
 Current Calibration Procedures
 ------------------------------
@@ -222,6 +250,7 @@ async function connect_motor_controller(){
       (async function(){
         await new_controller.load_position_calibration();
         await new_controller.load_current_calibration();
+        await new_controller.load_pid_parameters();
         motor_controller.value = new_controller;
       })(),
     ]);
@@ -273,7 +302,7 @@ const command_timeout_slider = Inputs.range([0, max_timeout*millis_per_cycle], {
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
-const command_leading_angle_slider = Inputs.range([-180, 180], {value: 95, step: 1, label: "Leading angle (degrees):"});
+const command_leading_angle_slider = Inputs.range([-180, 180], {value: 90, step: 1, label: "Leading angle (degrees):"});
 
 const command_leading_angle_degrees = Generators.input(command_leading_angle_slider);
 ```
@@ -600,6 +629,7 @@ const monitoring_plots = [
   plot_cycle_loop_stats,
   plot_electric_position,
   plot_electric_offsets,
+  plot_current_angle_correction,
   plot_speed,
   plot_acceleration,
   plot_measured_voltage,
@@ -660,8 +690,6 @@ const plot_runtime_stats = plot_lines({
   channels: [
     {y: "tick_rate", label: "Tick rate", color: colors.sum},
     {y: "adc_update_rate", label: "ADC & PWM rate", color: colors.u},
-    {y: "hall_unobserved_rate", label: "Hall overflow rate", color: colors.v},
-    {y: "hall_observed_rate", label: "Hall trigger rate", color: colors.w},
   ],
   curve,
 });
@@ -688,7 +716,7 @@ const plot_cycle_loop_stats = plot_lines({
 const plot_electric_position = plot_lines({
   subtitle: "Electric position",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
-  width: 1200, height: 150,
+  width: 1200, height: 200,
   x: "time",
   x_label: "Time (ms)",
   y_label: "Electric position (degrees)",
@@ -716,7 +744,7 @@ const plot_electric_position = plot_lines({
 const plot_electric_offsets = plot_lines({
   subtitle: "Electric Offsets",
   description: "Offsets for the electric angles.",
-  width: 1200, height: 150,
+  width: 1200, height: 200,
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angle (degrees)",
@@ -733,6 +761,22 @@ const plot_electric_offsets = plot_lines({
       y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 0.5ms average", color: d3.color(colors.angle_from_emf).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_diff_to_emf_stdev}),
     },
+  ],
+  curve,
+});
+
+const plot_current_angle_correction = plot_lines({
+  subtitle: "Current Angle Correction",
+  description: "Correction applied to the current angle.",
+  width: 1200, height: 200,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current Angle Correction (degrees)",
+  channels: [
+    {y: "current_angle_error", label: "Current Angle Error", color: colors.u},
+    {y: "current_angle_control", label: "Current Angle Control", color: colors.current_angle},
+    {y: "current_angle_diff", label: "Current Angle Diff", color: colors.v},
+    {y: "current_angle_integral", label: "Current Angle Integral", color: colors.w},
   ],
   curve,
 });
@@ -926,6 +970,7 @@ autosave_inputs({
   plot_cycle_loop_stats,
   plot_electric_position,
   plot_electric_offsets,
+  plot_current_angle_correction,
   plot_speed,
   plot_acceleration,
   plot_measured_voltage,
@@ -972,7 +1017,7 @@ const current_calibration_buttons = !motor_controller ? html`<p>Not connected to
       return value;
     })],
     ["Use Default Locally", wait_previous(async function(value){
-      motor_controller.current_calibration = current_calibration_default;
+      motor_controller.current_calibration = default_current_calibration;
       active_current_calibration_table.value = stringify_active_current_calibration();
       return value;
     })],
@@ -1200,6 +1245,118 @@ autosave_inputs({
   current_calibration_positive_mean_plot,
   current_calibration_negative_mean_plot,
 });
+```
+
+
+
+
+```js
+// PID Parameters
+// --------------
+
+function stringify_active_pid_parameters() {
+  return `motor_controller.pid_parameters = ${JSON.stringify(motor_controller?.pid_parameters, null, 2)}`;
+}
+
+let active_pid_parameters_table =  Mutable(stringify_active_pid_parameters());
+
+const current_angle_gains_input = [
+  ["kp", "Current Angle Proportional"],
+  ["ki", "Current Angle Integral"],
+  ["kd", "Current Angle Derivative"],
+  ["max_output", "Current Angle Max Output"],
+].map(([key, label]) => Inputs.number(key, {
+  label,
+  value: motor_controller?.pid_parameters?.current_angle_gains?.[key],
+}));
+
+const torque_control_gains_input = [
+  ["kp", "Torque Control Proportional"],
+  ["ki", "Torque Control Integral"],
+  ["kd", "Torque Control Derivative"],
+  ["max_output", "Torque Control Max Output"],
+].map(([key, label]) => Inputs.number(key, {
+  label,
+  value: motor_controller?.pid_parameters?.torque_gains?.[key],
+}));
+
+const angular_speed_control_gains_input = [
+  ["kp", "Angular Speed Control Proportional"],
+  ["ki", "Angular Speed Control Integral"],
+  ["kd", "Angular Speed Control Derivative"],
+  ["max_output", "Angular Speed Control Max Output"],
+].map(([key, label]) => Inputs.number(key, {
+  label,
+  value: motor_controller?.pid_parameters?.angular_speed_gains?.[key],
+}));
+
+const position_control_gains_input = [
+  ["kp", "Position Control Proportional"],
+  ["ki", "Position Control Integral"],
+  ["kd", "Position Control Derivative"],
+  ["max_output", "Position Control Max Output"],
+].map(([key, label]) => Inputs.number(key, {
+  label,
+  value: motor_controller?.pid_parameters?.position_gains?.[key],
+}));
+
+
+let pid_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
+  [
+    ["Upload Default", wait_previous(async function(value){
+      await motor_controller.upload_pid_parameters(default_pid_parameters);
+      active_pid_parameters_table.value = stringify_active_pid_parameters();
+      return value;
+    })],
+    ["Upload Zeroes", wait_previous(async function(value){
+      await motor_controller.upload_pid_parameters(zero_pid_parameters);
+      active_pid_parameters_table.value = stringify_active_pid_parameters();
+      return value;
+    })],
+    ["Upload to Driver", wait_previous(async function(value){
+      const pid_parameters = {
+        current_angle_gains: {
+          kp: current_angle_gains_input[0].value,
+          ki: current_angle_gains_input[1].value,
+          kd: current_angle_gains_input[2].value,
+          max_output: current_angle_gains_input[3].value,
+        },
+        torque_gains: {
+          kp: torque_control_gains_input[0].value,
+          ki: torque_control_gains_input[1].value,
+          kd: torque_control_gains_input[2].value,
+          max_output: torque_control_gains_input[3].value,
+        },
+        angular_speed_gains: {
+          kp: angular_speed_control_gains_input[0].value,
+          ki: angular_speed_control_gains_input[1].value,
+          kd: angular_speed_control_gains_input[2].value,
+          max_output: angular_speed_control_gains_input[3].value,
+        },
+        position_gains: {
+          kp: position_control_gains_input[0].value,
+          ki: position_control_gains_input[1].value,
+          kd: position_control_gains_input[2].value,
+          max_output: position_control_gains_input[3].value,
+        },
+      };
+
+      await motor_controller.upload_pid_parameters(pid_parameters);
+      active_pid_parameters_table.value = stringify_active_pid_parameters();
+      return value;
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_pid_parameters();
+      active_pid_parameters_table.value = stringify_active_pid_parameters();
+      return value;
+    })],
+  ],
+  {
+    label: "PID Parameters",
+    value: motor_controller?.pid_parameters ?? default_pid_parameters,
+  },
+);
+
 
 ```
 
@@ -1245,7 +1402,7 @@ const position_calibration_buttons = !motor_controller ? html`<p>Motor controlle
       return value;
     })],
     ["Use Default Locally", wait_previous(async function(value){
-      motor_controller.position_calibration = position_calibration_default;
+      motor_controller.position_calibration = default_position_calibration;
       active_position_calibration_table.value = stringify_active_position_calibration();
       return value;
     })],
@@ -1516,7 +1673,8 @@ import {run_position_calibration, compute_position_calibration} from "./componen
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
-  history_size, current_calibration_default, position_calibration_default, max_calibration_current,
+  history_size, default_current_calibration, default_position_calibration, max_calibration_current,
+  default_pid_parameters, zero_pid_parameters,
 } from "./components/motor_constants.js";
 
 import {unit_test_atan_expected} from "./components/motor_unit_tests.js";

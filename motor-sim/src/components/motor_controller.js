@@ -3,7 +3,7 @@ import {serial as serial_polyfill} from "web-serial-polyfill";
 import {wait} from "./async_utils.js";
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, command_codes, serialise_command, header_size} from "./motor_interface.js";
-import {current_calibration_default, position_calibration_default, history_size} from "./motor_constants.js";
+import {default_current_calibration, default_position_calibration, default_pid_parameters, history_size} from "./motor_constants.js";
 
 export { command_codes };
 
@@ -92,8 +92,9 @@ export class MotorController {
     this.receive_rate_timescale = 0.5; // seconds
     this.receive_rate_min_period = 0.050; // seconds
 
-    this.current_calibration = current_calibration_default;
-    this.position_calibration = position_calibration_default;
+    this.current_calibration = default_current_calibration;
+    this.position_calibration = default_position_calibration;
+    this.pid_parameters = default_pid_parameters;
   }
 
 
@@ -376,7 +377,19 @@ export class MotorController {
       console.error("Error loading position calibration:", error);
     }
   }
-  
+
+  async load_pid_parameters(){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.GET_PID_PARAMETERS}, 
+        {expected_code: command_codes.PID_PARAMETERS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid PID parameters data");
+      this.pid_parameters = data[0];
+    } catch (error) {
+      console.error("Error loading PID parameters:", error);
+    }
+  }
 
   async upload_current_calibration(current_calibration){
     try {
@@ -401,6 +414,19 @@ export class MotorController {
       this.position_calibration = data[0];
     } catch (error) {
       console.error("Error uploading position calibration:", error);
+    }
+  }
+
+  async upload_pid_parameters(pid_parameters){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.SET_PID_PARAMETERS, additional_data: pid_parameters}, 
+        {expected_code: command_codes.PID_PARAMETERS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid PID parameters data");
+      this.pid_parameters = data[0];
+    } catch (error) {
+      console.error("Error uploading PID parameters:", error);
     }
   }
 }

@@ -48,6 +48,7 @@ bool usb_wait_full_history = false;
 
 bool usb_reply_current_factors = false;
 bool usb_reply_trigger_angles = false;
+bool usb_reply_pid_parameters = false;
 
 uint8_t usb_unit_test_buffer[unit_test_size] = {0};
 bool usb_reply_unit_test = false;
@@ -375,11 +376,20 @@ bool handle_command(MessageBuffer const & buffer) {
             usb_reply_trigger_angles = true;
             return false;
 
+        case SET_PID_PARAMETERS:
+            pid_parameters = parse_pid_parameters(buffer.data, buffer.write_index);
+            usb_reply_pid_parameters = true;
+            return false;
+
         case GET_CURRENT_FACTORS:
             usb_reply_current_factors = true;
             return false;
         case GET_TRIGGER_ANGLES:
             usb_reply_trigger_angles = true;
+            return false;
+
+        case GET_PID_PARAMETERS:
+            usb_reply_pid_parameters = true;
             return false;
 
         case SAVE_SETTINGS_TO_FLASH:
@@ -397,6 +407,7 @@ bool handle_command(MessageBuffer const & buffer) {
         // We shouldn't receive these messages; the driver only sends them.
         case CURRENT_FACTORS:
         case TRIGGER_ANGLES:
+        case PID_PARAMETERS:
         case READOUT:
         case FULL_READOUT:
         case UNIT_TEST_OUTPUT:
@@ -458,6 +469,17 @@ void usb_queue_response(FullReadout const & full_readout) {
         // Reset the unit test buffer; using C memory functions.
         std::memset(usb_unit_test_buffer, 0, unit_test_size);
         usb_reply_unit_test = false;
+    }
+
+    // Send PID parameters if requested.
+    if (usb_reply_pid_parameters) {
+        if (not usb_check_queue(pid_parameters_size)) return;
+        
+        // Send the PID parameters to the host.
+        write_pid_parameters(usb_response_buffer, pid_parameters);
+        usb_queue_send(usb_response_buffer, pid_parameters_size);
+
+        usb_reply_pid_parameters = false;
     }
 
     // Send current factors if requested.

@@ -1,6 +1,7 @@
 #include "interrupts.hpp"
 #include "interrupts_data.hpp"
 #include "interrupts_angle.hpp"
+#include "interrupts_pid.hpp"
 
 #include "io.hpp"
 #include "constants.hpp"
@@ -63,7 +64,14 @@ MotorOutputs active_motor_outputs = null_motor_outputs;
 // We now set the motor outputs one turn delayed :( because our update takes more than half a PWM cycle.
 MotorOutputs previous_motor_outputs = null_motor_outputs;
 
+PIDControl current_angle_control = {};
 
+bool keep_pid_controls = false;
+
+static inline void reset_pid_controls(){
+    // Reset the PID controls to their initial state.
+    current_angle_control = PIDControl{};
+}
 
 // Hall sensors
 // ------------
@@ -249,7 +257,24 @@ static inline void update_motor_smooth(
 ){
     if (not angle_valid) return set_motor_break();
 
-    const int target_angle = normalize_angle(angle + direction * leading_angle);
+    const int target_lead_angle = direction * leading_angle;
+
+    const int current_angle_error = signed_angle(target_lead_angle - current_angle_offset);
+    
+    current_angle_control = compute_pid_control(
+        pid_parameters.current_angle_gains,
+        current_angle_control,
+        current_angle_error
+    );
+
+    readout.current_angle_error = current_angle_error;
+    readout.current_angle_control = current_angle_control.output;
+    readout.current_angle_integral = current_angle_control.integral / gains_fixed_point;
+    readout.current_angle_diff = current_angle_control.derivative / gains_fixed_point;
+
+
+    const int target_angle = normalize_angle(angle + target_lead_angle + current_angle_control.output);
+
 
     const uint16_t voltage_phase_u = get_phase_pwm(target_angle);
     const uint16_t voltage_phase_v = get_phase_pwm(target_angle - third_circle);
@@ -562,7 +587,7 @@ void adc_interrupt_handler(){
         current_fixed_point
     );
     
-
+    bool used_pid_controls = false;
 
     // Update motor control.
     switch (driver_state) {
@@ -585,13 +610,23 @@ void adc_interrupt_handler(){
             break;
         case DriverState::DRIVE_SMOOTH_POS:
             update_motor_smooth(+1, angle_valid, electric_position.angle, current_angle_offset, current_magnitude);
+            used_pid_controls = true;
             break;
         case DriverState::DRIVE_SMOOTH_NEG:
             update_motor_smooth(-1, angle_valid, electric_position.angle, current_angle_offset, current_magnitude);
+            used_pid_controls = true;
             break;
         case DriverState::HOLD:
             update_motor_hold();
             break;
+    }
+
+    if (keep_pid_controls and not used_pid_controls) {
+        keep_pid_controls = false;
+        reset_pid_controls();
+    } else if (used_pid_controls and not keep_pid_controls) {
+        // If we used the PID controls, we want to keep them for the next cycle.
+        keep_pid_controls = true;
     }
 
     // Send data to the main loop after updating the PWM registers; the queue access might be slow.
@@ -639,7 +674,6 @@ void tim2_global_handler(){
         // We overflowed the timer; this means we haven't seen a hall sensor toggle in a while.
         // hall_unobserved_number += 1;
         LL_TIM_ClearFlag_UPDATE(TIM2);
-
     }
 }
 
