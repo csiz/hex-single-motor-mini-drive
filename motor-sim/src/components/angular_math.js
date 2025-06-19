@@ -33,6 +33,11 @@ export function radians_to_degrees(radians){
   return radians * 180 / Math.PI;
 }
 
+export function degrees_to_radians(degrees){
+  if (degrees === undefined || degrees === null) return degrees;  
+  return degrees * Math.PI / 180;
+}
+
 export function normalize_degrees(a){
   return (a % 360 + 540) % 360 - 180;
 }

@@ -10,7 +10,7 @@ static inline PIDControl compute_pid_control(
     PIDGains const & gains,
     PIDControl const & control,
     const int16_t measurement,
-    const int16_t target = 0
+    const int16_t target
 ) {
     const int scaled_max_output = gains.max_output * gains_fixed_point;
 

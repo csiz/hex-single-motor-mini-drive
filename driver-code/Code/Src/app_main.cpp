@@ -591,8 +591,7 @@ void app_tick() {
         float seconds = duration_since_timing_update / 1000.f;
 
         tick_rate = (tick_number - last_tick) / seconds;
-        adc_update_rate = (full_readout.readout_number - last_readout_number) / seconds;
-
+        adc_update_rate = ((readout_number_base + full_readout.readout_number - last_readout_number) % readout_number_base) / seconds;
 
         last_tick = tick_number;
         last_readout_number = full_readout.readout_number;

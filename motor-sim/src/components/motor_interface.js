@@ -18,8 +18,8 @@ import {
   phase_resistance, phase_inductance,
 } from './motor_constants.js';
 
-import {normalize_degrees, radians_to_degrees} from './angular_math.js';
-import {square, clarke_transform} from './math_utils.js';
+import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
+import {square, clarke_transform, dq0_transform} from './math_utils.js';
 
 
 
@@ -162,12 +162,12 @@ function parse_readout(data_view, previous_readout){
   const w_current = scaled_w_current - avg_current;
 
   const current_angle = normalize_degrees(current_angle_offset + angle);
-  
-  const [current_alpha, current_beta] = clarke_transform(u_current, v_current, w_current);
+
+  const [current_alpha, current_beta] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(angle));
   const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
 
-  const web_current_angle = radians_to_degrees(Math.atan2(current_beta, current_alpha));
-  const web_current_angle_offset = normalize_degrees(web_current_angle - angle);
+  const web_current_angle_offset = radians_to_degrees(Math.atan2(current_beta, current_alpha));
+  const web_current_angle = normalize_degrees(web_current_angle_offset + angle);
 
 
   // Approximate the angle for the 6 sectors of the hall sensor.
@@ -294,13 +294,13 @@ function parse_full_readout(data_view, previous_readout){
   const current_angle_integral = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
 
-  const torque_error = current_conversion * data_view.getInt16(offset);
+  const torque_error = data_view.getInt16(offset);
   offset += 2;
-  const torque_control = current_conversion * data_view.getInt16(offset);
+  const torque_control = data_view.getInt16(offset);
   offset += 2;
-  const torque_diff = current_conversion * data_view.getInt16(offset);
+  const torque_derivative = data_view.getInt16(offset);
   offset += 2;
-  const torque_integral = current_conversion * data_view.getInt16(offset);
+  const torque_integral = data_view.getInt16(offset);
   offset += 2;
 
   const emf_voltage_angle = normalize_degrees(emf_voltage_angle_offset + readout.angle);
@@ -328,7 +328,7 @@ function parse_full_readout(data_view, previous_readout){
     current_angle_integral,
     torque_error,
     torque_control,
-    torque_diff,
+    torque_derivative,
     torque_integral,
   };
 }

@@ -254,35 +254,37 @@ static inline void update_motor_smooth(
     const int direction, 
     const bool angle_valid, 
     const int angle, 
-    const int current_angle_offset, 
-    const int current_magnitude
+    const int angular_speed,
+    const int current_angle_offset,
+    const int torque_current
 ){
     if (not angle_valid) return set_motor_break();
-    
 
-    const int target_lead_angle = direction * leading_angle;
+    const bool is_motor_moving = abs(angular_speed) > threshold_speed;
+
+    const int target_lead_angle = direction * (is_motor_moving ? leading_angle : leading_angle + quarter_circle / 3);
 
     const int current_angle_relative = signed_angle(current_angle_offset - target_lead_angle);
     
     current_angle_control = compute_pid_control(
         pid_parameters.current_angle_gains,
         current_angle_control,
-        current_angle_relative
+        current_angle_relative,
+        0
     );
 
-    const int current_target = pwm_target * adc_max_value / 2 / pwm_base;
+    const int current_target = max_drive_current * pwm_target / pwm_base;
 
     torque_control = compute_pid_control(
         pid_parameters.torque_gains,
         torque_control,
-        current_magnitude,
+        max(0, direction * torque_current),
         current_target
     );
 
     const int pwm = clip_to(0, pwm_max, torque_control.output);
 
     const int target_angle = normalize_angle(angle + target_lead_angle + current_angle_control.output);
-
 
     const uint16_t voltage_phase_u = get_phase_pwm(target_angle);
     const uint16_t voltage_phase_v = get_phase_pwm(target_angle - third_circle);
@@ -617,11 +619,11 @@ void adc_interrupt_handler(){
             update_motor_sector(hall_sector, motor_sector_driving_neg);
             break;
         case DriverState::DRIVE_SMOOTH_POS:
-            update_motor_smooth(+1, angle_valid, electric_position.angle, current_angle_offset, current_magnitude);
+            update_motor_smooth(+1, angle_valid, electric_position.angle, electric_position.angular_speed, current_angle_offset, beta_current);
             used_pid_controls = true;
             break;
         case DriverState::DRIVE_SMOOTH_NEG:
-            update_motor_smooth(-1, angle_valid, electric_position.angle, current_angle_offset, current_magnitude);
+            update_motor_smooth(-1, angle_valid, electric_position.angle, electric_position.angular_speed, current_angle_offset, beta_current);
             used_pid_controls = true;
             break;
         case DriverState::HOLD:

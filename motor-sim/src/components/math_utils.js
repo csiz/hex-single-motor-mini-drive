@@ -108,3 +108,10 @@ const power_invariant_simplified_clarke_matrix = power_invariant_clarke_matrix.s
 export function clarke_transform(u, v, w){
   return matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
 }
+
+export function dq0_transform(u, v, w, angle){
+  return [
+    +Math.cos(angle) * u + Math.cos(angle - 2 * Math.PI / 3) * v + Math.cos(angle + 2 * Math.PI / 3) * w,
+    -Math.sin(angle) * u - Math.sin(angle - 2 * Math.PI / 3) * v - Math.sin(angle + 2 * Math.PI / 3) * w,
+  ]
+}

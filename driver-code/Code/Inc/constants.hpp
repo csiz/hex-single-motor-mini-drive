@@ -35,6 +35,9 @@ const int angle_lookup_divider = angle_base / 1024;
 // The ADC has a 12-bit resolution.
 const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 
+// Readout number base; we cycle back to 0 instead of reaching this value.
+const int readout_number_base = 1 << 16;
+
 // Position constants
 // ------------------
 
@@ -74,6 +77,8 @@ const float current_conversion_float = adc_voltage_reference / (adc_max_value * 
 // Current conversion: 1 current unit = 1/248 A.
 const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_float);
 
+// Max driving current that we can command.
+const int16_t max_drive_current = 6 * current_fixed_point;
 
 // Resistance of the motor phase windings & mosfet; in Ohm.
 // Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
@@ -280,6 +285,8 @@ const int min_rpm = min_angular_speed * pwm_cycles_per_second / angle_base * 60 
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
+// Threshold speed when we consider the motor to be moving; in angle units per pwm cycle.
+const int threshold_speed = angle_base * speed_fixed_point / (16 * pwm_cycles_per_second / 1000);
 
 // Variance of the speed in degrees per ms; converted to angle units per pwm cycle, all squared.
 const int default_speed_variance = square(15 * angle_base / 360 * 1000 * speed_fixed_point / pwm_cycles_per_second) / speed_variance_to_square_speed;
@@ -367,10 +374,10 @@ const PIDParameters default_pid_parameters = {
         .max_output = quarter_circle / 2
     },
     .torque_gains = PIDGains{
-        .kp = 0,
-        .ki = gains_fixed_point / 32,
-        .kd = 0,
-        .max_output = adc_max_value / 2
+        .kp = 16,
+        .ki = 16,
+        .kd = 16,
+        .max_output = pwm_base + 512 // Give some leeway for the integral to stay at max command.
     },
     .angular_speed_gains = PIDGains{
         .kp = gains_fixed_point / 8,

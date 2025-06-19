@@ -42,7 +42,7 @@ Motor Driving Data
 <div class="card tight">${plot_voltages}</div>
 <div class="card tight">${plot_inferred_voltages}</div>
 <div class="card tight">${plot_dq0_currents}</div>
-<div class="card tight">${plot_current_correction}</div>
+<div class="card tight">${plot_torque_correction}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 
@@ -295,15 +295,15 @@ d3.select(command_options_input).select("div label").style("width", "100em");
 
 const command_options = Generators.input(command_options_input);
 
-const command_pwm_slider = Inputs.range([0, 1], {value: 0.2, step: 0.05, label: "Command value:"});
+const command_pwm_slider = inputs_wide_range([0, 1], {value: 0.2, step: 0.01, label: "Command value:"});
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
-const command_timeout_slider = Inputs.range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
+const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
-const command_leading_angle_slider = Inputs.range([-180, 180], {value: 90, step: 1, label: "Leading angle (degrees):"});
+const command_leading_angle_slider = inputs_wide_range([-180, 180], {value: 90, step: 1, label: "Leading angle (degrees):"});
 
 const command_leading_angle_degrees = Generators.input(command_leading_angle_slider);
 ```
@@ -639,7 +639,7 @@ const monitoring_plots = [
   plot_voltages,
   plot_inferred_voltages,
   plot_dq0_currents,
-  plot_current_correction,
+  plot_torque_correction,
   plot_dq0_voltages,
   plot_pwm_settings,
 ];
@@ -934,13 +934,13 @@ const plot_dq0_currents = plot_lines({
   curve,
 });
 
-const plot_current_correction = plot_lines({
-  subtitle: "Current Correction",
-  description: "Current correction applied to the measured currents.",
+const plot_torque_correction = plot_lines({
+  subtitle: "Torque Correction",
+  description: "Internal state of the torque PID controller.",
   width: 1200, height: 400,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Current Correction (A)",
+  y_label: "PWM",
   channels: [
     {y: "torque_error", label: "Torque Error", color: colors.u},
     {y: "torque_control", label: "Torque Control", color: colors.current_magnitude},
@@ -1001,7 +1001,7 @@ autosave_inputs({
   plot_voltages,
   plot_inferred_voltages,
   plot_dq0_currents,
-  plot_current_correction,
+  plot_torque_correction,
   plot_dq0_voltages,
   plot_pwm_settings,
 });
