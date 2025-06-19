@@ -267,11 +267,6 @@ static inline void update_motor_smooth(
         current_angle_relative
     );
 
-    readout.current_angle_error = current_angle_control.error;
-    readout.current_angle_control = current_angle_control.output;
-    readout.current_angle_integral = current_angle_control.integral / gains_fixed_point;
-    readout.current_angle_diff = current_angle_control.derivative / gains_fixed_point;
-
 
     const int target_angle = normalize_angle(angle + target_lead_angle + current_angle_control.output);
 
@@ -628,6 +623,12 @@ void adc_interrupt_handler(){
         // If we used the PID controls, we want to keep them for the next cycle.
         keep_pid_controls = true;
     }
+
+    readout.current_angle_error = current_angle_control.error;
+    readout.current_angle_control = current_angle_control.output;
+    readout.current_angle_integral = current_angle_control.integral / gains_fixed_point;
+    readout.current_angle_diff = current_angle_control.derivative / gains_fixed_point;
+
 
     // Send data to the main loop after updating the PWM registers; the queue access might be slow.
     
