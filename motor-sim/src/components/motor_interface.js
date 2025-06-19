@@ -246,7 +246,7 @@ function parse_readout(data_view, previous_readout){
   return process_readout.call(this, readout, previous_readout);
 }
 
-const full_readout_size = 66;
+const full_readout_size = 74;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
@@ -289,9 +289,18 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const current_angle_control = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const current_angle_diff = angle_units_to_degrees(data_view.getInt16(offset));
+  const current_angle_derivative = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   const current_angle_integral = angle_units_to_degrees(data_view.getInt16(offset));
+  offset += 2;
+
+  const torque_error = current_conversion * data_view.getInt16(offset);
+  offset += 2;
+  const torque_control = current_conversion * data_view.getInt16(offset);
+  offset += 2;
+  const torque_diff = current_conversion * data_view.getInt16(offset);
+  offset += 2;
+  const torque_integral = current_conversion * data_view.getInt16(offset);
   offset += 2;
 
   const emf_voltage_angle = normalize_degrees(emf_voltage_angle_offset + readout.angle);
@@ -315,8 +324,12 @@ function parse_full_readout(data_view, previous_readout){
     inductive_power,
     current_angle_error,
     current_angle_control,
-    current_angle_diff,
+    current_angle_derivative,
     current_angle_integral,
+    torque_error,
+    torque_control,
+    torque_diff,
+    torque_integral,
   };
 }
 

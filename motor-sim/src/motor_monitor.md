@@ -42,6 +42,7 @@ Motor Driving Data
 <div class="card tight">${plot_voltages}</div>
 <div class="card tight">${plot_inferred_voltages}</div>
 <div class="card tight">${plot_dq0_currents}</div>
+<div class="card tight">${plot_current_correction}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 
@@ -638,6 +639,7 @@ const monitoring_plots = [
   plot_voltages,
   plot_inferred_voltages,
   plot_dq0_currents,
+  plot_current_correction,
   plot_dq0_voltages,
   plot_pwm_settings,
 ];
@@ -779,7 +781,7 @@ const plot_current_angle_correction = plot_lines({
   channels: [
     {y: "current_angle_error", label: "Current Angle Error", color: colors.u},
     {y: "current_angle_control", label: "Current Angle Control", color: colors.current_angle},
-    {y: "current_angle_diff", label: "Current Angle Diff", color: colors.v},
+    {y: "current_angle_derivative", label: "Current Angle Diff", color: colors.v},
     {y: "current_angle_integral", label: "Current Angle Integral", color: colors.w},
   ],
   curve,
@@ -932,6 +934,22 @@ const plot_dq0_currents = plot_lines({
   curve,
 });
 
+const plot_current_correction = plot_lines({
+  subtitle: "Current Correction",
+  description: "Current correction applied to the measured currents.",
+  width: 1200, height: 400,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current Correction (A)",
+  channels: [
+    {y: "torque_error", label: "Torque Error", color: colors.u},
+    {y: "torque_control", label: "Torque Control", color: colors.current_magnitude},
+    {y: "torque_derivative", label: "Torque Derivative", color: colors.current_angle},
+    {y: "torque_integral", label: "Torque Integral", color: colors.w},
+  ],
+  curve,
+});
+
 const plot_dq0_voltages = plot_lines({
   subtitle: "DQ0 Voltages",
   description: "DQ0 voltages after Clarke and Park (direct-quadrature-zero) transforming the inferred voltages.",
@@ -983,6 +1001,7 @@ autosave_inputs({
   plot_voltages,
   plot_inferred_voltages,
   plot_dq0_currents,
+  plot_current_correction,
   plot_dq0_voltages,
   plot_pwm_settings,
 });

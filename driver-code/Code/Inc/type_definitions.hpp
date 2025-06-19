@@ -78,8 +78,12 @@ struct FullReadout : public Readout {
     int16_t inductive_power;
     int16_t current_angle_error;
     int16_t current_angle_control;
-    int16_t current_angle_diff;
+    int16_t current_angle_derivative;
     int16_t current_angle_integral;
+    int16_t torque_error;
+    int16_t torque_control;
+    int16_t torque_derivative;
+    int16_t torque_integral;
 };
 
 

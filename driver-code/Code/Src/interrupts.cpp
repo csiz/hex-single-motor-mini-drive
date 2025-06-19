@@ -65,12 +65,14 @@ MotorOutputs active_motor_outputs = null_motor_outputs;
 MotorOutputs previous_motor_outputs = null_motor_outputs;
 
 PIDControl current_angle_control = {};
+PIDControl torque_control = {};
 
 bool keep_pid_controls = false;
 
 static inline void reset_pid_controls(){
     // Reset the PID controls to their initial state.
     current_angle_control = PIDControl{};
+    torque_control = PIDControl{};
 }
 
 // Hall sensors
@@ -256,6 +258,7 @@ static inline void update_motor_smooth(
     const int current_magnitude
 ){
     if (not angle_valid) return set_motor_break();
+    
 
     const int target_lead_angle = direction * leading_angle;
 
@@ -267,6 +270,16 @@ static inline void update_motor_smooth(
         current_angle_relative
     );
 
+    const int current_target = pwm_target * adc_max_value / 2 / pwm_base;
+
+    torque_control = compute_pid_control(
+        pid_parameters.torque_gains,
+        torque_control,
+        current_magnitude,
+        current_target
+    );
+
+    const int pwm = clip_to(0, pwm_max, torque_control.output);
 
     const int target_angle = normalize_angle(angle + target_lead_angle + current_angle_control.output);
 
@@ -277,9 +290,9 @@ static inline void update_motor_smooth(
 
     active_motor_outputs = set_motor_outputs(MotorOutputs{
         .duration = active_motor_outputs.duration,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm_target / pwm_base),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_target / pwm_base),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_target / pwm_base)
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm / pwm_base),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm / pwm_base),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm / pwm_base)
     });
 
     enable_motor_outputs();
@@ -627,8 +640,12 @@ void adc_interrupt_handler(){
     readout.current_angle_error = current_angle_control.error;
     readout.current_angle_control = current_angle_control.output;
     readout.current_angle_integral = current_angle_control.integral / gains_fixed_point;
-    readout.current_angle_diff = current_angle_control.derivative / gains_fixed_point;
+    readout.current_angle_derivative = current_angle_control.derivative / gains_fixed_point;
 
+    readout.torque_error = torque_control.error;
+    readout.torque_control = torque_control.output;
+    readout.torque_integral = torque_control.integral / gains_fixed_point;
+    readout.torque_derivative = torque_control.derivative / gains_fixed_point;
 
     // Send data to the main loop after updating the PWM registers; the queue access might be slow.
     

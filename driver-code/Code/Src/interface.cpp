@@ -90,9 +90,18 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.current_angle_control);
     offset += 2;
-    write_int16(buffer + offset, readout.current_angle_diff);
+    write_int16(buffer + offset, readout.current_angle_derivative);
     offset += 2;
     write_int16(buffer + offset, readout.current_angle_integral);
+    offset += 2;
+
+    write_int16(buffer + offset, readout.torque_error);
+    offset += 2;
+    write_int16(buffer + offset, readout.torque_control);
+    offset += 2;
+    write_int16(buffer + offset, readout.torque_derivative);
+    offset += 2;
+    write_int16(buffer + offset, readout.torque_integral);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
