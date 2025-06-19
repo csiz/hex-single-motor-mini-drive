@@ -162,6 +162,7 @@ function compute_derivative_info(readout, previous_readout){
     angle, 
     web_current_angle_offset,
     web_emf_power,
+    web_total_power,
     web_emf_voltage_angle,
     web_emf_voltage_magnitude, 
   } = readout;
@@ -181,6 +182,8 @@ function compute_derivative_info(readout, previous_readout){
     web_current_angle_offset_stdev: prev_web_current_angle_offset_stdev,
     web_emf_power_avg: prev_web_emf_power_avg,
     web_emf_power_stdev: prev_web_emf_power_stdev,
+    web_total_power_avg: prev_web_total_power_avg,
+    web_total_power_stdev: prev_web_total_power_stdev,
   } = previous_readout;
 
   // Time units are milliseconds.
@@ -242,6 +245,15 @@ function compute_derivative_info(readout, previous_readout){
     },
   );
 
+  const {average: web_total_power_avg, stdev: web_total_power_stdev} = exp_stats(
+    web_total_power,
+    {
+      average: prev_web_total_power_avg,
+      stdev: prev_web_total_power_stdev,
+    },
+  );
+    
+
   return {
     ...readout,
     web_current_angle_offset_avg, web_current_angle_offset_stdev,
@@ -252,6 +264,7 @@ function compute_derivative_info(readout, previous_readout){
     angular_speed_from_emf, angular_speed_from_emf_avg, angular_speed_from_emf_stdev,
     angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
     web_emf_power_avg, web_emf_power_stdev,
+    web_total_power_avg, web_total_power_stdev,
   };
 }
 

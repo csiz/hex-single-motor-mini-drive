@@ -663,9 +663,13 @@ const plot_power = plot_lines({
   y_label: "Power (W)",
   channels: [
     {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
+    {
+      y: "web_total_power_avg", label: "Total Power 0.5ms average", color: d3.color(colors.web_angle).darker(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_total_power_stdev}),
+    },
     {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
     {
-      y: "web_emf_power_avg", label: "EMF Power 0.5ms average", color: d3.color(colors.u).brighter(1),
+      y: "web_emf_power_avg", label: "EMF Power 0.5ms average", color: d3.color(colors.u).darker(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_power_stdev}),
     },
     {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},

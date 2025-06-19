@@ -125,7 +125,7 @@ struct PIDGains {
 struct PIDControl {
     int integral = 0; // Integral term.
     int derivative = 0; // Derivative term.
-    int16_t previous_error = 0; // Previous error for derivative calculation.
+    int16_t error = 0; // Previous error for derivative calculation.
     int16_t output = 0; // Output value.
 };
 

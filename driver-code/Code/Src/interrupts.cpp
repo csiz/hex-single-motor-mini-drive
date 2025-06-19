@@ -259,15 +259,15 @@ static inline void update_motor_smooth(
 
     const int target_lead_angle = direction * leading_angle;
 
-    const int current_angle_error = signed_angle(target_lead_angle - current_angle_offset);
+    const int current_angle_relative = signed_angle(current_angle_offset - target_lead_angle);
     
     current_angle_control = compute_pid_control(
         pid_parameters.current_angle_gains,
         current_angle_control,
-        current_angle_error
+        current_angle_relative
     );
 
-    readout.current_angle_error = current_angle_error;
+    readout.current_angle_error = current_angle_control.error;
     readout.current_angle_control = current_angle_control.output;
     readout.current_angle_integral = current_angle_control.integral / gains_fixed_point;
     readout.current_angle_diff = current_angle_control.derivative / gains_fixed_point;
