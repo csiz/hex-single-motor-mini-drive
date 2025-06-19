@@ -167,7 +167,7 @@ function parse_readout(data_view, previous_readout){
   const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
 
   const web_current_angle_offset = radians_to_degrees(Math.atan2(current_beta, current_alpha));
-  const web_current_angle = normalize_degrees(web_current_angle_offset + angle);
+  const web_current_angle = normalize_degrees(angle + web_current_angle_offset);
 
 
   // Approximate the angle for the 6 sectors of the hall sensor.
@@ -203,9 +203,9 @@ function parse_readout(data_view, previous_readout){
   const v_emf_voltage = -v_drive_voltage + v_L_voltage + v_R_voltage;
   const w_emf_voltage = -w_drive_voltage + w_L_voltage + w_R_voltage;
 
-  const [emf_voltage_alpha, emf_voltage_beta] = clarke_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage);
+  const [emf_voltage_alpha, emf_voltage_beta] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(angle));
 
-  const web_emf_voltage_angle = radians_to_degrees(Math.atan2(emf_voltage_beta, emf_voltage_alpha));
+  const web_emf_voltage_angle = normalize_degrees(angle + radians_to_degrees(Math.atan2(emf_voltage_beta, emf_voltage_alpha)));
   const web_emf_voltage_magnitude = Math.sqrt(emf_voltage_alpha * emf_voltage_alpha + emf_voltage_beta * emf_voltage_beta);
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);

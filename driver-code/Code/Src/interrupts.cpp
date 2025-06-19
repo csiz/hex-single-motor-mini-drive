@@ -67,13 +67,6 @@ MotorOutputs previous_motor_outputs = null_motor_outputs;
 PIDControl current_angle_control = {};
 PIDControl torque_control = {};
 
-bool keep_pid_controls = false;
-
-static inline void reset_pid_controls(){
-    // Reset the PID controls to their initial state.
-    current_angle_control = PIDControl{};
-    torque_control = PIDControl{};
-}
 
 // Hall sensors
 // ------------
@@ -150,6 +143,24 @@ static inline PWMSchedule const* get_and_reset_schedule_queued(){
 
 // Motor Control
 // -------------
+
+const int min_sweep_offset = - 45 * angle_base / 360;
+const int max_sweep_offset = + 45 * angle_base / 360;
+const int sweep_step = 1 * angle_base / 360;
+
+int sweep_offset = min_sweep_offset;
+int sweep_direction = +1;
+
+bool keep_pid_controls = false;
+
+static inline void reset_pid_controls(){
+    // Reset the PID controls to their initial state.
+    current_angle_control = PIDControl{};
+    torque_control = PIDControl{};
+    sweep_offset = min_sweep_offset;
+    sweep_direction = +1;
+}
+
 
 bool is_motor_stopped(){
     // Check if the motor is stopped.
@@ -262,7 +273,26 @@ static inline void update_motor_smooth(
 
     const bool is_motor_moving = abs(angular_speed) > threshold_speed;
 
-    const int target_lead_angle = direction * (is_motor_moving ? leading_angle : leading_angle + quarter_circle / 3);
+    const int target_lead_angle = direction * (is_motor_moving ? 
+        leading_angle : 
+        leading_angle + sweep_offset
+    );
+
+    if (is_motor_moving) {
+        sweep_offset = min_sweep_offset;
+        sweep_direction = +1;
+    } else {
+        sweep_offset += sweep_step * sweep_direction;
+        if (sweep_offset > max_sweep_offset) {
+            sweep_offset = max_sweep_offset;
+            sweep_direction = -1;
+        }
+        if (sweep_offset < min_sweep_offset) {
+            sweep_offset = min_sweep_offset;
+            sweep_direction = +1;
+        }
+
+    }
 
     const int current_angle_relative = signed_angle(current_angle_offset - target_lead_angle);
     
@@ -273,7 +303,7 @@ static inline void update_motor_smooth(
         0
     );
 
-    const int current_target = max_drive_current * pwm_target / pwm_base;
+    const int current_target = max_drive_current * pwm_target / pwm_base + (is_motor_moving ? 0 : min_drive_current);
 
     torque_control = compute_pid_control(
         pid_parameters.torque_gains,
