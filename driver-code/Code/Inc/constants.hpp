@@ -81,7 +81,7 @@ const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_fl
 const int16_t max_drive_current = 4 * current_fixed_point;
 
 // Minimum driving current to move the motor.
-const int16_t min_drive_current = max_drive_current / 12;
+const int16_t min_drive_current = max_drive_current / 32;
 
 // Resistance of the motor phase windings & mosfet; in Ohm.
 // Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
@@ -216,22 +216,26 @@ const uint16_t motor_sector_driving_negative[6][3] {
 
 
 
-// Half a circle (pi).
+// Half a circle (pi) aka 180 degrees.
 const int half_circle = angle_base / 2;
-// 3/2 of a circle (3pi/2).
+
+// 3/2 of a circle (3pi/2) aka 540 degrees.
 const int one_and_half_circle = (3 * angle_base) / 2;
 
-// 2/3 of a circle (2pi/3).
+// 2/3 of a circle (2pi/3) aka 240 degrees.
 const int two_thirds_circle = (2 * angle_base) / 3;
 
-// 1/3 of a circle (pi/3).
+// 1/3 of a circle (pi/3) aka 120 degrees.
 const int third_circle = angle_base / 3;
 
-// 3/4 of a circle (3pi/4).
+// 3/4 of a circle (3pi/4) aka 270 degrees.
 const int three_quarters_circle = (3 * angle_base) / 4;
 
-// 1/4 of a circle (pi/4).
+// 1/4 of a circle (pi/4) aka 90 degrees.
 const int quarter_circle = angle_base / 4;
+
+// 1/8 of a circle (pi/8) aka 45 degrees.
+const int eighth_circle = angle_base / 8;
 
 // Normalize to a positive angle (0 to 2pi).
 inline constexpr int normalize_angle(int angle){
@@ -371,15 +375,15 @@ const int16_t gains_fixed_point = 1024;
 
 const PIDParameters default_pid_parameters = {
     .current_angle_gains = PIDGains{
-        .kp = 16,
-        .ki = 4,
-        .kd = 8,
+        .kp = 32,
+        .ki = 32,
+        .kd = 32,
         .max_output = quarter_circle / 2
     },
     .torque_gains = PIDGains{
-        .kp = 16,
-        .ki = 16,
-        .kd = 16,
+        .kp = 32,
+        .ki = 32,
+        .kd = 32,
         .max_output = pwm_base + 512 // Give some leeway for the integral to stay at max command.
     },
     .angular_speed_gains = PIDGains{

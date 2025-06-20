@@ -76,23 +76,11 @@ volatile bool external_pending_command = false;
 DriverState external_pending_state = DriverState::OFF;
 DriverParameters external_pending_parameters = {};
 
-
 size_t schedule_stage = 0;
 
 
-// Motor Control
-// -------------
-
-const int min_sweep_offset = - 45 * angle_base / 360;
-const int max_sweep_offset = + 45 * angle_base / 360;
-const int sweep_step = 1 * angle_base / 360;
-
-int sweep_offset = min_sweep_offset;
-int sweep_direction = +1;
-
-
-// Interrupt Interface
-// -------------------
+// Interrupt Data Interface
+// ------------------------
 
 FullReadout get_readout(){
     return readout;
@@ -161,8 +149,6 @@ static inline void reset_pid_controls(){
     // Reset the PID controls to their initial state.
     current_angle_control = PIDControl{};
     torque_control = PIDControl{};
-    sweep_offset = min_sweep_offset;
-    sweep_direction = +1;
 }
 
 // Motor Control Functions
@@ -179,10 +165,10 @@ static inline MotorOutputs update_motor_6_sector(
     uint8_t const& hall_sector,
     Drive6Sector const& sector_parameters
 ){
-    // Ensure we have valid hall sector and command duration.
-    if (hall_sector >= hall_sector_base or not active_motor_outputs.duration) {
-        return set_motor_break();
-    }
+    // Ensure we have valid hall sector.
+    if (hall_sector >= hall_sector_base) return set_motor_break();
+    // Break at the end of the command duration.
+    if (not active_motor_outputs.duration) return set_motor_break();
 
     auto const& motor_sector_driving_table = sector_parameters.pwm_target >= 0 ? 
         motor_sector_driving_positive : 
@@ -208,63 +194,57 @@ static inline MotorOutputs update_motor_smooth(
     bool const& angle_valid, 
     PositionStatistics const& electric_position,
     DriveSmooth const& smooth_parameters,
-    const int current_angle_offset,
-    const int torque_current
+    const int alpha_current,
+    const int beta_current
 ){
+    // Ensure we have valid angle.
     if (not angle_valid) return set_motor_break();
+    // Break at the end of the command duration.
+    if (not active_motor_outputs.duration) return set_motor_break();
 
-    const int direction = smooth_parameters.current_target >= 0 ? +1 : -1;
+    const int target_direction = smooth_parameters.current_target >= 0 ? +1 : -1;
 
     const bool is_motor_moving = abs(electric_position.angular_speed) > threshold_speed;
 
-    const int target_lead_angle = direction * (is_motor_moving ? 
-        smooth_parameters.leading_angle : 
-        smooth_parameters.leading_angle + sweep_offset
-    );
-
-    if (is_motor_moving) {
-        sweep_offset = min_sweep_offset;
-        sweep_direction = +1;
-    } else {
-        sweep_offset += sweep_step * sweep_direction;
-        if (sweep_offset > max_sweep_offset) {
-            sweep_offset = max_sweep_offset;
-            sweep_direction = -1;
-        }
-        if (sweep_offset < min_sweep_offset) {
-            sweep_offset = min_sweep_offset;
-            sweep_direction = +1;
-        }
-
-    }
-
-    const int current_angle_relative = signed_angle(current_angle_offset - target_lead_angle);
-    
-    current_angle_control = compute_pid_control(
-        pid_parameters.current_angle_gains,
-        current_angle_control,
-        current_angle_relative,
-        0
-    );
-
-    const int current_target = max_drive_current * abs(smooth_parameters.current_target) / pwm_base + (is_motor_moving ? 0 : min_drive_current);
+    const int current_target = smooth_parameters.current_target + (is_motor_moving ? 0 : target_direction * min_drive_current);
 
     torque_control = compute_pid_control(
         pid_parameters.torque_gains,
         torque_control,
-        max(0, direction * torque_current),
+        beta_current,
         current_target
     );
 
-    const int pwm = clip_to(0, pwm_max, torque_control.output);
+    // Get the target PWM after torque control.
+    const int pwm = min(pwm_max, abs(torque_control.output));
 
-    const int target_angle = normalize_angle(electric_position.angle + target_lead_angle + current_angle_control.output);
+    // Base the direction on the torque control output.
+    const int direction = torque_control.output >= 0 ? +1 : -1;
+
+    // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
+    // the beta current. Since calculating the angle is expensive just consider the ratio.
+    const int approximate_angle_error = clip_to(
+        -eighth_circle, +eighth_circle, 
+        not beta_current ? 0 : eighth_circle * alpha_current / abs(beta_current)
+    );
+
+    // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
+    current_angle_control = compute_pid_control(
+        pid_parameters.current_angle_gains,
+        current_angle_control,
+        -approximate_angle_error,
+        is_motor_moving ? 0 : -get_cos(smooth_parameters.leading_angle) * eighth_circle / angle_base
+    );
+
+    const int target_lead_angle = direction * (smooth_parameters.leading_angle + current_angle_control.output);
+
+
+    const int target_angle = normalize_angle(electric_position.angle + target_lead_angle);
 
     const uint16_t voltage_phase_u = get_phase_pwm(target_angle);
     const uint16_t voltage_phase_v = get_phase_pwm(target_angle - third_circle);
     const uint16_t voltage_phase_w = get_phase_pwm(target_angle - two_thirds_circle);
     
-    if (not active_motor_outputs.duration) return set_motor_break();
 
     return set_motor_outputs(MotorOutputs{
         .duration = active_motor_outputs.duration,
@@ -285,7 +265,7 @@ static inline MotorOutputs update_motor_smooth(
 
 // Process ADC readings for phase currents when the injected conversion is done.
 void adc_interrupt_handler(){
-    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) error(); 
+    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) error();
 
     // Note: a single float assignment will costs us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
 
@@ -467,9 +447,9 @@ void adc_interrupt_handler(){
         w_current * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
     );
 
-    const auto [current_angle_offset, current_magnitude] = int_atan2(beta_current, alpha_current);
+    // const auto [current_angle_offset, current_magnitude] = int_atan2(beta_current, alpha_current);
 
-    readout.current_angle_offset = current_angle_offset;
+    // readout.current_angle_offset = current_angle_offset;
 
     // We definitely need the code below, but can't afford to run it on the STM32F103C8T6, need faster chip!
 
@@ -548,24 +528,6 @@ void adc_interrupt_handler(){
 
     // Handle new command if we have one.
     if(pending_command){
-        // First; exit the old state.
-        switch(driver_state){
-            case DriverState::OFF:
-            case DriverState::FREEWHEEL:
-            case DriverState::DRIVE_6_SECTOR:
-            case DriverState::HOLD:
-                // No action needed.
-                break;
-            case DriverState::SCHEDULE:
-                // Clear the schedule if we are switching to a new state.
-                schedule_stage = 0;
-                break;
-            case DriverState::DRIVE_SMOOTH:
-                // Reset the PID controls when switching to a new state.
-                reset_pid_controls();
-                break;
-        }
-
         // Setup for the new state.
         switch(pending_state){
             
@@ -615,6 +577,10 @@ void adc_interrupt_handler(){
                 break;
 
             case DriverState::DRIVE_SMOOTH:
+                // Reset the PID controls when switching to smooth drive mode; but keep the
+                // same control state between smooth commands.
+                if (driver_state != DriverState::DRIVE_SMOOTH) reset_pid_controls();
+
                 // Set the motor outputs to drive the motor in the smooth position mode.
                 active_motor_outputs = set_motor_outputs(MotorOutputs{
                     .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.smooth.duration)),
@@ -680,7 +646,7 @@ void adc_interrupt_handler(){
                 break;
             
             case DriverState::DRIVE_SMOOTH: 
-                active_motor_outputs = update_motor_smooth(angle_valid, electric_position, driver_parameters.smooth, current_angle_offset, beta_current);
+                active_motor_outputs = update_motor_smooth(angle_valid, electric_position, driver_parameters.smooth, alpha_current, beta_current);
                 break;
             
         }

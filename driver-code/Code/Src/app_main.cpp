@@ -325,7 +325,7 @@ bool handle_command(MessageBuffer const & buffer) {
                 DriverState::DRIVE_SMOOTH, 
                 DriverParameters{ .smooth = DriveSmooth{ 
                     .duration = command.timeout, 
-                    .current_target = command.pwm, 
+                    .current_target = static_cast<int16_t>(max_drive_current * command.pwm / pwm_max),
                     .leading_angle = command.leading_angle 
                 }}
             );
