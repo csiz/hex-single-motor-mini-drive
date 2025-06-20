@@ -202,13 +202,6 @@ void app_init() {
     initialize_angle_tracking();
 }
 
-static inline void guarded_set_motor_state(MotorOutputs const& outputs, const DriverState state) {
-    // Disable the ADC interrupt while we read the latest readout.
-    NVIC_DisableIRQ(ADC1_2_IRQn);
-    set_motor_state(outputs, state);
-    NVIC_EnableIRQ(ADC1_2_IRQn);
-}
-
 static inline FullReadout guarded_get_readout() {
     // Disable the ADC interrupt while we read the latest readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
@@ -230,7 +223,7 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     usb_readouts_to_send = history_size;
 
     // Start the test schedule.
-    guarded_set_motor_state(schedule[0], DriverState::SCHEDULE);
+    set_motor_command(DriverState::SCHEDULE, DriverParameters{ .schedule = &schedule });
 }
 
 // Run a unit test that takes a function pointer to a test function (which itself takes a buffer).
@@ -254,6 +247,7 @@ inline bool run_unit_test( void (*test_function)(char * buffer, size_t max_size)
 
 bool handle_command(MessageBuffer const & buffer) {
     const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+    const uint16_t abs_command_pwm = abs(command.pwm);
 
     switch (static_cast<MessageCode>(command.code)) {
         case NULL_COMMAND:
@@ -277,10 +271,8 @@ bool handle_command(MessageBuffer const & buffer) {
 
         // Turn off the motor driver.
         case SET_STATE_OFF:
-            // Turn off unguarded immediately.
-            set_motor_break();
             // Repeat command, with the interrupt guards.
-            guarded_set_motor_state(null_motor_outputs, DriverState::OFF);
+            set_motor_command(DriverState::OFF, DriverParameters{});
             return false;
             
         // Measure the motor phase currents.
@@ -318,52 +310,75 @@ bool handle_command(MessageBuffer const & buffer) {
             return false;
 
         // Drive the motor.
-        case SET_STATE_DRIVE_POS:
-            set_pwm_target(command.pwm);
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_POS);
+        case SET_STATE_DRIVE_6_SECTOR:
+            set_motor_command(
+                DriverState::DRIVE_6_SECTOR,
+                DriverParameters{ .sector = Drive6Sector{ 
+                    .duration = command.timeout, 
+                    .pwm_target = command.pwm, 
+                }}
+            );
             return false;
-        case SET_STATE_DRIVE_NEG:
-            set_pwm_target(command.pwm);
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_NEG);
-            return false;
-        case SET_STATE_DRIVE_SMOOTH_POS:
-            set_pwm_target(command.pwm);
-            set_leading_angle(command.leading_angle);
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_SMOOTH_POS);
-            return false;
-        case SET_STATE_DRIVE_SMOOTH_NEG:
-            set_pwm_target(command.pwm);
-            set_leading_angle(command.leading_angle);
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout }, DriverState::DRIVE_SMOOTH_NEG);
+
+        case SET_STATE_DRIVE_SMOOTH:
+            set_motor_command(
+                DriverState::DRIVE_SMOOTH, 
+                DriverParameters{ .smooth = DriveSmooth{ 
+                    .duration = command.timeout, 
+                    .current_target = command.pwm, 
+                    .leading_angle = command.leading_angle 
+                }}
+            );
             return false;
 
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
-            guarded_set_motor_state(null_motor_outputs, DriverState::FREEWHEEL);
+            set_motor_command(DriverState::FREEWHEEL, DriverParameters{});
             return false;
 
         case SET_STATE_HOLD_U_POSITIVE:
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .u_duty = command.pwm }, DriverState::HOLD);
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+                .duration = command.timeout, 
+                .u_duty = abs_command_pwm
+            }});
             return false;
 
         case SET_STATE_HOLD_V_POSITIVE:
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .v_duty = command.pwm }, DriverState::HOLD);
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+                .duration = command.timeout, 
+                .v_duty = abs_command_pwm
+            }});
             return false;
 
         case SET_STATE_HOLD_W_POSITIVE:
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .w_duty = command.pwm }, DriverState::HOLD);
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+                .duration = command.timeout, 
+                .w_duty = abs_command_pwm
+            }});
             return false;
 
         case SET_STATE_HOLD_U_NEGATIVE:
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .v_duty = command.pwm, .w_duty = command.pwm }, DriverState::HOLD);
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+                .duration = command.timeout, 
+                .v_duty = abs_command_pwm, 
+                .w_duty = abs_command_pwm
+            }});
             return false;
 
         case SET_STATE_HOLD_V_NEGATIVE:
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .u_duty = command.pwm, .w_duty = command.pwm }, DriverState::HOLD);
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+                .duration = command.timeout, 
+                .u_duty = abs_command_pwm, 
+                .w_duty = abs_command_pwm
+            }});
             return false;
 
         case SET_STATE_HOLD_W_NEGATIVE:
-            guarded_set_motor_state(MotorOutputs{ .duration = command.timeout, .u_duty = command.pwm, .v_duty = command.pwm }, DriverState::HOLD);
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+                .duration = command.timeout, 
+                .u_duty = abs_command_pwm, 
+                .v_duty = abs_command_pwm
+            }});
             return false;
 
         case SET_CURRENT_FACTORS:

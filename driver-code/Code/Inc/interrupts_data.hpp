@@ -7,11 +7,10 @@
 
 #include "type_definitions.hpp"
 
+// Latest Data
+// -----------
 
-
-uint32_t get_adc_update_number();
 FullReadout get_readout();
-
 
 // Data queue
 // ----------
@@ -27,21 +26,9 @@ Readout readout_history_pop();
 // Check if motor is slowing/stopped (breaking or freewheeling).
 bool is_motor_stopped();
 
-// Functions to set motor driver state.
-void set_motor_state(MotorOutputs const & outputs, DriverState state);
+// Set the motor command to be executed by the interrupt loop; returns if the command was accepted.
+void set_motor_command(DriverState const& state, DriverParameters const& parameters);
 
-// Shorthand for motor break.
-static inline void set_motor_break(){
-    return set_motor_state(null_motor_outputs, DriverState::OFF);
-} 
-
-// Additional motor control parameters.
-
-// Set the leading angle for smooth driving.
-void set_leading_angle(int16_t angle);
-
-// Set the PWM target for the motor drive.
-void set_pwm_target(uint16_t pwm);
 
 // Position tracking
 // -----------------

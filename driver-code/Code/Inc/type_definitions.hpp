@@ -5,18 +5,24 @@
 #include <array>
 
 
+// Most useful datatype for this system, the 3 phase coordinates.
+struct ThreePhase {
+    int u; // Value for U phase.
+    int v; // Value for V phase.
+    int w; // Value for W phase.
+};
+
+
 // Driver State
 // ------------
 
-enum struct DriverState {
+enum struct DriverState : uint16_t {
     OFF,
     FREEWHEEL,
-    DRIVE_POS,
-    DRIVE_NEG,
-    DRIVE_SMOOTH_POS,
-    DRIVE_SMOOTH_NEG,
     HOLD,
     SCHEDULE,
+    DRIVE_6_SECTOR,
+    DRIVE_SMOOTH,
 };
 
 // Motor duty cycle (compare register values).
@@ -27,18 +33,41 @@ struct MotorOutputs {
     uint16_t w_duty; // PWM duty cycle for W phase.
 };
 
-const MotorOutputs null_motor_outputs = {
-    .duration = 0,
-    .u_duty = 0,
-    .v_duty = 0,
-    .w_duty = 0
-};
+// Zeroed motor outputs, used to short circuit break the motor outputs.
+const MotorOutputs null_motor_outputs = {};
+
+// The hold command is the same as the motor outputs.
+using DriveHold = MotorOutputs;
 
 // Number of steps in test schedules.
 const size_t schedule_size = 12;
 
 // Motor driving PWM schedule.
 using PWMSchedule = MotorOutputs[schedule_size];
+
+// Pointer to a PWM schedule to run the test.
+using DriveSchedule = PWMSchedule const*;
+
+// Drive motor using the 6 sector commutation method.
+struct Drive6Sector {
+    uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t pwm_target;
+};
+
+// Drive the motor using FOC targeting an output current (torque).
+struct DriveSmooth {
+    uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t current_target;
+    int16_t leading_angle;
+};
+
+// Drive parameters for each state.
+union DriverParameters {
+    DriveHold hold;
+    DriveSchedule schedule;
+    Drive6Sector sector;
+    DriveSmooth smooth;
+};
 
 
 
@@ -93,8 +122,8 @@ struct FullReadout : public Readout {
 struct BasicCommand {
     uint16_t code;
     uint16_t timeout;
-    uint16_t pwm;
-    uint16_t leading_angle;
+    int16_t pwm;
+    int16_t leading_angle;
 };
 
 struct CurrentCalibration {

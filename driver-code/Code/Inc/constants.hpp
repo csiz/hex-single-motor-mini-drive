@@ -178,7 +178,7 @@ const int phase_readout_diff_per_cycle_to_voltage = (
 // --------------------
 
 // Motor voltage fraction for the 6-step commutation.
-const uint16_t motor_sector_driving_pos[6][3] = {
+const uint16_t motor_sector_driving_positive[6][3] = {
     {0,        pwm_base, 0       },
     {0,        pwm_base, pwm_base},
     {0,        0,        pwm_base},
@@ -188,7 +188,7 @@ const uint16_t motor_sector_driving_pos[6][3] = {
 };
 
 // Surpirsingly good schedule for the 6-step commutation.
-const uint16_t motor_sector_driving_neg[6][3] {
+const uint16_t motor_sector_driving_negative[6][3] {
     {0,        0,        pwm_base},
     {pwm_base, 0,        pwm_base},
     {pwm_base, 0,        0       },

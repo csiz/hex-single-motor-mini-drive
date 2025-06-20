@@ -13,11 +13,10 @@ export async function run_position_calibration(motor_controller) {
   const drive_timeout = Math.floor((drive_time + 300) * cycles_per_millisecond);
 
   const drive_strength = Math.floor(pwm_base * 2 / 10);
-  const drive_options = {command_timeout: drive_timeout, command_pwm: drive_strength};
 
   const test_options = {command_timeout: 0, command_pwm: 0};
 
-  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_POS, ...drive_options});  
+  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_pwm: +drive_strength, command_timeout: drive_timeout});  
   await wait(drive_time);
   const drive_positive = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
@@ -25,7 +24,7 @@ export async function run_position_calibration(motor_controller) {
 
   console.info("Drive positive done");
 
-  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_NEG, ...drive_options});
+  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_pwm: -drive_strength, command_timeout: drive_timeout});
   await wait(drive_time);
   const drive_negative = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},

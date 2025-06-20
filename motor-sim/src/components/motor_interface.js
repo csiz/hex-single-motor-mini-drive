@@ -19,7 +19,7 @@ import {
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
-import {square, clarke_transform, dq0_transform} from './math_utils.js';
+import {square, dq0_transform} from './math_utils.js';
 
 
 
@@ -33,9 +33,8 @@ export const command_codes = {
   FULL_READOUT: 0x2023,
 
   SET_STATE_OFF: 0x2030,
-  SET_STATE_DRIVE_POS: 0x2031,
+  SET_STATE_DRIVE_6_SECTOR: 0x2031,
   SET_STATE_TEST_ALL_PERMUTATIONS: 0x2032,
-  SET_STATE_DRIVE_NEG: 0x2033,
   SET_STATE_FREEWHEEL: 0x2034,
 
   SET_STATE_TEST_GROUND_SHORT: 0x2036,
@@ -54,8 +53,7 @@ export const command_codes = {
   SET_STATE_HOLD_U_NEGATIVE: 0x3023,
   SET_STATE_HOLD_V_NEGATIVE: 0x3024,
   SET_STATE_HOLD_W_NEGATIVE: 0x3025,
-  SET_STATE_DRIVE_SMOOTH_POS: 0x4030,
-  SET_STATE_DRIVE_SMOOTH_NEG: 0x4031,
+  SET_STATE_DRIVE_SMOOTH: 0x4030,
 
   SET_CURRENT_FACTORS: 0x4040,
   SET_TRIGGER_ANGLES: 0x4041,
@@ -587,9 +585,9 @@ export function serialise_command({command, command_timeout = 0, command_pwm = 0
   offset += 2;
   view.setUint16(offset, command_timeout);
   offset += 2;
-  view.setUint16(offset, command_pwm);
+  view.setInt16(offset, command_pwm);
   offset += 2;
-  view.setUint16(offset, command_leading_angle);
+  view.setInt16(offset, command_leading_angle);
   offset += 2;
 
   return buffer;

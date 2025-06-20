@@ -219,9 +219,8 @@ static inline int get_message_size(uint16_t code) {
         case STREAM_FULL_READOUTS:
         case GET_READOUTS_SNAPSHOT:
         case SET_STATE_OFF:
-        case SET_STATE_DRIVE_POS:
+        case SET_STATE_DRIVE_6_SECTOR:
         case SET_STATE_TEST_ALL_PERMUTATIONS:
-        case SET_STATE_DRIVE_NEG:
         case SET_STATE_FREEWHEEL:
         case SET_STATE_TEST_GROUND_SHORT:
         case SET_STATE_TEST_POSITIVE_SHORT:
@@ -238,8 +237,7 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_HOLD_U_NEGATIVE:
         case SET_STATE_HOLD_V_NEGATIVE:
         case SET_STATE_HOLD_W_NEGATIVE:
-        case SET_STATE_DRIVE_SMOOTH_POS:
-        case SET_STATE_DRIVE_SMOOTH_NEG:
+        case SET_STATE_DRIVE_SMOOTH:
         case GET_CURRENT_FACTORS:
         case GET_TRIGGER_ANGLES:
         case GET_PID_PARAMETERS:
@@ -316,9 +314,9 @@ BasicCommand parse_basic_command(uint8_t const * data, size_t size) {
     offset += 2;
     const uint16_t timeout = read_uint16(data + offset);
     offset += 2;
-    const uint16_t pwm = read_uint16(data + offset);
+    const int16_t pwm = read_int16(data + offset);
     offset += 2;
-    const uint16_t leading_angle = read_uint16(data + offset);
+    const int16_t leading_angle = read_int16(data + offset);
     offset += 2;
 
     if (offset != basic_command_size) error();
