@@ -17,6 +17,7 @@ struct ThreePhase {
 // ------------
 
 enum struct DriverState : uint16_t {
+    NO_CHANGE,
     OFF,
     FREEWHEEL,
     HOLD,
@@ -69,7 +70,11 @@ union DriverParameters {
     DriveSmooth smooth;
 };
 
+const DriverParameters null_driver_parameters = {};
 
+using DriverData = std::tuple<MotorOutputs, DriverState, DriverParameters>;
+
+const size_t driver_data_size = sizeof(MotorOutputs) + sizeof(DriverState) + sizeof(DriverParameters);
 
 // Response data structures
 // ------------------------

@@ -65,15 +65,11 @@ PositionStatistics electric_position = null_position_statistics;
 DriverState driver_state = DriverState::OFF;
 DriverParameters driver_parameters = {};
 
-bool pending_command = false;
-
-DriverState pending_state = DriverState::OFF;
+DriverState pending_state = DriverState::NO_CHANGE;
 DriverParameters pending_parameters = {};
 
 // Must be volatile as it's the interaction flag between main loop and the interrupt handler.
-volatile bool external_pending_command = false;
-
-DriverState external_pending_state = DriverState::OFF;
+volatile DriverState external_pending_state = DriverState::NO_CHANGE;
 DriverParameters external_pending_parameters = {};
 
 size_t schedule_stage = 0;
@@ -110,11 +106,10 @@ bool is_motor_stopped(){
 
 void set_motor_command(DriverState const& state, DriverParameters const& parameters){
     // Don't override a pending command if the interrupt loop didn't copy it to active.
-    while (external_pending_command) continue;
+    while (external_pending_state != DriverState::NO_CHANGE) continue;
 
     external_pending_state = state;
     external_pending_parameters = parameters;
-    external_pending_command = true;
 }
 
 
@@ -154,21 +149,16 @@ static inline void reset_pid_controls(){
 // Motor Control Functions
 // =======================
     
-static inline MotorOutputs set_motor_break(){
+static inline void set_motor_break(){
     pending_state = DriverState::OFF;
     pending_parameters = DriverParameters{};
-    pending_command = true;
-    return set_motor_outputs(null_motor_outputs);
+    active_motor_outputs = null_motor_outputs;
 }
 
 static inline MotorOutputs update_motor_6_sector(
     uint8_t const& hall_sector,
     Drive6Sector const& sector_parameters
 ){
-    // Ensure we have valid hall sector.
-    if (hall_sector >= hall_sector_base) return set_motor_break();
-    // Break at the end of the command duration.
-    if (not active_motor_outputs.duration) return set_motor_break();
 
     auto const& motor_sector_driving_table = sector_parameters.pwm_target >= 0 ? 
         motor_sector_driving_positive : 
@@ -182,26 +172,20 @@ static inline MotorOutputs update_motor_6_sector(
 
     const uint16_t pwm = abs(sector_parameters.pwm_target);
 
-    return set_motor_outputs(MotorOutputs{
+    return MotorOutputs{
         .duration = active_motor_outputs.duration,
         .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm / pwm_base),
         .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm / pwm_base),
         .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm / pwm_base)
-    });
+    };
 }
 
 static inline MotorOutputs update_motor_smooth(
-    bool const& angle_valid, 
     PositionStatistics const& electric_position,
     DriveSmooth const& smooth_parameters,
     const int alpha_current,
     const int beta_current
 ){
-    // Ensure we have valid angle.
-    if (not angle_valid) return set_motor_break();
-    // Break at the end of the command duration.
-    if (not active_motor_outputs.duration) return set_motor_break();
-
     const int target_direction = smooth_parameters.current_target >= 0 ? +1 : -1;
 
     const bool is_motor_moving = abs(electric_position.angular_speed) > threshold_speed;
@@ -246,14 +230,13 @@ static inline MotorOutputs update_motor_smooth(
     const uint16_t voltage_phase_w = get_phase_pwm(target_angle - two_thirds_circle);
     
 
-    return set_motor_outputs(MotorOutputs{
+    return MotorOutputs{
         .duration = active_motor_outputs.duration,
         .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm / pwm_base),
         .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm / pwm_base),
         .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm / pwm_base)
-    });
+    };
 }
-
 
 // Interrupt handlers
 // ------------------
@@ -447,28 +430,19 @@ void adc_interrupt_handler(){
         w_current * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
     );
 
-    // const auto [current_angle_offset, current_magnitude] = int_atan2(beta_current, alpha_current);
-
-    // readout.current_angle_offset = current_angle_offset;
-
-    // We definitely need the code below, but can't afford to run it on the STM32F103C8T6, need faster chip!
-
-    // const int alpha_emf_voltage = (
-    //     u_emf_voltage * get_cos(electric_position.angle) / angle_base +
-    //     v_emf_voltage * get_cos(electric_position.angle - third_circle) / angle_base +
-    //     w_emf_voltage * get_cos(electric_position.angle - two_thirds_circle) / angle_base
-    // );
-    //
-    // const int beta_emf_voltage = (
-    //     u_emf_voltage * -get_sin(electric_position.angle) / angle_base +
-    //     v_emf_voltage * -get_sin(electric_position.angle - third_circle) / angle_base +
-    //     w_emf_voltage * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
-    // );
-    //
-    // const auto [emf_voltage_angle_offset, emf_magnitude] = int_atan2(beta_emf_voltage, alpha_emf_voltage);
+    const int alpha_emf_voltage = (
+        u_emf_voltage * get_cos(electric_position.angle) / angle_base +
+        v_emf_voltage * get_cos(electric_position.angle - third_circle) / angle_base +
+        w_emf_voltage * get_cos(electric_position.angle - two_thirds_circle) / angle_base
+    );
     
-    // readout.emf_voltage_angle_offset = emf_voltage_angle_offset;
-
+    const int beta_emf_voltage = (
+        u_emf_voltage * -get_sin(electric_position.angle) / angle_base +
+        v_emf_voltage * -get_sin(electric_position.angle - third_circle) / angle_base +
+        w_emf_voltage * -get_sin(electric_position.angle - two_thirds_circle) / angle_base
+    );
+    
+    readout.emf_voltage_angle_offset = alpha_emf_voltage + beta_emf_voltage;
 
     readout.total_power = -signed_round_div(
         power_fixed_point * signed_round_div(
@@ -516,143 +490,160 @@ void adc_interrupt_handler(){
     // -------------
 
     // Copy external command and override the internal pending command.
-    if (external_pending_command) {
-        pending_command = true;
+    if (external_pending_state != DriverState::NO_CHANGE) {
         pending_state = external_pending_state;
         pending_parameters = external_pending_parameters;
 
         // Reset the external command flag.
-        external_pending_command = false;
+        external_pending_state = DriverState::NO_CHANGE;
     }
 
 
     // Handle new command if we have one.
-    if(pending_command){
-        // Setup for the new state.
-        switch(pending_state){
+    switch(pending_state){
+        case DriverState::NO_CHANGE:
+            break;
+        
+        case DriverState::OFF:
+            driver_state = DriverState::OFF;
+            driver_parameters = null_driver_parameters;
+            break;
+
+        case DriverState::FREEWHEEL:
+            driver_state = DriverState::FREEWHEEL;
+            driver_parameters = null_driver_parameters;
+            break;
+
+        case DriverState::HOLD:
+            // Set the motor outputs to hold the current position.
+            active_motor_outputs = MotorOutputs{
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.hold.duration)),
+                .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_parameters.hold.u_duty)),
+                .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_parameters.hold.v_duty)),
+                .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_parameters.hold.w_duty))
+            };
+            enable_motor_outputs();
+            driver_state = DriverState::HOLD;
+            driver_parameters = pending_parameters;
+
+            break;
+
+        case DriverState::SCHEDULE:
+            // We should not enter testing mode without a valid schedule.
+            if (pending_parameters.schedule == nullptr) return error();
             
-            case DriverState::OFF:
-                // Short all motor phases to ground quickly stopping the motor.
-                active_motor_outputs = set_motor_outputs(null_motor_outputs);
-                enable_motor_outputs();
-                break;
-
-            case DriverState::FREEWHEEL:
-                // Disable the motor outputs; leaving them floating voltage/tristate.
-                disable_motor_outputs();
-                active_motor_outputs = set_motor_outputs(null_motor_outputs);
-                break;
-
-            case DriverState::HOLD:
-                // Set the motor outputs to hold the current position.
-                active_motor_outputs = set_motor_outputs(MotorOutputs{
-                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.hold.duration)),
-                    .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_parameters.hold.u_duty)),
-                    .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_parameters.hold.v_duty)),
-                    .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_parameters.hold.w_duty))
-                });
-                enable_motor_outputs();
-                break;
-
-            case DriverState::SCHEDULE:
-                // We should not enter testing mode without a valid schedule.
-                if (pending_parameters.schedule == nullptr) return error();
-                schedule_stage = 0;
-                // Clear the readouts buffer of old data.
-                readout_history_reset();
-                
-                active_motor_outputs = set_motor_outputs(null_motor_outputs);
-                enable_motor_outputs();
-                break;
-
-            case DriverState::DRIVE_6_SECTOR:
-                // Set the motor outputs to drive the motor in the 6 sector mode.
-                active_motor_outputs = set_motor_outputs(MotorOutputs{
-                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.sector.duration)),
-                    .u_duty = 0,
-                    .v_duty = 0,
-                    .w_duty = 0
-                });
-                enable_motor_outputs();
-                break;
-
-            case DriverState::DRIVE_SMOOTH:
-                // Reset the PID controls when switching to smooth drive mode; but keep the
-                // same control state between smooth commands.
-                if (driver_state != DriverState::DRIVE_SMOOTH) reset_pid_controls();
-
-                // Set the motor outputs to drive the motor in the smooth position mode.
-                active_motor_outputs = set_motor_outputs(MotorOutputs{
-                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.smooth.duration)),
-                    .u_duty = 0,
-                    .v_duty = 0,
-                    .w_duty = 0
-                });
-                enable_motor_outputs();
-                break;
-
-        }
-
-        // Set the new state.
-        driver_state = pending_state;
-        driver_parameters = pending_parameters;
-        pending_command = false;
-
-    } else {
-        // Carry on with the active state; no new command.
-        switch (driver_state) {
-            case DriverState::OFF:
-                active_motor_outputs = set_motor_outputs(null_motor_outputs);
-                enable_motor_outputs();
-                break;
-
-            case DriverState::FREEWHEEL:
-                disable_motor_outputs();
-                active_motor_outputs = set_motor_outputs(null_motor_outputs);
-                break;
-
-            case DriverState::HOLD:
-                active_motor_outputs = set_motor_outputs(active_motor_outputs);
-
-                if (not active_motor_outputs.duration) set_motor_break();
-                break;
-
-            case DriverState::SCHEDULE:
-                
-                // Run each schedule stage for a number of PWM cycles.
-                if (active_motor_outputs.duration) {
-
-                    // Continue the current stage.
-                    active_motor_outputs = set_motor_outputs(active_motor_outputs);
-                    
-                } else {
-                    // Begin the next schedule stage if the current stage finished.
-
-                    // Check if we reached the end of the schedule; and stop.
-                    if (schedule_stage >= schedule_size) {
-                        schedule_stage = 0;
-                        set_motor_break();
-                        break;
-                    }
-
-                    PWMSchedule const& schedule = *driver_parameters.schedule;
-                    active_motor_outputs = set_motor_outputs(schedule[schedule_stage]);
-                    schedule_stage += 1;
-                }
-                break;
-
-            case DriverState::DRIVE_6_SECTOR: 
-                active_motor_outputs = update_motor_6_sector(hall_sector, driver_parameters.sector);
-                break;
+            schedule_stage = 0;
+            // Clear the readouts buffer of old data.
+            readout_history_reset();
             
-            case DriverState::DRIVE_SMOOTH: 
-                active_motor_outputs = update_motor_smooth(angle_valid, electric_position, driver_parameters.smooth, alpha_current, beta_current);
-                break;
-            
-        }
+            enable_motor_outputs();
+            active_motor_outputs = null_motor_outputs;
+            driver_state = DriverState::SCHEDULE;
+            driver_parameters = pending_parameters;
+
+            break;
+
+        case DriverState::DRIVE_6_SECTOR:
+            // Set the motor outputs to drive the motor in the 6 sector mode.
+            active_motor_outputs = MotorOutputs{
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.sector.duration)),
+                .u_duty = 0,
+                .v_duty = 0,
+                .w_duty = 0
+            };
+            enable_motor_outputs();
+            driver_state = DriverState::DRIVE_6_SECTOR;
+            driver_parameters = pending_parameters;
+
+            break;
+
+        case DriverState::DRIVE_SMOOTH:
+            // Reset the PID controls when switching to smooth drive mode; but keep the
+            // same control state between smooth commands.
+            if (driver_state != DriverState::DRIVE_SMOOTH) reset_pid_controls();
+
+            // Set the motor outputs to drive the motor in the smooth position mode.
+            active_motor_outputs = MotorOutputs{
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.smooth.duration)),
+                .u_duty = 0,
+                .v_duty = 0,
+                .w_duty = 0
+            };
+            enable_motor_outputs();
+            driver_state = DriverState::DRIVE_SMOOTH;
+            driver_parameters = pending_parameters;
+
+            break;
 
     }
 
+    // Always reset the pending state to be ready for the next command.
+    pending_state = DriverState::NO_CHANGE;
+
+
+    // Update the active state.
+    switch (driver_state) {
+
+        // The active driver state should not be NO_CHANGE.
+        case DriverState::NO_CHANGE:
+            return error();
+
+        case DriverState::OFF:
+            active_motor_outputs = null_motor_outputs;
+            enable_motor_outputs();
+            break;
+
+        case DriverState::FREEWHEEL:
+            disable_motor_outputs();
+            active_motor_outputs = null_motor_outputs;
+            break;
+
+        case DriverState::HOLD:
+            if (not active_motor_outputs.duration) set_motor_break();
+            break;
+
+        case DriverState::SCHEDULE:
+            
+            // Run each stage at the end of the previous one.
+            if (not active_motor_outputs.duration) {
+
+                // Check if we reached the end of the schedule; and stop.
+                if (schedule_stage >= schedule_size) {
+                    schedule_stage = 0;
+                    set_motor_break();
+                    break;
+                }
+
+                PWMSchedule const& schedule = *driver_parameters.schedule;
+                active_motor_outputs = schedule[schedule_stage];
+                schedule_stage += 1;
+            }
+            break;
+
+        case DriverState::DRIVE_6_SECTOR:
+            // Break at the end of the command duration or if the hall sensor is missing the magnet.
+            if (not active_motor_outputs.duration or hall_sector >= hall_sector_base) {
+                set_motor_break();
+            } else {
+                active_motor_outputs = update_motor_6_sector(hall_sector, driver_parameters.sector);
+            }
+
+            break;
+        
+        case DriverState::DRIVE_SMOOTH:
+            // Break at the end of the command duration or if the angle is invalid.
+            if (not active_motor_outputs.duration or not angle_valid) {
+                set_motor_break();
+                reset_pid_controls();
+            } else {
+                active_motor_outputs = update_motor_smooth(electric_position, driver_parameters.smooth, alpha_current, beta_current);
+            }
+
+            break;
+    }
+
+    // Send the command to the timer compare registers.
+    active_motor_outputs = set_motor_outputs(active_motor_outputs);
 
     readout.current_angle_error = current_angle_control.error;
     readout.current_angle_control = current_angle_control.output;

@@ -293,7 +293,7 @@ const int min_rpm = min_angular_speed * pwm_cycles_per_second / angle_base * 60 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
 // Threshold speed when we consider the motor to be moving; in angle units per pwm cycle.
-const int threshold_speed = angle_base * speed_fixed_point / (30 * pwm_cycles_per_second / 1000);
+const int threshold_speed = 10 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
 
 // Variance of the speed in degrees per ms; converted to angle units per pwm cycle, all squared.
 const int default_speed_variance = square(15 * angle_base / 360 * 1000 * speed_fixed_point / pwm_cycles_per_second) / speed_variance_to_square_speed;

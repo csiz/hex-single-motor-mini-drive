@@ -14,7 +14,6 @@ Motor Commands
 <div>${command_buttons}</div>
 <div>
   ${command_pwm_slider}
-  ${command_direction_choice}
   ${command_timeout_slider}
   ${command_leading_angle_slider}
 </div>
@@ -300,17 +299,6 @@ const command_pwm_slider = inputs_wide_range([0, +1], {value: 0.05, step: 0.01, 
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
-const command_direction_choice = Inputs.radio(new Map([
-  ["Positive", +1],
-  ["Negative", -1],
-]), 
-{
-  value: +1,
-  label: "Command direction:",
-});
-
-const command_direction = Generators.input(command_direction_choice);
-
 const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
@@ -352,7 +340,7 @@ function push_data(readout){
 
 
 const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
-const command_pwm = Math.round(command_direction * command_pwm_fraction * pwm_base);
+const command_pwm = Math.round(command_pwm_fraction * pwm_base);
 const command_leading_angle = Math.floor(angle_base + angle_base * command_leading_angle_degrees / 360) % angle_base;
 
 async function command(command, options = {}){
@@ -467,12 +455,20 @@ const command_buttons = Inputs.button(
       await command(command_codes.SET_STATE_OFF);
       snapshot_if_checked(0);
     }],
-    ["Drive 6 sector", async function(){
-      await command(command_codes.SET_STATE_DRIVE_6_SECTOR);
+    ["Drive +", async function(){
+      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_pwm: +command_pwm});
       snapshot_if_checked(500);
     }],
-    ["Drive smooth", async function(){
-      await command(command_codes.SET_STATE_DRIVE_SMOOTH);
+    ["Drive -", async function(){
+      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_pwm: -command_pwm});
+      snapshot_if_checked(500);
+    }],
+    ["Drive smooth +", async function(){
+      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_pwm: +command_pwm});
+      snapshot_if_checked(500);
+    }],
+    ["Drive smooth -", async function(){
+      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_pwm: -command_pwm});
       snapshot_if_checked(500);
     }],
     ["Freewheel", async function(){
