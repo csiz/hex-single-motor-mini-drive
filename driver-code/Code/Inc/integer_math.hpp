@@ -9,15 +9,6 @@
 
 
 
-static inline int round_div(const int x, const int y) {
-    // Round the division to the nearest integer.
-    return (x + y / 2) / y;
-}
-
-static inline int signed_round_div(const int x, const int y) {
-    // Round the division to the nearest integer, preserving the sign.
-    return (x >= 0 ? (x + y / 2) : (x - y / 2)) / y;
-}
 
 // --- Constants and Look-Up Tables ---
 const int ATAN2_CORDIC_ITERATIONS = 10; // Number of CORDIC iterations. Affects precision and gain.

@@ -270,7 +270,7 @@ inline constexpr int signed_angle(int angle){
 }
 
 // Scaling factor for variance.
-const int variance_divider = 4;
+const int variance_divider = 16;
 
 // Note speed and acceleration are written in degrees per ms and per ms^2 respectively.
 
@@ -333,14 +333,15 @@ const int acceleration_variance_fixed_point = 32;
 const int acceleration_variance_to_square_acceleration = square(acceleration_fixed_point) / acceleration_variance_fixed_point * speed_variance_to_square_speed;
 
 // Variance of the expected acceleration loads in degrees per ms^2; converted to acceleration units per pwm cycle, all squared.
-const int angular_acceleration_div_2_variance = (
+const int angular_acceleration_div_2_variance = round_div(
     square(
-        9 * angle_base / 360 * 
+        15 * angle_base / 360 * 
         speed_fixed_point * 1000 / pwm_cycles_per_second * 
         acceleration_fixed_point * 1000 / pwm_cycles_per_second / 
         2
-    ) + acceleration_variance_to_square_acceleration / 2
-) / acceleration_variance_to_square_acceleration;
+    ),
+    acceleration_variance_to_square_acceleration
+);
 
 const PositionCalibration default_position_calibration = {
     // The angle at which we transition to this sector. The first is when rotating in the

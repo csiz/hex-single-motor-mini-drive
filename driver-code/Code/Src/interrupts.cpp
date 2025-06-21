@@ -244,8 +244,8 @@ void adc_interrupt_handler(){
         ) : 
         // If the previous sector was invalid; initialize the position.
         get_default_sector_position(hall_sector) : 
-        // No valid sector; reset the position.
-        null_position_statistics
+        // No valid sector; keep previous position.
+        predicted_position
     );
 
     const auto [u_current, v_current, w_current] = adjust_to_sum_zero(ThreePhase{

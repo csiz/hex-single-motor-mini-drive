@@ -46,7 +46,7 @@ export function angle_units_to_degrees(angle){
   return normalize_degrees(unbounded_angle_units_to_degrees(angle));
 }
 
-export const variance_divider = 4;
+export const variance_divider = 16;
 
 export const speed_fixed_point = 128;
 export const speed_variance_fixed_point = 256;
@@ -186,7 +186,7 @@ export const default_position_calibration = {
   sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
   sector_center_stdev: [30, 30, 30, 30, 30, 30],
   initial_angular_speed_stdev: 15.0, // initial speed distribution degrees per ms
-  angular_acceleration_stdev: 9.0, // acceleration distribution up to (degrees per ms^2).
+  angular_acceleration_stdev: 15.0, // acceleration distribution up to (degrees per ms^2).
 }
 
 export const default_pid_parameters = {

@@ -117,7 +117,7 @@ static inline PositionStatistics predict_position(PositionStatistics const & pre
     // We predict the position exactly once every cycle, thus we've chosen the time step dt = 1.
     // Also note that we can only use integer arithmetic on the STM32F01x so we use fixed point math.
 
-    const int predicted_angular_speed = previous.angular_speed;
+    const int predicted_angular_speed = previous.angular_speed - sign(previous.angular_speed);
 
     const int predicted_angular_speed_variance = min(
         max_16bit,
@@ -235,15 +235,19 @@ static inline PositionStatistics compute_non_transition_error(
     const bool same_direction = (predicted_position.angular_speed * distance_to_hall_angle) >= 0;
 
     if (same_direction) {
-        // No transition expected and no information gained; return magic variance 0 indicating infinity.
-        return null_position_statistics;
-
+        // No transition expected and no information gained; slowly decay to the center of the sector.
+        return PositionStatistics{
+            .angle = distance_to_hall_center,
+            .angle_variance = max_16bit,
+            .angular_speed = sign(distance_to_hall_center),
+            .angular_speed_variance = max_16bit
+        };
     } else {
         const int uncertainty = tail_end ? 1 : 2;
 
         // If we're moving past the next hall transition without seeing the transition; bring back towards the center.
         return PositionStatistics{
-            .angle = distance_to_hall_center,
+            .angle = distance_to_hall_angle,
             .angle_variance = uncertainty * distance_to_hall_center_variance,
             .angular_speed = distance_to_hall_angle * speed_fixed_point,
             .angular_speed_variance = min(
