@@ -249,28 +249,28 @@ void adc_interrupt_handler(){
     );
 
     const auto [u_current, v_current, w_current] = adjust_to_sum_zero(ThreePhase{
-        signed_round_div(u_readout * current_calibration.u_factor, current_calibration_fixed_point),
-        signed_round_div(v_readout * current_calibration.v_factor, current_calibration_fixed_point),
-        signed_round_div(w_readout * current_calibration.w_factor, current_calibration_fixed_point)
+        u_readout * current_calibration.u_factor / current_calibration_fixed_point,
+        v_readout * current_calibration.v_factor / current_calibration_fixed_point,
+        w_readout * current_calibration.w_factor / current_calibration_fixed_point
     });
 
     const auto [u_current_diff, v_current_diff, w_current_diff] = adjust_to_sum_zero(ThreePhase{
-        signed_round_div(u_readout_diff * current_calibration.u_factor, current_calibration_fixed_point),
-        signed_round_div(v_readout_diff * current_calibration.v_factor, current_calibration_fixed_point),
-        signed_round_div(w_readout_diff * current_calibration.w_factor, current_calibration_fixed_point)
+        u_readout_diff * current_calibration.u_factor / current_calibration_fixed_point,
+        v_readout_diff * current_calibration.v_factor / current_calibration_fixed_point,
+        w_readout_diff * current_calibration.w_factor / current_calibration_fixed_point
     });
 
     const int diff_to_voltage = round_div(phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor, current_calibration_fixed_point);
 
-    const int u_inductor_voltage = signed_round_div(u_current_diff * diff_to_voltage, current_fixed_point);
-    const int v_inductor_voltage = signed_round_div(v_current_diff * diff_to_voltage, current_fixed_point);
-    const int w_inductor_voltage = signed_round_div(w_current_diff * diff_to_voltage, current_fixed_point);
+    const int u_inductor_voltage = u_current_diff * diff_to_voltage / current_fixed_point;
+    const int v_inductor_voltage = v_current_diff * diff_to_voltage / current_fixed_point;
+    const int w_inductor_voltage = w_current_diff * diff_to_voltage / current_fixed_point;
 
     const int phase_current_to_voltage = round_div(phase_resistance * voltage_fixed_point, resistance_fixed_point);
 
-    const int u_resistive_voltage = signed_round_div(u_current * phase_current_to_voltage, current_fixed_point);
-    const int v_resistive_voltage = signed_round_div(v_current * phase_current_to_voltage, current_fixed_point);
-    const int w_resistive_voltage = signed_round_div(w_current * phase_current_to_voltage, current_fixed_point);
+    const int u_resistive_voltage = u_current * phase_current_to_voltage / current_fixed_point;
+    const int v_resistive_voltage = v_current * phase_current_to_voltage / current_fixed_point;
+    const int w_resistive_voltage = w_current * phase_current_to_voltage / current_fixed_point;
 
     const auto [u_drive_voltage, v_drive_voltage, w_drive_voltage] = adjust_to_sum_zero(ThreePhase{
         round_div(motor_outputs.u_duty * vcc_voltage, pwm_base),
@@ -359,44 +359,36 @@ void adc_interrupt_handler(){
         w_emf_voltage * neg_sin_w / angle_base
     );
     
-    readout.total_power = -signed_round_div(
-        power_fixed_point * signed_round_div(
+    readout.total_power = -(
+        power_div_voltage_fixed_point * (
             u_current * u_drive_voltage + 
             v_current * v_drive_voltage + 
-            w_current * w_drive_voltage,
-            voltage_fixed_point
-        ), 
-        current_fixed_point
+            w_current * w_drive_voltage
+        ) / current_fixed_point
     );
 
-    readout.resistive_power = round_div(
-        power_fixed_point * round_div(
+    readout.resistive_power = (
+        power_div_voltage_fixed_point * (
             u_current * u_resistive_voltage + 
             v_current * v_resistive_voltage + 
-            w_current * w_resistive_voltage,
-            voltage_fixed_point
-        ), 
-        current_fixed_point
+            w_current * w_resistive_voltage
+        ) / current_fixed_point
     );
 
-    readout.emf_power = -signed_round_div(
-        power_fixed_point * signed_round_div(
+    readout.emf_power = -(
+        power_div_voltage_fixed_point * (
             u_current * u_emf_voltage + 
             v_current * v_emf_voltage + 
-            w_current * w_emf_voltage,
-            voltage_fixed_point
-        ), 
-        current_fixed_point
+            w_current * w_emf_voltage
+        ) / current_fixed_point
     );
 
-    readout.inductive_power = signed_round_div(
-        power_fixed_point * signed_round_div(
+    readout.inductive_power = (
+        power_div_voltage_fixed_point * (
             u_current * u_inductor_voltage + 
             v_current * v_inductor_voltage + 
-            w_current * w_inductor_voltage,
-            voltage_fixed_point
-        ),
-        current_fixed_point
+            w_current * w_inductor_voltage
+        ) / current_fixed_point
     );
 
 

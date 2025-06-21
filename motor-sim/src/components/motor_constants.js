@@ -141,7 +141,7 @@ export const motor_shunt_resistance = 0.010;
 export const amplifier_gain = 20.0;
 export const current_conversion = adc_voltage_reference / (adc_base * motor_shunt_resistance * amplifier_gain);
 
-const power_fixed_point = 256; // Fixed point for power calculations.
+const power_fixed_point = 224; // Fixed point for power calculations.
 
 // Convert power units to Watts.
 export function convert_power_to_watts(power){

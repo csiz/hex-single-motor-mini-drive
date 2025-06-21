@@ -115,8 +115,12 @@ const float voltage_conversion_float = adc_voltage_reference / (adc_max_value * 
 // Voltage conversion: 1 voltage unit = 1/112 V.
 const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_float);
 
-// Power conversion: 1 power unit = 1/256 W.
-const int power_fixed_point = 256;
+
+// Power conversion: 1 power unit = 1/224 W.
+const int power_fixed_point = 2 * voltage_fixed_point;
+
+// We need this to convert a few formulas using voltage to power.
+const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_point;
 
 
 
