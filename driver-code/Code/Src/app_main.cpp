@@ -337,28 +337,28 @@ bool handle_command(MessageBuffer const & buffer) {
             return false;
 
         case SET_STATE_HOLD_U_POSITIVE:
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .u_duty = abs_command_pwm
             }});
             return false;
 
         case SET_STATE_HOLD_V_POSITIVE:
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .v_duty = abs_command_pwm
             }});
             return false;
 
         case SET_STATE_HOLD_W_POSITIVE:
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .w_duty = abs_command_pwm
             }});
             return false;
 
         case SET_STATE_HOLD_U_NEGATIVE:
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .v_duty = abs_command_pwm, 
                 .w_duty = abs_command_pwm
@@ -366,7 +366,7 @@ bool handle_command(MessageBuffer const & buffer) {
             return false;
 
         case SET_STATE_HOLD_V_NEGATIVE:
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .u_duty = abs_command_pwm, 
                 .w_duty = abs_command_pwm
@@ -374,7 +374,7 @@ bool handle_command(MessageBuffer const & buffer) {
             return false;
 
         case SET_STATE_HOLD_W_NEGATIVE:
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = MotorOutputs{ 
+            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .u_duty = abs_command_pwm, 
                 .v_duty = abs_command_pwm

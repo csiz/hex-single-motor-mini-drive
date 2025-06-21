@@ -30,13 +30,13 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
     write_int16(buffer + offset, readout.w_readout_diff);
     offset += 2;
 
-    write_uint16(buffer + offset, readout.position);
+    write_int16(buffer + offset, readout.position);
+    offset += 2;
+    write_uint16(buffer + offset, readout.angle);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed);
     offset += 2;
     write_uint16(buffer + offset, readout.instant_vcc_voltage);
-    offset += 2;
-    write_int16(buffer + offset, readout.current_angle_offset);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -67,9 +67,14 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.cycle_end_tick);
     offset += 2;
 
-    write_int16(buffer + offset, readout.emf_voltage_angle_offset);
+    write_int16(buffer + offset, readout.alpha_current);
     offset += 2;
-    write_uint16(buffer + offset, readout.current_angle_offset_variance);
+    write_int16(buffer + offset, readout.beta_current);
+    offset += 2;
+
+    write_int16(buffer + offset, readout.alpha_emf_voltage);
+    offset += 2;
+    write_int16(buffer + offset, readout.beta_emf_voltage);
     offset += 2;
 
     write_uint16(buffer + offset, readout.angle_variance);
@@ -90,18 +95,10 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.current_angle_control);
     offset += 2;
-    write_int16(buffer + offset, readout.current_angle_derivative);
-    offset += 2;
-    write_int16(buffer + offset, readout.current_angle_integral);
-    offset += 2;
 
     write_int16(buffer + offset, readout.torque_error);
     offset += 2;
     write_int16(buffer + offset, readout.torque_control);
-    offset += 2;
-    write_int16(buffer + offset, readout.torque_derivative);
-    offset += 2;
-    write_int16(buffer + offset, readout.torque_integral);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.

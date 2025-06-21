@@ -313,9 +313,9 @@ static inline uint8_t read_hall_sensors_state(){
 }
 
 // Mapping from hall state to sector number.
-static inline uint8_t get_hall_sector(uint8_t hall_state){
+static inline uint8_t get_hall_sector(const uint8_t hall_state){
     // Get the hall sector from the state.
-    switch (hall_state) {
+    switch (hall_state & 0b111) {
         case 0b000: // no hall sensors; either it's not ready or no magnet
             return hall_sector_base; // Out of range, indicates invalid.
         case 0b001: // hall U active; 0 degrees
@@ -332,8 +332,8 @@ static inline uint8_t get_hall_sector(uint8_t hall_state){
             return 5;
         case 0b111: // all hall sensors active; this would be quite unusual; but carry on
             return hall_sector_base; // Out of range, indicates invalid.
-        default:
-            error(); // Invalid hall state.
-            return hall_sector_base; // Out of range, indicates invalid.
     }
+    // We shouldn't reach here.
+    error();
+    return hall_sector_base;
 }

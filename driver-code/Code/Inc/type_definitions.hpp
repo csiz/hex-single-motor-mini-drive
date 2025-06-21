@@ -26,28 +26,56 @@ enum struct DriverState : uint16_t {
     DRIVE_SMOOTH,
 };
 
-// Motor duty cycle (compare register values).
+// Motor duty cycle (compare register values and enable settings).
 struct MotorOutputs {
+    uint16_t enable_flags; // Flags to enable/disable the motor outputs.
+    uint16_t u_duty; // PWM duty cycle for U phase.
+    uint16_t v_duty; // PWM duty cycle for V phase.
+    uint16_t w_duty; // PWM duty cycle for W phase.
+};
+
+// Enable all motor outputs (U, V, W).
+const uint16_t enable_flags_all = 0b111;
+// Enable U phase outputs.
+const uint16_t enable_flags_u = 0b001;
+// Enable V phase outputs.
+const uint16_t enable_flags_v = 0b010;
+// Enable W phase outputs.
+const uint16_t enable_flags_w = 0b100;
+// Disable all motor outputs.
+const uint16_t enable_flags_none = 0b000;
+
+// Zeroed motor outputs, used to short circuit break the motor outputs.
+const MotorOutputs breaking_motor_outputs = {
+    .enable_flags = enable_flags_all,
+    .u_duty = 0,
+    .v_duty = 0,
+    .w_duty = 0
+};
+
+
+struct PWMStage {
     uint16_t duration; // Duration in PWM cycles.
     uint16_t u_duty; // PWM duty cycle for U phase.
     uint16_t v_duty; // PWM duty cycle for V phase.
     uint16_t w_duty; // PWM duty cycle for W phase.
 };
 
-// Zeroed motor outputs, used to short circuit break the motor outputs.
-const MotorOutputs null_motor_outputs = {};
-
 // The hold command is the same as the motor outputs.
-using DriveHold = MotorOutputs;
+using DriveHold = PWMStage;
 
 // Number of steps in test schedules.
 const size_t schedule_size = 12;
 
 // Motor driving PWM schedule.
-using PWMSchedule = MotorOutputs[schedule_size];
+using PWMSchedule = PWMStage[schedule_size];
 
 // Pointer to a PWM schedule to run the test.
-using DriveSchedule = PWMSchedule const*;
+struct DriveSchedule {
+    PWMSchedule const* pointer;
+    uint16_t current_stage;
+    uint16_t stage_counter;
+};
 
 // Drive motor using the 6 sector commutation method.
 struct Drive6Sector {
@@ -76,6 +104,7 @@ using DriverData = std::tuple<MotorOutputs, DriverState, DriverParameters>;
 
 const size_t driver_data_size = sizeof(MotorOutputs) + sizeof(DriverState) + sizeof(DriverParameters);
 
+
 // Response data structures
 // ------------------------
 
@@ -89,10 +118,10 @@ struct Readout{
     int16_t u_readout_diff;
     int16_t v_readout_diff;
     int16_t w_readout_diff;
-    uint16_t position;
+    int16_t position;
+    uint16_t angle;
     int16_t angular_speed;
     int16_t instant_vcc_voltage;
-    int16_t current_angle_offset;
 };
 
 struct FullReadout : public Readout {
@@ -102,8 +131,10 @@ struct FullReadout : public Readout {
     uint16_t vcc_voltage;
     int16_t cycle_start_tick;
     int16_t cycle_end_tick;
-    int16_t emf_voltage_angle_offset;
-    uint16_t current_angle_offset_variance;
+    int16_t alpha_current;
+    int16_t beta_current;
+    int16_t alpha_emf_voltage;
+    int16_t beta_emf_voltage;
     uint16_t angle_variance;
     uint16_t angular_speed_variance;
     int16_t total_power;
@@ -112,12 +143,8 @@ struct FullReadout : public Readout {
     int16_t inductive_power;
     int16_t current_angle_error;
     int16_t current_angle_control;
-    int16_t current_angle_derivative;
-    int16_t current_angle_integral;
     int16_t torque_error;
     int16_t torque_control;
-    int16_t torque_derivative;
-    int16_t torque_integral;
 };
 
 
