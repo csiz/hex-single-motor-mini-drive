@@ -100,10 +100,6 @@ union DriverParameters {
 
 const DriverParameters null_driver_parameters = {};
 
-using DriverData = std::tuple<MotorOutputs, DriverState, DriverParameters>;
-
-const size_t driver_data_size = sizeof(MotorOutputs) + sizeof(DriverState) + sizeof(DriverParameters);
-
 
 // Response data structures
 // ------------------------
@@ -199,4 +195,18 @@ struct PIDParameters {
     PIDGains torque_gains;
     PIDGains angular_speed_gains;
     PIDGains position_gains;
+};
+
+struct PIDControlState {
+    PIDControl current_angle_control;
+    PIDControl torque_control;
+    PIDControl angular_speed_control;
+    PIDControl position_control;
+};
+
+const PIDControlState null_pid_control_state = {
+    .current_angle_control = {},
+    .torque_control = {},
+    .angular_speed_control = {},
+    .position_control = {}
 };

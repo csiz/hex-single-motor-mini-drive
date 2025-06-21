@@ -207,7 +207,30 @@ const uint16_t motor_sector_driving_negative[6][3] {
 // efficiency, and constexpr to define a bunch more constants below.
 
 
-
+// Mapping from hall state to sector number.
+static inline uint8_t get_hall_sector(const uint8_t hall_state){
+    // Get the hall sector from the state.
+    switch (hall_state & 0b111) {
+        case 0b000: // no hall sensors; either it's not ready or no magnet
+            return hall_sector_base; // Out of range, indicates invalid.
+        case 0b001: // hall U active; 0 degrees
+            return 0;
+        case 0b011: // hall U and hall V active; 60 degrees
+            return 1;
+        case 0b010: // hall V active; 120 degrees
+            return 2;
+        case 0b110: // hall V and hall W active; 180 degrees
+            return 3;
+        case 0b100: // hall W active; 240 degrees
+            return 4;
+        case 0b101: // hall U and hall W active; 300 degrees
+            return 5;
+        case 0b111: // all hall sensors active; this would be quite unusual; but carry on
+            return hall_sector_base; // Out of range, indicates invalid.
+    }
+    // We shouldn't reach here.
+    return hall_sector_base;
+}
 
 // Define a lot of constants. First, we need to define angles as integers because 
 // we can't (shouldn't) use floating point arithmetic in the interrupt handlers.
