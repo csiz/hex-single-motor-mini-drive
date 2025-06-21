@@ -3,15 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
-
+#include <tuple>
 
 // Most useful datatype for this system, the 3 phase coordinates.
-struct ThreePhase {
-    int u; // Value for U phase.
-    int v; // Value for V phase.
-    int w; // Value for W phase.
-};
-
+using ThreePhase = std::tuple<int, int, int>;
 
 // Driver State
 // ------------

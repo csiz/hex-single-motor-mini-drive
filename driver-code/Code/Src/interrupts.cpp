@@ -143,6 +143,16 @@ static inline MotorOutputs mid_motor_outputs(MotorOutputs const & a, MotorOutput
     };
 }
 
+static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
+    // Adjust the values so that their sum is zero.
+    const int avg = (std::get<0>(values) + std::get<1>(values) + std::get<2>(values)) / 3;
+    return ThreePhase{
+        std::get<0>(values) - avg,
+        std::get<1>(values) - avg,
+        std::get<2>(values) - avg
+    };
+}
+
 
 // Interrupt handlers
 // ------------------
@@ -154,18 +164,18 @@ static inline MotorOutputs mid_motor_outputs(MotorOutputs const & a, MotorOutput
 
 // Process ADC readings for phase currents when the injected conversion is done.
 void adc_interrupt_handler(){
-    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) error();
-
     // Note: a single float assignment will costs us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
 
     // Check what time it is on the PWM cycle.
     readout.cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
     
 
-    
     // Start by reading the ADC conversion data
     // ----------------------------------------
 
+    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) error();
+
+    
     // U and W phases are measured at the same time, followed by V and the reference voltage.
     // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
     // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
@@ -238,27 +248,17 @@ void adc_interrupt_handler(){
         null_position_statistics
     );
 
+    const auto [u_current, v_current, w_current] = adjust_to_sum_zero(ThreePhase{
+        signed_round_div(u_readout * current_calibration.u_factor, current_calibration_fixed_point),
+        signed_round_div(v_readout * current_calibration.v_factor, current_calibration_fixed_point),
+        signed_round_div(w_readout * current_calibration.w_factor, current_calibration_fixed_point)
+    });
 
-    const int scaled_u_current = round_div(u_readout * current_calibration.u_factor, current_calibration_fixed_point);
-    const int scaled_v_current = round_div(v_readout * current_calibration.v_factor, current_calibration_fixed_point);
-    const int scaled_w_current = round_div(w_readout * current_calibration.w_factor, current_calibration_fixed_point);
-
-    // The current sum should be zero, but we can have an offset due to (uncompensated) differences in the shunt resistors.
-    const int avg_current = round_div(scaled_u_current + scaled_v_current + scaled_w_current, 3);
-
-    const int u_current = scaled_u_current - avg_current;
-    const int v_current = scaled_v_current - avg_current;
-    const int w_current = scaled_w_current - avg_current;
-
-
-    const int scaled_u_current_diff = signed_round_div(u_readout_diff * current_calibration.u_factor, current_calibration_fixed_point);
-    const int scaled_v_current_diff = signed_round_div(v_readout_diff * current_calibration.v_factor, current_calibration_fixed_point);
-    const int scaled_w_current_diff = signed_round_div(w_readout_diff * current_calibration.w_factor, current_calibration_fixed_point);
-    const int avg_current_diff = signed_round_div(scaled_u_current_diff + scaled_v_current_diff + scaled_w_current_diff, 3);
-
-    const int u_current_diff = scaled_u_current_diff - avg_current_diff;
-    const int v_current_diff = scaled_v_current_diff - avg_current_diff;
-    const int w_current_diff = scaled_w_current_diff - avg_current_diff;
+    const auto [u_current_diff, v_current_diff, w_current_diff] = adjust_to_sum_zero(ThreePhase{
+        signed_round_div(u_readout_diff * current_calibration.u_factor, current_calibration_fixed_point),
+        signed_round_div(v_readout_diff * current_calibration.v_factor, current_calibration_fixed_point),
+        signed_round_div(w_readout_diff * current_calibration.w_factor, current_calibration_fixed_point)
+    });
 
     const int diff_to_voltage = round_div(phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor, current_calibration_fixed_point);
 
@@ -266,27 +266,17 @@ void adc_interrupt_handler(){
     const int v_inductor_voltage = signed_round_div(v_current_diff * diff_to_voltage, current_fixed_point);
     const int w_inductor_voltage = signed_round_div(w_current_diff * diff_to_voltage, current_fixed_point);
 
-    const int u_resistive_voltage = round_div(
-        round_div(u_current * phase_resistance, resistance_fixed_point) * voltage_fixed_point, 
-        current_fixed_point
-    );
-    const int v_resistive_voltage = round_div(
-        round_div(v_current * phase_resistance, resistance_fixed_point) * voltage_fixed_point, 
-        current_fixed_point
-    );
-    const int w_resistive_voltage = round_div(
-        round_div(w_current * phase_resistance, resistance_fixed_point) * voltage_fixed_point, 
-        current_fixed_point
-    );
+    const int phase_current_to_voltage = round_div(phase_resistance * voltage_fixed_point, resistance_fixed_point);
 
-    const int u_drive_voltage_scaled = round_div(motor_outputs.u_duty * vcc_voltage, pwm_base);
-    const int v_drive_voltage_scaled = round_div(motor_outputs.v_duty * vcc_voltage, pwm_base);
-    const int w_drive_voltage_scaled = round_div(motor_outputs.w_duty * vcc_voltage, pwm_base);
-    const int avg_drive_voltage = round_div(u_drive_voltage_scaled + v_drive_voltage_scaled + w_drive_voltage_scaled, 3);
+    const int u_resistive_voltage = signed_round_div(u_current * phase_current_to_voltage, current_fixed_point);
+    const int v_resistive_voltage = signed_round_div(v_current * phase_current_to_voltage, current_fixed_point);
+    const int w_resistive_voltage = signed_round_div(w_current * phase_current_to_voltage, current_fixed_point);
 
-    const int u_drive_voltage = u_drive_voltage_scaled - avg_drive_voltage;
-    const int v_drive_voltage = v_drive_voltage_scaled - avg_drive_voltage;
-    const int w_drive_voltage = w_drive_voltage_scaled - avg_drive_voltage;
+    const auto [u_drive_voltage, v_drive_voltage, w_drive_voltage] = adjust_to_sum_zero(ThreePhase{
+        round_div(motor_outputs.u_duty * vcc_voltage, pwm_base),
+        round_div(motor_outputs.v_duty * vcc_voltage, pwm_base),
+        round_div(motor_outputs.w_duty * vcc_voltage, pwm_base)
+    });
 
     const int u_emf_voltage = u_resistive_voltage + u_inductor_voltage - u_drive_voltage;
     const int v_emf_voltage = v_resistive_voltage + v_inductor_voltage - v_drive_voltage;
