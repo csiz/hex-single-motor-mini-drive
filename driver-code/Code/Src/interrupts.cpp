@@ -353,14 +353,16 @@ void adc_interrupt_handler(){
     const int alpha_current = (
         u_current * cos_u / angle_base +
         v_current * cos_v / angle_base +
-        w_current * cos_w / angle_base
-    );
+        w_current * cos_w / angle_base +
+        3 * readout.alpha_current
+    ) / 4;
 
     const int beta_current = (
         u_current * neg_sin_u / angle_base +
         v_current * neg_sin_v / angle_base +
-        w_current * neg_sin_w / angle_base
-    );
+        w_current * neg_sin_w / angle_base +
+        3 * readout.beta_current
+    ) / 4;
 
     // Calculate the park transformed EMF voltages.
     // 
@@ -370,33 +372,44 @@ void adc_interrupt_handler(){
     // obtain an alpha emf voltage close to zero. The EMF voltage is a source of information about the
     // rotor position and speed. But we don't have compute to calculate the angle, so we treat it as an
     // optimization problem over multiple cycles.
+    // 
+    // Exponentially average the values below to reduce noise, 1 : 3 parts coorresponds to 150us half life
+    // at our cycle frequency.
 
-    const int alpha_emf_voltage = (
+    const int instant_alpha_emf_voltage = (
         u_emf_voltage * cos_u / angle_base +
         v_emf_voltage * cos_v / angle_base +
         w_emf_voltage * cos_w / angle_base
     );
 
-    const int beta_emf_voltage = (
+    const int alpha_emf_voltage = (
+        instant_alpha_emf_voltage + 
+        3 * readout.alpha_emf_voltage
+    ) / 4;
+
+    const int instant_beta_emf_voltage = (
         u_emf_voltage * neg_sin_u / angle_base +
         v_emf_voltage * neg_sin_v / angle_base +
         w_emf_voltage * neg_sin_w / angle_base
     );
 
-    
-    // We can't compute sqrt in the loop, instead use the max abs value of the EMF voltages;
+    const int beta_emf_voltage = (
+        instant_beta_emf_voltage + 
+        3 * readout.beta_emf_voltage
+    ) / 4;
+
+    // I think this computes the variance of the EMF magnitude preceisely. Lucky!
+    const int emf_voltage_variance = round_div(
+        square(instant_beta_emf_voltage - beta_emf_voltage) + square(instant_alpha_emf_voltage - alpha_emf_voltage) +
+        3 * readout.emf_voltage_variance,
+        4
+    );
+
+    // We can't compute sqrt in the critical loop, instead use the abs of the beta EMF voltage.
     // As we optimize our angle estimate, the alpha EMF voltage should approach zero and
     // the beta EMF voltage will be equal to the EMF voltage magnitude.
-    const int emf_voltage = max(abs(alpha_emf_voltage), abs(beta_emf_voltage));
-    
-    // Calculate ~350us exponential moving average of the EMF voltage.
+    const int emf_voltage_average = abs(beta_emf_voltage);
 
-    const int emf_voltage_average = round_div(emf_voltage + 7 * readout.emf_voltage_average, 8);
-    const int emf_voltage_variance = round_div(
-        square(emf_voltage - emf_voltage_average) +
-        7 * readout.emf_voltage_variance,
-        8
-    );
 
     // Check if the emf voltage is away from zero with enough confidence.
     // 

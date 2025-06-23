@@ -181,8 +181,8 @@ const colors = {
   angle_from_emf: "rgb(166, 30, 132)",
   angular_speed: "rgb(41, 194, 173)",
   web_angular_speed: "rgb(156, 196, 47)",
-  current_alpha: "rgb(199, 0, 57)",
-  current_beta: "rgb(26, 82, 118)",
+  alpha_current: "rgb(199, 0, 57)",
+  beta_current: "rgb(26, 82, 118)",
   other: "rgb(27, 158, 119)",
 };
 
@@ -926,8 +926,10 @@ const plot_dq0_currents = plot_lines({
   x_label: "Time (ms)",
   y_label: "Current (A)",
   channels: [
-    {y: "current_alpha", label: "Current Alpha", color: colors.current_alpha},
-    {y: "current_beta", label: "Current Beta", color: colors.current_beta},
+    {y: "alpha_current", label: "Current Alpha", color: colors.alpha_current},
+    {y: "beta_current", label: "Current Beta", color: colors.beta_current},
+    {y: "web_alpha_current", label: "Current Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
+    {y: "web_beta_current", label: "Current Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "current_magnitude", label: "Current Magnitude", color: colors.current_magnitude},
   ],
   curve,
@@ -955,8 +957,10 @@ const plot_dq0_voltages = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "emf_voltage_alpha", label: "Voltage Alpha", color: colors.current_alpha},
-    {y: "emf_voltage_beta", label: "Voltage Beta", color: colors.current_beta},
+    {y: "alpha_emf_voltage", label: "Voltage Alpha", color: colors.alpha_current},
+    {y: "beta_emf_voltage", label: "Voltage Beta", color: colors.beta_current},
+    {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
+    {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "emf_voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
     {
       y: "emf_voltage_magnitude_avg", label: "Voltage Magnitude 350us average", color: d3.color(colors.current_magnitude).brighter(1),

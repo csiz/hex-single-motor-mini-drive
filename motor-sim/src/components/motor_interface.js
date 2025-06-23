@@ -164,10 +164,10 @@ function parse_readout(data_view, previous_readout){
   const v_current = scaled_v_current - avg_current;
   const w_current = scaled_w_current - avg_current;
 
-  const [current_alpha, current_beta] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(angle));
-  const current_magnitude = Math.sqrt(current_alpha * current_alpha + current_beta * current_beta);
+  const [web_alpha_current, web_beta_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(angle));
+  const current_magnitude = Math.sqrt(web_alpha_current * web_alpha_current + web_beta_current * web_beta_current);
 
-  const current_angle_offset = radians_to_degrees(Math.atan2(current_beta, current_alpha));
+  const current_angle_offset = radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current));
   const current_angle = normalize_degrees(angle + current_angle_offset);
 
 
@@ -204,11 +204,11 @@ function parse_readout(data_view, previous_readout){
   const v_emf_voltage = -v_drive_voltage + v_L_voltage + v_R_voltage;
   const w_emf_voltage = -w_drive_voltage + w_L_voltage + w_R_voltage;
 
-  const [emf_voltage_alpha, emf_voltage_beta] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(angle));
+  const [web_alpha_emf_voltage, web_beta_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(angle));
 
-  const emf_voltage_angle_offset = radians_to_degrees(Math.atan2(emf_voltage_beta, emf_voltage_alpha));
+  const emf_voltage_angle_offset = radians_to_degrees(Math.atan2(web_beta_emf_voltage, web_alpha_emf_voltage));
   const emf_voltage_angle = normalize_degrees(angle + emf_voltage_angle_offset);
-  const emf_voltage_magnitude = Math.sqrt(emf_voltage_alpha * emf_voltage_alpha + emf_voltage_beta * emf_voltage_beta);
+  const emf_voltage_magnitude = Math.sqrt(web_alpha_emf_voltage * web_alpha_emf_voltage + web_beta_emf_voltage * web_beta_emf_voltage);
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
   const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
@@ -224,7 +224,7 @@ function parse_readout(data_view, previous_readout){
     u_readout_diff, v_readout_diff, w_readout_diff,
     ref_readout,
     u_current, v_current, w_current, avg_current,
-    current_alpha, current_beta, current_magnitude,
+    web_alpha_current, web_beta_current, current_magnitude,
     current_angle, current_angle_offset,
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
@@ -240,7 +240,7 @@ function parse_readout(data_view, previous_readout){
     emf_direction_negative,
     instant_vcc_voltage,
     current_angle_offset,
-    emf_voltage_alpha, emf_voltage_beta, emf_voltage_magnitude,
+    web_alpha_emf_voltage, web_beta_emf_voltage, emf_voltage_magnitude,
     emf_voltage_angle, emf_voltage_angle_offset,
     web_total_power,
     web_emf_power,

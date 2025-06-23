@@ -165,6 +165,8 @@ function compute_derivative_info(readout, previous_readout){
     emf_voltage_magnitude, 
     web_emf_power,
     web_total_power,
+    emf_detected,
+    emf_direction_negative,
   } = readout;
 
   const {
@@ -213,7 +215,11 @@ function compute_derivative_info(readout, previous_readout){
 
   const is_hall_transition = prev_hall_sector != hall_sector;
 
-  const direction = is_hall_transition ? hall_transition_direction(prev_hall_sector, hall_sector) : prev_direction;
+  const direction = (
+    is_hall_transition ? hall_transition_direction(prev_hall_sector, hall_sector) : 
+    emf_detected ? (emf_direction_negative ? -1 : +1) :
+    0
+  );
 
   const angle_from_emf = normalize_degrees(emf_voltage_angle + (direction * 90));
 
