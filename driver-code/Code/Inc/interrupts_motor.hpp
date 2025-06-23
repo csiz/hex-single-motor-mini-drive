@@ -45,20 +45,11 @@ static inline MotorOutputs update_motor_smooth(
 ){
     const bool emf_detected = (readout.angle >> 11) & 0b1;
 
-    const int current_target = smooth_parameters.current_target;
+    // Get the abs value of the target PWM.
+    const int abs_pwm = min(pwm_max, abs(smooth_parameters.pwm_target));
 
-    pid_state.torque_control = compute_pid_control(
-        pid_parameters.torque_gains,
-        pid_state.torque_control,
-        readout.beta_current,
-        current_target
-    );
-
-    // Get the target PWM after torque control.
-    const int pwm = min(pwm_max, abs(pid_state.torque_control.output));
-
-    // Base the direction on the torque control output.
-    const int direction = pid_state.torque_control.output >= 0 ? +1 : -1;
+    // Base the direction on the sign of the target PWM.
+    const int direction = smooth_parameters.pwm_target >= 0 ? +1 : -1;
 
     // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
     // the beta current. Since calculating the angle is expensive just consider the ratio.
@@ -88,10 +79,40 @@ static inline MotorOutputs update_motor_smooth(
 
     return MotorOutputs{
         .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm / pwm_base),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm / pwm_base),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm / pwm_base)
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm / pwm_base),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm / pwm_base),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm / pwm_base)
     };
+}
+
+static inline MotorOutputs update_motor_torque(
+    FullReadout const& readout,
+    DriveTorque const& torque_parameters,
+    PIDControlState & pid_state
+){
+    // Calculate the target current in fixed point format.
+    const int16_t current_target = torque_parameters.current_target;
+
+    // Update the PID control for the torque.
+    pid_state.torque_control = compute_pid_control(
+        pid_parameters.torque_gains,
+        pid_state.torque_control,
+        readout.beta_current,
+        current_target
+    );
+
+    // Get the target PWM after torque control.
+    const int16_t pwm_target = pid_state.torque_control.output;
+
+    return update_motor_smooth(
+        readout,
+        DriveSmooth{
+            .duration = torque_parameters.duration,
+            .pwm_target = pwm_target,
+            .leading_angle = torque_parameters.leading_angle
+        },
+        pid_state
+    );
 }
 
 // Motor control
@@ -161,15 +182,27 @@ static inline MotorOutputs update_motor_control(
             break;
 
         case DriverState::DRIVE_SMOOTH:
-            // Reset the PID controls when switching to smooth drive mode; but keep the
-            // same control state between smooth commands.
-            if (driver_state != DriverState::DRIVE_SMOOTH) pid_state = null_pid_control_state;
             driver_state = DriverState::DRIVE_SMOOTH;
             driver_parameters = DriverParameters{
                 .smooth = DriveSmooth{
                     .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.smooth.duration)),
-                    .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_parameters.smooth.current_target)),
+                    .pwm_target = static_cast<int16_t>(clip_to(-pwm_max, +pwm_max, pending_parameters.smooth.pwm_target)),
                     .leading_angle = static_cast<int16_t>(clip_to(0, angle_base, pending_parameters.smooth.leading_angle))
+                }
+            };
+            break;
+            
+        case DriverState::DRIVE_TORQUE:
+            // Reset the PID for torque control unless we are switching between DRIVE_TORQUE commands.
+            if (driver_state != DriverState::DRIVE_TORQUE) {
+                pid_state.torque_control = PIDControl{};
+            }
+            driver_state = DriverState::DRIVE_TORQUE;
+            driver_parameters = DriverParameters{
+                .torque = DriveTorque{
+                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.torque.duration)),
+                    .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_parameters.torque.current_target)),
+                    .leading_angle = static_cast<int16_t>(clip_to(0, angle_base, pending_parameters.torque.leading_angle))
                 }
             };
             break;
@@ -264,6 +297,21 @@ static inline MotorOutputs update_motor_control(
             } else {
                 driver_parameters.smooth.duration -= 1;
                 return update_motor_smooth(readout, driver_parameters.smooth, pid_state);
+            }
+        }
+        case DriverState::DRIVE_TORQUE: {
+            const bool angle_valid = (readout.angle >> 12) & 0b1;
+
+            // Break at the end of the command duration or if the angle is invalid.
+            if (not driver_parameters.torque.duration or not angle_valid) {
+                // Reset the PID state.
+                pid_state = null_pid_control_state;
+                driver_state = DriverState::OFF;
+                driver_parameters = null_driver_parameters;
+                return breaking_motor_outputs;
+            } else {
+                driver_parameters.torque.duration -= 1;
+                return update_motor_torque(readout, driver_parameters.torque, pid_state);
             }
         }
     }

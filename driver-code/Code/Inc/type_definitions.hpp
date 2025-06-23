@@ -19,6 +19,7 @@ enum struct DriverState : uint16_t {
     SCHEDULE,
     DRIVE_6_SECTOR,
     DRIVE_SMOOTH,
+    DRIVE_TORQUE
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -78,11 +79,18 @@ struct Drive6Sector {
     int16_t pwm_target;
 };
 
-// Drive the motor using FOC targeting an output current (torque).
+// Drive the motor using FOC targeting a PWM value.
 struct DriveSmooth {
     uint16_t duration; // Duration for the command in pwm cycles.
-    int16_t current_target;
+    int16_t pwm_target;
     int16_t leading_angle;
+};
+
+// Drive the motor to a specific current target (torque target).
+struct DriveTorque {
+    uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t current_target; // Target current in fixed point format.
+    int16_t leading_angle; // Leading angle for the current control.
 };
 
 // Drive parameters for each state.
@@ -91,6 +99,7 @@ union DriverParameters {
     DriveSchedule schedule;
     Drive6Sector sector;
     DriveSmooth smooth;
+    DriveTorque torque;
 };
 
 const DriverParameters null_driver_parameters = {};

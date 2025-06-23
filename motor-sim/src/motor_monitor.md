@@ -472,6 +472,14 @@ const command_buttons = Inputs.button(
       await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_pwm: -command_pwm});
       snapshot_if_checked(500);
     }],
+    ["Drive torque +", async function(){
+      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_pwm: +command_pwm});
+      snapshot_if_checked(500);
+    }],
+    ["Drive torque -", async function(){
+      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_pwm: -command_pwm});
+      snapshot_if_checked(500);
+    }],
     ["Freewheel", async function(){
       await command(command_codes.SET_STATE_FREEWHEEL);
       snapshot_if_checked(0);

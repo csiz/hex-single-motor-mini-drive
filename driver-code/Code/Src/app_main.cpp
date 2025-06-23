@@ -315,8 +315,19 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_SMOOTH, 
                 DriverParameters{ .smooth = DriveSmooth{ 
                     .duration = command.timeout, 
-                    .current_target = static_cast<int16_t>(max_drive_current * command.pwm / pwm_max),
+                    .pwm_target = command.pwm,
                     .leading_angle = command.leading_angle 
+                }}
+            );
+            return false;
+
+        case SET_STATE_DRIVE_TORQUE:
+            set_motor_command(
+                DriverState::DRIVE_TORQUE, 
+                DriverParameters{ .torque = DriveTorque{ 
+                    .duration = command.timeout, 
+                    .current_target = static_cast<int16_t>(max_drive_current * command.pwm / pwm_max),
+                    .leading_angle = command.leading_angle
                 }}
             );
             return false;
