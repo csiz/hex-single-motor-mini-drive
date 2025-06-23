@@ -202,16 +202,6 @@ void app_init() {
     initialize_angle_tracking();
 }
 
-static inline FullReadout guarded_get_readout() {
-    // Disable the ADC interrupt while we read the latest readout.
-    NVIC_DisableIRQ(ADC1_2_IRQn);
-    // We should read from the circular buffer without disabling interrupts 
-    // when we use a chip with more memory...
-    FullReadout readout = get_readout();
-    NVIC_EnableIRQ(ADC1_2_IRQn);
-    return readout;
-}
-
 static inline void motor_start_test(PWMSchedule const& schedule){
     // Clear the readouts buffer of old data.
     readout_history_reset();
@@ -226,7 +216,7 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     set_motor_command(DriverState::SCHEDULE, DriverParameters{ .schedule = &schedule });
 }
 
-// Run a unit test that takes a function pointer to a test function (which itself takes a buffer).
+// Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
 inline bool run_unit_test( void (*test_function)(char * buffer, size_t max_size)) {
     if (usb_reply_unit_test) return true; // We are already running a unit test.
 
@@ -244,8 +234,8 @@ inline bool run_unit_test( void (*test_function)(char * buffer, size_t max_size)
     return false;
 }
 
-
-bool handle_command(MessageBuffer const & buffer) {
+// Handle the command on the buffer; returns whether there was an error.
+bool handle_command(MessageBuffer const& buffer) {
     const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
     const uint16_t abs_command_pwm = abs(command.pwm);
 
@@ -408,7 +398,7 @@ bool handle_command(MessageBuffer const & buffer) {
             return false;
 
         case SAVE_SETTINGS_TO_FLASH:
-            if(is_motor_stopped()){
+            if(is_motor_safed()){
                 save_settings_to_flash(current_calibration, position_calibration);
 
                 current_calibration = get_current_calibration();
@@ -461,7 +451,7 @@ inline void usb_queue_send(uint8_t * data, size_t len_to_send) {
 }
 
 
-void usb_queue_response(FullReadout const & full_readout) {
+void usb_queue_response(FullReadout const& readout) {
 
     // Check if we have to wait for the queue to fill before sending readouts.
     // This is used to prevent sending readouts while the motor is commutating.
@@ -521,7 +511,7 @@ void usb_queue_response(FullReadout const & full_readout) {
         usb_reply_trigger_angles = false;
     }
 
-    // Send readouts if requested; up to an arbitrary number of readouts so we don't block for long.
+    // Queue the readout history to the send buffer.
     while(usb_readouts_to_send > 0){
         // Check if we can enqueue the readout to the USB buffer.
         if(not usb_check_queue(readout_size)) return;
@@ -544,12 +534,12 @@ void usb_queue_response(FullReadout const & full_readout) {
         if (not usb_check_queue(full_readout_size)) return;
         
         // We have already sent this readout; don't send it again.
-        if (usb_stream_last_sent == full_readout.readout_number) return;
+        if (usb_stream_last_sent == readout.readout_number) return;
 
-        write_full_readout(usb_response_buffer, full_readout);
+        write_full_readout(usb_response_buffer, readout);
         usb_queue_send(usb_response_buffer, full_readout_size);
 
-        usb_stream_last_sent = full_readout.readout_number;
+        usb_stream_last_sent = readout.readout_number;
     }
 }
 
@@ -591,7 +581,7 @@ void usb_receive_command(){
 void app_tick() {
     tick_number += 1;
 
-    FullReadout full_readout = guarded_get_readout();
+    FullReadout readout = get_readout();
 
     // Timing
     // ------
@@ -606,14 +596,14 @@ void app_tick() {
         float seconds = duration_since_timing_update / 1000.f;
 
         tick_rate = (tick_number - last_tick) / seconds;
-        adc_update_rate = ((readout_number_base + full_readout.readout_number - last_readout_number) % readout_number_base) / seconds;
+        adc_update_rate = ((readout_number_base + readout.readout_number - last_readout_number) % readout_number_base) / seconds;
 
         last_tick = tick_number;
-        last_readout_number = full_readout.readout_number;
+        last_readout_number = readout.readout_number;
     }
 
-    full_readout.tick_rate = static_cast<int>(tick_rate);
-    full_readout.adc_update_rate = static_cast<int>(adc_update_rate);
+    readout.tick_rate = static_cast<int>(tick_rate);
+    readout.adc_update_rate = static_cast<int>(adc_update_rate);
 
     // USB comms
     // ---------
@@ -625,7 +615,7 @@ void app_tick() {
     usb_receive_command();
     
     // Queue the state readouts on the USB buffer.
-    usb_queue_response(full_readout);
+    usb_queue_response(readout);
     
     // Send USB data from the buffer, twice per loop, hopefully the 
     // USB module sends 64 byte packets while we computed stuff.

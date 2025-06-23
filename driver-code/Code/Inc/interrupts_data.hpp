@@ -10,23 +10,30 @@
 // Latest Data
 // -----------
 
+// Get a copy of the latest readout data.
 FullReadout get_readout();
+
 
 // Data queue
 // ----------
 
+// Reset the history buffer indexes.
 void readout_history_reset();
+// Check if the readout history is full.
 bool readout_history_full();
+// Check if there's data to read.
 bool readout_history_available();
+// Read the oldest data in the history buffer.
 Readout readout_history_pop();
+
 
 // Motor control
 // -------------
 
-// Check if motor is slowing/stopped (breaking or freewheeling).
-bool is_motor_stopped();
+// Check if the motor is in a safe state (breaking or freewheeling).
+bool is_motor_safed();
 
-// Set the motor command to be executed by the interrupt loop; returns if the command was accepted.
+// Set the motor command to be executed by the interrupt loop.
 void set_motor_command(DriverState const& state, DriverParameters const& parameters);
 
 

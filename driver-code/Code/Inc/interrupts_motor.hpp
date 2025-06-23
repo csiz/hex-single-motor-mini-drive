@@ -99,11 +99,10 @@ static inline MotorOutputs update_motor_smooth(
 // Motor control
 // -------------
 
-static inline void update_motor_control(
+static inline MotorOutputs update_motor_control(
     FullReadout const& readout,
     DriverState const pending_state,
     DriverParameters const& pending_parameters,
-    MotorOutputs & active_motor_outputs,
     DriverState & driver_state,
     DriverParameters & driver_parameters,
     PIDControlState & pid_state
@@ -137,7 +136,10 @@ static inline void update_motor_control(
 
         case DriverState::SCHEDULE:
             // We should not enter testing mode without a valid schedule.
-            if (pending_parameters.schedule.pointer == nullptr) return error();
+            if (pending_parameters.schedule.pointer == nullptr) {
+                error();
+                return breaking_motor_outputs;
+            }
             driver_state = DriverState::SCHEDULE;
             driver_parameters = DriverParameters{
                 .schedule = DriveSchedule{
@@ -180,65 +182,62 @@ static inline void update_motor_control(
 
         // The active driver state should not be NO_CHANGE.
         case DriverState::NO_CHANGE:
-            return error();
+            error();
+            return breaking_motor_outputs;
 
         case DriverState::OFF:
-            active_motor_outputs = breaking_motor_outputs;
-            break;
+            return breaking_motor_outputs;
 
         case DriverState::FREEWHEEL:
-            active_motor_outputs = MotorOutputs{
+            return MotorOutputs{
                 .enable_flags = enable_flags_none,
                 .u_duty = 0,
                 .v_duty = 0,
                 .w_duty = 0
             };
-            break;
 
         case DriverState::HOLD:
             // Break at the end of the command duration.
             if (not driver_parameters.hold.duration) {
-                active_motor_outputs = breaking_motor_outputs;
                 driver_state = DriverState::OFF;
                 driver_parameters = null_driver_parameters;
+                return breaking_motor_outputs;
             } else {
+                driver_parameters.hold.duration -= 1;
                 // Set the motor outputs to hold the current settings.
-                active_motor_outputs = MotorOutputs{
+                return MotorOutputs{
                     .enable_flags = enable_flags_all,
                     .u_duty = driver_parameters.hold.u_duty,
                     .v_duty = driver_parameters.hold.v_duty,
                     .w_duty = driver_parameters.hold.w_duty
                 };
-                driver_parameters.hold.duration -= 1;
             }
-            break;
 
         case DriverState::SCHEDULE:
             // We're done at the end of the schedule.
             if (driver_parameters.schedule.pointer == nullptr or driver_parameters.schedule.current_stage >= schedule_size) {
-                active_motor_outputs = breaking_motor_outputs;
                 driver_state = DriverState::OFF;
                 driver_parameters = null_driver_parameters;
+                return breaking_motor_outputs;
             } else {
                 PWMSchedule const& schedule = *driver_parameters.schedule.pointer;
                 PWMStage const& schedule_stage = schedule[driver_parameters.schedule.current_stage];
     
-                active_motor_outputs = MotorOutputs{
-                    .enable_flags = enable_flags_all,
-                    .u_duty = schedule_stage.u_duty,
-                    .v_duty = schedule_stage.v_duty,
-                    .w_duty = schedule_stage.w_duty
-                };
-    
                 driver_parameters.schedule.stage_counter += 1;
-    
+                
                 if (driver_parameters.schedule.stage_counter >= schedule_stage.duration) {
                     // Move to the next stage in the schedule.
                     driver_parameters.schedule.current_stage += 1;
                     driver_parameters.schedule.stage_counter = 0;
                 }
+                
+                return MotorOutputs{
+                    .enable_flags = enable_flags_all,
+                    .u_duty = schedule_stage.u_duty,
+                    .v_duty = schedule_stage.v_duty,
+                    .w_duty = schedule_stage.w_duty
+                };
             }
-            break;
 
         case DriverState::DRIVE_6_SECTOR: {
             // Re-extract the hall sector in this function.
@@ -246,29 +245,32 @@ static inline void update_motor_control(
 
             // Break at the end of the command duration or if the hall sensor is missing the magnet.
             if (not driver_parameters.sector.duration or hall_sector >= hall_sector_base) {
-                active_motor_outputs = breaking_motor_outputs;
                 driver_state = DriverState::OFF;
                 driver_parameters = null_driver_parameters;
+                return breaking_motor_outputs;
             } else {
-                active_motor_outputs = update_motor_6_sector(hall_sector, driver_parameters.sector);
                 driver_parameters.sector.duration -= 1;
+                return update_motor_6_sector(hall_sector, driver_parameters.sector);
             }
-            break;
         }
         case DriverState::DRIVE_SMOOTH: {
             const bool angle_valid = (readout.angle >> 12) & 0b1;
 
             // Break at the end of the command duration or if the angle is invalid.
             if (not driver_parameters.smooth.duration or not angle_valid) {
-                pid_state = null_pid_control_state; // Reset the PID state.
-                active_motor_outputs = breaking_motor_outputs;
+                // Reset the PID state.
+                pid_state = null_pid_control_state;
                 driver_state = DriverState::OFF;
                 driver_parameters = null_driver_parameters;
+                return breaking_motor_outputs;
             } else {
-                active_motor_outputs = update_motor_smooth(readout, driver_parameters.smooth, pid_state);
                 driver_parameters.smooth.duration -= 1;
+                return update_motor_smooth(readout, driver_parameters.smooth, pid_state);
             }
-            break;
         }
     }
+
+    // If we get here, we have an unknown/corrupted driver state.
+    error();
+    return breaking_motor_outputs;
 }
