@@ -45,6 +45,7 @@ Motor Driving Data
 <div class="card tight">${plot_torque_correction}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
+<div class="card tight">${plot_readout_flags}</div>
 
 
 Motor Control Parameters
@@ -642,6 +643,7 @@ const monitoring_plots = [
   plot_torque_correction,
   plot_dq0_voltages,
   plot_pwm_settings,
+  plot_readout_flags,
 ];
 
 monitoring_plots.forEach((plot) => plot.update({
@@ -666,12 +668,12 @@ const plot_power = plot_lines({
   channels: [
     {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
     {
-      y: "web_total_power_avg", label: "Total Power 0.5ms average", color: d3.color(colors.web_angle).darker(1),
+      y: "web_total_power_avg", label: "Total Power 350us average", color: d3.color(colors.web_angle).darker(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_total_power_stdev}),
     },
     {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
     {
-      y: "web_emf_power_avg", label: "EMF Power 0.5ms average", color: d3.color(colors.u).darker(1),
+      y: "web_emf_power_avg", label: "EMF Power 350us average", color: d3.color(colors.u).darker(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_power_stdev}),
     },
     {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},
@@ -756,13 +758,13 @@ const plot_electric_offsets = plot_lines({
   channels: [
     {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
     {
-      y: "current_angle_offset_avg", label: "Current Angle Offset 0.5ms average", color: d3.color(colors.angle).brighter(1),
+      y: "current_angle_offset_avg", label: "Current Angle Offset 350us average", color: d3.color(colors.angle).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.current_angle_offset_stdev}),
     },
     {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset", color: colors.voltage_angle},
     {y: "angle_diff_to_emf", label: "Angle diff to EMF", color: colors.angle_from_emf},
     {
-      y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 0.5ms average", color: d3.color(colors.angle_from_emf).brighter(1),
+      y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 350us average", color: d3.color(colors.angle_from_emf).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_diff_to_emf_stdev}),
     },
   ],
@@ -804,7 +806,7 @@ const plot_speed = plot_lines({
     {y: "web_angular_speed_stdev", label: "Angular Speed Stdev (computed online)", color: d3.color(colors.web_angular_speed).darker(1)},
     {y: "angular_speed_from_emf", label: "Angular Speed from EMF", color: colors.angle_from_emf},
     {
-      y: "angular_speed_from_emf_avg", label: "Angular Speed from EMF 0.5ms average", color: colors.angle_from_emf,
+      y: "angular_speed_from_emf_avg", label: "Angular Speed from EMF 350us average", color: colors.angle_from_emf,
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_from_emf_stdev}),
     },
   ],
@@ -957,9 +959,13 @@ const plot_dq0_voltages = plot_lines({
     {y: "emf_voltage_beta", label: "Voltage Beta", color: colors.current_beta},
     {y: "emf_voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
     {
-      y: "emf_voltage_magnitude_avg", label: "Voltage Magnitude 0.5ms average", color: d3.color(colors.current_magnitude).brighter(1),
+      y: "emf_voltage_magnitude_avg", label: "Voltage Magnitude 350us average", color: d3.color(colors.current_magnitude).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_magnitude_stdev}),
-    }
+    },
+    {
+      y: "emf_voltage_average", label: "Voltage Average", color: colors.angle,
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_stdev}),
+    },
   ],
   curve,
 });
@@ -980,6 +986,23 @@ const plot_pwm_settings = plot_lines({
   curve,
 });
 
+const plot_readout_flags = plot_lines({
+  subtitle: "Readout Flags",
+  description: "Flags indicating the state of the readouts.",
+  width: 1200, height: 150,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Flag setting",
+  channels: [
+    {y: "angle_valid", label: "Angle valid", color: colors.angle},
+    {y: "emf_detected", label: "EMF detected", color: colors.u},
+    {y: "emf_direction_negative", label: "EMF direction negative", color: colors.v},
+    {y: (d) => d.direction < 0 ? 1 : 0, label: "Hall direction negative", color: colors.w},
+    {y: (d) => d.is_hall_transition ? 1 : 0, label: "Hall transition detected", color: colors.sum},
+    {y: (d) => d.hall_sector === null ? 1 : 0, label: "Hall invalid", color: colors.other},
+  ],
+  curve,
+});
 
 autosave_inputs({
   plot_power,
@@ -999,6 +1022,7 @@ autosave_inputs({
   plot_torque_correction,
   plot_dq0_voltages,
   plot_pwm_settings,
+  plot_readout_flags,
 });
 
 ```

@@ -145,6 +145,11 @@ function parse_readout(data_view, previous_readout){
 
   // The next bit is the motor angle valid flag.
   const angle_valid = (angle_bytes >> 12) & 0b1;
+
+  const emf_detected = (angle_bytes >> 11) & 0b1;
+
+  const emf_direction_negative = (angle_bytes >> 10) & 0b1;
+
   // The last 10 bits are the motor angle. Representing range from 0 to 360 degrees,
   // where 0 means the rotor is aligned by holding positive current on the U phase.
   const angle = angle_units_to_degrees(angle_bytes & 0x3FF);
@@ -231,6 +236,8 @@ function parse_readout(data_view, previous_readout){
     hall_u, hall_v, hall_w, hall_sector,
     hall_u_as_angle, hall_v_as_angle, hall_w_as_angle,
     angle_valid, angle, angular_speed,
+    emf_detected,
+    emf_direction_negative,
     instant_vcc_voltage,
     current_angle_offset,
     emf_voltage_alpha, emf_voltage_beta, emf_voltage_magnitude,
@@ -244,7 +251,7 @@ function parse_readout(data_view, previous_readout){
   return process_readout.call(this, readout, previous_readout);
 }
 
-const full_readout_size = 70;
+const full_readout_size = 74;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
@@ -269,10 +276,15 @@ function parse_full_readout(data_view, previous_readout){
   const beta_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
 
-  const alpha_emf_voltage = data_view.getInt16(offset);
+  const alpha_emf_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
-  const beta_emf_voltage = data_view.getInt16(offset);
-  offset += 2;  
+  const beta_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  offset += 2;
+
+  const emf_voltage_average = calculate_voltage(data_view.getInt16(offset));
+  offset += 2;
+  const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
+  offset += 2;
 
   const angle_stdev = variance_units_to_degrees_stdev(data_view.getUint16(offset));
   offset += 2;
@@ -311,6 +323,8 @@ function parse_full_readout(data_view, previous_readout){
     beta_current,
     alpha_emf_voltage,
     beta_emf_voltage,
+    emf_voltage_average,
+    emf_voltage_stdev,
     angle_stdev,
     angular_speed_stdev,
     total_power,

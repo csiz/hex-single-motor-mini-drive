@@ -56,9 +56,8 @@ static inline int combined_gaussian_variance(int variance_a, int variance_b){
 // prior distribution (the predicted angle and speed) and the observation (the hall sensor trigger).
 // We consider both inputs to be gaussian distributions, the result is also a gaussian distribution.
 static inline PositionStatistics bayesian_update(
-    PositionStatistics const & prior, 
-    PositionStatistics const & measurement_error,
-    int max_angle_variance
+    PositionStatistics const& prior, 
+    PositionStatistics const& measurement_error
 ){
     // Note that we have changed coordinates so the predicted angle is 0 and so is the predicted speed.
     // In this case we only need to adjust based on the distance error.
@@ -78,7 +77,7 @@ static inline PositionStatistics bayesian_update(
     const int angle = normalize_angle(prior.angle + (distance_adjustment ? distance_adjustment : sign(measurement_error.angle)));
 
     const int angle_variance = clip_to(
-        1, max_angle_variance,
+        1, default_sector_center_variance,
         combined_gaussian_variance(
             measurement_error.angle_variance,
             prior.angle_variance
@@ -146,7 +145,7 @@ static inline PositionStatistics predict_position(PositionStatistics const & pre
 
 // Compute the error in the position when we see a hall sensor toggle.
 static inline PositionStatistics compute_transition_error(
-    PositionStatistics const & predicted_position, 
+    PositionStatistics const& predicted_position, 
     const uint8_t hall_sector, 
     const uint8_t previous_hall_sector
 ) {
@@ -196,8 +195,9 @@ static inline PositionStatistics compute_transition_error(
 
 // Calculate any adjustments when we don't have new hall data.
 static inline PositionStatistics compute_non_transition_error(
-    PositionStatistics const & predicted_position, 
-    const uint8_t hall_sector
+    PositionStatistics const& predicted_position, 
+    const uint8_t hall_sector,
+    const bool emf_detected
 ) {
     // No transition seen yet; anticipate the next hall transition and compare to our predicted
     // angle. If we should have crossed it by prediction then we should slow down our speed estimate.
@@ -236,10 +236,10 @@ static inline PositionStatistics compute_non_transition_error(
 
     if (same_direction) {
         // No transition expected and no information gained; slowly decay to the center of the sector.
-        return PositionStatistics{
+        return emf_detected ? null_position_statistics : PositionStatistics{
             .angle = distance_to_hall_center,
             .angle_variance = max_16bit,
-            .angular_speed = sign(distance_to_hall_center),
+            .angular_speed = distance_to_hall_center * speed_fixed_point,
             .angular_speed_variance = max_16bit
         };
     } else {
@@ -271,9 +271,10 @@ static inline PositionStatistics get_default_sector_position(const uint8_t hall_
 
 // Update the predicted position based on the hall sensors (whether there's a reading or not).
 static inline PositionStatistics infer_position_from_hall_sensors(
-    PositionStatistics const & predicted_position,
+    PositionStatistics const& predicted_position,
     const uint8_t hall_sector, 
-    const uint8_t previous_hall_sector
+    const uint8_t previous_hall_sector,
+    const bool emf_detected
 ) {
     // Check if we've switched sectors.
     const bool is_hall_transition = (hall_sector != previous_hall_sector);
@@ -286,15 +287,13 @@ static inline PositionStatistics infer_position_from_hall_sensors(
             previous_hall_sector) : 
         compute_non_transition_error(
             predicted_position,
-            hall_sector
+            hall_sector,
+            emf_detected
         )
     );
 
-    // Reference the maximum angle variance for this sector.
-    const int max_angle_variance = position_calibration.sector_center_variances[hall_sector];
-
     // Update the position statistics by combining gaussian distributions (this is the Kalman update).
-    return bayesian_update(predicted_position, position_error, max_angle_variance);
+    return bayesian_update(predicted_position, position_error);
 }
 
 // Read the hall sensors and update the motor rotation angle. Sensor chips might be: SS360NT (can't read the inprint clearly).

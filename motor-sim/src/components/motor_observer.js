@@ -189,7 +189,7 @@ function compute_derivative_info(readout, previous_readout){
   // Time units are milliseconds.
   const dt = time - prev_time;
 
-  const exp_stats = exponential_stats(dt, 0.5);
+  const exp_stats = exponential_stats(dt, 0.350);
 
 
   const angular_speed_from_emf = normalize_degrees(emf_voltage_angle - prev_emf_voltage_angle) / dt;

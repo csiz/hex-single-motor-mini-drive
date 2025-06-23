@@ -274,7 +274,8 @@ void adc_interrupt_handler(){
         infer_position_from_hall_sensors(
             predicted_position,
             hall_sector,
-            previous_hall_sector
+            previous_hall_sector,
+            (readout.angle >> 11) & 0b1 // EMF voltage was detected in the previous cycle (bit 11 is set).
         ) : 
         // If the previous sector was invalid; initialize the position.
         get_default_sector_position(hall_sector) : 
@@ -342,6 +343,125 @@ void adc_interrupt_handler(){
     const int16_t neg_sin_v = -get_sin(electric_position.angle - third_circle);
     const int16_t neg_sin_w = -get_sin(electric_position.angle - two_thirds_circle);
 
+    // Calculate the park transformed currents.
+    // 
+    // The beta component contributes to torque. The alpha component should be driven to zero, but it
+    // can also be used to hold the motor at standstill. When we stay within a single hall sector, the
+    // angle estimate degrades to +-30 degrees. A holding current would exert a torque proportional to
+    // the deviation between the real and target angle even when we can't sense the real angle.
+
+    const int alpha_current = (
+        u_current * cos_u / angle_base +
+        v_current * cos_v / angle_base +
+        w_current * cos_w / angle_base
+    );
+
+    const int beta_current = (
+        u_current * neg_sin_u / angle_base +
+        v_current * neg_sin_v / angle_base +
+        w_current * neg_sin_w / angle_base
+    );
+
+    // Calculate the park transformed EMF voltages.
+    // 
+    // Use the kalman filtered angle estimates. These are updated on the order of 2KHz while the PWM
+    // cycle is at 23KHz. The angle might diverge from reality and we can sense it by the misalignment
+    // in the park transformed voltages. We should adjust our angle estimate such that our calculations
+    // obtain an alpha emf voltage close to zero. The EMF voltage is a source of information about the
+    // rotor position and speed. But we don't have compute to calculate the angle, so we treat it as an
+    // optimization problem over multiple cycles.
+
+    const int alpha_emf_voltage = (
+        u_emf_voltage * cos_u / angle_base +
+        v_emf_voltage * cos_v / angle_base +
+        w_emf_voltage * cos_w / angle_base
+    );
+
+    const int beta_emf_voltage = (
+        u_emf_voltage * neg_sin_u / angle_base +
+        v_emf_voltage * neg_sin_v / angle_base +
+        w_emf_voltage * neg_sin_w / angle_base
+    );
+
+    
+    // We can't compute sqrt in the loop, instead use the max abs value of the EMF voltages;
+    // As we optimize our angle estimate, the alpha EMF voltage should approach zero and
+    // the beta EMF voltage will be equal to the EMF voltage magnitude.
+    const int emf_voltage = max(abs(alpha_emf_voltage), abs(beta_emf_voltage));
+    
+    // Calculate ~350us exponential moving average of the EMF voltage.
+
+    const int emf_voltage_average = round_div(emf_voltage + 7 * readout.emf_voltage_average, 8);
+    const int emf_voltage_variance = round_div(
+        square(emf_voltage - emf_voltage_average) +
+        7 * readout.emf_voltage_variance,
+        8
+    );
+
+    // Check if the emf voltage is away from zero with enough confidence.
+    // 
+    // Our confidence is 2 standard deviations, but the positive average is also expected to be
+    // at 1 stdev away, so we have to compensate.
+    const bool emf_detected = square(emf_voltage_average) > 9 * emf_voltage_variance;
+
+    // The rotation direction is the sign of the negative of the beta EMF voltage.
+    const bool emf_direction_is_negative = emf_detected and (beta_emf_voltage > 0);
+
+    // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
+    // use it to update the position between hall sensor toggles.
+    if (emf_detected) {
+        // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
+        // the beta current. Since calculating the angle is expensive just consider the ratio.
+        const int approximate_angle_error = -clip_to(
+            -eighth_circle, +eighth_circle, 
+            not beta_emf_voltage ? 0 : eighth_circle * alpha_emf_voltage / beta_emf_voltage
+        );
+
+        electric_position = bayesian_update(
+            electric_position,
+            PositionStatistics{
+                .angle = approximate_angle_error,
+                .angle_variance = emf_angle_variance,
+                .angular_speed = approximate_angle_error * speed_fixed_point,
+                .angular_speed_variance = emf_speed_variance
+            }
+        );
+    }
+
+    // Calculate the power values using the phase currents and voltages.
+    
+    const int total_power = -(
+        power_div_voltage_fixed_point * (
+            u_current * u_drive_voltage + 
+            v_current * v_drive_voltage + 
+            w_current * w_drive_voltage
+        ) / current_fixed_point
+    );
+
+    const int resistive_power = (
+        power_div_voltage_fixed_point * (
+            u_current * u_resistive_voltage + 
+            v_current * v_resistive_voltage + 
+            w_current * w_resistive_voltage
+        ) / current_fixed_point
+    );
+
+    const int emf_power = -(
+        power_div_voltage_fixed_point * (
+            u_current * u_emf_voltage + 
+            v_current * v_emf_voltage + 
+            w_current * w_emf_voltage
+        ) / current_fixed_point
+    );
+
+    const int inductive_power = (
+        power_div_voltage_fixed_point * (
+            u_current * u_inductor_voltage + 
+            v_current * v_inductor_voltage + 
+            w_current * w_inductor_voltage
+        ) / current_fixed_point
+    );
+
 
     // Write the latest readout data
     // -----------------------------
@@ -366,84 +486,25 @@ void adc_interrupt_handler(){
     readout.instant_vcc_voltage = instant_vcc_voltage;
     readout.vcc_voltage = vcc_voltage;
 
-    // The angle is 10 bits so we have 6 bits left to encode the hall state, angle validity, and if the motor is moving.
-    readout.angle = (electric_position.angle & 0x3FF) | (hall_state << 13) | angle_valid << 12;
+    // The angle is 10 bits so we have 6 bits left to encode the hall state, angle validity, emf detection (when the rotor moves), and direction.
+    readout.angle = (electric_position.angle & 0x3FF) | (hall_state << 13) | angle_valid << 12 | emf_detected << 11 | emf_direction_is_negative << 10;
     readout.angle_variance = electric_position.angle_variance;
     readout.angular_speed = electric_position.angular_speed;
     readout.angular_speed_variance = electric_position.angular_speed_variance;
 
+    readout.alpha_current = alpha_current;
+    readout.beta_current = beta_current;
 
-    // Calculate the park transformed currents.
-    //
-    // Use the kalman filtered angle estimates. These are updated on the order of 2KHz while the PWM
-    // cycle is at 23KHz. The angle might diverge from reality and we can sense it by the misalignment
-    // in the park transformed currents.
-    // 
-    // The beta component contributes to torque. The alpha component should be driven to zero, but it
-    // can also be used to hold the motor at standstill. When we stay within a single hall sector, the
-    // angle estimate degrades to +-30 degrees. A holding current would exert a torque proportional to
-    // the deviation between the real and target angle even when we can't sense the real angle.
+    readout.alpha_emf_voltage = alpha_emf_voltage;
+    readout.beta_emf_voltage = beta_emf_voltage;
 
-    readout.alpha_current = (
-        u_current * cos_u / angle_base +
-        v_current * cos_v / angle_base +
-        w_current * cos_w / angle_base
-    );
+    readout.emf_voltage_average = emf_voltage_average;
+    readout.emf_voltage_variance = emf_voltage_variance;
 
-    readout.beta_current = (
-        u_current * neg_sin_u / angle_base +
-        v_current * neg_sin_v / angle_base +
-        w_current * neg_sin_w / angle_base
-    );
-
-    // Calculate the park transformed EMF voltages.
-
-    readout.alpha_emf_voltage = (
-        u_emf_voltage * cos_u / angle_base +
-        v_emf_voltage * cos_v / angle_base +
-        w_emf_voltage * cos_w / angle_base
-    );
-
-    readout.beta_emf_voltage = (
-        u_emf_voltage * neg_sin_u / angle_base +
-        v_emf_voltage * neg_sin_v / angle_base +
-        w_emf_voltage * neg_sin_w / angle_base
-    );
-
-    // Calculate the power values using the phase currents and voltages.
-    
-    readout.total_power = -(
-        power_div_voltage_fixed_point * (
-            u_current * u_drive_voltage + 
-            v_current * v_drive_voltage + 
-            w_current * w_drive_voltage
-        ) / current_fixed_point
-    );
-
-    readout.resistive_power = (
-        power_div_voltage_fixed_point * (
-            u_current * u_resistive_voltage + 
-            v_current * v_resistive_voltage + 
-            w_current * w_resistive_voltage
-        ) / current_fixed_point
-    );
-
-    readout.emf_power = -(
-        power_div_voltage_fixed_point * (
-            u_current * u_emf_voltage + 
-            v_current * v_emf_voltage + 
-            w_current * w_emf_voltage
-        ) / current_fixed_point
-    );
-
-    readout.inductive_power = (
-        power_div_voltage_fixed_point * (
-            u_current * u_inductor_voltage + 
-            v_current * v_inductor_voltage + 
-            w_current * w_inductor_voltage
-        ) / current_fixed_point
-    );
-
+    readout.total_power = total_power;
+    readout.resistive_power = resistive_power;
+    readout.emf_power = emf_power;
+    readout.inductive_power = inductive_power;
 
 
     // Calculate motor outputs and write control state

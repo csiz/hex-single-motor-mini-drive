@@ -80,8 +80,6 @@ const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_fl
 // Max driving current that we can command.
 const int16_t max_drive_current = 4 * current_fixed_point;
 
-// Minimum driving current to move the motor.
-const int16_t min_drive_current = max_drive_current / 32;
 
 // Resistance of the motor phase windings & mosfet; in Ohm.
 // Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
@@ -287,6 +285,9 @@ const int default_sector_center_variance = square(30 * angle_base / 360) / varia
 // Ensure that our biggest variance is small enough to be usable in gaussian updates while staying < max_16bit.
 static_assert(default_sector_center_variance * 16 < max_16bit, "max_variance must be less than 32768 (max 16-bit signed int)");
 
+// Variance of the EMF angle correction.
+const int emf_angle_variance = square(10 * angle_base / 360) / variance_divider;
+
 // The hall sensors trigger later than expected going each direction.
 const int hysterisis = 5 * angle_base / 360;
 
@@ -298,6 +299,9 @@ const int speed_fixed_point = 128;
 
 // Fixed point for speed variance with respect to angle units variance.
 const int speed_variance_fixed_point = 256;
+
+// Variance of the EMF speed correction.
+const int emf_speed_variance = emf_angle_variance * speed_variance_fixed_point;
 
 // Conversion factor between square speed and speed variance.
 const int speed_variance_to_square_speed = square(speed_fixed_point) / speed_variance_fixed_point * variance_divider;

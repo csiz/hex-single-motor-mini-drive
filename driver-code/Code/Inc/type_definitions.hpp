@@ -126,6 +126,8 @@ struct FullReadout : public Readout {
     int16_t beta_current;
     int16_t alpha_emf_voltage;
     int16_t beta_emf_voltage;
+    int16_t emf_voltage_average;
+    int16_t emf_voltage_variance;
     uint16_t angle_variance;
     uint16_t angular_speed_variance;
     int16_t total_power;

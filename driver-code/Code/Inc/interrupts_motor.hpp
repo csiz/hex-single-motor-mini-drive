@@ -43,11 +43,9 @@ static inline MotorOutputs update_motor_smooth(
     DriveSmooth const& smooth_parameters,
     PIDControlState & pid_state
 ){
-    const int target_direction = smooth_parameters.current_target >= 0 ? +1 : -1;
+    const bool emf_detected = (readout.angle >> 11) & 0b1;
 
-    const bool is_motor_moving = abs(readout.angular_speed) > threshold_speed;
-
-    const int current_target = smooth_parameters.current_target + (is_motor_moving ? 0 : target_direction * min_drive_current);
+    const int current_target = smooth_parameters.current_target;
 
     pid_state.torque_control = compute_pid_control(
         pid_parameters.torque_gains,
@@ -70,11 +68,11 @@ static inline MotorOutputs update_motor_smooth(
     );
 
     // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-    pid_state.current_angle_control = compute_pid_control(
+    pid_state.current_angle_control = not emf_detected ? PIDControl{} : compute_pid_control(
         pid_parameters.current_angle_gains,
         pid_state.current_angle_control,
         -approximate_angle_error,
-        is_motor_moving ? 0 : -get_cos(smooth_parameters.leading_angle) * eighth_circle / angle_base
+        0
     );
 
     const int target_lead_angle = direction * (smooth_parameters.leading_angle + pid_state.current_angle_control.output);
