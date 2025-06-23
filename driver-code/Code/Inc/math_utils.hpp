@@ -32,8 +32,3 @@ static inline constexpr int round_div(const int x, const int y) {
     // Round the division to the nearest integer.
     return (x + y / 2) / y;
 }
-
-static inline constexpr int signed_round_div(const int x, const int y) {
-    // Round the division to the nearest integer, preserving the sign.
-    return (x >= 0 ? (x + y / 2) : (x - y / 2)) / y;
-}

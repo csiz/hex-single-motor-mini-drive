@@ -29,7 +29,7 @@ static inline int combined_gaussian_adjustment(int a, int variance_a, int varian
     if (variance_a == 0) return 0;
 
     const int variance_sum = variance_a + variance_b;
-    return signed_round_div(a * variance_b, variance_sum);
+    return a * variance_b / variance_sum;
 }
 
 // Combine gaussians; this is the product of two normal PDFs with means a and b 
@@ -39,7 +39,7 @@ static inline int combined_gaussian_adjustment(int a, int variance_a, int varian
 // both input distribtutions represent the same underlying variable.
 static inline int combined_gaussian_mean(int a, int variance_a, int b, int variance_b){
     const int variance_sum = variance_a + variance_b;
-    return signed_round_div(a * variance_b + b * variance_a, variance_sum);
+    return (a * variance_b + b * variance_a) / variance_sum;
 }
 
 // Get the variance of the product of two normal PDFs.
@@ -126,7 +126,7 @@ static inline PositionStatistics predict_position(PositionStatistics const & pre
 
     const int predicted_angle = normalize_angle(
         previous.angle + 
-        signed_round_div(previous.angular_speed, speed_fixed_point)
+        previous.angular_speed / speed_fixed_point
     );
 
     const int predicted_angle_variance = min(
