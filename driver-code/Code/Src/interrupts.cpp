@@ -232,7 +232,7 @@ void adc_interrupt_handler(){
 
 
     // Average out the VCC voltage; it should be relatively stable so average to reduce our error.
-    const int vcc_voltage = round_div(instant_vcc_voltage * 4 + readout.vcc_voltage * 12, 16);
+    const int vcc_voltage = round_div(instant_vcc_voltage + readout.vcc_voltage * 3, 4);
 
     // Calculate our outputs on the motor phases.
     // If we managed to set the compare before the new cycle then it's the mid point; otherwise it's the previous outputs.
@@ -444,36 +444,28 @@ void adc_interrupt_handler(){
     // Calculate the power values using the phase currents and voltages.
     
     const int total_power = -(
-        power_div_voltage_fixed_point * (
-            u_current * u_drive_voltage + 
-            v_current * v_drive_voltage + 
-            w_current * w_drive_voltage
-        ) / current_fixed_point
-    );
+        u_current * u_drive_voltage + 
+        v_current * v_drive_voltage + 
+        w_current * w_drive_voltage
+    ) / voltage_current_div_power_fixed_point;
 
     const int resistive_power = (
-        power_div_voltage_fixed_point * (
-            u_current * u_resistive_voltage + 
-            v_current * v_resistive_voltage + 
-            w_current * w_resistive_voltage
-        ) / current_fixed_point
-    );
+        u_current * u_resistive_voltage + 
+        v_current * v_resistive_voltage + 
+        w_current * w_resistive_voltage
+    ) / voltage_current_div_power_fixed_point;
 
     const int emf_power = -(
-        power_div_voltage_fixed_point * (
-            u_current * u_emf_voltage + 
-            v_current * v_emf_voltage + 
-            w_current * w_emf_voltage
-        ) / current_fixed_point
-    );
+        u_current * u_emf_voltage + 
+        v_current * v_emf_voltage + 
+        w_current * w_emf_voltage
+    ) / voltage_current_div_power_fixed_point;
 
     const int inductive_power = (
-        power_div_voltage_fixed_point * (
-            u_current * u_inductor_voltage + 
-            v_current * v_inductor_voltage + 
-            w_current * w_inductor_voltage
-        ) / current_fixed_point
-    );
+        u_current * u_inductor_voltage + 
+        v_current * v_inductor_voltage + 
+        w_current * w_inductor_voltage
+    ) / voltage_current_div_power_fixed_point;
 
 
     // Write the latest readout data
@@ -538,6 +530,14 @@ void adc_interrupt_handler(){
     readout.torque_error = pid_state.torque_control.error;
     readout.torque_control = pid_state.torque_control.output;
 
+    readout.battery_power_error = pid_state.battery_power_control.error;
+    readout.battery_power_control = pid_state.battery_power_control.output;
+
+    readout.angular_speed_error = pid_state.angular_speed_control.error;
+    readout.angular_speed_control = pid_state.angular_speed_control.output;
+
+    readout.position_error = pid_state.position_control.error;
+    readout.position_control = pid_state.position_control.output;
 
     // Try to write the latest readout if there's space.
     readout_history_push(readout);

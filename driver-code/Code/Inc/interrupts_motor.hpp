@@ -115,6 +115,35 @@ static inline MotorOutputs update_motor_torque(
     );
 }
 
+static inline MotorOutputs update_motor_battery_power(
+    FullReadout const& readout,
+    DriveBatteryPower const& battery_power_parameters,
+    PIDControlState & pid_state
+){
+    const bool direction_is_negative = battery_power_parameters.power_target < 0;
+
+    pid_state.battery_power_control = compute_pid_control(
+        pid_parameters.battery_power_gains,
+        pid_state.battery_power_control,
+        max(0, -readout.total_power),
+        abs(battery_power_parameters.power_target)
+    );
+
+    // Get the target PWM after power control.
+    const int16_t pwm_target = (direction_is_negative ? -1 : 1) * pid_state.battery_power_control.output;
+
+    return update_motor_smooth(
+        readout,
+        DriveSmooth{
+            .duration = battery_power_parameters.duration,
+            .pwm_target = pwm_target,
+            .leading_angle = battery_power_parameters.leading_angle
+        },
+        pid_state
+    );
+}
+
+
 // Motor control
 // -------------
 
@@ -206,6 +235,21 @@ static inline MotorOutputs update_motor_control(
                 }
             };
             break;
+
+        case DriverState::DRIVE_BATTERY_POWER:
+            if (driver_state != DriverState::DRIVE_BATTERY_POWER) {
+                pid_state.battery_power_control = PIDControl{};
+            }
+            driver_state = DriverState::DRIVE_BATTERY_POWER;
+            driver_parameters = DriverParameters{
+                .battery_power = DriveBatteryPower{
+                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.battery_power.duration)),
+                    .power_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_parameters.battery_power.power_target)),
+                    .leading_angle = static_cast<int16_t>(clip_to(0, angle_base, pending_parameters.battery_power.leading_angle))
+                }
+            };
+            break;
+
     }
 
     // Update the active state.
@@ -314,6 +358,22 @@ static inline MotorOutputs update_motor_control(
                 return update_motor_torque(readout, driver_parameters.torque, pid_state);
             }
         }
+        case DriverState::DRIVE_BATTERY_POWER: {
+            const bool angle_valid = (readout.angle >> 12) & 0b1;
+
+            // Break at the end of the command duration or if the angle is invalid.
+            if (not driver_parameters.battery_power.duration or not angle_valid) {
+                // Reset the PID state.
+                pid_state = null_pid_control_state;
+                driver_state = DriverState::OFF;
+                driver_parameters = null_driver_parameters;
+                return breaking_motor_outputs;
+            } else {
+                driver_parameters.battery_power.duration -= 1;
+                return update_motor_battery_power(readout, driver_parameters.battery_power, pid_state);
+            }
+        }
+            
     }
 
     // If we get here, we have an unknown/corrupted driver state.

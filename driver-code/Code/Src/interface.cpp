@@ -67,6 +67,11 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.cycle_end_tick);
     offset += 2;
 
+    write_uint16(buffer + offset, readout.angle_variance);
+    offset += 2;
+    write_uint16(buffer + offset, readout.angular_speed_variance);
+    offset += 2;
+
     write_int16(buffer + offset, readout.alpha_current);
     offset += 2;
     write_int16(buffer + offset, readout.beta_current);
@@ -82,10 +87,6 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.emf_voltage_variance);
     offset += 2;
 
-    write_uint16(buffer + offset, readout.angle_variance);
-    offset += 2;
-    write_uint16(buffer + offset, readout.angular_speed_variance);
-    offset += 2;
 
     write_int16(buffer + offset, readout.total_power);
     offset += 2;
@@ -100,10 +101,21 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.current_angle_control);
     offset += 2;
-
     write_int16(buffer + offset, readout.torque_error);
     offset += 2;
     write_int16(buffer + offset, readout.torque_control);
+    offset += 2;
+    write_int16(buffer + offset, readout.battery_power_error);
+    offset += 2;
+    write_int16(buffer + offset, readout.battery_power_control);
+    offset += 2;
+    write_int16(buffer + offset, readout.angular_speed_error);
+    offset += 2;
+    write_int16(buffer + offset, readout.angular_speed_control);
+    offset += 2;
+    write_int16(buffer + offset, readout.position_error);
+    offset += 2;
+    write_int16(buffer + offset, readout.position_control);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -188,6 +200,15 @@ void write_pid_parameters(uint8_t * buffer, PIDParameters const & parameters) {
     write_int16(buffer + offset, parameters.torque_gains.max_output);
     offset += 2;
 
+    write_int16(buffer + offset, parameters.battery_power_gains.kp);
+    offset += 2;
+    write_int16(buffer + offset, parameters.battery_power_gains.ki);
+    offset += 2;
+    write_int16(buffer + offset, parameters.battery_power_gains.kd);
+    offset += 2;
+    write_int16(buffer + offset, parameters.battery_power_gains.max_output);
+    offset += 2;
+
     write_int16(buffer + offset, parameters.angular_speed_gains.kp);
     offset += 2;
     write_int16(buffer + offset, parameters.angular_speed_gains.ki);
@@ -241,6 +262,7 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_HOLD_W_NEGATIVE:
         case SET_STATE_DRIVE_SMOOTH:
         case SET_STATE_DRIVE_TORQUE:
+        case SET_STATE_DRIVE_BATTERY_POWER:
         case GET_CURRENT_FACTORS:
         case GET_TRIGGER_ANGLES:
         case GET_PID_PARAMETERS:
@@ -412,6 +434,15 @@ PIDParameters parse_pid_parameters(uint8_t const * data, size_t size) {
     parameters.torque_gains.kd = read_int16(data + offset);
     offset += 2;
     parameters.torque_gains.max_output = read_int16(data + offset);
+    offset += 2;
+
+    parameters.battery_power_gains.kp = read_int16(data + offset);
+    offset += 2;
+    parameters.battery_power_gains.ki = read_int16(data + offset);
+    offset += 2;
+    parameters.battery_power_gains.kd = read_int16(data + offset);
+    offset += 2;
+    parameters.battery_power_gains.max_output = read_int16(data + offset);
     offset += 2;
 
     parameters.angular_speed_gains.kp = read_int16(data + offset);

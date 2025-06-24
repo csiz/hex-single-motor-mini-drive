@@ -29,11 +29,13 @@ Motor Driving Data
   <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${plot_power}</div>
+<div class="card tight">${plot_current_angle_control}</div>
+<div class="card tight">${plot_torque_control}</div>
+<div class="card tight">${plot_battery_power_control}</div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_electric_offsets}</div>
-<div class="card tight">${plot_current_angle_correction}</div>
 <div class="card tight">${plot_speed}</div>
 <div class="card tight">${plot_acceleration}</div>
 <div class="card tight">${plot_measured_voltage}</div>
@@ -42,7 +44,6 @@ Motor Driving Data
 <div class="card tight">${plot_voltages}</div>
 <div class="card tight">${plot_inferred_voltages}</div>
 <div class="card tight">${plot_dq0_currents}</div>
-<div class="card tight">${plot_torque_correction}</div>
 <div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 <div class="card tight">${plot_readout_flags}</div>
@@ -64,15 +65,18 @@ Motor Control Parameters
 </div>
 <div class="card tight">
   <h3>Torque Control</h3>
-  <div>${torque_control_gains_input}</div>
+  <div>${torque_gains_input}</div>
 </div>
 <div class="card tight">
+  <h3>Battery Power Control</h3>
+  <div>${battery_power_gains_input}</div>
+<div class="card tight">
   <h3>Angular Speed Control</h3>
-  <div>${angular_speed_control_gains_input}</div>
+  <div>${angular_speed_gains_input}</div>
 </div>
 <div class="card tight">
   <h3>Position Control</h3>
-  <div>${position_control_gains_input}</div>
+  <div>${position_gains_input}</div>
 </div>
 
 Current Calibration Procedures
@@ -296,7 +300,7 @@ d3.select(command_options_input).select("div label").style("width", "100em");
 
 const command_options = Generators.input(command_options_input);
 
-const command_pwm_slider = inputs_wide_range([0, +1], {value: 0.05, step: 0.01, label: "Command value:"});
+const command_pwm_slider = inputs_wide_range([0, +1], {value: 0.05, step: 0.001, label: "Command value:"});
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
@@ -480,6 +484,14 @@ const command_buttons = Inputs.button(
       await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_pwm: -command_pwm});
       snapshot_if_checked(500);
     }],
+    ["Drive power +", async function(){
+      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_pwm: +command_pwm});
+      snapshot_if_checked(500);
+    }],
+    ["Drive power -", async function(){
+      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_pwm: -command_pwm});
+      snapshot_if_checked(500);
+    }],
     ["Freewheel", async function(){
       await command(command_codes.SET_STATE_FREEWHEEL);
       snapshot_if_checked(0);
@@ -633,28 +645,9 @@ const selected_time_domain = !timeline_position.selection ? [timeline_start, tim
 
 const data_in_time_window = sparsify(filter_window(data, selected_time_domain));
 
-const monitoring_plots = [
-  plot_power,
-  plot_runtime_stats,
-  plot_cycle_loop_stats,
-  plot_electric_position,
-  plot_electric_offsets,
-  plot_current_angle_correction,
-  plot_speed,
-  plot_acceleration,
-  plot_measured_voltage,
-  plot_measured_temperature,
-  plot_measured_current,
-  plot_voltages,
-  plot_inferred_voltages,
-  plot_dq0_currents,
-  plot_torque_correction,
-  plot_dq0_voltages,
-  plot_pwm_settings,
-  plot_readout_flags,
-];
 
-monitoring_plots.forEach((plot) => plot.update({
+
+Object.values(monitoring_plots).forEach((plot) => plot.update({
   data: data_in_time_window, 
   x_domain: selected_time_domain,
 }));
@@ -695,6 +688,48 @@ const plot_power = plot_lines({
   curve,
 });
 
+const plot_current_angle_control = plot_lines({
+  subtitle: "Current Angle PID correction",
+  description: "Correction applied to the current angle.",
+  width: 1200, height: 200,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Current Angle Correction (degrees)",
+  channels: [
+    {y: "current_angle_error", label: "Current Angle Error", color: colors.u},
+    {y: "current_angle_control", label: "Current Angle Control", color: colors.current_angle},
+
+  ],
+  curve,
+});
+
+const plot_torque_control = plot_lines({
+  subtitle: "Torque PID Control",
+  description: "Internal state of the torque PID controller.",
+  width: 1200, height: 200,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "PWM",
+  channels: [
+    {y: "torque_error", label: "Torque Error", color: colors.u},
+    {y: "torque_control", label: "Torque Control", color: colors.current_magnitude},
+  ],
+  curve,
+});
+
+const plot_battery_power_control = plot_lines({
+  subtitle: "Battery Power PID Control",
+  description: "Internal state of the battery power PID controller.",
+  width: 1200, height: 200,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "PWM",
+  channels: [
+    {y: "battery_power_error", label: "Battery Power Error", color: colors.u},
+    {y: "battery_power_control", label: "Battery Power Control", color: colors.current_magnitude},
+  ],
+  curve,
+});
 
 const plot_runtime_stats = plot_lines({
   subtitle: "Motor driver runtime stats",
@@ -779,20 +814,6 @@ const plot_electric_offsets = plot_lines({
   curve,
 });
 
-const plot_current_angle_correction = plot_lines({
-  subtitle: "Current Angle Correction",
-  description: "Correction applied to the current angle.",
-  width: 1200, height: 200,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Current Angle Correction (degrees)",
-  channels: [
-    {y: "current_angle_error", label: "Current Angle Error", color: colors.u},
-    {y: "current_angle_control", label: "Current Angle Control", color: colors.current_angle},
-
-  ],
-  curve,
-});
 
 const plot_speed = plot_lines({
   subtitle: "Rotor Speed",
@@ -882,6 +903,7 @@ const plot_measured_current = plot_lines({
     {y: "u_readout", label: "Current U (uncalibrated)", color: d3.color(colors.u).darker(1)},
     {y: "v_readout", label: "Current V (uncalibrated)", color: d3.color(colors.v).darker(1)},
     {y: "w_readout", label: "Current W (uncalibrated)", color: d3.color(colors.w).darker(1)},
+    {y: "battery_current", label: "Battery Current", color: colors.other},
     {y: (d) => d.avg_current * 3, label: "Sum", color: colors.sum},
     {y: "ref_readout", label: "Reference Diff", color: colors.ref_readout},
   ],
@@ -939,20 +961,6 @@ const plot_dq0_currents = plot_lines({
     {y: "web_alpha_current", label: "Current Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_current", label: "Current Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "current_magnitude", label: "Current Magnitude", color: colors.current_magnitude},
-  ],
-  curve,
-});
-
-const plot_torque_correction = plot_lines({
-  subtitle: "Torque Correction",
-  description: "Internal state of the torque PID controller.",
-  width: 1200, height: 400,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "PWM",
-  channels: [
-    {y: "torque_error", label: "Torque Error", color: colors.u},
-    {y: "torque_control", label: "Torque Control", color: colors.current_magnitude},
   ],
   curve,
 });
@@ -1016,13 +1024,15 @@ const plot_readout_flags = plot_lines({
   curve,
 });
 
-autosave_inputs({
+const monitoring_plots = {
   plot_power,
+  plot_current_angle_control,
+  plot_battery_power_control,
+  plot_torque_control,
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
   plot_electric_offsets,
-  plot_current_angle_correction,
   plot_speed,
   plot_acceleration,
   plot_measured_voltage,
@@ -1031,12 +1041,12 @@ autosave_inputs({
   plot_voltages,
   plot_inferred_voltages,
   plot_dq0_currents,
-  plot_torque_correction,
   plot_dq0_voltages,
   plot_pwm_settings,
   plot_readout_flags,
-});
+};
 
+autosave_inputs(monitoring_plots);
 ```
 
 
@@ -1324,7 +1334,7 @@ const current_angle_gains_input = [
   value: motor_controller?.pid_parameters?.current_angle_gains?.[key],
 }));
 
-const torque_control_gains_input = [
+const torque_gains_input = [
   ["kp", "Torque Control Proportional"],
   ["ki", "Torque Control Integral"],
   ["kd", "Torque Control Derivative"],
@@ -1334,7 +1344,17 @@ const torque_control_gains_input = [
   value: motor_controller?.pid_parameters?.torque_gains?.[key],
 }));
 
-const angular_speed_control_gains_input = [
+const battery_power_gains_input = [
+  ["kp", "Battery Power Proportional"],
+  ["ki", "Battery Power Integral"],
+  ["kd", "Battery Power Derivative"],
+  ["max_output", "Battery Power Max Output"],
+].map(([key, label]) => Inputs.number(key, {
+  label,
+  value: motor_controller?.pid_parameters?.battery_power_gains?.[key],
+}));
+
+const angular_speed_gains_input = [
   ["kp", "Angular Speed Control Proportional"],
   ["ki", "Angular Speed Control Integral"],
   ["kd", "Angular Speed Control Derivative"],
@@ -1344,7 +1364,7 @@ const angular_speed_control_gains_input = [
   value: motor_controller?.pid_parameters?.angular_speed_gains?.[key],
 }));
 
-const position_control_gains_input = [
+const position_gains_input = [
   ["kp", "Position Control Proportional"],
   ["ki", "Position Control Integral"],
   ["kd", "Position Control Derivative"],
@@ -1362,11 +1382,6 @@ let pid_parameters_buttons = !motor_controller ? html`<p>Motor controller not co
       active_pid_parameters_table.value = stringify_active_pid_parameters();
       return value;
     })],
-    ["Upload Zeroes", wait_previous(async function(value){
-      await motor_controller.upload_pid_parameters(zero_pid_parameters);
-      active_pid_parameters_table.value = stringify_active_pid_parameters();
-      return value;
-    })],
     ["Upload to Driver", wait_previous(async function(value){
       const pid_parameters = {
         current_angle_gains: {
@@ -1376,22 +1391,28 @@ let pid_parameters_buttons = !motor_controller ? html`<p>Motor controller not co
           max_output: current_angle_gains_input[3].value,
         },
         torque_gains: {
-          kp: torque_control_gains_input[0].value,
-          ki: torque_control_gains_input[1].value,
-          kd: torque_control_gains_input[2].value,
-          max_output: torque_control_gains_input[3].value,
+          kp: torque_gains_input[0].value,
+          ki: torque_gains_input[1].value,
+          kd: torque_gains_input[2].value,
+          max_output: torque_gains_input[3].value,
+        },
+        battery_power_gains: {
+          kp: battery_power_gains_input[0].value,
+          ki: battery_power_gains_input[1].value,
+          kd: battery_power_gains_input[2].value,
+          max_output: battery_power_gains_input[3].value,
         },
         angular_speed_gains: {
-          kp: angular_speed_control_gains_input[0].value,
-          ki: angular_speed_control_gains_input[1].value,
-          kd: angular_speed_control_gains_input[2].value,
-          max_output: angular_speed_control_gains_input[3].value,
+          kp: angular_speed_gains_input[0].value,
+          ki: angular_speed_gains_input[1].value,
+          kd: angular_speed_gains_input[2].value,
+          max_output: angular_speed_gains_input[3].value,
         },
         position_gains: {
-          kp: position_control_gains_input[0].value,
-          ki: position_control_gains_input[1].value,
-          kd: position_control_gains_input[2].value,
-          max_output: position_control_gains_input[3].value,
+          kp: position_gains_input[0].value,
+          ki: position_gains_input[1].value,
+          kd: position_gains_input[2].value,
+          max_output: position_gains_input[3].value,
         },
       };
 
@@ -1728,7 +1749,7 @@ import {run_position_calibration, compute_position_calibration} from "./componen
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, default_current_calibration, default_position_calibration, max_calibration_current,
-  default_pid_parameters, zero_pid_parameters,
+  default_pid_parameters,
 } from "./components/motor_constants.js";
 
 import {unit_test_atan_expected} from "./components/motor_unit_tests.js";

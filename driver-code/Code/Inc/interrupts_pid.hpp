@@ -7,8 +7,8 @@
 
 
 static inline PIDControl compute_pid_control(
-    PIDGains const & gains,
-    PIDControl const & control,
+    PIDGains const& gains,
+    PIDControl const& control,
     const int16_t measurement,
     const int16_t target
 ) {
@@ -33,7 +33,6 @@ static inline PIDControl compute_pid_control(
 
     return PIDControl{
         .integral = integral,
-        .derivative = derivative,
         .error = error,
         .output = output
     };

@@ -141,7 +141,7 @@ export const motor_shunt_resistance = 0.010;
 export const amplifier_gain = 20.0;
 export const current_conversion = adc_voltage_reference / (adc_base * motor_shunt_resistance * amplifier_gain);
 
-const power_fixed_point = 224; // Fixed point for power calculations.
+const power_fixed_point = 448; // Fixed point for power calculations.
 
 // Convert power units to Watts.
 export function convert_power_to_watts(power){
@@ -194,51 +194,30 @@ export const default_pid_parameters = {
     "kp": 32,
     "ki": 32,
     "kd": 32,
-    "max_output": 128
+    "max_output": 256
   },
   "torque_gains": {
     "kp": 32,
     "ki": 32,
     "kd": 32,
-    "max_output": 2048
+    "max_output": pwm_base
+  },
+  "battery_power_gains": {
+    "kp": 32,
+    "ki": 4,
+    "kd": 0,
+    "max_output": pwm_base
   },
   "angular_speed_gains": {
     "kp": 133,
     "ki": 16,
     "kd": 8,
-    "max_output": 233
+    "max_output": 228
   },
   "position_gains": {
     "kp": 128,
     "ki": 16,
     "kd": 8,
     "max_output": 512
-  }
-};
-
-export const zero_pid_parameters = {
-  "current_angle_gains": {
-    "kp": 0,
-    "ki": 0,
-    "kd": 0,
-    "max_output": 0
-  },
-  "torque_gains": {
-    "kp": 0,
-    "ki": 0,
-    "kd": 0,
-    "max_output": 0
-  },
-  "angular_speed_gains": {
-    "kp": 0,
-    "ki": 0,
-    "kd": 0,
-    "max_output": 0
-  },
-  "position_gains": {
-    "kp": 0,
-    "ki": 0,
-    "kd": 0,
-    "max_output": 0
   }
 };

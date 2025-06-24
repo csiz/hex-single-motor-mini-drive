@@ -19,7 +19,8 @@ enum struct DriverState : uint16_t {
     SCHEDULE,
     DRIVE_6_SECTOR,
     DRIVE_SMOOTH,
-    DRIVE_TORQUE
+    DRIVE_TORQUE,
+    DRIVE_BATTERY_POWER
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -93,6 +94,13 @@ struct DriveTorque {
     int16_t leading_angle; // Leading angle for the current control.
 };
 
+// Drive the motor to a specific battery power drain.
+struct DriveBatteryPower {
+    uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t power_target; // Target power in fixed point format.
+    int16_t leading_angle; // Leading angle for the power control.
+};
+
 // Drive parameters for each state.
 union DriverParameters {
     DriveHold hold;
@@ -100,6 +108,7 @@ union DriverParameters {
     Drive6Sector sector;
     DriveSmooth smooth;
     DriveTorque torque;
+    DriveBatteryPower battery_power;
 };
 
 const DriverParameters null_driver_parameters = {};
@@ -131,14 +140,14 @@ struct FullReadout : public Readout {
     uint16_t vcc_voltage;
     int16_t cycle_start_tick;
     int16_t cycle_end_tick;
+    uint16_t angle_variance;
+    uint16_t angular_speed_variance;
     int16_t alpha_current;
     int16_t beta_current;
     int16_t alpha_emf_voltage;
     int16_t beta_emf_voltage;
     int16_t emf_voltage_average;
     int16_t emf_voltage_variance;
-    uint16_t angle_variance;
-    uint16_t angular_speed_variance;
     int16_t total_power;
     int16_t resistive_power;
     int16_t emf_power;
@@ -147,6 +156,12 @@ struct FullReadout : public Readout {
     int16_t current_angle_control;
     int16_t torque_error;
     int16_t torque_control;
+    int16_t battery_power_error;
+    int16_t battery_power_control;
+    int16_t angular_speed_error;
+    int16_t angular_speed_control;
+    int16_t position_error;
+    int16_t position_control;
 };
 
 
@@ -191,7 +206,6 @@ struct PIDGains {
 
 struct PIDControl {
     int integral = 0; // Integral term.
-    int derivative = 0; // Derivative term.
     int16_t error = 0; // Previous error for derivative calculation.
     int16_t output = 0; // Output value.
 };
@@ -199,6 +213,7 @@ struct PIDControl {
 struct PIDParameters {
     PIDGains current_angle_gains;
     PIDGains torque_gains;
+    PIDGains battery_power_gains;
     PIDGains angular_speed_gains;
     PIDGains position_gains;
 };
@@ -206,6 +221,7 @@ struct PIDParameters {
 struct PIDControlState {
     PIDControl current_angle_control;
     PIDControl torque_control;
+    PIDControl battery_power_control;
     PIDControl angular_speed_control;
     PIDControl position_control;
 };
@@ -213,6 +229,7 @@ struct PIDControlState {
 const PIDControlState null_pid_control_state = {
     .current_angle_control = {},
     .torque_control = {},
+    .battery_power_control = {},
     .angular_speed_control = {},
     .position_control = {}
 };

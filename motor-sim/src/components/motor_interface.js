@@ -55,6 +55,7 @@ export const command_codes = {
   SET_STATE_HOLD_W_NEGATIVE: 0x3025,
   SET_STATE_DRIVE_SMOOTH: 0x4030,
   SET_STATE_DRIVE_TORQUE: 0x4031,
+  SET_STATE_DRIVE_BATTERY_POWER: 0x4032,
 
   SET_CURRENT_FACTORS: 0x4040,
   SET_TRIGGER_ANGLES: 0x4041,
@@ -252,7 +253,7 @@ function parse_readout(data_view, previous_readout){
   return process_readout.call(this, readout, previous_readout);
 }
 
-const full_readout_size = 74;
+const full_readout_size = 86;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
@@ -272,6 +273,11 @@ function parse_full_readout(data_view, previous_readout){
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
+  const angle_stdev = variance_units_to_degrees_stdev(data_view.getUint16(offset));
+  offset += 2;
+  const angular_speed_stdev = speed_variance_to_degrees_per_millisecond_stdev(data_view.getUint16(offset));
+  offset += 2;
+
   const alpha_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
   const beta_current = current_conversion * data_view.getInt16(offset);
@@ -287,11 +293,6 @@ function parse_full_readout(data_view, previous_readout){
   const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
 
-  const angle_stdev = variance_units_to_degrees_stdev(data_view.getUint16(offset));
-  offset += 2;
-  const angular_speed_stdev = speed_variance_to_degrees_per_millisecond_stdev(data_view.getUint16(offset));
-  offset += 2;
-
   const total_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
   const resistive_power = convert_power_to_watts(data_view.getInt16(offset));
@@ -305,12 +306,25 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const current_angle_control = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-
   const torque_error = data_view.getInt16(offset);
   offset += 2;
   const torque_control = data_view.getInt16(offset);
   offset += 2;
+  const battery_power_error = data_view.getInt16(offset);
+  offset += 2;
+  const battery_power_control = data_view.getInt16(offset);
+  offset += 2;
+  const angular_speed_error = data_view.getInt16(offset);
+  offset += 2;
+  const angular_speed_control = data_view.getInt16(offset);
+  offset += 2;
+  const position_error = data_view.getInt16(offset);
+  offset += 2;
+  const position_control = data_view.getInt16(offset);
+  offset += 2;
 
+
+  const battery_current = total_power / vcc_voltage;
 
   return {
     ...readout,
@@ -320,14 +334,15 @@ function parse_full_readout(data_view, previous_readout){
     vcc_voltage,
     cycle_start_tick,
     cycle_end_tick,
+    angle_stdev,
+    angular_speed_stdev,
     alpha_current,
     beta_current,
     alpha_emf_voltage,
     beta_emf_voltage,
     emf_voltage_average,
     emf_voltage_stdev,
-    angle_stdev,
-    angular_speed_stdev,
+    battery_current,
     total_power,
     resistive_power,
     emf_power,
@@ -336,6 +351,12 @@ function parse_full_readout(data_view, previous_readout){
     current_angle_control,
     torque_error,
     torque_control,
+    battery_power_error,
+    battery_power_control,
+    angular_speed_error,
+    angular_speed_control,
+    position_error,
+    position_control,
   };
 }
 
@@ -410,7 +431,7 @@ function parse_position_calibration(data_view){
 }
 
 
-const pid_parameters_size = 34;
+const pid_parameters_size = 42;
 function parse_pid_parameters(data_view) {
   let offset = header_size;
 
@@ -423,6 +444,14 @@ function parse_pid_parameters(data_view) {
   offset += 8;
 
   const torque_gains = {
+    kp: data_view.getInt16(offset),
+    ki: data_view.getInt16(offset + 2),
+    kd: data_view.getInt16(offset + 4),
+    max_output: data_view.getInt16(offset + 6),
+  };
+  offset += 8;
+
+  const battery_power_gains = {
     kp: data_view.getInt16(offset),
     ki: data_view.getInt16(offset + 2),
     kd: data_view.getInt16(offset + 4),
@@ -449,6 +478,7 @@ function parse_pid_parameters(data_view) {
   return {
     current_angle_gains,
     torque_gains,
+    battery_power_gains,
     angular_speed_gains,
     position_gains,
   };
@@ -535,7 +565,7 @@ function serialise_set_position_calibration(position_calibration) {
 }
 
 function serialise_set_pid_parameters(pid_parameters) {
-  const { current_angle_gains, torque_gains, angular_speed_gains, position_gains } = pid_parameters;
+  const { current_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains } = pid_parameters;
 
   let buffer = new Uint8Array(pid_parameters_size);
 
@@ -546,7 +576,7 @@ function serialise_set_pid_parameters(pid_parameters) {
   offset += 2;
 
   // Serialise each set of gains.
-  for (const gains of [current_angle_gains, torque_gains, angular_speed_gains, position_gains]) {
+  for (const gains of [current_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains]) {
     view.setInt16(offset, gains.kp);
     offset += 2;
     view.setInt16(offset, gains.ki);

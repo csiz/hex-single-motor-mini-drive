@@ -247,6 +247,8 @@ bool handle_command(MessageBuffer const& buffer) {
         case STREAM_FULL_READOUTS:
             // Cotinuously stream data if timeout > 0.
             usb_stream_state = command.timeout;
+            // Also stop the motor if we stop the stream.
+            if (not usb_stream_state) set_motor_command(DriverState::OFF, DriverParameters{});
             return false;
 
         case GET_READOUTS_SNAPSHOT:
@@ -327,6 +329,17 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverParameters{ .torque = DriveTorque{ 
                     .duration = command.timeout, 
                     .current_target = static_cast<int16_t>(max_drive_current * command.pwm / pwm_max),
+                    .leading_angle = command.leading_angle
+                }}
+            );
+            return false;
+
+        case SET_STATE_DRIVE_BATTERY_POWER:
+            set_motor_command(
+                DriverState::DRIVE_BATTERY_POWER, 
+                DriverParameters{ .battery_power = DriveBatteryPower{ 
+                    .duration = command.timeout, 
+                    .power_target = static_cast<int16_t>(max_drive_power * command.pwm / pwm_max),
                     .leading_angle = command.leading_angle
                 }}
             );

@@ -77,7 +77,7 @@ const float current_conversion_float = adc_voltage_reference / (adc_max_value * 
 // Current conversion: 1 current unit = 1/248 A.
 const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_float);
 
-// Max driving current that we can command.
+// 4A max DQ0 driving current.
 const int16_t max_drive_current = 4 * current_fixed_point;
 
 
@@ -115,12 +115,16 @@ const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_fl
 
 
 // Power conversion: 1 power unit = 1/224 W.
-const int power_fixed_point = 2 * voltage_fixed_point;
+const int power_fixed_point = 4 * voltage_fixed_point;
+
+// 12W max drive power.
+const int max_drive_power = 12 * power_fixed_point;
 
 // We need this to convert a few formulas using voltage to power.
 const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_point;
 
-
+// Directly convert voltage * current to power in fixed point format.
+const int voltage_current_div_power_fixed_point = current_fixed_point / power_div_voltage_fixed_point;
 
 // Timing and PWM constants
 // ------------------------
@@ -313,13 +317,13 @@ const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pw
 const int max_updates_between_transitions = 16384;
 
 // Minimum angular speed that we need to have to move at the max time between transitions.
-const int min_angular_speed = 60 * angle_base / 360 * speed_fixed_point / max_updates_between_transitions;
+const int min_measurable_angular_speed = 60 * angle_base / 360 * speed_fixed_point / max_updates_between_transitions;
 
-static_assert(min_angular_speed > 0, "min_angular_speed must be greater than 0");
-static_assert(min_angular_speed < 4, "min_angular_speed should be quite low");
+static_assert(min_measurable_angular_speed > 0, "min_measurable_angular_speed must be greater than 0");
+static_assert(min_measurable_angular_speed < 4, "min_measurable_angular_speed should be quite low");
 
 // Minimum speed in rotor revolutions per minute (RPM) that we can represent with our units.
-const int min_rpm = min_angular_speed * pwm_cycles_per_second / angle_base * 60 / speed_fixed_point / rotor_revolutions_per_electric;
+const int min_rpm = min_measurable_angular_speed * pwm_cycles_per_second / angle_base * 60 / speed_fixed_point / rotor_revolutions_per_electric;
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
@@ -416,7 +420,13 @@ const PIDParameters default_pid_parameters = {
         .kp = 32,
         .ki = 32,
         .kd = 32,
-        .max_output = pwm_base + 512 // Give some leeway for the integral to stay at max command.
+        .max_output = pwm_base
+    },
+    .battery_power_gains = PIDGains{
+        .kp = 32,
+        .ki = 4,
+        .kd = 0,
+        .max_output = pwm_base
     },
     .angular_speed_gains = PIDGains{
         .kp = gains_fixed_point / 8,
