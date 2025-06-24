@@ -12,8 +12,6 @@ static inline PIDControl compute_pid_control(
     const int16_t measurement,
     const int16_t target
 ) {
-    const int scaled_max_output = gains.max_output * gains_fixed_point;
-
     const int16_t error = target - measurement;
 
     // Proportional term.
@@ -22,17 +20,21 @@ static inline PIDControl compute_pid_control(
     // Derivative term; assuming dt = 1.
     const int derivative = gains.kd * (error - control.error);
 
-    // Only accumulate the integral if the output isn't saturated.
-    const int integral = abs(proportional) > scaled_max_output ? 
-        control.integral : 
-        clip_to(-scaled_max_output, scaled_max_output, control.integral + gains.ki * error);
-
+    // Compute an uncapped integral term.
+    const int integral = control.integral + gains.ki * error;
+    
     // Update the output.
-    const int16_t output = clip_to(-gains.max_output, gains.max_output, round_div(proportional + integral + derivative, gains_fixed_point));
-
+    const int16_t output = (proportional + integral + derivative) / gains_fixed_point;
+    
+    // Only accumulate the integral if the output isn't saturated in the same direction.
+    const int new_integral = (
+        output > gains.max_output ? min(integral, control.integral) :
+        output < -gains.max_output ? max(integral, control.integral) :
+        integral
+    );
 
     return PIDControl{
-        .integral = integral,
+        .integral = new_integral,
         .error = error,
         .output = output
     };

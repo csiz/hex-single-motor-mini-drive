@@ -51,8 +51,8 @@ export const variance_divider = 16;
 export const speed_fixed_point = 128;
 export const speed_variance_fixed_point = 256;
 
-export const acceleration_fixed_point = 32;
-export const acceleration_variance_fixed_point = 32;
+export const acceleration_fixed_point = 256;
+export const acceleration_variance_fixed_point = 256;
 
 // Speed and acceleration units
 // ----------------------------
@@ -186,27 +186,27 @@ export const default_position_calibration = {
   sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
   sector_center_stdev: [30, 30, 30, 30, 30, 30],
   initial_angular_speed_stdev: 15.0, // initial speed distribution degrees per ms
-  angular_acceleration_stdev: 15.0, // acceleration distribution up to (degrees per ms^2).
+  angular_acceleration_stdev: 5.0, // acceleration distribution up to (degrees per ms^2).
 }
 
 export const default_pid_parameters = {
   "current_angle_gains": {
-    "kp": 32,
-    "ki": 32,
-    "kd": 32,
+    "kp": 64,
+    "ki": 2,
+    "kd": 64,
     "max_output": 256
   },
   "torque_gains": {
-    "kp": 32,
-    "ki": 32,
-    "kd": 32,
-    "max_output": pwm_base
+    "kp": 256,
+    "ki": 64,
+    "kd": 0,
+    "max_output": 1450
   },
   "battery_power_gains": {
     "kp": 32,
     "ki": 4,
     "kd": 0,
-    "max_output": pwm_base
+    "max_output": 1450
   },
   "angular_speed_gains": {
     "kp": 133,

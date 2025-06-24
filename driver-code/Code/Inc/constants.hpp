@@ -291,8 +291,9 @@ const int default_sector_center_variance = square(30 * angle_base / 360) / varia
 // Ensure that our biggest variance is small enough to be usable in gaussian updates while staying < max_16bit.
 static_assert(default_sector_center_variance * 16 < max_16bit, "max_variance must be less than 32768 (max 16-bit signed int)");
 
-// Variance of the EMF angle correction.
-const int emf_angle_variance = square(10 * angle_base / 360) / variance_divider;
+// Value for the initial EMF variance; our certainty in the EMF angle increases with the magnitude of the EMF voltage/speed.
+const int emf_initial_angular_variance = square(30 * angle_base / 360) / variance_divider;
+
 
 // The hall sensors trigger later than expected going each direction.
 const int hysterisis = 5 * angle_base / 360;
@@ -306,11 +307,9 @@ const int speed_fixed_point = 128;
 // Fixed point for speed variance with respect to angle units variance.
 const int speed_variance_fixed_point = 256;
 
-// Variance of the EMF speed correction.
-const int emf_speed_variance = emf_angle_variance * speed_variance_fixed_point;
-
 // Conversion factor between square speed and speed variance.
 const int speed_variance_to_square_speed = square(speed_fixed_point) / speed_variance_fixed_point * variance_divider;
+
 
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
@@ -338,10 +337,10 @@ const int default_speed_variance = square(15 * angle_base / 360 * 1000 * speed_f
 static_assert(default_speed_variance < max_16bit, "default_speed_variance must be less than max_variance");
 
 // Acceleration fixed point with respect to speed units.
-const int acceleration_fixed_point = 32;
+const int acceleration_fixed_point = 256;
 
 // Fixed point for acceleration variance with respect to speed variance.
-const int acceleration_variance_fixed_point = 32;
+const int acceleration_variance_fixed_point = 256;
 
 // Covnersion factor between square acceleration and acceleration variance.
 const int acceleration_variance_to_square_acceleration = square(acceleration_fixed_point) / acceleration_variance_fixed_point * speed_variance_to_square_speed;
@@ -349,13 +348,16 @@ const int acceleration_variance_to_square_acceleration = square(acceleration_fix
 // Variance of the expected acceleration loads in degrees per ms^2; converted to acceleration units per pwm cycle, all squared.
 const int angular_acceleration_div_2_variance = round_div(
     square(
-        15 * angle_base / 360 * 
+        5 * angle_base / 360 * 
         speed_fixed_point * 1000 / pwm_cycles_per_second * 
         acceleration_fixed_point * 1000 / pwm_cycles_per_second / 
         2
     ),
     acceleration_variance_to_square_acceleration
 );
+
+// Moment of inertia of the entrained load; kg*m^2. TODO: what's a good value for this?
+const int moment_of_inertia_fixed_point = 250;
 
 const PositionCalibration default_position_calibration = {
     // The angle at which we transition to this sector. The first is when rotating in the
@@ -366,7 +368,7 @@ const PositionCalibration default_position_calibration = {
         { 90 * angle_base / 360 + hysterisis, 150 * angle_base / 360 - hysterisis},
         {150 * angle_base / 360 + hysterisis, 210 * angle_base / 360 - hysterisis},
         {210 * angle_base / 360 + hysterisis, 270 * angle_base / 360 - hysterisis},
-        {270 * angle_base / 360 + hysterisis, 330 * angle_base / 360 - hysterisis},     
+        {270 * angle_base / 360 + hysterisis, 330 * angle_base / 360 - hysterisis},
     }},
     // Variance of each sector transition; we can calibrate it.
     .sector_transition_variances = {{
@@ -413,22 +415,22 @@ const int16_t gains_fixed_point = 1024;
 
 const PIDParameters default_pid_parameters = {
     .current_angle_gains = PIDGains{
-        .kp = 32,
-        .ki = 32,
-        .kd = 32,
-        .max_output = quarter_circle / 2
+        .kp = 64,
+        .ki = 4,
+        .kd = 64,
+        .max_output = quarter_circle
     },
     .torque_gains = PIDGains{
-        .kp = 32,
-        .ki = 32,
-        .kd = 32,
-        .max_output = pwm_base
+        .kp = 256,
+        .ki = 64,
+        .kd = 0,
+        .max_output = pwm_max - 40
     },
     .battery_power_gains = PIDGains{
         .kp = 32,
         .ki = 4,
         .kd = 0,
-        .max_output = pwm_base
+        .max_output = pwm_max - 40
     },
     .angular_speed_gains = PIDGains{
         .kp = gains_fixed_point / 8,

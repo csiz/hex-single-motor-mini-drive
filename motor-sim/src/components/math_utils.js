@@ -89,6 +89,27 @@ export function exponential_stats(time_since_last, alpha_time) {
   }
 }
 
+export function sum_preserving_exponential_stats(time_since_last, alpha_time) {
+  const exp_avg = exponential_averager(time_since_last, alpha_time);
+  const alpha = Math.exp(-time_since_last / alpha_time);
+  
+  return function(new_value, {average, stdev, sum}) {
+    const first_value = !(valid_number(average) && valid_number(stdev));
+    if (first_value) {
+      return {average: new_value, stdev: Math.abs(new_value), sum: new_value};
+    } else {
+      sum += new_value;
+      const new_average = sum * (1 - alpha);
+      sum -= new_average;
+      return {
+        average: new_average,
+        stdev: Math.sqrt(exp_avg(square(new_value - average), square(stdev))),
+        sum,
+      };
+    }
+  }
+}
+
 export function valid_number(value) {
   return (typeof value === "number" && !isNaN(value) && isFinite(value));
 }

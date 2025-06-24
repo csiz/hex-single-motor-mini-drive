@@ -44,6 +44,7 @@ static inline MotorOutputs update_motor_smooth(
     PIDControlState & pid_state
 ){
     const bool emf_detected = (readout.angle >> 11) & 0b1;
+    // const bool motor_breaking = readout.emf_power < 0;
 
     // Get the abs value of the target PWM.
     const int abs_pwm = min(pwm_max, abs(smooth_parameters.pwm_target));
@@ -51,22 +52,27 @@ static inline MotorOutputs update_motor_smooth(
     // Base the direction on the sign of the target PWM.
     const int direction = smooth_parameters.pwm_target >= 0 ? +1 : -1;
 
+    const int abs_beta_current = abs(readout.beta_current) + 1;
+
     // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
     // the beta current. Since calculating the angle is expensive just consider the ratio.
     const int approximate_angle_error = clip_to(
         -eighth_circle, +eighth_circle, 
-        not readout.beta_current ? 0 : eighth_circle * readout.alpha_current / abs(readout.beta_current)
+        eighth_circle * readout.alpha_current / abs_beta_current
     );
 
     // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-    pid_state.current_angle_control = not emf_detected ? PIDControl{} : compute_pid_control(
-        pid_parameters.current_angle_gains,
-        pid_state.current_angle_control,
-        -approximate_angle_error,
-        0
+    pid_state.current_angle_control = (
+        not emf_detected ? PIDControl{} : 
+        compute_pid_control(
+            pid_parameters.current_angle_gains,
+            pid_state.current_angle_control,
+            -approximate_angle_error,
+            0
+        )
     );
 
-    const int target_lead_angle = direction * (smooth_parameters.leading_angle + pid_state.current_angle_control.output);
+    const int target_lead_angle = direction * clip_to(0, half_circle, smooth_parameters.leading_angle + pid_state.current_angle_control.output);
 
     const int rotor_angle = readout.angle & 0x3FF;
 
@@ -102,7 +108,7 @@ static inline MotorOutputs update_motor_torque(
     );
 
     // Get the target PWM after torque control.
-    const int16_t pwm_target = pid_state.torque_control.output;
+    const int16_t pwm_target = clip_to(-pwm_max, pwm_max, pid_state.torque_control.output);
 
     return update_motor_smooth(
         readout,
@@ -130,7 +136,7 @@ static inline MotorOutputs update_motor_battery_power(
     );
 
     // Get the target PWM after power control.
-    const int16_t pwm_target = (direction_is_negative ? -1 : 1) * pid_state.battery_power_control.output;
+    const int16_t pwm_target = clip_to(-pwm_max, pwm_max, (direction_is_negative ? -1 : 1) * pid_state.battery_power_control.output);
 
     return update_motor_smooth(
         readout,

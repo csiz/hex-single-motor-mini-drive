@@ -19,7 +19,7 @@ import {
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
-import {square, dq0_transform} from './math_utils.js';
+import {square, dq0_transform, exponential_stats, sum_preserving_exponential_stats} from './math_utils.js';
 
 
 
@@ -326,6 +326,21 @@ function parse_full_readout(data_view, previous_readout){
 
   const battery_current = total_power / vcc_voltage;
 
+  const dt = readout.time - previous_readout?.time;
+
+  const {
+    average: residual_acceleration_avg, 
+    stdev: residual_acceleration_stdev,
+    sum: residual_acceleration_sum,
+  } = sum_preserving_exponential_stats(dt, 20.000)(
+    residual_acceleration,
+    {
+      average: previous_readout?.residual_acceleration_avg,
+      stdev: previous_readout?.residual_acceleration_stdev,
+      sum: previous_readout?.residual_acceleration_sum,
+    },
+  );
+
   return {
     ...readout,
     tick_rate,
@@ -342,6 +357,9 @@ function parse_full_readout(data_view, previous_readout){
     beta_emf_voltage,
     emf_voltage_stdev,
     residual_acceleration,
+    residual_acceleration_sum,
+    residual_acceleration_avg,
+    residual_acceleration_stdev,
     battery_current,
     total_power,
     resistive_power,

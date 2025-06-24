@@ -172,7 +172,6 @@ function compute_derivative_info(readout, previous_readout){
   const {
     time: prev_time,
     hall_sector: prev_hall_sector, 
-    direction: prev_direction,
     emf_voltage_angle: prev_emf_voltage_angle,
     angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
     angular_speed_from_emf_stdev: prev_angular_speed_from_emf_stdev,
@@ -258,6 +257,8 @@ function compute_derivative_info(readout, previous_readout){
       stdev: prev_web_total_power_stdev,
     },
   );
+
+
     
 
   return {

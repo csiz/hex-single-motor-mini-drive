@@ -852,12 +852,15 @@ const plot_acceleration = plot_lines({
   channels: [
     {y: "web_angular_acceleration", label: "Angular Acceleration (computed online)", color: colors.web_angular_speed},
     {
-      y: "web_angular_acceleration_avg", label: "Angular Acceleration 2.0ms average", color: d3.color(colors.web_angular_speed).brighter(1),
+      y: "web_angular_acceleration_avg", label: "Angular Acceleration 2.0ms average", color: d3.color(colors.web_angular_speed).darker(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_acceleration_stdev}),
     },
+    {y: "residual_acceleration", label: "Residual Acceleration", color: colors.angle},
     {
-      y: "residual_acceleration", label: "Residual Acceleration", color: colors.angle
+      y: "residual_acceleration_avg", label: "Residual Acceleration 350us average", color: d3.color(colors.angle).darker(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.residual_acceleration_stdev}),
     },
+    {y: "residual_acceleration_sum", label: "Residual Acceleration Tracking Sum", color: colors.sum},
   ],
   curve,
 });

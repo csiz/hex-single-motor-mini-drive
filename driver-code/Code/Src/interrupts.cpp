@@ -56,6 +56,8 @@ bool angle_valid = false;
 // pole pairs, and the slot triplets, and the mechanical gear ratio.
 PositionStatistics electric_position = null_position_statistics;
 
+// Count the number of consecutive EMF detections; we get good statistics after a threshold number.
+size_t consecutive_emf_detections = 0;
 
 // Motor driver state
 // ------------------
@@ -249,6 +251,8 @@ void adc_interrupt_handler(){
     const int v_readout_diff = v_readout - readout.v_readout;
     const int w_readout_diff = w_readout - readout.w_readout;
 
+    // Remember the previous speed for acceleration calculations.
+    const int previous_angular_speed = readout.angular_speed;
 
     // Predict the position based on the previous state.
     const auto predicted_position = predict_position(electric_position);
@@ -353,25 +357,13 @@ void adc_interrupt_handler(){
     const int alpha_current = (
         u_current * cos_u / angle_base +
         v_current * cos_v / angle_base +
-        w_current * cos_w / angle_base +
-        3 * readout.alpha_current
-    ) / 4;
+        w_current * cos_w / angle_base
+    );
 
-    const int unadjusted_beta_current = (
+    const int beta_current = (
         u_current * neg_sin_u / angle_base +
         v_current * neg_sin_v / angle_base +
-        w_current * neg_sin_w / angle_base +
-        3 * readout.beta_current
-    ) / 4;
-
-    const int abs_alpha_current = abs(alpha_current);
-    const int abs_unadjusted_beta_current = abs(unadjusted_beta_current);
-
-    const int beta_current = unadjusted_beta_current + sign(unadjusted_beta_current) * (
-        // Taylor expansion for beta "much bigger" than alpha.
-        abs_unadjusted_beta_current > abs_alpha_current ? square(alpha_current) / (2 * abs_unadjusted_beta_current) :
-        // Otherwise assume "sqrt(2) = 1.5" is close enough.
-        abs_unadjusted_beta_current / 2
+        w_current * neg_sin_w / angle_base
     );
 
     // Calculate the park transformed EMF voltages.
@@ -409,11 +401,11 @@ void adc_interrupt_handler(){
     ) / 4;
 
     // I think this computes the variance of the EMF magnitude preceisely. Lucky!
-    const int emf_voltage_variance = round_div(
+    const int emf_voltage_variance = min(1, round_div(
         square(instant_beta_emf_voltage - unadjusted_beta_emf_voltage) + square(instant_alpha_emf_voltage - alpha_emf_voltage) +
         3 * readout.emf_voltage_variance,
         4
-    );
+    ));
 
     // We can't compute sqrt in the critical loop, instead use the abs of the beta EMF voltage.
     // As we optimize our angle estimate, the alpha EMF voltage should approach zero and
@@ -429,11 +421,13 @@ void adc_interrupt_handler(){
         abs_unadjusted_beta_emf_voltage / 2
     );
 
+    const int sq_beta_emf_voltage = square(beta_emf_voltage);
+
     // Check if the emf voltage is away from zero with enough confidence.
     // 
     // Our confidence is 2 standard deviations, but the positive average is also expected to be
     // at 1 stdev away, so we have to compensate.
-    const bool emf_detected = square(beta_emf_voltage) > 9 * emf_voltage_variance;
+    const bool emf_detected = sq_beta_emf_voltage > 9 * emf_voltage_variance;
 
     // The rotation direction is the sign of the negative of the beta EMF voltage.
     const bool emf_direction_is_negative = emf_detected and (beta_emf_voltage > 0);
@@ -441,6 +435,8 @@ void adc_interrupt_handler(){
     // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
     // use it to update the position between hall sensor toggles.
     if (emf_detected) {
+        consecutive_emf_detections += 1;
+
         // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
         // the beta current. Since calculating the angle is expensive just consider the ratio.
         const int approximate_angle_error = -clip_to(
@@ -448,15 +444,19 @@ void adc_interrupt_handler(){
             not beta_emf_voltage ? 0 : eighth_circle * alpha_emf_voltage / beta_emf_voltage
         );
 
+        const int emf_angle_variance = clip_to(1, max_16bit, emf_initial_angular_variance * emf_voltage_variance / sq_beta_emf_voltage);
+
         electric_position = bayesian_update(
             electric_position,
             PositionStatistics{
                 .angle = approximate_angle_error,
                 .angle_variance = emf_angle_variance,
                 .angular_speed = approximate_angle_error * speed_fixed_point,
-                .angular_speed_variance = emf_speed_variance
+                .angular_speed_variance = min(emf_angle_variance * speed_variance_fixed_point, max_16bit)
             }
         );
+    } else {
+        consecutive_emf_detections = 0;
     }
 
     // Calculate the power values using the phase currents and voltages.
@@ -494,7 +494,7 @@ void adc_interrupt_handler(){
     // measured magnitude of the DQ0 current. We then adjust our beta current using
     // a Taylor expansion for small alpha current. The system uses the real beta current
     // not what we measure; thus we compute the emf power using our massaged DQ0 values.
-    const int emf_power = -beta_current * beta_emf_voltage / dq0_to_power_fixed_point;
+    const int emf_power = -(beta_current + alpha_current * (emf_direction_is_negative ? -1 : 1)) * beta_emf_voltage / dq0_to_power_fixed_point;
 
     // Compute the real total power used from the balance of powers.
     // 
@@ -508,7 +508,12 @@ void adc_interrupt_handler(){
     // power is quite reliable and inductive_power is very small.
     const int total_power = -(resistive_power + emf_power + inductive_power);
 
-    
+    // Get the external acceleration torque by subtracting our EMF acceleration from our position measurements.
+    const int residual_acceleration = (
+        // Only add speed changes when we have an EMF fix; the speed will jump a large amount on the first position detection.
+        (consecutive_emf_detections > 5) * (electric_position.angular_speed - previous_angular_speed) * acceleration_fixed_point
+    );
+
     // Write the latest readout data
     // -----------------------------
 
@@ -545,7 +550,7 @@ void adc_interrupt_handler(){
     readout.beta_emf_voltage = beta_emf_voltage;
 
     readout.emf_voltage_variance = emf_voltage_variance;
-    readout.residual_acceleration = 0;
+    readout.residual_acceleration = residual_acceleration;
 
     readout.total_power = total_power;
     readout.resistive_power = resistive_power;

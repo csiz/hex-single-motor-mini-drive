@@ -423,10 +423,11 @@ bool handle_command(MessageBuffer const& buffer) {
 
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
-                save_settings_to_flash(current_calibration, position_calibration);
+                save_settings_to_flash(current_calibration, position_calibration, pid_parameters);
 
                 current_calibration = get_current_calibration();
                 position_calibration = get_position_calibration();
+                pid_parameters = get_pid_parameters();
                 
                 return false;
             } else {
