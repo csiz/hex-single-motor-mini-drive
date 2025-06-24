@@ -126,6 +126,8 @@ const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_poin
 // Directly convert voltage * current to power in fixed point format.
 const int voltage_current_div_power_fixed_point = current_fixed_point / power_div_voltage_fixed_point;
 
+const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 / 2;
+
 // Timing and PWM constants
 // ------------------------
 

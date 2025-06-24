@@ -357,12 +357,22 @@ void adc_interrupt_handler(){
         3 * readout.alpha_current
     ) / 4;
 
-    const int beta_current = (
+    const int unadjusted_beta_current = (
         u_current * neg_sin_u / angle_base +
         v_current * neg_sin_v / angle_base +
         w_current * neg_sin_w / angle_base +
         3 * readout.beta_current
     ) / 4;
+
+    const int abs_alpha_current = abs(alpha_current);
+    const int abs_unadjusted_beta_current = abs(unadjusted_beta_current);
+
+    const int beta_current = unadjusted_beta_current + sign(unadjusted_beta_current) * (
+        // Taylor expansion for beta "much bigger" than alpha.
+        abs_unadjusted_beta_current > abs_alpha_current ? square(alpha_current) / (2 * abs_unadjusted_beta_current) :
+        // Otherwise assume "sqrt(2) = 1.5" is close enough.
+        abs_unadjusted_beta_current / 2
+    );
 
     // Calculate the park transformed EMF voltages.
     // 
@@ -393,14 +403,14 @@ void adc_interrupt_handler(){
         w_emf_voltage * neg_sin_w / angle_base
     );
 
-    const int beta_emf_voltage = (
+    const int unadjusted_beta_emf_voltage = (
         instant_beta_emf_voltage + 
         3 * readout.beta_emf_voltage
     ) / 4;
 
     // I think this computes the variance of the EMF magnitude preceisely. Lucky!
     const int emf_voltage_variance = round_div(
-        square(instant_beta_emf_voltage - beta_emf_voltage) + square(instant_alpha_emf_voltage - alpha_emf_voltage) +
+        square(instant_beta_emf_voltage - unadjusted_beta_emf_voltage) + square(instant_alpha_emf_voltage - alpha_emf_voltage) +
         3 * readout.emf_voltage_variance,
         4
     );
@@ -408,14 +418,22 @@ void adc_interrupt_handler(){
     // We can't compute sqrt in the critical loop, instead use the abs of the beta EMF voltage.
     // As we optimize our angle estimate, the alpha EMF voltage should approach zero and
     // the beta EMF voltage will be equal to the EMF voltage magnitude.
-    const int emf_voltage_average = abs(beta_emf_voltage);
 
+    const int abs_unadjusted_beta_emf_voltage = abs(unadjusted_beta_emf_voltage);
+    const int abs_alpha_emf_voltage = abs(alpha_emf_voltage);
+
+    const int beta_emf_voltage = unadjusted_beta_emf_voltage + sign(unadjusted_beta_emf_voltage) * (
+        // Taylor expansion for beta "much bigger" than alpha.
+        abs_unadjusted_beta_emf_voltage > abs_alpha_emf_voltage ? square(alpha_emf_voltage) / (2 * abs_unadjusted_beta_emf_voltage) :
+        // Otherwise assume "sqrt(2) = 1.5" is close enough.
+        abs_unadjusted_beta_emf_voltage / 2
+    );
 
     // Check if the emf voltage is away from zero with enough confidence.
     // 
     // Our confidence is 2 standard deviations, but the positive average is also expected to be
     // at 1 stdev away, so we have to compensate.
-    const bool emf_detected = square(emf_voltage_average) > 9 * emf_voltage_variance;
+    const bool emf_detected = square(beta_emf_voltage) > 9 * emf_voltage_variance;
 
     // The rotation direction is the sign of the negative of the beta EMF voltage.
     const bool emf_direction_is_negative = emf_detected and (beta_emf_voltage > 0);
@@ -443,22 +461,10 @@ void adc_interrupt_handler(){
 
     // Calculate the power values using the phase currents and voltages.
     
-    const int total_power = -(
-        u_current * u_drive_voltage + 
-        v_current * v_drive_voltage + 
-        w_current * w_drive_voltage
-    ) / voltage_current_div_power_fixed_point;
-
     const int resistive_power = (
         u_current * u_resistive_voltage + 
         v_current * v_resistive_voltage + 
         w_current * w_resistive_voltage
-    ) / voltage_current_div_power_fixed_point;
-
-    const int emf_power = -(
-        u_current * u_emf_voltage + 
-        v_current * v_emf_voltage + 
-        w_current * w_emf_voltage
     ) / voltage_current_div_power_fixed_point;
 
     const int inductive_power = (
@@ -467,7 +473,42 @@ void adc_interrupt_handler(){
         w_current * w_inductor_voltage
     ) / voltage_current_div_power_fixed_point;
 
+    // Nope, the phase currents lie! We should assume the motor is behaving rationally and
+    // smoothly while our measurements are noisy and lagged at high speed. Theoretically
+    // the equations below give the correct power values, but it's actually better to
+    // compute power from the DQ0 transformed values with some adjustments.
+    // 
+    // const int emf_power = -(
+    //     u_current * u_emf_voltage + 
+    //     v_current * v_emf_voltage + 
+    //     w_current * w_emf_voltage
+    // ) / voltage_current_div_power_fixed_point;
 
+    // const int total_power = -(
+    //     u_current * u_drive_voltage + 
+    //     v_current * v_drive_voltage + 
+    //     w_current * w_drive_voltage
+    // ) / voltage_current_div_power_fixed_point;
+
+    // By assuming the motor moves smoothly we claim the beta current is closer to the
+    // measured magnitude of the DQ0 current. We then adjust our beta current using
+    // a Taylor expansion for small alpha current. The system uses the real beta current
+    // not what we measure; thus we compute the emf power using our massaged DQ0 values.
+    const int emf_power = -beta_current * beta_emf_voltage / dq0_to_power_fixed_point;
+
+    // Compute the real total power used from the balance of powers.
+    // 
+    // Resistive power is the power dissipated in the motor coils and MOSFETs.
+    // EMF power is the power transferred into the rotor movement, driving the motor.
+    // Inductive power is the power transfered to the motor inductance.
+    // The total power is the power transferred to the battery.
+    // 
+    // The balance of all powers must be zero assuming no other source or sink of power. Thus
+    // we can compute the total power from the others; mostly determined by EMF. The resistive
+    // power is quite reliable and inductive_power is very small.
+    const int total_power = -(resistive_power + emf_power + inductive_power);
+
+    
     // Write the latest readout data
     // -----------------------------
 
@@ -503,8 +544,8 @@ void adc_interrupt_handler(){
     readout.alpha_emf_voltage = alpha_emf_voltage;
     readout.beta_emf_voltage = beta_emf_voltage;
 
-    readout.emf_voltage_average = emf_voltage_average;
     readout.emf_voltage_variance = emf_voltage_variance;
+    readout.residual_acceleration = 0;
 
     readout.total_power = total_power;
     readout.resistive_power = resistive_power;

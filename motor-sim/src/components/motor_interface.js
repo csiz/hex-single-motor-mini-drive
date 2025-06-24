@@ -288,9 +288,9 @@ function parse_full_readout(data_view, previous_readout){
   const beta_emf_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
 
-  const emf_voltage_average = calculate_voltage(data_view.getInt16(offset));
-  offset += 2;
   const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
+  offset += 2;
+  const residual_acceleration = acceleration_units_to_degrees_per_millisecond2(data_view.getInt16(offset));
   offset += 2;
 
   const total_power = convert_power_to_watts(data_view.getInt16(offset));
@@ -340,8 +340,8 @@ function parse_full_readout(data_view, previous_readout){
     beta_current,
     alpha_emf_voltage,
     beta_emf_voltage,
-    emf_voltage_average,
     emf_voltage_stdev,
+    residual_acceleration,
     battery_current,
     total_power,
     resistive_power,

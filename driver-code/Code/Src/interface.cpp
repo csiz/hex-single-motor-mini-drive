@@ -82,9 +82,9 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.beta_emf_voltage);
     offset += 2;
 
-    write_int16(buffer + offset, readout.emf_voltage_average);
-    offset += 2;
     write_int16(buffer + offset, readout.emf_voltage_variance);
+    offset += 2;
+    write_int16(buffer + offset, readout.residual_acceleration);
     offset += 2;
 
 

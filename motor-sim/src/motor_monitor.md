@@ -855,6 +855,9 @@ const plot_acceleration = plot_lines({
       y: "web_angular_acceleration_avg", label: "Angular Acceleration 2.0ms average", color: d3.color(colors.web_angular_speed).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_acceleration_stdev}),
     },
+    {
+      y: "residual_acceleration", label: "Residual Acceleration", color: colors.angle
+    },
   ],
   curve,
 });
@@ -974,17 +977,16 @@ const plot_dq0_voltages = plot_lines({
   y_label: "Voltage (V)",
   channels: [
     {y: "alpha_emf_voltage", label: "Voltage Alpha", color: colors.alpha_current},
-    {y: "beta_emf_voltage", label: "Voltage Beta", color: colors.beta_current},
+    {
+      y: "beta_emf_voltage", label: "Voltage Beta", color: colors.beta_current,
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_stdev}),
+    },
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "emf_voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
     {
       y: "emf_voltage_magnitude_avg", label: "Voltage Magnitude 350us average", color: d3.color(colors.current_magnitude).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_magnitude_stdev}),
-    },
-    {
-      y: "emf_voltage_average", label: "Voltage Average", color: colors.angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_stdev}),
     },
   ],
   curve,
