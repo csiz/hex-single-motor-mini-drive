@@ -283,9 +283,9 @@ function parse_full_readout(data_view, previous_readout){
   const beta_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
 
-  const alpha_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  const motor_constant = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
-  const beta_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  const emf_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
 
   const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
@@ -353,8 +353,8 @@ function parse_full_readout(data_view, previous_readout){
     angular_speed_stdev,
     alpha_current,
     beta_current,
-    alpha_emf_voltage,
-    beta_emf_voltage,
+    motor_constant,
+    emf_voltage,
     emf_voltage_stdev,
     residual_acceleration,
     residual_acceleration_sum,

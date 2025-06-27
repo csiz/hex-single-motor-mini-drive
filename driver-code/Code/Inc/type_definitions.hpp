@@ -144,8 +144,8 @@ struct FullReadout : public Readout {
     uint16_t angular_speed_variance;
     int16_t alpha_current;
     int16_t beta_current;
-    int16_t alpha_emf_voltage;
-    int16_t beta_emf_voltage;
+    int16_t motor_constant;
+    int16_t emf_voltage;
     int16_t emf_voltage_variance;
     int16_t residual_acceleration;
     int16_t total_power;

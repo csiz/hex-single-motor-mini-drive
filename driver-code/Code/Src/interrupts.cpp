@@ -59,6 +59,11 @@ PositionStatistics electric_position = null_position_statistics;
 // Count the number of consecutive EMF detections; we get good statistics after a threshold number.
 size_t consecutive_emf_detections = 0;
 
+
+const int motor_constant_32bit_fixed_point = 1024;
+int motor_constant_32bit = 0;
+
+
 // Motor driver state
 // ------------------
 
@@ -279,7 +284,7 @@ void adc_interrupt_handler(){
             predicted_position,
             hall_sector,
             previous_hall_sector,
-            (readout.angle >> 11) & 0b1 // EMF voltage was detected in the previous cycle (bit 11 is set).
+            consecutive_emf_detections
         ) : 
         // If the previous sector was invalid; initialize the position.
         get_default_sector_position(hall_sector) : 
@@ -347,6 +352,84 @@ void adc_interrupt_handler(){
     const int16_t neg_sin_v = -get_sin(electric_position.angle - third_circle);
     const int16_t neg_sin_w = -get_sin(electric_position.angle - two_thirds_circle);
 
+    // Calculate the park transformed EMF voltages.
+    // 
+    // Use the kalman filtered angle estimates. These are updated on the order of 2KHz while the PWM
+    // cycle is at 23KHz. The angle might diverge from reality and we can sense it by the misalignment
+    // in the park transformed voltages. We should adjust our angle estimate such that our calculations
+    // obtain an alpha emf voltage close to zero. The EMF voltage is a source of information about the
+    // rotor position and speed. But we don't have compute to calculate the angle, so we treat it as an
+    // optimization problem over multiple cycles.
+    // 
+    // Exponentially average the values below to reduce noise, 1 : 3 parts coorresponds to 150us half life
+    // at our cycle frequency.
+
+    const int alpha_emf_voltage = (
+        u_emf_voltage * cos_u / angle_base +
+        v_emf_voltage * cos_v / angle_base +
+        w_emf_voltage * cos_w / angle_base
+    );
+
+
+    const int beta_emf_voltage = (
+        u_emf_voltage * neg_sin_u / angle_base +
+        v_emf_voltage * neg_sin_v / angle_base +
+        w_emf_voltage * neg_sin_w / angle_base
+    );
+
+
+    // I think this computes the variance of the EMF magnitude preceisely. Lucky!
+    const int emf_voltage_variance = min(max_16bit, 1 + round_div(
+        square(alpha_emf_voltage) +
+        3 * readout.emf_voltage_variance,
+        4
+    ));
+
+    // We can't compute sqrt in the critical loop, instead use the abs of the beta EMF voltage.
+    // As we optimize our angle estimate, the alpha EMF voltage should approach zero and
+    // the beta EMF voltage will be equal to the EMF voltage magnitude.
+
+    const int abs_beta_emf_voltage = abs(beta_emf_voltage);
+
+    const int emf_voltage = beta_emf_voltage + sign(beta_emf_voltage) * alpha_emf_voltage;
+
+    const int sq_emf_voltage = square(emf_voltage);
+
+    // Check if the emf voltage is away from zero with enough confidence.
+    // 
+    // Our confidence is 2 standard deviations.
+    consecutive_emf_detections = (sq_emf_voltage > 4 * emf_voltage_variance) ? 
+        consecutive_emf_detections + 1 :
+        0;
+
+    const bool emf_detected = consecutive_emf_detections > 8;
+
+    // The rotation direction is the sign of the negative of the beta EMF voltage.
+    const bool emf_direction_is_negative = emf_detected and (emf_voltage > 0);
+
+    // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
+    // use it to update the position between hall sensor toggles.
+    if (consecutive_emf_detections > 2) {
+        // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
+        // the beta current. Since calculating the angle is expensive just consider the ratio.
+        const int approximate_angle_error = -clip_to(
+            -eighth_circle, +eighth_circle, 
+            not emf_voltage ? 0 : eighth_circle * alpha_emf_voltage / emf_voltage
+        );
+
+        const int emf_angle_variance = clip_to(1, max_16bit, emf_initial_angular_variance * emf_voltage_variance / sq_emf_voltage);
+
+        electric_position = bayesian_update(
+            electric_position,
+            PositionStatistics{
+                .angle = approximate_angle_error,
+                .angle_variance = emf_angle_variance,
+                .angular_speed = approximate_angle_error * speed_fixed_point,
+                .angular_speed_variance = min(emf_angle_variance * speed_variance_fixed_point, max_16bit)
+            }
+        );
+    }
+
     // Calculate the park transformed currents.
     // 
     // The beta component contributes to torque. The alpha component should be driven to zero, but it
@@ -364,100 +447,8 @@ void adc_interrupt_handler(){
         u_current * neg_sin_u / angle_base +
         v_current * neg_sin_v / angle_base +
         w_current * neg_sin_w / angle_base
-    );
+    ) + alpha_current * (emf_direction_is_negative ? -1 : 1);
 
-    // Calculate the park transformed EMF voltages.
-    // 
-    // Use the kalman filtered angle estimates. These are updated on the order of 2KHz while the PWM
-    // cycle is at 23KHz. The angle might diverge from reality and we can sense it by the misalignment
-    // in the park transformed voltages. We should adjust our angle estimate such that our calculations
-    // obtain an alpha emf voltage close to zero. The EMF voltage is a source of information about the
-    // rotor position and speed. But we don't have compute to calculate the angle, so we treat it as an
-    // optimization problem over multiple cycles.
-    // 
-    // Exponentially average the values below to reduce noise, 1 : 3 parts coorresponds to 150us half life
-    // at our cycle frequency.
-
-    const int instant_alpha_emf_voltage = (
-        u_emf_voltage * cos_u / angle_base +
-        v_emf_voltage * cos_v / angle_base +
-        w_emf_voltage * cos_w / angle_base
-    );
-
-    const int alpha_emf_voltage = (
-        instant_alpha_emf_voltage + 
-        3 * readout.alpha_emf_voltage
-    ) / 4;
-
-    const int instant_beta_emf_voltage = (
-        u_emf_voltage * neg_sin_u / angle_base +
-        v_emf_voltage * neg_sin_v / angle_base +
-        w_emf_voltage * neg_sin_w / angle_base
-    );
-
-    const int unadjusted_beta_emf_voltage = (
-        instant_beta_emf_voltage + 
-        3 * readout.beta_emf_voltage
-    ) / 4;
-
-    // I think this computes the variance of the EMF magnitude preceisely. Lucky!
-    const int emf_voltage_variance = min(1, round_div(
-        square(instant_beta_emf_voltage - unadjusted_beta_emf_voltage) + square(instant_alpha_emf_voltage - alpha_emf_voltage) +
-        3 * readout.emf_voltage_variance,
-        4
-    ));
-
-    // We can't compute sqrt in the critical loop, instead use the abs of the beta EMF voltage.
-    // As we optimize our angle estimate, the alpha EMF voltage should approach zero and
-    // the beta EMF voltage will be equal to the EMF voltage magnitude.
-
-    const int abs_unadjusted_beta_emf_voltage = abs(unadjusted_beta_emf_voltage);
-    const int abs_alpha_emf_voltage = abs(alpha_emf_voltage);
-
-    const int beta_emf_voltage = unadjusted_beta_emf_voltage + sign(unadjusted_beta_emf_voltage) * (
-        // Taylor expansion for beta "much bigger" than alpha.
-        abs_unadjusted_beta_emf_voltage > abs_alpha_emf_voltage ? square(alpha_emf_voltage) / (2 * abs_unadjusted_beta_emf_voltage) :
-        // Otherwise assume "sqrt(2) = 1.5" is close enough.
-        abs_unadjusted_beta_emf_voltage / 2
-    );
-
-    const int sq_beta_emf_voltage = square(beta_emf_voltage);
-
-    // Check if the emf voltage is away from zero with enough confidence.
-    // 
-    // Our confidence is 2 standard deviations, but the positive average is also expected to be
-    // at 1 stdev away, so we have to compensate.
-    const bool emf_detected = sq_beta_emf_voltage > 9 * emf_voltage_variance;
-
-    // The rotation direction is the sign of the negative of the beta EMF voltage.
-    const bool emf_direction_is_negative = emf_detected and (beta_emf_voltage > 0);
-
-    // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
-    // use it to update the position between hall sensor toggles.
-    if (emf_detected) {
-        consecutive_emf_detections += 1;
-
-        // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
-        // the beta current. Since calculating the angle is expensive just consider the ratio.
-        const int approximate_angle_error = -clip_to(
-            -eighth_circle, +eighth_circle, 
-            not beta_emf_voltage ? 0 : eighth_circle * alpha_emf_voltage / beta_emf_voltage
-        );
-
-        const int emf_angle_variance = clip_to(1, max_16bit, emf_initial_angular_variance * emf_voltage_variance / sq_beta_emf_voltage);
-
-        electric_position = bayesian_update(
-            electric_position,
-            PositionStatistics{
-                .angle = approximate_angle_error,
-                .angle_variance = emf_angle_variance,
-                .angular_speed = approximate_angle_error * speed_fixed_point,
-                .angular_speed_variance = min(emf_angle_variance * speed_variance_fixed_point, max_16bit)
-            }
-        );
-    } else {
-        consecutive_emf_detections = 0;
-    }
 
     // Calculate the power values using the phase currents and voltages.
     
@@ -494,7 +485,7 @@ void adc_interrupt_handler(){
     // measured magnitude of the DQ0 current. We then adjust our beta current using
     // a Taylor expansion for small alpha current. The system uses the real beta current
     // not what we measure; thus we compute the emf power using our massaged DQ0 values.
-    const int emf_power = -(beta_current + alpha_current * (emf_direction_is_negative ? -1 : 1)) * beta_emf_voltage / dq0_to_power_fixed_point;
+    const int emf_power = -beta_current * emf_voltage / dq0_to_power_fixed_point;
 
     // Compute the real total power used from the balance of powers.
     // 
@@ -511,8 +502,16 @@ void adc_interrupt_handler(){
     // Get the external acceleration torque by subtracting our EMF acceleration from our position measurements.
     const int residual_acceleration = (
         // Only add speed changes when we have an EMF fix; the speed will jump a large amount on the first position detection.
-        (consecutive_emf_detections > 5) * (electric_position.angular_speed - previous_angular_speed) * acceleration_fixed_point
+        emf_detected * (electric_position.angular_speed - previous_angular_speed) * acceleration_fixed_point
     );
+
+    motor_constant_32bit = (emf_detected and (abs(electric_position.angular_speed) > min_emf_angular_speed) and (abs_beta_emf_voltage > min_emf_voltage)) ? 
+        (
+            -emf_voltage * motor_constant_fixed_point * motor_constant_32bit_fixed_point / electric_position.angular_speed +
+            motor_constant_32bit * 63
+        ) / 64 : 
+        motor_constant_32bit;
+
 
     // Write the latest readout data
     // -----------------------------
@@ -546,9 +545,9 @@ void adc_interrupt_handler(){
     readout.alpha_current = alpha_current;
     readout.beta_current = beta_current;
 
-    readout.alpha_emf_voltage = alpha_emf_voltage;
-    readout.beta_emf_voltage = beta_emf_voltage;
-
+    readout.motor_constant = motor_constant_32bit / motor_constant_32bit_fixed_point;
+    
+    readout.emf_voltage = emf_voltage;
     readout.emf_voltage_variance = emf_voltage_variance;
     readout.residual_acceleration = residual_acceleration;
 

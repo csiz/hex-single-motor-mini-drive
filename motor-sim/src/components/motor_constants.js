@@ -191,25 +191,25 @@ export const default_position_calibration = {
 
 export const default_pid_parameters = {
   "current_angle_gains": {
-    "kp": 64,
-    "ki": 2,
+    "kp": 128,
+    "ki": 8,
     "kd": 64,
     "max_output": 256
   },
   "torque_gains": {
-    "kp": 256,
-    "ki": 64,
+    "kp": 0,
+    "ki": 8,
     "kd": 0,
     "max_output": 1450
   },
   "battery_power_gains": {
-    "kp": 32,
-    "ki": 4,
+    "kp": 0,
+    "ki": 8,
     "kd": 0,
     "max_output": 1450
   },
   "angular_speed_gains": {
-    "kp": 133,
+    "kp": 1337,
     "ki": 16,
     "kd": 8,
     "max_output": 228

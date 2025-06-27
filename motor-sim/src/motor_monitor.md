@@ -29,9 +29,7 @@ Motor Driving Data
   <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${plot_power}</div>
-<div class="card tight">${plot_current_angle_control}</div>
-<div class="card tight">${plot_torque_control}</div>
-<div class="card tight">${plot_battery_power_control}</div>
+<div class="card tight">${plot_drive_controls}</div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
@@ -47,6 +45,7 @@ Motor Driving Data
 <div class="card tight">${plot_dq0_voltages}</div>
 <div class="card tight">${plot_pwm_settings}</div>
 <div class="card tight">${plot_readout_flags}</div>
+<div class="card tight">${plot_motor_values}</div>
 
 
 Motor Control Parameters
@@ -276,7 +275,7 @@ const connect_buttons = Inputs.button(
   [
     ["Connect", connect_motor_controller],
     ["Disconnect", disconnect_motor_controller],
-    ["Reset data & inputs", () => (clear_stored_data(), location.reload())],
+    // ["Reset data & inputs", () => (clear_stored_data(), location.reload())],
   ],
   {label: "Connect to COM"},
 );
@@ -688,48 +687,24 @@ const plot_power = plot_lines({
   curve,
 });
 
-const plot_current_angle_control = plot_lines({
-  subtitle: "Current Angle PID correction",
-  description: "Correction applied to the current angle.",
+const plot_drive_controls = plot_lines({
+  subtitle: "PID Control State",
+  description: "Error and output for each PID controller.",
   width: 1200, height: 200,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Current Angle Correction (degrees)",
+  y_label: "Error & Output",
   channels: [
-    {y: "current_angle_error", label: "Current Angle Error", color: colors.u},
-    {y: "current_angle_control", label: "Current Angle Control", color: colors.current_angle},
-
+    {y: "current_angle_error", label: "Current Angle Error (degrees)", color: colors.u},
+    {y: "current_angle_control", label: "Current Angle Control (degrees)", color: colors.beta_current},
+    {y: "torque_error", label: "Torque Error", color: colors.w},
+    {y: "torque_control", label: "Torque Control", color: colors.angle_from_emf},
+    {y: "battery_power_error", label: "Battery Power Error", color: colors.current_angle},
+    {y: "battery_power_control", label: "Battery Power Control", color: colors.other},
   ],
   curve,
 });
 
-const plot_torque_control = plot_lines({
-  subtitle: "Torque PID Control",
-  description: "Internal state of the torque PID controller.",
-  width: 1200, height: 200,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "PWM",
-  channels: [
-    {y: "torque_error", label: "Torque Error", color: colors.u},
-    {y: "torque_control", label: "Torque Control", color: colors.current_magnitude},
-  ],
-  curve,
-});
-
-const plot_battery_power_control = plot_lines({
-  subtitle: "Battery Power PID Control",
-  description: "Internal state of the battery power PID controller.",
-  width: 1200, height: 200,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "PWM",
-  channels: [
-    {y: "battery_power_error", label: "Battery Power Error", color: colors.u},
-    {y: "battery_power_control", label: "Battery Power Control", color: colors.current_magnitude},
-  ],
-  curve,
-});
 
 const plot_runtime_stats = plot_lines({
   subtitle: "Motor driver runtime stats",
@@ -979,9 +954,8 @@ const plot_dq0_voltages = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "alpha_emf_voltage", label: "Voltage Alpha", color: colors.alpha_current},
     {
-      y: "beta_emf_voltage", label: "Voltage Beta", color: colors.beta_current,
+      y: "emf_voltage", label: "EMF Voltage", color: colors.beta_current,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_stdev}),
     },
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
@@ -1029,11 +1003,22 @@ const plot_readout_flags = plot_lines({
   curve,
 });
 
+const plot_motor_values = plot_lines({
+  subtitle: "Motor Values",
+  description: "Various values related to the motor's operation.",
+  width: 1200, height: 400,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Value",
+  channels: [
+    {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
+  ],
+  curve,
+});
+
 const monitoring_plots = {
   plot_power,
-  plot_current_angle_control,
-  plot_battery_power_control,
-  plot_torque_control,
+  plot_drive_controls,
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
@@ -1049,6 +1034,7 @@ const monitoring_plots = {
   plot_dq0_voltages,
   plot_pwm_settings,
   plot_readout_flags,
+  plot_motor_values,
 };
 
 autosave_inputs(monitoring_plots);

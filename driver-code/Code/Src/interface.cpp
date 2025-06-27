@@ -77,9 +77,9 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.beta_current);
     offset += 2;
 
-    write_int16(buffer + offset, readout.alpha_emf_voltage);
+    write_int16(buffer + offset, readout.motor_constant);
     offset += 2;
-    write_int16(buffer + offset, readout.beta_emf_voltage);
+    write_int16(buffer + offset, readout.emf_voltage);
     offset += 2;
 
     write_int16(buffer + offset, readout.emf_voltage_variance);

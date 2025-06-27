@@ -167,6 +167,15 @@ const uint16_t minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
 const uint16_t pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty); 
 
+// Save a bit of PWM capacity to compensate for sudden rotor acceleration.
+// 
+// The rotor usually has a gearbox and gears wiggle and bump into each other. That
+// means the rotor experiences large accelerations and decelerations from the tooth
+// collisions; they aren't just bad data, those acceleration spikes are real. We need
+// to be able to compensate for the increased back EMF while we wait for the gears to
+// get back into sync. Therefore we need to save some spare PWM capacity.
+const uint16_t pwm_max_smooth = pwm_max - pwm_base / 10;
+
 // Maximum duty for hold commands.
 const uint16_t pwm_max_hold = pwm_base * 2 / 10;
 
@@ -356,6 +365,16 @@ const int angular_acceleration_div_2_variance = round_div(
     acceleration_variance_to_square_acceleration
 );
 
+const int emf_base = static_cast<int>(pwm_base * 1.16);
+
+// Fixed point representation of the motor constant.
+const int motor_constant_fixed_point = 1024;
+
+// 1.0V minimum EMF voltage to use it for motor constant updates.
+const int min_emf_voltage = voltage_fixed_point;
+
+const int min_emf_angular_speed = 30 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
+
 // Moment of inertia of the entrained load; kg*m^2. TODO: what's a good value for this?
 const int moment_of_inertia_fixed_point = 250;
 
@@ -415,20 +434,20 @@ const int16_t gains_fixed_point = 1024;
 
 const PIDParameters default_pid_parameters = {
     .current_angle_gains = PIDGains{
-        .kp = 64,
-        .ki = 4,
+        .kp = 128,
+        .ki = 8,
         .kd = 64,
         .max_output = quarter_circle
     },
     .torque_gains = PIDGains{
-        .kp = 256,
-        .ki = 64,
+        .kp = 0,
+        .ki = 8,
         .kd = 0,
         .max_output = pwm_max - 40
     },
     .battery_power_gains = PIDGains{
-        .kp = 32,
-        .ki = 4,
+        .kp = 0,
+        .ki = 2,
         .kd = 0,
         .max_output = pwm_max - 40
     },

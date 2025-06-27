@@ -46,20 +46,18 @@ static inline MotorOutputs update_motor_smooth(
     const bool emf_detected = (readout.angle >> 11) & 0b1;
     // const bool motor_breaking = readout.emf_power < 0;
 
+    const int emf_compensation = - emf_detected * readout.emf_voltage * emf_base / readout.vcc_voltage;
+
+    const int max_allowed_target = max(0, pwm_max_smooth - emf_compensation);
+    const int min_allowed_target = min(0, -pwm_max_smooth - emf_compensation);
+
+    const int pwm_target = emf_compensation + clip_to(min_allowed_target, max_allowed_target, smooth_parameters.pwm_target);
+
     // Get the abs value of the target PWM.
-    const int abs_pwm = min(pwm_max, abs(smooth_parameters.pwm_target));
+    const int abs_pwm = min(pwm_max, abs(pwm_target));
 
     // Base the direction on the sign of the target PWM.
-    const int direction = smooth_parameters.pwm_target >= 0 ? +1 : -1;
-
-    const int abs_beta_current = abs(readout.beta_current) + 1;
-
-    // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
-    // the beta current. Since calculating the angle is expensive just consider the ratio.
-    const int approximate_angle_error = clip_to(
-        -eighth_circle, +eighth_circle, 
-        eighth_circle * readout.alpha_current / abs_beta_current
-    );
+    const int direction = 1 - (pwm_target < 0) * 2;
 
     // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
     pid_state.current_angle_control = (
@@ -67,7 +65,7 @@ static inline MotorOutputs update_motor_smooth(
         compute_pid_control(
             pid_parameters.current_angle_gains,
             pid_state.current_angle_control,
-            -approximate_angle_error,
+            -readout.alpha_current,
             0
         )
     );
@@ -108,7 +106,7 @@ static inline MotorOutputs update_motor_torque(
     );
 
     // Get the target PWM after torque control.
-    const int16_t pwm_target = clip_to(-pwm_max, pwm_max, pid_state.torque_control.output);
+    const int16_t pwm_target = pid_state.torque_control.output;
 
     return update_motor_smooth(
         readout,

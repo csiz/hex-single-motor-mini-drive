@@ -171,6 +171,7 @@ function compute_derivative_info(readout, previous_readout){
 
   const {
     time: prev_time,
+    emf_detected: prev_emf_detected,
     hall_sector: prev_hall_sector, 
     emf_voltage_angle: prev_emf_voltage_angle,
     angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
@@ -193,7 +194,7 @@ function compute_derivative_info(readout, previous_readout){
   const exp_stats = exponential_stats(dt, 0.350);
 
 
-  const angular_speed_from_emf = normalize_degrees(emf_voltage_angle - prev_emf_voltage_angle) / dt;
+  const angular_speed_from_emf = prev_emf_detected ? normalize_degrees(emf_voltage_angle - prev_emf_voltage_angle) / dt : 0;
 
   const {average: angular_speed_from_emf_avg, stdev: angular_speed_from_emf_stdev} = exp_stats(
     angular_speed_from_emf, 
