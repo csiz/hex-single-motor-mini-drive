@@ -695,8 +695,8 @@ const plot_drive_controls = plot_lines({
   x_label: "Time (ms)",
   y_label: "Error & Output",
   channels: [
-    {y: "current_angle_error", label: "Current Angle Error (degrees)", color: colors.u},
-    {y: "current_angle_control", label: "Current Angle Control (degrees)", color: colors.beta_current},
+    {y: "current_angle_error", label: "Current Angle Error", color: colors.u},
+    {y: "current_angle_control", label: "Current Angle Control", color: colors.beta_current},
     {y: "torque_error", label: "Torque Error", color: colors.w},
     {y: "torque_control", label: "Torque Control", color: colors.angle_from_emf},
     {y: "battery_power_error", label: "Battery Power Error", color: colors.current_angle},

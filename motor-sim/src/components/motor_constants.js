@@ -109,6 +109,13 @@ export function degrees_per_millisecond2_stdev_to_acceleration_div_2_variance(st
 
 export const minimum_acceleration = acceleration_units_to_degrees_per_millisecond2(1);
 
+// Bit handling constants
+// ----------------------
+export const hall_state_bit_offset = 13;
+export const angle_valid_bit_offset = 12;
+export const emf_detected_bit_offset = 11;
+export const emf_direction_is_negative_bit_offset = 10;
+export const angle_bit_mask = 0x3FF;
 
 // Motor control constants
 // -----------------------

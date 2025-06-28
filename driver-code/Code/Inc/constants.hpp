@@ -27,7 +27,10 @@ const uint8_t hall_sector_base = 6;
 // Note that speed units and acceleration units are defined as angle units
 // per pwm cycle. This allows for easy maths during updates because the time
 // delta is always 1 pwm cycle per cycle.
-const int angle_base = 1024;
+const int angle_base = 1 << 10; // 1024
+
+// Bit mask for the angle reading.
+const uint16_t angle_bit_mask = angle_base - 1; // 0x3FF
 
 // Round down angle units for the trig lookup tables. 14 to 10 bits.
 const int angle_lookup_divider = angle_base / 1024;
@@ -37,6 +40,20 @@ const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 
 // Readout number base; we cycle back to 0 instead of reaching this value.
 const int readout_number_base = 1 << 16;
+
+
+// Readout bit packing
+// -------------------
+
+const size_t hall_state_bit_offset = 13;
+const size_t angle_valid_bit_offset = 12;
+const size_t emf_detected_bit_offset = 11;
+const size_t emf_direction_is_negative_bit_offset = 10;
+
+const uint16_t angle_valid_bit = 0b1 << angle_valid_bit_offset;
+const uint16_t emf_detected_bit = 0b1 << emf_detected_bit_offset;
+const uint16_t emf_direction_is_negative_bit = 0b1 << emf_direction_is_negative_bit_offset;
+
 
 // Position constants
 // ------------------
@@ -279,11 +296,11 @@ const int eighth_circle = angle_base / 8;
 
 // Normalize to a positive angle (0 to 2pi).
 inline constexpr int normalize_angle(int angle){
-    return (angle + angle_base) % angle_base;
+    return (angle + angle_base) & angle_bit_mask;
 }
 // Normalize a 0 centerd angle; keeping its sign (-pi to pi).
 inline constexpr int signed_angle(int angle){
-    return (angle + one_and_half_circle) % angle_base - half_circle;
+    return ((angle + one_and_half_circle) & angle_bit_mask) - half_circle;
 }
 
 // Scaling factor for variance.
@@ -300,9 +317,9 @@ const int default_sector_center_variance = square(30 * angle_base / 360) / varia
 // Ensure that our biggest variance is small enough to be usable in gaussian updates while staying < max_16bit.
 static_assert(default_sector_center_variance * 16 < max_16bit, "max_variance must be less than 32768 (max 16-bit signed int)");
 
+// TODO: make this the integral parameter of the EMF tracking PID.
 // Value for the initial EMF variance; our certainty in the EMF angle increases with the magnitude of the EMF voltage/speed.
-const int emf_initial_angular_variance = square(30 * angle_base / 360) / variance_divider;
-
+const int emf_initial_angular_variance = square(20 * angle_base / 360) / variance_divider;
 
 // The hall sensors trigger later than expected going each direction.
 const int hysterisis = 5 * angle_base / 360;
@@ -368,7 +385,7 @@ const int angular_acceleration_div_2_variance = round_div(
 const int emf_base = static_cast<int>(pwm_base * 1.16);
 
 // Fixed point representation of the motor constant.
-const int motor_constant_fixed_point = 1024;
+const int motor_constant_fixed_point = 1 << 14;
 
 // 1.0V minimum EMF voltage to use it for motor constant updates.
 const int min_emf_voltage = voltage_fixed_point;

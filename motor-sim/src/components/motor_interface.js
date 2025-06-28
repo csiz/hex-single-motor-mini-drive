@@ -16,6 +16,11 @@ import {
   acceleration_div_2_variance_to_degrees_per_millisecond2_stdev,
   degrees_per_millisecond2_stdev_to_acceleration_div_2_variance,
   phase_resistance, phase_inductance,
+  hall_state_bit_offset,
+  angle_valid_bit_offset,
+  emf_detected_bit_offset,
+  emf_direction_is_negative_bit_offset,
+  angle_bit_mask,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
@@ -139,22 +144,22 @@ function parse_readout(data_view, previous_readout){
   const w_drive_voltage = (w_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
 
   // The first 3 bits are the hall sensor state.
-  const hall_u = (angle_bytes >> 13) & 0b1;
-  const hall_v = (angle_bytes >> 14) & 0b1;
-  const hall_w = (angle_bytes >> 15) & 0b1;
+  const hall_u = (angle_bytes >> hall_state_bit_offset) & 0b001;
+  const hall_v = (angle_bytes >> hall_state_bit_offset) & 0b010;
+  const hall_w = (angle_bytes >> hall_state_bit_offset) & 0b100;
 
   const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
 
   // The next bit is the motor angle valid flag.
-  const angle_valid = (angle_bytes >> 12) & 0b1;
+  const angle_valid = (angle_bytes >> angle_valid_bit_offset) & 0b1;
 
-  const emf_detected = (angle_bytes >> 11) & 0b1;
+  const emf_detected = (angle_bytes >> emf_detected_bit_offset) & 0b1;
 
-  const emf_direction_negative = (angle_bytes >> 10) & 0b1;
+  const emf_direction_negative = (angle_bytes >> emf_direction_is_negative_bit_offset) & 0b1;
 
   // The last 10 bits are the motor angle. Representing range from 0 to 360 degrees,
   // where 0 means the rotor is aligned by holding positive current on the U phase.
-  const angle = angle_units_to_degrees(angle_bytes & 0x3FF);
+  const angle = angle_units_to_degrees(angle_bytes & angle_bit_mask);
 
 
   const scaled_u_current = u_readout * this.current_calibration.u_factor;
@@ -283,11 +288,10 @@ function parse_full_readout(data_view, previous_readout){
   const beta_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
 
-  const motor_constant = calculate_voltage(data_view.getInt16(offset));
+  const motor_constant = data_view.getInt16(offset);
   offset += 2;
   const emf_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
-
   const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   const residual_acceleration = acceleration_units_to_degrees_per_millisecond2(data_view.getInt16(offset));
@@ -302,9 +306,9 @@ function parse_full_readout(data_view, previous_readout){
   const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
 
-  const current_angle_error = angle_units_to_degrees(data_view.getInt16(offset));
+  const current_angle_error = data_view.getInt16(offset);
   offset += 2;
-  const current_angle_control = angle_units_to_degrees(data_view.getInt16(offset));
+  const current_angle_control = data_view.getInt16(offset);
   offset += 2;
   const torque_error = data_view.getInt16(offset);
   offset += 2;

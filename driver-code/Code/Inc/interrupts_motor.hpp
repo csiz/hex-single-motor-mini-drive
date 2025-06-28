@@ -43,12 +43,11 @@ static inline MotorOutputs update_motor_smooth(
     DriveSmooth const& smooth_parameters,
     PIDControlState & pid_state
 ){
-    const bool emf_detected = (readout.angle >> 11) & 0b1;
-    // const bool motor_breaking = readout.emf_power < 0;
+    const bool emf_detected = readout.angle & emf_detected_bit;
 
     const int emf_compensation = - emf_detected * readout.emf_voltage * emf_base / readout.vcc_voltage;
 
-    const int max_allowed_target = max(0, pwm_max_smooth - emf_compensation);
+    const int max_allowed_target = max(0, +pwm_max_smooth - emf_compensation);
     const int min_allowed_target = min(0, -pwm_max_smooth - emf_compensation);
 
     const int pwm_target = emf_compensation + clip_to(min_allowed_target, max_allowed_target, smooth_parameters.pwm_target);
@@ -65,14 +64,16 @@ static inline MotorOutputs update_motor_smooth(
         compute_pid_control(
             pid_parameters.current_angle_gains,
             pid_state.current_angle_control,
-            -readout.alpha_current,
+            -readout.alpha_current * abs(readout.emf_voltage) / dq0_to_power_fixed_point,
             0
         )
     );
 
-    const int target_lead_angle = direction * clip_to(0, half_circle, smooth_parameters.leading_angle + pid_state.current_angle_control.output);
+    const int target_lead_angle = direction * clip_to(0, half_circle, 
+        smooth_parameters.leading_angle + 
+        pid_state.current_angle_control.output / 4);
 
-    const int rotor_angle = readout.angle & 0x3FF;
+    const int rotor_angle = readout.angle & angle_bit_mask;
 
     const int target_angle = normalize_angle(rotor_angle + target_lead_angle);
 
@@ -320,7 +321,7 @@ static inline MotorOutputs update_motor_control(
 
         case DriverState::DRIVE_6_SECTOR: {
             // Re-extract the hall sector in this function.
-            const uint8_t hall_sector = get_hall_sector(readout.angle >> 13);
+            const uint8_t hall_sector = get_hall_sector(readout.angle >> hall_state_bit_offset);
 
             // Break at the end of the command duration or if the hall sensor is missing the magnet.
             if (not driver_parameters.sector.duration or hall_sector >= hall_sector_base) {
@@ -333,7 +334,7 @@ static inline MotorOutputs update_motor_control(
             }
         }
         case DriverState::DRIVE_SMOOTH: {
-            const bool angle_valid = (readout.angle >> 12) & 0b1;
+            const bool angle_valid = readout.angle & angle_valid_bit;
 
             // Break at the end of the command duration or if the angle is invalid.
             if (not driver_parameters.smooth.duration or not angle_valid) {
@@ -348,10 +349,8 @@ static inline MotorOutputs update_motor_control(
             }
         }
         case DriverState::DRIVE_TORQUE: {
-            const bool angle_valid = (readout.angle >> 12) & 0b1;
-
-            // Break at the end of the command duration or if the angle is invalid.
-            if (not driver_parameters.torque.duration or not angle_valid) {
+            // Break at the end of the command duration.
+            if (not driver_parameters.torque.duration) {
                 // Reset the PID state.
                 pid_state = null_pid_control_state;
                 driver_state = DriverState::OFF;
@@ -363,10 +362,8 @@ static inline MotorOutputs update_motor_control(
             }
         }
         case DriverState::DRIVE_BATTERY_POWER: {
-            const bool angle_valid = (readout.angle >> 12) & 0b1;
-
-            // Break at the end of the command duration or if the angle is invalid.
-            if (not driver_parameters.battery_power.duration or not angle_valid) {
+            // Break at the end of the command duration.
+            if (not driver_parameters.battery_power.duration) {
                 // Reset the PID state.
                 pid_state = null_pid_control_state;
                 driver_state = DriverState::OFF;
