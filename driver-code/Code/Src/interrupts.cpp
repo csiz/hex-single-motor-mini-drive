@@ -25,7 +25,6 @@
 // Electrical and position state
 FullReadout readout = {};
 
-
 // History of shorthand readouts that we record while keeping the comms quiet (so we don't miss any).
 Readout readout_history[history_size] = {};
 
@@ -36,33 +35,19 @@ size_t readout_history_write_index = 0;
 size_t readout_history_read_index = 0;
 
 
-// Hall & Position Tracking
-// ------------------------
-
-// Hall states as bits, 0b001 = hall 1, 0b010 = hall 2, 0b100 = hall 3.
-uint8_t hall_state = 0b000;
-
-// The 6 valid configurations of hall sensors in trigonometric order.
-// 
-// The order is u, uv, v, vw, w, wu. Treat values outside the range as
-// invalid, the magnet is not present or the sensors are not ready.
-uint8_t hall_sector = hall_sector_base;
-
-// Whether the position is valid.
-bool angle_valid = false;
+// Position Tracking & Observers
+// -----------------------------
 
 // Best estimate of the **electric** angle and speed (that is the angle between the coil 
 // U and the magnetic North). The actual position of the output depends on the number of
 // pole pairs, and the slot triplets, and the mechanical gear ratio.
-PositionStatistics electric_position = null_position_statistics;
+
+// All tracked observers, including the rotor and inductor positions, resistances, inductances, etc.
+Observers observers = {};
 
 // Count the number of consecutive EMF detections; we get good statistics after a threshold number.
 size_t consecutive_emf_detections = 0;
 
-
-const int tracking_scale = 64;
-int tracking_motor_constant = 0;
-int motor_constant_variance = 0;
 
 // Motor driver state
 // ------------------
@@ -260,37 +245,9 @@ void adc_interrupt_handler(){
     const int previous_angular_speed = readout.angular_speed;
 
     // Predict the position based on the previous state.
-    const auto predicted_position = predict_position(electric_position);
+    const auto predicted_position = predict_position(observers.rotor_position);
 
-    // Read new data from the hall sensors.
-    hall_state = read_hall_sensors_state();
-
-    // Remember the previous hall sector to compute transitions.
-    const uint8_t previous_hall_sector = hall_sector;
-
-    // Update the sector variable.
-    hall_sector = get_hall_sector(hall_state);
-
-    // Check if the magnet is present.
-    angle_valid = hall_sector < hall_sector_base;
-
-    // We need 2 hall sector readings in a row to compute an update.
-    const bool previous_angle_valid = previous_hall_sector < hall_sector_base;
-
-    // Update the position; or reset to default.
-    electric_position = (angle_valid ? previous_angle_valid ? 
-        // Perform the Kalman filter update based on the hall sensor data.
-        infer_position_from_hall_sensors(
-            predicted_position,
-            hall_sector,
-            previous_hall_sector,
-            consecutive_emf_detections
-        ) : 
-        // If the previous sector was invalid; initialize the position.
-        get_default_sector_position(hall_sector) : 
-        // No valid sector; keep previous position.
-        predicted_position
-    );
+    observers.rotor_position = predicted_position;
 
     // Get calibrated currents.
 
@@ -342,15 +299,15 @@ void adc_interrupt_handler(){
 
     // Load the projections of each phase on the current electric angle.
 
-    const int16_t cos_u = get_cos(electric_position.angle);
-    const int16_t cos_v = get_cos(electric_position.angle - third_circle);
-    const int16_t cos_w = get_cos(electric_position.angle - two_thirds_circle);
+    const int16_t cos_u = get_cos(observers.rotor_position.angle);
+    const int16_t cos_v = get_cos(observers.rotor_position.angle - third_circle);
+    const int16_t cos_w = get_cos(observers.rotor_position.angle - two_thirds_circle);
 
     // We need the negative sine values for the park transformation.
 
-    const int16_t neg_sin_u = -get_sin(electric_position.angle);
-    const int16_t neg_sin_v = -get_sin(electric_position.angle - third_circle);
-    const int16_t neg_sin_w = -get_sin(electric_position.angle - two_thirds_circle);
+    const int16_t neg_sin_u = -get_sin(observers.rotor_position.angle);
+    const int16_t neg_sin_v = -get_sin(observers.rotor_position.angle - third_circle);
+    const int16_t neg_sin_w = -get_sin(observers.rotor_position.angle - two_thirds_circle);
 
     // Calculate the park transformed currents.
     // 
@@ -432,8 +389,8 @@ void adc_interrupt_handler(){
 
         const int emf_angle_variance = clip_to(1, max_16bit, emf_initial_angular_variance * emf_voltage_variance / sq_emf_voltage);
 
-        electric_position = bayesian_update(
-            electric_position,
+        observers.rotor_position = bayesian_update(
+            observers.rotor_position,
             PositionStatistics{
                 .angle = approximate_angle_error,
                 .angle_variance = emf_angle_variance,
@@ -499,17 +456,12 @@ void adc_interrupt_handler(){
     // Get the external acceleration torque by subtracting our EMF acceleration from our position measurements.
     // 
     // Only add speed changes when we have an EMF fix; the speed will jump a large amount on the first position detection.
-    const int rotor_acceleration = emf_detected * (electric_position.angular_speed - previous_angular_speed) * acceleration_fixed_point;
+    const int rotor_acceleration = emf_detected * (observers.rotor_position.angular_speed - previous_angular_speed) * acceleration_fixed_point;
 
-    const bool valid_motor_constant = (emf_detected and (abs(electric_position.angular_speed) > min_emf_angular_speed));
+    const bool valid_motor_constant = (emf_detected and (abs(observers.rotor_position.angular_speed) > min_emf_angular_speed));
 
-    const int instant_motor_constant = - valid_motor_constant * emf_voltage * motor_constant_fixed_point / electric_position.angular_speed * tracking_scale;
+    const int instant_motor_constant = - valid_motor_constant * emf_voltage * motor_constant_fixed_point / observers.rotor_position.angular_speed;
 
-
-    tracking_motor_constant = instant_motor_constant <= 0 ? tracking_motor_constant : 
-        (instant_motor_constant + 63 * tracking_motor_constant) / 64;
-
-    motor_constant_variance = (instant_motor_constant - tracking_motor_constant) / tracking_scale;
 
     // Write the latest readout data
     // -----------------------------
@@ -536,20 +488,20 @@ void adc_interrupt_handler(){
 
     // The angle is 10 bits so we have 6 bits left to encode the hall state, angle validity, emf detection (when the rotor moves), and direction.
     readout.angle = (
-        (electric_position.angle & angle_bit_mask) | 
-        (hall_state << hall_state_bit_offset) | 
-        (angle_valid << angle_valid_bit_offset) | 
+        (observers.rotor_position.angle & angle_bit_mask) | 
+        (readout.angle & hall_state_bit_mask) | 
+        (readout.angle & angle_valid_bit_mask) | 
         (emf_detected << emf_detected_bit_offset) | 
         (emf_direction_is_negative << emf_direction_is_negative_bit_offset)
     );
-    readout.angle_variance = electric_position.angle_variance;
-    readout.angular_speed = electric_position.angular_speed;
-    readout.angular_speed_variance = electric_position.angular_speed_variance;
+    readout.angle_variance = observers.rotor_position.angle_variance;
+    readout.angular_speed = observers.rotor_position.angular_speed;
+    readout.angular_speed_variance = observers.rotor_position.angular_speed_variance;
 
     readout.alpha_current = alpha_current;
     readout.beta_current = beta_current;
 
-    readout.motor_constant = tracking_motor_constant / tracking_scale;
+    readout.motor_constant = instant_motor_constant;
     readout.emf_voltage = emf_voltage;
     readout.emf_voltage_variance = emf_voltage_variance;
     readout.residual_acceleration = rotor_acceleration;
@@ -564,28 +516,11 @@ void adc_interrupt_handler(){
     // -----------------------------------------------
 
     // Update the motor controls using the readout data. Note that it also modifies the driver_state, driver_parameters, and pid_state.
-    active_motor_outputs = update_motor_control(readout, pending_state, pending_parameters, driver_state, driver_parameters, pid_state);
+    active_motor_outputs = update_motor_control(pending_state, pending_parameters, readout, driver_state, driver_parameters, pid_state);
 
     // Always reset the pending state to be ready for the next command.
     pending_state = DriverState::NO_CHANGE;
 
-
-    // Copy the updated PID state to the readout.
-
-    readout.current_angle_error = pid_state.current_angle_control.error;
-    readout.current_angle_control = pid_state.current_angle_control.output;
-
-    readout.torque_error = pid_state.torque_control.error;
-    readout.torque_control = pid_state.torque_control.output;
-
-    readout.battery_power_error = pid_state.battery_power_control.error;
-    readout.battery_power_control = pid_state.battery_power_control.output;
-
-    readout.angular_speed_error = pid_state.angular_speed_control.error;
-    readout.angular_speed_control = pid_state.angular_speed_control.output;
-
-    readout.position_error = pid_state.position_control.error;
-    readout.position_control = pid_state.position_control.output;
 
     // Try to write the latest readout if there's space.
     readout_history_push(readout);

@@ -233,3 +233,102 @@ const PIDControlState null_pid_control_state = {
     .angular_speed_control = {},
     .position_control = {}
 };
+
+
+struct ObserverGains {
+    // Magnet position.
+    int16_t rotor_angle_ki;
+    
+    // Inductor position.
+    int16_t inductor_angle_ki;
+
+    // Phase resistance; the drag factor for the fixed reference frame current.
+    int16_t resistance_ki;
+
+    // Inductance; behaves as if the inductor coil magnetic field had a mass. It's 
+    // smaller than the rotor mass. It controls the ratio between the magnet acceleration
+    // and the (reversely felt) inductor acceleration. Also the classical L/R time constant
+    // for the fixed reference frame current.
+    int16_t inductance_ki;
+    
+    // Motor constant; the ratio between the EMF voltage induced in the coils and the magnet angular speed.
+    // 
+    // Also the ratio between the torque produced by the magnetic rotor and the current 
+    // induced in the inductor coils (aka. the acceleration of the inductor angle).
+    // 
+    // Also the ratio between the torque induced in the inductor coils (aka. the current 
+    // dumped/tanken from the inductor coils by the accelerating magnetic rotor).
+    // 
+    // ... and finally the ratio between the flux linkage to the magnetic rotor from the
+    // inductor coils and inductor angular speed.
+    // 
+    // All of the above statements are equivalent; because they relate the relative position
+    // and velocity between the inductor coil magnetic field and the rotor magnetic field.
+    int16_t motor_constant_ki;
+    
+    // The drag factor for the rotor magnetic field; (iron losses). Acts like resistance
+    // for the inductor flux linkages (accumulated inductor currents).
+    int16_t magnetic_resistance_ki;
+
+    // The inertial mass of the magnetic rotor and geartrain.
+    int16_t rotor_mass_ki;
+
+    // This is the physical torque on the rotor; it acts like a resistance, but in this
+    // case it can also be negative (the motor is pushed externally and driver is regen breaking).
+    int16_t rotor_torque_ki;
+};
+
+struct ObserverState {
+    // Current estimate of the observed value.
+    int value = 0;
+    // Variance of the observed value.
+    int value_variance = 0;
+};
+
+// Track angle, angular speed and their uncertainties as gaussian distributions.
+struct PositionStatistics {
+    // Estimated angle.
+    int angle;
+    // Variance of the angle estimate.
+    int angle_variance;
+    // Estimated angular speed.
+    int angular_speed;
+    // Variance of the angular speed estimate.
+    int angular_speed_variance;
+};
+
+// Zeroes position statistics; also means infinite variance.
+const PositionStatistics null_position_statistics = {0};
+
+
+struct Observers {
+    // The rotor magnetic angle.
+    PositionStatistics rotor_position;
+
+    // The inductor coil magnetic angle.
+    PositionStatistics inductor_position;
+
+
+    // The phase resistance; the drag factor for the fixed reference frame current.
+    ObserverState resistance;
+
+    // The phase inductance; behaves as if the inductor coil magnetic field had a mass. It's 
+    // smaller than the rotor mass. It controls the ratio between the magnet acceleration
+    // and the (reversely felt) inductor acceleration. Also the classical L/R time constant
+    // for the fixed reference frame current.
+    ObserverState inductance;
+
+    // The motor constant; the ratio between the EMF voltage induced in the coils and the magnet angular speed.
+    ObserverState motor_constant;
+
+    // The drag factor for the rotor magnetic field; (iron losses). Acts like resistance
+    // for the inductor flux linkages (accumulated inductor currents).
+    ObserverState magnetic_resistance;
+
+    // The inertial mass of the magnetic rotor and geartrain.
+    ObserverState rotor_mass;
+
+    // This is the physical torque on the rotor; it acts like a resistance, but in this
+    // case it can also be negative (the motor is pushed externally and driver is regen breaking).
+    ObserverState rotor_torque;
+};

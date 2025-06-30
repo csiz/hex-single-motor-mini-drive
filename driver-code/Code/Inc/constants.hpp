@@ -50,9 +50,10 @@ const size_t angle_valid_bit_offset = 12;
 const size_t emf_detected_bit_offset = 11;
 const size_t emf_direction_is_negative_bit_offset = 10;
 
-const uint16_t angle_valid_bit = 0b1 << angle_valid_bit_offset;
-const uint16_t emf_detected_bit = 0b1 << emf_detected_bit_offset;
-const uint16_t emf_direction_is_negative_bit = 0b1 << emf_direction_is_negative_bit_offset;
+const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
+const uint16_t angle_valid_bit_mask = 0b1 << angle_valid_bit_offset;
+const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
+const uint16_t emf_direction_is_negative_bit_mask = 0b1 << emf_direction_is_negative_bit_offset;
 
 
 // Position constants

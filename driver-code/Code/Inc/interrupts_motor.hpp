@@ -14,9 +14,20 @@
 // =======================
 
 static inline MotorOutputs update_motor_6_sector(
-    uint8_t const& hall_sector,
-    Drive6Sector const& sector_parameters
+    Drive6Sector const& sector_parameters,
+    FullReadout & readout
 ){
+    // Read new data from the hall sensors.
+    const uint8_t hall_state = read_hall_sensors_state();
+
+    // Update the sector variable.
+    const uint8_t hall_sector = get_hall_sector(hall_state);
+
+    // Check if the magnet is present.
+    const bool angle_valid = hall_sector < hall_sector_base;
+
+    const uint16_t angle_keep_bits = readout.angle &= ~(hall_state_bit_mask | angle_valid_bit_mask);
+    readout.angle = angle_keep_bits | (hall_state << hall_state_bit_offset) | (angle_valid << angle_valid_bit_offset);
 
     auto const& motor_sector_driving_table = sector_parameters.pwm_target >= 0 ? 
         motor_sector_driving_positive : 
@@ -39,11 +50,11 @@ static inline MotorOutputs update_motor_6_sector(
 }
 
 static inline MotorOutputs update_motor_smooth(
-    FullReadout const& readout,
     DriveSmooth const& smooth_parameters,
+    FullReadout & readout,
     PIDControlState & pid_state
 ){
-    const bool emf_detected = readout.angle & emf_detected_bit;
+    const bool emf_detected = readout.angle & emf_detected_bit_mask;
 
     const int emf_compensation = - emf_detected * readout.emf_voltage * emf_base / readout.vcc_voltage;
 
@@ -69,6 +80,10 @@ static inline MotorOutputs update_motor_smooth(
         )
     );
 
+    readout.current_angle_error = pid_state.current_angle_control.error;
+    readout.current_angle_control = pid_state.current_angle_control.output;
+
+
     const int target_lead_angle = direction * clip_to(0, half_circle, 
         smooth_parameters.leading_angle + 
         pid_state.current_angle_control.output / 4);
@@ -91,8 +106,8 @@ static inline MotorOutputs update_motor_smooth(
 }
 
 static inline MotorOutputs update_motor_torque(
-    FullReadout const& readout,
     DriveTorque const& torque_parameters,
+    FullReadout & readout,
     PIDControlState & pid_state
 ){
     // Calculate the target current in fixed point format.
@@ -106,23 +121,27 @@ static inline MotorOutputs update_motor_torque(
         current_target
     );
 
+    readout.torque_error = pid_state.torque_control.error;
+    readout.torque_control = pid_state.torque_control.output;
+
+
     // Get the target PWM after torque control.
     const int16_t pwm_target = pid_state.torque_control.output;
 
     return update_motor_smooth(
-        readout,
         DriveSmooth{
             .duration = torque_parameters.duration,
             .pwm_target = pwm_target,
             .leading_angle = torque_parameters.leading_angle
         },
+        readout,
         pid_state
     );
 }
 
 static inline MotorOutputs update_motor_battery_power(
-    FullReadout const& readout,
     DriveBatteryPower const& battery_power_parameters,
+    FullReadout & readout,
     PIDControlState & pid_state
 ){
     const bool direction_is_negative = battery_power_parameters.power_target < 0;
@@ -134,16 +153,19 @@ static inline MotorOutputs update_motor_battery_power(
         abs(battery_power_parameters.power_target)
     );
 
+    readout.battery_power_error = pid_state.battery_power_control.error;
+    readout.battery_power_control = pid_state.battery_power_control.output;
+
     // Get the target PWM after power control.
     const int16_t pwm_target = clip_to(-pwm_max, pwm_max, (direction_is_negative ? -1 : 1) * pid_state.battery_power_control.output);
 
     return update_motor_smooth(
-        readout,
         DriveSmooth{
             .duration = battery_power_parameters.duration,
             .pwm_target = pwm_target,
             .leading_angle = battery_power_parameters.leading_angle
         },
+        readout,
         pid_state
     );
 }
@@ -151,11 +173,27 @@ static inline MotorOutputs update_motor_battery_power(
 
 // Motor control
 // -------------
+template<typename AnyDriverParameters>
+static inline bool break_at_end_of_duration(
+    DriverState & driver_state,
+    DriverParameters & driver_parameters,
+    AnyDriverParameters & driver_parameters_with_duration
+){
+    // Break at the end of the command duration.
+    if (driver_parameters_with_duration.duration <= 0) {
+        driver_state = DriverState::OFF;
+        driver_parameters = null_driver_parameters;
+        return true;
+    } else {
+        driver_parameters_with_duration.duration -= 1;
+        return false;
+    }
+}
 
 static inline MotorOutputs update_motor_control(
-    FullReadout const& readout,
     DriverState const pending_state,
     DriverParameters const& pending_parameters,
+    FullReadout & readout,
     DriverState & driver_state,
     DriverParameters & driver_parameters,
     PIDControlState & pid_state
@@ -277,21 +315,15 @@ static inline MotorOutputs update_motor_control(
             };
 
         case DriverState::HOLD:
-            // Break at the end of the command duration.
-            if (not driver_parameters.hold.duration) {
-                driver_state = DriverState::OFF;
-                driver_parameters = null_driver_parameters;
-                return breaking_motor_outputs;
-            } else {
-                driver_parameters.hold.duration -= 1;
-                // Set the motor outputs to hold the current settings.
-                return MotorOutputs{
+            // Set the motor outputs to hold the current settings.
+            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.hold) ?
+                breaking_motor_outputs :
+                MotorOutputs{
                     .enable_flags = enable_flags_all,
                     .u_duty = driver_parameters.hold.u_duty,
                     .v_duty = driver_parameters.hold.v_duty,
                     .w_duty = driver_parameters.hold.w_duty
                 };
-            }
 
         case DriverState::SCHEDULE:
             // We're done at the end of the schedule.
@@ -319,62 +351,29 @@ static inline MotorOutputs update_motor_control(
                 };
             }
 
-        case DriverState::DRIVE_6_SECTOR: {
-            // Re-extract the hall sector in this function.
-            const uint8_t hall_sector = get_hall_sector(readout.angle >> hall_state_bit_offset);
+        case DriverState::DRIVE_6_SECTOR:
+            // Update motor outputs for the 6 sector driving.
+            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.sector) ?
+                breaking_motor_outputs :
+                update_motor_6_sector(driver_parameters.sector, readout);
 
-            // Break at the end of the command duration or if the hall sensor is missing the magnet.
-            if (not driver_parameters.sector.duration or hall_sector >= hall_sector_base) {
-                driver_state = DriverState::OFF;
-                driver_parameters = null_driver_parameters;
-                return breaking_motor_outputs;
-            } else {
-                driver_parameters.sector.duration -= 1;
-                return update_motor_6_sector(hall_sector, driver_parameters.sector);
-            }
-        }
-        case DriverState::DRIVE_SMOOTH: {
-            const bool angle_valid = readout.angle & angle_valid_bit;
+        case DriverState::DRIVE_SMOOTH:
+            // Update the motor outputs for the smooth driving.
+            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.smooth) ?
+                breaking_motor_outputs :
+                update_motor_smooth(driver_parameters.smooth, readout, pid_state);
 
-            // Break at the end of the command duration or if the angle is invalid.
-            if (not driver_parameters.smooth.duration or not angle_valid) {
-                // Reset the PID state.
-                pid_state = null_pid_control_state;
-                driver_state = DriverState::OFF;
-                driver_parameters = null_driver_parameters;
-                return breaking_motor_outputs;
-            } else {
-                driver_parameters.smooth.duration -= 1;
-                return update_motor_smooth(readout, driver_parameters.smooth, pid_state);
-            }
-        }
-        case DriverState::DRIVE_TORQUE: {
+        case DriverState::DRIVE_TORQUE:
+            // Update the motor outputs for the torque driving.
+            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.torque) ?
+                breaking_motor_outputs :
+                update_motor_torque(driver_parameters.torque, readout, pid_state);
+
+        case DriverState::DRIVE_BATTERY_POWER:
             // Break at the end of the command duration.
-            if (not driver_parameters.torque.duration) {
-                // Reset the PID state.
-                pid_state = null_pid_control_state;
-                driver_state = DriverState::OFF;
-                driver_parameters = null_driver_parameters;
-                return breaking_motor_outputs;
-            } else {
-                driver_parameters.torque.duration -= 1;
-                return update_motor_torque(readout, driver_parameters.torque, pid_state);
-            }
-        }
-        case DriverState::DRIVE_BATTERY_POWER: {
-            // Break at the end of the command duration.
-            if (not driver_parameters.battery_power.duration) {
-                // Reset the PID state.
-                pid_state = null_pid_control_state;
-                driver_state = DriverState::OFF;
-                driver_parameters = null_driver_parameters;
-                return breaking_motor_outputs;
-            } else {
-                driver_parameters.battery_power.duration -= 1;
-                return update_motor_battery_power(readout, driver_parameters.battery_power, pid_state);
-            }
-        }
-            
+            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.battery_power) ?
+                breaking_motor_outputs :
+                update_motor_battery_power(driver_parameters.battery_power, readout, pid_state);
     }
 
     // If we get here, we have an unknown/corrupted driver state.

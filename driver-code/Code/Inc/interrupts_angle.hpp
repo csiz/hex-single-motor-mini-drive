@@ -5,22 +5,9 @@
 #include "error_handler.hpp"
 #include "math_utils.hpp"
 #include "integer_math.hpp"
+#include "type_definitions.hpp"
 
 #include <cstdint>
-
-
-
-
-// Track angle, angular speed and their uncertainties as gaussian distributions.
-struct PositionStatistics {
-    int angle; // Estimated angle.
-    int angle_variance; // Variance of the angle estimate.
-    int angular_speed; // Estimated angular speed.
-    int angular_speed_variance; // Variance of the angular speed estimate.
-};
-
-// Zeroes position statistics; also means infinite variance.
-const PositionStatistics null_position_statistics = {0};
 
 
 // Combine gaussian with mean a and variance a with gaussian with mean 0 and variance b.
