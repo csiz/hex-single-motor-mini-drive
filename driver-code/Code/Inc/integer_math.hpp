@@ -181,3 +181,45 @@ static inline int int_sqrt(int s)
 	}		
 	return x0;
 }
+
+// Minimum magnitude for funky atan2 to be considered valid
+const int funky_atan2_constant = 4;
+
+// Square of the minimum magnitude for atan2 to be considered useful.
+const int sq_ok_atan2_magnitude = 16 * 16;
+
+static inline int funky_atan2(int y, int x) {    
+    if (x == 0 and y == 0) return 0;
+
+    int result = 0;
+    if (x < 0) {
+        // Rotate 180 degrees and compensate in the result.
+        result += half_circle;
+        x = -x;
+        y = -y;
+    }
+
+    if (y < 0) {
+        // Rotate 270 degrees and compensate in the result.
+        result += three_quarters_circle;
+        int temp = x;
+        x = -y;
+        y = temp;
+    }
+    
+    // Now x >= 0 and y >= 0.
+
+    if (x >= y) {
+        result += (funky_atan2_constant * y * eighth_circle) / (funky_atan2_constant * x + y);
+    } else {
+        result += quarter_circle - (funky_atan2_constant * x * eighth_circle) / (funky_atan2_constant * y + x);
+    }
+
+    // Return the result sign normalized to [-half_circle to +half_circle].
+    return (result + half_circle) % angle_base - half_circle;
+}
+
+
+void unit_test_funky_atan(char * buffer, size_t max_size);
+void unit_test_funky_atan_part_2(char * buffer, size_t max_size);
+void unit_test_funky_atan_part_3(char * buffer, size_t max_size);

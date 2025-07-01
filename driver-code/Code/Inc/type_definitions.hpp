@@ -128,7 +128,7 @@ struct Readout{
     int16_t v_readout_diff;
     int16_t w_readout_diff;
     int16_t position;
-    uint16_t angle;
+    uint16_t angle_bytes;
     int16_t angular_speed;
     int16_t instant_vcc_voltage;
 };
@@ -144,10 +144,10 @@ struct FullReadout : public Readout {
     uint16_t angular_speed_variance;
     int16_t alpha_current;
     int16_t beta_current;
-    int16_t motor_constant;
-    int16_t emf_voltage;
-    int16_t emf_voltage_variance;
-    int16_t residual_acceleration;
+    int16_t alpha_emf_voltage;
+    int16_t beta_emf_voltage;
+    int16_t beta_current_variance;
+    int16_t alpha_emf_voltage_variance;
     int16_t total_power;
     int16_t resistive_power;
     int16_t emf_power;
@@ -158,10 +158,10 @@ struct FullReadout : public Readout {
     int16_t torque_control;
     int16_t battery_power_error;
     int16_t battery_power_control;
-    int16_t angular_speed_error;
-    int16_t angular_speed_control;
-    int16_t position_error;
-    int16_t position_control;
+    int16_t inductor_angle;
+    int16_t inductor_angle_variance;
+    int16_t inductor_angular_speed;
+    int16_t inductor_angular_speed_variance;
 };
 
 

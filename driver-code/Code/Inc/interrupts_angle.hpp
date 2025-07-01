@@ -51,40 +51,42 @@ static inline PositionStatistics bayesian_update(
     
 
     // Adjust the distance using the kalman gain. This is actually the new mean of a product of gaussians.
-    const int distance_adjustment = combined_gaussian_adjustment(
+    // Clip the angle adjustment to +- 90 degrees (quarter circle) to avoid large jumps.
+    const int distance_adjustment = clip_to(-quarter_circle, +quarter_circle, combined_gaussian_adjustment(
         measurement_error.angle,
         measurement_error.angle_variance,
         prior.angle_variance
-    );
+    ));
 
 
     // Update the position parameters.
 
     // Adjust angle by at least 1 LSB in the direction of the error in case we rounded down to 0.
-    const int angle = normalize_angle(prior.angle + (distance_adjustment ? distance_adjustment : sign(measurement_error.angle)));
+    const int angle = normalize_angle(prior.angle + distance_adjustment + sign(measurement_error.angle));
 
     const int angle_variance = clip_to(
-        1, default_sector_center_variance,
+        1, max_16bit,
         combined_gaussian_variance(
             measurement_error.angle_variance,
             prior.angle_variance
         )
     );
 
+    const int speed_variance = measurement_error.angular_speed_variance * speed_variance_fixed_point;
 
     // Similarly adjust the speed based on our new guess and previous variance.
     const int speed_adjustment = combined_gaussian_adjustment(
         measurement_error.angular_speed,
-        measurement_error.angular_speed_variance,
+        speed_variance,
         prior.angular_speed_variance
     );
 
-    const int angular_speed = prior.angular_speed + (speed_adjustment ? speed_adjustment : sign(measurement_error.angular_speed));
+    const int angular_speed = prior.angular_speed + speed_adjustment + sign(measurement_error.angular_speed);
 
     const int angular_speed_variance = clip_to(
-        1, position_calibration.initial_angular_speed_variance,
+        1, max_16bit,
         combined_gaussian_variance(
-            measurement_error.angular_speed_variance,
+            speed_variance,
             prior.angular_speed_variance
         )
     );
@@ -99,7 +101,7 @@ static inline PositionStatistics bayesian_update(
 
 
 // Simple Euler iteration of the position based on the previous state.
-static inline PositionStatistics predict_position(PositionStatistics const & previous){
+static inline PositionStatistics predict_position(PositionStatistics const& previous, const int acceleration_variance){
     // We predict the position exactly once every cycle, thus we've chosen the time step dt = 1.
     // Also note that we can only use integer arithmetic on the STM32F01x so we use fixed point math.
 
@@ -108,7 +110,7 @@ static inline PositionStatistics predict_position(PositionStatistics const & pre
     const int predicted_angular_speed_variance = min(
         max_16bit,
         previous.angular_speed_variance + 
-        position_calibration.angular_acceleration_div_2_variance / acceleration_variance_fixed_point + 1
+        acceleration_variance
     );
 
     const int predicted_angle = normalize_angle(
@@ -280,7 +282,10 @@ static inline PositionStatistics infer_position_from_hall_sensors(
     );
 
     // Update the position statistics by combining gaussian distributions (this is the Kalman update).
-    return bayesian_update(predicted_position, position_error);
+    return bayesian_update(
+        predicted_position, 
+        position_error
+    );
 }
 
 // Read the hall sensors and update the motor rotation angle. Sensor chips might be: SS360NT (can't read the inprint clearly).

@@ -28,6 +28,13 @@ rotating phasor frame).
   <div>${phases_rebased_plot}</div>
 </div>
 
+We need to approximate the atan2 function because we don't have enough processing to
+compute it in real time.
+
+<div class="card tight">
+  <div>${atan_approx_plot}</div>
+</div>
+
 <pre>${phases_wave_form_lookup_table}</pre>
 <pre>${sin_lookup_table}</pre>
 </main>
@@ -110,3 +117,58 @@ const phases_chunked = Array.from({length: Math.ceil(phases.length / chunk_size)
 const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base}] = {\n    ${phases_chunked.map(chunk => chunk.map(d => (d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
 
 const sin_lookup_table = `const uint16_t sin_lookup[${angle_base}] = {\n    ${phases_chunked.map(chunk => chunk.map(d => (d.sin * angle_base).toFixed(0).padStart(5, " ")).join(', ')).join(',\n    ')}\n};`;
+
+
+
+function funky_atan2(y, x){
+  const c = 4; // constant to avoid division by zero
+
+  let result = 0;
+
+  if (x < 0) {
+    // Rotate 180 degrees
+    result += Math.PI;
+    [x, y] = [-x, -y];
+  }
+
+  if (y < 0) {
+    // Rotate 90 degrees
+    result += 3 * Math.PI / 2;
+    [x, y] = [-y, x];
+  }
+
+  // Now x and y are both positive.
+
+  // Final adjustment; divide the first quadrant into 2 parts by y == x
+  // and compute the complementary angle for y > x that we mirror onto the result.
+  result += x >= y ? (y / (x + y/c)) : (Math.PI / 2 - x / (y + x/c));
+
+  return (result + Math.PI) % (2 * Math.PI) - Math.PI;
+}
+
+const atan_approx = phi.map(t => {
+  const deg = t * 180 / Math.PI;
+  const m = 180;
+  const y = m * Math.sin(t);
+  const x = m * Math.cos(t);
+
+
+  const atan = Math.atan2(y, x) * 180 / Math.PI;
+  const atan_approx = funky_atan2(y, x) * 180 / Math.PI;
+
+  return {deg, x, y, atan, atan_approx};
+});
+
+const atan_approx_plot = Plot.plot({
+  y: {domain: [-180, 180]},
+  marks: [
+    Plot.lineY(atan_approx, {x: "deg", y: "atan", stroke: 'black', label: 'atan'}),
+    Plot.lineY(atan_approx, {x: "deg", y: "atan_approx", stroke: 'red', label: 'atan approx'}),
+    Plot.lineY(atan_approx, {x: "deg", y: "x", stroke: 'lightblue', label: 'X'}),
+    Plot.lineY(atan_approx, {x: "deg", y: "y", stroke: 'lightgreen', label: 'Y'}),
+    Plot.gridX({interval: 60, stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
+  ]
+});
+
+```

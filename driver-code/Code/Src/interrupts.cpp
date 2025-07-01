@@ -43,11 +43,27 @@ size_t readout_history_read_index = 0;
 // pole pairs, and the slot triplets, and the mechanical gear ratio.
 
 // All tracked observers, including the rotor and inductor positions, resistances, inductances, etc.
-Observers observers = {};
+Observers observers = {
+    .rotor_position = {
+        .angle = 0,
+        .angle_variance = inductor_initial_angular_variance,
+        .angular_speed = 0,
+        .angular_speed_variance = inductor_initial_angular_variance 
+    },
+    .inductor_position = {
+        .angle = 0,
+        .angle_variance = emf_initial_angular_variance,
+        .angular_speed = 0,
+        .angular_speed_variance = emf_initial_angular_variance 
+    }
+};
 
 // Count the number of consecutive EMF detections; we get good statistics after a threshold number.
 size_t consecutive_emf_detections = 0;
 
+size_t consecutive_current_detections = 0;
+
+int beta_current_variance = 0;
 
 // Motor driver state
 // ------------------
@@ -242,12 +258,11 @@ void adc_interrupt_handler(){
     const int w_readout_diff = w_readout - readout.w_readout;
 
     // Remember the previous speed for acceleration calculations.
-    const int previous_angular_speed = readout.angular_speed;
+    // const int previous_angular_speed = readout.angular_speed;
 
     // Predict the position based on the previous state.
-    const auto predicted_position = predict_position(observers.rotor_position);
-
-    observers.rotor_position = predicted_position;
+    observers.rotor_position = predict_position(observers.rotor_position, 1);
+    observers.inductor_position = predict_position(observers.inductor_position, 4);
 
     // Get calibrated currents.
 
@@ -274,9 +289,6 @@ void adc_interrupt_handler(){
     const int v_inductor_voltage = v_current_diff * diff_to_voltage / current_fixed_point;
     const int w_inductor_voltage = w_current_diff * diff_to_voltage / current_fixed_point;
 
-    // Conversion factor between current and phase resistance voltage.
-    const int phase_current_to_voltage = round_div(phase_resistance * voltage_fixed_point, resistance_fixed_point);
-
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     
     const int u_resistive_voltage = u_current * phase_current_to_voltage / current_fixed_point;
@@ -297,17 +309,6 @@ void adc_interrupt_handler(){
     const int v_emf_voltage = -(v_drive_voltage - v_resistive_voltage - v_inductor_voltage);
     const int w_emf_voltage = -(w_drive_voltage - w_resistive_voltage - w_inductor_voltage);
 
-    // Load the projections of each phase on the current electric angle.
-
-    const int16_t cos_u = get_cos(observers.rotor_position.angle);
-    const int16_t cos_v = get_cos(observers.rotor_position.angle - third_circle);
-    const int16_t cos_w = get_cos(observers.rotor_position.angle - two_thirds_circle);
-
-    // We need the negative sine values for the park transformation.
-
-    const int16_t neg_sin_u = -get_sin(observers.rotor_position.angle);
-    const int16_t neg_sin_v = -get_sin(observers.rotor_position.angle - third_circle);
-    const int16_t neg_sin_w = -get_sin(observers.rotor_position.angle - two_thirds_circle);
 
     // Calculate the park transformed currents.
     // 
@@ -317,16 +318,59 @@ void adc_interrupt_handler(){
     // the deviation between the real and target angle even when we can't sense the real angle.
 
     const int alpha_current = (
-        u_current * cos_u / angle_base +
-        v_current * cos_v / angle_base +
-        w_current * cos_w / angle_base
+        u_current * get_cos(observers.inductor_position.angle) / angle_base +
+        v_current * get_cos(observers.inductor_position.angle - third_circle) / angle_base +
+        w_current * get_cos(observers.inductor_position.angle - two_thirds_circle) / angle_base
     );
 
-    const int unadjusted_beta_current = (
-        u_current * neg_sin_u / angle_base +
-        v_current * neg_sin_v / angle_base +
-        w_current * neg_sin_w / angle_base
+    const int beta_current = (
+        -u_current * get_sin(observers.inductor_position.angle) / angle_base +
+        -v_current * get_sin(observers.inductor_position.angle - third_circle) / angle_base +
+        -w_current * get_sin(observers.inductor_position.angle - two_thirds_circle) / angle_base
     );
+
+    beta_current_variance = (16 * square(beta_current) + beta_current_variance * 15) / 16;
+
+    const int sq_beta_current = square(beta_current);
+    const int sq_current = square(alpha_current) + sq_beta_current;
+
+    const bool current_detected = sq_current > 9;
+
+    consecutive_current_detections = current_detected * (consecutive_current_detections + 1);
+
+    const int current_error_direction = sign(beta_current);
+
+    if (current_detected) {
+        // We have a good estimate of the beta current, so we can use it to update the inductor position.
+        const int approximate_angle_error = current_error_direction * funky_atan2(abs(beta_current), -alpha_current);
+
+        const int inductor_angular_variance = clip_to(1, max_16bit, 
+            inductor_initial_angular_variance * beta_current_variance / sq_current
+        );
+
+        const bool compute_speed = consecutive_current_detections > 8;
+
+        observers.inductor_position = bayesian_update(
+            observers.inductor_position,
+            PositionStatistics{
+                .angle = approximate_angle_error,
+                .angle_variance = inductor_angular_variance,
+                .angular_speed = (approximate_angle_error + current_error_direction) * speed_fixed_point * compute_speed,
+                .angular_speed_variance = inductor_angular_variance * compute_speed
+            }
+        );
+    } else {
+        // Drive speed towards 0.
+        observers.inductor_position = bayesian_update(
+            observers.inductor_position,
+            PositionStatistics{
+                .angle = 0,
+                .angle_variance = inductor_initial_angular_variance,
+                .angular_speed = -observers.inductor_position.angular_speed,
+                .angular_speed_variance = inductor_initial_angular_variance 
+            }
+        );
+    }
 
     // Calculate the park transformed EMF voltages.
     // 
@@ -341,67 +385,69 @@ void adc_interrupt_handler(){
     // at our cycle frequency.
 
     const int alpha_emf_voltage = (
-        u_emf_voltage * cos_u / angle_base +
-        v_emf_voltage * cos_v / angle_base +
-        w_emf_voltage * cos_w / angle_base
+        u_emf_voltage * get_cos(observers.rotor_position.angle) / angle_base +
+        v_emf_voltage * get_cos(observers.rotor_position.angle - third_circle) / angle_base +
+        w_emf_voltage * get_cos(observers.rotor_position.angle - two_thirds_circle) / angle_base
     );
 
 
     const int beta_emf_voltage = (
-        u_emf_voltage * neg_sin_u / angle_base +
-        v_emf_voltage * neg_sin_v / angle_base +
-        w_emf_voltage * neg_sin_w / angle_base
+        -u_emf_voltage * get_sin(observers.rotor_position.angle) / angle_base +
+        -v_emf_voltage * get_sin(observers.rotor_position.angle - third_circle) / angle_base +
+        -w_emf_voltage * get_sin(observers.rotor_position.angle - two_thirds_circle) / angle_base
     );
 
+    const int sq_emf_voltage = square(beta_emf_voltage) + square(alpha_emf_voltage);
 
-    // This might be a good proxy for the variance of the EMF voltage.
-    const int emf_voltage_variance = clip_to(1, max_16bit, round_div(
-        square(alpha_emf_voltage) +
-        3 * readout.emf_voltage_variance,
-        4
-    ));
 
-    // We need to compensate the EMF voltage for our position error. As long as we have an emf fix,
-    // then any stray alpha voltage is from unaccounted rotor acceleration.
-    const int emf_voltage = beta_emf_voltage;
+    // Check if the emf voltage is away from zero with enough confidence.
+    const bool emf_detected = sq_emf_voltage > 16;
+    
+    consecutive_emf_detections = emf_detected * (consecutive_emf_detections + 1);
 
-    const int sq_emf_voltage = square(emf_voltage);
+    const bool emf_fix = consecutive_emf_detections > 16;
 
-    // Check if the emf voltage is away from zero with enough confidence (2 standard deviations).
-    consecutive_emf_detections = (sq_emf_voltage > 4 * emf_voltage_variance) * (consecutive_emf_detections + 1);
-
-    const bool emf_detected = consecutive_emf_detections > 8;
-
-    // The rotation direction is the sign of the negative of the beta EMF voltage.
-    const bool emf_direction_is_negative = emf_voltage > 0;
-
-    const int emf_direction = 1 - emf_direction_is_negative * 2;
+    // const int beta_change_direction = sign(beta_emf_voltage - readout.beta_emf_voltage);
 
     // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
     // use it to update the position between hall sensor toggles.
-    if (consecutive_emf_detections > 3) {
-        // Poor man's atan2, what we need to do is drive the alpha current to zero relative to 
-        // the beta current. Since calculating the angle is expensive just consider the ratio.
-        const int approximate_angle_error = -clip_to(
-            -quarter_circle, +quarter_circle, 
-            emf_detected * quarter_circle * alpha_emf_voltage / emf_voltage
+    if (consecutive_emf_detections > 4) {
+        const int emf_error_direction = sign(alpha_emf_voltage) * (observers.rotor_position.angular_speed >= 0 ? +1 : -1);
+
+        const int approximate_angle_error = emf_error_direction * funky_atan2(abs(alpha_emf_voltage), abs(beta_emf_voltage));
+
+        const int emf_angular_variance = clip_to(1, max_16bit, 
+            emf_initial_angular_variance * 4048 / min(4048, sq_emf_voltage)
         );
 
-        const int emf_angle_variance = clip_to(1, max_16bit, emf_initial_angular_variance * emf_voltage_variance / sq_emf_voltage);
+        const bool compute_speed = consecutive_emf_detections > 8;
 
         observers.rotor_position = bayesian_update(
             observers.rotor_position,
             PositionStatistics{
                 .angle = approximate_angle_error,
-                .angle_variance = emf_angle_variance,
-                .angular_speed = approximate_angle_error * speed_fixed_point,
-                .angular_speed_variance = min(emf_angle_variance * speed_variance_fixed_point, max_16bit)
+                .angle_variance = emf_angular_variance,
+                .angular_speed = (approximate_angle_error + emf_error_direction) * speed_fixed_point * compute_speed,
+                .angular_speed_variance = emf_angular_variance * compute_speed
+            }
+        );
+    } else {
+        // Drive speed towards 0.
+        observers.rotor_position = bayesian_update(
+            observers.rotor_position,
+            PositionStatistics{
+                .angle = 0,
+                .angle_variance = emf_initial_angular_variance,
+                .angular_speed = -observers.rotor_position.angular_speed,
+                .angular_speed_variance = emf_initial_angular_variance 
             }
         );
     }
 
+    
+    // The rotation direction is the sign of the negative of the beta EMF voltage.
+    const bool emf_direction_is_negative = observers.rotor_position.angular_speed < 0;
 
-    const int beta_current = unadjusted_beta_current + alpha_current * emf_direction / 2;
 
 
     // Calculate the power values using the phase currents and voltages.
@@ -439,7 +485,7 @@ void adc_interrupt_handler(){
     // measured magnitude of the DQ0 current. We then adjust our beta current using
     // a Taylor expansion for small alpha current. The system uses the real beta current
     // not what we measure; thus we compute the emf power using our massaged DQ0 values.
-    const int emf_power = -beta_current * emf_voltage / dq0_to_power_fixed_point;
+    const int emf_power = -alpha_current * beta_emf_voltage / dq0_to_power_fixed_point;
 
     // Compute the real total power used from the balance of powers.
     // 
@@ -456,11 +502,11 @@ void adc_interrupt_handler(){
     // Get the external acceleration torque by subtracting our EMF acceleration from our position measurements.
     // 
     // Only add speed changes when we have an EMF fix; the speed will jump a large amount on the first position detection.
-    const int rotor_acceleration = emf_detected * (observers.rotor_position.angular_speed - previous_angular_speed) * acceleration_fixed_point;
+    // const int rotor_acceleration = emf_detected * (observers.rotor_position.angular_speed - previous_angular_speed) * acceleration_fixed_point;
 
-    const bool valid_motor_constant = (emf_detected and (abs(observers.rotor_position.angular_speed) > min_emf_angular_speed));
+    // const bool valid_motor_constant = (emf_detected and (abs(observers.rotor_position.angular_speed) > min_emf_angular_speed));
 
-    const int instant_motor_constant = - valid_motor_constant * emf_voltage * motor_constant_fixed_point / observers.rotor_position.angular_speed;
+    // const int instant_motor_constant = - valid_motor_constant * beta_emf_voltage * motor_constant_fixed_point / observers.rotor_position.angular_speed;
 
 
     // Write the latest readout data
@@ -487,11 +533,11 @@ void adc_interrupt_handler(){
     readout.vcc_voltage = vcc_voltage;
 
     // The angle is 10 bits so we have 6 bits left to encode the hall state, angle validity, emf detection (when the rotor moves), and direction.
-    readout.angle = (
+    readout.angle_bytes = (
         (observers.rotor_position.angle & angle_bit_mask) | 
-        (readout.angle & hall_state_bit_mask) | 
-        (readout.angle & angle_valid_bit_mask) | 
-        (emf_detected << emf_detected_bit_offset) | 
+        (readout.angle_bytes & hall_state_bit_mask) | 
+        (readout.angle_bytes & angle_valid_bit_mask) | 
+        (emf_fix << emf_detected_bit_offset) | 
         (emf_direction_is_negative << emf_direction_is_negative_bit_offset)
     );
     readout.angle_variance = observers.rotor_position.angle_variance;
@@ -500,17 +546,18 @@ void adc_interrupt_handler(){
 
     readout.alpha_current = alpha_current;
     readout.beta_current = beta_current;
-
-    readout.motor_constant = instant_motor_constant;
-    readout.emf_voltage = emf_voltage;
-    readout.emf_voltage_variance = emf_voltage_variance;
-    readout.residual_acceleration = rotor_acceleration;
+    readout.alpha_emf_voltage = alpha_emf_voltage;
+    readout.beta_emf_voltage = beta_emf_voltage;
 
     readout.total_power = total_power;
     readout.resistive_power = resistive_power;
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
 
+    readout.inductor_angle = observers.inductor_position.angle;
+    readout.inductor_angle_variance = observers.inductor_position.angle_variance;
+    readout.inductor_angular_speed = observers.inductor_position.angular_speed;
+    readout.inductor_angular_speed_variance = observers.inductor_position.angular_speed_variance;
 
     // Calculate motor outputs and write control state
     // -----------------------------------------------

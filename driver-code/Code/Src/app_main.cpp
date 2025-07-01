@@ -445,7 +445,12 @@ bool handle_command(MessageBuffer const& buffer) {
 
         case RUN_UNIT_TEST_ATAN:
             return run_unit_test(unit_test_atan);
-            
+        case RUN_UNIT_TEST_FUNKY_ATAN:
+            return run_unit_test(unit_test_funky_atan);
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_2:
+            return run_unit_test(unit_test_funky_atan_part_2);
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_3:
+            return run_unit_test(unit_test_funky_atan_part_3);
     }
 
     // If we get here, we have an unknown command code.

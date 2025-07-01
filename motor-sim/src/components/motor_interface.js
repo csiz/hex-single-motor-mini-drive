@@ -1,5 +1,3 @@
-import {process_readout} from './motor_observer.js';  
-
 import {
   millis_per_cycle, pwm_base, readout_base,
   current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage,
@@ -76,7 +74,9 @@ export const command_codes = {
 
   UNIT_TEST_OUTPUT: 0x5040,
   RUN_UNIT_TEST_ATAN: 0x5041,
-  
+  RUN_UNIT_TEST_FUNKY_ATAN: 0x5042,
+  RUN_UNIT_TEST_FUNKY_ATAN_PART_2: 0x5043,
+  RUN_UNIT_TEST_FUNKY_ATAN_PART_3: 0x5044,
 }
 
 
@@ -92,6 +92,125 @@ function get_hall_sector({hall_u, hall_v, hall_w}){
     default: return null;
   }
 }
+
+
+
+function process_readout_diff(readout, previous_readout){
+  if (!previous_readout) return readout;
+
+  const {
+    time,
+    hall_sector, 
+    angle, 
+    current_angle_offset,
+    emf_voltage_angle,
+    emf_voltage_magnitude, 
+    web_emf_power,
+    web_total_power,
+    emf_detected,
+    emf_direction_negative,
+  } = readout;
+
+  const {
+    time: prev_time,
+    emf_detected: prev_emf_detected,
+    hall_sector: prev_hall_sector, 
+    emf_voltage_angle: prev_emf_voltage_angle,
+    angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
+    angular_speed_from_emf_stdev: prev_angular_speed_from_emf_stdev,
+    emf_voltage_magnitude_avg: prev_emf_voltage_magnitude_avg,
+    emf_voltage_magnitude_stdev: prev_emf_voltage_magnitude_stdev,
+    angle_diff_to_emf_avg: prev_angle_diff_to_emf_avg,
+    angle_diff_to_emf_stdev: prev_angle_diff_to_emf_stdev,
+    current_angle_offset_avg: prev_current_angle_offset_avg,
+    current_angle_offset_stdev: prev_current_angle_offset_stdev,
+    web_emf_power_avg: prev_web_emf_power_avg,
+    web_emf_power_stdev: prev_web_emf_power_stdev,
+    web_total_power_avg: prev_web_total_power_avg,
+    web_total_power_stdev: prev_web_total_power_stdev,
+  } = previous_readout;
+
+  // Time units are milliseconds.
+  const dt = time - prev_time;
+
+  const exp_stats = exponential_stats(dt, 0.350);
+
+
+  const angular_speed_from_emf = prev_emf_detected ? normalize_degrees(emf_voltage_angle - prev_emf_voltage_angle) / dt : 0;
+
+  const {average: angular_speed_from_emf_avg, stdev: angular_speed_from_emf_stdev} = exp_stats(
+    angular_speed_from_emf, 
+    {
+      average: prev_angular_speed_from_emf_avg, 
+      stdev: prev_angular_speed_from_emf_stdev,
+    },
+  );
+  
+
+  const {average: emf_voltage_magnitude_avg, stdev: emf_voltage_magnitude_stdev} = exp_stats(
+    emf_voltage_magnitude,
+    {
+      average: prev_emf_voltage_magnitude_avg,
+      stdev: prev_emf_voltage_magnitude_stdev,
+    },
+  );
+
+  const is_hall_transition = prev_hall_sector != hall_sector;
+
+  const direction = emf_detected ? (emf_direction_negative ? -1 : +1) : 0;
+
+  const angle_from_emf = normalize_degrees(emf_voltage_angle + (direction * 90));
+
+  const angle_diff_to_emf = normalize_degrees(angle - angle_from_emf);
+
+  const {average: angle_diff_to_emf_avg, stdev: angle_diff_to_emf_stdev} = exp_stats(
+    angle_diff_to_emf,
+    {
+      average: normalize_degrees(prev_angle_diff_to_emf_avg),
+      stdev: prev_angle_diff_to_emf_stdev,
+    },
+  );
+
+
+  const {average: current_angle_offset_avg, stdev: current_angle_offset_stdev} = exp_stats(
+    current_angle_offset, 
+    {
+      average: normalize_degrees(prev_current_angle_offset_avg),
+      stdev: prev_current_angle_offset_stdev,
+    },
+  );
+
+
+  const {average: web_emf_power_avg, stdev: web_emf_power_stdev} = exp_stats(
+    web_emf_power,
+    {
+      average: prev_web_emf_power_avg,
+      stdev: prev_web_emf_power_stdev,
+    },
+  );
+
+  const {average: web_total_power_avg, stdev: web_total_power_stdev} = exp_stats(
+    web_total_power,
+    {
+      average: prev_web_total_power_avg,
+      stdev: prev_web_total_power_stdev,
+    },
+  );
+
+  return {
+    ...readout,
+    current_angle_offset_avg, current_angle_offset_stdev,
+    emf_voltage_magnitude_avg, emf_voltage_magnitude_stdev,
+    is_hall_transition,
+    direction,
+    angle_from_emf,
+    angular_speed_from_emf, angular_speed_from_emf_avg, angular_speed_from_emf_stdev,
+    angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
+    web_emf_power_avg, web_emf_power_stdev,
+    web_total_power_avg, web_total_power_stdev,
+  };
+}
+
 
 const readout_size = 30;
 
@@ -255,7 +374,7 @@ function parse_readout(data_view, previous_readout){
     web_inductive_power,
   };
 
-  return process_readout.call(this, readout, previous_readout);
+  return process_readout_diff.call(this, readout, previous_readout);
 }
 
 const full_readout_size = 86;
@@ -287,14 +406,14 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const beta_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
+  const alpha_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  offset += 2;
+  const beta_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  offset += 2;
 
-  const motor_constant = data_view.getInt16(offset);
+  const alpha_emf_voltage_stdev = data_view.getInt16(offset);
   offset += 2;
-  const emf_voltage = calculate_voltage(data_view.getInt16(offset));
-  offset += 2;
-  const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
-  offset += 2;
-  const residual_acceleration = acceleration_units_to_degrees_per_millisecond2(data_view.getInt16(offset));
+  const beta_current_variance = data_view.getInt16(offset);
   offset += 2;
 
   const total_power = convert_power_to_watts(data_view.getInt16(offset));
@@ -318,32 +437,17 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const battery_power_control = data_view.getInt16(offset);
   offset += 2;
-  const angular_speed_error = data_view.getInt16(offset);
+  const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const angular_speed_control = data_view.getInt16(offset);
+  const inductor_angle_stdev = variance_units_to_degrees_stdev(data_view.getInt16(offset));
   offset += 2;
-  const position_error = data_view.getInt16(offset);
+  const inductor_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const position_control = data_view.getInt16(offset);
+  const inductor_angular_speed_stdev = speed_variance_to_degrees_per_millisecond_stdev(data_view.getInt16(offset));
   offset += 2;
 
 
   const battery_current = total_power / vcc_voltage;
-
-  const dt = readout.time - previous_readout?.time;
-
-  const {
-    average: residual_acceleration_avg, 
-    stdev: residual_acceleration_stdev,
-    sum: residual_acceleration_sum,
-  } = sum_preserving_exponential_stats(dt, 20.000)(
-    residual_acceleration,
-    {
-      average: previous_readout?.residual_acceleration_avg,
-      stdev: previous_readout?.residual_acceleration_stdev,
-      sum: previous_readout?.residual_acceleration_sum,
-    },
-  );
 
   return {
     ...readout,
@@ -357,13 +461,10 @@ function parse_full_readout(data_view, previous_readout){
     angular_speed_stdev,
     alpha_current,
     beta_current,
-    motor_constant,
-    emf_voltage,
-    emf_voltage_stdev,
-    residual_acceleration,
-    residual_acceleration_sum,
-    residual_acceleration_avg,
-    residual_acceleration_stdev,
+    beta_current_variance,
+    beta_emf_voltage,
+    alpha_emf_voltage_stdev,
+    alpha_emf_voltage,
     battery_current,
     total_power,
     resistive_power,
@@ -375,10 +476,10 @@ function parse_full_readout(data_view, previous_readout){
     torque_control,
     battery_power_error,
     battery_power_control,
-    angular_speed_error,
-    angular_speed_control,
-    position_error,
-    position_control,
+    inductor_angle,
+    inductor_angle_stdev,
+    inductor_angular_speed,
+    inductor_angular_speed_stdev,
   };
 }
 

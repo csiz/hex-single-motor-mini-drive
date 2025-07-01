@@ -26,8 +26,8 @@ static inline MotorOutputs update_motor_6_sector(
     // Check if the magnet is present.
     const bool angle_valid = hall_sector < hall_sector_base;
 
-    const uint16_t angle_keep_bits = readout.angle &= ~(hall_state_bit_mask | angle_valid_bit_mask);
-    readout.angle = angle_keep_bits | (hall_state << hall_state_bit_offset) | (angle_valid << angle_valid_bit_offset);
+    const uint16_t angle_keep_bits = readout.angle_bytes &= ~(hall_state_bit_mask | angle_valid_bit_mask);
+    readout.angle_bytes = angle_keep_bits | (hall_state << hall_state_bit_offset) | (angle_valid << angle_valid_bit_offset);
 
     auto const& motor_sector_driving_table = sector_parameters.pwm_target >= 0 ? 
         motor_sector_driving_positive : 
@@ -54,14 +54,16 @@ static inline MotorOutputs update_motor_smooth(
     FullReadout & readout,
     PIDControlState & pid_state
 ){
-    const bool emf_detected = readout.angle & emf_detected_bit_mask;
+    const bool emf_detected = readout.angle_bytes & emf_detected_bit_mask;
 
-    const int emf_compensation = - emf_detected * readout.emf_voltage * emf_base / readout.vcc_voltage;
+    // const int emf_compensation = - emf_detected * readout.beta_emf_voltage * emf_base / readout.vcc_voltage;
 
-    const int max_allowed_target = max(0, +pwm_max_smooth - emf_compensation);
-    const int min_allowed_target = min(0, -pwm_max_smooth - emf_compensation);
+    // const int max_allowed_target = max(0, +pwm_max_smooth - emf_compensation);
+    // const int min_allowed_target = min(0, -pwm_max_smooth - emf_compensation);
 
-    const int pwm_target = emf_compensation + clip_to(min_allowed_target, max_allowed_target, smooth_parameters.pwm_target);
+    // const int pwm_target = emf_compensation + clip_to(min_allowed_target, max_allowed_target, smooth_parameters.pwm_target);
+
+    const int pwm_target = clip_to(-pwm_max_smooth, pwm_max_smooth, smooth_parameters.pwm_target);
 
     // Get the abs value of the target PWM.
     const int abs_pwm = min(pwm_max, abs(pwm_target));
@@ -69,13 +71,15 @@ static inline MotorOutputs update_motor_smooth(
     // Base the direction on the sign of the target PWM.
     const int direction = 1 - (pwm_target < 0) * 2;
 
+    const int rotor_angle = readout.angle_bytes & angle_bit_mask;
+
     // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
     pid_state.current_angle_control = (
         not emf_detected ? PIDControl{} : 
         compute_pid_control(
             pid_parameters.current_angle_gains,
             pid_state.current_angle_control,
-            -readout.alpha_current * abs(readout.emf_voltage) / dq0_to_power_fixed_point,
+            signed_angle(rotor_angle + direction * smooth_parameters.leading_angle - readout.inductor_angle),
             0
         )
     );
@@ -88,7 +92,7 @@ static inline MotorOutputs update_motor_smooth(
         smooth_parameters.leading_angle + 
         pid_state.current_angle_control.output / 4);
 
-    const int rotor_angle = readout.angle & angle_bit_mask;
+
 
     const int target_angle = normalize_angle(rotor_angle + target_lead_angle);
 

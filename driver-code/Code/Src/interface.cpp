@@ -32,7 +32,7 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
 
     write_int16(buffer + offset, readout.position);
     offset += 2;
-    write_uint16(buffer + offset, readout.angle);
+    write_uint16(buffer + offset, readout.angle_bytes);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed);
     offset += 2;
@@ -76,15 +76,14 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.beta_current);
     offset += 2;
-
-    write_int16(buffer + offset, readout.motor_constant);
+    write_int16(buffer + offset, readout.alpha_emf_voltage);
     offset += 2;
-    write_int16(buffer + offset, readout.emf_voltage);
+    write_int16(buffer + offset, readout.beta_emf_voltage);
     offset += 2;
-
-    write_int16(buffer + offset, readout.emf_voltage_variance);
+    
+    write_int16(buffer + offset, readout.alpha_emf_voltage_variance);
     offset += 2;
-    write_int16(buffer + offset, readout.residual_acceleration);
+    write_int16(buffer + offset, readout.beta_current_variance);
     offset += 2;
 
 
@@ -109,13 +108,13 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.battery_power_control);
     offset += 2;
-    write_int16(buffer + offset, readout.angular_speed_error);
+    write_int16(buffer + offset, readout.inductor_angle);
     offset += 2;
-    write_int16(buffer + offset, readout.angular_speed_control);
+    write_int16(buffer + offset, readout.inductor_angle_variance);
     offset += 2;
-    write_int16(buffer + offset, readout.position_error);
+    write_int16(buffer + offset, readout.inductor_angular_speed);
     offset += 2;
-    write_int16(buffer + offset, readout.position_control);
+    write_int16(buffer + offset, readout.inductor_angular_speed_variance);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -268,6 +267,9 @@ static inline int get_message_size(uint16_t code) {
         case GET_PID_PARAMETERS:
         case SAVE_SETTINGS_TO_FLASH:
         case RUN_UNIT_TEST_ATAN:
+        case RUN_UNIT_TEST_FUNKY_ATAN:
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_2:
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_3:
             return min_message_size;
         
         case SET_CURRENT_FACTORS:

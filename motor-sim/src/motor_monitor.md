@@ -749,12 +749,12 @@ const plot_electric_position = plot_lines({
   y_domain: [-180, 180],
   channels: [
     {
-      y: "angle", label: "Angle", color: colors.angle,
+      y: "angle", label: "Magnet Angle", color: colors.angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {
-      y: "web_angle", label: "Angle (computed online)", color: colors.web_angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
+      y: "inductor_angle", label: "Inductor Angle", color: colors.web_angle,
+      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angle_stdev}),
     },
     {y: "angle_from_emf", label: "Angle infered from EMF", color: colors.angle_from_emf},
     {y: "current_angle", label: "Current Angle", color: colors.current_angle},
@@ -799,19 +799,12 @@ const plot_speed = plot_lines({
   y_label: "Angular Speed (degrees/ms)",
   channels: [
     {
-      y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
+      y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
-    {y: "angular_speed_stdev", label: "Angular Speed Stdev", color: d3.color(colors.angular_speed).brighter(1)},
     {
-      y: "web_angular_speed", label: "Angular Speed (computed online)", color: colors.web_angular_speed,
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
-    },
-    {y: "web_angular_speed_stdev", label: "Angular Speed Stdev (computed online)", color: d3.color(colors.web_angular_speed).darker(1)},
-    {y: "angular_speed_from_emf", label: "Angular Speed from EMF", color: colors.angle_from_emf},
-    {
-      y: "angular_speed_from_emf_avg", label: "Angular Speed from EMF 350us average", color: colors.angle_from_emf,
-      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_from_emf_stdev}),
+      y: "inductor_angular_speed", label: "Inductor Angular Speed", color: colors.web_angular_speed,
+      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angular_speed_stdev}),
     },
   ],
   curve,
@@ -830,12 +823,6 @@ const plot_acceleration = plot_lines({
       y: "web_angular_acceleration_avg", label: "Angular Acceleration 2.0ms average", color: d3.color(colors.web_angular_speed).darker(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_acceleration_stdev}),
     },
-    {y: "residual_acceleration", label: "Residual Acceleration", color: colors.angle},
-    {
-      y: "residual_acceleration_avg", label: "Residual Acceleration 350us average", color: d3.color(colors.angle).darker(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.residual_acceleration_stdev}),
-    },
-    {y: "residual_acceleration_sum", label: "Residual Acceleration Tracking Sum", color: colors.sum},
   ],
   curve,
 });
@@ -955,9 +942,10 @@ const plot_dq0_voltages = plot_lines({
   y_label: "Voltage (V)",
   channels: [
     {
-      y: "emf_voltage", label: "EMF Voltage", color: colors.beta_current,
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_stdev}),
+      y: "beta_emf_voltage", label: "EMF Voltage Beta", color: colors.beta_current,
+      draw_extra: setup_stdev_95({stdev: (d) => d.alpha_emf_voltage_stdev}),
     },
+    {y: "alpha_emf_voltage", label: "EMF Voltage Alpha", color: colors.alpha_current},
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "emf_voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
@@ -1693,9 +1681,12 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
     ["Run All Tests", async function(){
       unit_test_results.value = [];
 
-      let all_passed = true;
-
-      all_passed &= await command_unit_test(command_codes.RUN_UNIT_TEST_ATAN, "Integer atan2", unit_test_atan_expected);
+      const all_passed = [
+        await command_unit_test(command_codes.RUN_UNIT_TEST_ATAN, "Integer atan2", unit_test_atan_expected),
+        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN, "Funky atan2", unit_test_atan_expected),
+        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_2, "Funky atan2 part 2", unit_test_atan_expected),
+        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_3, "Funky atan2 part 3", unit_test_atan_expected),
+      ].reduce((acc, passed) => acc && passed, true);
 
       unit_test_results.value = [
         html`<h3>${all_passed ? 

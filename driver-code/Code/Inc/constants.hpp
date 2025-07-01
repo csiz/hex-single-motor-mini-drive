@@ -131,6 +131,9 @@ const float voltage_conversion_float = adc_voltage_reference / (adc_max_value * 
 // Voltage conversion: 1 voltage unit = 1/112 V.
 const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_float);
 
+// Conversion factor between current and phase resistance voltage.
+const int phase_current_to_voltage = round_div(phase_resistance * voltage_fixed_point, resistance_fixed_point);
+
 
 // Power conversion: 1 power unit = 1/224 W.
 const int power_fixed_point = 4 * voltage_fixed_point;
@@ -320,7 +323,9 @@ static_assert(default_sector_center_variance * 16 < max_16bit, "max_variance mus
 
 // TODO: make this the integral parameter of the EMF tracking PID.
 // Value for the initial EMF variance; our certainty in the EMF angle increases with the magnitude of the EMF voltage/speed.
-const int emf_initial_angular_variance = square(20 * angle_base / 360) / variance_divider;
+const int emf_initial_angular_variance = square(2 * angle_base / 360) / variance_divider;
+
+const int inductor_initial_angular_variance = square(10 * angle_base / 360) / variance_divider;
 
 // The hall sensors trigger later than expected going each direction.
 const int hysterisis = 5 * angle_base / 360;
