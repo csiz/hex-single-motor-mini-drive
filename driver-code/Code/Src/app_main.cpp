@@ -49,6 +49,7 @@ bool usb_wait_full_history = false;
 bool usb_reply_current_factors = false;
 bool usb_reply_trigger_angles = false;
 bool usb_reply_pid_parameters = false;
+bool usb_reply_observer_parameters = false;
 
 uint8_t usb_unit_test_buffer[unit_test_size] = {0};
 bool usb_reply_unit_test = false;
@@ -409,6 +410,10 @@ bool handle_command(MessageBuffer const& buffer) {
             pid_parameters = parse_pid_parameters(buffer.data, buffer.write_index);
             usb_reply_pid_parameters = true;
             return false;
+        case SET_OBSERVER_PARAMETERS:
+            observer_parameters = parse_observer_parameters(buffer.data, buffer.write_index);
+            usb_reply_observer_parameters = true;
+            return false;
 
         case GET_CURRENT_FACTORS:
             usb_reply_current_factors = true;
@@ -421,6 +426,10 @@ bool handle_command(MessageBuffer const& buffer) {
             usb_reply_pid_parameters = true;
             return false;
 
+        case GET_OBSERVER_PARAMETERS:
+            usb_reply_observer_parameters = true;
+            return false;
+
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
                 save_settings_to_flash(current_calibration, position_calibration, pid_parameters);
@@ -428,6 +437,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 current_calibration = get_current_calibration();
                 position_calibration = get_position_calibration();
                 pid_parameters = get_pid_parameters();
+                observer_parameters = get_observer_parameters();
                 
                 return false;
             } else {
@@ -438,6 +448,7 @@ bool handle_command(MessageBuffer const& buffer) {
         case CURRENT_FACTORS:
         case TRIGGER_ANGLES:
         case PID_PARAMETERS:
+        case OBSERVER_PARAMETERS:
         case READOUT:
         case FULL_READOUT:
         case UNIT_TEST_OUTPUT:
@@ -515,6 +526,17 @@ void usb_queue_response(FullReadout const& readout) {
         usb_queue_send(usb_response_buffer, pid_parameters_size);
 
         usb_reply_pid_parameters = false;
+    }
+
+    // Send observer parameters if requested.
+    if (usb_reply_observer_parameters) {
+        if (not usb_check_queue(observer_parameters_size)) return;
+        
+        // Send the observer parameters to the host.
+        write_observer_parameters(usb_response_buffer, observer_parameters);
+        usb_queue_send(usb_response_buffer, observer_parameters_size);
+
+        usb_reply_observer_parameters = false;
     }
 
     // Send current factors if requested.

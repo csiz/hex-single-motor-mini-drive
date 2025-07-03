@@ -16,6 +16,7 @@ const size_t history_size = 360;
 // Maximum value we can use in signed 32 bit multiplication.
 const int max_16bit = (1 << 15) - 1; // 32767
 
+
 // PWM base value; representing full on duty cycle.
 const uint16_t pwm_base = 1536;
 
@@ -54,6 +55,26 @@ const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 const uint16_t angle_valid_bit_mask = 0b1 << angle_valid_bit_offset;
 const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 const uint16_t emf_direction_is_negative_bit_mask = 0b1 << emf_direction_is_negative_bit_offset;
+
+
+// Observer constants
+// ------------------
+
+const int16_t observer_fixed_point = 4096;
+
+const ObserverState default_observer_state = {
+    .value = 0,
+    .value_variance = max_16bit,
+    .error = 0,
+    .error_variance = max_16bit
+};
+
+const ObserverParameters default_observer_parameters = {
+    .rotor_angle_ki = observer_fixed_point / 16,
+    .rotor_angular_speed_ki = observer_fixed_point / 256,
+    .inductor_angle_ki = observer_fixed_point / 4,
+    .inductor_angular_speed_ki = observer_fixed_point / 256,
+};
 
 
 // Position constants
@@ -334,7 +355,9 @@ const int hysterisis = 5 * angle_base / 360;
 const int max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 // Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
-const int speed_fixed_point = 128;
+const int speed_fixed_point = 32;
+
+const int square_speed_fixed_point = square(speed_fixed_point);
 
 // Fixed point for speed variance with respect to angle units variance.
 const int speed_variance_fixed_point = 256;
@@ -347,7 +370,7 @@ const int speed_variance_to_square_speed = square(speed_fixed_point) / speed_var
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
 
 // Cap the update counter between transitions; we'll consider the motor settled at this point.
-const int max_updates_between_transitions = 16384;
+const int max_updates_between_transitions = 4096;
 
 // Minimum angular speed that we need to have to move at the max time between transitions.
 const int min_measurable_angular_speed = 60 * angle_base / 360 * speed_fixed_point / max_updates_between_transitions;
@@ -361,7 +384,7 @@ const int min_rpm = min_measurable_angular_speed * pwm_cycles_per_second / angle
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
 // Threshold speed when we consider the motor to be moving; in angle units per pwm cycle.
-const int threshold_speed = 10 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
+const int threshold_speed = 20 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
 
 // Variance of the speed in degrees per ms; converted to angle units per pwm cycle, all squared.
 const int default_speed_variance = square(15 * angle_base / 360 * 1000 * speed_fixed_point / pwm_cycles_per_second) / speed_variance_to_square_speed;
@@ -487,8 +510,6 @@ const PIDParameters default_pid_parameters = {
         .max_output = half_circle
     }
 };
-
-
 
 
 static_assert(angle_base == 1024, "angle_base must be 1024 for the sine and cosine lookup tables to work correctly");

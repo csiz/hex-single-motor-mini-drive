@@ -29,7 +29,8 @@ Motor Driving Data
   <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${plot_power}</div>
-<div class="card tight">${plot_drive_controls}</div>
+<div class="card tight">${plot_angle_observer}</div>
+<div class="card tight">${plot_inductor_angle_observer}</div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
@@ -46,6 +47,20 @@ Motor Driving Data
 <div class="card tight">${plot_pwm_settings}</div>
 <div class="card tight">${plot_readout_flags}</div>
 <div class="card tight">${plot_motor_values}</div>
+
+Observer Parameters
+-------------------
+<div class="card tight">
+  <div>${observer_parameters_buttons}</div>
+  <h3>Active Observer Parameters</h3>
+  <p>These are the currently active observer parameters for the motor controller.</p>
+  <pre>${active_observer_parameters_table}</pre>
+</div>
+
+<div class="card tight">
+  <h3>Observer Parameters</h3>
+  <div>${observer_parameters_input}</div>
+</div>
 
 
 Motor Control Parameters
@@ -174,8 +189,6 @@ const colors = {
   u: "rgb(117, 112, 179)",
   v: "rgb(217, 95, 2)",
   w: "rgb(231, 41, 138)",
-  ref_readout: "rgb(102, 102, 102)",
-  sum: "rgb(0, 0, 0)",
   web_angle: "rgb(178, 228, 0)",
   angle: "rgb(39, 163, 185)",
   current_magnitude: "rgb(197, 152, 67)",
@@ -187,7 +200,12 @@ const colors = {
   alpha_current: "rgb(199, 0, 57)",
   beta_current: "rgb(26, 82, 118)",
   other: "rgb(27, 158, 119)",
+  ref_readout: "rgb(102, 102, 102)",
+  sum: "rgb(0, 0, 0)",
 };
+
+const colors_categories = Object.values(colors);
+
 
 
 ```
@@ -256,6 +274,7 @@ async function connect_motor_controller(){
         await new_controller.load_position_calibration();
         await new_controller.load_current_calibration();
         await new_controller.load_pid_parameters();
+        await new_controller.load_observer_parameters();
         motor_controller.value = new_controller;
       })(),
     ]);
@@ -687,20 +706,42 @@ const plot_power = plot_lines({
   curve,
 });
 
-const plot_drive_controls = plot_lines({
-  subtitle: "PID Control State",
-  description: "Error and output for each PID controller.",
-  width: 1200, height: 200,
+const plot_angle_observer = plot_lines({
+  subtitle: "Angle Observer State",
+  description: "Error and output for the angle observer.",
+  width: 1200, height: 400,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Error & Output",
+  y_label: "Value & Error",
   channels: [
-    {y: "current_angle_error", label: "Current Angle Error", color: colors.u},
-    {y: "current_angle_control", label: "Current Angle Control", color: colors.beta_current},
-    {y: "torque_error", label: "Torque Error", color: colors.w},
-    {y: "torque_control", label: "Torque Control", color: colors.angle_from_emf},
-    {y: "battery_power_error", label: "Battery Power Error", color: colors.current_angle},
-    {y: "battery_power_control", label: "Battery Power Control", color: colors.other},
+    {y: "angle_raw", label: "Magnet Angle", color: colors_categories[0]},
+    {y: "angle_stdev_raw", label: "Magnet Angle Stdev", color: d3.color(colors_categories[0]).brighter(1)},
+    {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
+    {y: "angle_stdev_error", label: "Magnet Angle Error Stdev", color: d3.color(colors_categories[1]).brighter(1)},
+    {y: "angular_speed_raw", label: "Magnet Angular Speed", color: colors_categories[2]},
+    {y: "angular_speed_stdev_raw", label: "Magnet Angular Speed Stdev", color: d3.color(colors_categories[2]).brighter(1)},
+    {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[3]},
+    {y: "angular_speed_stdev_error", label: "Magnet Angular Speed Error Stdev", color: d3.color(colors_categories[3]).brighter(1)},
+  ],
+  curve,
+});
+
+const plot_inductor_angle_observer = plot_lines({
+  subtitle: "Inductor Angle Observer State",
+  description: "Error and output for the inductor angle observer.",
+  width: 1200, height: 400,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Value & Error",
+  channels: [
+    {y: "inductor_angle_raw", label: "Inductor Angle", color: colors_categories[4]},
+    {y: "inductor_angle_stdev_raw", label: "Inductor Angle Stdev", color: d3.color(colors_categories[4]).brighter(1)},
+    {y: "inductor_angle_error", label: "Inductor Angle Error", color: colors_categories[5]},
+    {y: "inductor_angle_error_stdev", label: "Inductor Angle Error Stdev", color: d3.color(colors_categories[5]).brighter(1)},
+    {y: "inductor_angular_speed_raw", label: "Inductor Angular Speed", color: colors_categories[6]},
+    {y: "inductor_angular_speed_stdev_raw", label: "Inductor Angular Speed Stdev", color: d3.color(colors_categories[6]).brighter(1)},
+    {y: "inductor_angular_speed_error", label: "Inductor Angular Speed Error", color: colors_categories[7]},
+    {y: "inductor_angular_speed_error_stdev", label: "Inductor Angular Speed Error Stdev", color: d3.color(colors_categories[7]).brighter(1)},
   ],
   curve,
 });
@@ -1006,7 +1047,8 @@ const plot_motor_values = plot_lines({
 
 const monitoring_plots = {
   plot_power,
-  plot_drive_controls,
+  plot_angle_observer,
+  plot_inductor_angle_observer,
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
@@ -1414,8 +1456,64 @@ let pid_parameters_buttons = !motor_controller ? html`<p>Motor controller not co
 
 ```
 
+```js
+// Observer Parameters
+// -------------------
 
+function stringify_active_observer_parameters() {
+  return `motor_controller.observer_parameters = ${JSON.stringify(motor_controller?.observer_parameters, null, 2)}`;
+}
 
+let active_observer_parameters_table =  Mutable(stringify_active_observer_parameters());
+
+const observer_parameters_input = [
+  ["rotor_angle_ki", "Rotor Angle KI"],
+  ["rotor_angular_speed_ki", "Rotor Angular Speed KI"],
+  ["inductor_angle_ki", "Inductor Angle KI"],
+  ["inductor_angular_speed_ki", "Inductor Angular Speed KI"],
+  ["resistance_ki", "Resistance KI"],
+  ["inductance_ki", "Inductance KI"],
+  ["motor_constant_ki", "Motor Constant KI"],
+  ["magnetic_resistance_ki", "Magnetic Resistance KI"],
+  ["rotor_mass_ki", "Rotor Mass KI"],
+  ["rotor_torque_ki", "Rotor Torque KI"],
+].map(([key, label]) => Inputs.number(key, {
+  label,
+  value: motor_controller?.observer_parameters?.[key],
+}));
+
+let observer_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
+  [
+    ["Upload to Driver", wait_previous(async function(value){
+      const observer_parameters = {
+        rotor_angle_ki: observer_parameters_input[0].value,
+        rotor_angular_speed_ki: observer_parameters_input[1].value,
+        inductor_angle_ki: observer_parameters_input[2].value,
+        inductor_angular_speed_ki: observer_parameters_input[3].value,
+        resistance_ki: observer_parameters_input[4].value,
+        inductance_ki: observer_parameters_input[5].value,
+        motor_constant_ki: observer_parameters_input[6].value,
+        magnetic_resistance_ki: observer_parameters_input[7].value,
+        rotor_mass_ki: observer_parameters_input[8].value,
+        rotor_torque_ki: observer_parameters_input[9].value,
+      };
+      await motor_controller.upload_observer_parameters(observer_parameters);
+      active_observer_parameters_table.value = stringify_active_observer_parameters();
+      return value;
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_observer_parameters();
+      active_observer_parameters_table.value = stringify_active_observer_parameters();
+      return value;
+    })],
+  ],
+  {
+    label: "Observer Parameters",
+    value: motor_controller?.observer_parameters ?? {},
+  },
+);
+
+```
 
 ```js
 // Position Calibration

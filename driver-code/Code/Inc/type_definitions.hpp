@@ -140,28 +140,28 @@ struct FullReadout : public Readout {
     uint16_t vcc_voltage;
     int16_t cycle_start_tick;
     int16_t cycle_end_tick;
-    uint16_t angle_variance;
-    uint16_t angular_speed_variance;
+    int16_t angle_variance;
+    int16_t angular_speed_variance;
     int16_t alpha_current;
     int16_t beta_current;
     int16_t alpha_emf_voltage;
     int16_t beta_emf_voltage;
-    int16_t beta_current_variance;
-    int16_t alpha_emf_voltage_variance;
     int16_t total_power;
     int16_t resistive_power;
     int16_t emf_power;
     int16_t inductive_power;
-    int16_t current_angle_error;
-    int16_t current_angle_control;
-    int16_t torque_error;
-    int16_t torque_control;
-    int16_t battery_power_error;
-    int16_t battery_power_control;
+    int16_t angle_error;
+    int16_t angle_error_variance;
+    int16_t angular_speed_error;
+    int16_t angular_speed_error_variance;
     int16_t inductor_angle;
     int16_t inductor_angle_variance;
+    int16_t inductor_angle_error;
+    int16_t inductor_angle_error_variance;
     int16_t inductor_angular_speed;
     int16_t inductor_angular_speed_variance;
+    int16_t inductor_angular_speed_error;
+    int16_t inductor_angular_speed_error_variance;
 };
 
 
@@ -195,6 +195,21 @@ struct PositionCalibration {
     uint16_t initial_angular_speed_variance;
     uint16_t angular_acceleration_div_2_variance;
 };
+
+// Track angle, angular speed and their uncertainties as gaussian distributions.
+struct PositionStatistics {
+    // Estimated angle.
+    int angle;
+    // Variance of the angle estimate.
+    int angle_variance;
+    // Estimated angular speed.
+    int angular_speed;
+    // Variance of the angular speed estimate.
+    int angular_speed_variance;
+};
+
+// Zeroes position statistics; also means infinite variance.
+const PositionStatistics null_position_statistics = {0};
 
 
 struct PIDGains {
@@ -235,12 +250,19 @@ const PIDControlState null_pid_control_state = {
 };
 
 
-struct ObserverGains {
+
+struct ObserverParameters {
     // Magnet position.
     int16_t rotor_angle_ki;
+
+    // Magnet angular speed.
+    int16_t rotor_angular_speed_ki;
     
     // Inductor position.
     int16_t inductor_angle_ki;
+
+    // Inductor angular speed.
+    int16_t inductor_angular_speed_ki;
 
     // Phase resistance; the drag factor for the fixed reference frame current.
     int16_t resistance_ki;
@@ -280,34 +302,27 @@ struct ObserverGains {
 
 struct ObserverState {
     // Current estimate of the observed value.
-    int value = 0;
+    int16_t value;
     // Variance of the observed value.
-    int value_variance = 0;
+    int16_t value_variance;
+    // Latest error in the observed value.
+    int16_t error;
+    // Variance of the error.
+    int16_t error_variance;
 };
-
-// Track angle, angular speed and their uncertainties as gaussian distributions.
-struct PositionStatistics {
-    // Estimated angle.
-    int angle;
-    // Variance of the angle estimate.
-    int angle_variance;
-    // Estimated angular speed.
-    int angular_speed;
-    // Variance of the angular speed estimate.
-    int angular_speed_variance;
-};
-
-// Zeroes position statistics; also means infinite variance.
-const PositionStatistics null_position_statistics = {0};
-
 
 struct Observers {
     // The rotor magnetic angle.
-    PositionStatistics rotor_position;
+    ObserverState rotor_angle;
+
+    // The rotor magnetic angular speed.
+    ObserverState rotor_angular_speed;
 
     // The inductor coil magnetic angle.
-    PositionStatistics inductor_position;
+    ObserverState inductor_angle;
 
+    // The inductor coil magnetic angular speed.
+    ObserverState inductor_angular_speed;
 
     // The phase resistance; the drag factor for the fixed reference frame current.
     ObserverState resistance;

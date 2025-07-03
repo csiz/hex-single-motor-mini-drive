@@ -48,3 +48,6 @@ extern CurrentCalibration current_calibration;
 
 // PID control parameters.
 extern PIDParameters pid_parameters;
+
+// Observer gains.
+extern ObserverParameters observer_parameters;

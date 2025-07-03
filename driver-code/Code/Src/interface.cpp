@@ -56,17 +56,15 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.adc_update_rate);
     offset += 2;
-
-
     write_uint16(buffer + offset, readout.temperature);
     offset += 2;
     write_uint16(buffer + offset, readout.vcc_voltage);
     offset += 2;
+    
     write_int16(buffer + offset, readout.cycle_start_tick);
     offset += 2;
     write_int16(buffer + offset, readout.cycle_end_tick);
     offset += 2;
-
     write_uint16(buffer + offset, readout.angle_variance);
     offset += 2;
     write_uint16(buffer + offset, readout.angular_speed_variance);
@@ -80,11 +78,6 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.beta_emf_voltage);
     offset += 2;
-    
-    write_int16(buffer + offset, readout.alpha_emf_voltage_variance);
-    offset += 2;
-    write_int16(buffer + offset, readout.beta_current_variance);
-    offset += 2;
 
 
     write_int16(buffer + offset, readout.total_power);
@@ -96,25 +89,31 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.inductive_power);
     offset += 2;
 
-    write_int16(buffer + offset, readout.current_angle_error);
+    write_int16(buffer + offset, readout.angle_error);
     offset += 2;
-    write_int16(buffer + offset, readout.current_angle_control);
+    write_int16(buffer + offset, readout.angle_error_variance);
     offset += 2;
-    write_int16(buffer + offset, readout.torque_error);
+    write_int16(buffer + offset, readout.angular_speed_error);
     offset += 2;
-    write_int16(buffer + offset, readout.torque_control);
+    write_int16(buffer + offset, readout.angular_speed_error_variance);
     offset += 2;
-    write_int16(buffer + offset, readout.battery_power_error);
-    offset += 2;
-    write_int16(buffer + offset, readout.battery_power_control);
-    offset += 2;
+
     write_int16(buffer + offset, readout.inductor_angle);
     offset += 2;
     write_int16(buffer + offset, readout.inductor_angle_variance);
     offset += 2;
+    write_int16(buffer + offset, readout.inductor_angle_error);
+    offset += 2;
+    write_int16(buffer + offset, readout.inductor_angle_error_variance);
+    offset += 2;
+
     write_int16(buffer + offset, readout.inductor_angular_speed);
     offset += 2;
     write_int16(buffer + offset, readout.inductor_angular_speed_variance);
+    offset += 2;
+    write_int16(buffer + offset, readout.inductor_angular_speed_error);
+    offset += 2;
+    write_int16(buffer + offset, readout.inductor_angular_speed_error_variance);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -230,6 +229,37 @@ void write_pid_parameters(uint8_t * buffer, PIDParameters const & parameters) {
     if (offset != pid_parameters_size) error();
 }
 
+void write_observer_parameters(uint8_t * buffer, ObserverParameters const & observers) {
+    size_t offset = 0;
+
+    write_uint16(buffer + offset, OBSERVER_PARAMETERS);
+    offset += 2;
+
+    write_int16(buffer + offset, observers.rotor_angle_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.rotor_angular_speed_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.inductor_angle_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.inductor_angular_speed_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.resistance_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.inductance_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.motor_constant_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.magnetic_resistance_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.rotor_mass_ki);
+    offset += 2;
+    write_int16(buffer + offset, observers.rotor_torque_ki);
+    offset += 2;
+    
+    // Check if we wrote the correct number of bytes.
+    if (offset != observer_parameters_size) error();
+}
+
 // Receive data
 // ------------
 
@@ -265,6 +295,7 @@ static inline int get_message_size(uint16_t code) {
         case GET_CURRENT_FACTORS:
         case GET_TRIGGER_ANGLES:
         case GET_PID_PARAMETERS:
+        case GET_OBSERVER_PARAMETERS:
         case SAVE_SETTINGS_TO_FLASH:
         case RUN_UNIT_TEST_ATAN:
         case RUN_UNIT_TEST_FUNKY_ATAN:
@@ -278,6 +309,8 @@ static inline int get_message_size(uint16_t code) {
             return position_calibration_size;
         case SET_PID_PARAMETERS:
             return pid_parameters_size;
+        case SET_OBSERVER_PARAMETERS:
+            return observer_parameters_size;
 
         case READOUT:
             return readout_size;
@@ -289,6 +322,8 @@ static inline int get_message_size(uint16_t code) {
             return position_calibration_size;
         case PID_PARAMETERS:
             return pid_parameters_size;
+        case OBSERVER_PARAMETERS:
+            return observer_parameters_size;
 
         case UNIT_TEST_OUTPUT:
             return unit_test_size;
@@ -470,3 +505,35 @@ PIDParameters parse_pid_parameters(uint8_t const * data, size_t size) {
     return parameters;
 }
 
+ObserverParameters parse_observer_parameters(uint8_t const * data, size_t size) {
+    if(size < observer_parameters_size) error();
+
+    size_t offset = header_size;
+
+    ObserverParameters observers = {};
+
+    observers.rotor_angle_ki = read_int16(data + offset);
+    offset += 2;
+    observers.rotor_angular_speed_ki = read_int16(data + offset);
+    offset += 2;
+    observers.inductor_angle_ki = read_int16(data + offset);
+    offset += 2;
+    observers.inductor_angular_speed_ki = read_int16(data + offset);
+    offset += 2;
+    observers.resistance_ki = read_int16(data + offset);
+    offset += 2;
+    observers.inductance_ki = read_int16(data + offset);
+    offset += 2;
+    observers.motor_constant_ki = read_int16(data + offset);
+    offset += 2;
+    observers.magnetic_resistance_ki = read_int16(data + offset);
+    offset += 2;
+    observers.rotor_mass_ki = read_int16(data + offset);
+    offset += 2;
+    observers.rotor_torque_ki = read_int16(data + offset);
+    offset += 2;
+
+    if (offset != observer_parameters_size) error();
+
+    return observers;
+}

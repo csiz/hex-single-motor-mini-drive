@@ -18,6 +18,7 @@ uint8_t page_buffer[FLASH_PAGE_SIZE] = {0};
 const size_t current_calibration_offset = 0x00;
 const size_t position_calibration_offset = 0x20;
 const size_t pid_parameters_offset = 0x80;
+const size_t observer_parameters_offset = 0xF0;
 
 CurrentCalibration get_current_calibration(){
     const bool calibration_available = (CURRENT_FACTORS == read_uint16(user_data + current_calibration_offset));
@@ -38,6 +39,13 @@ PIDParameters get_pid_parameters(){
     return parameters_available ? 
         parse_pid_parameters(user_data + pid_parameters_offset, pid_parameters_size) :
         default_pid_parameters;
+}
+
+ObserverParameters get_observer_parameters() {
+    const bool parameters_available = (OBSERVER_PARAMETERS == read_uint16(user_data + observer_parameters_offset));
+    return parameters_available ?
+        parse_observer_parameters(user_data + observer_parameters_offset, observer_parameters_size) :
+        default_observer_parameters;
 }
 
 uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)

@@ -46,10 +46,10 @@ export function angle_units_to_degrees(angle){
   return normalize_degrees(unbounded_angle_units_to_degrees(angle));
 }
 
-export const variance_divider = 16;
+export const variance_divider = 1;
 
-export const speed_fixed_point = 128;
-export const speed_variance_fixed_point = 256;
+export const speed_fixed_point = 32;
+export const speed_variance_fixed_point = 1024;
 
 export const acceleration_fixed_point = 256;
 export const acceleration_variance_fixed_point = 256;

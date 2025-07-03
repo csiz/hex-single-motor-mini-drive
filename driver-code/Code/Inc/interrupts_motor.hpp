@@ -84,10 +84,6 @@ static inline MotorOutputs update_motor_smooth(
         )
     );
 
-    readout.current_angle_error = pid_state.current_angle_control.error;
-    readout.current_angle_control = pid_state.current_angle_control.output;
-
-
     const int target_lead_angle = direction * clip_to(0, half_circle, 
         smooth_parameters.leading_angle + 
         pid_state.current_angle_control.output / 4);
@@ -125,10 +121,6 @@ static inline MotorOutputs update_motor_torque(
         current_target
     );
 
-    readout.torque_error = pid_state.torque_control.error;
-    readout.torque_control = pid_state.torque_control.output;
-
-
     // Get the target PWM after torque control.
     const int16_t pwm_target = pid_state.torque_control.output;
 
@@ -156,9 +148,6 @@ static inline MotorOutputs update_motor_battery_power(
         max(0, -readout.total_power),
         abs(battery_power_parameters.power_target)
     );
-
-    readout.battery_power_error = pid_state.battery_power_control.error;
-    readout.battery_power_control = pid_state.battery_power_control.output;
 
     // Get the target PWM after power control.
     const int16_t pwm_target = clip_to(-pwm_max, pwm_max, (direction_is_negative ? -1 : 1) * pid_state.battery_power_control.output);
