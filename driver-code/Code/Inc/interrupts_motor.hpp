@@ -8,7 +8,7 @@
 #include "byte_handling.hpp"
 #include "math_utils.hpp"
 #include "integer_math.hpp"
-
+#include "error_handler.hpp"
 
 // Motor Control Functions
 // =======================
@@ -26,8 +26,7 @@ static inline MotorOutputs update_motor_6_sector(
     // Check if the magnet is present.
     const bool angle_valid = hall_sector < hall_sector_base;
 
-    const uint16_t angle_keep_bits = readout.angle_bytes &= ~(hall_state_bit_mask | angle_valid_bit_mask);
-    readout.angle_bytes = angle_keep_bits | (hall_state << hall_state_bit_offset) | (angle_valid << angle_valid_bit_offset);
+    if (not angle_valid) return breaking_motor_outputs;
 
     auto const& motor_sector_driving_table = sector_parameters.pwm_target >= 0 ? 
         motor_sector_driving_positive : 
@@ -78,7 +77,7 @@ static inline MotorOutputs update_motor_smooth(
     FullReadout & readout,
     PIDControlState & pid_state
 ){
-    const bool emf_detected = readout.angle_bytes & emf_detected_bit_mask;
+    const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
 
     // const int emf_compensation = - emf_detected * readout.beta_emf_voltage * emf_base / readout.vcc_voltage;
 
@@ -95,7 +94,7 @@ static inline MotorOutputs update_motor_smooth(
     // Base the direction on the sign of the target PWM.
     const int direction = 1 - (pwm_target < 0) * 2;
 
-    const int rotor_angle = readout.angle_bytes & angle_bit_mask;
+    const int rotor_angle = readout.angle & angle_bit_mask;
 
     // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
     pid_state.current_angle_control = (

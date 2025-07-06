@@ -129,15 +129,15 @@ const DriverParameters null_driver_parameters = {};
 struct Readout{
     uint32_t pwm_commands;
     uint16_t readout_number;
+    uint16_t state_flags;
     int16_t u_readout;
     int16_t v_readout;
     int16_t w_readout;
-    uint16_t ref_readout;
+    int16_t ref_readout;
     int16_t u_readout_diff;
     int16_t v_readout_diff;
     int16_t w_readout_diff;
-    int16_t position;
-    uint16_t angle_bytes;
+    int16_t angle;
     int16_t angular_speed;
     int16_t instant_vcc_voltage;
 };

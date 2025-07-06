@@ -29,14 +29,11 @@ Motor Driving Data
   <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${plot_power}</div>
-<div class="card tight">${plot_angle_observer}</div>
-<div class="card tight">${plot_angular_speed_observer}</div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
 <div class="card tight">${plot_electric_offsets}</div>
 <div class="card tight">${plot_speed}</div>
-<div class="card tight">${plot_acceleration}</div>
 <div class="card tight">${plot_measured_voltage}</div>
 <div class="card tight">${plot_measured_temperature}</div>
 <div class="card tight">${plot_measured_current}</div>
@@ -74,8 +71,8 @@ Motor Control Parameters
 </div>
 
 <div class="card tight">
-  <h3>Current Angle Control</h3>
-  <div>${current_angle_gains_input}</div>
+  <h3>Inductor Angle Control</h3>
+  <div>${inductor_angle_gains_input}</div>
 </div>
 <div class="card tight">
   <h3>Torque Control</h3>
@@ -191,8 +188,8 @@ const colors = {
   w: "rgb(231, 41, 138)",
   web_angle: "rgb(178, 228, 0)",
   angle: "rgb(39, 163, 185)",
-  current_magnitude: "rgb(197, 152, 67)",
-  current_angle: "rgb(102, 166, 30)",
+  web_current_magnitude: "rgb(197, 152, 67)",
+  inductor_angle: "rgb(102, 166, 30)",
   voltage_angle: "rgb(0, 185, 124)",
   angle_from_emf: "rgb(166, 30, 132)",
   angular_speed: "rgb(41, 194, 173)",
@@ -703,54 +700,9 @@ const plot_power = plot_lines({
     {y: "web_inductive_power", label: "Inductive Power (computed online)", color: colors.w},
 
     {y: "total_power", label: "Total Power", color: colors.sum},
-    {y: "resistive_power", label: "Resistive Power", color: colors.current_magnitude},
+    {y: "resistive_power", label: "Resistive Power", color: colors.web_current_magnitude},
     {y: "emf_power", label: "EMF Power", color: colors.angle},
-    {y: "inductive_power", label: "Inductive Power", color: colors.current_angle},
-  ],
-  curve,
-});
-
-const plot_angle_observer = plot_lines({
-  subtitle: "Angle Observers State",
-  description: "Error and output for the angle observers.",
-  width: 1200, height: 400,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Angle (degrees)",
-  channels: [
-    {
-      y: "angle_raw", label: "Magnet Angle", color: colors_categories[0],
-      draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev_raw}),
-    },
-    {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
-
-    {
-      y: "inductor_angle_raw", label: "Inductor Angle", color: colors_categories[2],
-      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angle_stdev_raw}),
-    },
-    {y: "inductor_angle_error", label: "Inductor Angle Error", color: colors_categories[3]},
-  ],
-  curve,
-});
-
-const plot_angular_speed_observer = plot_lines({
-  subtitle: "Angular Speed Observers State",
-  description: "Error and output for the angular speed observers.",
-  width: 1200, height: 400,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Angular Speed (degrees/ms)",
-  channels: [
-    {
-      y: "angular_speed_raw", label: "Magnet Angular Speed", color: colors_categories[0],
-      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev_raw}),
-    },
-    {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
-    {
-      y: "inductor_angular_speed_raw", label: "Inductor Angular Speed", color: colors_categories[2],
-      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angular_speed_stdev_raw}),
-    },
-    {y: "inductor_angular_speed_error", label: "Inductor Angular Speed Error", color: colors_categories[3]},
+    {y: "inductive_power", label: "Inductive Power", color: colors.inductor_angle},
   ],
   curve,
 });
@@ -802,16 +754,15 @@ const plot_electric_position = plot_lines({
       y: "angle", label: "Magnet Angle", color: colors.angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
+    {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
+
     {
       y: "inductor_angle", label: "Inductor Angle", color: colors.web_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angle_stdev}),
     },
-    {y: "angle_from_emf", label: "Angle infered from EMF", color: colors.angle_from_emf},
-    {y: "current_angle", label: "Current Angle", color: colors.current_angle},
-    {y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
-    {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
-    {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
-    {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
+    {y: "inductor_angle_error", label: "Inductor Angle Error", color: colors_categories[3]},
+    {y: "web_inductor_angle", label: "Inductor Angle (computed online)", color: colors.inductor_angle},
+    {y: "web_emf_voltage_angle", label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
   ],
   curve,
 });
@@ -824,17 +775,12 @@ const plot_electric_offsets = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (degrees)",
   channels: [
-    {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
+    {y: "inductor_angle_offset", label: "Inductor Angle Offset (online - chip)", color: colors.inductor_angle},
     {
-      y: "current_angle_offset_avg", label: "Current Angle Offset 350us average", color: d3.color(colors.angle).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.current_angle_offset_stdev}),
+      y: "inductor_angle_offset_avg", label: "Inductor Angle Offset (350us average)", color: d3.color(colors.angle).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angle_offset_stdev}),
     },
-    {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset", color: colors.voltage_angle},
-    {y: "angle_diff_to_emf", label: "Angle diff to EMF", color: colors.angle_from_emf},
-    {
-      y: "angle_diff_to_emf_avg", label: "Angle diff to EMF 350us average", color: d3.color(colors.angle_from_emf).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.angle_diff_to_emf_stdev}),
-    },
+    {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
   ],
   curve,
 });
@@ -852,27 +798,13 @@ const plot_speed = plot_lines({
       y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
+    {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
+    
     {
       y: "inductor_angular_speed", label: "Inductor Angular Speed", color: colors.web_angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angular_speed_stdev}),
     },
-  ],
-  curve,
-});
-
-const plot_acceleration = plot_lines({
-  subtitle: "Rotor Acceleration",
-  description: "Angular acceleration of the rotor in degrees per millisecond squared.",
-  width: 1200, height: 300,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Angular Acceleration (degrees/ms²)",
-  channels: [
-    {y: "web_angular_acceleration", label: "Angular Acceleration (computed online)", color: colors.web_angular_speed},
-    {
-      y: "web_angular_acceleration_avg", label: "Angular Acceleration 2.0ms average", color: d3.color(colors.web_angular_speed).darker(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_acceleration_stdev}),
-    },
+    {y: "inductor_angular_speed_error", label: "Inductor Angular Speed Error", color: colors_categories[3]},
   ],
   curve,
 });
@@ -978,7 +910,7 @@ const plot_dq0_currents = plot_lines({
     {y: "beta_current", label: "Current Beta", color: colors.beta_current},
     {y: "web_alpha_current", label: "Current Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_current", label: "Current Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
-    {y: "current_magnitude", label: "Current Magnitude", color: colors.current_magnitude},
+    {y: "web_current_magnitude", label: "Current Magnitude (computed online)", color: colors.web_current_magnitude},
   ],
   curve,
 });
@@ -998,10 +930,10 @@ const plot_dq0_voltages = plot_lines({
     {y: "alpha_emf_voltage", label: "EMF Voltage Alpha", color: colors.alpha_current},
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
-    {y: "emf_voltage_magnitude", label: "Voltage Magnitude", color: colors.current_magnitude},
+    {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
     {
-      y: "emf_voltage_magnitude_avg", label: "Voltage Magnitude 350us average", color: d3.color(colors.current_magnitude).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_magnitude_stdev}),
+      y: "web_emf_voltage_magnitude_avg", label: "Voltage Magnitude (350us average)", color: d3.color(colors.web_current_magnitude).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_voltage_magnitude_stdev}),
     },
   ],
   curve,
@@ -1031,12 +963,8 @@ const plot_readout_flags = plot_lines({
   x_label: "Time (ms)",
   y_label: "Flag setting",
   channels: [
-    {y: "angle_valid", label: "Angle valid", color: colors.angle},
     {y: "emf_detected", label: "EMF detected", color: colors.u},
     {y: "emf_direction_negative", label: "EMF direction negative", color: colors.v},
-    {y: (d) => d.direction < 0 ? 1 : 0, label: "Hall direction negative", color: colors.w},
-    {y: (d) => d.is_hall_transition ? 1 : 0, label: "Hall transition detected", color: colors.sum},
-    {y: (d) => d.hall_sector === null ? 1 : 0, label: "Hall invalid", color: colors.other},
   ],
   curve,
 });
@@ -1056,14 +984,11 @@ const plot_motor_values = plot_lines({
 
 const monitoring_plots = {
   plot_power,
-  plot_angle_observer,
-  plot_angular_speed_observer,
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
   plot_electric_offsets,
   plot_speed,
-  plot_acceleration,
   plot_measured_voltage,
   plot_measured_temperature,
   plot_measured_current,
@@ -1354,14 +1279,14 @@ function stringify_active_pid_parameters() {
 
 let active_pid_parameters_table =  Mutable(stringify_active_pid_parameters());
 
-const current_angle_gains_input = [
-  ["kp", "Current Angle Proportional"],
-  ["ki", "Current Angle Integral"],
-  ["kd", "Current Angle Derivative"],
-  ["max_output", "Current Angle Max Output"],
+const inductor_angle_gains_input = [
+  ["kp", "Inductor Angle Proportional"],
+  ["ki", "Inductor Angle Integral"],
+  ["kd", "Inductor Angle Derivative"],
+  ["max_output", "Inductor Angle Max Output"],
 ].map(([key, label]) => Inputs.number(key, {
   label,
-  value: motor_controller?.pid_parameters?.current_angle_gains?.[key],
+  value: motor_controller?.pid_parameters?.inductor_angle_gains?.[key],
 }));
 
 const torque_gains_input = [
@@ -1414,11 +1339,11 @@ let pid_parameters_buttons = !motor_controller ? html`<p>Motor controller not co
     })],
     ["Upload to Driver", wait_previous(async function(value){
       const pid_parameters = {
-        current_angle_gains: {
-          kp: current_angle_gains_input[0].value,
-          ki: current_angle_gains_input[1].value,
-          kd: current_angle_gains_input[2].value,
-          max_output: current_angle_gains_input[3].value,
+        inductor_angle_gains: {
+          kp: inductor_angle_gains_input[0].value,
+          ki: inductor_angle_gains_input[1].value,
+          kd: inductor_angle_gains_input[2].value,
+          max_output: inductor_angle_gains_input[3].value,
         },
         torque_gains: {
           kp: torque_gains_input[0].value,
@@ -1750,7 +1675,8 @@ const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` :
 ```js
 let unit_test_results = Mutable([]);
 
-async function command_unit_test(test_code, subtitle, expected){
+async function command_unit_test(test_code, subtitle){
+  const expected = unit_test_expected[test_code];
 
   const output = (await motor_controller.command_and_read(
     {command: test_code},
@@ -1789,10 +1715,10 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
       unit_test_results.value = [];
 
       const all_passed = [
-        await command_unit_test(command_codes.RUN_UNIT_TEST_ATAN, "Integer atan2", unit_test_atan_expected),
-        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN, "Funky atan2", unit_test_atan_expected),
-        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_2, "Funky atan2 part 2", unit_test_atan_expected),
-        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_3, "Funky atan2 part 3", unit_test_atan_expected),
+        await command_unit_test(command_codes.RUN_UNIT_TEST_ATAN, "Integer atan2"),
+        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN, "Funky atan2"),
+        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_2, "Funky atan2 part 2"),
+        await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_3, "Funky atan2 part 3"),
       ].reduce((acc, passed) => acc && passed, true);
 
       unit_test_results.value = [
@@ -1841,6 +1767,6 @@ import {
   default_pid_parameters,
 } from "./components/motor_constants.js";
 
-import {unit_test_atan_expected} from "./components/motor_unit_tests.js";
+import {unit_test_expected} from "./components/motor_unit_tests.js";
 
 ```

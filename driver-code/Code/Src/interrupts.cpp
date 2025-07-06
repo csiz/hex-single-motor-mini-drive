@@ -511,7 +511,12 @@ void adc_interrupt_handler(){
 
     // Advance the readout number.
     readout.readout_number = readout.readout_number + 1;
-    
+        
+    readout.state_flags = (
+        (emf_fix << emf_detected_bit_offset) | 
+        (emf_direction_is_negative << emf_direction_is_negative_bit_offset)
+    );
+
     readout.ref_readout = ref_readout;
 
     readout.u_readout = u_readout;
@@ -527,14 +532,7 @@ void adc_interrupt_handler(){
     readout.instant_vcc_voltage = instant_vcc_voltage;
     readout.vcc_voltage = vcc_voltage;
 
-    // The angle is 10 bits so we have 6 bits left to encode the hall state, angle validity, emf detection (when the rotor moves), and direction.
-    readout.angle_bytes = (
-        (observers.rotor_angle.value & angle_bit_mask) | 
-        (readout.angle_bytes & hall_state_bit_mask) | 
-        (readout.angle_bytes & angle_valid_bit_mask) | 
-        (emf_fix << emf_detected_bit_offset) | 
-        (emf_direction_is_negative << emf_direction_is_negative_bit_offset)
-    );
+    readout.angle = observers.rotor_angle.value;
     readout.angle_variance = observers.rotor_angle.value_variance;
     readout.angle_error = observers.rotor_angle.error;
 

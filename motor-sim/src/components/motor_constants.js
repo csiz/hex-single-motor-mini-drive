@@ -46,7 +46,6 @@ export function angle_units_to_degrees(angle){
   return normalize_degrees(unbounded_angle_units_to_degrees(angle));
 }
 
-export const variance_divider = 1;
 
 export const speed_fixed_point = 32;
 export const speed_variance_fixed_point = 1024;
@@ -62,11 +61,11 @@ export function square(x){
 }
 
 export function variance_units_to_degrees_stdev(variance){
-  return unbounded_angle_units_to_degrees(Math.sqrt(variance * variance_divider));
+  return unbounded_angle_units_to_degrees(Math.sqrt(variance));
 }
 
 export function degrees_stdev_to_variance_units(stdev){
-  return Math.round(square(unrounded_degrees_to_angle_units(stdev)) / variance_divider);
+  return Math.round(square(unrounded_degrees_to_angle_units(stdev)));
 }
 
 export function speed_units_to_degrees_per_millisecond(speed){
@@ -74,7 +73,7 @@ export function speed_units_to_degrees_per_millisecond(speed){
 }
 
 export function speed_variance_to_degrees_per_millisecond_stdev(variance){
-  return unbounded_angle_units_to_degrees(Math.sqrt(variance / speed_variance_fixed_point * variance_divider)) * cycles_per_millisecond;
+  return unbounded_angle_units_to_degrees(Math.sqrt(variance / speed_variance_fixed_point)) * cycles_per_millisecond;
 }
 
 export function degrees_per_millisecond_to_speed_units(speed){
@@ -82,7 +81,7 @@ export function degrees_per_millisecond_to_speed_units(speed){
 }
 
 export function degrees_per_millisecond_stdev_to_speed_variance(stdev){
-  return Math.round(square(unrounded_degrees_to_angle_units(stdev * millis_per_cycle)) * speed_variance_fixed_point / variance_divider);
+  return Math.round(square(unrounded_degrees_to_angle_units(stdev * millis_per_cycle)) * speed_variance_fixed_point);
 }
 
 export function acceleration_units_to_degrees_per_millisecond2(acceleration){
@@ -91,7 +90,7 @@ export function acceleration_units_to_degrees_per_millisecond2(acceleration){
 
 export function acceleration_div_2_variance_to_degrees_per_millisecond2_stdev(variance){
   return (
-    unbounded_angle_units_to_degrees(2 * Math.sqrt(variance / acceleration_variance_fixed_point / speed_variance_fixed_point * variance_divider)) * 
+    unbounded_angle_units_to_degrees(2 * Math.sqrt(variance / acceleration_variance_fixed_point / speed_variance_fixed_point)) * 
     square(cycles_per_millisecond)
   );
 }
@@ -103,7 +102,7 @@ export function degrees_per_millisecond2_to_acceleration_units(acceleration){
 export function degrees_per_millisecond2_stdev_to_acceleration_div_2_variance(stdev){
   return Math.round(
     square(unrounded_degrees_to_angle_units(stdev / 2 * square(millis_per_cycle))) * 
-    acceleration_variance_fixed_point * speed_variance_fixed_point / variance_divider
+    acceleration_variance_fixed_point * speed_variance_fixed_point
   );
 }
 
@@ -111,11 +110,9 @@ export const minimum_acceleration = acceleration_units_to_degrees_per_millisecon
 
 // Bit handling constants
 // ----------------------
-export const hall_state_bit_offset = 13;
-export const angle_valid_bit_offset = 12;
+
 export const emf_detected_bit_offset = 11;
 export const emf_direction_is_negative_bit_offset = 10;
-export const angle_bit_mask = 0x3FF;
 
 // Motor control constants
 // -----------------------

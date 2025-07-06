@@ -15,6 +15,8 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
     offset += 4;
     write_uint16(buffer + offset, readout.readout_number);
     offset += 2;
+    write_uint16(buffer + offset, readout.state_flags);
+    offset += 2;
     write_int16(buffer + offset, readout.u_readout);
     offset += 2;
     write_int16(buffer + offset, readout.v_readout);
@@ -29,10 +31,7 @@ void write_readout(uint8_t * buffer, Readout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.w_readout_diff);
     offset += 2;
-
-    write_int16(buffer + offset, readout.position);
-    offset += 2;
-    write_uint16(buffer + offset, readout.angle_bytes);
+    write_uint16(buffer + offset, readout.angle);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed);
     offset += 2;

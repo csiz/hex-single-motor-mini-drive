@@ -1,7 +1,7 @@
 import {
   millis_per_cycle, pwm_base, readout_base,
   current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage,
-  angle_units_to_degrees, degrees_to_angle_units, current_calibration_base, unbounded_angle_units_to_degrees,
+  angle_units_to_degrees, degrees_to_angle_units, current_calibration_base,
   speed_units_to_degrees_per_millisecond, 
   degrees_per_millisecond_to_speed_units,
   acceleration_units_to_degrees_per_millisecond2, 
@@ -14,11 +14,8 @@ import {
   acceleration_div_2_variance_to_degrees_per_millisecond2_stdev,
   degrees_per_millisecond2_stdev_to_acceleration_div_2_variance,
   phase_resistance, phase_inductance,
-  hall_state_bit_offset,
-  angle_valid_bit_offset,
   emf_detected_bit_offset,
   emf_direction_is_negative_bit_offset,
-  angle_bit_mask,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
@@ -107,10 +104,9 @@ function process_readout_diff(readout, previous_readout){
   const {
     time,
     hall_sector, 
-    angle, 
-    current_angle_offset,
-    emf_voltage_angle,
-    emf_voltage_magnitude, 
+    inductor_angle_offset,
+    web_emf_voltage_angle,
+    web_emf_voltage_magnitude, 
     web_emf_power,
     web_total_power,
     emf_detected,
@@ -119,17 +115,11 @@ function process_readout_diff(readout, previous_readout){
 
   const {
     time: prev_time,
-    emf_detected: prev_emf_detected,
     hall_sector: prev_hall_sector, 
-    emf_voltage_angle: prev_emf_voltage_angle,
-    angular_speed_from_emf_avg: prev_angular_speed_from_emf_avg,
-    angular_speed_from_emf_stdev: prev_angular_speed_from_emf_stdev,
-    emf_voltage_magnitude_avg: prev_emf_voltage_magnitude_avg,
-    emf_voltage_magnitude_stdev: prev_emf_voltage_magnitude_stdev,
-    angle_diff_to_emf_avg: prev_angle_diff_to_emf_avg,
-    angle_diff_to_emf_stdev: prev_angle_diff_to_emf_stdev,
-    current_angle_offset_avg: prev_current_angle_offset_avg,
-    current_angle_offset_stdev: prev_current_angle_offset_stdev,
+    web_emf_voltage_magnitude_avg: prev_web_emf_voltage_magnitude_avg,
+    web_emf_voltage_magnitude_stdev: prev_web_emf_voltage_magnitude_stdev,
+    inductor_angle_offset_avg: prev_inductor_angle_offset_avg,
+    inductor_angle_offset_stdev: prev_inductor_angle_offset_stdev,
     web_emf_power_avg: prev_web_emf_power_avg,
     web_emf_power_stdev: prev_web_emf_power_stdev,
     web_total_power_avg: prev_web_total_power_avg,
@@ -142,22 +132,11 @@ function process_readout_diff(readout, previous_readout){
   const exp_stats = exponential_stats(dt, 0.350);
 
 
-  const angular_speed_from_emf = prev_emf_detected ? normalize_degrees(emf_voltage_angle - prev_emf_voltage_angle) / dt : 0;
-
-  const {average: angular_speed_from_emf_avg, stdev: angular_speed_from_emf_stdev} = exp_stats(
-    angular_speed_from_emf, 
+  const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
+    web_emf_voltage_magnitude,
     {
-      average: prev_angular_speed_from_emf_avg, 
-      stdev: prev_angular_speed_from_emf_stdev,
-    },
-  );
-  
-
-  const {average: emf_voltage_magnitude_avg, stdev: emf_voltage_magnitude_stdev} = exp_stats(
-    emf_voltage_magnitude,
-    {
-      average: prev_emf_voltage_magnitude_avg,
-      stdev: prev_emf_voltage_magnitude_stdev,
+      average: prev_web_emf_voltage_magnitude_avg,
+      stdev: prev_web_emf_voltage_magnitude_stdev,
     },
   );
 
@@ -165,24 +144,14 @@ function process_readout_diff(readout, previous_readout){
 
   const direction = emf_detected ? (emf_direction_negative ? -1 : +1) : 0;
 
-  const angle_from_emf = normalize_degrees(emf_voltage_angle + (direction * 90));
+  const angle_from_emf = normalize_degrees(web_emf_voltage_angle + (direction * 90));
 
-  const angle_diff_to_emf = normalize_degrees(angle - angle_from_emf);
 
-  const {average: angle_diff_to_emf_avg, stdev: angle_diff_to_emf_stdev} = exp_stats(
-    angle_diff_to_emf,
+  const {average: inductor_angle_offset_avg, stdev: inductor_angle_offset_stdev} = exp_stats(
+    inductor_angle_offset, 
     {
-      average: normalize_degrees(prev_angle_diff_to_emf_avg),
-      stdev: prev_angle_diff_to_emf_stdev,
-    },
-  );
-
-
-  const {average: current_angle_offset_avg, stdev: current_angle_offset_stdev} = exp_stats(
-    current_angle_offset, 
-    {
-      average: normalize_degrees(prev_current_angle_offset_avg),
-      stdev: prev_current_angle_offset_stdev,
+      average: normalize_degrees(prev_inductor_angle_offset_avg),
+      stdev: prev_inductor_angle_offset_stdev,
     },
   );
 
@@ -205,13 +174,11 @@ function process_readout_diff(readout, previous_readout){
 
   return {
     ...readout,
-    current_angle_offset_avg, current_angle_offset_stdev,
-    emf_voltage_magnitude_avg, emf_voltage_magnitude_stdev,
+    inductor_angle_offset_avg, inductor_angle_offset_stdev,
+    web_emf_voltage_magnitude_avg, web_emf_voltage_magnitude_stdev,
     is_hall_transition,
     direction,
     angle_from_emf,
-    angular_speed_from_emf, angular_speed_from_emf_avg, angular_speed_from_emf_stdev,
-    angle_diff_to_emf, angle_diff_to_emf_avg, angle_diff_to_emf_stdev,
     web_emf_power_avg, web_emf_power_stdev,
     web_total_power_avg, web_total_power_stdev,
   };
@@ -229,6 +196,9 @@ function parse_readout(data_view, previous_readout){
   // Get the readout number, a counter that increments with each readout & PWM cycle.
   const readout_number = data_view.getUint16(offset);
   offset += 2;
+  const state_flags = data_view.getUint16(offset);
+  offset += 2;
+
   // Get the raw readout values.
   const u_readout = current_conversion * data_view.getInt16(offset);
   offset += 2;
@@ -236,7 +206,7 @@ function parse_readout(data_view, previous_readout){
   offset += 2;
   const w_readout = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const ref_readout = current_conversion * (data_view.getUint16(offset) - expected_ref_readout);
+  const ref_readout = current_conversion * (data_view.getInt16(offset) - expected_ref_readout);
   offset += 2;
   const u_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
   offset += 2;
@@ -245,16 +215,17 @@ function parse_readout(data_view, previous_readout){
   const w_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
   offset += 2;
 
-  // Get motor angle and hall sensor data.
-  const position = data_view.getInt16(offset);
+  // Get electric angle data. Angle 0 means the rotor North is aligned when holding positive current on the U phase.
+  const angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const angle_bytes = data_view.getUint16(offset);
+  const angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  offset += 2;
+  const instant_vcc_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
 
-  const angular_speed_raw = data_view.getInt16(offset);
-  offset += 2;
-  const instant_vcc_voltage = calculate_voltage(data_view.getUint16(offset));
-  offset += 2;
+
+  const emf_detected = (state_flags >> emf_detected_bit_offset) & 0b1;
+  const emf_direction_negative = (state_flags >> emf_direction_is_negative_bit_offset) & 0b1;
 
 
   // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
@@ -268,25 +239,6 @@ function parse_readout(data_view, previous_readout){
   const v_drive_voltage = (v_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
   const w_drive_voltage = (w_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
 
-  // The first 3 bits are the hall sensor state.
-  const hall_u = (angle_bytes >> hall_state_bit_offset) & 0b001;
-  const hall_v = (angle_bytes >> hall_state_bit_offset) & 0b010;
-  const hall_w = (angle_bytes >> hall_state_bit_offset) & 0b100;
-
-  const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
-
-  // The next bit is the motor angle valid flag.
-  const angle_valid = (angle_bytes >> angle_valid_bit_offset) & 0b1;
-
-  const emf_detected = (angle_bytes >> emf_detected_bit_offset) & 0b1;
-
-  const emf_direction_negative = (angle_bytes >> emf_direction_is_negative_bit_offset) & 0b1;
-
-  // The last 10 bits are the motor angle. Representing range from 0 to 360 degrees,
-  // where 0 means the rotor is aligned by holding positive current on the U phase.
-  const angle_raw = angle_bytes & angle_bit_mask;
-  const angle = angle_units_to_degrees(angle_raw);
-
 
   const scaled_u_current = u_readout * this.current_calibration.u_factor;
   const scaled_v_current = v_readout * this.current_calibration.v_factor;
@@ -298,17 +250,11 @@ function parse_readout(data_view, previous_readout){
   const w_current = scaled_w_current - avg_current;
 
   const [web_alpha_current, web_beta_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(angle));
-  const current_magnitude = Math.sqrt(web_alpha_current * web_alpha_current + web_beta_current * web_beta_current);
+  
+  const inductor_angle_offset = radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current));
+  const web_inductor_angle = normalize_degrees(angle + inductor_angle_offset);
+  const web_current_magnitude = Math.sqrt(web_alpha_current * web_alpha_current + web_beta_current * web_beta_current);
 
-  const current_angle_offset = radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current));
-  const current_angle = normalize_degrees(angle + current_angle_offset);
-
-
-  // Approximate the angle for the 6 sectors of the hall sensor.
-  const ε = 2;
-  const hall_u_as_angle = hall_u ? hall_v ? + 60 - ε : hall_w ? - 60 + ε :    0 : null;
-  const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
-  const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
   // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
   const readout_diff = !previous_readout ? 0 : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
@@ -340,8 +286,8 @@ function parse_readout(data_view, previous_readout){
   const [web_alpha_emf_voltage, web_beta_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(angle));
 
   const emf_voltage_angle_offset = radians_to_degrees(Math.atan2(web_beta_emf_voltage, web_alpha_emf_voltage));
-  const emf_voltage_angle = normalize_degrees(angle + emf_voltage_angle_offset);
-  const emf_voltage_magnitude = Math.sqrt(web_alpha_emf_voltage * web_alpha_emf_voltage + web_beta_emf_voltage * web_beta_emf_voltage);
+  const web_emf_voltage_angle = normalize_degrees(angle + emf_voltage_angle_offset);
+  const web_emf_voltage_magnitude = Math.sqrt(web_alpha_emf_voltage * web_alpha_emf_voltage + web_beta_emf_voltage * web_beta_emf_voltage);
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
   const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
@@ -352,33 +298,31 @@ function parse_readout(data_view, previous_readout){
 
   const readout = {
     readout_number,
-    readout_index, time,
+    readout_index, 
+    time,
     u_readout, v_readout, w_readout,
     u_readout_diff, v_readout_diff, w_readout_diff,
     ref_readout,
     u_current, v_current, w_current, avg_current,
-    web_alpha_current, web_beta_current, current_magnitude,
-    current_angle, current_angle_offset,
+    web_alpha_current, web_beta_current, 
+    web_current_magnitude,
+    web_inductor_angle, 
+    inductor_angle_offset,
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,
-    position,
-    hall_u, hall_v, hall_w, hall_sector,
-    hall_u_as_angle, hall_v_as_angle, hall_w_as_angle,
-    angle_valid, 
-    angle_raw,
     angle,
-    angular_speed_raw,
-    angular_speed: speed_units_to_degrees_per_millisecond(angular_speed_raw),
+    angular_speed,
     emf_detected,
     emf_direction_negative,
     instant_vcc_voltage,
-    current_angle_offset,
-    web_alpha_emf_voltage, web_beta_emf_voltage, emf_voltage_magnitude,
-    emf_voltage_angle, emf_voltage_angle_offset,
+    web_alpha_emf_voltage, web_beta_emf_voltage, 
+    web_emf_voltage_magnitude,
+    web_emf_voltage_angle, 
+    emf_voltage_angle_offset,
     web_total_power,
     web_emf_power,
     web_resistive_power,
@@ -408,9 +352,9 @@ function parse_full_readout(data_view, previous_readout){
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
-  const angle_stdev_raw = Math.sqrt(data_view.getInt16(offset));
+  const angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const angular_speed_stdev_raw = Math.sqrt(data_view.getInt16(offset));
+  const angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
 
   const alpha_current = current_conversion * data_view.getInt16(offset);
@@ -432,29 +376,29 @@ function parse_full_readout(data_view, previous_readout){
   const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
 
-  const angle_error = data_view.getInt16(offset);
+  const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const angle_error_stdev = Math.sqrt(data_view.getInt16(offset));
+  const angle_error_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const angular_speed_error = data_view.getInt16(offset);
+  const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const angular_speed_error_stdev = Math.sqrt(data_view.getInt16(offset));
+  const angular_speed_error_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const inductor_angle_raw = data_view.getInt16(offset);
+  const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angle_stdev_raw = Math.sqrt(data_view.getInt16(offset));
+  const inductor_angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const inductor_angle_error = data_view.getInt16(offset);
+  const inductor_angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angle_error_stdev = Math.sqrt(data_view.getInt16(offset));
+  const inductor_angle_error_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const inductor_angular_speed_raw = data_view.getInt16(offset);
+  const inductor_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angular_speed_stdev_raw = Math.sqrt(data_view.getInt16(offset));
+  const inductor_angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const inductor_angular_speed_error = data_view.getInt16(offset);
+  const inductor_angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angular_speed_error_stdev = Math.sqrt(data_view.getInt16(offset));
+  const inductor_angular_speed_error_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   
 
@@ -470,12 +414,8 @@ function parse_full_readout(data_view, previous_readout){
     cycle_start_tick,
     cycle_end_tick,
     
-    angle_stdev_raw,
-    angle_stdev: angle_units_to_degrees(angle_stdev_raw),
-    angle_stdev_raw,
-    angle_stdev: angle_units_to_degrees(angle_stdev_raw),
-    angular_speed_stdev_raw,
-    angular_speed_stdev: speed_units_to_degrees_per_millisecond(angular_speed_stdev_raw),
+    angle_stdev,
+    angular_speed_stdev,
 
     alpha_current,
     beta_current,
@@ -493,17 +433,13 @@ function parse_full_readout(data_view, previous_readout){
     angular_speed_error,
     angular_speed_error_stdev,
 
-    inductor_angle_raw,
-    inductor_angle: angle_units_to_degrees(inductor_angle_raw),
-    inductor_angle_stdev_raw,
-    inductor_angle_stdev: variance_units_to_degrees_stdev(inductor_angle_stdev_raw),
+    inductor_angle,
+    inductor_angle_stdev,
     inductor_angle_error,
     inductor_angle_error_stdev,
 
-    inductor_angular_speed_raw,
-    inductor_angular_speed: speed_units_to_degrees_per_millisecond(inductor_angular_speed_raw),
-    inductor_angular_speed_stdev_raw,
-    inductor_angular_speed_stdev: speed_units_to_degrees_per_millisecond(inductor_angular_speed_stdev_raw),
+    inductor_angular_speed,
+    inductor_angular_speed_stdev,
     inductor_angular_speed_error,
     inductor_angular_speed_error_stdev,
   };
@@ -584,7 +520,7 @@ const pid_parameters_size = 42;
 function parse_pid_parameters(data_view) {
   let offset = header_size;
 
-  const current_angle_gains = {
+  const inductor_angle_gains = {
     kp: data_view.getInt16(offset),
     ki: data_view.getInt16(offset + 2),
     kd: data_view.getInt16(offset + 4),
@@ -625,7 +561,7 @@ function parse_pid_parameters(data_view) {
   offset += 8;
 
   return {
-    current_angle_gains,
+    inductor_angle_gains,
     torque_gains,
     battery_power_gains,
     angular_speed_gains,
@@ -754,7 +690,7 @@ function serialise_set_position_calibration(position_calibration) {
 }
 
 function serialise_set_pid_parameters(pid_parameters) {
-  const { current_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains } = pid_parameters;
+  const { inductor_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains } = pid_parameters;
 
   let buffer = new Uint8Array(pid_parameters_size);
 
@@ -765,7 +701,7 @@ function serialise_set_pid_parameters(pid_parameters) {
   offset += 2;
 
   // Serialise each set of gains.
-  for (const gains of [current_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains]) {
+  for (const gains of [inductor_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains]) {
     view.setInt16(offset, gains.kp);
     offset += 2;
     view.setInt16(offset, gains.ki);
