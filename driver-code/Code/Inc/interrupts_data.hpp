@@ -40,9 +40,6 @@ void set_motor_command(DriverState const& state, DriverParameters const& paramet
 // Position tracking
 // -----------------
 
-// Position calibration data. These are the trigger angles for each hall sensor output.
-extern PositionCalibration position_calibration;
-
 // Current calibration factors.
 extern CurrentCalibration current_calibration;
 

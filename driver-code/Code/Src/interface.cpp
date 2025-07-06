@@ -136,43 +136,6 @@ void write_current_calibration(uint8_t * data, CurrentCalibration const & factor
     if (offset != current_calibration_size) error();
 }
 
-
-void write_position_calibration(uint8_t * buffer, PositionCalibration const & position_calibration) {
-    size_t offset = 0;
-    write_uint16(buffer + offset, TRIGGER_ANGLES);
-    offset += 2;
-
-    for (int i = 0; i < 6; i++){
-        write_uint16(buffer + offset, position_calibration.sector_transition_angles[i][0]);
-        offset += 2;
-        write_uint16(buffer + offset, position_calibration.sector_transition_angles[i][1]);
-        offset += 2;
-    }
-
-    for (int i = 0; i < 6; i++){
-        write_uint16(buffer + offset, position_calibration.sector_transition_variances[i][0]);
-        offset += 2;
-        write_uint16(buffer + offset, position_calibration.sector_transition_variances[i][1]);
-        offset += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        write_uint16(buffer + offset, position_calibration.sector_center_angles[i]);
-        offset += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        write_uint16(buffer + offset, position_calibration.sector_center_variances[i]);
-        offset += 2;
-    }
-
-    write_uint16(buffer + offset, position_calibration.initial_angular_speed_variance);
-    offset += 2;
-    write_uint16(buffer + offset, position_calibration.angular_acceleration_div_2_variance);
-    offset += 2;
-
-    // Check if we wrote the correct number of bytes.
-    if (offset != position_calibration_size) error();
-}
-
 void write_pid_parameters(uint8_t * buffer, PIDParameters const & parameters) {
     size_t offset = 0;
 
@@ -293,7 +256,6 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_DRIVE_TORQUE:
         case SET_STATE_DRIVE_BATTERY_POWER:
         case GET_CURRENT_FACTORS:
-        case GET_TRIGGER_ANGLES:
         case GET_PID_PARAMETERS:
         case GET_OBSERVER_PARAMETERS:
         case SAVE_SETTINGS_TO_FLASH:
@@ -305,8 +267,6 @@ static inline int get_message_size(uint16_t code) {
         
         case SET_CURRENT_FACTORS:
             return current_calibration_size;
-        case SET_TRIGGER_ANGLES:
-            return position_calibration_size;
         case SET_PID_PARAMETERS:
             return pid_parameters_size;
         case SET_OBSERVER_PARAMETERS:
@@ -318,8 +278,6 @@ static inline int get_message_size(uint16_t code) {
             return full_readout_size;
         case CURRENT_FACTORS:
             return current_calibration_size;
-        case TRIGGER_ANGLES:
-            return position_calibration_size;
         case PID_PARAMETERS:
             return pid_parameters_size;
         case OBSERVER_PARAMETERS:
@@ -405,46 +363,6 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
     if (offset != current_calibration_size) error();
 
     return current_calibration;
-}
-
-
-PositionCalibration parse_position_calibration(uint8_t const * data, size_t size) {
-    if(size < position_calibration_size) error();
-
-    size_t offset = header_size;
-
-    PositionCalibration position_calibration = {};
-
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_transition_angles[i][0] = read_uint16(data + offset);
-        offset += 2;
-        position_calibration.sector_transition_angles[i][1] = read_uint16(data + offset);
-        offset += 2;
-    }
-
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_transition_variances[i][0] = read_uint16(data + offset);
-        offset += 2;
-        position_calibration.sector_transition_variances[i][1] = read_uint16(data + offset);
-        offset += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_center_angles[i] = read_uint16(data + offset);
-        offset += 2;
-    }
-    for (int i = 0; i < 6; i++){
-        position_calibration.sector_center_variances[i] = read_uint16(data + offset);
-        offset += 2;
-    }
-
-    position_calibration.initial_angular_speed_variance = read_uint16(data + offset);
-    offset += 2;
-    position_calibration.angular_acceleration_div_2_variance = read_uint16(data + offset);
-    offset += 2;
-
-    if (offset != position_calibration_size) error();
-
-    return position_calibration;
 }
 
 

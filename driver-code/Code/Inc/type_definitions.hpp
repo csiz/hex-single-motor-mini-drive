@@ -191,36 +191,6 @@ struct CurrentCalibration {
     int16_t inductance_factor;
 };
 
-using TriggerAngles = std::array<std::array<uint16_t, 2>, 6>;
-using TriggerAngleVariances = std::array<std::array<uint16_t, 2>, 6>;
-using CenterAngles = std::array<uint16_t, 6>;
-using CenterVariances = std::array<uint16_t, 6>;
-
-struct PositionCalibration {
-    TriggerAngles sector_transition_angles;
-    TriggerAngleVariances sector_transition_variances;
-    CenterAngles sector_center_angles;
-    CenterVariances sector_center_variances;
-    uint16_t initial_angular_speed_variance;
-    uint16_t angular_acceleration_div_2_variance;
-};
-
-// Track angle, angular speed and their uncertainties as gaussian distributions.
-struct PositionStatistics {
-    // Estimated angle.
-    int angle;
-    // Variance of the angle estimate.
-    int angle_variance;
-    // Estimated angular speed.
-    int angular_speed;
-    // Variance of the angular speed estimate.
-    int angular_speed_variance;
-};
-
-// Zeroes position statistics; also means infinite variance.
-const PositionStatistics null_position_statistics = {0};
-
-
 struct PIDGains {
     int16_t kp; // Proportional gain.
     int16_t ki; // Integral gain.

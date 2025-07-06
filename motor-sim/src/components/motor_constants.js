@@ -30,83 +30,39 @@ export const millis_per_cycle = 1.0/cycles_per_millisecond;
 
 export const angle_base = 1024;
 
+// Convert degrees to angle units.
 export function degrees_to_angle_units(degrees){
-  // Convert degrees to angle units.
   return Math.round(positive_degrees(degrees) * angle_base / 360.0);
 }
 
-export function unrounded_degrees_to_angle_units(degrees){
-  return degrees * angle_base / 360.0;
-}
-
-export function unbounded_angle_units_to_degrees(angle){
-  return angle * 360.0 / angle_base
-}
 export function angle_units_to_degrees(angle){
   return normalize_degrees(unbounded_angle_units_to_degrees(angle));
 }
 
+export function unbounded_degrees_to_angle_units(degrees){
+  return degrees * angle_base / 360.0;
+}
+
+export function unbounded_angle_units_to_degrees(angle){
+  return angle * 360.0 / angle_base;
+}
+
+
+// Speed units
+// -----------
 
 export const speed_fixed_point = 32;
 export const speed_variance_fixed_point = 1024;
 
-export const acceleration_fixed_point = 256;
-export const acceleration_variance_fixed_point = 256;
-
-// Speed and acceleration units
-// ----------------------------
-
-export function square(x){
-  return x * x;
-}
-
-export function variance_units_to_degrees_stdev(variance){
-  return unbounded_angle_units_to_degrees(Math.sqrt(variance));
-}
-
-export function degrees_stdev_to_variance_units(stdev){
-  return Math.round(square(unrounded_degrees_to_angle_units(stdev)));
-}
 
 export function speed_units_to_degrees_per_millisecond(speed){
   return unbounded_angle_units_to_degrees(speed / speed_fixed_point) * cycles_per_millisecond;
 }
 
-export function speed_variance_to_degrees_per_millisecond_stdev(variance){
-  return unbounded_angle_units_to_degrees(Math.sqrt(variance / speed_variance_fixed_point)) * cycles_per_millisecond;
-}
-
 export function degrees_per_millisecond_to_speed_units(speed){
-  return degrees_to_angle_units(speed * speed_fixed_point * millis_per_cycle);
+  return unbounded_degrees_to_angle_units(speed * speed_fixed_point * millis_per_cycle);
 }
 
-export function degrees_per_millisecond_stdev_to_speed_variance(stdev){
-  return Math.round(square(unrounded_degrees_to_angle_units(stdev * millis_per_cycle)) * speed_variance_fixed_point);
-}
-
-export function acceleration_units_to_degrees_per_millisecond2(acceleration){
-  return unbounded_angle_units_to_degrees(acceleration / acceleration_fixed_point / speed_fixed_point) * square(cycles_per_millisecond);
-}
-
-export function acceleration_div_2_variance_to_degrees_per_millisecond2_stdev(variance){
-  return (
-    unbounded_angle_units_to_degrees(2 * Math.sqrt(variance / acceleration_variance_fixed_point / speed_variance_fixed_point)) * 
-    square(cycles_per_millisecond)
-  );
-}
-
-export function degrees_per_millisecond2_to_acceleration_units(acceleration){
-  return degrees_to_angle_units(acceleration * square(millis_per_cycle)) * acceleration_fixed_point * speed_fixed_point;
-}
-
-export function degrees_per_millisecond2_stdev_to_acceleration_div_2_variance(stdev){
-  return Math.round(
-    square(unrounded_degrees_to_angle_units(stdev / 2 * square(millis_per_cycle))) * 
-    acceleration_variance_fixed_point * speed_variance_fixed_point
-  );
-}
-
-export const minimum_acceleration = acceleration_units_to_degrees_per_millisecond2(1);
 
 // Bit handling constants
 // ----------------------
@@ -166,32 +122,6 @@ export const default_current_calibration = {
   inductance_factor: 1.0,
 };
 
-
-const hall_hysterisis = 10;
-const transition_stdev = 10;
-
-export const default_position_calibration = {
-  sector_transition_degrees: [
-    [- 30 + hall_hysterisis / 2, + 30 - hall_hysterisis / 2],
-    [+ 30 + hall_hysterisis / 2, + 90 - hall_hysterisis / 2],
-    [+ 90 + hall_hysterisis / 2, +150 - hall_hysterisis / 2],
-    [+150 + hall_hysterisis / 2, -150 - hall_hysterisis / 2],
-    [-150 + hall_hysterisis / 2, - 90 - hall_hysterisis / 2],
-    [- 90 + hall_hysterisis / 2, - 30 - hall_hysterisis / 2],
-  ],
-  sector_transition_stdev: [
-    [transition_stdev, transition_stdev],
-    [transition_stdev, transition_stdev],
-    [transition_stdev, transition_stdev],
-    [transition_stdev, transition_stdev],
-    [transition_stdev, transition_stdev],
-    [transition_stdev, transition_stdev],
-  ],
-  sector_center_degrees: [0, 60, 120, 180, 240, 300].map(normalize_degrees),
-  sector_center_stdev: [30, 30, 30, 30, 30, 30],
-  initial_angular_speed_stdev: 15.0, // initial speed distribution degrees per ms
-  angular_acceleration_stdev: 5.0, // acceleration distribution up to (degrees per ms^2).
-}
 
 export const default_pid_parameters = {
   "current_angle_gains": {

@@ -503,6 +503,16 @@ void adc_interrupt_handler(){
 
     // const int instant_motor_constant = - valid_motor_constant * beta_emf_voltage * motor_constant_fixed_point / observers.rotor_position.angular_speed;
 
+    
+    // Calculate motor outputs
+    // -----------------------
+
+    // Update the motor controls using the readout data. Note that it also modifies the driver_state, driver_parameters, and pid_state.
+    active_motor_outputs = update_motor_control(pending_state, pending_parameters, readout, driver_state, driver_parameters, pid_state);
+
+    // Always reset the pending state to be ready for the next command.
+    pending_state = DriverState::NO_CHANGE;
+
 
     // Write the latest readout data
     // -----------------------------
@@ -556,15 +566,6 @@ void adc_interrupt_handler(){
     readout.inductor_angular_speed = observers.inductor_angular_speed.value;
     readout.inductor_angular_speed_variance = observers.inductor_angular_speed.value_variance;
     readout.inductor_angular_speed_error = observers.inductor_angular_speed.error;
-
-    // Calculate motor outputs and write control state
-    // -----------------------------------------------
-
-    // Update the motor controls using the readout data. Note that it also modifies the driver_state, driver_parameters, and pid_state.
-    active_motor_outputs = update_motor_control(pending_state, pending_parameters, readout, driver_state, driver_parameters, pid_state);
-
-    // Always reset the pending state to be ready for the next command.
-    pending_state = DriverState::NO_CHANGE;
 
 
     // Try to write the latest readout if there's space.

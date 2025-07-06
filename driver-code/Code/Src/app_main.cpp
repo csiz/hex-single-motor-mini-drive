@@ -47,7 +47,6 @@ uint16_t usb_readouts_to_send = 0;
 bool usb_wait_full_history = false;
 
 bool usb_reply_current_factors = false;
-bool usb_reply_trigger_angles = false;
 bool usb_reply_pid_parameters = false;
 bool usb_reply_observer_parameters = false;
 
@@ -412,11 +411,6 @@ bool handle_command(MessageBuffer const& buffer) {
             usb_reply_current_factors = true;
             return false;
 
-        case SET_TRIGGER_ANGLES:
-            position_calibration = parse_position_calibration(buffer.data, buffer.write_index);
-            usb_reply_trigger_angles = true;
-            return false;
-
         case SET_PID_PARAMETERS:
             pid_parameters = parse_pid_parameters(buffer.data, buffer.write_index);
             usb_reply_pid_parameters = true;
@@ -429,9 +423,6 @@ bool handle_command(MessageBuffer const& buffer) {
         case GET_CURRENT_FACTORS:
             usb_reply_current_factors = true;
             return false;
-        case GET_TRIGGER_ANGLES:
-            usb_reply_trigger_angles = true;
-            return false;
 
         case GET_PID_PARAMETERS:
             usb_reply_pid_parameters = true;
@@ -443,10 +434,9 @@ bool handle_command(MessageBuffer const& buffer) {
 
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
-                save_settings_to_flash(current_calibration, position_calibration, pid_parameters);
+                save_settings_to_flash(current_calibration, pid_parameters);
 
                 current_calibration = get_current_calibration();
-                position_calibration = get_position_calibration();
                 pid_parameters = get_pid_parameters();
                 observer_parameters = get_observer_parameters();
                 
@@ -457,7 +447,6 @@ bool handle_command(MessageBuffer const& buffer) {
 
         // We shouldn't receive these messages; the driver only sends them.
         case CURRENT_FACTORS:
-        case TRIGGER_ANGLES:
         case PID_PARAMETERS:
         case OBSERVER_PARAMETERS:
         case READOUT:
@@ -561,17 +550,6 @@ void usb_queue_response(FullReadout const& readout) {
         usb_queue_send(usb_response_buffer, current_calibration_size);
 
         usb_reply_current_factors = false;
-    }
-
-    // Send trigger angles if requested.
-    if (usb_reply_trigger_angles) {
-        if(not usb_check_queue(position_calibration_size)) return;
-        
-        // Send the trigger angles to the host.
-        write_position_calibration(usb_response_buffer, position_calibration);
-        usb_queue_send(usb_response_buffer, position_calibration_size);
-
-        usb_reply_trigger_angles = false;
     }
 
     // Queue the readout history to the send buffer.

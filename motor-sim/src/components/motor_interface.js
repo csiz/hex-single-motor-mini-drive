@@ -1,28 +1,23 @@
 import {
-  millis_per_cycle, pwm_base, readout_base,
-  current_conversion, expected_ref_readout, calculate_temperature, calculate_voltage,
-  angle_units_to_degrees, degrees_to_angle_units, current_calibration_base,
-  speed_units_to_degrees_per_millisecond, 
-  degrees_per_millisecond_to_speed_units,
-  acceleration_units_to_degrees_per_millisecond2, 
-  degrees_per_millisecond2_to_acceleration_units,
+  millis_per_cycle, 
+  pwm_base, 
+  readout_base,
+  current_conversion, 
+  expected_ref_readout, 
+  calculate_temperature, 
+  calculate_voltage,
+  current_calibration_base,
+  angle_units_to_degrees, 
+  speed_units_to_degrees_per_millisecond,
   convert_power_to_watts,
-  variance_units_to_degrees_stdev,
-  degrees_stdev_to_variance_units,
-  speed_variance_to_degrees_per_millisecond_stdev,
-  degrees_per_millisecond_stdev_to_speed_variance,
-  acceleration_div_2_variance_to_degrees_per_millisecond2_stdev,
-  degrees_per_millisecond2_stdev_to_acceleration_div_2_variance,
-  phase_resistance, phase_inductance,
+  phase_resistance, 
+  phase_inductance,
   emf_detected_bit_offset,
   emf_direction_is_negative_bit_offset,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
-import {square, dq0_transform, exponential_stats, sum_preserving_exponential_stats} from './math_utils.js';
-
-
-
+import {square, dq0_transform, exponential_stats} from './math_utils.js';
 
 export const header_size = 2; // 2 bytes
 
@@ -60,15 +55,14 @@ export const command_codes = {
   SET_STATE_DRIVE_TORQUE: 0x4031,
   SET_STATE_DRIVE_BATTERY_POWER: 0x4032,
 
-  SET_CURRENT_FACTORS: 0x4040,
-  SET_TRIGGER_ANGLES: 0x4041,
-  CURRENT_FACTORS: 0x4042,
-  TRIGGER_ANGLES: 0x4043,
-  GET_CURRENT_FACTORS: 0x4044,
-  GET_TRIGGER_ANGLES: 0x4045,
+  CURRENT_FACTORS: 0x4040,
+  GET_CURRENT_FACTORS: 0x4041,
+  SET_CURRENT_FACTORS: 0x4042,
+
   PID_PARAMETERS: 0x4046,
   GET_PID_PARAMETERS: 0x4047,
   SET_PID_PARAMETERS: 0x4048,
+
   OBSERVER_PARAMETERS: 0x4049,
   SET_OBSERVER_PARAMETERS: 0x404A,
   GET_OBSERVER_PARAMETERS: 0x404B,
@@ -80,20 +74,6 @@ export const command_codes = {
   RUN_UNIT_TEST_FUNKY_ATAN: 0x5042,
   RUN_UNIT_TEST_FUNKY_ATAN_PART_2: 0x5043,
   RUN_UNIT_TEST_FUNKY_ATAN_PART_3: 0x5044,
-}
-
-
-function get_hall_sector({hall_u, hall_v, hall_w}){
-  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
-  switch(hall_state){
-    case 0b001: return 0;
-    case 0b011: return 1;
-    case 0b010: return 2;
-    case 0b110: return 3;
-    case 0b100: return 4;
-    case 0b101: return 5;
-    default: return null;
-  }
 }
 
 
@@ -470,52 +450,6 @@ function parse_current_calibration(data_view){
 }
 
 
-const position_calibration_size = 78;
-function parse_position_calibration(data_view){
-  let offset = header_size;
-  const sector_transition_degrees = Array.from(Array(6), () => Array.from(Array(2), () => {
-    const value = data_view.getUint16(offset);
-    offset += 2;
-    return angle_units_to_degrees(value);
-  }));
-  
-  const sector_transition_stdev = Array.from(Array(6), () => Array.from(Array(2), () => {
-    // We receive the variance, not the stdev.
-    const value = data_view.getUint16(offset);
-    offset += 2;
-    return variance_units_to_degrees_stdev(value);
-  }));
-
-  const sector_center_degrees = Array.from(Array(6), () => {
-    const value = data_view.getUint16(offset);
-    offset += 2;
-    return angle_units_to_degrees(value);
-  });
-
-  const sector_center_stdev = Array.from(Array(6), () => {
-    // We receive the variance, not the stdev.
-    const value = data_view.getUint16(offset);
-    offset += 2;
-    return variance_units_to_degrees_stdev(value);
-  });
-
-  // We receive the variance, not the stdev.
-  const initial_angular_speed_stdev = speed_variance_to_degrees_per_millisecond_stdev(data_view.getUint16(offset));
-  offset += 2;
-  const angular_acceleration_stdev = acceleration_div_2_variance_to_degrees_per_millisecond2_stdev(data_view.getUint16(offset));
-  offset += 2;
-
-  return {
-    sector_transition_degrees,
-    sector_transition_stdev,
-    sector_center_degrees,
-    sector_center_stdev,
-    initial_angular_speed_stdev,
-    angular_acceleration_stdev,
-  };
-}
-
-
 const pid_parameters_size = 42;
 function parse_pid_parameters(data_view) {
   let offset = header_size;
@@ -641,53 +575,6 @@ function serialise_set_current_calibration(current_calibration) {
   return buffer;
 }
 
-function serialise_set_position_calibration(position_calibration) {
-  const {
-    sector_transition_degrees, sector_transition_stdev, sector_center_degrees, sector_center_stdev,
-    initial_angular_speed_stdev, angular_acceleration_stdev,
-  } = position_calibration;
-
-  let buffer = new Uint8Array(position_calibration_size);
-
-  let view = new DataView(buffer.buffer);
-
-  let offset = 0;
-  view.setUint16(offset, command_codes.SET_TRIGGER_ANGLES);
-  offset += 2;
-
-  for (let i = 0; i < 6; i++) {
-    for (let j = 0; j < 2; j++) {
-      view.setUint16(offset, degrees_to_angle_units(sector_transition_degrees[i][j]));
-      offset += 2;
-    }
-  }
-
-  for (let i = 0; i < 6; i++) {
-    for (let j = 0; j < 2; j++) {
-      // Send variance, not stdev.
-      view.setUint16(offset, degrees_stdev_to_variance_units(sector_transition_stdev[i][j]));
-      offset += 2;
-    }
-  }
-
-  for (let i = 0; i < 6; i++) {
-    view.setUint16(offset, degrees_to_angle_units(sector_center_degrees[i]));
-    offset += 2;
-  }
-
-  for (let i = 0; i < 6; i++) {
-    // Send variance, not stdev.
-    view.setUint16(offset, degrees_stdev_to_variance_units(sector_center_stdev[i]));
-    offset += 2;
-  }
-
-  view.setUint16(offset, degrees_per_millisecond_stdev_to_speed_variance(initial_angular_speed_stdev));
-  offset += 2;
-  view.setUint16(offset, degrees_per_millisecond2_stdev_to_acceleration_div_2_variance(angular_acceleration_stdev));
-  offset += 2;
-
-  return buffer;
-}
 
 function serialise_set_pid_parameters(pid_parameters) {
   const { inductor_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains } = pid_parameters;
@@ -748,7 +635,6 @@ function serialise_set_observer_parameters(observer_parameters) {
 
 export const serialiser_mapping = {
   [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_set_current_calibration},
-  [command_codes.SET_TRIGGER_ANGLES]: {serialise_func: serialise_set_position_calibration},
   [command_codes.SET_PID_PARAMETERS]: {serialise_func: serialise_set_pid_parameters},
   [command_codes.SET_OBSERVER_PARAMETERS]: {serialise_func: serialise_set_observer_parameters},
 };
@@ -757,7 +643,6 @@ export const parser_mapping = {
   [command_codes.READOUT]: {parse_func: parse_readout, message_size: readout_size},
   [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
   [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
-  [command_codes.TRIGGER_ANGLES]: {parse_func: parse_position_calibration, message_size: position_calibration_size},
   [command_codes.PID_PARAMETERS]: {parse_func: parse_pid_parameters, message_size: pid_parameters_size},
   [command_codes.OBSERVER_PARAMETERS]: {parse_func: parse_observer_parameters, message_size: observer_parameters_size},
   [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},

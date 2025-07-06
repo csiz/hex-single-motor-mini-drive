@@ -3,7 +3,7 @@ import {serial as serial_polyfill} from "web-serial-polyfill";
 import {wait} from "./async_utils.js";
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, command_codes, serialise_command, header_size} from "./motor_interface.js";
-import {default_current_calibration, default_position_calibration, default_pid_parameters, history_size} from "./motor_constants.js";
+import {default_current_calibration, default_pid_parameters, history_size} from "./motor_constants.js";
 
 export { command_codes };
 
@@ -93,7 +93,6 @@ export class MotorController {
     this.receive_rate_min_period = 0.050; // seconds
 
     this.current_calibration = default_current_calibration;
-    this.position_calibration = default_position_calibration;
     this.pid_parameters = default_pid_parameters;
     this.observer_parameters = {};
   }
@@ -366,19 +365,6 @@ export class MotorController {
     }
   }
 
-  async load_position_calibration(){
-    try {
-      const data = await this.command_and_read(
-        {command: command_codes.GET_TRIGGER_ANGLES}, 
-        {expected_code: command_codes.TRIGGER_ANGLES, expected_messages: 1},
-      );
-      if (data.length != 1) throw new Error("Invalid position calibration data");
-      this.position_calibration = data[0];
-    } catch (error) {
-      console.error("Error loading position calibration:", error);
-    }
-  }
-
   async load_pid_parameters(){
     try {
       const data = await this.command_and_read(
@@ -415,19 +401,6 @@ export class MotorController {
       this.current_calibration = data[0];
     } catch (error) {
       console.error("Error uploading current calibration:", error);
-    }
-  }
-
-  async upload_position_calibration(position_calibration){
-    try {
-      const data = await this.command_and_read(
-        {command: command_codes.SET_TRIGGER_ANGLES, additional_data: position_calibration}, 
-        {expected_code: command_codes.TRIGGER_ANGLES, expected_messages: 1},
-      );
-      if (data.length != 1) throw new Error("Invalid position calibration data");
-      this.position_calibration = data[0];
-    } catch (error) {
-      console.error("Error uploading position calibration:", error);
     }
   }
 

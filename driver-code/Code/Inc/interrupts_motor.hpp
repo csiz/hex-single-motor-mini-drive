@@ -15,7 +15,7 @@
 
 static inline MotorOutputs update_motor_6_sector(
     Drive6Sector const& sector_parameters,
-    FullReadout & readout
+    FullReadout const& readout
 ){
     // Read new data from the hall sensors.
     const uint8_t hall_state = read_hall_sensors_state();
@@ -50,7 +50,7 @@ static inline MotorOutputs update_motor_6_sector(
 
 static inline MotorOutputs update_motor_periodic(
     DrivePeriodic const& periodic_parameters,
-    FullReadout & readout,
+    FullReadout const& readout,
     PIDControlState & pid_state
 ){
     const int pwm_target = periodic_parameters.pwm_target;
@@ -74,7 +74,7 @@ static inline MotorOutputs update_motor_periodic(
 
 static inline MotorOutputs update_motor_smooth(
     DriveSmooth const& smooth_parameters,
-    FullReadout & readout,
+    FullReadout const& readout,
     PIDControlState & pid_state
 ){
     const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
@@ -130,7 +130,7 @@ static inline MotorOutputs update_motor_smooth(
 
 static inline MotorOutputs update_motor_torque(
     DriveTorque const& torque_parameters,
-    FullReadout & readout,
+    FullReadout const& readout,
     PIDControlState & pid_state
 ){
     // Calculate the target current in fixed point format.
@@ -160,7 +160,7 @@ static inline MotorOutputs update_motor_torque(
 
 static inline MotorOutputs update_motor_battery_power(
     DriveBatteryPower const& battery_power_parameters,
-    FullReadout & readout,
+    FullReadout const& readout,
     PIDControlState & pid_state
 ){
     const bool direction_is_negative = battery_power_parameters.power_target < 0;
@@ -209,7 +209,7 @@ static inline bool break_at_end_of_duration(
 static inline MotorOutputs update_motor_control(
     DriverState const pending_state,
     DriverParameters const& pending_parameters,
-    FullReadout & readout,
+    FullReadout const& readout,
     DriverState & driver_state,
     DriverParameters & driver_parameters,
     PIDControlState & pid_state

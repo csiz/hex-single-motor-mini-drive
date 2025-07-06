@@ -123,39 +123,6 @@ Current Calibration Procedures
 </div>
 
 
-Position Calibration Procedures
--------------------------------
-
-<div class="card tight">
-  <div>${position_calibration_buttons}</div>
-  <div>Number of calibration data sets: ${position_calibration.results.length}</div>
-</div>
-<div class="card tight">
-  <h3>Position Calibration Results</h3>
-  <div>
-    <p>Position calibration angles:</p>
-    <pre>${position_calibration_table}</pre>
-    <p>Active position calibration angles:</p>
-    <pre>${active_position_calibration_table}</pre>
-  </div>
-  <div>${position_calibration_result_to_display_input}</div>
-  <div>${position_calibration_pos_plot}</div>
-  <div>${position_calibration_pos_speed_plot}</div>
-  <div>${position_calibration_neg_plot}</div>
-  <div>${position_calibration_neg_speed_plot}</div>
-  <p>Angles where the hall sensors toggle states (hall sector transitions):</p>
-  <div>${position_calibration_transitions_table}</div>
-  <p>Mid points of the hall sensor sectors:</p>
-  <div>${position_calibration_centers_table}</div>
-  <h3>Position Calibration Statistics</h3>
-  <p>Hall sensor transitions when driving in the positive direction vs the negative direction:</p>
-  <div>${position_calibration_sensor_spans_table}</div>
-  <p>Hall sensor hysterisis (difference between the positive and negative transition) & actual locations (ideally they are 0, 120 -120 degrees):</p>
-  <div>${position_calibration_sensor_locations_table}</div>
-</div>
-
-
-
 Flash Data Storage
 ------------------
 
@@ -268,7 +235,6 @@ async function connect_motor_controller(){
     await Promise.all([
       new_controller.reading_loop(display_connection_stats),
       (async function(){
-        await new_controller.load_position_calibration();
         await new_controller.load_current_calibration();
         await new_controller.load_pid_parameters();
         await new_controller.load_observer_parameters();
@@ -1449,214 +1415,6 @@ let observer_parameters_buttons = !motor_controller ? html`<p>Motor controller n
 
 ```
 
-```js
-// Position Calibration
-// --------------------
-
-// Write out the position calibration results in copyable format.
-function print_position_calibration(position_calibration){
-  if (!position_calibration) return "null";
-  return `{\n  ${Object.entries(position_calibration).map(([key, value]) => `"${key}": ${JSON.stringify(value)}`).join(",\n  ")},\n}`;
-}
-
-function stringify_active_position_calibration() {
-  return `motor_controller.position_calibration = ${print_position_calibration(motor_controller?.position_calibration)}`;
-}
-
-const active_position_calibration_table =  Mutable(stringify_active_position_calibration());
-
-const default_position_calibration_result = {results: [], ...compute_position_calibration([])};
-
-const position_calibration_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
-  [
-    ["Start Position Calibration", wait_previous(async function(value){
-
-      for (let i = 0; i < 5; i++){
-        const results = [...value.results, await run_position_calibration(motor_controller)];
-        value = {results, ...compute_position_calibration(results)};
-      }
-
-      return value;
-    })],
-    ["Reset Results", wait_previous(async function(value){
-      return default_position_calibration_result;
-    })],
-    ["Use Locally", wait_previous(async function(value){
-      if (!value.position_calibration) return value;
-      motor_controller.position_calibration = value.position_calibration;
-      active_position_calibration_table.value = stringify_active_position_calibration();
-      return value;
-    })],
-    ["Use Default Locally", wait_previous(async function(value){
-      motor_controller.position_calibration = default_position_calibration;
-      active_position_calibration_table.value = stringify_active_position_calibration();
-      return value;
-    })],
-    ["Upload to Driver", wait_previous(async function(value){
-      const position_calibration = value.position_calibration ?? motor_controller.position_calibration;
-      await motor_controller.upload_position_calibration(position_calibration);
-      active_position_calibration_table.value = stringify_active_position_calibration();
-      return value;
-    })],
-    ["Reload from Driver", wait_previous(async function(value){
-      await motor_controller.load_position_calibration();
-      active_position_calibration_table.value = stringify_active_position_calibration();
-      return value;
-    })],
-  ],
-  {
-    label: "Collect position calibration data",
-    value: default_position_calibration_result,
-  },
-);
-
-d3.select(position_calibration_buttons).style("width", "100%");
-
-
-const position_calibration = !motor_controller ? default_position_calibration_result : Generators.input(position_calibration_buttons);
-
-```
-
-
-```js
-const position_calibration_result_to_display_input = Inputs.select(
-  d3.range(0, position_calibration.results.length),
-  {
-    value: position_calibration.results.length - 1,
-    label: "Select position calibration data set:",
-  },
-);
-const position_calibration_result_to_display = Generators.input(position_calibration_result_to_display_input);
-
-
-const position_calibration_transitions_table = Inputs.table(Object.values(position_calibration.transition_stats), {rows: 12+1});
-
-const position_calibration_centers_table = Inputs.table(Object.values(position_calibration.center_angles), {rows: 6+1});
-
-const position_calibration_sensor_spans_table = Inputs.table(Object.values(position_calibration.sensor_spans), {rows: 6+1});
-
-const position_calibration_sensor_locations_table = Inputs.table(Object.values(position_calibration.sensor_locations), {rows: 3+1});
-
-
-
-const position_calibration_table = `position_calibration = ${print_position_calibration(position_calibration?.position_calibration)}`;
-```
-
-
-```js
-
-const position_calibration_selected_result = position_calibration.results[position_calibration_result_to_display];
-
-const position_calibration_pos_plot = plot_lines({
-  data: position_calibration_selected_result?.drive_positive,
-  subtitle: "Electric position | drive positive then break",
-  description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
-  width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
-  y_domain: [-180, 180],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Electric position (degrees)",
-  channels: [
-    {
-      y: "angle", label: "Angle", color: colors.angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
-    },
-    {
-      y: "web_angle", label: "Angle (computed online)", color: colors.web_angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
-    },
-    {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
-    {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
-    {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
-    {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
-  ],
-  curve: d3.curveStep,
-});
-
-
-const position_calibration_pos_speed_plot = plot_lines({
-  data: position_calibration_selected_result?.drive_positive,
-  subtitle: "Rotor Speed | drive positive then break",
-  description: "Angular speed of the rotor in degrees per millisecond.",
-  width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Angular Speed (degrees/ms)",
-  channels: [
-    {
-      y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
-      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
-    },
-    {
-      y: "web_angular_speed", label: "Angular Speed (computed online)", color: colors.web_angular_speed,
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
-    },
-  ],
-  curve: d3.curveStep,
-});
-
-
-const position_calibration_neg_plot = plot_lines({
-  data: position_calibration_selected_result?.drive_negative,
-  subtitle: "Electric position | drive negative then break",
-  description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
-  width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
-  y_domain: [-180, 180],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Electric position (degrees)",
-  channels: [
-    {
-      y: "angle", label: "Angle", color: colors.angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
-    },
-    {
-      y: "web_angle", label: "Angle (computed online)", color: colors.web_angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_angle_stdev}),
-    },
-    {y: "angle_from_emf", label: "Angle from EMF", color: colors.angle_from_emf},
-    {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
-    {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
-    {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
-  ],
-  curve: d3.curveStep,
-});
-
-const position_calibration_neg_speed_plot = plot_lines({
-  data: position_calibration_selected_result?.drive_negative,
-  subtitle: "Rotor Speed | drive negative then break",
-  description: "Angular speed of the rotor in degrees per millisecond.",
-  width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Angular Speed (degrees/ms)",
-  channels: [
-    {
-      y: "angular_speed", label: "Angular Speed", color: colors.angular_speed,
-      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
-    },
-    {
-      y: "web_angular_speed", label: "Angular Speed (computed online)", color: colors.web_angular_speed,
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_angular_speed_stdev}),
-    },
-  ],
-  curve: d3.curveStep,
-});
-
-autosave_inputs({
-  position_calibration_pos_plot,
-  position_calibration_pos_speed_plot,
-  position_calibration_neg_plot,
-  position_calibration_neg_speed_plot,
-});
-
-
-```
-
 
 ```js
 const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
@@ -1759,11 +1517,10 @@ import {command_codes, connect_usb_motor_controller, MotorController} from "./co
 
 import {run_current_calibration, compute_current_calibration} from "./components/motor_current_calibration.js";
 
-import {run_position_calibration, compute_position_calibration} from "./components/motor_position_calibration.js";
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
-  history_size, default_current_calibration, default_position_calibration, max_calibration_current,
+  history_size, default_current_calibration, max_calibration_current,
   default_pid_parameters,
 } from "./components/motor_constants.js";
 

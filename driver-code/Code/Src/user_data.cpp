@@ -16,7 +16,7 @@ uint8_t user_data[user_data_size];
 uint8_t page_buffer[FLASH_PAGE_SIZE] = {0};
 
 const size_t current_calibration_offset = 0x00;
-const size_t position_calibration_offset = 0x20;
+const size_t spare_offset = 0x20;
 const size_t pid_parameters_offset = 0x80;
 const size_t observer_parameters_offset = 0xF0;
 
@@ -25,13 +25,6 @@ CurrentCalibration get_current_calibration(){
     return calibration_available ? 
         parse_current_calibration(user_data + current_calibration_offset, current_calibration_size) :
         default_current_calibration;
-}
-
-PositionCalibration get_position_calibration(){
-    const bool calibration_available = (TRIGGER_ANGLES == read_uint16(user_data + position_calibration_offset));
-    return calibration_available ? 
-        parse_position_calibration(user_data + position_calibration_offset, position_calibration_size) :
-        default_position_calibration;
 }
 
 PIDParameters get_pid_parameters(){
@@ -90,14 +83,10 @@ uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
 
 void save_settings_to_flash(
     CurrentCalibration const& current_calibration, 
-    PositionCalibration const& position_calibration,
     PIDParameters const& pid_parameters
 ) {
     // Write the current calibration to the buffer.
     write_current_calibration(page_buffer + current_calibration_offset, current_calibration);
-
-    // Write the position calibration to the buffer.
-    write_position_calibration(page_buffer + position_calibration_offset, position_calibration);
 
     // Write the PID parameters to the buffer.
     write_pid_parameters(page_buffer + pid_parameters_offset, pid_parameters);

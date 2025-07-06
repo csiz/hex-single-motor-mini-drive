@@ -46,14 +46,10 @@ const int readout_number_base = 1 << 16;
 // Readout bit packing
 // -------------------
 
-const size_t hall_state_bit_offset = 13;
-const size_t angle_valid_bit_offset = 12;
 const size_t emf_detected_bit_offset = 11;
-const size_t emf_direction_is_negative_bit_offset = 10;
-
-const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
-const uint16_t angle_valid_bit_mask = 0b1 << angle_valid_bit_offset;
 const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
+
+const size_t emf_direction_is_negative_bit_offset = 10;
 const uint16_t emf_direction_is_negative_bit_mask = 0b1 << emf_direction_is_negative_bit_offset;
 
 
@@ -261,35 +257,6 @@ const uint16_t motor_sector_driving_negative[6][3] {
 // --------------------------
 
 
-// Some useful functions to compute position. These need to be inlined for 
-// efficiency, and constexpr to define a bunch more constants below.
-
-
-// Mapping from hall state to sector number.
-static inline uint8_t get_hall_sector(const uint8_t hall_state){
-    // Get the hall sector from the state.
-    switch (hall_state & 0b111) {
-        case 0b000: // no hall sensors; either it's not ready or no magnet
-            return hall_sector_base; // Out of range, indicates invalid.
-        case 0b001: // hall U active; 0 degrees
-            return 0;
-        case 0b011: // hall U and hall V active; 60 degrees
-            return 1;
-        case 0b010: // hall V active; 120 degrees
-            return 2;
-        case 0b110: // hall V and hall W active; 180 degrees
-            return 3;
-        case 0b100: // hall W active; 240 degrees
-            return 4;
-        case 0b101: // hall U and hall W active; 300 degrees
-            return 5;
-        case 0b111: // all hall sensors active; this would be quite unusual; but carry on
-            return hall_sector_base; // Out of range, indicates invalid.
-    }
-    // We shouldn't reach here.
-    return hall_sector_base;
-}
-
 // Define a lot of constants. First, we need to define angles as integers because 
 // we can't (shouldn't) use floating point arithmetic in the interrupt handlers.
 // Then define the time units. Then speed units, further scaled by a constant to
@@ -322,33 +289,13 @@ const int eighth_circle = angle_base / 8;
 inline constexpr int normalize_angle(int angle){
     return (angle + angle_base) & angle_bit_mask;
 }
+
 // Normalize a 0 centerd angle; keeping its sign (-pi to pi).
 inline constexpr int signed_angle(int angle){
     return ((angle + one_and_half_circle) & angle_bit_mask) - half_circle;
 }
 
-// Scaling factor for variance.
-const int variance_divider = 16;
-
-// Note speed and acceleration are written in degrees per ms and per ms^2 respectively.
-
-// Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
-const int default_sector_transition_variance = square(10 * angle_base / 360) / variance_divider;
-
-// Variance of a gaussian spread over the entire sector.
-const int default_sector_center_variance = square(30 * angle_base / 360) / variance_divider;
-
-// Ensure that our biggest variance is small enough to be usable in gaussian updates while staying < max_16bit.
-static_assert(default_sector_center_variance * 16 < max_16bit, "max_variance must be less than 32768 (max 16-bit signed int)");
-
-// TODO: make this the integral parameter of the EMF tracking PID.
-// Value for the initial EMF variance; our certainty in the EMF angle increases with the magnitude of the EMF voltage/speed.
-const int emf_initial_angular_variance = square(2 * angle_base / 360) / variance_divider;
-
-const int inductor_initial_angular_variance = square(10 * angle_base / 360) / variance_divider;
-
-// The hall sensors trigger later than expected going each direction.
-const int hysterisis = 5 * angle_base / 360;
+// Note speed values written in degrees per ms and converted to speed units.
 
 // Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
 const int max_rpm = 32'000 * rotor_revolutions_per_electric;
@@ -358,113 +305,22 @@ const int speed_fixed_point = 32;
 
 const int square_speed_fixed_point = square(speed_fixed_point);
 
-// Fixed point for speed variance with respect to angle units variance.
-const int speed_variance_fixed_point = 256;
-
-// Conversion factor between square speed and speed variance.
-const int speed_variance_to_square_speed = square(speed_fixed_point) / speed_variance_fixed_point * variance_divider;
-
-
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
 
-// Cap the update counter between transitions; we'll consider the motor settled at this point.
-const int max_updates_between_transitions = 4096;
-
-// Minimum angular speed that we need to have to move at the max time between transitions.
-const int min_measurable_angular_speed = 60 * angle_base / 360 * speed_fixed_point / max_updates_between_transitions;
-
-static_assert(min_measurable_angular_speed > 0, "min_measurable_angular_speed must be greater than 0");
-static_assert(min_measurable_angular_speed < 4, "min_measurable_angular_speed should be quite low");
-
 // Minimum speed in rotor revolutions per minute (RPM) that we can represent with our units.
-const int min_rpm = min_measurable_angular_speed * pwm_cycles_per_second / angle_base * 60 / speed_fixed_point / rotor_revolutions_per_electric;
+const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_point / rotor_revolutions_per_electric;
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
 // Threshold speed when we consider the motor to be moving; in angle units per pwm cycle.
 const int threshold_speed = 20 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
 
-// Variance of the speed in degrees per ms; converted to angle units per pwm cycle, all squared.
-const int default_speed_variance = square(15 * angle_base / 360 * 1000 * speed_fixed_point / pwm_cycles_per_second) / speed_variance_to_square_speed;
-
-static_assert(default_speed_variance < max_16bit, "default_speed_variance must be less than max_variance");
-
-// Acceleration fixed point with respect to speed units.
-const int acceleration_fixed_point = 256;
-
-// Fixed point for acceleration variance with respect to speed variance.
-const int acceleration_variance_fixed_point = 256;
-
-// Covnersion factor between square acceleration and acceleration variance.
-const int acceleration_variance_to_square_acceleration = square(acceleration_fixed_point) / acceleration_variance_fixed_point * speed_variance_to_square_speed;
-
-// Variance of the expected acceleration loads in degrees per ms^2; converted to acceleration units per pwm cycle, all squared.
-const int angular_acceleration_div_2_variance = round_div(
-    square(
-        5 * angle_base / 360 * 
-        speed_fixed_point * 1000 / pwm_cycles_per_second * 
-        acceleration_fixed_point * 1000 / pwm_cycles_per_second / 
-        2
-    ),
-    acceleration_variance_to_square_acceleration
-);
-
 const int emf_base = static_cast<int>(pwm_base * 1.16);
 
 // Fixed point representation of the motor constant.
 const int motor_constant_fixed_point = 1 << 14;
 
-// 1.0V minimum EMF voltage to use it for motor constant updates.
-const int min_emf_voltage = voltage_fixed_point;
-
-const int min_emf_angular_speed = 30 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
-
-// Moment of inertia of the entrained load; kg*m^2. TODO: what's a good value for this?
-const int moment_of_inertia_fixed_point = 250;
-
-const PositionCalibration default_position_calibration = {
-    // The angle at which we transition to this sector. The first is when rotating in the
-    // positive direction; second for the negative direction.
-    .sector_transition_angles = {{
-        {330 * angle_base / 360 + hysterisis,  30 * angle_base / 360 - hysterisis},
-        { 30 * angle_base / 360 + hysterisis,  90 * angle_base / 360 - hysterisis},
-        { 90 * angle_base / 360 + hysterisis, 150 * angle_base / 360 - hysterisis},
-        {150 * angle_base / 360 + hysterisis, 210 * angle_base / 360 - hysterisis},
-        {210 * angle_base / 360 + hysterisis, 270 * angle_base / 360 - hysterisis},
-        {270 * angle_base / 360 + hysterisis, 330 * angle_base / 360 - hysterisis},
-    }},
-    // Variance of each sector transition; we can calibrate it.
-    .sector_transition_variances = {{
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-    }},
-    // The center of each hall sector; the motor should rest at these poles.
-    .sector_center_angles = {{
-        (  0 * angle_base / 360),
-        ( 60 * angle_base / 360),
-        (120 * angle_base / 360),
-        (180 * angle_base / 360),
-        (240 * angle_base / 360),
-        (300 * angle_base / 360),
-    }},
-    // Variance of the centers.
-    .sector_center_variances = {{
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-    }},
-    .initial_angular_speed_variance = default_speed_variance,
-    // Precalculate the variance of the acceleration divided by 2.
-    .angular_acceleration_div_2_variance = angular_acceleration_div_2_variance,
-};
 
 const int16_t current_calibration_fixed_point = 1024;
 
@@ -500,7 +356,7 @@ const PIDParameters default_pid_parameters = {
         .kp = gains_fixed_point / 8,
         .ki = gains_fixed_point / 64,
         .kd = gains_fixed_point / 128,
-        .max_output = static_cast<int16_t>(sqrt(default_speed_variance * speed_variance_to_square_speed))
+        .max_output = max_angular_speed
     },
     .position_gains = PIDGains{
         .kp = gains_fixed_point / 8,

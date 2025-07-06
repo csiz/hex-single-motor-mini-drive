@@ -46,15 +46,14 @@ enum MessageCode : uint16_t {
     SET_STATE_DRIVE_TORQUE = 0x4031,
     SET_STATE_DRIVE_BATTERY_POWER = 0x4032,
 
-    SET_CURRENT_FACTORS = 0x4040,
-    SET_TRIGGER_ANGLES = 0x4041,
-    CURRENT_FACTORS = 0x4042,
-    TRIGGER_ANGLES = 0x4043,
-    GET_CURRENT_FACTORS = 0x4044,
-    GET_TRIGGER_ANGLES = 0x4045,
+    CURRENT_FACTORS = 0x4040,
+    GET_CURRENT_FACTORS = 0x4041,
+    SET_CURRENT_FACTORS = 0x4042,
+
     PID_PARAMETERS = 0x4046,
     GET_PID_PARAMETERS = 0x4047,
     SET_PID_PARAMETERS = 0x4048,
+
     OBSERVER_PARAMETERS = 0x4049,
     SET_OBSERVER_PARAMETERS = 0x404A,
     GET_OBSERVER_PARAMETERS = 0x404B,
@@ -81,7 +80,6 @@ const size_t basic_command_size = sizeof(BasicCommand); // Note; basic command i
 const size_t readout_size = header_size + sizeof(Readout);
 const size_t full_readout_size = header_size + sizeof(FullReadout);
 const size_t current_calibration_size = header_size + sizeof(CurrentCalibration);
-const size_t position_calibration_size = header_size + sizeof(PositionCalibration);
 const size_t pid_parameters_size = header_size + sizeof(PIDParameters);
 const size_t observer_parameters_size = header_size + sizeof(ObserverParameters);
 
@@ -116,7 +114,6 @@ bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t * buf, 
 
 BasicCommand parse_basic_command(uint8_t const * data, size_t size);
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size);
-PositionCalibration parse_position_calibration(uint8_t const * data, size_t size);
 PIDParameters parse_pid_parameters(uint8_t const * data, size_t size);
 ObserverParameters parse_observer_parameters(uint8_t const * data, size_t size);
 
@@ -125,15 +122,9 @@ ObserverParameters parse_observer_parameters(uint8_t const * data, size_t size);
 
 
 void write_readout(uint8_t * buffer, Readout const & readout);
-
 void write_full_readout(uint8_t * buffer, FullReadout const & full_readout);
-
 void write_current_calibration(uint8_t * data, CurrentCalibration const & factors);
-
-void write_position_calibration(uint8_t * data, PositionCalibration const & position_calibration);
-
 void write_pid_parameters(uint8_t * buffer, PIDParameters const & parameters);
-
 void write_observer_parameters(uint8_t * buffer, ObserverParameters const & parameters);
 
 // The unit test will write directly to the buffer.
