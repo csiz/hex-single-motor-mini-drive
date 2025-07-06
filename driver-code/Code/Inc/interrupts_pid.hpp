@@ -42,14 +42,13 @@ static inline PIDControl compute_pid_control(
 
 // Update the observer state based on the error.
 static inline void update_observer(ObserverState & observer, const int16_t error, const int16_t observer_gain) {
-    observer.error = error;
 
-    observer.error_variance = min(max_16bit, 1 + (square(error) + observer.error_variance * 15) / 16);
+    const int value_adjustment = sign(error) + error * observer_gain / observer_fixed_point;
 
-    const int value_adjustment = sign(observer.error) + observer.error * observer_gain / observer_fixed_point;
+    observer.value = clip_to(-max_16bit, +max_16bit, observer.value + value_adjustment);
 
-    observer.value += value_adjustment;
+    observer.error = value_adjustment;
 
     observer.value_variance = min(max_16bit, 1 + (square(value_adjustment) + observer.value_variance * 15) / 16);
 }
-
+    

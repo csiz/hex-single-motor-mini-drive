@@ -65,8 +65,7 @@ const int16_t observer_fixed_point = 4096;
 const ObserverState default_observer_state = {
     .value = 0,
     .value_variance = max_16bit,
-    .error = 0,
-    .error_variance = max_16bit
+    .error = 0
 };
 
 const ObserverParameters default_observer_parameters = {

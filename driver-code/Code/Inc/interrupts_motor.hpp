@@ -49,6 +49,30 @@ static inline MotorOutputs update_motor_6_sector(
     };
 }
 
+static inline MotorOutputs update_motor_periodic(
+    DrivePeriodic const& periodic_parameters,
+    FullReadout & readout,
+    PIDControlState & pid_state
+){
+    const int pwm_target = periodic_parameters.pwm_target;
+
+    const int target_angle = normalize_angle((
+        periodic_parameters.zero_offset + 
+        periodic_parameters.angular_speed * readout.readout_number
+    ) / speed_fixed_point % angle_base);
+
+    const uint16_t voltage_phase_u = get_phase_pwm(target_angle);
+    const uint16_t voltage_phase_v = get_phase_pwm(target_angle - third_circle);
+    const uint16_t voltage_phase_w = get_phase_pwm(target_angle - two_thirds_circle);
+
+    return MotorOutputs{
+        .enable_flags = enable_flags_all,
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm_target / pwm_base),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_target / pwm_base),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_target / pwm_base)
+    };
+}
+
 static inline MotorOutputs update_motor_smooth(
     DriveSmooth const& smooth_parameters,
     FullReadout & readout,
@@ -246,6 +270,17 @@ static inline MotorOutputs update_motor_control(
             };
             break;
 
+        case DriverState::DRIVE_PERIODIC:
+            driver_state = DriverState::DRIVE_PERIODIC;
+            driver_parameters = DriverParameters{
+                .periodic = DrivePeriodic{
+                    .zero_offset = pending_parameters.periodic.zero_offset,
+                    .pwm_target = static_cast<int16_t>(clip_to(0, pwm_max_hold, pending_parameters.periodic.pwm_target)),
+                    .angular_speed = static_cast<int16_t>(clip_to(-max_angular_speed, max_angular_speed, pending_parameters.periodic.angular_speed))
+                }
+            };
+            break;
+
         case DriverState::DRIVE_SMOOTH:
             driver_state = DriverState::DRIVE_SMOOTH;
             driver_parameters = DriverParameters{
@@ -349,6 +384,14 @@ static inline MotorOutputs update_motor_control(
             return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.sector) ?
                 breaking_motor_outputs :
                 update_motor_6_sector(driver_parameters.sector, readout);
+        
+        case DriverState::DRIVE_PERIODIC:
+            return update_motor_periodic(
+                driver_parameters.periodic,
+                readout,
+                pid_state
+            );
+                
 
         case DriverState::DRIVE_SMOOTH:
             // Update the motor outputs for the smooth driving.

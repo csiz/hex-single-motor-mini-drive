@@ -289,6 +289,7 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_HOLD_U_NEGATIVE:
         case SET_STATE_HOLD_V_NEGATIVE:
         case SET_STATE_HOLD_W_NEGATIVE:
+        case SET_STATE_DRIVE_PERIODIC:
         case SET_STATE_DRIVE_SMOOTH:
         case SET_STATE_DRIVE_TORQUE:
         case SET_STATE_DRIVE_BATTERY_POWER:

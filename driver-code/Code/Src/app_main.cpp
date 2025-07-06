@@ -238,7 +238,6 @@ inline bool run_unit_test( void (*test_function)(char * buffer, size_t max_size)
 // Handle the command on the buffer; returns whether there was an error.
 bool handle_command(MessageBuffer const& buffer) {
     const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-    const uint16_t abs_command_pwm = abs(command.pwm);
 
     switch (static_cast<MessageCode>(command.code)) {
         case NULL_COMMAND:
@@ -308,7 +307,19 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_6_SECTOR,
                 DriverParameters{ .sector = Drive6Sector{ 
                     .duration = command.timeout, 
-                    .pwm_target = command.pwm, 
+                    .pwm_target = command.value, 
+                }}
+            );
+            return false;
+
+        case SET_STATE_DRIVE_PERIODIC:
+            set_motor_command(
+                DriverState::DRIVE_PERIODIC, 
+                DriverParameters{ .periodic = DrivePeriodic{ 
+                    .duration = command.timeout,
+                    .zero_offset = 0,
+                    .pwm_target = command.value,
+                    .angular_speed = command.secondary
                 }}
             );
             return false;
@@ -318,8 +329,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_SMOOTH, 
                 DriverParameters{ .smooth = DriveSmooth{ 
                     .duration = command.timeout, 
-                    .pwm_target = command.pwm,
-                    .leading_angle = command.leading_angle 
+                    .pwm_target = command.value,
+                    .leading_angle = command.secondary 
                 }}
             );
             return false;
@@ -329,8 +340,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_TORQUE, 
                 DriverParameters{ .torque = DriveTorque{ 
                     .duration = command.timeout, 
-                    .current_target = static_cast<int16_t>(max_drive_current * command.pwm / pwm_max),
-                    .leading_angle = command.leading_angle
+                    .current_target = static_cast<int16_t>(max_drive_current * command.value / pwm_max),
+                    .leading_angle = command.secondary
                 }}
             );
             return false;
@@ -340,8 +351,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_BATTERY_POWER, 
                 DriverParameters{ .battery_power = DriveBatteryPower{ 
                     .duration = command.timeout, 
-                    .power_target = static_cast<int16_t>(max_drive_power * command.pwm / pwm_max),
-                    .leading_angle = command.leading_angle
+                    .power_target = static_cast<int16_t>(max_drive_power * command.value / pwm_max),
+                    .leading_angle = command.secondary
                 }}
             );
             return false;
@@ -354,45 +365,45 @@ bool handle_command(MessageBuffer const& buffer) {
         case SET_STATE_HOLD_U_POSITIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
-                .u_duty = abs_command_pwm
+                .u_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
 
         case SET_STATE_HOLD_V_POSITIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
-                .v_duty = abs_command_pwm
+                .v_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
 
         case SET_STATE_HOLD_W_POSITIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
-                .w_duty = abs_command_pwm
+                .w_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
 
         case SET_STATE_HOLD_U_NEGATIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
-                .v_duty = abs_command_pwm, 
-                .w_duty = abs_command_pwm
+                .v_duty = static_cast<uint16_t>(command.value),
+                .w_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
 
         case SET_STATE_HOLD_V_NEGATIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
-                .u_duty = abs_command_pwm, 
-                .w_duty = abs_command_pwm
+                .u_duty = static_cast<uint16_t>(command.value), 
+                .w_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
 
         case SET_STATE_HOLD_W_NEGATIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
-                .u_duty = abs_command_pwm, 
-                .v_duty = abs_command_pwm
+                .u_duty = static_cast<uint16_t>(command.value),
+                .v_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
 

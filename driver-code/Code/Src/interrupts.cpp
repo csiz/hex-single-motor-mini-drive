@@ -341,18 +341,25 @@ void adc_interrupt_handler(){
 
         observers.inductor_angle.value = normalize_angle(observers.inductor_angle.value);
 
-        if (compute_speed) update_observer(
-            observers.inductor_angular_speed,
-            approximate_angle_error * speed_fixed_point,
-            observer_parameters.inductor_angular_speed_ki
-        );
-    } else {
+        if (compute_speed) {
+            const int angular_speed_error = approximate_angle_error * speed_fixed_point;
+
+            update_observer(
+                observers.inductor_angular_speed,
+                angular_speed_error,
+                observer_parameters.inductor_angular_speed_ki
+            );
+        }
+    } else if(observers.inductor_angular_speed.value) {
         // Drop speed towards 0.
-        if(observers.inductor_angular_speed.value) update_observer(
+        const int angular_speed_error = -observers.inductor_angular_speed.value;
+
+        update_observer(
             observers.inductor_angular_speed,
-            -observers.inductor_angular_speed.value, 
+            angular_speed_error,
             observer_parameters.inductor_angular_speed_ki
         );
+
     }
 
     // Calculate the park transformed EMF voltages.
@@ -405,23 +412,29 @@ void adc_interrupt_handler(){
         const bool compute_speed = consecutive_emf_detections > 8;
 
         update_observer(
-            observers.rotor_angle, 
-            approximate_angle_error, 
+            observers.rotor_angle,
+            approximate_angle_error,
             observer_parameters.rotor_angle_ki
         );
 
         observers.rotor_angle.value = normalize_angle(observers.rotor_angle.value);
 
-        if (compute_speed) update_observer(
-            observers.rotor_angular_speed,
-            approximate_angle_error * speed_fixed_point, 
-            observer_parameters.rotor_angular_speed_ki
-        );
-    } else {
+        if (compute_speed) {
+            const int angular_speed_error = approximate_angle_error * speed_fixed_point;
+
+            update_observer(
+                observers.rotor_angular_speed,
+                angular_speed_error,
+                observer_parameters.rotor_angular_speed_ki
+            );
+        }
+    } else if (observers.rotor_angular_speed.value) {
         // Drop speed towards 0.
-        if (observers.rotor_angular_speed.value) update_observer(
+        const int angular_speed_error = -observers.rotor_angular_speed.value;
+
+        update_observer(
             observers.rotor_angular_speed,
-            -observers.rotor_angular_speed.value,
+            angular_speed_error,
             observer_parameters.rotor_angular_speed_ki
         );
     }
@@ -524,12 +537,10 @@ void adc_interrupt_handler(){
     );
     readout.angle_variance = observers.rotor_angle.value_variance;
     readout.angle_error = observers.rotor_angle.error;
-    readout.angle_error_variance = observers.rotor_angle.error_variance;
 
     readout.angular_speed = observers.rotor_angular_speed.value;
     readout.angular_speed_variance = observers.rotor_angular_speed.value_variance;
     readout.angular_speed_error = observers.rotor_angular_speed.error;
-    readout.angular_speed_error_variance = observers.rotor_angular_speed.error_variance;
 
     readout.alpha_current = alpha_current;
     readout.beta_current = beta_current;
@@ -544,13 +555,9 @@ void adc_interrupt_handler(){
     readout.inductor_angle = observers.inductor_angle.value;
     readout.inductor_angle_variance = observers.inductor_angle.value_variance;
     readout.inductor_angle_error = observers.inductor_angle.error;
-    readout.inductor_angle_error_variance = observers.inductor_angle.error_variance;
-    
     readout.inductor_angular_speed = observers.inductor_angular_speed.value;
     readout.inductor_angular_speed_variance = observers.inductor_angular_speed.value_variance;
     readout.inductor_angular_speed_error = observers.inductor_angular_speed.error;
-    readout.inductor_angular_speed_error_variance = observers.inductor_angular_speed.error_variance;
-
 
     // Calculate motor outputs and write control state
     // -----------------------------------------------

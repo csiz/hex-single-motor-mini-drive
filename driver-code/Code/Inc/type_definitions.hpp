@@ -18,6 +18,7 @@ enum struct DriverState : uint16_t {
     HOLD,
     SCHEDULE,
     DRIVE_6_SECTOR,
+    DRIVE_PERIODIC,
     DRIVE_SMOOTH,
     DRIVE_TORQUE,
     DRIVE_BATTERY_POWER
@@ -80,6 +81,13 @@ struct Drive6Sector {
     int16_t pwm_target;
 };
 
+struct DrivePeriodic {
+    uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t zero_offset; // Initial angle at readout number 0.
+    int16_t pwm_target; // Target PWM value.
+    int16_t angular_speed; // Angular speed for the drive command.
+};
+
 // Drive the motor using FOC targeting a PWM value.
 struct DriveSmooth {
     uint16_t duration; // Duration for the command in pwm cycles.
@@ -106,6 +114,7 @@ union DriverParameters {
     DriveHold hold;
     DriveSchedule schedule;
     Drive6Sector sector;
+    DrivePeriodic periodic;
     DriveSmooth smooth;
     DriveTorque torque;
     DriveBatteryPower battery_power;
@@ -171,8 +180,8 @@ struct FullReadout : public Readout {
 struct BasicCommand {
     uint16_t code;
     uint16_t timeout;
-    int16_t pwm;
-    int16_t leading_angle;
+    int16_t value;
+    int16_t secondary;
 };
 
 struct CurrentCalibration {
@@ -305,10 +314,8 @@ struct ObserverState {
     int16_t value;
     // Variance of the observed value.
     int16_t value_variance;
-    // Latest error in the observed value.
-    int16_t error;
-    // Variance of the error.
-    int16_t error_variance;
+    // The last error used to update the observer.
+    int16_t error = 0;
 };
 
 struct Observers {

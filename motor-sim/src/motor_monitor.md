@@ -30,7 +30,7 @@ Motor Driving Data
 </div>
 <div class="card tight">${plot_power}</div>
 <div class="card tight">${plot_angle_observer}</div>
-<div class="card tight">${plot_inductor_angle_observer}</div>
+<div class="card tight">${plot_angular_speed_observer}</div>
 <div class="card tight">${plot_runtime_stats}</div>
 <div class="card tight">${plot_cycle_loop_stats}</div>
 <div class="card tight">${plot_electric_position}</div>
@@ -478,12 +478,16 @@ const command_buttons = Inputs.button(
       await command(command_codes.SET_STATE_OFF);
       snapshot_if_checked(0);
     }],
-    ["Drive +", async function(){
+    ["Drive 6S +", async function(){
       await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_pwm: +command_pwm});
       snapshot_if_checked(500);
     }],
-    ["Drive -", async function(){
+    ["Drive 6S -", async function(){
       await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_pwm: -command_pwm});
+      snapshot_if_checked(500);
+    }],
+    ["Drive periodic", async function(){
+      await command(command_codes.SET_STATE_DRIVE_PERIODIC);
       snapshot_if_checked(500);
     }],
     ["Drive smooth +", async function(){
@@ -707,41 +711,46 @@ const plot_power = plot_lines({
 });
 
 const plot_angle_observer = plot_lines({
-  subtitle: "Angle Observer State",
-  description: "Error and output for the angle observer.",
+  subtitle: "Angle Observers State",
+  description: "Error and output for the angle observers.",
   width: 1200, height: 400,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Value & Error",
+  y_label: "Angle (degrees)",
   channels: [
-    {y: "angle_raw", label: "Magnet Angle", color: colors_categories[0]},
-    {y: "angle_stdev_raw", label: "Magnet Angle Stdev", color: d3.color(colors_categories[0]).brighter(1)},
+    {
+      y: "angle_raw", label: "Magnet Angle", color: colors_categories[0],
+      draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev_raw}),
+    },
     {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
-    {y: "angle_stdev_error", label: "Magnet Angle Error Stdev", color: d3.color(colors_categories[1]).brighter(1)},
-    {y: "angular_speed_raw", label: "Magnet Angular Speed", color: colors_categories[2]},
-    {y: "angular_speed_stdev_raw", label: "Magnet Angular Speed Stdev", color: d3.color(colors_categories[2]).brighter(1)},
-    {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[3]},
-    {y: "angular_speed_stdev_error", label: "Magnet Angular Speed Error Stdev", color: d3.color(colors_categories[3]).brighter(1)},
+
+    {
+      y: "inductor_angle_raw", label: "Inductor Angle", color: colors_categories[2],
+      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angle_stdev_raw}),
+    },
+    {y: "inductor_angle_error", label: "Inductor Angle Error", color: colors_categories[3]},
   ],
   curve,
 });
 
-const plot_inductor_angle_observer = plot_lines({
-  subtitle: "Inductor Angle Observer State",
-  description: "Error and output for the inductor angle observer.",
+const plot_angular_speed_observer = plot_lines({
+  subtitle: "Angular Speed Observers State",
+  description: "Error and output for the angular speed observers.",
   width: 1200, height: 400,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Value & Error",
+  y_label: "Angular Speed (degrees/ms)",
   channels: [
-    {y: "inductor_angle_raw", label: "Inductor Angle", color: colors_categories[4]},
-    {y: "inductor_angle_stdev_raw", label: "Inductor Angle Stdev", color: d3.color(colors_categories[4]).brighter(1)},
-    {y: "inductor_angle_error", label: "Inductor Angle Error", color: colors_categories[5]},
-    {y: "inductor_angle_error_stdev", label: "Inductor Angle Error Stdev", color: d3.color(colors_categories[5]).brighter(1)},
-    {y: "inductor_angular_speed_raw", label: "Inductor Angular Speed", color: colors_categories[6]},
-    {y: "inductor_angular_speed_stdev_raw", label: "Inductor Angular Speed Stdev", color: d3.color(colors_categories[6]).brighter(1)},
-    {y: "inductor_angular_speed_error", label: "Inductor Angular Speed Error", color: colors_categories[7]},
-    {y: "inductor_angular_speed_error_stdev", label: "Inductor Angular Speed Error Stdev", color: d3.color(colors_categories[7]).brighter(1)},
+    {
+      y: "angular_speed_raw", label: "Magnet Angular Speed", color: colors_categories[0],
+      draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev_raw}),
+    },
+    {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
+    {
+      y: "inductor_angular_speed_raw", label: "Inductor Angular Speed", color: colors_categories[2],
+      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angular_speed_stdev_raw}),
+    },
+    {y: "inductor_angular_speed_error", label: "Inductor Angular Speed Error", color: colors_categories[3]},
   ],
   curve,
 });
@@ -1048,7 +1057,7 @@ const plot_motor_values = plot_lines({
 const monitoring_plots = {
   plot_power,
   plot_angle_observer,
-  plot_inductor_angle_observer,
+  plot_angular_speed_observer,
   plot_runtime_stats,
   plot_cycle_loop_stats,
   plot_electric_position,
