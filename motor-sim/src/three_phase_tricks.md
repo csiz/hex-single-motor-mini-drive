@@ -45,7 +45,7 @@ compute it in real time.
 import {angle_base, pwm_base} from "./components/motor_constants.js";
 
 const phi = d3.range(angle_base).map(x => 2 * Math.PI * x / angle_base);
-const phases = phi.map(t => {
+function phase_func(t){
   const deg = t * 180 / Math.PI;
 
   const sin = Math.sin(t);
@@ -67,8 +67,10 @@ const phases = phi.map(t => {
   const adj_u = u + adj;
   const adj_v = v + adj;
   const adj_w = w + adj;
-  return {sin, deg, u, v, w, adj: -adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w, uv, vw, wu};
-});
+  return {t, sin, deg, u, v, w, adj: -adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w, uv, vw, wu};
+}
+
+const phases = phi.map(phase_func);
 
 const max_adj = d3.max(phases, d => d.adj_u);
 
@@ -110,13 +112,21 @@ const phases_rebased_plot = Plot.plot({
   ]
 });
 
+
+
 // Print the lookup table in chunks of 16 elements per line; indenting each line by a tab character.
 const chunk_size = 16;
-const phases_chunked = Array.from({length: Math.ceil(phases.length / chunk_size)}, (_, i) => phases.slice(i * chunk_size, i * chunk_size + chunk_size));
+function chunk_array(arr) {
+  return Array.from({length: Math.ceil(arr.length / chunk_size)}, (_, i) => arr.slice(i * chunk_size, i * chunk_size + chunk_size));
+}
 
-const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base}] = {\n    ${phases_chunked.map(chunk => chunk.map(d => (d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
+const phases_waveform = d3.range(angle_base / 4).map((x) => (x * Math.PI / (angle_base / 4))).map(phase_func);
 
-const sin_lookup_table = `const uint16_t sin_lookup[${angle_base}] = {\n    ${phases_chunked.map(chunk => chunk.map(d => (d.sin * angle_base).toFixed(0).padStart(5, " ")).join(', ')).join(',\n    ')}\n};`;
+const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base / 4}] = {\n    ${chunk_array(phases_waveform).map(chunk => chunk.map(d => (d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
+
+const sin_waveform = d3.range(angle_base / 4).map((x) => (x * Math.PI / 2 / (angle_base / 4))).map(t => ({t, sin: Math.sin(t)}));
+
+const sin_lookup_table = `const uint16_t sin_lookup[${angle_base / 4}] = {\n    ${chunk_array(sin_waveform).map(chunk => chunk.map(({sin}) => (Math.round(sin * angle_base).toFixed(0).padStart(5, " "))).join(', ')).join(',\n    ')}\n};`;
 
 
 

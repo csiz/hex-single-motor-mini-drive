@@ -15,7 +15,7 @@ Motor Commands
 <div>
   ${command_pwm_slider}
   ${command_timeout_slider}
-  ${command_leading_angle_slider}
+  ${command_secondary_slider}
 </div>
 
 
@@ -289,9 +289,9 @@ const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycl
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
-const command_leading_angle_slider = inputs_wide_range([-180, 180], {value: 90, step: 1, label: "Leading angle (degrees):"});
+const command_secondary_slider = inputs_wide_range([-angle_base/2 + 1, angle_base/2 - 1], {value: 1, step: 1, label: "Secondary value"});
 
-const command_leading_angle_degrees = Generators.input(command_leading_angle_slider);
+const command_secondary = Generators.input(command_secondary_slider);
 ```
 
 
@@ -327,12 +327,11 @@ function push_data(readout){
 
 const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
 const command_pwm = Math.round(command_pwm_fraction * pwm_base);
-const command_leading_angle = Math.floor(angle_base + angle_base * command_leading_angle_degrees / 360) % angle_base;
 
 async function command(command, options = {}){
   if (!motor_controller) return;
   
-  await motor_controller.send_command({command, command_timeout, command_pwm, command_leading_angle, ...options});
+  await motor_controller.send_command({command, command_timeout, command_pwm, command_secondary, ...options});
 }
 
 let latest_stream_timeout = null;
@@ -348,7 +347,7 @@ function command_and_stream(delay_ms, command, options = {}){
       reset_data();
       // Start reading the data stream.
       await motor_controller.command_and_stream(
-        {command, command_timeout: 0, command_pwm: 0, command_leading_angle: 0, ...options},
+        {command, command_timeout: 0, command_pwm: 0, command_secondary: 0, ...options},
         {readout_callback: push_data, ...options});
 
     } catch (error) {
@@ -402,18 +401,6 @@ const test_buttons = Inputs.button(
     }],
     ["Test U decreasing", function(){
       snapshot_if_checked(0, command_codes.SET_STATE_TEST_U_DECREASING);
-    }],
-    ["Test V increasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_INCREASING);
-    }],
-    ["Test V decreasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_DECREASING);
-    }],
-    ["Test W increasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_INCREASING);
-    }],
-    ["Test W decreasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_DECREASING);
     }],
     ["Test V increasing", function(){
       snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_INCREASING);
@@ -721,7 +708,10 @@ const plot_electric_position = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
     {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
-
+    {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
+    {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
+    {y: "hall_w_as_angle", label: "Hall W", color: colors.w},
+    {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[8]},
     {
       y: "inductor_angle", label: "Inductor Angle", color: colors.web_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angle_stdev}),
@@ -873,6 +863,7 @@ const plot_dq0_currents = plot_lines({
   y_label: "Current (A)",
   channels: [
     {y: "alpha_current", label: "Current Alpha", color: colors.alpha_current},
+    {y: "steady_state_alpha_current", label: "Steady State Alpha Current", color: d3.color(colors.alpha_current).darker(1)},
     {y: "beta_current", label: "Current Beta", color: colors.beta_current},
     {y: "web_alpha_current", label: "Current Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_current", label: "Current Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
@@ -894,6 +885,8 @@ const plot_dq0_voltages = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.alpha_emf_voltage_stdev}),
     },
     {y: "alpha_emf_voltage", label: "EMF Voltage Alpha", color: colors.alpha_current},
+    {y: "alpha_inductor_voltage", label: "Inductor Voltage Alpha", color: d3.color(colors.alpha_current).darker(1)},
+    {y: "beta_inductor_voltage", label: "Inductor Voltage Beta", color: d3.color(colors.beta_current).darker(1)},
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
@@ -901,6 +894,7 @@ const plot_dq0_voltages = plot_lines({
       y: "web_emf_voltage_magnitude_avg", label: "Voltage Magnitude (350us average)", color: d3.color(colors.web_current_magnitude).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_voltage_magnitude_stdev}),
     },
+    {y: "drive_voltage_magnitude", label: "Drive Voltage Magnitude", color: colors_categories[2]},
   ],
   curve,
 });
@@ -929,8 +923,12 @@ const plot_readout_flags = plot_lines({
   x_label: "Time (ms)",
   y_label: "Flag setting",
   channels: [
-    {y: "emf_detected", label: "EMF detected", color: colors.u},
-    {y: "emf_direction_negative", label: "EMF direction negative", color: colors.v},
+    {y: "emf_detected", label: "EMF detected", color: colors_categories[3]},
+    {y: "emf_direction_negative", label: "EMF direction negative", color: colors_categories[5]},
+    {y: "current_detected", label: "Current detected", color: colors_categories[6]},
+    {y: "hall_u", label: "Hall U", color: colors.u},
+    {y: "hall_v", label: "Hall V", color: colors.v},
+    {y: "hall_w", label: "Hall W", color: colors.w},
   ],
   curve,
 });

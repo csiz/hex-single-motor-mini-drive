@@ -90,11 +90,11 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
 
     write_int16(buffer + offset, readout.angle_error);
     offset += 2;
-    write_int16(buffer + offset, readout.angle_error_variance);
+    write_int16(buffer + offset, readout.alpha_inductor_voltage);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed_error);
     offset += 2;
-    write_int16(buffer + offset, readout.angular_speed_error_variance);
+    write_int16(buffer + offset, readout.beta_inductor_voltage);
     offset += 2;
 
     write_int16(buffer + offset, readout.inductor_angle);

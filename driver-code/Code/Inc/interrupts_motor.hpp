@@ -17,11 +17,9 @@ static inline MotorOutputs update_motor_6_sector(
     Drive6Sector const& sector_parameters,
     FullReadout const& readout
 ){
-    // Read new data from the hall sensors.
-    const uint8_t hall_state = read_hall_sensors_state();
 
     // Update the sector variable.
-    const uint8_t hall_sector = get_hall_sector(hall_state);
+    const uint8_t hall_sector = get_hall_sector(readout.state_flags & hall_state_bit_mask);
 
     // Check if the magnet is present.
     const bool angle_valid = hall_sector < hall_sector_base;

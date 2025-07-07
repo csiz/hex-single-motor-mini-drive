@@ -83,13 +83,17 @@ uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
 
 void save_settings_to_flash(
     CurrentCalibration const& current_calibration, 
-    PIDParameters const& pid_parameters
+    PIDParameters const& pid_parameters,
+    ObserverParameters const& observer_parameters
 ) {
     // Write the current calibration to the buffer.
     write_current_calibration(page_buffer + current_calibration_offset, current_calibration);
 
     // Write the PID parameters to the buffer.
     write_pid_parameters(page_buffer + pid_parameters_offset, pid_parameters);
+
+    // Write the observer parameters to the buffer.
+    write_observer_parameters(page_buffer + observer_parameters_offset, observer_parameters);
 
     // Write the buffer to flash memory.
     if(write_to_flash(reinterpret_cast<uint32_t *>(user_data), page_buffer, FLASH_PAGE_SIZE) != HAL_OK) {

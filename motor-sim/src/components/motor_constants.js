@@ -28,7 +28,7 @@ export const millis_per_cycle = 1.0/cycles_per_millisecond;
 // Angle units
 // -----------
 
-export const angle_base = 1024;
+export const angle_base = 4096;
 
 // Convert degrees to angle units.
 export function degrees_to_angle_units(degrees){
@@ -51,8 +51,8 @@ export function unbounded_angle_units_to_degrees(angle){
 // Speed units
 // -----------
 
-export const speed_fixed_point = 32;
-export const speed_variance_fixed_point = 1024;
+export const speed_fixed_point = 8;
+export const speed_variance_fixed_point = 64;
 
 
 export function speed_units_to_degrees_per_millisecond(speed){
@@ -66,9 +66,12 @@ export function degrees_per_millisecond_to_speed_units(speed){
 
 // Bit handling constants
 // ----------------------
-
+export const hall_state_bit_offset = 0;
 export const emf_detected_bit_offset = 11;
 export const emf_direction_is_negative_bit_offset = 10;
+export const current_detected_bit_offset = 9;
+
+export const hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
 // Motor control constants
 // -----------------------

@@ -14,10 +14,12 @@ import {
   phase_inductance,
   emf_detected_bit_offset,
   emf_direction_is_negative_bit_offset,
+  hall_state_bit_mask,
+  current_detected_bit_offset,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
-import {square, dq0_transform, exponential_stats} from './math_utils.js';
+import {square, dq0_transform, exponential_stats, clarke_transform} from './math_utils.js';
 
 export const header_size = 2; // 2 bytes
 
@@ -164,6 +166,18 @@ function process_readout_diff(readout, previous_readout){
   };
 }
 
+function get_hall_sector({hall_u, hall_v, hall_w}){
+  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
+  switch(hall_state){
+    case 0b001: return 0;
+    case 0b011: return 1;
+    case 0b010: return 2;
+    case 0b110: return 3;
+    case 0b100: return 4;
+    case 0b101: return 5;
+    default: return null;
+  }
+}
 
 const readout_size = 30;
 
@@ -204,9 +218,21 @@ function parse_readout(data_view, previous_readout){
   offset += 2;
 
 
+  const hall_state = (state_flags & hall_state_bit_mask);
+
+  const hall_u = Boolean(hall_state & 0b001) * 1;
+  const hall_v = Boolean(hall_state & 0b010) * 1;
+  const hall_w = Boolean(hall_state & 0b100) * 1;
+
+  // Approximate the angle for the 6 sectors of the hall sensor; for plotting.
+  const ε = 2;
+  const hall_u_as_angle = hall_u ? hall_v ? + 60 - ε : hall_w ? - 60 + ε :    0 : null;
+  const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
+  const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
+
   const emf_detected = (state_flags >> emf_detected_bit_offset) & 0b1;
   const emf_direction_negative = (state_flags >> emf_direction_is_negative_bit_offset) & 0b1;
-
+  const current_detected = (state_flags >> current_detected_bit_offset) & 0b1;
 
   // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
   const u_pwm = Math.floor(pwm_commands / pwm_base / pwm_base) % pwm_base;
@@ -218,6 +244,10 @@ function parse_readout(data_view, previous_readout){
   const u_drive_voltage = (u_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
   const v_drive_voltage = (v_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
   const w_drive_voltage = (w_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
+
+  const [drive_voltage_alpha, drive_voltage_beta] = clarke_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage);
+  const drive_voltage_angle = radians_to_degrees(Math.atan2(drive_voltage_beta, drive_voltage_alpha));
+  const drive_voltage_magnitude = Math.sqrt(drive_voltage_alpha * drive_voltage_alpha + drive_voltage_beta * drive_voltage_beta);
 
 
   const scaled_u_current = u_readout * this.current_calibration.u_factor;
@@ -274,15 +304,25 @@ function parse_readout(data_view, previous_readout){
   const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
-
+  const steady_state_alpha_current = drive_voltage_magnitude * 1.16 / phase_resistance;
 
   const readout = {
+    // Index
     readout_number,
     readout_index, 
     time,
+    // State flags
+    emf_detected,
+    emf_direction_negative,
+    current_detected,
+    hall_u,
+    hall_v,
+    hall_w,
+    // Raw readout values
     u_readout, v_readout, w_readout,
     u_readout_diff, v_readout_diff, w_readout_diff,
     ref_readout,
+    // Readouts converted to physical dimensions
     u_current, v_current, w_current, avg_current,
     web_alpha_current, web_beta_current, 
     web_current_magnitude,
@@ -291,13 +331,19 @@ function parse_readout(data_view, previous_readout){
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
+    drive_voltage_alpha,
+    drive_voltage_beta,
+    drive_voltage_angle,
+    drive_voltage_magnitude,
+    steady_state_alpha_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,
+    hall_u_as_angle,
+    hall_v_as_angle,
+    hall_w_as_angle,
     angle,
     angular_speed,
-    emf_detected,
-    emf_direction_negative,
     instant_vcc_voltage,
     web_alpha_emf_voltage, web_beta_emf_voltage, 
     web_emf_voltage_magnitude,
@@ -358,11 +404,11 @@ function parse_full_readout(data_view, previous_readout){
 
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const angle_error_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
+  const alpha_inductor_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const angular_speed_error_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
+  const beta_inductor_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
   const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
@@ -394,9 +440,6 @@ function parse_full_readout(data_view, previous_readout){
     cycle_start_tick,
     cycle_end_tick,
     
-    angle_stdev,
-    angular_speed_stdev,
-
     alpha_current,
     beta_current,
     alpha_emf_voltage,
@@ -408,10 +451,13 @@ function parse_full_readout(data_view, previous_readout){
     emf_power,
     inductive_power,
 
+    angle_stdev,
     angle_error,
-    angle_error_stdev,
+    angular_speed_stdev,
     angular_speed_error,
-    angular_speed_error_stdev,
+
+    alpha_inductor_voltage,
+    beta_inductor_voltage,
 
     inductor_angle,
     inductor_angle_stdev,
@@ -651,7 +697,9 @@ export const parser_mapping = {
 
 const basic_command_size = 8;
 
-export function serialise_command({command, command_timeout = 0, command_pwm = 0, command_leading_angle = 0, additional_data = undefined}) {
+export const default_command_options = {command_timeout: 0, command_pwm: 0, command_secondary: 0, additional_data: undefined};
+
+export function serialise_command({command, command_timeout, command_pwm, command_secondary, additional_data}) {
   const {serialise_func} = serialiser_mapping[command] ?? {serialise_func: null};
 
   // Serialise the command with a special serialiser if it exists.
@@ -668,7 +716,7 @@ export function serialise_command({command, command_timeout = 0, command_pwm = 0
   offset += 2;
   view.setInt16(offset, command_pwm);
   offset += 2;
-  view.setInt16(offset, command_leading_angle);
+  view.setInt16(offset, command_secondary);
   offset += 2;
 
   return buffer;

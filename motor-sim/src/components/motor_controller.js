@@ -2,7 +2,7 @@ import {serial as serial_polyfill} from "web-serial-polyfill";
 
 import {wait} from "./async_utils.js";
 import {exponential_average} from "./math_utils.js";
-import {parser_mapping, command_codes, serialise_command, header_size} from "./motor_interface.js";
+import {parser_mapping, command_codes, serialise_command, header_size, default_command_options} from "./motor_interface.js";
 import {default_current_calibration, default_pid_parameters, history_size} from "./motor_constants.js";
 
 export { command_codes };
@@ -242,9 +242,9 @@ export class MotorController {
   }
 
   /* Send a command to the motor driver. */
-  async send_command({command, command_timeout = 0, command_pwm = 0, command_leading_angle = 0, additional_data = undefined}) {
+  async send_command({command, ...command_options}) {
     if (!this._port.writable) return;
-    const buffer = serialise_command({command, command_timeout, command_pwm, command_leading_angle, additional_data});
+    const buffer = serialise_command({...default_command_options,command, ...command_options});
     await this._writer.write(buffer);
   }
 
