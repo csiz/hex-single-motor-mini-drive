@@ -85,15 +85,15 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.inductive_power);
     offset += 2;
 
-    write_int16(buffer + offset, readout.alpha_driven_voltage);
+    write_int16(buffer + offset, readout.u_debug);
     offset += 2;
-    write_int16(buffer + offset, readout.beta_to_driven_emf_voltage);
+    write_int16(buffer + offset, readout.v_debug);
     offset += 2;
-    write_int16(buffer + offset, readout.driven_angle);
+    write_int16(buffer + offset, readout.w_debug);
     offset += 2;
-    write_int16(buffer + offset, readout.driven_angular_speed);
+    write_int16(buffer + offset, readout.motor_constant);
     offset += 2;
-    
+
     write_int16(buffer + offset, readout.angle_variance);
     offset += 2;
     write_int16(buffer + offset, readout.angle_error);

@@ -245,7 +245,7 @@ function parse_readout(data_view, previous_readout){
   const v_drive_voltage = (v_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
   const w_drive_voltage = (w_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
 
-  const [drive_voltage_alpha, drive_voltage_beta] = clarke_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage);
+  const [drive_voltage_alpha, drive_voltage_beta] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
   const drive_voltage_angle = radians_to_degrees(Math.atan2(drive_voltage_beta, drive_voltage_alpha));
   const drive_voltage_magnitude = Math.sqrt(drive_voltage_alpha * drive_voltage_alpha + drive_voltage_beta * drive_voltage_beta);
 
@@ -304,7 +304,7 @@ function parse_readout(data_view, previous_readout){
   const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
-  const steady_state_alpha_current = drive_voltage_magnitude * 1.16 / phase_resistance;
+  const steady_state_alpha_current = drive_voltage_magnitude / phase_resistance;
 
   const readout = {
     // Index
@@ -397,13 +397,13 @@ function parse_full_readout(data_view, previous_readout){
   const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
 
-  const alpha_driven_voltage = calculate_voltage(data_view.getInt16(offset));
+  const u_debug = data_view.getInt16(offset);
   offset += 2;
-  const beta_to_driven_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  const v_debug = data_view.getInt16(offset);
   offset += 2;
-  const driven_angle = angle_units_to_degrees(data_view.getInt16(offset));
+  const w_debug = data_view.getInt16(offset);
   offset += 2;
-  const driven_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  const motor_constant = data_view.getInt16(offset);
   offset += 2;
 
   const angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
@@ -459,10 +459,10 @@ function parse_full_readout(data_view, previous_readout){
     angular_speed_stdev,
     angular_speed_error,
 
-    alpha_driven_voltage,
-    beta_to_driven_emf_voltage,
-    driven_angle,
-    driven_angular_speed,
+    u_debug,
+    v_debug,
+    w_debug,
+    motor_constant,
 
     inductor_angle,
     inductor_angle_stdev,

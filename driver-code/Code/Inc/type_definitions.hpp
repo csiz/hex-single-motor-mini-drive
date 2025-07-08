@@ -161,10 +161,10 @@ struct FullReadout : public Readout {
     int16_t emf_power;
     int16_t inductive_power;
 
-    int16_t alpha_driven_voltage;
-    int16_t beta_to_driven_emf_voltage;
-    int16_t driven_angle;
-    int16_t driven_angular_speed;
+    int16_t u_debug;
+    int16_t v_debug;
+    int16_t w_debug;
+    int16_t motor_constant;
     
     int16_t angle_variance;
     int16_t angle_error;

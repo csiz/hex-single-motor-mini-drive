@@ -42,6 +42,7 @@ static inline PIDControl compute_pid_control(
 
 // Update the observer state based on the error.
 static inline void update_observer(ObserverState & observer, const int16_t error, const int16_t observer_gain) {
+    if (not error) return;
 
     const int value_adjustment = sign(error) + error * observer_gain / observer_fixed_point;
 

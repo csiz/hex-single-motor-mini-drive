@@ -69,10 +69,16 @@ const ObserverState default_observer_state = {
 };
 
 const ObserverParameters default_observer_parameters = {
-    .rotor_angle_ki = observer_fixed_point / 16,
-    .rotor_angular_speed_ki = observer_fixed_point / 256,
+    .rotor_angle_ki = observer_fixed_point / 4,
+    .rotor_angular_speed_ki = observer_fixed_point / 16,
     .inductor_angle_ki = observer_fixed_point / 4,
-    .inductor_angular_speed_ki = observer_fixed_point / 256,
+    .inductor_angular_speed_ki = observer_fixed_point / 16,
+    .resistance_ki = 16,
+    .inductance_ki = 16,
+    .motor_constant_ki = 16,
+    .magnetic_resistance_ki = 16,
+    .rotor_mass_ki = 16,
+    .rotor_torque_ki = 16
 };
 
 
@@ -224,13 +230,6 @@ const uint16_t pwm_max_hold = pwm_base * 2 / 10;
 const uint16_t max_timeout = 0xFFFF;
 
 
-// Time dependent constants
-// ------------------------
-
-const int phase_readout_diff_per_cycle_to_voltage = (
-    (pwm_cycles_per_second * phase_inductance * voltage_fixed_point + inductance_fixed_point / 2) / 
-    inductance_fixed_point
-);
 
 // Motor control tables
 // --------------------
@@ -305,9 +304,7 @@ inline constexpr int signed_angle(int angle){
 const int max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 // Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
-const int speed_fixed_point = 8;
-
-const int square_speed_fixed_point = square(speed_fixed_point);
+const int speed_fixed_point = 16;
 
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
@@ -317,14 +314,40 @@ const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_po
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
-// Threshold speed when we consider the motor to be moving; in angle units per pwm cycle.
-// TODO: is this better as a voltage magnitude?
-// const int threshold_speed = 20 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
 
 const int emf_base = static_cast<int>(pwm_base * 1.16);
 
-// Fixed point representation of the motor constant.
-const int motor_constant_fixed_point = 1 << 14;
+// Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
+const int motor_constant_fixed_point = 1 << 18;
+
+const int radians_per_sec_div_angle_base = static_cast<int>(2 * 3.14159265 * pwm_cycles_per_second) / angle_base;
+
+
+// Threshold speed when we consider the motor to be moving; in angle units per pwm cycle.
+const int motor_constant_threshold_speed = 20 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
+
+
+// Time dependent constants
+// ------------------------
+
+const int phase_readout_diff_per_cycle_to_voltage = round_div(
+    pwm_cycles_per_second * phase_inductance * voltage_fixed_point,
+    inductance_fixed_point
+);
+
+const int emf_change_current_voltage_conversion = (
+    (motor_constant_fixed_point * angle_base) / 
+    (voltage_fixed_point * pwm_cycles_per_second)
+);
+
+const int emf_change_rotor_voltage_conversion = (
+    (speed_fixed_point * motor_constant_fixed_point) / 
+    (radians_per_sec_div_angle_base * voltage_fixed_point)
+);
+
+
+// Calibration and PID constants
+// -----------------------------
 
 
 const int16_t current_calibration_fixed_point = 1024;

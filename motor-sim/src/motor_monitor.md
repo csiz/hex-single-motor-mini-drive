@@ -939,6 +939,9 @@ const plot_motor_values = plot_lines({
   y_label: "Value",
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
+    {y: "u_debug", label: "U Debug", color: colors.u},
+    {y: "v_debug", label: "V Debug", color: colors.v},
+    {y: "w_debug", label: "W Debug", color: colors.w},
   ],
   curve,
 });

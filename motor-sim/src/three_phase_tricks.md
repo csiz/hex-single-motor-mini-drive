@@ -26,6 +26,7 @@ rotating phasor frame).
 
 <div class="card tight">
   <div>${phases_rebased_plot}</div>
+  Maximum voltage diff is: ${max_adj.toFixed(3)} V
 </div>
 
 We need to approximate the atan2 function because we don't have enough processing to
@@ -107,8 +108,9 @@ const phases_rebased_plot = Plot.plot({
     Plot.lineY(phases, {x: "deg", y: "adj_u", stroke: 'red', label: 'U'}),
     Plot.lineY(phases, {x: "deg", y: "adj_v", stroke: 'green', label: 'V'}),
     Plot.lineY(phases, {x: "deg", y: "adj_w", stroke: 'blue', label: 'W'}),
+    Plot.ruleY([max_adj], {stroke: 'purple', strokeWidth: 1}),
     Plot.gridX({interval: 60, stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
+    Plot.gridY({interval: 0.25, stroke: 'black', strokeWidth : 2}),
   ]
 });
 

@@ -51,9 +51,7 @@ export function unbounded_angle_units_to_degrees(angle){
 // Speed units
 // -----------
 
-export const speed_fixed_point = 8;
-export const speed_variance_fixed_point = 64;
-
+export const speed_fixed_point = 16;
 
 export function speed_units_to_degrees_per_millisecond(speed){
   return unbounded_angle_units_to_degrees(speed / speed_fixed_point) * cycles_per_millisecond;
