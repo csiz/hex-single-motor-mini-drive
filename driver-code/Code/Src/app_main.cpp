@@ -209,9 +209,6 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     // Stop emptying the readouts queue; we want to keep the test data.
     usb_wait_full_history = true;
 
-    // Stop adding readouts to the queue until the test starts in the interrupt handler.
-    usb_readouts_to_send = history_size;
-
     // Start the test schedule.
     set_motor_command(DriverState::SCHEDULE, DriverParameters{ .schedule = &schedule });
 }
@@ -493,7 +490,18 @@ inline void usb_queue_send(uint8_t * data, size_t len_to_send) {
 
 
 void usb_queue_response(FullReadout const& readout) {
+    if(usb_stream_state){
+        if (not usb_check_queue(full_readout_size)) return;
+        
+        // We have already sent this readout; don't send it again.
+        if (usb_stream_last_sent == readout.readout_number) return;
 
+        write_full_readout(usb_response_buffer, readout);
+        usb_queue_send(usb_response_buffer, full_readout_size);
+
+        usb_stream_last_sent = readout.readout_number;
+    }
+    
     // Check if we have to wait for the queue to fill before sending readouts.
     // This is used to prevent sending readouts while the motor is commutating.
     if (usb_wait_full_history) {
@@ -571,17 +579,7 @@ void usb_queue_response(FullReadout const& readout) {
         
     }
 
-    if(usb_stream_state){
-        if (not usb_check_queue(full_readout_size)) return;
-        
-        // We have already sent this readout; don't send it again.
-        if (usb_stream_last_sent == readout.readout_number) return;
 
-        write_full_readout(usb_response_buffer, readout);
-        usb_queue_send(usb_response_buffer, full_readout_size);
-
-        usb_stream_last_sent = readout.readout_number;
-    }
 }
 
 void usb_receive_command(){

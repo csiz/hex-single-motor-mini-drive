@@ -755,7 +755,6 @@ const plot_speed = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.angular_speed_stdev}),
     },
     {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
-    
     {
       y: "inductor_angular_speed", label: "Inductor Angular Speed", color: colors.web_angular_speed,
       draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angular_speed_stdev}),
@@ -885,8 +884,6 @@ const plot_dq0_voltages = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.alpha_emf_voltage_stdev}),
     },
     {y: "alpha_emf_voltage", label: "EMF Voltage Alpha", color: colors.alpha_current},
-    {y: "alpha_inductor_voltage", label: "Inductor Voltage Alpha", color: d3.color(colors.alpha_current).darker(1)},
-    {y: "beta_inductor_voltage", label: "Inductor Voltage Beta", color: d3.color(colors.beta_current).darker(1)},
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},

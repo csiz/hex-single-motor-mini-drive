@@ -302,6 +302,47 @@ void adc_interrupt_handler(){
     const int v_emf_voltage = -(v_drive_voltage - v_resistive_voltage - v_inductor_voltage);
     const int w_emf_voltage = -(w_drive_voltage - w_resistive_voltage - w_inductor_voltage);
 
+    
+    // Find driven angle via integer gradient descent.
+    // const int alpha_driven_voltage = (
+    //     u_drive_voltage * get_cos(observers.driven_angle.value) +
+    //     v_drive_voltage * get_cos(observers.driven_angle.value - third_circle) +
+    //     w_drive_voltage * get_cos(observers.driven_angle.value - two_thirds_circle)
+    // ) / angle_base;
+
+    // const int beta_driven_voltage = (
+    //     -u_drive_voltage * get_sin(observers.driven_angle.value) +
+    //     -v_drive_voltage * get_sin(observers.driven_angle.value - third_circle) +
+    //     -w_drive_voltage * get_sin(observers.driven_angle.value - two_thirds_circle)
+    // ) / angle_base;
+
+    // if (alpha_driven_voltage or beta_driven_voltage) {
+    //     const int angle_error = funky_atan2(beta_driven_voltage, alpha_driven_voltage);
+    //     update_observer(
+    //         observers.driven_angle, 
+    //         angle_error, 
+    //         observer_parameters.inductor_angle_ki
+    //     );
+    //     observers.driven_angle.value = normalize_angle(observers.driven_angle.value);
+    //     const int angular_speed_error = angle_error * speed_fixed_point;
+    //     update_observer(
+    //         observers.driven_angular_speed, 
+    //         angular_speed_error, 
+    //         observer_parameters.inductor_angular_speed_ki
+    //     );
+    // } else {
+    //     // Keep value the same but reset the rest.
+    //     observers.driven_angle.value_variance = max_16bit;
+    //     observers.driven_angular_speed.value = 0;
+    //     observers.driven_angular_speed.value_variance = max_16bit;
+    // }
+
+    // const int beta_to_driven_emf_voltage = (
+    //     -u_emf_voltage * get_sin(observers.driven_angle.value) +
+    //     -v_emf_voltage * get_sin(observers.driven_angle.value - third_circle) +
+    //     -w_emf_voltage * get_sin(observers.driven_angle.value - two_thirds_circle)
+    // ) / angle_base;
+
 
     // Calculate the park transformed currents.
     // 
@@ -366,18 +407,6 @@ void adc_interrupt_handler(){
 
     }
 
-    const int alpha_inductor_voltage = (
-        u_inductor_voltage * get_cos(observers.inductor_angle.value) +
-        v_inductor_voltage * get_cos(observers.inductor_angle.value - third_circle) +
-        w_inductor_voltage * get_cos(observers.inductor_angle.value - two_thirds_circle)
-    ) / angle_base;
-
-    const int beta_inductor_voltage = (
-        -u_inductor_voltage * get_sin(observers.inductor_angle.value) +
-        -v_inductor_voltage * get_sin(observers.inductor_angle.value - third_circle) +
-        -w_inductor_voltage * get_sin(observers.inductor_angle.value - two_thirds_circle)
-    ) / angle_base;
-
     // Calculate the park transformed EMF voltages.
     // 
     // Use the kalman filtered angle estimates. These are updated on the order of 2KHz while the PWM
@@ -406,12 +435,12 @@ void adc_interrupt_handler(){
 
     const int sq_emf_voltage = square(beta_emf_voltage) + square(alpha_emf_voltage);
 
-    const int estimated_emf_voltage = max(abs(alpha_emf_voltage), abs(beta_emf_voltage));
+    emf_voltage_average = (15 * emf_voltage_average + beta_emf_voltage) / 16;
 
-    emf_voltage_average = (15 * emf_voltage_average + estimated_emf_voltage) / 16;
+    const int delta_emf_voltage = beta_emf_voltage - emf_voltage_average;
 
     emf_voltage_variance = min(max_16bit,
-        1 + (15 * emf_voltage_variance + square(estimated_emf_voltage - emf_voltage_average)) / 16
+        1 + (15 * emf_voltage_variance + square(delta_emf_voltage)) / 16
     );
 
     // Check if the emf voltage is away from zero with enough confidence.
@@ -452,7 +481,7 @@ void adc_interrupt_handler(){
         //         observer_parameters.rotor_angular_speed_ki
         //     );
         // } else 
-        if (compute_speed and abs(angle_error) < quarter_circle) {
+        if (compute_speed) {
             const int angular_speed_error = angle_error * speed_fixed_point;
 
             update_observer(
@@ -469,6 +498,15 @@ void adc_interrupt_handler(){
             // if (wrong_phase) {
             //     observers.rotor_angle.value = normalize_angle(observers.rotor_angle.value + half_circle);
             // }
+        } else {
+            
+            const int angular_speed_error = - observers.rotor_angular_speed.value * delta_emf_voltage / beta_emf_voltage;
+            
+            update_observer(
+                observers.rotor_angular_speed,
+                angular_speed_error,
+                observer_parameters.rotor_angular_speed_ki
+            );
         }
     } else if (observers.rotor_angular_speed.value) {
         // Drop speed towards 0.
@@ -597,12 +635,13 @@ void adc_interrupt_handler(){
 
     readout.alpha_current = alpha_current;
     readout.beta_current = beta_current;
-    
     readout.alpha_emf_voltage = alpha_emf_voltage;
     readout.beta_emf_voltage = beta_emf_voltage;
 
-    readout.alpha_inductor_voltage = alpha_inductor_voltage;
-    readout.beta_inductor_voltage = beta_inductor_voltage;
+    // readout.alpha_driven_voltage = alpha_driven_voltage;
+    // readout.beta_to_driven_emf_voltage = beta_to_driven_emf_voltage;
+    // readout.driven_angle = observers.driven_angle.value;
+    // readout.driven_angular_speed = observers.driven_angular_speed.value;
 
     readout.total_power = total_power;
     readout.resistive_power = resistive_power;
@@ -612,6 +651,7 @@ void adc_interrupt_handler(){
     readout.inductor_angle = observers.inductor_angle.value;
     readout.inductor_angle_variance = observers.inductor_angle.value_variance;
     readout.inductor_angle_error = observers.inductor_angle.error;
+    
     readout.inductor_angular_speed = observers.inductor_angular_speed.value;
     readout.inductor_angular_speed_variance = observers.inductor_angular_speed.value_variance;
     readout.inductor_angular_speed_error = observers.inductor_angular_speed.error;

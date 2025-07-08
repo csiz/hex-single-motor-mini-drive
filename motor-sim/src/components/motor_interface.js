@@ -378,11 +378,6 @@ function parse_full_readout(data_view, previous_readout){
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
-  const angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
-  offset += 2;
-  const angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
-  offset += 2;
-
   const alpha_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
   const beta_current = current_conversion * data_view.getInt16(offset);
@@ -402,30 +397,38 @@ function parse_full_readout(data_view, previous_readout){
   const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
 
+  const alpha_driven_voltage = calculate_voltage(data_view.getInt16(offset));
+  offset += 2;
+  const beta_to_driven_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  offset += 2;
+  const driven_angle = angle_units_to_degrees(data_view.getInt16(offset));
+  offset += 2;
+  const driven_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  offset += 2;
+
+  const angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
+  offset += 2;
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const alpha_inductor_voltage = calculate_voltage(data_view.getInt16(offset));
+  const angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const beta_inductor_voltage = calculate_voltage(data_view.getInt16(offset));
-  offset += 2;
+
   const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   const inductor_angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   const inductor_angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angle_error_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
-  offset += 2;
+
   const inductor_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
   const inductor_angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   const inductor_angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angular_speed_error_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
-  offset += 2;
+
   
 
   const battery_current = total_power / vcc_voltage;
@@ -456,18 +459,18 @@ function parse_full_readout(data_view, previous_readout){
     angular_speed_stdev,
     angular_speed_error,
 
-    alpha_inductor_voltage,
-    beta_inductor_voltage,
+    alpha_driven_voltage,
+    beta_to_driven_emf_voltage,
+    driven_angle,
+    driven_angular_speed,
 
     inductor_angle,
     inductor_angle_stdev,
     inductor_angle_error,
-    inductor_angle_error_stdev,
 
     inductor_angular_speed,
     inductor_angular_speed_stdev,
     inductor_angular_speed_error,
-    inductor_angular_speed_error_stdev,
   };
 }
 

@@ -64,10 +64,7 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.cycle_end_tick);
     offset += 2;
-    write_uint16(buffer + offset, readout.angle_variance);
-    offset += 2;
-    write_uint16(buffer + offset, readout.angular_speed_variance);
-    offset += 2;
+
 
     write_int16(buffer + offset, readout.alpha_current);
     offset += 2;
@@ -88,13 +85,22 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.inductive_power);
     offset += 2;
 
+    write_int16(buffer + offset, readout.alpha_driven_voltage);
+    offset += 2;
+    write_int16(buffer + offset, readout.beta_to_driven_emf_voltage);
+    offset += 2;
+    write_int16(buffer + offset, readout.driven_angle);
+    offset += 2;
+    write_int16(buffer + offset, readout.driven_angular_speed);
+    offset += 2;
+    
+    write_int16(buffer + offset, readout.angle_variance);
+    offset += 2;
     write_int16(buffer + offset, readout.angle_error);
     offset += 2;
-    write_int16(buffer + offset, readout.alpha_inductor_voltage);
+    write_int16(buffer + offset, readout.angular_speed_variance);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed_error);
-    offset += 2;
-    write_int16(buffer + offset, readout.beta_inductor_voltage);
     offset += 2;
 
     write_int16(buffer + offset, readout.inductor_angle);
@@ -103,8 +109,7 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.inductor_angle_error);
     offset += 2;
-    write_int16(buffer + offset, readout.inductor_angle_error_variance);
-    offset += 2;
+
 
     write_int16(buffer + offset, readout.inductor_angular_speed);
     offset += 2;
@@ -112,8 +117,7 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.inductor_angular_speed_error);
     offset += 2;
-    write_int16(buffer + offset, readout.inductor_angular_speed_error_variance);
-    offset += 2;
+
 
     // Check if we wrote the correct number of bytes.
     if (offset != full_readout_size) error();

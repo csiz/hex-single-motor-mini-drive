@@ -147,30 +147,37 @@ struct FullReadout : public Readout {
     uint16_t adc_update_rate;
     uint16_t temperature;
     uint16_t vcc_voltage;
+
     int16_t cycle_start_tick;
     int16_t cycle_end_tick;
-    int16_t angle_variance;
-    int16_t angular_speed_variance;
+
     int16_t alpha_current;
     int16_t beta_current;
     int16_t alpha_emf_voltage;
     int16_t beta_emf_voltage;
+
     int16_t total_power;
     int16_t resistive_power;
     int16_t emf_power;
     int16_t inductive_power;
+
+    int16_t alpha_driven_voltage;
+    int16_t beta_to_driven_emf_voltage;
+    int16_t driven_angle;
+    int16_t driven_angular_speed;
+    
+    int16_t angle_variance;
     int16_t angle_error;
-    int16_t alpha_inductor_voltage;
+    int16_t angular_speed_variance;
     int16_t angular_speed_error;
-    int16_t beta_inductor_voltage;
+    
     int16_t inductor_angle;
     int16_t inductor_angle_variance;
     int16_t inductor_angle_error;
-    int16_t inductor_angle_error_variance;
+    
     int16_t inductor_angular_speed;
     int16_t inductor_angular_speed_variance;
     int16_t inductor_angular_speed_error;
-    int16_t inductor_angular_speed_error_variance;
 };
 
 
@@ -289,6 +296,9 @@ struct ObserverState {
 };
 
 struct Observers {
+    ObserverState driven_angle;
+    ObserverState driven_angular_speed;
+
     // The rotor magnetic angle.
     ObserverState rotor_angle;
 
