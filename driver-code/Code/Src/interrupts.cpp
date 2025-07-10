@@ -51,7 +51,7 @@ Observers observers = {
     .resistance = {},
     .inductance = {},
     .motor_constant = {
-        .value = 256,
+        .value = 1,
         .error = 0
     },
     .magnetic_resistance = {},
@@ -258,8 +258,6 @@ void adc_interrupt_handler(){
     const int v_readout_diff = v_readout - readout.v_readout;
     const int w_readout_diff = w_readout - readout.w_readout;
 
-    // Remember the previous speed for acceleration calculations.
-    // const int previous_angular_speed = readout.angular_speed;
 
     // Predict the position based on the previous state.
     observers.rotor_angle.value += observers.rotor_angular_speed.value / speed_fixed_point;
@@ -445,14 +443,18 @@ void adc_interrupt_handler(){
     const int rotor_speed = observers.rotor_angular_speed.value;
     const int motor_constant = observers.motor_constant.value;
 
-    const int predicted_emf_voltage = -rotor_speed * motor_constant / emf_change_rotor_voltage_conversion;
+    const int predicted_emf_voltage = -rotor_speed * motor_constant / emf_motor_constant_conversion;
 
     // Don't adjust the motor constant if our prediction is the wrong sign. We mostly likely lost
     // track of the rotor polarization direction; even if we have the correct polarization axis angle.
     const bool prediction_matches_sign = predicted_emf_voltage * beta_emf_voltage >= 0;
 
-    observers.motor_constant.error = emf_fix * prediction_matches_sign * (predicted_emf_voltage - beta_emf_voltage) * rotor_speed / emf_change_rotor_voltage_conversion;
-    observers.motor_constant.value += observers.motor_constant.error * observer_parameters.motor_constant_ki / observer_fixed_point;
+    observers.motor_constant.error = emf_fix * prediction_matches_sign * (predicted_emf_voltage - beta_emf_voltage) * rotor_speed / emf_motor_constant_error_conversion;
+    observers.motor_constant.value = max(1, 
+        observers.motor_constant.value +
+        observers.motor_constant.error * observer_parameters.motor_constant_ki / observer_fixed_point
+    );
+
 
     // Calculate the power values using the phase currents and voltages.
     

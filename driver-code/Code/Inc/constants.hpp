@@ -325,9 +325,11 @@ const int phase_readout_diff_per_cycle_to_voltage = round_div(
 );
 
 
-const int emf_change_rotor_voltage_conversion = (
+const int emf_motor_constant_conversion = (
     motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
 );
+
+const int emf_motor_constant_error_conversion = emf_motor_constant_conversion / 64;
 
 
 // Calibration and PID constants
