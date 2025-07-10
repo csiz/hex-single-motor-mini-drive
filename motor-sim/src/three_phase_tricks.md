@@ -168,7 +168,8 @@ const atan_approx = phi.map(t => {
   const atan = Math.atan2(y, x) * 180 / Math.PI;
   const atan_approx = funky_atan2(y, x) * 180 / Math.PI;
 
-  return {deg, x, y, atan, atan_approx};
+  const atan_error = atan - atan_approx;
+  return {deg, x, y, atan, atan_approx, atan_error};
 });
 
 const atan_approx_plot = Plot.plot({
@@ -178,6 +179,7 @@ const atan_approx_plot = Plot.plot({
     Plot.lineY(atan_approx, {x: "deg", y: "atan_approx", stroke: 'red', label: 'atan approx'}),
     Plot.lineY(atan_approx, {x: "deg", y: "x", stroke: 'lightblue', label: 'X'}),
     Plot.lineY(atan_approx, {x: "deg", y: "y", stroke: 'lightgreen', label: 'Y'}),
+    Plot.lineY(atan_approx, {x: "deg", y: "atan_error", stroke: 'purple', label: 'Error'}),
     Plot.gridX({interval: 60, stroke: 'black', strokeWidth : 2}),
     Plot.gridY({interval: 90, stroke: 'black', strokeWidth : 2}),
   ]

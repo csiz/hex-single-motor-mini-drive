@@ -296,9 +296,6 @@ struct ObserverState {
 };
 
 struct Observers {
-    ObserverState driven_angle;
-    ObserverState driven_angular_speed;
-
     // The rotor magnetic angle.
     ObserverState rotor_angle;
 

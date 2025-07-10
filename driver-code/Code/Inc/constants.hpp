@@ -288,6 +288,9 @@ const int quarter_circle = angle_base / 4;
 // 1/8 of a circle (pi/8) aka 45 degrees.
 const int eighth_circle = angle_base / 8;
 
+// Conversion factor between angle units and radians.
+const int half_circle_div_pi = static_cast<int>(half_circle / 3.14159265);
+
 // Normalize to a positive angle (0 to 2pi).
 inline constexpr int normalize_angle(int angle){
     return (angle + angle_base) & angle_bit_mask;
@@ -306,6 +309,8 @@ const int max_rpm = 32'000 * rotor_revolutions_per_electric;
 // Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
 const int speed_fixed_point = 16;
 
+const int square_speed_fixed_point = square(speed_fixed_point);
+
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
 
@@ -314,17 +319,12 @@ const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_po
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
-
 const int emf_base = static_cast<int>(pwm_base * 1.16);
 
 // Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
-const int motor_constant_fixed_point = 1 << 18;
+const int motor_constant_fixed_point = 1 << 20;
 
-const int radians_per_sec_div_angle_base = static_cast<int>(2 * 3.14159265 * pwm_cycles_per_second) / angle_base;
-
-
-// Threshold speed when we consider the motor to be moving; in angle units per pwm cycle.
-const int motor_constant_threshold_speed = 20 * angle_base * speed_fixed_point / 360 / (pwm_cycles_per_second / 1000);
+const int radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_div_pi;
 
 
 // Time dependent constants
@@ -335,14 +335,9 @@ const int phase_readout_diff_per_cycle_to_voltage = round_div(
     inductance_fixed_point
 );
 
-const int emf_change_current_voltage_conversion = (
-    (motor_constant_fixed_point * angle_base) / 
-    (voltage_fixed_point * pwm_cycles_per_second)
-);
 
 const int emf_change_rotor_voltage_conversion = (
-    (speed_fixed_point * motor_constant_fixed_point) / 
-    (radians_per_sec_div_angle_base * voltage_fixed_point)
+    motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
 );
 
 

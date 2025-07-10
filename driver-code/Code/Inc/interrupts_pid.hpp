@@ -53,3 +53,11 @@ static inline void update_observer(ObserverState & observer, const int16_t error
     observer.value_variance = min(max_16bit, 1 + (square(value_adjustment) + observer.value_variance * 15) / 16);
 }
     
+static inline void advance_angle_observers(
+    ObserverState & angle,
+    ObserverState & angular_speed
+) {
+    angle.value = normalize_angle(angle.value + angular_speed.value / speed_fixed_point);
+    angle.value_variance = min(max_16bit, angle.value_variance + 1 + angular_speed.value_variance / square_speed_fixed_point);
+    angular_speed.value_variance = min(max_16bit, angular_speed.value_variance + 1);
+}

@@ -451,8 +451,6 @@ bool handle_command(MessageBuffer const& buffer) {
         case UNIT_TEST_OUTPUT:
             return true;
 
-        case RUN_UNIT_TEST_ATAN:
-            return run_unit_test(unit_test_atan);
         case RUN_UNIT_TEST_FUNKY_ATAN:
             return run_unit_test(unit_test_funky_atan);
         case RUN_UNIT_TEST_FUNKY_ATAN_PART_2:

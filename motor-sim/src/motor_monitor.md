@@ -707,6 +707,7 @@ const plot_electric_position = plot_lines({
       y: "angle", label: "Magnet Angle", color: colors.angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.angle_stdev}),
     },
+    {y: "angle_stdev", label: "Magnet Angle stdev", color: d3.color(colors.angle).darker(1)},
     {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
     {y: "hall_u_as_angle", label: "Hall U", color: colors.u},
     {y: "hall_v_as_angle", label: "Hall V", color: colors.v},
@@ -1471,7 +1472,6 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
       unit_test_results.value = [];
 
       const all_passed = [
-        await command_unit_test(command_codes.RUN_UNIT_TEST_ATAN, "Integer atan2"),
         await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN, "Funky atan2"),
         await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_2, "Funky atan2 part 2"),
         await command_unit_test(command_codes.RUN_UNIT_TEST_FUNKY_ATAN_PART_3, "Funky atan2 part 3"),

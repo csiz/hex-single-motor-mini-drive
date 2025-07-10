@@ -263,7 +263,6 @@ static inline int get_message_size(uint16_t code) {
         case GET_PID_PARAMETERS:
         case GET_OBSERVER_PARAMETERS:
         case SAVE_SETTINGS_TO_FLASH:
-        case RUN_UNIT_TEST_ATAN:
         case RUN_UNIT_TEST_FUNKY_ATAN:
         case RUN_UNIT_TEST_FUNKY_ATAN_PART_2:
         case RUN_UNIT_TEST_FUNKY_ATAN_PART_3:
