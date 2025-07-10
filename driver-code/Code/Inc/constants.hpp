@@ -50,9 +50,6 @@ const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 const size_t emf_detected_bit_offset = 11;
 const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 
-const size_t emf_direction_is_negative_bit_offset = 10;
-const uint16_t emf_direction_is_negative_bit_mask = 0b1 << emf_direction_is_negative_bit_offset;
-
 const size_t current_detected_bit_offset = 9;
 const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 
@@ -62,11 +59,6 @@ const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 
 const int16_t observer_fixed_point = 4096;
 
-const ObserverState default_observer_state = {
-    .value = 0,
-    .value_variance = max_16bit,
-    .error = 0
-};
 
 const ObserverParameters default_observer_parameters = {
     .rotor_angle_ki = observer_fixed_point / 4,
@@ -308,8 +300,6 @@ const int max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 // Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
 const int speed_fixed_point = 16;
-
-const int square_speed_fixed_point = square(speed_fixed_point);
 
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;

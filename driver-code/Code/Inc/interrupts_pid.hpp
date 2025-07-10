@@ -39,25 +39,3 @@ static inline PIDControl compute_pid_control(
         .output = output
     };
 }
-
-// Update the observer state based on the error.
-static inline void update_observer(ObserverState & observer, const int16_t error, const int16_t observer_gain) {
-    if (not error) return;
-
-    const int value_adjustment = sign(error) + error * observer_gain / observer_fixed_point;
-
-    observer.value = clip_to(-max_16bit, +max_16bit, observer.value + value_adjustment);
-
-    observer.error = value_adjustment;
-
-    observer.value_variance = min(max_16bit, 1 + (square(value_adjustment) + observer.value_variance * 15) / 16);
-}
-    
-static inline void advance_angle_observers(
-    ObserverState & angle,
-    ObserverState & angular_speed
-) {
-    angle.value = normalize_angle(angle.value + angular_speed.value / speed_fixed_point);
-    angle.value_variance = min(max_16bit, angle.value_variance + 1 + angular_speed.value_variance / square_speed_fixed_point);
-    angular_speed.value_variance = min(max_16bit, angular_speed.value_variance + 1);
-}

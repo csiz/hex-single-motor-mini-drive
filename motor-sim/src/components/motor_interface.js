@@ -13,7 +13,6 @@ import {
   phase_resistance, 
   phase_inductance,
   emf_detected_bit_offset,
-  emf_direction_is_negative_bit_offset,
   hall_state_bit_mask,
   current_detected_bit_offset,
 } from './motor_constants.js';
@@ -91,7 +90,6 @@ function process_readout_diff(readout, previous_readout){
     web_emf_power,
     web_total_power,
     emf_detected,
-    emf_direction_negative,
   } = readout;
 
   const {
@@ -122,10 +120,6 @@ function process_readout_diff(readout, previous_readout){
   );
 
   const is_hall_transition = prev_hall_sector != hall_sector;
-
-  const direction = emf_detected ? (emf_direction_negative ? -1 : +1) : 0;
-
-  const angle_from_emf = normalize_degrees(web_emf_voltage_angle + (direction * 90));
 
 
   const {average: inductor_angle_offset_avg, stdev: inductor_angle_offset_stdev} = exp_stats(
@@ -158,8 +152,6 @@ function process_readout_diff(readout, previous_readout){
     inductor_angle_offset_avg, inductor_angle_offset_stdev,
     web_emf_voltage_magnitude_avg, web_emf_voltage_magnitude_stdev,
     is_hall_transition,
-    direction,
-    angle_from_emf,
     web_emf_power_avg, web_emf_power_stdev,
     web_total_power_avg, web_total_power_stdev,
   };
@@ -230,7 +222,6 @@ function parse_readout(data_view, previous_readout){
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
   const emf_detected = (state_flags >> emf_detected_bit_offset) & 0b1;
-  const emf_direction_negative = (state_flags >> emf_direction_is_negative_bit_offset) & 0b1;
   const current_detected = (state_flags >> current_detected_bit_offset) & 0b1;
 
   // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
@@ -312,7 +303,6 @@ function parse_readout(data_view, previous_readout){
     time,
     // State flags
     emf_detected,
-    emf_direction_negative,
     current_detected,
     hall_u,
     hall_v,
@@ -405,29 +395,19 @@ function parse_full_readout(data_view, previous_readout){
   const motor_constant = data_view.getInt16(offset);
   offset += 2;
 
-  const angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
+  const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
+  const inductor_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  offset += 2;
+  
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
-  offset += 2;
-  const angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-
-  const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
-  offset += 2;
-  const inductor_angle_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
-  offset += 2;
   const inductor_angle_error = angle_units_to_degrees(data_view.getInt16(offset));
-  offset += 2;
-
-  const inductor_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
-  offset += 2;
-  const inductor_angular_speed_stdev = speed_units_to_degrees_per_millisecond(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   const inductor_angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-
   
 
   const battery_current = total_power / vcc_voltage;
@@ -453,22 +433,17 @@ function parse_full_readout(data_view, previous_readout){
     emf_power,
     inductive_power,
 
-    angle_stdev,
-    angle_error,
-    angular_speed_stdev,
-    angular_speed_error,
-
     u_debug,
     v_debug,
     w_debug,
     motor_constant,
-
+    
     inductor_angle,
-    inductor_angle_stdev,
-    inductor_angle_error,
-
     inductor_angular_speed,
-    inductor_angular_speed_stdev,
+    
+    angle_error,
+    angular_speed_error,
+    inductor_angle_error,
     inductor_angular_speed_error,
   };
 }

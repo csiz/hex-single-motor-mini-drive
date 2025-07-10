@@ -94,30 +94,19 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     write_int16(buffer + offset, readout.motor_constant);
     offset += 2;
 
-    write_int16(buffer + offset, readout.angle_variance);
+    write_int16(buffer + offset, readout.inductor_angle);
     offset += 2;
+    write_int16(buffer + offset, readout.inductor_angular_speed);
+    offset += 2;
+    
     write_int16(buffer + offset, readout.angle_error);
-    offset += 2;
-    write_int16(buffer + offset, readout.angular_speed_variance);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed_error);
     offset += 2;
-
-    write_int16(buffer + offset, readout.inductor_angle);
-    offset += 2;
-    write_int16(buffer + offset, readout.inductor_angle_variance);
-    offset += 2;
     write_int16(buffer + offset, readout.inductor_angle_error);
-    offset += 2;
-
-
-    write_int16(buffer + offset, readout.inductor_angular_speed);
-    offset += 2;
-    write_int16(buffer + offset, readout.inductor_angular_speed_variance);
-    offset += 2;
+    offset += 2;    
     write_int16(buffer + offset, readout.inductor_angular_speed_error);
     offset += 2;
-
 
     // Check if we wrote the correct number of bytes.
     if (offset != full_readout_size) error();

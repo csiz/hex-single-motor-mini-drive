@@ -166,17 +166,12 @@ struct FullReadout : public Readout {
     int16_t w_debug;
     int16_t motor_constant;
     
-    int16_t angle_variance;
-    int16_t angle_error;
-    int16_t angular_speed_variance;
-    int16_t angular_speed_error;
-    
     int16_t inductor_angle;
-    int16_t inductor_angle_variance;
-    int16_t inductor_angle_error;
-    
     int16_t inductor_angular_speed;
-    int16_t inductor_angular_speed_variance;
+
+    int16_t angle_error;
+    int16_t angular_speed_error;
+    int16_t inductor_angle_error;
     int16_t inductor_angular_speed_error;
 };
 
@@ -289,10 +284,8 @@ struct ObserverParameters {
 struct ObserverState {
     // Current estimate of the observed value.
     int16_t value;
-    // Variance of the observed value.
-    int16_t value_variance;
     // The last error used to update the observer.
-    int16_t error = 0;
+    int16_t error;
 };
 
 struct Observers {
