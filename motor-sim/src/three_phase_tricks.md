@@ -122,13 +122,13 @@ function chunk_array(arr) {
   return Array.from({length: Math.ceil(arr.length / chunk_size)}, (_, i) => arr.slice(i * chunk_size, i * chunk_size + chunk_size));
 }
 
-const phases_waveform = d3.range(angle_base / 4).map((x) => (x * Math.PI / (angle_base / 4))).map(phase_func);
+const phases_waveform = d3.range(angle_base).map((x) => (x * 2 * Math.PI / (angle_base))).map(phase_func);
 
-const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base / 4}] = {\n    ${chunk_array(phases_waveform).map(chunk => chunk.map(d => (d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
+const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base}] = {\n    ${chunk_array(phases_waveform).map(chunk => chunk.map(d => (d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
 
-const sin_waveform = d3.range(angle_base / 4).map((x) => (x * Math.PI / 2 / (angle_base / 4))).map(t => ({t, sin: Math.sin(t)}));
+const sin_waveform = d3.range(angle_base).map((x) => (x * 2 * Math.PI / (angle_base))).map(t => ({t, sin: Math.sin(t)}));
 
-const sin_lookup_table = `const uint16_t sin_lookup[${angle_base / 4}] = {\n    ${chunk_array(sin_waveform).map(chunk => chunk.map(({sin}) => (Math.round(sin * angle_base).toFixed(0).padStart(5, " "))).join(', ')).join(',\n    ')}\n};`;
+const sin_lookup_table = `const int16_t sin_lookup[${angle_base}] = {\n    ${chunk_array(sin_waveform).map(chunk => chunk.map(({sin}) => (Math.round(sin * angle_base).toFixed(0).padStart(5, " "))).join(', ')).join(',\n    ')}\n};`;
 
 
 
