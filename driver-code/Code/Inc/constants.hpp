@@ -50,9 +50,14 @@ const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 const size_t emf_detected_bit_offset = 11;
 const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 
+const size_t emf_fix_bit_offset = 10;
+const uint16_t emf_fix_bit_mask = 0b1 << emf_fix_bit_offset;
+
 const size_t current_detected_bit_offset = 9;
 const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 
+const size_t current_fix_bit_offset = 8;
+const uint16_t current_fix_bit_mask = 0b1 << current_fix_bit_offset;
 
 // Observer constants
 // ------------------
@@ -299,7 +304,9 @@ inline constexpr int signed_angle(int angle){
 const int max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 // Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
-const int speed_fixed_point = 64;
+const int speed_fixed_point = 32;
+
+static_assert(speed_fixed_point * angle_base - 1 <= max_16bit, "speed_fixed_point * angle_base must be less than 32768 (max 16-bit signed int)");
 
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;

@@ -47,7 +47,6 @@ Observers observers = {
     .rotor_angle = {},
     .rotor_angular_speed = {},
     .inductor_angle = {},
-    .inductor_angular_speed = {},
     .resistance = {},
     .inductance = {},
     .motor_constant = {
@@ -261,7 +260,6 @@ void adc_interrupt_handler(){
 
     // Predict the position based on the previous state.
     observers.rotor_angle.value += observers.rotor_angular_speed.value / speed_fixed_point;
-    observers.inductor_angle.value += observers.inductor_angular_speed.value / speed_fixed_point;
 
     // Get calibrated currents.
 
@@ -352,30 +350,30 @@ void adc_interrupt_handler(){
     ) / angle_base;
 
 
+    // DONE: Consider rotating towards the actual vectors. We should be able to
+    // get the proper values with a single corrective rotation if our funky_atan2
+    // is good enough.
+    // DONE: in that case we can probably drop the current detection iterative
+    // algo and use the current angle value directly. Current angle doesn't spin
+    // like the rotor... Perhaps only an imperceptible amount from quantum spin.
+    // We still wanna have a flag for certainty that current is detected.
+    // NOPE: update rotor speed all the time so we can remove more if branching
+    // Only one branch won't save us much and it helps with the direction detection.
 
+    // TODO: reimplement drive modes.
+    // TODO: also add duration to the periodic mode.
+    // TODO: better command sliders for the drive modes in the UI.
 
-    const int sq_current = square(alpha_current) + square(beta_current);
+    const bool current_detected = square(alpha_current) + square(beta_current) > 16;
 
-    const bool current_detected = sq_current > 9;
+    observers.inductor_angle.error = funky_atan2(beta_current, alpha_current);
+    observers.inductor_angle.value = normalize_angle(observers.inductor_angle.value + observers.inductor_angle.error);
 
     consecutive_current_detections = current_detected * (consecutive_current_detections + 1);
 
-    const bool current_fix = consecutive_current_detections > 16;
+    const bool current_fix = consecutive_current_detections > 4;
 
-    if (current_detected) {
-        // We have a good estimate of the beta current, so we can use it to update the inductor position.
-        observers.inductor_angle.error = funky_atan2(beta_current, alpha_current);
-
-        observers.inductor_angle.value += normalize_angle(observers.inductor_angle.error * observer_parameters.inductor_angle_ki / observer_fixed_point);
-
-        // Adjust the speed after the angle has settled.
-        if (consecutive_current_detections > 8) {
-            observers.inductor_angular_speed.error = clip_to(-max_16bit, max_16bit, observers.inductor_angle.error * speed_fixed_point);
-            observers.inductor_angular_speed.value += observers.inductor_angular_speed.error * observer_parameters.inductor_angular_speed_ki / observer_fixed_point;
-        }
-    } else {
-        observers.inductor_angular_speed.value = observers.inductor_angular_speed.value * 255 / 256;
-    }
+    
 
 
     const int sq_emf_voltage = square(beta_emf_voltage) + square(alpha_emf_voltage);
@@ -409,20 +407,24 @@ void adc_interrupt_handler(){
         observers.rotor_angle.value += normalize_angle(observers.rotor_angle.error * observer_parameters.rotor_angle_ki / observer_fixed_point);
         
         // Adjust the speed after the angle has settled.
-        if (consecutive_emf_detections > 8) {
+        if (consecutive_emf_detections > 16) {
             // Don't multiply the angle error by speed_fixed_point here, we know speed converges slower.
             observers.rotor_angular_speed.error = observers.rotor_angle.error;
             observers.rotor_angular_speed.value += observers.rotor_angular_speed.error * observer_parameters.rotor_angular_speed_ki / observer_fixed_point;
+        } else {
+            observers.rotor_angular_speed.error = 0;
         }
     } else {
+        const auto previous_speed = observers.rotor_angular_speed.value;
         observers.rotor_angular_speed.value = observers.rotor_angular_speed.value * 255 / 256;
+        observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
     }
 
     const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > 64;
 
     incorrect_direction_detections = incorrect_rotor_angle * (incorrect_direction_detections + 1);
 
-    const bool emf_fix = consecutive_emf_detections > 16 and not incorrect_direction_detections;
+    const bool emf_fix = consecutive_emf_detections > 32 and not incorrect_direction_detections;
 
     consecutive_emf_detections = emf_detected * (consecutive_emf_detections + 1);
 
@@ -433,10 +435,6 @@ void adc_interrupt_handler(){
         // Reset the incorrect detection counter.
         incorrect_direction_detections = 0;
     }
-
-    // TODO: reimplement drive modes.
-    // TODO: also add duration to the periodic mode.
-    // TODO: better command sliders for the drive modes in the UI.
 
     // Note use rotor speed after correction!
     
@@ -529,8 +527,10 @@ void adc_interrupt_handler(){
         
     readout.state_flags = (
         (hall_state << hall_state_bit_offset) |
-        (emf_fix << emf_detected_bit_offset) | 
-        (current_fix << current_detected_bit_offset)
+        (emf_fix << emf_fix_bit_offset) |
+        (emf_detected << emf_detected_bit_offset) |
+        (current_fix << current_fix_bit_offset) |
+        (current_detected << current_detected_bit_offset)
     );
 
     readout.ref_readout = ref_readout;
@@ -567,12 +567,12 @@ void adc_interrupt_handler(){
     readout.inductive_power = inductive_power;
 
     readout.inductor_angle = observers.inductor_angle.value;
-    readout.inductor_angular_speed = observers.inductor_angular_speed.value;
+    // readout.inductor_angular_speed = observers.inductor_angular_speed.value;
 
     readout.angle_error = observers.rotor_angle.error;
     readout.angular_speed_error = observers.rotor_angular_speed.error;
     readout.inductor_angle_error = observers.inductor_angle.error;
-    readout.inductor_angular_speed_error = observers.inductor_angular_speed.error;
+    // readout.inductor_angular_speed_error = observers.inductor_angular_speed.error;
 
     
     // Calculate motor outputs

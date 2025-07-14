@@ -33,11 +33,9 @@ static inline int int_sqrt(int s)
 // Minimum magnitude for funky atan2 to be considered valid
 const int funky_atan2_constant = 4;
 
-// Square of the minimum magnitude for atan2 to be considered useful.
-const int sq_ok_atan2_magnitude = 16 * 16;
-
-static inline int funky_atan2(int y, int x) {    
-    if (x == 0 and y == 0) return 0;
+static inline int funky_atan2(int y, int x) {
+    // In mod angle_base arithmetic this is equivalent to 0, but allows us to distinguish the 0 case.    
+    if (x == 0 and y == 0) return angle_base;
 
     int result = 0;
     if (x < 0) {

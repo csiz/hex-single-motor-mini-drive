@@ -15,6 +15,8 @@ import {
   emf_detected_bit_offset,
   hall_state_bit_mask,
   current_detected_bit_offset,
+  current_fix_bit_offset,
+  emf_fix_bit_offset,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
@@ -222,7 +224,9 @@ function parse_readout(data_view, previous_readout){
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
   const emf_detected = (state_flags >> emf_detected_bit_offset) & 0b1;
+  const emf_fix = (state_flags >> emf_fix_bit_offset) & 0b1;
   const current_detected = (state_flags >> current_detected_bit_offset) & 0b1;
+  const current_fix = (state_flags >> current_fix_bit_offset) & 0b1;
 
   // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
   const u_pwm = Math.floor(pwm_commands / pwm_base / pwm_base) % pwm_base;
@@ -295,6 +299,8 @@ function parse_readout(data_view, previous_readout){
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
   const steady_state_alpha_current = drive_voltage_magnitude / phase_resistance;
+  const motor_is_driven = drive_voltage_magnitude > 0.0;
+
 
   const readout = {
     // Index
@@ -303,7 +309,9 @@ function parse_readout(data_view, previous_readout){
     time,
     // State flags
     emf_detected,
+    emf_fix,
     current_detected,
+    current_fix,
     hall_u,
     hall_v,
     hall_w,
@@ -324,6 +332,7 @@ function parse_readout(data_view, previous_readout){
     drive_voltage_beta,
     drive_voltage_angle,
     drive_voltage_magnitude,
+    motor_is_driven,
     steady_state_alpha_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,

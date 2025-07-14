@@ -298,9 +298,6 @@ struct Observers {
     // The inductor coil magnetic angle.
     ObserverState inductor_angle;
 
-    // The inductor coil magnetic angular speed.
-    ObserverState inductor_angular_speed;
-
     // The phase resistance; the drag factor for the fixed reference frame current.
     ObserverState resistance;
 
