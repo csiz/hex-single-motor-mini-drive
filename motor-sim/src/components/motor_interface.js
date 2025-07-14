@@ -298,7 +298,7 @@ function parse_readout(data_view, previous_readout){
   const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
-  const steady_state_alpha_current = drive_voltage_magnitude / phase_resistance;
+  const steady_state_beta_current = drive_voltage_magnitude / phase_resistance;
   const motor_is_driven = drive_voltage_magnitude > 0.0;
 
 
@@ -333,7 +333,7 @@ function parse_readout(data_view, previous_readout){
     drive_voltage_angle,
     drive_voltage_magnitude,
     motor_is_driven,
-    steady_state_alpha_current,
+    steady_state_beta_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,
@@ -406,16 +406,16 @@ function parse_full_readout(data_view, previous_readout){
 
   const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  const spare_1 = data_view.getInt16(offset);
   offset += 2;
   
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const inductor_angle_error = angle_units_to_degrees(data_view.getInt16(offset));
+  const spare_2 = data_view.getInt16(offset);
   offset += 2;
-  const inductor_angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  const spare_3 = data_view.getInt16(offset);
   offset += 2;
   
 
@@ -448,12 +448,12 @@ function parse_full_readout(data_view, previous_readout){
     motor_constant,
     
     inductor_angle,
-    inductor_angular_speed,
+    spare_1,
     
     angle_error,
     angular_speed_error,
-    inductor_angle_error,
-    inductor_angular_speed_error,
+    spare_2,
+    spare_3,
   };
 }
 

@@ -167,12 +167,12 @@ struct FullReadout : public Readout {
     int16_t motor_constant;
     
     int16_t inductor_angle;
-    int16_t inductor_angular_speed;
+    int16_t spare_1;
 
     int16_t angle_error;
     int16_t angular_speed_error;
-    int16_t inductor_angle_error;
-    int16_t inductor_angular_speed_error;
+    int16_t spare_2;
+    int16_t spare_3;
 };
 
 
@@ -239,10 +239,10 @@ struct ObserverParameters {
     // Magnet angular speed.
     int16_t rotor_angular_speed_ki;
     
-    // Inductor position.
+    // Inductor position; TODO: this is not used anymore.
     int16_t inductor_angle_ki;
 
-    // Inductor angular speed.
+    // Inductor angular speed; TODO: this is not used anymore.
     int16_t inductor_angular_speed_ki;
 
     // Phase resistance; the drag factor for the fixed reference frame current.
@@ -294,9 +294,6 @@ struct Observers {
 
     // The rotor magnetic angular speed.
     ObserverState rotor_angular_speed;
-
-    // The inductor coil magnetic angle.
-    ObserverState inductor_angle;
 
     // The phase resistance; the drag factor for the fixed reference frame current.
     ObserverState resistance;

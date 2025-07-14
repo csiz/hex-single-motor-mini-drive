@@ -707,7 +707,6 @@ const plot_electric_position = plot_lines({
     {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
     {y: (d) => d.motor_is_driven ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[8]},
     {y: (d) => d.current_fix ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
-    {y: (d) => d.current_fix ? d.inductor_angle_error : null, label: "Inductor Angle Error", color: colors_categories[3]},
     {y: (d) => d.web_current_magnitude > 0.01 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
     {y: (d) => d.web_emf_voltage_magnitude > 0.05 ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
   ],
@@ -743,8 +742,6 @@ const plot_speed = plot_lines({
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
-    {y: "inductor_angular_speed", label: "Inductor Angular Speed", color: colors.web_angular_speed},
-    {y: "inductor_angular_speed_error", label: "Inductor Angular Speed Error", color: colors_categories[3]},
   ],
   curve,
 });
@@ -847,7 +844,7 @@ const plot_dq0_currents = plot_lines({
   y_label: "Current (A)",
   channels: [
     {y: "alpha_current", label: "Current Alpha", color: colors.alpha_current},
-    {y: "steady_state_alpha_current", label: "Steady State Alpha Current", color: d3.color(colors.alpha_current).darker(1)},
+    {y: "steady_state_beta_current", label: "Steady State Beta Current", color: d3.color(colors.alpha_current).darker(1)},
     {y: "beta_current", label: "Current Beta", color: colors.beta_current},
     {y: "web_alpha_current", label: "Current Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_current", label: "Current Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},

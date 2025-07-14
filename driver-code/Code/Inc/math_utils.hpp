@@ -1,8 +1,5 @@
 #pragma once
 
-#include <cmath> 
-#include <cstdint>
-
 // Square a number.
 static inline constexpr int square(int x){
     return x * x;
@@ -31,4 +28,9 @@ static inline constexpr int sign(int x){
 static inline constexpr int round_div(const int x, const int y) {
     // Round the division to the nearest integer.
     return (x + y / 2) / y;
+}
+
+// Get the absolute value of a number; somehow the std implementation is slower.
+static inline constexpr int faster_abs(int value) {
+    return value < 0 ? -value : value;
 }

@@ -36,7 +36,7 @@ static inline MotorOutputs update_motor_6_sector(
     const uint16_t voltage_phase_v = motor_sector_driving_table[hall_sector][1];
     const uint16_t voltage_phase_w = motor_sector_driving_table[hall_sector][2];
 
-    const uint16_t pwm = abs(sector_parameters.pwm_target);
+    const uint16_t pwm = faster_abs(sector_parameters.pwm_target);
 
     return MotorOutputs{
         .enable_flags = enable_flags_all,
@@ -87,7 +87,7 @@ static inline MotorOutputs update_motor_smooth(
     const int pwm_target = clip_to(-pwm_max_smooth, pwm_max_smooth, smooth_parameters.pwm_target);
 
     // Get the abs value of the target PWM.
-    const int abs_pwm = min(pwm_max, abs(pwm_target));
+    const int abs_pwm = min(pwm_max, faster_abs(pwm_target));
 
     // Base the direction on the sign of the target PWM.
     const int direction = 1 - (pwm_target < 0) * 2;
@@ -167,7 +167,7 @@ static inline MotorOutputs update_motor_battery_power(
         pid_parameters.battery_power_gains,
         pid_state.battery_power_control,
         max(0, -readout.total_power),
-        abs(battery_power_parameters.power_target)
+        faster_abs(battery_power_parameters.power_target)
     );
 
     // Get the target PWM after power control.

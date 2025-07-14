@@ -46,7 +46,6 @@ size_t readout_history_read_index = 0;
 Observers observers = {
     .rotor_angle = {},
     .rotor_angular_speed = {},
-    .inductor_angle = {},
     .resistance = {},
     .inductance = {},
     .motor_constant = {
@@ -155,7 +154,6 @@ void set_motor_command(DriverState const& state, DriverParameters const& paramet
 
 // Helper funcs
 // ------------
-
 
 // Combine the motor duty cycles into a single 32-bit value; because it barely fits.
 static inline uint32_t encode_pwm_commands(MotorOutputs const & outputs){
@@ -322,43 +320,41 @@ void adc_interrupt_handler(){
     //
     // Exponentially average the values below to reduce noise, 1 : 3 parts coorresponds to 150us half life
     // at our cycle frequency.
+    
+    // First alias the trig functions based on the predicted rotor angle.
 
+    const int u_cos = get_cos(observers.rotor_angle.value);
+    const int v_cos = get_cos(observers.rotor_angle.value - third_circle);
+    const int w_cos = get_cos(observers.rotor_angle.value - two_thirds_circle);
+    const int u_neg_sin = -get_sin(observers.rotor_angle.value);
+    const int v_neg_sin = -get_sin(observers.rotor_angle.value - third_circle);
+    const int w_neg_sin = -get_sin(observers.rotor_angle.value - two_thirds_circle);
 
-    const int alpha_current = round_div(
-        u_current * get_cos(observers.inductor_angle.value) +
-        v_current * get_cos(observers.inductor_angle.value - third_circle) +
-        w_current * get_cos(observers.inductor_angle.value - two_thirds_circle),
-        angle_base
-    );
+    // Park transform the currents and voltages.
+    const int alpha_current = (
+        u_current * u_cos +
+        v_current * v_cos +
+        w_current * w_cos
+    ) / angle_base;
 
     const int beta_current = (
-        -u_current * get_sin(observers.inductor_angle.value) +
-        -v_current * get_sin(observers.inductor_angle.value - third_circle) +
-        -w_current * get_sin(observers.inductor_angle.value - two_thirds_circle)
+        u_current * u_neg_sin +
+        v_current * v_neg_sin +
+        w_current * w_neg_sin
     ) / angle_base;
 
     const int alpha_emf_voltage = (
-        u_emf_voltage * get_cos(observers.rotor_angle.value) +
-        v_emf_voltage * get_cos(observers.rotor_angle.value - third_circle) +
-        w_emf_voltage * get_cos(observers.rotor_angle.value - two_thirds_circle)
+        u_emf_voltage * u_cos +
+        v_emf_voltage * v_cos +
+        w_emf_voltage * w_cos
     ) / angle_base;
 
     const int beta_emf_voltage = (
-        -u_emf_voltage * get_sin(observers.rotor_angle.value) +
-        -v_emf_voltage * get_sin(observers.rotor_angle.value - third_circle) +
-        -w_emf_voltage * get_sin(observers.rotor_angle.value - two_thirds_circle)
+        u_emf_voltage * u_neg_sin +
+        v_emf_voltage * v_neg_sin +
+        w_emf_voltage * w_neg_sin
     ) / angle_base;
 
-
-    // DONE: Consider rotating towards the actual vectors. We should be able to
-    // get the proper values with a single corrective rotation if our funky_atan2
-    // is good enough.
-    // DONE: in that case we can probably drop the current detection iterative
-    // algo and use the current angle value directly. Current angle doesn't spin
-    // like the rotor... Perhaps only an imperceptible amount from quantum spin.
-    // We still wanna have a flag for certainty that current is detected.
-    // NOPE: update rotor speed all the time so we can remove more if branching
-    // Only one branch won't save us much and it helps with the direction detection.
 
     // TODO: reimplement drive modes.
     // TODO: also add duration to the periodic mode.
@@ -366,8 +362,7 @@ void adc_interrupt_handler(){
 
     const bool current_detected = square(alpha_current) + square(beta_current) > 16;
 
-    observers.inductor_angle.error = funky_atan2(beta_current, alpha_current);
-    observers.inductor_angle.value = normalize_angle(observers.inductor_angle.value + observers.inductor_angle.error);
+    const int inductor_angle = normalize_angle(observers.rotor_angle.value + funky_atan2(beta_current, alpha_current));
 
     consecutive_current_detections = current_detected * (consecutive_current_detections + 1);
 
@@ -420,7 +415,7 @@ void adc_interrupt_handler(){
         observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
     }
 
-    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > 64;
+    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > 16;
 
     incorrect_direction_detections = incorrect_rotor_angle * (incorrect_direction_detections + 1);
 
@@ -437,19 +432,11 @@ void adc_interrupt_handler(){
     }
 
     // Note use rotor speed after correction!
-    
-    const int rotor_speed = observers.rotor_angular_speed.value;
-    const int motor_constant = observers.motor_constant.value;
 
-    const int predicted_emf_voltage = -rotor_speed * motor_constant / emf_motor_constant_conversion;
+    const int predicted_emf_voltage = faster_abs(observers.rotor_angular_speed.value) * observers.motor_constant.value / emf_motor_constant_conversion;
 
-    // Don't adjust the motor constant if our prediction is the wrong sign. We mostly likely lost
-    // track of the rotor polarization direction; even if we have the correct polarization axis angle.
-    const bool prediction_matches_sign = predicted_emf_voltage * beta_emf_voltage >= 0;
-
-    observers.motor_constant.error = emf_fix * prediction_matches_sign * (predicted_emf_voltage - beta_emf_voltage) * rotor_speed / emf_motor_constant_error_conversion;
-    observers.motor_constant.value = max(1, 
-        observers.motor_constant.value +
+    observers.motor_constant.error = emf_fix * (faster_abs(beta_emf_voltage) - predicted_emf_voltage);
+    observers.motor_constant.value += (
         observers.motor_constant.error * observer_parameters.motor_constant_ki / observer_fixed_point
     );
 
@@ -566,13 +553,10 @@ void adc_interrupt_handler(){
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
 
-    readout.inductor_angle = observers.inductor_angle.value;
-    // readout.inductor_angular_speed = observers.inductor_angular_speed.value;
+    readout.inductor_angle = inductor_angle;
 
     readout.angle_error = observers.rotor_angle.error;
     readout.angular_speed_error = observers.rotor_angular_speed.error;
-    readout.inductor_angle_error = observers.inductor_angle.error;
-    // readout.inductor_angular_speed_error = observers.inductor_angular_speed.error;
 
     
     // Calculate motor outputs
