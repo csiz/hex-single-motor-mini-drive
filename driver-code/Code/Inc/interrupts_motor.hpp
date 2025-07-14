@@ -46,18 +46,19 @@ static inline MotorOutputs update_motor_6_sector(
     };
 }
 
-static inline MotorOutputs update_motor_periodic(
-    DrivePeriodic const& periodic_parameters,
-    FullReadout const& readout,
-    PIDControlState & pid_state
+static inline int16_t get_periodic_angle(FullReadout const& readout, int16_t const& zero_offset, int16_t const& angular_speed) {
+    return normalize_angle(angular_speed * readout.readout_number / speed_fixed_point + zero_offset);
+}
+
+static inline int16_t get_zero_offset(FullReadout const& readout, int16_t const& target_angle, int16_t const& angular_speed) {
+    return signed_angle(target_angle - angular_speed * readout.readout_number / speed_fixed_point);
+}
+
+static inline MotorOutputs pwm_at_angle(
+    const uint16_t pwm_target,
+    const int16_t target_angle
 ){
-    const int pwm_target = periodic_parameters.pwm_target;
-
-    const int target_angle = normalize_angle((
-        periodic_parameters.zero_offset + 
-        periodic_parameters.angular_speed * readout.readout_number
-    ) / speed_fixed_point % angle_base);
-
+    // Get the voltage for the three phases from the table.
     const uint16_t voltage_phase_u = get_phase_pwm(target_angle);
     const uint16_t voltage_phase_v = get_phase_pwm(target_angle - third_circle);
     const uint16_t voltage_phase_w = get_phase_pwm(target_angle - two_thirds_circle);
@@ -70,12 +71,50 @@ static inline MotorOutputs update_motor_periodic(
     };
 }
 
-static inline MotorOutputs update_motor_smooth(
-    DriveSmooth const& smooth_parameters,
+static inline MotorOutputs update_motor_periodic(
+    DrivePeriodic const& periodic_parameters,
     FullReadout const& readout,
     PIDControlState & pid_state
 ){
-    const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
+    const int pwm_target = periodic_parameters.pwm_target;
+
+    const int target_angle = get_periodic_angle(
+        readout,
+        periodic_parameters.zero_offset,
+        periodic_parameters.angular_speed
+    );
+
+    return pwm_at_angle(pwm_target, target_angle);
+}
+
+const int probing_angular_speed = 32;
+
+static inline MotorOutputs update_motor_smooth(
+    DriveSmooth & smooth_parameters,
+    PIDControlState & pid_state,
+    FullReadout const& readout
+){
+    // Get the abs value of the target PWM.
+    const uint16_t pwm_target = min(pwm_max_smooth, faster_abs(smooth_parameters.pwm_target));
+
+    // Base the direction on the sign of the target PWM.
+    const int direction = 1 - (smooth_parameters.pwm_target < 0) * 2;
+
+    const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
+
+    const int target_lead_angle = direction * quarter_circle + readout.drive_to_current_offset;
+    const int target_angle = normalize_angle(readout.angle + target_lead_angle);
+
+    if (emf_fix) {
+        smooth_parameters.zero_offset = get_zero_offset(readout, target_angle, direction * probing_angular_speed);
+        
+        return pwm_at_angle(pwm_target, target_angle);
+    } else {
+        const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * probing_angular_speed);
+
+        return pwm_at_angle(pwm_target, probing_angle);
+    }
+
 
     // const int emf_compensation = - emf_detected * readout.beta_emf_voltage * emf_base / readout.vcc_voltage;
 
@@ -84,46 +123,21 @@ static inline MotorOutputs update_motor_smooth(
 
     // const int pwm_target = emf_compensation + clip_to(min_allowed_target, max_allowed_target, smooth_parameters.pwm_target);
 
-    const int pwm_target = clip_to(-pwm_max_smooth, pwm_max_smooth, smooth_parameters.pwm_target);
-
-    // Get the abs value of the target PWM.
-    const int abs_pwm = min(pwm_max, faster_abs(pwm_target));
-
-    // Base the direction on the sign of the target PWM.
-    const int direction = 1 - (pwm_target < 0) * 2;
-
-    const int rotor_angle = readout.angle & angle_bit_mask;
-
-    // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-    pid_state.current_angle_control = (
-        not emf_detected ? PIDControl{} : 
-        compute_pid_control(
-            pid_parameters.current_angle_gains,
-            pid_state.current_angle_control,
-            signed_angle(rotor_angle + direction * smooth_parameters.leading_angle - readout.inductor_angle),
-            0
-        )
-    );
-
-    const int target_lead_angle = direction * clip_to(0, half_circle, 
-        smooth_parameters.leading_angle + 
-        pid_state.current_angle_control.output / 4);
 
 
 
-    const int target_angle = normalize_angle(rotor_angle + target_lead_angle);
 
-    const uint16_t voltage_phase_u = get_phase_pwm(target_angle);
-    const uint16_t voltage_phase_v = get_phase_pwm(target_angle - third_circle);
-    const uint16_t voltage_phase_w = get_phase_pwm(target_angle - two_thirds_circle);
-    
+    // // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
+    // pid_state.current_angle_control = (
+    //     not emf_fix ? PIDControl{} : 
+    //     compute_pid_control(
+    //         pid_parameters.current_angle_gains,
+    //         pid_state.current_angle_control,
+    //         signed_angle(readout.angle + direction * quarter_circle - readout.inductor_angle),
+    //         0
+    //     )
+    // );
 
-    return MotorOutputs{
-        .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm / pwm_base),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm / pwm_base),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm / pwm_base)
-    };
 }
 
 static inline MotorOutputs update_motor_torque(
@@ -145,14 +159,16 @@ static inline MotorOutputs update_motor_torque(
     // Get the target PWM after torque control.
     const int16_t pwm_target = pid_state.torque_control.output;
 
+    DriveSmooth smooth_parameters = {
+        .duration = torque_parameters.duration,
+        .zero_offset = torque_parameters.zero_offset,
+        .pwm_target = pwm_target
+    };
+
     return update_motor_smooth(
-        DriveSmooth{
-            .duration = torque_parameters.duration,
-            .pwm_target = pwm_target,
-            .leading_angle = torque_parameters.leading_angle
-        },
-        readout,
-        pid_state
+        smooth_parameters,
+        pid_state,
+        readout
     );
 }
 
@@ -173,14 +189,16 @@ static inline MotorOutputs update_motor_battery_power(
     // Get the target PWM after power control.
     const int16_t pwm_target = clip_to(-pwm_max, pwm_max, (direction_is_negative ? -1 : 1) * pid_state.battery_power_control.output);
 
+    DriveSmooth smooth_parameters = {
+        .duration = battery_power_parameters.duration,
+        .zero_offset = battery_power_parameters.zero_offset,
+        .pwm_target = pwm_target
+    };
+
     return update_motor_smooth(
-        DriveSmooth{
-            .duration = battery_power_parameters.duration,
-            .pwm_target = pwm_target,
-            .leading_angle = battery_power_parameters.leading_angle
-        },
-        readout,
-        pid_state
+        smooth_parameters,
+        pid_state,
+        readout
     );
 }
 
@@ -307,8 +325,8 @@ static inline bool update_motor_control(
             driver_parameters = DriverParameters{
                 .smooth = DriveSmooth{
                     .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.smooth.duration)),
+                    .zero_offset = get_zero_offset(readout, readout.angle + sign(pending_parameters.smooth.pwm_target) * quarter_circle, probing_angular_speed),
                     .pwm_target = static_cast<int16_t>(clip_to(-pwm_max, +pwm_max, pending_parameters.smooth.pwm_target)),
-                    .leading_angle = static_cast<int16_t>(clip_to(0, angle_base, pending_parameters.smooth.leading_angle))
                 }
             };
             break;
@@ -322,8 +340,8 @@ static inline bool update_motor_control(
             driver_parameters = DriverParameters{
                 .torque = DriveTorque{
                     .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.torque.duration)),
+                    .zero_offset = pending_parameters.torque.zero_offset,
                     .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_parameters.torque.current_target)),
-                    .leading_angle = static_cast<int16_t>(clip_to(0, angle_base, pending_parameters.torque.leading_angle))
                 }
             };
             break;
@@ -336,8 +354,8 @@ static inline bool update_motor_control(
             driver_parameters = DriverParameters{
                 .battery_power = DriveBatteryPower{
                     .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.battery_power.duration)),
+                    .zero_offset = pending_parameters.battery_power.zero_offset,
                     .power_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_parameters.battery_power.power_target)),
-                    .leading_angle = static_cast<int16_t>(clip_to(0, angle_base, pending_parameters.battery_power.leading_angle))
                 }
             };
             break;
@@ -417,7 +435,7 @@ static inline bool update_motor_control(
             }
 
             // Update the motor outputs for the smooth driving.
-            active_motor_outputs = update_motor_smooth(driver_parameters.smooth, readout, pid_state);
+            active_motor_outputs = update_motor_smooth(driver_parameters.smooth, pid_state, readout);
 
             return false;
 

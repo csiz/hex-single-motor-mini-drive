@@ -90,22 +90,22 @@ struct DrivePeriodic {
 // Drive the motor using FOC targeting a PWM value.
 struct DriveSmooth {
     uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t zero_offset;
     int16_t pwm_target;
-    int16_t leading_angle;
 };
 
 // Drive the motor to a specific current target (torque target).
 struct DriveTorque {
     uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t zero_offset;
     int16_t current_target; // Target current in fixed point format.
-    int16_t leading_angle; // Leading angle for the current control.
 };
 
 // Drive the motor to a specific battery power drain.
 struct DriveBatteryPower {
     uint16_t duration; // Duration for the command in pwm cycles.
+    int16_t zero_offset;
     int16_t power_target; // Target power in fixed point format.
-    int16_t leading_angle; // Leading angle for the power control.
 };
 
 // Drive parameters for each state.

@@ -429,25 +429,19 @@ void adc_interrupt_handler(){
 
         observers.rotor_angle.value += normalize_angle(observers.rotor_angle.error * observer_parameters.rotor_angle_ki / observer_fixed_point);
         
-        // Adjust the speed after the angle has settled.
-        if (consecutive_emf_detections > 16) {
-            // Don't multiply the angle error by speed_fixed_point here, we know speed converges slower.
-            observers.rotor_angular_speed.error = observers.rotor_angle.error;
-            observers.rotor_angular_speed.value += observers.rotor_angular_speed.error * observer_parameters.rotor_angular_speed_ki / observer_fixed_point;
-        } else {
-            observers.rotor_angular_speed.error = 0;
-        }
+
+        // Don't multiply the angle error by speed_fixed_point here, we know speed converges slower.
+        observers.rotor_angular_speed.error = observers.rotor_angle.error;
+        observers.rotor_angular_speed.value += observers.rotor_angular_speed.error * observer_parameters.rotor_angular_speed_ki / observer_fixed_point;
     } else {
         const auto previous_speed = observers.rotor_angular_speed.value;
         observers.rotor_angular_speed.value = observers.rotor_angular_speed.value * 255 / 256;
         observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
     }
 
-    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > 0;
+    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > incorrect_direction_threshold;
 
     incorrect_direction_detections = incorrect_rotor_angle * (incorrect_direction_detections + 1);
-
-    const bool emf_fix = consecutive_emf_detections > 32 and not incorrect_direction_detections;
 
     consecutive_emf_detections = emf_detected * (consecutive_emf_detections + 1);
 
@@ -457,7 +451,11 @@ void adc_interrupt_handler(){
         observers.rotor_angle.value = normalize_angle(observers.rotor_angle.value + half_circle);
         // Reset the incorrect detection counter.
         incorrect_direction_detections = 0;
+        consecutive_emf_detections = 0;
     }
+
+    const bool emf_fix = consecutive_emf_detections > 32;
+
 
     // Note use rotor speed after correction!
 
@@ -504,7 +502,7 @@ void adc_interrupt_handler(){
     // measured magnitude of the DQ0 current. We then adjust our beta current using
     // a Taylor expansion for small alpha current. The system uses the real beta current
     // not what we measure; thus we compute the emf power using our massaged DQ0 values.
-    const int emf_power = -alpha_current * beta_emf_voltage / dq0_to_power_fixed_point;
+    const int emf_power = -beta_current * beta_emf_voltage / dq0_to_power_fixed_point;
 
     // Compute the real total power used from the balance of powers.
     // 

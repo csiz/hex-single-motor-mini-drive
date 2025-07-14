@@ -325,8 +325,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_SMOOTH, 
                 DriverParameters{ .smooth = DriveSmooth{ 
                     .duration = command.timeout, 
-                    .pwm_target = command.value,
-                    .leading_angle = command.secondary 
+                    .zero_offset = command.secondary,
+                    .pwm_target = command.value
                 }}
             );
             return false;
@@ -336,8 +336,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_TORQUE, 
                 DriverParameters{ .torque = DriveTorque{ 
                     .duration = command.timeout, 
-                    .current_target = static_cast<int16_t>(max_drive_current * command.value / pwm_max),
-                    .leading_angle = command.secondary
+                    .zero_offset = command.secondary,
+                    .current_target = static_cast<int16_t>(max_drive_current * command.value / pwm_max)
                 }}
             );
             return false;
@@ -347,8 +347,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 DriverState::DRIVE_BATTERY_POWER, 
                 DriverParameters{ .battery_power = DriveBatteryPower{ 
                     .duration = command.timeout, 
-                    .power_target = static_cast<int16_t>(max_drive_power * command.value / pwm_max),
-                    .leading_angle = command.secondary
+                    .zero_offset = command.secondary,
+                    .power_target = static_cast<int16_t>(max_drive_power * command.value / pwm_max)
                 }}
             );
             return false;

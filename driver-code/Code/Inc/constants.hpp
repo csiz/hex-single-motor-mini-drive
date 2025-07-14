@@ -319,6 +319,7 @@ const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_po
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
+const int incorrect_direction_threshold = speed_fixed_point * voltage_fixed_point * 100 / 1000;
 
 // Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
 const int motor_constant_fixed_point = 1 << 20;
