@@ -167,12 +167,12 @@ struct FullReadout : public Readout {
     int16_t motor_constant;
     
     int16_t inductor_angle;
-    int16_t spare_1;
+    int16_t drive_angle;
 
     int16_t angle_error;
     int16_t angular_speed_error;
-    int16_t spare_2;
-    int16_t spare_3;
+    int16_t drive_to_current_offset;
+    int16_t drive_to_current_offset_error;
 };
 
 
@@ -269,9 +269,8 @@ struct ObserverParameters {
     // and velocity between the inductor coil magnetic field and the rotor magnetic field.
     int16_t motor_constant_ki;
     
-    // The drag factor for the rotor magnetic field; (iron losses). Acts like resistance
-    // for the inductor flux linkages (accumulated inductor currents).
-    int16_t magnetic_resistance_ki;
+    // The angle difference between the drive angle and the current angle.
+    int16_t drive_to_current_offset_ki;
 
     // The inertial mass of the magnetic rotor and geartrain.
     int16_t rotor_mass_ki;
@@ -307,9 +306,8 @@ struct Observers {
     // The motor constant; the ratio between the EMF voltage induced in the coils and the magnet angular speed.
     ObserverState motor_constant;
 
-    // The drag factor for the rotor magnetic field; (iron losses). Acts like resistance
-    // for the inductor flux linkages (accumulated inductor currents).
-    ObserverState magnetic_resistance;
+    // The avg difference between the drive angle and the current angle.
+    ObserverState drive_to_current_offset;
 
     // The inertial mass of the magnetic rotor and geartrain.
     ObserverState rotor_mass;

@@ -65,6 +65,7 @@ export function degrees_per_millisecond_to_speed_units(speed){
 // Bit handling constants
 // ----------------------
 export const hall_state_bit_offset = 0;
+export const motor_is_driven_bit_offset = 12;
 export const emf_detected_bit_offset = 11;
 export const emf_fix_bit_offset = 10;
 export const current_detected_bit_offset = 9;

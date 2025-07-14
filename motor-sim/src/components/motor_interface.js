@@ -17,6 +17,7 @@ import {
   current_detected_bit_offset,
   current_fix_bit_offset,
   emf_fix_bit_offset,
+  motor_is_driven_bit_offset,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
@@ -86,7 +87,6 @@ function process_readout_diff(readout, previous_readout){
   const {
     time,
     hall_sector, 
-    inductor_angle_offset,
     web_emf_voltage_angle,
     web_emf_voltage_magnitude, 
     web_emf_power,
@@ -99,8 +99,6 @@ function process_readout_diff(readout, previous_readout){
     hall_sector: prev_hall_sector, 
     web_emf_voltage_magnitude_avg: prev_web_emf_voltage_magnitude_avg,
     web_emf_voltage_magnitude_stdev: prev_web_emf_voltage_magnitude_stdev,
-    inductor_angle_offset_avg: prev_inductor_angle_offset_avg,
-    inductor_angle_offset_stdev: prev_inductor_angle_offset_stdev,
     web_emf_power_avg: prev_web_emf_power_avg,
     web_emf_power_stdev: prev_web_emf_power_stdev,
     web_total_power_avg: prev_web_total_power_avg,
@@ -124,14 +122,6 @@ function process_readout_diff(readout, previous_readout){
   const is_hall_transition = prev_hall_sector != hall_sector;
 
 
-  const {average: inductor_angle_offset_avg, stdev: inductor_angle_offset_stdev} = exp_stats(
-    inductor_angle_offset, 
-    {
-      average: normalize_degrees(prev_inductor_angle_offset_avg),
-      stdev: prev_inductor_angle_offset_stdev,
-    },
-  );
-
 
   const {average: web_emf_power_avg, stdev: web_emf_power_stdev} = exp_stats(
     web_emf_power,
@@ -151,7 +141,6 @@ function process_readout_diff(readout, previous_readout){
 
   return {
     ...readout,
-    inductor_angle_offset_avg, inductor_angle_offset_stdev,
     web_emf_voltage_magnitude_avg, web_emf_voltage_magnitude_stdev,
     is_hall_transition,
     web_emf_power_avg, web_emf_power_stdev,
@@ -223,6 +212,7 @@ function parse_readout(data_view, previous_readout){
   const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
+  const motor_is_driven = (state_flags >> motor_is_driven_bit_offset) & 0b1;
   const emf_detected = (state_flags >> emf_detected_bit_offset) & 0b1;
   const emf_fix = (state_flags >> emf_fix_bit_offset) & 0b1;
   const current_detected = (state_flags >> current_detected_bit_offset) & 0b1;
@@ -254,9 +244,8 @@ function parse_readout(data_view, previous_readout){
   const w_current = scaled_w_current - avg_current;
 
   const [web_alpha_current, web_beta_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(angle));
-  
-  const inductor_angle_offset = radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current));
-  const web_inductor_angle = normalize_degrees(angle + inductor_angle_offset);
+
+  const web_inductor_angle = normalize_degrees(angle + radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current)));
   const web_current_magnitude = Math.sqrt(web_alpha_current * web_alpha_current + web_beta_current * web_beta_current);
 
 
@@ -299,7 +288,6 @@ function parse_readout(data_view, previous_readout){
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
   const steady_state_beta_current = drive_voltage_magnitude / phase_resistance;
-  const motor_is_driven = drive_voltage_magnitude > 0.0;
 
 
   const readout = {
@@ -324,7 +312,7 @@ function parse_readout(data_view, previous_readout){
     web_alpha_current, web_beta_current, 
     web_current_magnitude,
     web_inductor_angle, 
-    inductor_angle_offset,
+
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
@@ -406,20 +394,24 @@ function parse_full_readout(data_view, previous_readout){
 
   const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const spare_1 = data_view.getInt16(offset);
+  const drive_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const spare_2 = data_view.getInt16(offset);
+  const drive_to_current_offset = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const spare_3 = data_view.getInt16(offset);
+  const drive_to_current_offset_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   
 
   const battery_current = total_power / vcc_voltage;
+
+
+  const inductor_angle_offset = normalize_degrees(inductor_angle - readout.angle);
+
 
   return {
     ...readout,
@@ -435,25 +427,26 @@ function parse_full_readout(data_view, previous_readout){
     beta_current,
     alpha_emf_voltage,
     beta_emf_voltage,
-
+    
     battery_current,
     total_power,
     resistive_power,
     emf_power,
     inductive_power,
-
+    
     u_debug,
     v_debug,
     w_debug,
     motor_constant,
     
     inductor_angle,
-    spare_1,
+    inductor_angle_offset,
+    drive_angle,
     
     angle_error,
     angular_speed_error,
-    spare_2,
-    spare_3,
+    drive_to_current_offset,
+    drive_to_current_offset_error,
   };
 }
 
@@ -554,7 +547,7 @@ function parse_observer_parameters(data_view) {
   offset += 2;
   const motor_constant_ki = data_view.getInt16(offset);
   offset += 2;
-  const magnetic_resistance_ki = data_view.getInt16(offset);
+  const drive_to_current_offset_ki = data_view.getInt16(offset);
   offset += 2;
   const rotor_mass_ki = data_view.getInt16(offset);
   offset += 2;
@@ -569,7 +562,7 @@ function parse_observer_parameters(data_view) {
     resistance_ki,
     inductance_ki,
     motor_constant_ki,
-    magnetic_resistance_ki,
+    drive_to_current_offset_ki,
     rotor_mass_ki,
     rotor_torque_ki,
   };
@@ -655,7 +648,7 @@ function serialise_set_observer_parameters(observer_parameters) {
   offset += 2;
   view.setInt16(offset, observer_parameters.motor_constant_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.magnetic_resistance_ki);
+  view.setInt16(offset, observer_parameters.drive_to_current_offset_ki);
   offset += 2;
   view.setInt16(offset, observer_parameters.rotor_mass_ki);
   offset += 2;

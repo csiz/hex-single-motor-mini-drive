@@ -705,7 +705,7 @@ const plot_electric_position = plot_lines({
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
-    {y: (d) => d.motor_is_driven ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[8]},
+    {y: (d) => d.motor_is_driven ? d.drive_angle : null, label: "Drive Angle", color: colors_categories[8]},
     {y: (d) => d.current_fix ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.01 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
     {y: (d) => d.web_emf_voltage_magnitude > 0.05 ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
@@ -721,12 +721,10 @@ const plot_electric_offsets = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (degrees)",
   channels: [
-    {y: "inductor_angle_offset", label: "Inductor Angle Offset (online - chip)", color: colors.inductor_angle},
-    {
-      y: "inductor_angle_offset_avg", label: "Inductor Angle Offset (350us average)", color: d3.color(colors.angle).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.inductor_angle_offset_stdev}),
-    },
+    {y: "inductor_angle_offset", label: "Inductor Angle Offset", color: colors.inductor_angle},
     {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
+    {y: "drive_to_current_offset", label: "Drive to Current Angle Offset", color: colors.angle_driven},
+    {y: "drive_to_current_offset_error", label: "Drive to Current Angle Offset Error", color: colors_categories[1]},
   ],
   curve,
 });
@@ -1355,7 +1353,7 @@ const observer_parameters_input = [
   ["resistance_ki", "Resistance KI"],
   ["inductance_ki", "Inductance KI"],
   ["motor_constant_ki", "Motor Constant KI"],
-  ["magnetic_resistance_ki", "Magnetic Resistance KI"],
+  ["drive_to_current_offset_ki", "Drive to Current Offset KI"],
   ["rotor_mass_ki", "Rotor Mass KI"],
   ["rotor_torque_ki", "Rotor Torque KI"],
 ].map(([key, label]) => Inputs.number(key, {
@@ -1374,7 +1372,7 @@ let observer_parameters_buttons = !motor_controller ? html`<p>Motor controller n
         resistance_ki: observer_parameters_input[4].value,
         inductance_ki: observer_parameters_input[5].value,
         motor_constant_ki: observer_parameters_input[6].value,
-        magnetic_resistance_ki: observer_parameters_input[7].value,
+        drive_to_current_offset_ki: observer_parameters_input[7].value,
         rotor_mass_ki: observer_parameters_input[8].value,
         rotor_torque_ki: observer_parameters_input[9].value,
       };

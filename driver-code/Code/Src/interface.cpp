@@ -96,16 +96,16 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
 
     write_int16(buffer + offset, readout.inductor_angle);
     offset += 2;
-    write_int16(buffer + offset, readout.spare_1);
+    write_int16(buffer + offset, readout.drive_angle);
     offset += 2;
     
     write_int16(buffer + offset, readout.angle_error);
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed_error);
     offset += 2;
-    write_int16(buffer + offset, readout.spare_2);
+    write_int16(buffer + offset, readout.drive_to_current_offset);
     offset += 2;    
-    write_int16(buffer + offset, readout.spare_3);
+    write_int16(buffer + offset, readout.drive_to_current_offset_error);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -204,7 +204,7 @@ void write_observer_parameters(uint8_t * buffer, ObserverParameters const & obse
     offset += 2;
     write_int16(buffer + offset, observers.motor_constant_ki);
     offset += 2;
-    write_int16(buffer + offset, observers.magnetic_resistance_ki);
+    write_int16(buffer + offset, observers.drive_to_current_offset_ki);
     offset += 2;
     write_int16(buffer + offset, observers.rotor_mass_ki);
     offset += 2;
@@ -436,7 +436,7 @@ ObserverParameters parse_observer_parameters(uint8_t const * data, size_t size) 
     offset += 2;
     observers.motor_constant_ki = read_int16(data + offset);
     offset += 2;
-    observers.magnetic_resistance_ki = read_int16(data + offset);
+    observers.drive_to_current_offset_ki = read_int16(data + offset);
     offset += 2;
     observers.rotor_mass_ki = read_int16(data + offset);
     offset += 2;

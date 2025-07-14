@@ -52,7 +52,7 @@ Observers observers = {
         .value = 1,
         .error = 0
     },
-    .magnetic_resistance = {},
+    .drive_to_current_offset = {},
     .rotor_mass = {},
     .rotor_torque = {}
 };
@@ -355,6 +355,18 @@ void adc_interrupt_handler(){
         w_emf_voltage * w_neg_sin
     ) / angle_base;
 
+    const int alpha_drive_voltage = (
+        u_drive_voltage * u_cos +
+        v_drive_voltage * v_cos +
+        w_drive_voltage * w_cos
+    ) / angle_base;
+
+    const int beta_drive_voltage = (
+        u_drive_voltage * u_neg_sin +
+        v_drive_voltage * v_neg_sin +
+        w_drive_voltage * w_neg_sin
+    ) / angle_base;
+
 
     // TODO: reimplement drive modes.
     // TODO: also add duration to the periodic mode.
@@ -362,17 +374,37 @@ void adc_interrupt_handler(){
 
     const bool current_detected = square(alpha_current) + square(beta_current) > 16;
 
-    const int inductor_angle = normalize_angle(observers.rotor_angle.value + funky_atan2(beta_current, alpha_current));
+    const int inductor_angle = normalize_angle(
+        observers.rotor_angle.value + 
+        funky_atan2(beta_current, alpha_current)
+    );
 
     consecutive_current_detections = current_detected * (consecutive_current_detections + 1);
 
     const bool current_fix = consecutive_current_detections > 4;
 
-    
+    const int drive_angle_offset = funky_atan2(beta_drive_voltage, alpha_drive_voltage);
 
+    const int drive_angle = normalize_angle(observers.rotor_angle.value + drive_angle_offset);
+
+    const bool motor_is_driven = drive_angle_offset != angle_base;
+
+    
+    if (motor_is_driven and current_fix) {
+        observers.drive_to_current_offset.error = signed_angle(drive_angle - inductor_angle) - observers.drive_to_current_offset.value;
+        observers.drive_to_current_offset.value += signed_ceil_div(
+            observers.drive_to_current_offset.error * observer_parameters.drive_to_current_offset_ki, 
+            observer_fixed_point
+        );
+    } else {
+        observers.drive_to_current_offset.error = 0;
+        observers.drive_to_current_offset.value = 0;
+    }
+
+    // Back EMF observer
+    // -----------------
 
     const int sq_emf_voltage = square(beta_emf_voltage) + square(alpha_emf_voltage);
-
 
     // Check if the emf voltage is away from zero with enough confidence.
     const bool emf_detected = sq_emf_voltage > 128;
@@ -513,6 +545,7 @@ void adc_interrupt_handler(){
     readout.readout_number = readout.readout_number + 1;
         
     readout.state_flags = (
+        (motor_is_driven << motor_is_driven_bit_offset) |
         (hall_state << hall_state_bit_offset) |
         (emf_fix << emf_fix_bit_offset) |
         (emf_detected << emf_detected_bit_offset) |
@@ -554,9 +587,13 @@ void adc_interrupt_handler(){
     readout.inductive_power = inductive_power;
 
     readout.inductor_angle = inductor_angle;
+    readout.drive_angle = drive_angle;
 
     readout.angle_error = observers.rotor_angle.error;
     readout.angular_speed_error = observers.rotor_angular_speed.error;
+
+    readout.drive_to_current_offset = observers.drive_to_current_offset.value;
+    readout.drive_to_current_offset_error = observers.drive_to_current_offset.error;
 
     
     // Calculate motor outputs

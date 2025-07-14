@@ -30,6 +30,11 @@ static inline constexpr int round_div(const int x, const int y) {
     return (x + y / 2) / y;
 }
 
+static inline constexpr int signed_ceil_div(const int x, const int y) {
+    // Ceil of the division away from zero.
+    return sign(x) + (x / y);
+}
+
 // Get the absolute value of a number; somehow the std implementation is slower.
 static inline constexpr int faster_abs(int value) {
     return value < 0 ? -value : value;

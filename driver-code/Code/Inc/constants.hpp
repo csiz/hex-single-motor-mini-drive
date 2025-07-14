@@ -47,6 +47,9 @@ const int readout_number_base = 1 << 16;
 const size_t hall_state_bit_offset = 0;
 const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
+const size_t motor_is_driven_bit_offset = 12;
+const uint16_t motor_is_driven_bit_mask = 0b1 << motor_is_driven_bit_offset;
+
 const size_t emf_detected_bit_offset = 11;
 const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 
@@ -73,7 +76,7 @@ const ObserverParameters default_observer_parameters = {
     .resistance_ki = 16,
     .inductance_ki = 16,
     .motor_constant_ki = 16,
-    .magnetic_resistance_ki = 16,
+    .drive_to_current_offset_ki = 16,
     .rotor_mass_ki = 16,
     .rotor_torque_ki = 16
 };
