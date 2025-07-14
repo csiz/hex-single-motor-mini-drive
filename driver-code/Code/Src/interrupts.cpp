@@ -600,10 +600,15 @@ void adc_interrupt_handler(){
     // -----------------------
 
     // Update the motor controls using the readout data. Note that it also modifies the driver_state, driver_parameters, and pid_state.
-    active_motor_outputs = update_motor_control(pending_state, pending_parameters, readout, driver_state, driver_parameters, pid_state);
+    const bool critical_error = update_motor_control(
+        active_motor_outputs, driver_state, driver_parameters, pid_state,
+        pending_state, pending_parameters, readout
+    );
 
     // Always reset the pending state to be ready for the next command.
     pending_state = DriverState::NO_CHANGE;
+
+    if (critical_error) error();
 
 
     // Try to write the latest readout if there's space.

@@ -51,7 +51,6 @@ const MotorOutputs breaking_motor_outputs = {
     .w_duty = 0
 };
 
-
 struct PWMStage {
     uint16_t duration; // Duration in PWM cycles.
     uint16_t u_duty; // PWM duty cycle for U phase.

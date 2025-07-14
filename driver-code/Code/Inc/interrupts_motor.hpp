@@ -8,7 +8,7 @@
 #include "byte_handling.hpp"
 #include "math_utils.hpp"
 #include "integer_math.hpp"
-#include "error_handler.hpp"
+
 
 // Motor Control Functions
 // =======================
@@ -187,30 +187,32 @@ static inline MotorOutputs update_motor_battery_power(
 
 // Motor control
 // -------------
-template<typename AnyDriverParameters>
-static inline bool break_at_end_of_duration(
+
+static inline bool set_breaking_control(
+    MotorOutputs & active_motor_outputs,
     DriverState & driver_state,
-    DriverParameters & driver_parameters,
-    AnyDriverParameters & driver_parameters_with_duration
+    DriverParameters & driver_parameters
 ){
-    // Break at the end of the command duration.
-    if (driver_parameters_with_duration.duration <= 0) {
-        driver_state = DriverState::OFF;
-        driver_parameters = null_driver_parameters;
-        return true;
-    } else {
-        driver_parameters_with_duration.duration -= 1;
-        return false;
-    }
+    // Set the active motor outputs to breaking.
+    active_motor_outputs = breaking_motor_outputs;
+
+    // Set the driver state to OFF.
+    driver_state = DriverState::OFF;
+
+    // Reset the driver parameters.
+    driver_parameters = null_driver_parameters;
+
+    return false; // No critical error.
 }
 
-static inline MotorOutputs update_motor_control(
-    DriverState const pending_state,
-    DriverParameters const& pending_parameters,
-    FullReadout const& readout,
+static inline bool update_motor_control(
+    MotorOutputs & active_motor_outputs,
     DriverState & driver_state,
     DriverParameters & driver_parameters,
-    PIDControlState & pid_state
+    PIDControlState & pid_state,
+    DriverState const pending_state,
+    DriverParameters const& pending_parameters,
+    FullReadout const& readout
 ){
     // Copy the pending command if we have one.
     switch(pending_state){
@@ -241,10 +243,7 @@ static inline MotorOutputs update_motor_control(
 
         case DriverState::SCHEDULE:
             // We should not enter testing mode without a valid schedule.
-            if (pending_parameters.schedule.pointer == nullptr) {
-                error();
-                return breaking_motor_outputs;
-            }
+            if (pending_parameters.schedule.pointer == nullptr) return true;
             driver_state = DriverState::SCHEDULE;
             driver_parameters = DriverParameters{
                 .schedule = DriveSchedule{
@@ -325,37 +324,39 @@ static inline MotorOutputs update_motor_control(
 
         // The active driver state should not be NO_CHANGE.
         case DriverState::NO_CHANGE:
-            error();
-            return breaking_motor_outputs;
+            return true;
 
         case DriverState::OFF:
-            return breaking_motor_outputs;
+            active_motor_outputs = breaking_motor_outputs;
+            return false;
 
         case DriverState::FREEWHEEL:
-            return MotorOutputs{
+            active_motor_outputs = MotorOutputs{
                 .enable_flags = enable_flags_none,
                 .u_duty = 0,
                 .v_duty = 0,
                 .w_duty = 0
             };
+            return false;
 
         case DriverState::HOLD:
+            if (driver_parameters.hold.duration-- <= 0) {
+                return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
+            }
+
             // Set the motor outputs to hold the current settings.
-            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.hold) ?
-                breaking_motor_outputs :
-                MotorOutputs{
-                    .enable_flags = enable_flags_all,
-                    .u_duty = driver_parameters.hold.u_duty,
-                    .v_duty = driver_parameters.hold.v_duty,
-                    .w_duty = driver_parameters.hold.w_duty
-                };
+            active_motor_outputs = MotorOutputs{
+                .enable_flags = enable_flags_all,
+                .u_duty = driver_parameters.hold.u_duty,
+                .v_duty = driver_parameters.hold.v_duty,
+                .w_duty = driver_parameters.hold.w_duty
+            };
+            return false;
 
         case DriverState::SCHEDULE:
             // We're done at the end of the schedule.
             if (driver_parameters.schedule.pointer == nullptr or driver_parameters.schedule.current_stage >= schedule_size) {
-                driver_state = DriverState::OFF;
-                driver_parameters = null_driver_parameters;
-                return breaking_motor_outputs;
+                return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
             } else {
                 PWMSchedule const& schedule = *driver_parameters.schedule.pointer;
                 PWMStage const& schedule_stage = schedule[driver_parameters.schedule.current_stage];
@@ -368,48 +369,71 @@ static inline MotorOutputs update_motor_control(
                     driver_parameters.schedule.stage_counter = 0;
                 }
                 
-                return MotorOutputs{
+                active_motor_outputs = MotorOutputs{
                     .enable_flags = enable_flags_all,
                     .u_duty = schedule_stage.u_duty,
                     .v_duty = schedule_stage.v_duty,
                     .w_duty = schedule_stage.w_duty
                 };
+
+                return false;
             }
 
         case DriverState::DRIVE_6_SECTOR:
+            if (driver_parameters.sector.duration-- <= 0) {
+                return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
+            }
+
             // Update motor outputs for the 6 sector driving.
-            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.sector) ?
-                breaking_motor_outputs :
-                update_motor_6_sector(driver_parameters.sector, readout);
-        
+            active_motor_outputs = update_motor_6_sector(driver_parameters.sector, readout);
+
+            return false;
+
         case DriverState::DRIVE_PERIODIC:
-            return update_motor_periodic(
+            if (driver_parameters.periodic.duration-- <= 0) {
+                return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
+            }
+
+            active_motor_outputs = update_motor_periodic(
                 driver_parameters.periodic,
                 readout,
                 pid_state
             );
+            return false;
                 
 
         case DriverState::DRIVE_SMOOTH:
+            if (driver_parameters.smooth.duration-- <= 0) {
+                return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
+            }
+
             // Update the motor outputs for the smooth driving.
-            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.smooth) ?
-                breaking_motor_outputs :
-                update_motor_smooth(driver_parameters.smooth, readout, pid_state);
+            active_motor_outputs = update_motor_smooth(driver_parameters.smooth, readout, pid_state);
+
+            return false;
+
 
         case DriverState::DRIVE_TORQUE:
+            if (driver_parameters.torque.duration-- <= 0) {
+                return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
+            }
+
             // Update the motor outputs for the torque driving.
-            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.torque) ?
-                breaking_motor_outputs :
-                update_motor_torque(driver_parameters.torque, readout, pid_state);
+            active_motor_outputs = update_motor_torque(driver_parameters.torque, readout, pid_state);
+
+            return false;
 
         case DriverState::DRIVE_BATTERY_POWER:
+            if (driver_parameters.battery_power.duration-- <= 0) {
+                return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
+            }
+            
             // Break at the end of the command duration.
-            return break_at_end_of_duration(driver_state, driver_parameters, driver_parameters.battery_power) ?
-                breaking_motor_outputs :
-                update_motor_battery_power(driver_parameters.battery_power, readout, pid_state);
+            active_motor_outputs = update_motor_battery_power(driver_parameters.battery_power, readout, pid_state);
+
+            return false;
     }
 
     // If we get here, we have an unknown/corrupted driver state.
-    error();
-    return breaking_motor_outputs;
+    return true;
 }
