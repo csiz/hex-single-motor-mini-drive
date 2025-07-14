@@ -48,10 +48,7 @@ Observers observers = {
     .rotor_angular_speed = {},
     .resistance = {},
     .inductance = {},
-    .motor_constant = {
-        .value = 1,
-        .error = 0
-    },
+    .motor_constant = {},
     .drive_to_current_offset = {},
     .rotor_mass = {},
     .rotor_torque = {}
@@ -447,7 +444,7 @@ void adc_interrupt_handler(){
         observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
     }
 
-    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > 16;
+    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > 0;
 
     incorrect_direction_detections = incorrect_rotor_angle * (incorrect_direction_detections + 1);
 

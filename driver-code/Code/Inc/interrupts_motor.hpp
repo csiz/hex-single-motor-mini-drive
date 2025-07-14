@@ -185,6 +185,30 @@ static inline MotorOutputs update_motor_battery_power(
 }
 
 
+static inline MotorOutputs update_motor_schedule(
+    DriveSchedule & schedule_parameters,
+    FullReadout const& readout
+){
+    PWMSchedule const& schedule = *schedule_parameters.pointer;
+    PWMStage const& schedule_stage = schedule[schedule_parameters.current_stage];
+
+    schedule_parameters.stage_counter += 1;
+
+    if (schedule_parameters.stage_counter >= schedule_stage.duration) {
+        // Move to the next stage in the schedule.
+        schedule_parameters.current_stage += 1;
+        schedule_parameters.stage_counter = 0;
+    }
+    
+    return MotorOutputs{
+        .enable_flags = enable_flags_all,
+        .u_duty = schedule_stage.u_duty,
+        .v_duty = schedule_stage.v_duty,
+        .w_duty = schedule_stage.w_duty
+    };
+}
+
+
 // Motor control
 // -------------
 
@@ -357,27 +381,11 @@ static inline bool update_motor_control(
             // We're done at the end of the schedule.
             if (driver_parameters.schedule.pointer == nullptr or driver_parameters.schedule.current_stage >= schedule_size) {
                 return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
-            } else {
-                PWMSchedule const& schedule = *driver_parameters.schedule.pointer;
-                PWMStage const& schedule_stage = schedule[driver_parameters.schedule.current_stage];
-    
-                driver_parameters.schedule.stage_counter += 1;
-                
-                if (driver_parameters.schedule.stage_counter >= schedule_stage.duration) {
-                    // Move to the next stage in the schedule.
-                    driver_parameters.schedule.current_stage += 1;
-                    driver_parameters.schedule.stage_counter = 0;
-                }
-                
-                active_motor_outputs = MotorOutputs{
-                    .enable_flags = enable_flags_all,
-                    .u_duty = schedule_stage.u_duty,
-                    .v_duty = schedule_stage.v_duty,
-                    .w_duty = schedule_stage.w_duty
-                };
-
-                return false;
             }
+            
+            active_motor_outputs = update_motor_schedule(driver_parameters.schedule, readout);
+
+            return false;
 
         case DriverState::DRIVE_6_SECTOR:
             if (driver_parameters.sector.duration-- <= 0) {
