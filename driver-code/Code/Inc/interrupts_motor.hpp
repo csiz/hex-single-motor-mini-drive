@@ -294,6 +294,7 @@ static inline bool update_motor_control(
             driver_state = DriverState::DRIVE_PERIODIC;
             driver_parameters = DriverParameters{
                 .periodic = DrivePeriodic{
+                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.periodic.duration)),
                     .zero_offset = pending_parameters.periodic.zero_offset,
                     .pwm_target = static_cast<int16_t>(clip_to(0, pwm_max_hold, pending_parameters.periodic.pwm_target)),
                     .angular_speed = static_cast<int16_t>(clip_to(-max_angular_speed, max_angular_speed, pending_parameters.periodic.angular_speed))

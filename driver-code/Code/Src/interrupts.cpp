@@ -366,7 +366,6 @@ void adc_interrupt_handler(){
 
 
     // TODO: reimplement drive modes.
-    // TODO: also add duration to the periodic mode.
     // TODO: better command sliders for the drive modes in the UI.
 
     const bool current_detected = square(alpha_current) + square(beta_current) > 16;
