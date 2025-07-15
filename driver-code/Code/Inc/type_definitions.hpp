@@ -287,11 +287,14 @@ struct ObserverState {
 };
 
 struct Observers {
-    // The rotor magnetic angle.
+    // Position of the rotor magnetic angle.
     ObserverState rotor_angle;
 
-    // The rotor magnetic angular speed.
+    // Rotor magnetic angular speed.
     ObserverState rotor_angular_speed;
+
+    // Average rotor angular acceleration.
+    ObserverState rotor_acceleration;
 
     // The phase resistance; the drag factor for the fixed reference frame current.
     ObserverState resistance;
@@ -305,8 +308,6 @@ struct Observers {
     // The motor constant; the ratio between the EMF voltage induced in the coils and the magnet angular speed.
     ObserverState motor_constant;
 
-    // The avg difference between the drive angle and the current angle.
-    ObserverState drive_to_current_offset;
 
     // The inertial mass of the magnetic rotor and geartrain.
     ObserverState rotor_mass;

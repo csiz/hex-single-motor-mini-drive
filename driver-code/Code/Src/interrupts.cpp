@@ -328,6 +328,7 @@ void adc_interrupt_handler(){
     const int w_neg_sin = -get_sin(observers.rotor_angle.value - two_thirds_circle);
 
     // Park transform the currents and voltages.
+
     const int alpha_current = (
         u_current * u_cos +
         v_current * v_cos +
@@ -352,21 +353,12 @@ void adc_interrupt_handler(){
         w_emf_voltage * w_neg_sin
     ) / angle_base;
 
-    const int alpha_drive_voltage = (
-        u_drive_voltage * u_cos +
-        v_drive_voltage * v_cos +
-        w_drive_voltage * w_cos
-    ) / angle_base;
-
-    const int beta_drive_voltage = (
-        u_drive_voltage * u_neg_sin +
-        v_drive_voltage * v_neg_sin +
-        w_drive_voltage * w_neg_sin
-    ) / angle_base;
-
 
     // TODO: reimplement drive modes.
     // TODO: better command sliders for the drive modes in the UI.
+
+    // Current angle calculation
+    // -------------------------
 
     const bool current_detected = square(alpha_current) + square(beta_current) > 16;
 
@@ -379,13 +371,6 @@ void adc_interrupt_handler(){
 
     const bool current_fix = consecutive_current_detections > 4;
 
-    const int drive_angle_offset = funky_atan2(beta_drive_voltage, alpha_drive_voltage);
-
-    const int drive_angle = normalize_angle(observers.rotor_angle.value + drive_angle_offset);
-
-    const bool motor_is_driven = drive_angle_offset != angle_base;
-
-    
 
     // Back EMF observer
     // -----------------
@@ -479,13 +464,13 @@ void adc_interrupt_handler(){
     // the equations below give the correct power values, but it's actually better to
     // compute power from the DQ0 transformed values with some adjustments.
     // 
-    // const int emf_power = -(
+    // const int wrong_emf_power = -(
     //     u_current * u_emf_voltage + 
     //     v_current * v_emf_voltage + 
     //     w_current * w_emf_voltage
     // ) / voltage_current_div_power_fixed_point;
 
-    // const int total_power = -(
+    // const int wrong_total_power = -(
     //     u_current * u_drive_voltage + 
     //     v_current * v_drive_voltage + 
     //     w_current * w_drive_voltage
@@ -532,7 +517,6 @@ void adc_interrupt_handler(){
     readout.readout_number = readout.readout_number + 1;
         
     readout.state_flags = (
-        (motor_is_driven << motor_is_driven_bit_offset) |
         (hall_state << hall_state_bit_offset) |
         (emf_fix << emf_fix_bit_offset) |
         (emf_detected << emf_detected_bit_offset) |
@@ -574,7 +558,7 @@ void adc_interrupt_handler(){
     readout.inductive_power = inductive_power;
 
     readout.inductor_angle = inductor_angle;
-    readout.drive_angle = drive_angle;
+    // readout.drive_angle = drive_angle;
 
     readout.angle_error = observers.rotor_angle.error;
     readout.angular_speed_error = observers.rotor_angular_speed.error;

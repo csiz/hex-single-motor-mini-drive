@@ -17,7 +17,6 @@ import {
   current_detected_bit_offset,
   current_fix_bit_offset,
   emf_fix_bit_offset,
-  motor_is_driven_bit_offset,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
@@ -144,7 +143,6 @@ function parse_readout(data_view, previous_readout){
   const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
-  const motor_is_driven = (state_flags >> motor_is_driven_bit_offset) & 0b1;
   const emf_detected = (state_flags >> emf_detected_bit_offset) & 0b1;
   const emf_fix = (state_flags >> emf_fix_bit_offset) & 0b1;
   const current_detected = (state_flags >> current_detected_bit_offset) & 0b1;
@@ -252,7 +250,6 @@ function parse_readout(data_view, previous_readout){
     drive_voltage_beta,
     drive_voltage_angle,
     drive_voltage_magnitude,
-    motor_is_driven,
     steady_state_beta_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
