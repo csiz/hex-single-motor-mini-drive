@@ -164,7 +164,7 @@ static inline MotorOutputs update_motor_smooth(
         const int quench_voltage = (
             -readout.alpha_current * diff_to_voltage / current_fixed_point
             * observer_parameters.stray_current_absorption_ki / observer_fixed_point
-            * max(0, abs_current_angle_error - quarter_circle) / quarter_circle
+            * max(0, abs_current_angle_error - eighth_circle) / quarter_circle
         );
 
         // Calculate the pwm value required; capped by the target PWM.

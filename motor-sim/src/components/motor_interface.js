@@ -351,7 +351,7 @@ function parse_full_readout(data_view, previous_readout){
 
   const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const drive_angle = angle_units_to_degrees(data_view.getInt16(offset));
+  const emf_voltage_magnitude = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
   
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
@@ -398,7 +398,7 @@ function parse_full_readout(data_view, previous_readout){
     
     inductor_angle,
     inductor_angle_offset,
-    drive_angle,
+    emf_voltage_magnitude,
     
     angle_error,
     angular_speed_error,

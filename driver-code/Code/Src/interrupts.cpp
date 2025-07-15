@@ -389,10 +389,16 @@ void adc_interrupt_handler(){
     // Back EMF observer
     // -----------------
 
-    const int sq_emf_voltage = square(beta_emf_voltage) + square(alpha_emf_voltage);
+    const int rotor_angle_error = funky_atan2(alpha_emf_voltage, -beta_emf_voltage);
+
+    // Calculate the emf voltage as a rotation of the beta voltage. This should always be positive, but let's make sure of it.
+    const int emf_voltage_magnitude = faster_abs(
+        -(get_cos(rotor_angle_error) * beta_emf_voltage - get_sin(rotor_angle_error) * alpha_emf_voltage) / angle_base
+    );
+
 
     // Check if the emf voltage is away from zero with enough confidence.
-    const bool emf_detected = sq_emf_voltage > 128;
+    const bool emf_detected = emf_voltage_magnitude > 8;
 
     const auto previous_speed = observers.rotor_angular_speed.value;
 
@@ -400,7 +406,7 @@ void adc_interrupt_handler(){
     // use it to update the position between hall sensor toggles.
     if (emf_detected) {
         // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
-        observers.rotor_angle.error = angle_or_mirror(funky_atan2(alpha_emf_voltage, -beta_emf_voltage));
+        observers.rotor_angle.error = angle_or_mirror(rotor_angle_error);
         observers.rotor_angle.value += normalize_angle(observers.rotor_angle.error * observer_parameters.rotor_angle_ki / observer_fixed_point);
 
         observers.rotor_angular_speed.error = observers.rotor_angle.error * speed_fixed_point;
@@ -438,7 +444,7 @@ void adc_interrupt_handler(){
 
     const int predicted_emf_voltage = faster_abs(observers.rotor_angular_speed.value) * observers.motor_constant.value / emf_motor_constant_conversion;
 
-    observers.motor_constant.error = emf_fix * (faster_abs(beta_emf_voltage) - predicted_emf_voltage);
+    observers.motor_constant.error = emf_fix * (emf_voltage_magnitude - predicted_emf_voltage);
     observers.motor_constant.value += (
         observers.motor_constant.error * observer_parameters.motor_constant_ki / observer_fixed_point
     );
@@ -557,7 +563,7 @@ void adc_interrupt_handler(){
     readout.inductive_power = inductive_power;
 
     readout.inductor_angle = inductor_angle;
-    // readout.drive_angle = drive_angle;
+    readout.emf_voltage_magnitude = emf_voltage_magnitude;
 
     readout.angle_error = observers.rotor_angle.error;
     readout.angular_speed_error = observers.rotor_angular_speed.error;

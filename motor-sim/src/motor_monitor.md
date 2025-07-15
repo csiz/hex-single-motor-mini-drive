@@ -706,7 +706,6 @@ const plot_electric_position = plot_lines({
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
-    {y: (d) => d.motor_is_driven ? d.drive_angle : null, label: "Drive Angle", color: colors_categories[8]},
     {y: (d) => d.current_fix ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.01 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
     {y: (d) => d.web_emf_voltage_magnitude > 0.05 ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
@@ -869,6 +868,7 @@ const plot_dq0_voltages = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.alpha_emf_voltage_stdev}),
     },
     {y: "alpha_emf_voltage", label: "EMF Voltage Alpha", color: colors.alpha_current},
+    {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude},
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
