@@ -170,8 +170,8 @@ struct FullReadout : public Readout {
 
     int16_t angle_error;
     int16_t angular_speed_error;
-    int16_t drive_to_current_offset;
-    int16_t drive_to_current_offset_error;
+    int16_t rotor_acceleration;
+    int16_t rotor_acceleration_error;
 };
 
 
@@ -238,11 +238,11 @@ struct ObserverParameters {
     // Magnet angular speed.
     int16_t rotor_angular_speed_ki;
     
-    // Inductor position; TODO: this is not used anymore.
+    // Inductor position angle adjustment speed; should be 1.0f.
     int16_t inductor_angle_ki;
 
-    // Inductor angular speed; TODO: this is not used anymore.
-    int16_t inductor_angular_speed_ki;
+    // Scalar for adjust stray currents in the smooth driver.
+    int16_t stray_current_absorption_ki;
 
     // Phase resistance; the drag factor for the fixed reference frame current.
     int16_t resistance_ki;
@@ -268,8 +268,8 @@ struct ObserverParameters {
     // and velocity between the inductor coil magnetic field and the rotor magnetic field.
     int16_t motor_constant_ki;
     
-    // The angle difference between the drive angle and the current angle.
-    int16_t drive_to_current_offset_ki;
+    // Averaging gain for the acceleration of the rotor.
+    int16_t rotor_acceleration_ki;
 
     // The inertial mass of the magnetic rotor and geartrain.
     int16_t rotor_mass_ki;

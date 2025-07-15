@@ -103,9 +103,9 @@ void write_full_readout(uint8_t * buffer, FullReadout const & readout) {
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed_error);
     offset += 2;
-    write_int16(buffer + offset, readout.drive_to_current_offset);
+    write_int16(buffer + offset, readout.rotor_acceleration);
     offset += 2;    
-    write_int16(buffer + offset, readout.drive_to_current_offset_error);
+    write_int16(buffer + offset, readout.rotor_acceleration_error);
     offset += 2;
 
     // Check if we wrote the correct number of bytes.
@@ -196,7 +196,7 @@ void write_observer_parameters(uint8_t * buffer, ObserverParameters const & obse
     offset += 2;
     write_int16(buffer + offset, observers.inductor_angle_ki);
     offset += 2;
-    write_int16(buffer + offset, observers.inductor_angular_speed_ki);
+    write_int16(buffer + offset, observers.stray_current_absorption_ki);
     offset += 2;
     write_int16(buffer + offset, observers.resistance_ki);
     offset += 2;
@@ -204,7 +204,7 @@ void write_observer_parameters(uint8_t * buffer, ObserverParameters const & obse
     offset += 2;
     write_int16(buffer + offset, observers.motor_constant_ki);
     offset += 2;
-    write_int16(buffer + offset, observers.drive_to_current_offset_ki);
+    write_int16(buffer + offset, observers.rotor_acceleration_ki);
     offset += 2;
     write_int16(buffer + offset, observers.rotor_mass_ki);
     offset += 2;
@@ -428,7 +428,7 @@ ObserverParameters parse_observer_parameters(uint8_t const * data, size_t size) 
     offset += 2;
     observers.inductor_angle_ki = read_int16(data + offset);
     offset += 2;
-    observers.inductor_angular_speed_ki = read_int16(data + offset);
+    observers.stray_current_absorption_ki = read_int16(data + offset);
     offset += 2;
     observers.resistance_ki = read_int16(data + offset);
     offset += 2;
@@ -436,7 +436,7 @@ ObserverParameters parse_observer_parameters(uint8_t const * data, size_t size) 
     offset += 2;
     observers.motor_constant_ki = read_int16(data + offset);
     offset += 2;
-    observers.drive_to_current_offset_ki = read_int16(data + offset);
+    observers.rotor_acceleration_ki = read_int16(data + offset);
     offset += 2;
     observers.rotor_mass_ki = read_int16(data + offset);
     offset += 2;

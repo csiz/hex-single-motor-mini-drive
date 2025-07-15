@@ -143,46 +143,44 @@ static inline MotorOutputs update_motor_smooth(
         // Get the error between the measured current and the ideal current angle.
         const int current_angle_error = signed_angle(readout.inductor_angle - ideal_angle);
 
-        // For small deviations < 45 degrees, we rely on the PID controller; for larger deviations we absorb the current.
-        const bool small_error = faster_abs(current_angle_error) < eighth_circle;
+        const int abs_current_angle_error = faster_abs(current_angle_error);
 
-        if (small_error) {
-            // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-            pid_state.current_angle_control = compute_pid_control(
-                pid_parameters.current_angle_gains,
-                pid_state.current_angle_control,
-                current_angle_error,
-                0
-            );
+        // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
+        pid_state.current_angle_control = compute_pid_control(
+            pid_parameters.current_angle_gains,
+            pid_state.current_angle_control,
+            current_angle_error * (half_circle - abs_current_angle_error) / half_circle,
+            0
+        );
 
-            // Output all our PWM value at the adjusted angle.
-            return pwm_at_angle(pwm_target, target_angle);
+        // Recalculate the inductor to voltage transformation constant.
+        const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
 
-        } else {
-            // Recalculate the inductor to voltage transformation constant.
-            const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
+        // Quench the deceleration current immediately (decay alpha_current to 0). We do
+        // this by driving the phases opposite the alpha current such that di/dt opposes
+        // the existing current and decays it to 0 in exactly 1 time step.
+        // 
+        // Note we have to scale the DQ0 current transform by 2/3 to get the phase current.
+        const int quench_voltage = (
+            -readout.alpha_current * diff_to_voltage / current_fixed_point
+            * observer_parameters.stray_current_absorption_ki / observer_fixed_point
+            * max(0, abs_current_angle_error - quarter_circle) / quarter_circle
+        );
 
-            // Quench the deceleration current immediately (decay alpha_current to 0). We do
-            // this by driving the phases opposite the alpha current such that di/dt opposes
-            // the existing current and decays it to 0 in exactly 1 time step.
-            const int quench_voltage = -readout.alpha_current * diff_to_voltage / current_fixed_point;
+        // Calculate the pwm value required; capped by the target PWM.
+        const int quench_pwm = min(pwm_target, faster_abs(quench_voltage) * pwm_waveform_base / readout.vcc_voltage);
 
-            // Calculate the pwm value required; up to half the target PWM.
-            const int quench_pwm = min(pwm_target, faster_abs(quench_voltage) * pwm_base / readout.vcc_voltage);
+        // The angle is either aligned with the rotor or opposite to it, depending on the sign of the 
+        // current we want to 0. It seems to work better if we also lead it by the control output.
+        const int quench_angle = normalize_angle(
+            (quench_voltage >= 0 ? readout.angle : readout.angle + half_circle)
+        );
 
-            // The angle is either aligned with the rotor or opposite to it, depending on the sign of the 
-            // current we want to 0. It seems to work better if we also lead it by the control output.
-            const int quench_angle = normalize_angle(
-                (quench_voltage >= 0 ? readout.angle : readout.angle + half_circle) + 
-                pid_state.current_angle_control.output
-            );
-
-            // The final output is the quenching PWM at the quench angle and the remaining PWM at the target angle.
-            return add_motor_outputs(
-                pwm_at_angle(pwm_target - quench_pwm, target_angle),
-                pwm_at_angle(quench_pwm, quench_angle)
-            );
-        }
+        // The final output is the quenching PWM at the quench angle and the remaining PWM at the target angle.
+        return add_motor_outputs(
+            pwm_at_angle(pwm_target - quench_pwm, target_angle),
+            pwm_at_angle(quench_pwm, quench_angle)
+        );
     } else {
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
         const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * probing_angular_speed);

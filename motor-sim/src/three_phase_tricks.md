@@ -15,7 +15,6 @@ don't occur at the same time for all phases.
 
 <div class="card tight">
     <div>${phases_and_maximums_plot}</div>
-    <div>${phases_difference_plot}</div>
 </div>
 
 A convenient trick is to adjust the phases so that the minimum voltage is always zero
@@ -26,7 +25,7 @@ rotating phasor frame).
 
 <div class="card tight">
   <div>${phases_rebased_plot}</div>
-  Maximum voltage diff is: ${max_adj.toFixed(3)} V
+  Maximum voltage diff is: ${(max_adj / 2).toFixed(3)} VCC
 </div>
 
 Atan2 Approximation
@@ -62,10 +61,6 @@ function phase_func(t){
   const v = Math.cos(t + 2 * Math.PI / 3);
   const w = Math.cos(t + 4 * Math.PI / 3);
 
-  const uv = u - v;
-  const vw = v - w;
-  const wu = w - u;
-
   const max = Math.max(u, v, w);
   const min = Math.min(u, v, w);
   const max_adj = max;
@@ -75,7 +70,7 @@ function phase_func(t){
   const adj_u = u + adj;
   const adj_v = v + adj;
   const adj_w = w + adj;
-  return {t, sin, deg, u, v, w, adj: -adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w, uv, vw, wu};
+  return {t, sin, deg, u, v, w, adj: -adj, max, min, max_adj, min_adj, adj_u, adj_v, adj_w};
 }
 
 const phases = phi.map(phase_func);
@@ -95,17 +90,6 @@ const phases_and_maximums_plot = Plot.plot({
   ]
 });
 
-
-const phases_difference_plot = Plot.plot({
-  y: {domain: [-2.0, 2.0]},
-  marks: [
-    Plot.lineY(phases, {x: "deg", y: "uv", stroke: 'yellow', label: 'U-V'}),
-    Plot.lineY(phases, {x: "deg", y: "vw", stroke: 'cyan', label: 'V-W'}),
-    Plot.lineY(phases, {x: "deg", y: "wu", stroke: 'magenta', label: 'W-U'}),
-    Plot.gridX({interval: 60, stroke: 'black', strokeWidth : 2}),
-    Plot.gridY({interval: 0.5, stroke: 'black', strokeWidth : 2}),
-  ]
-});
 
 
 const phases_rebased_plot = Plot.plot({
@@ -131,7 +115,7 @@ function chunk_array(arr) {
 
 const phases_waveform = d3.range(angle_base).map((x) => (x * 2 * Math.PI / (angle_base))).map(phase_func);
 
-const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base}] = {\n    ${chunk_array(phases_waveform).map(chunk => chunk.map(d => (d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
+const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base}] = {\n    ${chunk_array(phases_waveform).map(chunk => chunk.map(d => Math.ceil(d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
 
 const sin_waveform = d3.range(angle_base).map((x) => (x * 2 * Math.PI / (angle_base))).map(t => ({t, sin: Math.sin(t)}));
 

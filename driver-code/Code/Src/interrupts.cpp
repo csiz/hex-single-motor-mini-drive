@@ -46,10 +46,10 @@ size_t readout_history_read_index = 0;
 Observers observers = {
     .rotor_angle = {},
     .rotor_angular_speed = {},
+    .rotor_acceleration = {},
     .resistance = {},
     .inductance = {},
     .motor_constant = {},
-    .drive_to_current_offset = {},
     .rotor_mass = {},
     .rotor_torque = {}
 };
@@ -180,6 +180,20 @@ static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
         std::get<1>(values) - avg,
         std::get<2>(values) - avg
     };
+}
+
+static inline int angle_or_mirror(const int angle){
+    return (
+        angle >= 0 ? (
+            angle <= quarter_circle ?
+                angle :
+                angle - half_circle
+        ) : (
+            angle >= -quarter_circle ?
+                angle :
+                angle + half_circle
+        )
+    );
 }
 
 
@@ -364,7 +378,7 @@ void adc_interrupt_handler(){
 
     const int inductor_angle = normalize_angle(
         observers.rotor_angle.value + 
-        funky_atan2(beta_current, alpha_current)
+        funky_atan2(beta_current, alpha_current) * observer_parameters.inductor_angle_ki / observer_fixed_point
     );
 
     consecutive_current_detections = current_detected * (consecutive_current_detections + 1);
@@ -380,36 +394,21 @@ void adc_interrupt_handler(){
     // Check if the emf voltage is away from zero with enough confidence.
     const bool emf_detected = sq_emf_voltage > 128;
 
+    const auto previous_speed = observers.rotor_angular_speed.value;
+
     // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
     // use it to update the position between hall sensor toggles.
     if (emf_detected) {
-        const int angle_error_guess = funky_atan2(
-            alpha_emf_voltage,
-            -beta_emf_voltage
-        );
-
-        // If the angle error is between -90 and +90 degrees, use it directly 
-        // otherwise use the mirror angle.
-        observers.rotor_angle.error = (
-            angle_error_guess >= 0 ? (
-                angle_error_guess <= quarter_circle ?
-                    angle_error_guess :
-                    angle_error_guess - half_circle
-            ) : (
-                angle_error_guess >= -quarter_circle ?
-                    angle_error_guess :
-                    angle_error_guess + half_circle
-            )
-        );
-
+        // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
+        observers.rotor_angle.error = angle_or_mirror(funky_atan2(alpha_emf_voltage, -beta_emf_voltage));
         observers.rotor_angle.value += normalize_angle(observers.rotor_angle.error * observer_parameters.rotor_angle_ki / observer_fixed_point);
-        
 
-        // Don't multiply the angle error by speed_fixed_point here, we know speed converges slower.
-        observers.rotor_angular_speed.error = observers.rotor_angle.error;
+        observers.rotor_angular_speed.error = observers.rotor_angle.error * speed_fixed_point;
         observers.rotor_angular_speed.value += observers.rotor_angular_speed.error * observer_parameters.rotor_angular_speed_ki / observer_fixed_point;
     } else {
-        const auto previous_speed = observers.rotor_angular_speed.value;
+        observers.rotor_angle.error = 0;
+        observers.rotor_angle.value = observers.rotor_angle.value;
+
         observers.rotor_angular_speed.value = observers.rotor_angular_speed.value * 255 / 256;
         observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
     }
@@ -562,9 +561,9 @@ void adc_interrupt_handler(){
 
     readout.angle_error = observers.rotor_angle.error;
     readout.angular_speed_error = observers.rotor_angular_speed.error;
-
-    readout.drive_to_current_offset = observers.drive_to_current_offset.value;
-    readout.drive_to_current_offset_error = observers.drive_to_current_offset.error;
+    
+    readout.rotor_acceleration = observers.rotor_acceleration.value;
+    readout.rotor_acceleration_error = observers.rotor_acceleration.error;
 
     
     // Calculate motor outputs

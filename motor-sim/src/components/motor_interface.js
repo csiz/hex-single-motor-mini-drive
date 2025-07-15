@@ -358,9 +358,9 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const drive_to_current_offset = angle_units_to_degrees(data_view.getInt16(offset));
+  const rotor_acceleration = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const drive_to_current_offset_error = angle_units_to_degrees(data_view.getInt16(offset));
+  const rotor_acceleration_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
   
 
@@ -402,8 +402,8 @@ function parse_full_readout(data_view, previous_readout){
     
     angle_error,
     angular_speed_error,
-    drive_to_current_offset,
-    drive_to_current_offset_error,
+    rotor_acceleration,
+    rotor_acceleration_error,
   };
 
   if (!previous_readout) return full_readout;
@@ -525,7 +525,7 @@ function parse_observer_parameters(data_view) {
   offset += 2;
   const inductor_angle_ki = data_view.getInt16(offset);
   offset += 2;
-  const inductor_angular_speed_ki = data_view.getInt16(offset);
+  const stray_current_absorption_ki = data_view.getInt16(offset);
   offset += 2;
   const resistance_ki = data_view.getInt16(offset);
   offset += 2;
@@ -533,7 +533,7 @@ function parse_observer_parameters(data_view) {
   offset += 2;
   const motor_constant_ki = data_view.getInt16(offset);
   offset += 2;
-  const drive_to_current_offset_ki = data_view.getInt16(offset);
+  const rotor_acceleration_ki = data_view.getInt16(offset);
   offset += 2;
   const rotor_mass_ki = data_view.getInt16(offset);
   offset += 2;
@@ -544,11 +544,11 @@ function parse_observer_parameters(data_view) {
     rotor_angle_ki,
     rotor_angular_speed_ki,
     inductor_angle_ki,
-    inductor_angular_speed_ki,
+    stray_current_absorption_ki,
     resistance_ki,
     inductance_ki,
     motor_constant_ki,
-    drive_to_current_offset_ki,
+    rotor_acceleration_ki,
     rotor_mass_ki,
     rotor_torque_ki,
   };
@@ -626,7 +626,7 @@ function serialise_set_observer_parameters(observer_parameters) {
   offset += 2;
   view.setInt16(offset, observer_parameters.inductor_angle_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.inductor_angular_speed_ki);
+  view.setInt16(offset, observer_parameters.stray_current_absorption_ki);
   offset += 2;
   view.setInt16(offset, observer_parameters.resistance_ki);
   offset += 2;
@@ -634,7 +634,7 @@ function serialise_set_observer_parameters(observer_parameters) {
   offset += 2;
   view.setInt16(offset, observer_parameters.motor_constant_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.drive_to_current_offset_ki);
+  view.setInt16(offset, observer_parameters.rotor_acceleration_ki);
   offset += 2;
   view.setInt16(offset, observer_parameters.rotor_mass_ki);
   offset += 2;

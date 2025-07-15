@@ -724,8 +724,8 @@ const plot_electric_offsets = plot_lines({
   channels: [
     {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
     {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
-    {y: "drive_to_current_offset", label: "Drive to Current Angle Offset", color: colors.angle_driven},
-    {y: "drive_to_current_offset_error", label: "Drive to Current Angle Offset Error", color: colors_categories[1]},
+    {y: "rotor_acceleration", label: "Drive to Current Angle Offset", color: colors.angle_driven},
+    {y: "rotor_acceleration_error", label: "Drive to Current Angle Offset Error", color: colors_categories[1]},
   ],
   curve,
 });
@@ -1354,11 +1354,11 @@ const observer_parameters_input = [
   ["rotor_angle_ki", "Rotor Angle KI"],
   ["rotor_angular_speed_ki", "Rotor Angular Speed KI"],
   ["inductor_angle_ki", "Inductor Angle KI"],
-  ["inductor_angular_speed_ki", "Inductor Angular Speed KI"],
+  ["stray_current_absorption_ki", "Stray Current Absorption KI"],
   ["resistance_ki", "Resistance KI"],
   ["inductance_ki", "Inductance KI"],
   ["motor_constant_ki", "Motor Constant KI"],
-  ["drive_to_current_offset_ki", "Drive to Current Offset KI"],
+  ["rotor_acceleration_ki", "Rotor Acceleration KI"],
   ["rotor_mass_ki", "Rotor Mass KI"],
   ["rotor_torque_ki", "Rotor Torque KI"],
 ].map(([key, label]) => Inputs.number(key, {
@@ -1373,11 +1373,11 @@ let observer_parameters_buttons = !motor_controller ? html`<p>Motor controller n
         rotor_angle_ki: observer_parameters_input[0].value,
         rotor_angular_speed_ki: observer_parameters_input[1].value,
         inductor_angle_ki: observer_parameters_input[2].value,
-        inductor_angular_speed_ki: observer_parameters_input[3].value,
+        stray_current_absorption_ki: observer_parameters_input[3].value,
         resistance_ki: observer_parameters_input[4].value,
         inductance_ki: observer_parameters_input[5].value,
         motor_constant_ki: observer_parameters_input[6].value,
-        drive_to_current_offset_ki: observer_parameters_input[7].value,
+        rotor_acceleration_ki: observer_parameters_input[7].value,
         rotor_mass_ki: observer_parameters_input[8].value,
         rotor_torque_ki: observer_parameters_input[9].value,
       };
