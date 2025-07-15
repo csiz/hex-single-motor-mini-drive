@@ -301,7 +301,7 @@ const command_secondary = Generators.input(command_secondary_slider);
 // ------------------
 
 
-const target_data_size = 2500 / millis_per_cycle;
+const target_data_size = 4000 / millis_per_cycle;
 const max_data_size = 2 * target_data_size;
 
 
@@ -624,6 +624,8 @@ Object.values(monitoring_plots).forEach((plot) => plot.update({
   x_domain: selected_time_domain,
 }));
 
+// TODO: what's up with the skips in the timeline?
+console.log(data);
 ```
 
 
@@ -723,8 +725,6 @@ const plot_electric_offsets = plot_lines({
   channels: [
     {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
     {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
-    {y: "rotor_acceleration", label: "Drive to Current Angle Offset", color: colors.angle_driven},
-    {y: "rotor_acceleration_error", label: "Drive to Current Angle Offset Error", color: colors_categories[1]},
   ],
   curve,
 });
@@ -740,6 +740,8 @@ const plot_speed = plot_lines({
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
+    {y: "rotor_acceleration", label: "Rotor Acceleration", color: colors.angle_driven},
+    {y: "rotor_acceleration_error", label: "Rotor Acceleration Error", color: colors_categories[1]},
   ],
   curve,
 });
@@ -1354,7 +1356,7 @@ const observer_parameters_input = [
   ["rotor_angle_ki", "Rotor Angle KI"],
   ["rotor_angular_speed_ki", "Rotor Angular Speed KI"],
   ["inductor_angle_ki", "Inductor Angle KI"],
-  ["stray_current_absorption_ki", "Stray Current Absorption KI"],
+  ["pwm_change_ki", "PWM Change KI"],
   ["resistance_ki", "Resistance KI"],
   ["inductance_ki", "Inductance KI"],
   ["motor_constant_ki", "Motor Constant KI"],
@@ -1373,7 +1375,7 @@ let observer_parameters_buttons = !motor_controller ? html`<p>Motor controller n
         rotor_angle_ki: observer_parameters_input[0].value,
         rotor_angular_speed_ki: observer_parameters_input[1].value,
         inductor_angle_ki: observer_parameters_input[2].value,
-        stray_current_absorption_ki: observer_parameters_input[3].value,
+        pwm_change_ki: observer_parameters_input[3].value,
         resistance_ki: observer_parameters_input[4].value,
         inductance_ki: observer_parameters_input[5].value,
         motor_constant_ki: observer_parameters_input[6].value,

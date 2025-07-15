@@ -69,7 +69,7 @@ const ObserverParameters default_observer_parameters = {
     .rotor_angle_ki = observer_fixed_point / 4,
     .rotor_angular_speed_ki = observer_fixed_point / 16,
     .inductor_angle_ki = observer_fixed_point / 4,
-    .stray_current_absorption_ki = observer_fixed_point / 16,
+    .pwm_change_ki = observer_fixed_point / 16,
     .resistance_ki = 16,
     .inductance_ki = 16,
     .motor_constant_ki = 16,
@@ -307,8 +307,14 @@ const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_po
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
-// 100mv and 5 degrees per millisecond is the miniumm threshold for emf direction detection.
-const int emf_direction_threshold = 100 * voltage_fixed_point * 5 * angle_base / 360 * speed_fixed_point / pwm_cycles_per_second;
+// Minimum EMF voltage magnitude.
+const int emf_min_voltage = 180 * voltage_fixed_point / 1000;
+
+// Minimum EMF speed to consider direction detection valid.
+const int emf_min_speed = 20 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second;
+
+// Minimum combined EMF voltage and speed to consider direction detection valid.
+const int emf_direction_threshold = emf_min_voltage * emf_min_speed;
 
 // Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
 const int motor_constant_fixed_point = 1 << 20;

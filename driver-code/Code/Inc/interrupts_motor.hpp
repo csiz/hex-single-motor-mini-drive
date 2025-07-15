@@ -110,11 +110,24 @@ static inline MotorOutputs update_motor_smooth(
     PIDControlState & pid_state,
     FullReadout const& readout
 ){
+    // Check if we have an accurate readout angle.
+    const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
+
+    const int16_t pwm_target = (
+        emf_fix ? 
+        clip_to(-pwm_max, +pwm_max, smooth_parameters.pwm_target) :
+        clip_to(-pwm_max_hold, +pwm_max_hold, smooth_parameters.pwm_target)
+    );
+
+    const int pwm_change = pwm_target - smooth_parameters.pwm_active;
+
+    smooth_parameters.pwm_active += signed_ceil_div(pwm_change * observer_parameters.pwm_change_ki, observer_fixed_point);
+
     // Get the abs value of the target PWM.
-    const uint16_t pwm_target = min(pwm_max, faster_abs(smooth_parameters.pwm_target));
+    const uint16_t abs_pwm = faster_abs(smooth_parameters.pwm_active);
 
     // Base the direction on the sign of the target PWM.
-    const int direction = sign(smooth_parameters.pwm_target);
+    const int direction = sign(smooth_parameters.pwm_active);
 
 
     // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
@@ -126,9 +139,6 @@ static inline MotorOutputs update_motor_smooth(
     
     // The ideal angle.
     const int ideal_angle = readout.angle + ideal_lead_angle;
-
-    // Check if we have an accurate readout angle.
-    const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
 
     if (emf_fix) {
         // If we have an accurate position, we can use it to adjust our control.
@@ -151,7 +161,7 @@ static inline MotorOutputs update_motor_smooth(
         // Update the zero offset in case we lose the emf fix.
         smooth_parameters.zero_offset = get_zero_offset(readout, target_angle, direction * probing_angular_speed);
 
-        return pwm_at_angle(pwm_target, target_angle);
+        return pwm_at_angle(abs_pwm, target_angle);
     } else {
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
         const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * probing_angular_speed);
@@ -160,7 +170,7 @@ static inline MotorOutputs update_motor_smooth(
         pid_state.current_angle_control = {};
 
         // Output a capped PWM at the probing angle; moving in a circle slowly.
-        return pwm_at_angle(min(pwm_max_hold, pwm_target), probing_angle);
+        return pwm_at_angle(abs_pwm, probing_angle);
     }
 }
 

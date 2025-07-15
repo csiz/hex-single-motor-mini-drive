@@ -181,6 +181,10 @@ function parse_readout(data_view, previous_readout){
 
   // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
   const readout_diff = !previous_readout ? 0 : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
+  
+  // We have a readout overflow, ignore this readout.
+  if (readout_diff > readout_base / 2) return null;
+
   const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
   const time = readout_index * millis_per_cycle;
 
@@ -305,6 +309,8 @@ const full_readout_size = 86;
 
 function parse_full_readout(data_view, previous_readout){
   const readout = parse_readout.call(this, data_view, previous_readout);
+
+  if (!readout) return null;
 
   let offset = readout_size;
 
@@ -525,7 +531,7 @@ function parse_observer_parameters(data_view) {
   offset += 2;
   const inductor_angle_ki = data_view.getInt16(offset);
   offset += 2;
-  const stray_current_absorption_ki = data_view.getInt16(offset);
+  const pwm_change_ki = data_view.getInt16(offset);
   offset += 2;
   const resistance_ki = data_view.getInt16(offset);
   offset += 2;
@@ -544,7 +550,7 @@ function parse_observer_parameters(data_view) {
     rotor_angle_ki,
     rotor_angular_speed_ki,
     inductor_angle_ki,
-    stray_current_absorption_ki,
+    pwm_change_ki,
     resistance_ki,
     inductance_ki,
     motor_constant_ki,
@@ -626,7 +632,7 @@ function serialise_set_observer_parameters(observer_parameters) {
   offset += 2;
   view.setInt16(offset, observer_parameters.inductor_angle_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.stray_current_absorption_ki);
+  view.setInt16(offset, observer_parameters.pwm_change_ki);
   offset += 2;
   view.setInt16(offset, observer_parameters.resistance_ki);
   offset += 2;

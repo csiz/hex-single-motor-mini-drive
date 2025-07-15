@@ -196,7 +196,7 @@ void write_observer_parameters(uint8_t * buffer, ObserverParameters const & obse
     offset += 2;
     write_int16(buffer + offset, observers.inductor_angle_ki);
     offset += 2;
-    write_int16(buffer + offset, observers.stray_current_absorption_ki);
+    write_int16(buffer + offset, observers.pwm_change_ki);
     offset += 2;
     write_int16(buffer + offset, observers.resistance_ki);
     offset += 2;
@@ -428,7 +428,7 @@ ObserverParameters parse_observer_parameters(uint8_t const * data, size_t size) 
     offset += 2;
     observers.inductor_angle_ki = read_int16(data + offset);
     offset += 2;
-    observers.stray_current_absorption_ki = read_int16(data + offset);
+    observers.pwm_change_ki = read_int16(data + offset);
     offset += 2;
     observers.resistance_ki = read_int16(data + offset);
     offset += 2;

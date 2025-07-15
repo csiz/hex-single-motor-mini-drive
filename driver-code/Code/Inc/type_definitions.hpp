@@ -92,6 +92,7 @@ struct DriveSmooth {
     uint16_t duration; // Duration for the command in pwm cycles.
     int16_t zero_offset;
     int16_t pwm_target;
+    int16_t pwm_active;
 };
 
 // Drive the motor to a specific current target (torque target).
@@ -241,8 +242,8 @@ struct ObserverParameters {
     // Inductor position angle adjustment speed; should be 1.0f.
     int16_t inductor_angle_ki;
 
-    // Scalar for adjust stray currents in the smooth driver.
-    int16_t stray_current_absorption_ki;
+    // Rate at which we adjust the driving PWM.
+    int16_t pwm_change_ki;
 
     // Phase resistance; the drag factor for the fixed reference frame current.
     int16_t resistance_ki;

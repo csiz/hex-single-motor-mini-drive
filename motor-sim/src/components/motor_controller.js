@@ -223,6 +223,7 @@ export class MotorController {
 
         // We have enough data to parse the message; parse it.
         const message = parse_func.call(this, new DataView(byte_array.buffer, offset, message_size), this._last_message);
+
         // Only advance the offset once we parsed the message (we need to keep collecting data until then).
         offset += message_size;
 
@@ -230,8 +231,8 @@ export class MotorController {
         this._last_message = message;
         last_message_time = Date.now();
 
-        // Return the message to the caller.
-        this._onmessage(message);
+        // Return the message to the caller if it's valid.
+        if(message) this._onmessage(message);
       }
       
       // Slice our buffer once we have processed all the messages.

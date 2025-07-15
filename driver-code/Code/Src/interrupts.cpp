@@ -384,7 +384,7 @@ void adc_interrupt_handler(){
 
 
     // Check if the emf voltage is away from zero with enough confidence.
-    const bool emf_detected = emf_voltage_magnitude > 8;
+    const bool emf_detected = emf_voltage_magnitude > emf_min_voltage;
 
     const auto previous_speed = observers.rotor_angular_speed.value;
 
@@ -395,18 +395,25 @@ void adc_interrupt_handler(){
         observers.rotor_angle.error = angle_or_mirror(rotor_angle_error);
         observers.rotor_angle.value += normalize_angle(observers.rotor_angle.error * observer_parameters.rotor_angle_ki / observer_fixed_point);
 
-        observers.rotor_angular_speed.error = observers.rotor_angle.error * speed_fixed_point;
-        observers.rotor_angular_speed.value += observers.rotor_angular_speed.error * observer_parameters.rotor_angular_speed_ki / observer_fixed_point;
+        const bool compute_speed = consecutive_emf_detections > 4;
+
+        observers.rotor_angular_speed.error = compute_speed * observers.rotor_angle.error * speed_fixed_point;
+        observers.rotor_angular_speed.value += signed_ceil_div(observers.rotor_angular_speed.error * observer_parameters.rotor_angular_speed_ki, observer_fixed_point);
+
+        observers.rotor_acceleration.error = (observers.rotor_angular_speed.value - previous_speed) - observers.rotor_acceleration.value;
+        observers.rotor_acceleration.value += signed_ceil_div(observers.rotor_acceleration.error * observer_parameters.rotor_acceleration_ki, observer_fixed_point);
     } else {
         observers.rotor_angle.error = 0;
         observers.rotor_angle.value = observers.rotor_angle.value;
 
         observers.rotor_angular_speed.value = observers.rotor_angular_speed.value * 255 / 256;
         observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
+
+        observers.rotor_acceleration.value = 0;
+        observers.rotor_acceleration.error = 0;
     }
 
 
-    // const bool correct_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value < -emf_direction_threshold;
 
     const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > emf_direction_threshold;
 
@@ -415,7 +422,7 @@ void adc_interrupt_handler(){
     consecutive_emf_detections = emf_detected * (consecutive_emf_detections + 1);
 
     // Beta voltage and the speed must have opposite signs; fix if they don't.
-    if (incorrect_direction_detections > 16) {
+    if (incorrect_direction_detections > 8) {
         // We detected the rotor in the wrong quadrant; it's the mirrored angle.
         observers.rotor_angle.value = normalize_angle(observers.rotor_angle.value + half_circle);
         // Reset the incorrect detection counter.
@@ -423,7 +430,7 @@ void adc_interrupt_handler(){
         consecutive_emf_detections = 0;
     }
 
-    const bool emf_fix = consecutive_emf_detections > 32;
+    const bool emf_fix = consecutive_emf_detections > 16;
 
 
     // Note use rotor speed after correction!
