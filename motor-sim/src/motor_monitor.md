@@ -639,23 +639,24 @@ const plot_power = plot_lines({
   x_label: "Time (ms)",
   y_label: "Power (W)",
   channels: [
+    {y: "total_power", label: "Total Power", color: colors.sum},
+    {
+      y: "total_power_avg", label: "Total Power (2ms average)", color: d3.color(colors.sum).darker(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.total_power_stdev}),
+    },
+    {y: "resistive_power", label: "Resistive Power", color: colors.web_current_magnitude},
+    {y: "emf_power", label: "EMF Power", color: colors.angle},
+    {
+      y: "emf_power_avg", label: "EMF Power (2ms average)", color: d3.color(colors.angle).darker(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_power_stdev}),
+    },
+    {y: "inductive_power", label: "Inductive Power", color: colors.inductor_angle},
+    
     {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
-    {
-      y: "web_total_power_avg", label: "Total Power 350us average", color: d3.color(colors.web_angle).darker(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_total_power_stdev}),
-    },
     {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
-    {
-      y: "web_emf_power_avg", label: "EMF Power 350us average", color: d3.color(colors.u).darker(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_power_stdev}),
-    },
     {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},
     {y: "web_inductive_power", label: "Inductive Power (computed online)", color: colors.w},
 
-    {y: "total_power", label: "Total Power", color: colors.sum},
-    {y: "resistive_power", label: "Resistive Power", color: colors.web_current_magnitude},
-    {y: "emf_power", label: "EMF Power", color: colors.angle},
-    {y: "inductive_power", label: "Inductive Power", color: colors.inductor_angle},
   ],
   curve,
 });
@@ -721,7 +722,7 @@ const plot_electric_offsets = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (degrees)",
   channels: [
-    {y: "inductor_angle_offset", label: "Inductor Angle Offset", color: colors.inductor_angle},
+    {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
     {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
     {y: "drive_to_current_offset", label: "Drive to Current Angle Offset", color: colors.angle_driven},
     {y: "drive_to_current_offset_error", label: "Drive to Current Angle Offset Error", color: colors_categories[1]},
@@ -842,11 +843,15 @@ const plot_dq0_currents = plot_lines({
   y_label: "Current (A)",
   channels: [
     {y: "alpha_current", label: "Current Alpha", color: colors.alpha_current},
-    {y: "steady_state_beta_current", label: "Steady State Beta Current", color: d3.color(colors.alpha_current).darker(1)},
     {y: "beta_current", label: "Current Beta", color: colors.beta_current},
     {y: "web_alpha_current", label: "Current Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_current", label: "Current Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
+    {y: "steady_state_beta_current", label: "Steady State Beta Current", color: d3.color(colors.alpha_current).darker(1)},
     {y: "web_current_magnitude", label: "Current Magnitude (computed online)", color: colors.web_current_magnitude},
+    {
+      y: "web_current_magnitude_avg", label: "Current Magnitude (2ms average)", color: d3.color(colors.web_current_magnitude).brighter(1),
+      draw_extra: setup_stdev_95({stdev: (d) => d.web_current_magnitude_stdev}),
+    },
   ],
   curve,
 });
@@ -868,7 +873,7 @@ const plot_dq0_voltages = plot_lines({
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
     {
-      y: "web_emf_voltage_magnitude_avg", label: "Voltage Magnitude (350us average)", color: d3.color(colors.web_current_magnitude).brighter(1),
+      y: "web_emf_voltage_magnitude_avg", label: "Voltage Magnitude (2ms average)", color: d3.color(colors.web_current_magnitude).brighter(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_voltage_magnitude_stdev}),
     },
     {y: "drive_voltage_magnitude", label: "Drive Voltage Magnitude", color: colors_categories[2]},

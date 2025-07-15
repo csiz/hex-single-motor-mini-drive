@@ -214,15 +214,6 @@ const uint16_t minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
 const uint16_t pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty); 
 
-// Save a bit of PWM capacity to compensate for sudden rotor acceleration.
-// 
-// The rotor usually has a gearbox and gears wiggle and bump into each other. That
-// means the rotor experiences large accelerations and decelerations from the tooth
-// collisions; they aren't just bad data, those acceleration spikes are real. We need
-// to be able to compensate for the increased back EMF while we wait for the gears to
-// get back into sync. Therefore we need to save some spare PWM capacity.
-const uint16_t pwm_max_smooth = pwm_max - pwm_base / 10;
-
 // Maximum duty for hold commands.
 const uint16_t pwm_max_hold = pwm_base * 2 / 10;
 
@@ -319,7 +310,8 @@ const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_po
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
-const int incorrect_direction_threshold = speed_fixed_point * voltage_fixed_point * 100 / 1000;
+// 100mv and 5 degrees per millisecond is the miniumm threshold for emf direction detection.
+const int emf_direction_threshold = 100 * voltage_fixed_point * 5 * angle_base / 360 * speed_fixed_point / pwm_cycles_per_second;
 
 // Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
 const int motor_constant_fixed_point = 1 << 20;

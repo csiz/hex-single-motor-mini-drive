@@ -29,6 +29,9 @@ rotating phasor frame).
   Maximum voltage diff is: ${max_adj.toFixed(3)} V
 </div>
 
+Atan2 Approximation
+-------------------
+
 We need to approximate the atan2 function because we don't have enough processing to
 compute it in real time.
 
@@ -36,9 +39,13 @@ compute it in real time.
   <div>${atan_approx_plot}</div>
 </div>
 
+Trig and waveform lookup tables
+-------------------------------
+
 <pre>${phases_wave_form_lookup_table}</pre>
 <pre>${sin_lookup_table}</pre>
 </main>
+
 
 
 ```js

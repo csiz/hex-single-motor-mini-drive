@@ -273,7 +273,7 @@ void adc_interrupt_handler(){
     };
 
     // Calibrated conversion factor between current divergence and phase inductance voltage.
-    const int diff_to_voltage = round_div(phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor, current_calibration_fixed_point);
+    const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
 
     // Calculate the voltage drop across the coil inductance.
 
@@ -386,16 +386,6 @@ void adc_interrupt_handler(){
     const bool motor_is_driven = drive_angle_offset != angle_base;
 
     
-    if (motor_is_driven and current_fix) {
-        observers.drive_to_current_offset.error = signed_angle(drive_angle - inductor_angle) - observers.drive_to_current_offset.value;
-        observers.drive_to_current_offset.value += signed_ceil_div(
-            observers.drive_to_current_offset.error * observer_parameters.drive_to_current_offset_ki, 
-            observer_fixed_point
-        );
-    } else {
-        observers.drive_to_current_offset.error = 0;
-        observers.drive_to_current_offset.value = 0;
-    }
 
     // Back EMF observer
     // -----------------
@@ -439,7 +429,10 @@ void adc_interrupt_handler(){
         observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
     }
 
-    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > incorrect_direction_threshold;
+
+    // const bool correct_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value < -emf_direction_threshold;
+
+    const bool incorrect_rotor_angle = beta_emf_voltage * observers.rotor_angular_speed.value > emf_direction_threshold;
 
     incorrect_direction_detections = incorrect_rotor_angle * (incorrect_direction_detections + 1);
 

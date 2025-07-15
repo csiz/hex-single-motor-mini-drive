@@ -13,6 +13,19 @@
 // Motor Control Functions
 // =======================
 
+// Linearly add two motor outputs together; note that we don't do bounds checking here.
+static inline MotorOutputs add_motor_outputs(
+    MotorOutputs const& a,
+    MotorOutputs const& b
+){
+    return MotorOutputs{
+        .enable_flags = enable_flags_all,
+        .u_duty = static_cast<uint16_t>(a.u_duty + b.u_duty),
+        .v_duty = static_cast<uint16_t>(a.v_duty + b.v_duty),
+        .w_duty = static_cast<uint16_t>(a.w_duty + b.w_duty)
+    };
+}
+
 static inline MotorOutputs update_motor_6_sector(
     Drive6Sector const& sector_parameters,
     FullReadout const& readout
@@ -71,6 +84,7 @@ static inline MotorOutputs pwm_at_angle(
     };
 }
 
+// Drive the inductors around the circle at the specified PWM and speed. Open loop control.
 static inline MotorOutputs update_motor_periodic(
     DrivePeriodic const& periodic_parameters,
     FullReadout const& readout,
@@ -89,55 +103,96 @@ static inline MotorOutputs update_motor_periodic(
 
 const int probing_angular_speed = 32;
 
+// Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
+// close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
 static inline MotorOutputs update_motor_smooth(
     DriveSmooth & smooth_parameters,
     PIDControlState & pid_state,
     FullReadout const& readout
 ){
     // Get the abs value of the target PWM.
-    const uint16_t pwm_target = min(pwm_max_smooth, faster_abs(smooth_parameters.pwm_target));
+    const uint16_t pwm_target = min(pwm_max, faster_abs(smooth_parameters.pwm_target));
 
     // Base the direction on the sign of the target PWM.
-    const int direction = 1 - (smooth_parameters.pwm_target < 0) * 2;
+    const int direction = sign(smooth_parameters.pwm_target);
 
+
+    // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+    // 
+    // Of course, the inductors take a while to charge and the rotor is producing an EMF
+    // which all interacts with the current. However, the current that we end up measuring
+    // should be as close to the 90 degrees as possible for maximum torque per current use.
+    const int ideal_lead_angle = direction * quarter_circle;
+    
+    // The ideal angle.
+    const int ideal_angle = readout.angle + ideal_lead_angle;
+
+    // Check if we have an accurate readout angle.
     const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
 
-    const int target_lead_angle = direction * quarter_circle + readout.drive_to_current_offset;
-    const int target_angle = normalize_angle(readout.angle + target_lead_angle);
-
     if (emf_fix) {
+        // If we have an accurate position, we can use it to adjust our control.
+
+        // Compensate the target angle by the control output. At high speed we need
+        // to lead by more than 90 degrees to compensate for the RL time constant.
+        const int16_t target_angle = normalize_angle(ideal_angle + pid_state.current_angle_control.output);
+
+        // Update the zero offset in case we lose the emf fix.
         smooth_parameters.zero_offset = get_zero_offset(readout, target_angle, direction * probing_angular_speed);
-        
-        return pwm_at_angle(pwm_target, target_angle);
+
+        // Get the error between the measured current and the ideal current angle.
+        const int current_angle_error = signed_angle(readout.inductor_angle - ideal_angle);
+
+        // For small deviations < 45 degrees, we rely on the PID controller; for larger deviations we absorb the current.
+        const bool small_error = faster_abs(current_angle_error) < eighth_circle;
+
+        if (small_error) {
+            // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
+            pid_state.current_angle_control = compute_pid_control(
+                pid_parameters.current_angle_gains,
+                pid_state.current_angle_control,
+                current_angle_error,
+                0
+            );
+
+            // Output all our PWM value at the adjusted angle.
+            return pwm_at_angle(pwm_target, target_angle);
+
+        } else {
+            // Recalculate the inductor to voltage transformation constant.
+            const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
+
+            // Quench the deceleration current immediately (decay alpha_current to 0). We do
+            // this by driving the phases opposite the alpha current such that di/dt opposes
+            // the existing current and decays it to 0 in exactly 1 time step.
+            const int quench_voltage = -readout.alpha_current * diff_to_voltage / current_fixed_point;
+
+            // Calculate the pwm value required; up to half the target PWM.
+            const int quench_pwm = min(pwm_target, faster_abs(quench_voltage) * pwm_base / readout.vcc_voltage);
+
+            // The angle is either aligned with the rotor or opposite to it, depending on the sign of the 
+            // current we want to 0. It seems to work better if we also lead it by the control output.
+            const int quench_angle = normalize_angle(
+                (quench_voltage >= 0 ? readout.angle : readout.angle + half_circle) + 
+                pid_state.current_angle_control.output
+            );
+
+            // The final output is the quenching PWM at the quench angle and the remaining PWM at the target angle.
+            return add_motor_outputs(
+                pwm_at_angle(pwm_target - quench_pwm, target_angle),
+                pwm_at_angle(quench_pwm, quench_angle)
+            );
+        }
     } else {
+        // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
         const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * probing_angular_speed);
 
-        return pwm_at_angle(pwm_target, probing_angle);
+        // Reset the current angle control; it needs to start from 0 at low speed.
+        pid_state.current_angle_control = {};
+
+        // Output a capped PWM at the probing angle; moving in a circle slowly.
+        return pwm_at_angle(min(pwm_max_hold, pwm_target), probing_angle);
     }
-
-
-    // const int emf_compensation = - emf_detected * readout.beta_emf_voltage * emf_base / readout.vcc_voltage;
-
-    // const int max_allowed_target = max(0, +pwm_max_smooth - emf_compensation);
-    // const int min_allowed_target = min(0, -pwm_max_smooth - emf_compensation);
-
-    // const int pwm_target = emf_compensation + clip_to(min_allowed_target, max_allowed_target, smooth_parameters.pwm_target);
-
-
-
-
-
-    // // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-    // pid_state.current_angle_control = (
-    //     not emf_fix ? PIDControl{} : 
-    //     compute_pid_control(
-    //         pid_parameters.current_angle_gains,
-    //         pid_state.current_angle_control,
-    //         signed_angle(readout.angle + direction * quarter_circle - readout.inductor_angle),
-    //         0
-    //     )
-    // );
-
 }
 
 static inline MotorOutputs update_motor_torque(

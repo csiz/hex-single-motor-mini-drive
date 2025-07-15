@@ -80,74 +80,6 @@ export const command_codes = {
 }
 
 
-
-function process_readout_diff(readout, previous_readout){
-  if (!previous_readout) return readout;
-
-  const {
-    time,
-    hall_sector, 
-    web_emf_voltage_angle,
-    web_emf_voltage_magnitude, 
-    web_emf_power,
-    web_total_power,
-    emf_detected,
-  } = readout;
-
-  const {
-    time: prev_time,
-    hall_sector: prev_hall_sector, 
-    web_emf_voltage_magnitude_avg: prev_web_emf_voltage_magnitude_avg,
-    web_emf_voltage_magnitude_stdev: prev_web_emf_voltage_magnitude_stdev,
-    web_emf_power_avg: prev_web_emf_power_avg,
-    web_emf_power_stdev: prev_web_emf_power_stdev,
-    web_total_power_avg: prev_web_total_power_avg,
-    web_total_power_stdev: prev_web_total_power_stdev,
-  } = previous_readout;
-
-  // Time units are milliseconds.
-  const dt = time - prev_time;
-
-  const exp_stats = exponential_stats(dt, 0.350);
-
-
-  const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
-    web_emf_voltage_magnitude,
-    {
-      average: prev_web_emf_voltage_magnitude_avg,
-      stdev: prev_web_emf_voltage_magnitude_stdev,
-    },
-  );
-
-  const is_hall_transition = prev_hall_sector != hall_sector;
-
-
-
-  const {average: web_emf_power_avg, stdev: web_emf_power_stdev} = exp_stats(
-    web_emf_power,
-    {
-      average: prev_web_emf_power_avg,
-      stdev: prev_web_emf_power_stdev,
-    },
-  );
-
-  const {average: web_total_power_avg, stdev: web_total_power_stdev} = exp_stats(
-    web_total_power,
-    {
-      average: prev_web_total_power_avg,
-      stdev: prev_web_total_power_stdev,
-    },
-  );
-
-  return {
-    ...readout,
-    web_emf_voltage_magnitude_avg, web_emf_voltage_magnitude_stdev,
-    is_hall_transition,
-    web_emf_power_avg, web_emf_power_stdev,
-    web_total_power_avg, web_total_power_stdev,
-  };
-}
-
 function get_hall_sector({hall_u, hall_v, hall_w}){
   const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
   switch(hall_state){
@@ -341,7 +273,35 @@ function parse_readout(data_view, previous_readout){
     web_inductive_power,
   };
 
-  return process_readout_diff.call(this, readout, previous_readout);
+  if (!previous_readout) return readout;
+
+  // Time units are milliseconds.
+  const dt = time - previous_readout.time;
+
+  const exp_stats = exponential_stats(dt, 2.0);
+
+
+  const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
+    web_emf_voltage_magnitude,
+    {
+      average: previous_readout.web_emf_voltage_magnitude_avg,
+      stdev: previous_readout.web_emf_voltage_magnitude_stdev,
+    },
+  );
+
+  const {average: web_current_magnitude_avg, stdev: web_current_magnitude_stdev} = exp_stats(
+    web_current_magnitude,
+    {
+      average: previous_readout.web_current_magnitude_avg,
+      stdev: previous_readout.web_current_magnitude_stdev,
+    },
+  );
+
+  return {
+    ...readout,
+    web_emf_voltage_magnitude_avg, web_emf_voltage_magnitude_stdev,
+    web_current_magnitude_avg, web_current_magnitude_stdev,
+  };
 }
 
 const full_readout_size = 86;
@@ -413,7 +373,7 @@ function parse_full_readout(data_view, previous_readout){
   const inductor_angle_offset = normalize_degrees(inductor_angle - readout.angle);
 
 
-  return {
+  const full_readout = {
     ...readout,
     tick_rate,
     adc_update_rate,
@@ -447,6 +407,35 @@ function parse_full_readout(data_view, previous_readout){
     angular_speed_error,
     drive_to_current_offset,
     drive_to_current_offset_error,
+  };
+
+  if (!previous_readout) return full_readout;
+
+  const dt = readout.time - previous_readout.time;
+
+  const exp_stats = exponential_stats(dt, 2.0);
+
+
+    const {average: emf_power_avg, stdev: emf_power_stdev} = exp_stats(
+    emf_power,
+    {
+      average: previous_readout.emf_power_avg,
+      stdev: previous_readout.emf_power_stdev,
+    },
+  );
+
+  const {average: total_power_avg, stdev: total_power_stdev} = exp_stats(
+    total_power,
+    {
+      average: previous_readout.total_power_avg,
+      stdev: previous_readout.total_power_stdev,
+    },
+  );
+
+  return {
+    ...full_readout,
+    emf_power_avg, emf_power_stdev,
+    total_power_avg, total_power_stdev,
   };
 }
 
