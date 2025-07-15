@@ -182,20 +182,6 @@ static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
     };
 }
 
-static inline int angle_or_mirror(const int angle){
-    return (
-        angle >= 0 ? (
-            angle <= quarter_circle ?
-                angle :
-                angle - half_circle
-        ) : (
-            angle >= -quarter_circle ?
-                angle :
-                angle + half_circle
-        )
-    );
-}
-
 
 // Interrupt handlers
 // ------------------

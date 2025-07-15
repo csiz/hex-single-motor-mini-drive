@@ -69,3 +69,17 @@ static inline int funky_atan2(int y, int x) {
 void unit_test_funky_atan(char * buffer, size_t max_size);
 void unit_test_funky_atan_part_2(char * buffer, size_t max_size);
 void unit_test_funky_atan_part_3(char * buffer, size_t max_size);
+
+static inline int angle_or_mirror(const int angle){
+    return (
+        angle >= 0 ? (
+            angle <= quarter_circle ?
+                angle :
+                angle - half_circle
+        ) : (
+            angle >= -quarter_circle ?
+                angle :
+                angle + half_circle
+        )
+    );
+}
