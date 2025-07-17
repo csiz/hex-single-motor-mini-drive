@@ -321,6 +321,8 @@ const int motor_constant_fixed_point = 1 << 20;
 
 const int radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_div_pi;
 
+// Acceleration needs more precision than speed; it's in angle units per pwm cycle per pwm cycle / fixed point series.
+const int acceleration_fixed_point = 32;
 
 // Time dependent constants
 // ------------------------

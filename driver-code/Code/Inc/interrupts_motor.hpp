@@ -121,7 +121,7 @@ static inline MotorOutputs update_motor_smooth(
 
     const int pwm_change = pwm_target - smooth_parameters.pwm_active;
 
-    smooth_parameters.pwm_active += signed_ceil_div(pwm_change * observer_parameters.pwm_change_ki, observer_fixed_point);
+    smooth_parameters.pwm_active += clip_to(-observer_parameters.pwm_change_ki, +observer_parameters.pwm_change_ki, pwm_change);
 
     // Get the abs value of the target PWM.
     const uint16_t abs_pwm = faster_abs(smooth_parameters.pwm_active);

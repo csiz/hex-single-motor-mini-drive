@@ -61,6 +61,15 @@ export function degrees_per_millisecond_to_speed_units(speed){
   return unbounded_degrees_to_angle_units(speed * speed_fixed_point * millis_per_cycle);
 }
 
+export const acceleration_fixed_point = 32;
+
+export function acceleration_units_to_degrees_per_millisecond_squared(acceleration){
+  return speed_units_to_degrees_per_millisecond(acceleration / acceleration_fixed_point) * cycles_per_millisecond;
+}
+
+export function degrees_per_millisecond_squared_to_acceleration_units(acceleration){
+  return degrees_per_millisecond_to_speed_units(acceleration * acceleration_fixed_point / cycles_per_millisecond);
+}
 
 // Bit handling constants
 // ----------------------

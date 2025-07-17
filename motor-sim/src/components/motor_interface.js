@@ -9,6 +9,7 @@ import {
   current_calibration_base,
   angle_units_to_degrees, 
   speed_units_to_degrees_per_millisecond,
+  acceleration_units_to_degrees_per_millisecond_squared,
   convert_power_to_watts,
   phase_resistance, 
   phase_inductance,
@@ -364,9 +365,9 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const rotor_acceleration = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  const rotor_acceleration = data_view.getInt16(offset);
   offset += 2;
-  const rotor_acceleration_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  const rotor_acceleration_error = data_view.getInt16(offset);
   offset += 2;
   
 

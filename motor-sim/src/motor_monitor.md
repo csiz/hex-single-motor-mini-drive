@@ -623,9 +623,6 @@ Object.values(monitoring_plots).forEach((plot) => plot.update({
   data: data_in_time_window, 
   x_domain: selected_time_domain,
 }));
-
-// TODO: what's up with the skips in the timeline?
-console.log(data);
 ```
 
 
@@ -740,8 +737,6 @@ const plot_speed = plot_lines({
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
-    {y: "rotor_acceleration", label: "Rotor Acceleration", color: colors.angle_driven},
-    {y: "rotor_acceleration_error", label: "Rotor Acceleration Error", color: colors_categories[1]},
   ],
   curve,
 });
@@ -927,6 +922,8 @@ const plot_motor_values = plot_lines({
   y_label: "Value",
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
+    {y: "rotor_acceleration", label: "Rotor Acceleration", color: colors.angle_driven},
+    {y: "rotor_acceleration_error", label: "Rotor Acceleration Error", color: colors_categories[1]},
     {y: "u_debug", label: "U Debug", color: colors.u},
     {y: "v_debug", label: "V Debug", color: colors.v},
     {y: "w_debug", label: "W Debug", color: colors.w},

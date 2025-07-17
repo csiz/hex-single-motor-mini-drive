@@ -387,21 +387,31 @@ void adc_interrupt_handler(){
     const bool emf_detected = emf_voltage_magnitude > emf_min_voltage;
 
     const auto previous_speed = observers.rotor_angular_speed.value;
+    const auto previous_angle = observers.rotor_angle.value;
 
     // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
     // use it to update the position between hall sensor toggles.
     if (emf_detected) {
         // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
         observers.rotor_angle.error = angle_or_mirror(rotor_angle_error);
-        observers.rotor_angle.value += normalize_angle(observers.rotor_angle.error * observer_parameters.rotor_angle_ki / observer_fixed_point);
+        observers.rotor_angle.value = normalize_angle(
+            observers.rotor_angle.value +
+            observers.rotor_angle.error * observer_parameters.rotor_angle_ki / observer_fixed_point
+        );
 
         const bool compute_speed = consecutive_emf_detections > 4;
 
+        // Calculate the new speed based on the angle adjustment.
+        // 
+        // Note that the angle change is relative to the current speed because of the prediction step.
         observers.rotor_angular_speed.error = compute_speed * observers.rotor_angle.error * speed_fixed_point;
         observers.rotor_angular_speed.value += signed_ceil_div(observers.rotor_angular_speed.error * observer_parameters.rotor_angular_speed_ki, observer_fixed_point);
 
-        observers.rotor_acceleration.error = (observers.rotor_angular_speed.value - previous_speed) - observers.rotor_acceleration.value;
-        observers.rotor_acceleration.value += signed_ceil_div(observers.rotor_acceleration.error * observer_parameters.rotor_acceleration_ki, observer_fixed_point);
+        // Calculate the acceleration based on the speed change.
+        // 
+        // The new speed isn't predicted so we need to diff to the previous acceleration to get the error.
+        observers.rotor_acceleration.error = (observers.rotor_angular_speed.value - previous_speed) * acceleration_fixed_point - observers.rotor_acceleration.value;
+        observers.rotor_acceleration.value += observers.rotor_acceleration.error * observer_parameters.rotor_acceleration_ki / observer_fixed_point;
     } else {
         observers.rotor_angle.error = 0;
         observers.rotor_angle.value = observers.rotor_angle.value;
