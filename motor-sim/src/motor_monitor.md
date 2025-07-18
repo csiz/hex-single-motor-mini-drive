@@ -45,18 +45,18 @@ Motor Driving Data
 <div class="card tight">${plot_readout_flags}</div>
 <div class="card tight">${plot_motor_values}</div>
 
-Observer Parameters
+Control Parameters
 -------------------
 <div class="card tight">
-  <div>${observer_parameters_buttons}</div>
-  <h3>Active Observer Parameters</h3>
-  <p>These are the currently active observer parameters for the motor controller.</p>
-  <pre>${active_observer_parameters_table}</pre>
+  <div>${control_parameters_buttons}</div>
+  <h3>Active Control Parameters</h3>
+  <p>These are the currently active parameters for the motor controller.</p>
+  <pre>${active_control_parameters_table}</pre>
 </div>
 
 <div class="card tight">
-  <h3>Observer Parameters</h3>
-  <div>${observer_parameters_input}</div>
+  <h3>Control Parameters</h3>
+  <div>${control_parameters_input}</div>
 </div>
 
 
@@ -237,7 +237,7 @@ async function connect_motor_controller(){
       (async function(){
         await new_controller.load_current_calibration();
         await new_controller.load_pid_parameters();
-        await new_controller.load_observer_parameters();
+        await new_controller.load_control_parameters();
         motor_controller.value = new_controller;
       })(),
     ]);
@@ -1340,59 +1340,59 @@ let pid_parameters_buttons = !motor_controller ? html`<p>Motor controller not co
 ```
 
 ```js
-// Observer Parameters
+// Control Parameters
 // -------------------
 
-function stringify_active_observer_parameters() {
-  return `motor_controller.observer_parameters = ${JSON.stringify(motor_controller?.observer_parameters, null, 2)}`;
+function stringify_active_control_parameters() {
+  return `motor_controller.control_parameters = ${JSON.stringify(motor_controller?.control_parameters, null, 2)}`;
 }
 
-let active_observer_parameters_table =  Mutable(stringify_active_observer_parameters());
+let active_control_parameters_table =  Mutable(stringify_active_control_parameters());
 
-const observer_parameters_input = [
+const control_parameters_input = [
   ["rotor_angle_ki", "Rotor Angle KI"],
   ["rotor_angular_speed_ki", "Rotor Angular Speed KI"],
-  ["inductor_angle_ki", "Inductor Angle KI"],
-  ["pwm_change_ki", "PWM Change KI"],
+  ["rotor_acceleration_ki", "Rotor Acceleration KI"],
+  ["motor_constant_ki", "Motor Constant KI"],
   ["resistance_ki", "Resistance KI"],
   ["inductance_ki", "Inductance KI"],
-  ["motor_constant_ki", "Motor Constant KI"],
-  ["rotor_acceleration_ki", "Rotor Acceleration KI"],
-  ["rotor_mass_ki", "Rotor Mass KI"],
-  ["rotor_torque_ki", "Rotor Torque KI"],
+  ["max_pwm_change", "Maximum PWM Change per cycle"],
+  ["max_angle_change", "Maximum Angle Change per cycle"],
+  ["min_emf_voltage", "Minimum EMF Voltage for detection"],
+  ["min_emf_speed", "Minimum EMF Speed for detection"],
 ].map(([key, label]) => Inputs.number(key, {
   label,
-  value: motor_controller?.observer_parameters?.[key],
+  value: motor_controller?.control_parameters?.[key],
 }));
 
-let observer_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
+let control_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
   [
     ["Upload to Driver", wait_previous(async function(value){
-      const observer_parameters = {
-        rotor_angle_ki: observer_parameters_input[0].value,
-        rotor_angular_speed_ki: observer_parameters_input[1].value,
-        inductor_angle_ki: observer_parameters_input[2].value,
-        pwm_change_ki: observer_parameters_input[3].value,
-        resistance_ki: observer_parameters_input[4].value,
-        inductance_ki: observer_parameters_input[5].value,
-        motor_constant_ki: observer_parameters_input[6].value,
-        rotor_acceleration_ki: observer_parameters_input[7].value,
-        rotor_mass_ki: observer_parameters_input[8].value,
-        rotor_torque_ki: observer_parameters_input[9].value,
+      const control_parameters = {
+        rotor_angle_ki: control_parameters_input[0].value,
+        rotor_angular_speed_ki: control_parameters_input[1].value,
+        rotor_acceleration_ki: control_parameters_input[2].value,
+        motor_constant_ki: control_parameters_input[3].value,
+        resistance_ki: control_parameters_input[4].value,
+        inductance_ki: control_parameters_input[5].value,
+        max_pwm_change: control_parameters_input[6].value,
+        max_angle_change: control_parameters_input[7].value,
+        min_emf_voltage: control_parameters_input[8].value,
+        min_emf_speed: control_parameters_input[9].value,
       };
-      await motor_controller.upload_observer_parameters(observer_parameters);
-      active_observer_parameters_table.value = stringify_active_observer_parameters();
+      await motor_controller.upload_control_parameters(control_parameters);
+      active_control_parameters_table.value = stringify_active_control_parameters();
       return value;
     })],
     ["Reload from Driver", wait_previous(async function(value){
-      await motor_controller.load_observer_parameters();
-      active_observer_parameters_table.value = stringify_active_observer_parameters();
+      await motor_controller.load_control_parameters();
+      active_control_parameters_table.value = stringify_active_control_parameters();
       return value;
     })],
   ],
   {
-    label: "Observer Parameters",
-    value: motor_controller?.observer_parameters ?? {},
+    label: "Control Parameters",
+    value: motor_controller?.control_parameters ?? {},
   },
 );
 

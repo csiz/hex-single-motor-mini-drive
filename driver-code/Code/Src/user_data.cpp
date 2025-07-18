@@ -18,7 +18,7 @@ uint8_t page_buffer[FLASH_PAGE_SIZE] = {0};
 const size_t current_calibration_offset = 0x00;
 const size_t spare_offset = 0x20;
 const size_t pid_parameters_offset = 0x80;
-const size_t observer_parameters_offset = 0xF0;
+const size_t control_parameters_offset = 0xF0;
 
 CurrentCalibration get_current_calibration(){
     const bool calibration_available = (CURRENT_FACTORS == read_uint16(user_data + current_calibration_offset));
@@ -34,11 +34,11 @@ PIDParameters get_pid_parameters(){
         default_pid_parameters;
 }
 
-ObserverParameters get_observer_parameters() {
-    const bool parameters_available = (OBSERVER_PARAMETERS == read_uint16(user_data + observer_parameters_offset));
+ControlParameters get_control_parameters() {
+    const bool parameters_available = (CONTROL_PARAMETERS == read_uint16(user_data + control_parameters_offset));
     return parameters_available ?
-        parse_observer_parameters(user_data + observer_parameters_offset, observer_parameters_size) :
-        default_observer_parameters;
+        parse_control_parameters(user_data + control_parameters_offset, control_parameters_size) :
+        default_control_parameters;
 }
 
 uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
@@ -84,7 +84,7 @@ uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
 void save_settings_to_flash(
     CurrentCalibration const& current_calibration, 
     PIDParameters const& pid_parameters,
-    ObserverParameters const& observer_parameters
+    ControlParameters const& control_parameters
 ) {
     // Write the current calibration to the buffer.
     write_current_calibration(page_buffer + current_calibration_offset, current_calibration);
@@ -93,7 +93,7 @@ void save_settings_to_flash(
     write_pid_parameters(page_buffer + pid_parameters_offset, pid_parameters);
 
     // Write the observer parameters to the buffer.
-    write_observer_parameters(page_buffer + observer_parameters_offset, observer_parameters);
+    write_control_parameters(page_buffer + control_parameters_offset, control_parameters);
 
     // Write the buffer to flash memory.
     if(write_to_flash(reinterpret_cast<uint32_t *>(user_data), page_buffer, FLASH_PAGE_SIZE) != HAL_OK) {

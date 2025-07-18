@@ -25,15 +25,15 @@
 
 
 
-uint32_t tick_number = 0;
-uint32_t last_tick = 0;
+uint32_t main_loop_number = 0;
+uint32_t last_loop_number = 0;
 uint16_t last_readout_number = 0;
 
 
 const uint32_t min_timing_period_millis = 50;
-uint32_t last_tick_time_millis = 0;
+uint32_t last_update_time_millis = 0;
 
-float tick_rate = 0.0f;
+float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
 
 MessageBuffer usb_receive_buffer = {};
@@ -412,8 +412,8 @@ bool handle_command(MessageBuffer const& buffer) {
             pid_parameters = parse_pid_parameters(buffer.data, buffer.write_index);
             usb_reply_pid_parameters = true;
             return false;
-        case SET_OBSERVER_PARAMETERS:
-            observer_parameters = parse_observer_parameters(buffer.data, buffer.write_index);
+        case SET_CONTROL_PARAMETERS:
+            control_parameters = parse_control_parameters(buffer.data, buffer.write_index);
             usb_reply_observer_parameters = true;
             return false;
 
@@ -425,17 +425,17 @@ bool handle_command(MessageBuffer const& buffer) {
             usb_reply_pid_parameters = true;
             return false;
 
-        case GET_OBSERVER_PARAMETERS:
+        case GET_CONTROL_PARAMETERS:
             usb_reply_observer_parameters = true;
             return false;
 
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
-                save_settings_to_flash(current_calibration, pid_parameters, observer_parameters);
+                save_settings_to_flash(current_calibration, pid_parameters, control_parameters);
 
                 current_calibration = get_current_calibration();
                 pid_parameters = get_pid_parameters();
-                observer_parameters = get_observer_parameters();
+                control_parameters = get_control_parameters();
                 
                 return false;
             } else {
@@ -445,7 +445,7 @@ bool handle_command(MessageBuffer const& buffer) {
         // We shouldn't receive these messages; the driver only sends them.
         case CURRENT_FACTORS:
         case PID_PARAMETERS:
-        case OBSERVER_PARAMETERS:
+        case CONTROL_PARAMETERS:
         case READOUT:
         case FULL_READOUT:
         case UNIT_TEST_OUTPUT:
@@ -536,11 +536,11 @@ void usb_queue_response(FullReadout const& readout) {
 
     // Send observer parameters if requested.
     if (usb_reply_observer_parameters) {
-        if (not usb_check_queue(observer_parameters_size)) return;
+        if (not usb_check_queue(control_parameters_size)) return;
         
         // Send the observer parameters to the host.
-        write_observer_parameters(usb_response_buffer, observer_parameters);
-        usb_queue_send(usb_response_buffer, observer_parameters_size);
+        write_control_parameters(usb_response_buffer, control_parameters);
+        usb_queue_send(usb_response_buffer, control_parameters_size);
 
         usb_reply_observer_parameters = false;
     }
@@ -616,7 +616,7 @@ void usb_receive_command(){
 
 
 void app_tick() {
-    tick_number += 1;
+    main_loop_number += 1;
 
     FullReadout readout = get_readout();
 
@@ -626,20 +626,20 @@ void app_tick() {
     // Update timing information.
     const uint32_t milliseconds = HAL_GetTick();
 
-    const uint32_t duration_since_timing_update = milliseconds - last_tick_time_millis;
+    const uint32_t duration_since_timing_update = milliseconds - last_update_time_millis;
     if (duration_since_timing_update > min_timing_period_millis) {
-        last_tick_time_millis = milliseconds;
+        last_update_time_millis = milliseconds;
         
         float seconds = duration_since_timing_update / 1000.f;
 
-        tick_rate = (tick_number - last_tick) / seconds;
+        main_loop_rate = (main_loop_number - last_loop_number) / seconds;
         adc_update_rate = ((readout_number_base + readout.readout_number - last_readout_number) % readout_number_base) / seconds;
 
-        last_tick = tick_number;
+        last_loop_number = main_loop_number;
         last_readout_number = readout.readout_number;
     }
 
-    readout.tick_rate = static_cast<int>(tick_rate);
+    readout.main_loop_rate = static_cast<int>(main_loop_rate);
     readout.adc_update_rate = static_cast<int>(adc_update_rate);
 
     // USB comms

@@ -6,4 +6,4 @@
 
 CurrentCalibration current_calibration = get_current_calibration();
 PIDParameters pid_parameters = get_pid_parameters();
-ObserverParameters observer_parameters = get_observer_parameters();
+ControlParameters control_parameters = get_control_parameters();

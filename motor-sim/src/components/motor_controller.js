@@ -94,7 +94,7 @@ export class MotorController {
 
     this.current_calibration = default_current_calibration;
     this.pid_parameters = default_pid_parameters;
-    this.observer_parameters = {};
+    this.control_parameters = {};
   }
 
 
@@ -379,14 +379,14 @@ export class MotorController {
     }
   }
 
-  async load_observer_parameters(){
+  async load_control_parameters(){
     try {
       const data = await this.command_and_read(
-        {command: command_codes.GET_OBSERVER_PARAMETERS}, 
-        {expected_code: command_codes.OBSERVER_PARAMETERS, expected_messages: 1},
+        {command: command_codes.GET_CONTROL_PARAMETERS}, 
+        {expected_code: command_codes.CONTROL_PARAMETERS, expected_messages: 1},
       );
       if (data.length != 1) throw new Error("Invalid observer parameters data");
-      this.observer_parameters = data[0];
+      this.control_parameters = data[0];
     } catch (error) {
       console.error("Error loading observer parameters:", error);
     }
@@ -418,14 +418,14 @@ export class MotorController {
     }
   }
 
-  async upload_observer_parameters(observer_parameters){
+  async upload_control_parameters(control_parameters){
     try {
       const data = await this.command_and_read(
-        {command: command_codes.SET_OBSERVER_PARAMETERS, additional_data: observer_parameters}, 
-        {expected_code: command_codes.OBSERVER_PARAMETERS, expected_messages: 1},
+        {command: command_codes.SET_CONTROL_PARAMETERS, additional_data: control_parameters}, 
+        {expected_code: command_codes.CONTROL_PARAMETERS, expected_messages: 1},
       );
       if (data.length != 1) throw new Error("Invalid observer parameters data");
-      this.observer_parameters = data[0];
+      this.control_parameters = data[0];
     } catch (error) {
       console.error("Error uploading observer parameters:", error);
     }

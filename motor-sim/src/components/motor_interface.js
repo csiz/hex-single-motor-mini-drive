@@ -67,9 +67,9 @@ export const command_codes = {
   GET_PID_PARAMETERS: 0x4047,
   SET_PID_PARAMETERS: 0x4048,
 
-  OBSERVER_PARAMETERS: 0x4049,
-  SET_OBSERVER_PARAMETERS: 0x404A,
-  GET_OBSERVER_PARAMETERS: 0x404B,
+  CONTROL_PARAMETERS: 0x4049,
+  SET_CONTROL_PARAMETERS: 0x404A,
+  GET_CONTROL_PARAMETERS: 0x404B,
 
   SAVE_SETTINGS_TO_FLASH: 0x4080,
 
@@ -347,27 +347,27 @@ function parse_full_readout(data_view, previous_readout){
   const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
   offset += 2;
 
-  const u_debug = data_view.getInt16(offset);
-  offset += 2;
-  const v_debug = data_view.getInt16(offset);
-  offset += 2;
-  const w_debug = data_view.getInt16(offset);
-  offset += 2;
   const motor_constant = data_view.getInt16(offset);
   offset += 2;
-
   const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   const emf_voltage_magnitude = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
+  const rotor_acceleration = data_view.getInt16(offset);
+  offset += 2;
+  
   
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const rotor_acceleration = data_view.getInt16(offset);
-  offset += 2;
   const rotor_acceleration_error = data_view.getInt16(offset);
+  offset += 2;
+  const u_debug = data_view.getInt16(offset);
+  offset += 2;
+  const v_debug = data_view.getInt16(offset);
+  offset += 2;
+  const w_debug = data_view.getInt16(offset);
   offset += 2;
   
 
@@ -522,42 +522,42 @@ function parse_pid_parameters(data_view) {
 }
 
 
-const observer_parameters_size = 22;
-function parse_observer_parameters(data_view) {
+const control_parameters_size = 22;
+function parse_control_parameters(data_view) {
   let offset = header_size;
 
   const rotor_angle_ki = data_view.getInt16(offset);
   offset += 2;
   const rotor_angular_speed_ki = data_view.getInt16(offset);
   offset += 2;
-  const inductor_angle_ki = data_view.getInt16(offset);
+  const rotor_acceleration_ki = data_view.getInt16(offset);
   offset += 2;
-  const pwm_change_ki = data_view.getInt16(offset);
+  const motor_constant_ki = data_view.getInt16(offset);
   offset += 2;
   const resistance_ki = data_view.getInt16(offset);
   offset += 2;
   const inductance_ki = data_view.getInt16(offset);
   offset += 2;
-  const motor_constant_ki = data_view.getInt16(offset);
+  const max_pwm_change = data_view.getInt16(offset);
   offset += 2;
-  const rotor_acceleration_ki = data_view.getInt16(offset);
+  const max_angle_change = data_view.getInt16(offset);
   offset += 2;
-  const rotor_mass_ki = data_view.getInt16(offset);
+  const min_emf_voltage = data_view.getInt16(offset);
   offset += 2;
-  const rotor_torque_ki = data_view.getInt16(offset);
+  const min_emf_speed = data_view.getInt16(offset);
   offset += 2;
 
   return {
     rotor_angle_ki,
     rotor_angular_speed_ki,
-    inductor_angle_ki,
-    pwm_change_ki,
+    rotor_acceleration_ki,
+    motor_constant_ki,
     resistance_ki,
     inductance_ki,
-    motor_constant_ki,
-    rotor_acceleration_ki,
-    rotor_mass_ki,
-    rotor_torque_ki,
+    max_pwm_change,
+    max_angle_change,
+    min_emf_voltage,
+    min_emf_speed,
   };
 }
 
@@ -620,32 +620,32 @@ function serialise_set_pid_parameters(pid_parameters) {
   return buffer;
 }
 
-function serialise_set_observer_parameters(observer_parameters) {
-  let buffer = new Uint8Array(observer_parameters_size);
+function serialise_set_control_parameters(control_parameters) {
+  let buffer = new Uint8Array(control_parameters_size);
   let view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setUint16(offset, command_codes.SET_OBSERVER_PARAMETERS);
+  view.setUint16(offset, command_codes.SET_CONTROL_PARAMETERS);
   offset += 2;
 
-  view.setInt16(offset, observer_parameters.rotor_angle_ki);
+  view.setInt16(offset, control_parameters.rotor_angle_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.rotor_angular_speed_ki);
+  view.setInt16(offset, control_parameters.rotor_angular_speed_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.inductor_angle_ki);
+  view.setInt16(offset, control_parameters.rotor_acceleration_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.pwm_change_ki);
+  view.setInt16(offset, control_parameters.motor_constant_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.resistance_ki);
+  view.setInt16(offset, control_parameters.resistance_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.inductance_ki);
+  view.setInt16(offset, control_parameters.inductance_ki);
   offset += 2;
-  view.setInt16(offset, observer_parameters.motor_constant_ki);
+  view.setInt16(offset, control_parameters.max_pwm_change);
   offset += 2;
-  view.setInt16(offset, observer_parameters.rotor_acceleration_ki);
+  view.setInt16(offset, control_parameters.max_angle_change);
   offset += 2;
-  view.setInt16(offset, observer_parameters.rotor_mass_ki);
+  view.setInt16(offset, control_parameters.min_emf_voltage);
   offset += 2;
-  view.setInt16(offset, observer_parameters.rotor_torque_ki);
+  view.setInt16(offset, control_parameters.min_emf_speed);
   offset += 2;
   return buffer;
 }
@@ -654,7 +654,7 @@ function serialise_set_observer_parameters(observer_parameters) {
 export const serialiser_mapping = {
   [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_set_current_calibration},
   [command_codes.SET_PID_PARAMETERS]: {serialise_func: serialise_set_pid_parameters},
-  [command_codes.SET_OBSERVER_PARAMETERS]: {serialise_func: serialise_set_observer_parameters},
+  [command_codes.SET_CONTROL_PARAMETERS]: {serialise_func: serialise_set_control_parameters},
 };
 
 export const parser_mapping = {
@@ -662,7 +662,7 @@ export const parser_mapping = {
   [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
   [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
   [command_codes.PID_PARAMETERS]: {parse_func: parse_pid_parameters, message_size: pid_parameters_size},
-  [command_codes.OBSERVER_PARAMETERS]: {parse_func: parse_observer_parameters, message_size: observer_parameters_size},
+  [command_codes.CONTROL_PARAMETERS]: {parse_func: parse_control_parameters, message_size: control_parameters_size},
   [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},
 };
 

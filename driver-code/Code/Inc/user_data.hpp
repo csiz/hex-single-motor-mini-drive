@@ -16,12 +16,12 @@ CurrentCalibration get_current_calibration();
 // Load the PID parameters from flash memory.
 PIDParameters get_pid_parameters();
 
-// Load the observer parameters from flash memory.
-ObserverParameters get_observer_parameters();
+// Load the control parameters from flash memory.
+ControlParameters get_control_parameters();
 
 // Write all calibration data to flash memory. (Flash memory is erased by pages, so we need to re-write it all.)
 void save_settings_to_flash(
   CurrentCalibration const& current_calibration, 
   PIDParameters const& pid_parameters,
-  ObserverParameters const& observer_parameters
+  ControlParameters const& control_parameters
 );

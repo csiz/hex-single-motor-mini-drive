@@ -62,20 +62,20 @@ const uint16_t current_fix_bit_mask = 0b1 << current_fix_bit_offset;
 // Observer constants
 // ------------------
 
-const int16_t observer_fixed_point = 4096;
+const int16_t control_parameters_fixed_point = 4096;
 
 
-const ObserverParameters default_observer_parameters = {
-    .rotor_angle_ki = observer_fixed_point / 4,
-    .rotor_angular_speed_ki = observer_fixed_point / 16,
-    .inductor_angle_ki = observer_fixed_point / 4,
-    .pwm_change_ki = observer_fixed_point / 16,
+const ControlParameters default_control_parameters = {
+    .rotor_angle_ki = control_parameters_fixed_point / 2,
+    .rotor_angular_speed_ki = control_parameters_fixed_point / 16,
+    .rotor_acceleration_ki = 16,
+    .motor_constant_ki = 16,
     .resistance_ki = 16,
     .inductance_ki = 16,
-    .motor_constant_ki = 16,
-    .rotor_acceleration_ki = 16,
-    .rotor_mass_ki = 16,
-    .rotor_torque_ki = 16
+    .max_pwm_change = control_parameters_fixed_point / 16,
+    .max_angle_change = 16,
+    .min_emf_voltage = 16,
+    .min_emf_speed = control_parameters_fixed_point / 4,
 };
 
 
