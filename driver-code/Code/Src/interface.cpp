@@ -129,60 +129,6 @@ void write_current_calibration(uint8_t * data, CurrentCalibration const& factors
     if (offset != current_calibration_size) error();
 }
 
-void write_pid_parameters(uint8_t * buffer, PIDParameters const& parameters) {
-    size_t offset = 0;
-
-    write_uint16(buffer + offset, PID_PARAMETERS);
-    offset += 2;
-    
-    write_int16(buffer + offset, parameters.current_angle_gains.kp);
-    offset += 2;
-    write_int16(buffer + offset, parameters.current_angle_gains.ki);
-    offset += 2;
-    write_int16(buffer + offset, parameters.current_angle_gains.kd);
-    offset += 2;
-    write_int16(buffer + offset, parameters.current_angle_gains.max_output);
-    offset += 2;
-
-    write_int16(buffer + offset, parameters.torque_gains.kp);
-    offset += 2;
-    write_int16(buffer + offset, parameters.torque_gains.ki);
-    offset += 2;
-    write_int16(buffer + offset, parameters.torque_gains.kd);
-    offset += 2;
-    write_int16(buffer + offset, parameters.torque_gains.max_output);
-    offset += 2;
-
-    write_int16(buffer + offset, parameters.battery_power_gains.kp);
-    offset += 2;
-    write_int16(buffer + offset, parameters.battery_power_gains.ki);
-    offset += 2;
-    write_int16(buffer + offset, parameters.battery_power_gains.kd);
-    offset += 2;
-    write_int16(buffer + offset, parameters.battery_power_gains.max_output);
-    offset += 2;
-
-    write_int16(buffer + offset, parameters.angular_speed_gains.kp);
-    offset += 2;
-    write_int16(buffer + offset, parameters.angular_speed_gains.ki);
-    offset += 2;
-    write_int16(buffer + offset, parameters.angular_speed_gains.kd);
-    offset += 2;
-    write_int16(buffer + offset, parameters.angular_speed_gains.max_output);
-    offset += 2;
-
-    write_int16(buffer + offset, parameters.position_gains.kp);
-    offset += 2;
-    write_int16(buffer + offset, parameters.position_gains.ki);
-    offset += 2;
-    write_int16(buffer + offset, parameters.position_gains.kd);
-    offset += 2;
-    write_int16(buffer + offset, parameters.position_gains.max_output);
-    offset += 2;
-
-    // Check if we wrote the correct number of bytes.
-    if (offset != pid_parameters_size) error();
-}
 
 void write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters) {
     size_t offset = 0;
@@ -209,6 +155,14 @@ void write_control_parameters(uint8_t * buffer, ControlParameters const& control
     write_int16(buffer + offset, control_parameters.min_emf_voltage);
     offset += 2;
     write_int16(buffer + offset, control_parameters.min_emf_speed);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.lead_angle_control_ki);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.torque_control_ki);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.battery_power_control_ki);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.speed_control_ki);
     offset += 2;
     
     // Check if we wrote the correct number of bytes.
@@ -249,8 +203,8 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_DRIVE_TORQUE:
         case SET_STATE_DRIVE_BATTERY_POWER:
         case GET_CURRENT_FACTORS:
-        case GET_PID_PARAMETERS:
         case GET_CONTROL_PARAMETERS:
+        case RESET_CONTROL_PARAMETERS:
         case SAVE_SETTINGS_TO_FLASH:
         case RUN_UNIT_TEST_FUNKY_ATAN:
         case RUN_UNIT_TEST_FUNKY_ATAN_PART_2:
@@ -259,8 +213,6 @@ static inline int get_message_size(uint16_t code) {
         
         case SET_CURRENT_FACTORS:
             return current_calibration_size;
-        case SET_PID_PARAMETERS:
-            return pid_parameters_size;
         case SET_CONTROL_PARAMETERS:
             return control_parameters_size;
 
@@ -270,8 +222,6 @@ static inline int get_message_size(uint16_t code) {
             return full_readout_size;
         case CURRENT_FACTORS:
             return current_calibration_size;
-        case PID_PARAMETERS:
-            return pid_parameters_size;
         case CONTROL_PARAMETERS:
             return control_parameters_size;
 
@@ -358,63 +308,6 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
 }
 
 
-PIDParameters parse_pid_parameters(uint8_t const * data, size_t size) {
-    if(size < pid_parameters_size) error();
-
-    size_t offset = header_size;
-
-    PIDParameters parameters = {};
-
-    parameters.current_angle_gains.kp = read_int16(data + offset);
-    offset += 2;
-    parameters.current_angle_gains.ki = read_int16(data + offset);
-    offset += 2;
-    parameters.current_angle_gains.kd = read_int16(data + offset);
-    offset += 2;
-    parameters.current_angle_gains.max_output = read_int16(data + offset);
-    offset += 2;
-
-    parameters.torque_gains.kp = read_int16(data + offset);
-    offset += 2;
-    parameters.torque_gains.ki = read_int16(data + offset);
-    offset += 2;
-    parameters.torque_gains.kd = read_int16(data + offset);
-    offset += 2;
-    parameters.torque_gains.max_output = read_int16(data + offset);
-    offset += 2;
-
-    parameters.battery_power_gains.kp = read_int16(data + offset);
-    offset += 2;
-    parameters.battery_power_gains.ki = read_int16(data + offset);
-    offset += 2;
-    parameters.battery_power_gains.kd = read_int16(data + offset);
-    offset += 2;
-    parameters.battery_power_gains.max_output = read_int16(data + offset);
-    offset += 2;
-
-    parameters.angular_speed_gains.kp = read_int16(data + offset);
-    offset += 2;
-    parameters.angular_speed_gains.ki = read_int16(data + offset);
-    offset += 2;
-    parameters.angular_speed_gains.kd = read_int16(data + offset);
-    offset += 2;
-    parameters.angular_speed_gains.max_output = read_int16(data + offset);
-    offset += 2;
-
-    parameters.position_gains.kp = read_int16(data + offset);
-    offset += 2;
-    parameters.position_gains.ki = read_int16(data + offset);
-    offset += 2;
-    parameters.position_gains.kd = read_int16(data + offset);
-    offset += 2;
-    parameters.position_gains.max_output = read_int16(data + offset);
-    offset += 2;
-
-    if (offset != pid_parameters_size) error();
-
-    return parameters;
-}
-
 ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     if(size < control_parameters_size) error();
 
@@ -441,6 +334,14 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     control_parameters.min_emf_voltage = read_int16(data + offset);
     offset += 2;
     control_parameters.min_emf_speed = read_int16(data + offset);
+    offset += 2;
+    control_parameters.lead_angle_control_ki = read_int16(data + offset);
+    offset += 2;
+    control_parameters.torque_control_ki = read_int16(data + offset);
+    offset += 2;
+    control_parameters.battery_power_control_ki = read_int16(data + offset);
+    offset += 2;
+    control_parameters.speed_control_ki = read_int16(data + offset);
     offset += 2;
 
     if (offset != control_parameters_size) error();

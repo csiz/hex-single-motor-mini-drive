@@ -59,25 +59,6 @@ const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 const size_t current_fix_bit_offset = 8;
 const uint16_t current_fix_bit_mask = 0b1 << current_fix_bit_offset;
 
-// Observer constants
-// ------------------
-
-const int16_t control_parameters_fixed_point = 4096;
-
-
-const ControlParameters default_control_parameters = {
-    .rotor_angle_ki = control_parameters_fixed_point / 2,
-    .rotor_angular_speed_ki = control_parameters_fixed_point / 16,
-    .rotor_acceleration_ki = 16,
-    .motor_constant_ki = 16,
-    .resistance_ki = 16,
-    .inductance_ki = 16,
-    .max_pwm_change = control_parameters_fixed_point / 16,
-    .max_angle_change = 16,
-    .min_emf_voltage = 16,
-    .min_emf_speed = control_parameters_fixed_point / 4,
-};
-
 
 // Position constants
 // ------------------
@@ -340,8 +321,8 @@ const int emf_motor_constant_conversion = (
 const int emf_motor_constant_error_conversion = emf_motor_constant_conversion / 64;
 
 
-// Calibration and PID constants
-// -----------------------------
+// Calibration and Control Parameters
+// ----------------------------------
 
 
 const int16_t current_calibration_fixed_point = 1024;
@@ -353,41 +334,28 @@ const CurrentCalibration default_current_calibration = {
     .inductance_factor = current_calibration_fixed_point,
 };
 
-const int16_t gains_fixed_point = 1024;
+const int16_t control_parameters_fixed_point = 4096;
 
-const PIDParameters default_pid_parameters = {
-    .current_angle_gains = PIDGains{
-        .kp = 128,
-        .ki = 8,
-        .kd = 64,
-        .max_output = quarter_circle
-    },
-    .torque_gains = PIDGains{
-        .kp = 0,
-        .ki = 8,
-        .kd = 0,
-        .max_output = pwm_max - 40
-    },
-    .battery_power_gains = PIDGains{
-        .kp = 0,
-        .ki = 2,
-        .kd = 0,
-        .max_output = pwm_max - 40
-    },
-    .angular_speed_gains = PIDGains{
-        .kp = gains_fixed_point / 8,
-        .ki = gains_fixed_point / 64,
-        .kd = gains_fixed_point / 128,
-        .max_output = max_angular_speed
-    },
-    .position_gains = PIDGains{
-        .kp = gains_fixed_point / 8,
-        .ki = gains_fixed_point / 64,
-        .kd = gains_fixed_point / 128,
-        .max_output = half_circle
-    }
+const ControlParameters default_control_parameters = {
+    .rotor_angle_ki = 1024,
+    .rotor_angular_speed_ki = 64,
+    .rotor_acceleration_ki = 128,
+    .motor_constant_ki = 128,
+    .resistance_ki = 0,
+    .inductance_ki = 0,
+    .max_pwm_change = 8,
+    .max_angle_change = 0,
+    .min_emf_voltage = 0,
+    .min_emf_speed = 0,
+    .lead_angle_control_ki = 8,
+    .torque_control_ki = 0,
+    .battery_power_control_ki = 0,
+    .speed_control_ki = 0,
 };
 
+
+// Waveform and Trigonometric tables
+// ---------------------------------
 
 static_assert(angle_base == 1024, "angle_base must be 4096 for the sine and cosine lookup tables to work correctly");
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "interrupts_pid.hpp"
 #include "interrupts_data.hpp"
 
 #include "type_definitions.hpp"
@@ -87,8 +86,7 @@ static inline MotorOutputs pwm_at_angle(
 // Drive the inductors around the circle at the specified PWM and speed. Open loop control.
 static inline MotorOutputs update_motor_periodic(
     DrivePeriodic const& periodic_parameters,
-    FullReadout const& readout,
-    PIDControlState & pid_state
+    FullReadout const& readout
 ){
     const int pwm_target = periodic_parameters.pwm_target;
 
@@ -107,7 +105,6 @@ const int probing_angular_speed = 32;
 // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
 static inline MotorOutputs update_motor_smooth(
     DriveSmooth & smooth_parameters,
-    PIDControlState & pid_state,
     FullReadout const& readout
 ){
     // Check if we have an accurate readout angle.
@@ -144,19 +141,21 @@ static inline MotorOutputs update_motor_smooth(
         // If we have an accurate position, we can use it to adjust our control.
 
         // Get the error between the measured current and the ideal current angle.
-        const int current_angle_error = signed_angle(readout.inductor_angle - ideal_angle);
+        const int lead_angle_error = signed_angle(ideal_angle - readout.inductor_angle);
 
         // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-        pid_state.current_angle_control = compute_pid_control(
-            pid_parameters.current_angle_gains,
-            pid_state.current_angle_control,
-            current_angle_error * (half_circle - faster_abs(current_angle_error)) / half_circle,
-            0
+        smooth_parameters.lead_angle_control = clip_to(
+            - half_circle,
+            + half_circle,
+            smooth_parameters.lead_angle_control + signed_ceil_div(
+                lead_angle_error * control_parameters.lead_angle_control_ki,
+                control_parameters_fixed_point
+            )
         );
         
         // Compensate the target angle by the control output. At high speed we need
         // to lead by more than 90 degrees to compensate for the RL time constant.
-        const int16_t target_angle = normalize_angle(ideal_angle + pid_state.current_angle_control.output);
+        const int16_t target_angle = normalize_angle(ideal_angle + smooth_parameters.lead_angle_control);
 
         // Update the zero offset in case we lose the emf fix.
         smooth_parameters.zero_offset = get_zero_offset(readout, target_angle, direction * probing_angular_speed);
@@ -167,7 +166,7 @@ static inline MotorOutputs update_motor_smooth(
         const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * probing_angular_speed);
 
         // Reset the current angle control; it needs to start from 0 at low speed.
-        pid_state.current_angle_control = {};
+        smooth_parameters.lead_angle_control = 0;
 
         // Output a capped PWM at the probing angle; moving in a circle slowly.
         return pwm_at_angle(abs_pwm, probing_angle);
@@ -175,23 +174,24 @@ static inline MotorOutputs update_motor_smooth(
 }
 
 static inline MotorOutputs update_motor_torque(
-    DriveTorque const& torque_parameters,
-    FullReadout const& readout,
-    PIDControlState & pid_state
+    DriveTorque & torque_parameters,
+    FullReadout const& readout
 ){
     // Calculate the target current in fixed point format.
     const int16_t current_target = torque_parameters.current_target;
 
     // Update the PID control for the torque.
-    pid_state.torque_control = compute_pid_control(
-        pid_parameters.torque_gains,
-        pid_state.torque_control,
-        readout.beta_current,
-        current_target
+    torque_parameters.torque_control = clip_to(
+        -pwm_max,
+        +pwm_max,
+        signed_ceil_div(
+            (current_target - readout.beta_current) * control_parameters.torque_control_ki, 
+            control_parameters_fixed_point
+        )
     );
 
     // Get the target PWM after torque control.
-    const int16_t pwm_target = pid_state.torque_control.output;
+    const int16_t pwm_target = torque_parameters.torque_control;
 
     DriveSmooth smooth_parameters = {
         .duration = torque_parameters.duration,
@@ -201,27 +201,27 @@ static inline MotorOutputs update_motor_torque(
 
     return update_motor_smooth(
         smooth_parameters,
-        pid_state,
         readout
     );
 }
 
 static inline MotorOutputs update_motor_battery_power(
-    DriveBatteryPower const& battery_power_parameters,
-    FullReadout const& readout,
-    PIDControlState & pid_state
+    DriveBatteryPower & battery_power_parameters,
+    FullReadout const& readout
 ){
     const bool direction_is_negative = battery_power_parameters.power_target < 0;
 
-    pid_state.battery_power_control = compute_pid_control(
-        pid_parameters.battery_power_gains,
-        pid_state.battery_power_control,
-        max(0, -readout.total_power),
-        faster_abs(battery_power_parameters.power_target)
+    battery_power_parameters.battery_power_control = clip_to(
+        -pwm_max,
+        +pwm_max,
+        signed_ceil_div(
+            (max(0, -readout.total_power) - faster_abs(battery_power_parameters.power_target)) * control_parameters.battery_power_control_ki, 
+            control_parameters_fixed_point
+        )
     );
 
     // Get the target PWM after power control.
-    const int16_t pwm_target = clip_to(-pwm_max, pwm_max, (direction_is_negative ? -1 : 1) * pid_state.battery_power_control.output);
+    const int16_t pwm_target = clip_to(-pwm_max, pwm_max, (direction_is_negative ? -1 : 1) * battery_power_parameters.battery_power_control);
 
     DriveSmooth smooth_parameters = {
         .duration = battery_power_parameters.duration,
@@ -231,7 +231,6 @@ static inline MotorOutputs update_motor_battery_power(
 
     return update_motor_smooth(
         smooth_parameters,
-        pid_state,
         readout
     );
 }
@@ -285,7 +284,6 @@ static inline bool update_motor_control(
     MotorOutputs & active_motor_outputs,
     DriverState & driver_state,
     DriverParameters & driver_parameters,
-    PIDControlState & pid_state,
     DriverState const pending_state,
     DriverParameters const& pending_parameters,
     FullReadout const& readout
@@ -366,10 +364,6 @@ static inline bool update_motor_control(
             break;
             
         case DriverState::DRIVE_TORQUE:
-            // Reset the PID for torque control unless we are switching between DRIVE_TORQUE commands.
-            if (driver_state != DriverState::DRIVE_TORQUE) {
-                pid_state.torque_control = PIDControl{};
-            }
             driver_state = DriverState::DRIVE_TORQUE;
             driver_parameters = DriverParameters{
                 .torque = DriveTorque{
@@ -381,9 +375,6 @@ static inline bool update_motor_control(
             break;
 
         case DriverState::DRIVE_BATTERY_POWER:
-            if (driver_state != DriverState::DRIVE_BATTERY_POWER) {
-                pid_state.battery_power_control = PIDControl{};
-            }
             driver_state = DriverState::DRIVE_BATTERY_POWER;
             driver_parameters = DriverParameters{
                 .battery_power = DriveBatteryPower{
@@ -455,11 +446,7 @@ static inline bool update_motor_control(
                 return set_breaking_control(active_motor_outputs, driver_state, driver_parameters);
             }
 
-            active_motor_outputs = update_motor_periodic(
-                driver_parameters.periodic,
-                readout,
-                pid_state
-            );
+            active_motor_outputs = update_motor_periodic(driver_parameters.periodic, readout);
             return false;
                 
 
@@ -469,7 +456,7 @@ static inline bool update_motor_control(
             }
 
             // Update the motor outputs for the smooth driving.
-            active_motor_outputs = update_motor_smooth(driver_parameters.smooth, pid_state, readout);
+            active_motor_outputs = update_motor_smooth(driver_parameters.smooth, readout);
 
             return false;
 
@@ -480,7 +467,7 @@ static inline bool update_motor_control(
             }
 
             // Update the motor outputs for the torque driving.
-            active_motor_outputs = update_motor_torque(driver_parameters.torque, readout, pid_state);
+            active_motor_outputs = update_motor_torque(driver_parameters.torque, readout);
 
             return false;
 
@@ -490,7 +477,7 @@ static inline bool update_motor_control(
             }
             
             // Break at the end of the command duration.
-            active_motor_outputs = update_motor_battery_power(driver_parameters.battery_power, readout, pid_state);
+            active_motor_outputs = update_motor_battery_power(driver_parameters.battery_power, readout);
 
             return false;
     }

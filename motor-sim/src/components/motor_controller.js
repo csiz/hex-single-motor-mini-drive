@@ -424,10 +424,23 @@ export class MotorController {
         {command: command_codes.SET_CONTROL_PARAMETERS, additional_data: control_parameters}, 
         {expected_code: command_codes.CONTROL_PARAMETERS, expected_messages: 1},
       );
-      if (data.length != 1) throw new Error("Invalid observer parameters data");
+      if (data.length != 1) throw new Error("Invalid control parameters data");
       this.control_parameters = data[0];
     } catch (error) {
-      console.error("Error uploading observer parameters:", error);
+      console.error("Error uploading control parameters:", error);
+    }
+  }
+
+  async reset_control_parameters(){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.RESET_CONTROL_PARAMETERS}, 
+        {expected_code: command_codes.CONTROL_PARAMETERS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid control parameters data");
+      this.control_parameters = data[0];
+    } catch (error) {
+      console.error("Error resetting control parameters:", error);
     }
   }
 }

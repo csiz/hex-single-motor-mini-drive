@@ -70,6 +70,7 @@ export const command_codes = {
   CONTROL_PARAMETERS: 0x4049,
   SET_CONTROL_PARAMETERS: 0x404A,
   GET_CONTROL_PARAMETERS: 0x404B,
+  RESET_CONTROL_PARAMETERS: 0x404C,
 
   SAVE_SETTINGS_TO_FLASH: 0x4080,
 
@@ -522,7 +523,7 @@ function parse_pid_parameters(data_view) {
 }
 
 
-const control_parameters_size = 22;
+const control_parameters_size = 30;
 function parse_control_parameters(data_view) {
   let offset = header_size;
 
@@ -546,7 +547,15 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const min_emf_speed = data_view.getInt16(offset);
   offset += 2;
-
+  const lead_angle_control_ki = data_view.getInt16(offset);
+  offset += 2;
+  const torque_control_ki = data_view.getInt16(offset);
+  offset += 2;
+  const battery_power_control_ki = data_view.getInt16(offset);
+  offset += 2;
+  const speed_control_ki = data_view.getInt16(offset);
+  offset += 2;
+  
   return {
     rotor_angle_ki,
     rotor_angular_speed_ki,
@@ -558,6 +567,10 @@ function parse_control_parameters(data_view) {
     max_angle_change,
     min_emf_voltage,
     min_emf_speed,
+    lead_angle_control_ki,
+    torque_control_ki,
+    battery_power_control_ki,
+    speed_control_ki
   };
 }
 
@@ -647,6 +660,15 @@ function serialise_set_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.min_emf_speed);
   offset += 2;
+  view.setInt16(offset, control_parameters.lead_angle_control_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.torque_control_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.battery_power_control_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.speed_control_ki);
+  offset += 2;
+
   return buffer;
 }
 

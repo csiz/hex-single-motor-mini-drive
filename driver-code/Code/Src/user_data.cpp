@@ -27,13 +27,6 @@ CurrentCalibration get_current_calibration(){
         default_current_calibration;
 }
 
-PIDParameters get_pid_parameters(){
-    const bool parameters_available = (PID_PARAMETERS == read_uint16(user_data + pid_parameters_offset));
-    return parameters_available ? 
-        parse_pid_parameters(user_data + pid_parameters_offset, pid_parameters_size) :
-        default_pid_parameters;
-}
-
 ControlParameters get_control_parameters() {
     const bool parameters_available = (CONTROL_PARAMETERS == read_uint16(user_data + control_parameters_offset));
     return parameters_available ?
@@ -83,14 +76,10 @@ uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
 
 void save_settings_to_flash(
     CurrentCalibration const& current_calibration, 
-    PIDParameters const& pid_parameters,
     ControlParameters const& control_parameters
 ) {
     // Write the current calibration to the buffer.
     write_current_calibration(page_buffer + current_calibration_offset, current_calibration);
-
-    // Write the PID parameters to the buffer.
-    write_pid_parameters(page_buffer + pid_parameters_offset, pid_parameters);
 
     // Write the observer parameters to the buffer.
     write_control_parameters(page_buffer + control_parameters_offset, control_parameters);

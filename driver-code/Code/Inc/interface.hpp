@@ -50,13 +50,10 @@ enum MessageCode : uint16_t {
     GET_CURRENT_FACTORS = 0x4041,
     SET_CURRENT_FACTORS = 0x4042,
 
-    PID_PARAMETERS = 0x4046,
-    GET_PID_PARAMETERS = 0x4047,
-    SET_PID_PARAMETERS = 0x4048,
-
     CONTROL_PARAMETERS = 0x4049,
     SET_CONTROL_PARAMETERS = 0x404A,
     GET_CONTROL_PARAMETERS = 0x404B,
+    RESET_CONTROL_PARAMETERS = 0x404C,
 
     SAVE_SETTINGS_TO_FLASH = 0x4080,
 
@@ -79,7 +76,6 @@ const size_t basic_command_size = sizeof(BasicCommand); // Note; basic command i
 const size_t readout_size = header_size + sizeof(Readout);
 const size_t full_readout_size = header_size + sizeof(FullReadout);
 const size_t current_calibration_size = header_size + sizeof(CurrentCalibration);
-const size_t pid_parameters_size = header_size + sizeof(PIDParameters);
 const size_t control_parameters_size = header_size + sizeof(ControlParameters);
 
 const size_t max_message_size = 256;
@@ -113,7 +109,6 @@ bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t * buf, 
 
 BasicCommand parse_basic_command(uint8_t const * data, size_t size);
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size);
-PIDParameters parse_pid_parameters(uint8_t const * data, size_t size);
 ControlParameters parse_control_parameters(uint8_t const * data, size_t size);
 
 // Sending data
@@ -123,7 +118,6 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size);
 void write_readout(uint8_t * buffer, Readout const& readout);
 void write_full_readout(uint8_t * buffer, FullReadout const& full_readout);
 void write_current_calibration(uint8_t * data, CurrentCalibration const& factors);
-void write_pid_parameters(uint8_t * buffer, PIDParameters const& parameters);
 void write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters);
 
 // The unit test will write directly to the buffer.

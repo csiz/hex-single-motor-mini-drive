@@ -93,6 +93,7 @@ struct DriveSmooth {
     int16_t zero_offset;
     int16_t pwm_target;
     int16_t pwm_active;
+    int16_t lead_angle_control;
 };
 
 // Drive the motor to a specific current target (torque target).
@@ -100,6 +101,7 @@ struct DriveTorque {
     uint16_t duration; // Duration for the command in pwm cycles.
     int16_t zero_offset;
     int16_t current_target; // Target current in fixed point format.
+    int16_t torque_control;
 };
 
 // Drive the motor to a specific battery power drain.
@@ -107,6 +109,7 @@ struct DriveBatteryPower {
     uint16_t duration; // Duration for the command in pwm cycles.
     int16_t zero_offset;
     int16_t power_target; // Target power in fixed point format.
+    int16_t battery_power_control;
 };
 
 // Drive parameters for each state.
@@ -242,44 +245,6 @@ struct CurrentCalibration {
     int16_t inductance_factor;
 };
 
-struct PIDGains {
-    int16_t kp; // Proportional gain.
-    int16_t ki; // Integral gain.
-    int16_t kd; // Derivative gain.
-    int16_t max_output;
-};
-
-struct PIDControl {
-    int integral = 0; // Integral term.
-    int16_t error = 0; // Previous error for derivative calculation.
-    int16_t output = 0; // Output value.
-};
-
-struct PIDParameters {
-    PIDGains current_angle_gains;
-    PIDGains torque_gains;
-    PIDGains battery_power_gains;
-    PIDGains angular_speed_gains;
-    PIDGains position_gains;
-};
-
-struct PIDControlState {
-    PIDControl current_angle_control;
-    PIDControl torque_control;
-    PIDControl battery_power_control;
-    PIDControl angular_speed_control;
-    PIDControl position_control;
-};
-
-const PIDControlState null_pid_control_state = {
-    .current_angle_control = {},
-    .torque_control = {},
-    .battery_power_control = {},
-    .angular_speed_control = {},
-    .position_control = {}
-};
-
-
 
 struct ControlParameters {
     // Magnet position integral gain.
@@ -311,6 +276,18 @@ struct ControlParameters {
     
     // Minimum speed when we are certain to detect the EMF voltage.
     int16_t min_emf_speed;
+
+    // Lead angle integral gain for efficient driving.
+    int16_t lead_angle_control_ki;
+
+    // Torque control gain.
+    int16_t torque_control_ki;
+
+    // Battery power control gain.
+    int16_t battery_power_control_ki;
+
+    // Speed control gain.
+    int16_t speed_control_ki;
 };
 
 struct ObserverState {
@@ -330,6 +307,9 @@ struct Observers {
     // Average rotor angular acceleration.
     ObserverState rotor_acceleration;
 
+    // The motor constant; the ratio between the EMF voltage induced in the coils and the magnet angular speed.
+    ObserverState motor_constant;
+    
     // The phase resistance; the drag factor for the fixed reference frame current.
     ObserverState resistance;
 
@@ -338,15 +318,4 @@ struct Observers {
     // and the (reversely felt) inductor acceleration. Also the classical L/R time constant
     // for the fixed reference frame current.
     ObserverState inductance;
-
-    // The motor constant; the ratio between the EMF voltage induced in the coils and the magnet angular speed.
-    ObserverState motor_constant;
-
-
-    // The inertial mass of the magnetic rotor and geartrain.
-    ObserverState rotor_mass;
-
-    // This is the physical torque on the rotor; it acts like a resistance, but in this
-    // case it can also be negative (the motor is pushed externally and driver is regen breaking).
-    ObserverState rotor_torque;
 };

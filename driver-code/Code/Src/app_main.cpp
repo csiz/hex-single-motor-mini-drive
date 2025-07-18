@@ -47,8 +47,7 @@ uint16_t usb_readouts_to_send = 0;
 bool usb_wait_full_history = false;
 
 bool usb_reply_current_factors = false;
-bool usb_reply_pid_parameters = false;
-bool usb_reply_observer_parameters = false;
+bool usb_reply_control_parameters = false;
 
 uint8_t usb_unit_test_buffer[unit_test_size] = {0};
 bool usb_reply_unit_test = false;
@@ -408,33 +407,29 @@ bool handle_command(MessageBuffer const& buffer) {
             usb_reply_current_factors = true;
             return false;
 
-        case SET_PID_PARAMETERS:
-            pid_parameters = parse_pid_parameters(buffer.data, buffer.write_index);
-            usb_reply_pid_parameters = true;
-            return false;
         case SET_CONTROL_PARAMETERS:
             control_parameters = parse_control_parameters(buffer.data, buffer.write_index);
-            usb_reply_observer_parameters = true;
+            usb_reply_control_parameters = true;
+            return false;
+
+        case RESET_CONTROL_PARAMETERS:
+            control_parameters = default_control_parameters;
+            usb_reply_control_parameters = true;
             return false;
 
         case GET_CURRENT_FACTORS:
             usb_reply_current_factors = true;
             return false;
 
-        case GET_PID_PARAMETERS:
-            usb_reply_pid_parameters = true;
-            return false;
-
         case GET_CONTROL_PARAMETERS:
-            usb_reply_observer_parameters = true;
+            usb_reply_control_parameters = true;
             return false;
 
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
-                save_settings_to_flash(current_calibration, pid_parameters, control_parameters);
+                save_settings_to_flash(current_calibration, control_parameters);
 
                 current_calibration = get_current_calibration();
-                pid_parameters = get_pid_parameters();
                 control_parameters = get_control_parameters();
                 
                 return false;
@@ -444,7 +439,6 @@ bool handle_command(MessageBuffer const& buffer) {
 
         // We shouldn't receive these messages; the driver only sends them.
         case CURRENT_FACTORS:
-        case PID_PARAMETERS:
         case CONTROL_PARAMETERS:
         case READOUT:
         case FULL_READOUT:
@@ -523,26 +517,15 @@ void usb_queue_response(FullReadout const& readout) {
         usb_reply_unit_test = false;
     }
 
-    // Send PID parameters if requested.
-    if (usb_reply_pid_parameters) {
-        if (not usb_check_queue(pid_parameters_size)) return;
-        
-        // Send the PID parameters to the host.
-        write_pid_parameters(usb_response_buffer, pid_parameters);
-        usb_queue_send(usb_response_buffer, pid_parameters_size);
-
-        usb_reply_pid_parameters = false;
-    }
-
-    // Send observer parameters if requested.
-    if (usb_reply_observer_parameters) {
+    // Send control parameters if requested.
+    if (usb_reply_control_parameters) {
         if (not usb_check_queue(control_parameters_size)) return;
-        
-        // Send the observer parameters to the host.
+
+        // Send the control parameters to the host.
         write_control_parameters(usb_response_buffer, control_parameters);
         usb_queue_send(usb_response_buffer, control_parameters_size);
 
-        usb_reply_observer_parameters = false;
+        usb_reply_control_parameters = false;
     }
 
     // Send current factors if requested.

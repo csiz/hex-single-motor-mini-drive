@@ -43,8 +43,5 @@ void set_motor_command(DriverState const& state, DriverParameters const& paramet
 // Current calibration factors.
 extern CurrentCalibration current_calibration;
 
-// PID control parameters.
-extern PIDParameters pid_parameters;
-
 // Interrupt loop control parameters.
 extern ControlParameters control_parameters;

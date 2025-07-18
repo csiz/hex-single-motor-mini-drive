@@ -1,7 +1,6 @@
 #include "interrupts.hpp"
 #include "interrupts_data.hpp"
 #include "interrupts_angle.hpp"
-#include "interrupts_pid.hpp"
 #include "interrupts_motor.hpp"
 
 #include "io.hpp"
@@ -47,11 +46,9 @@ Observers observers = {
     .rotor_angle = {},
     .rotor_angular_speed = {},
     .rotor_acceleration = {},
+    .motor_constant = {},
     .resistance = {},
     .inductance = {},
-    .motor_constant = {},
-    .rotor_mass = {},
-    .rotor_torque = {}
 };
 
 // Count the number of consecutive EMF detections; we get good statistics after a threshold number.
@@ -90,9 +87,6 @@ MotorOutputs active_motor_outputs = breaking_motor_outputs;
 
 // Keep a record of the previous output; the output switches mid cycle so we need to account for that.
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
-
-// PID control state for all controls.
-PIDControlState pid_state = null_pid_control_state;
 
 
 // Interrupt Data Interface
@@ -383,37 +377,40 @@ void adc_interrupt_handler(){
     // Check if the emf voltage is away from zero with enough confidence.
     const bool emf_detected = emf_voltage_magnitude > emf_min_voltage;
 
-    const auto previous_speed = observers.rotor_angular_speed.value;
-
     // The EMF voltage gives us a noisy but accurate estimate of the rotor magnetic angle;
     // use it to update the position between hall sensor toggles.
     if (emf_detected) {
         // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
-        observers.rotor_angle.error = angle_or_mirror(rotor_angle_error);
-        observers.rotor_angle.value = normalize_angle(
-            observers.rotor_angle.value +
-            observers.rotor_angle.error * control_parameters.rotor_angle_ki / control_parameters_fixed_point
+        const int prediction_error = angle_or_mirror(rotor_angle_error);
+
+        observers.rotor_angle.error = signed_ceil_div(
+            prediction_error * control_parameters.rotor_angle_ki,
+            control_parameters_fixed_point
         );
+        observers.rotor_angle.value = normalize_angle(observers.rotor_angle.value + observers.rotor_angle.error);
 
         const bool compute_speed = consecutive_emf_detections > 4;
 
         // Calculate the new speed based on the angle adjustment.
         // 
         // Note that the angle change is relative to the current speed because of the prediction step.
-        observers.rotor_angular_speed.error = compute_speed * observers.rotor_angle.error * speed_fixed_point;
-        observers.rotor_angular_speed.value += signed_ceil_div(observers.rotor_angular_speed.error * control_parameters.rotor_angular_speed_ki, control_parameters_fixed_point);
+        observers.rotor_angular_speed.error = compute_speed * speed_fixed_point * signed_ceil_div(
+            prediction_error * control_parameters.rotor_angular_speed_ki, 
+            control_parameters_fixed_point
+        );
+        observers.rotor_angular_speed.value += observers.rotor_angular_speed.error;
 
         // Calculate the acceleration based on the speed change.
         // 
         // The new speed isn't predicted so we need to diff to the previous acceleration to get the error.
-        observers.rotor_acceleration.error = (observers.rotor_angular_speed.value - previous_speed) * acceleration_fixed_point - observers.rotor_acceleration.value;
+        observers.rotor_acceleration.error = observers.rotor_angular_speed.error * acceleration_fixed_point - observers.rotor_acceleration.value;
         observers.rotor_acceleration.value += observers.rotor_acceleration.error * control_parameters.rotor_acceleration_ki / control_parameters_fixed_point;
     } else {
         observers.rotor_angle.error = 0;
         observers.rotor_angle.value = observers.rotor_angle.value;
 
-        observers.rotor_angular_speed.value = observers.rotor_angular_speed.value * 255 / 256;
-        observers.rotor_angular_speed.error = observers.rotor_angular_speed.value - previous_speed;
+        observers.rotor_angular_speed.error = -signed_ceil_div(observers.rotor_angular_speed.value, 256);
+        observers.rotor_angular_speed.value += observers.rotor_angular_speed.error;
 
         observers.rotor_acceleration.value = 0;
         observers.rotor_acceleration.error = 0;
@@ -576,7 +573,7 @@ void adc_interrupt_handler(){
 
     // Update the motor controls using the readout data. Note that it also modifies the driver_state, driver_parameters, and pid_state.
     const bool critical_error = update_motor_control(
-        active_motor_outputs, driver_state, driver_parameters, pid_state,
+        active_motor_outputs, driver_state, driver_parameters,
         pending_state, pending_parameters, readout
     );
 

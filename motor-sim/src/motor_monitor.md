@@ -45,8 +45,10 @@ Motor Driving Data
 <div class="card tight">${plot_readout_flags}</div>
 <div class="card tight">${plot_motor_values}</div>
 
-Control Parameters
--------------------
+
+Motor Control Parameters
+------------------------
+
 <div class="card tight">
   <div>${control_parameters_buttons}</div>
   <h3>Active Control Parameters</h3>
@@ -56,39 +58,9 @@ Control Parameters
 
 <div class="card tight">
   <h3>Control Parameters</h3>
-  <div>${control_parameters_input}</div>
+  <div>${Object.values(control_parameters_input)}</div>
 </div>
 
-
-Motor Control Parameters
-------------------------
-<div class="card tight">
-  <div>${pid_parameters_buttons}</div>
-
-  <h3>Active PID Parameters</h3>
-  <p>These are the currently active PID parameters for the motor controller.</p>
-  <pre>${active_pid_parameters_table}</pre>
-</div>
-
-<div class="card tight">
-  <h3>Inductor Angle Control</h3>
-  <div>${inductor_angle_gains_input}</div>
-</div>
-<div class="card tight">
-  <h3>Torque Control</h3>
-  <div>${torque_gains_input}</div>
-</div>
-<div class="card tight">
-  <h3>Battery Power Control</h3>
-  <div>${battery_power_gains_input}</div>
-<div class="card tight">
-  <h3>Angular Speed Control</h3>
-  <div>${angular_speed_gains_input}</div>
-</div>
-<div class="card tight">
-  <h3>Position Control</h3>
-  <div>${position_gains_input}</div>
-</div>
 
 Current Calibration Procedures
 ------------------------------
@@ -236,7 +208,6 @@ async function connect_motor_controller(){
       new_controller.reading_loop(display_connection_stats),
       (async function(){
         await new_controller.load_current_calibration();
-        await new_controller.load_pid_parameters();
         await new_controller.load_control_parameters();
         motor_controller.value = new_controller;
       })(),
@@ -1216,129 +1187,6 @@ autosave_inputs({
 ```
 
 
-
-
-```js
-// PID Parameters
-// --------------
-
-function stringify_active_pid_parameters() {
-  return `motor_controller.pid_parameters = ${JSON.stringify(motor_controller?.pid_parameters, null, 2)}`;
-}
-
-let active_pid_parameters_table =  Mutable(stringify_active_pid_parameters());
-
-const inductor_angle_gains_input = [
-  ["kp", "Inductor Angle Proportional"],
-  ["ki", "Inductor Angle Integral"],
-  ["kd", "Inductor Angle Derivative"],
-  ["max_output", "Inductor Angle Max Output"],
-].map(([key, label]) => Inputs.number(key, {
-  label,
-  value: motor_controller?.pid_parameters?.inductor_angle_gains?.[key],
-}));
-
-const torque_gains_input = [
-  ["kp", "Torque Control Proportional"],
-  ["ki", "Torque Control Integral"],
-  ["kd", "Torque Control Derivative"],
-  ["max_output", "Torque Control Max Output"],
-].map(([key, label]) => Inputs.number(key, {
-  label,
-  value: motor_controller?.pid_parameters?.torque_gains?.[key],
-}));
-
-const battery_power_gains_input = [
-  ["kp", "Battery Power Proportional"],
-  ["ki", "Battery Power Integral"],
-  ["kd", "Battery Power Derivative"],
-  ["max_output", "Battery Power Max Output"],
-].map(([key, label]) => Inputs.number(key, {
-  label,
-  value: motor_controller?.pid_parameters?.battery_power_gains?.[key],
-}));
-
-const angular_speed_gains_input = [
-  ["kp", "Angular Speed Control Proportional"],
-  ["ki", "Angular Speed Control Integral"],
-  ["kd", "Angular Speed Control Derivative"],
-  ["max_output", "Angular Speed Control Max Output"],
-].map(([key, label]) => Inputs.number(key, {
-  label,
-  value: motor_controller?.pid_parameters?.angular_speed_gains?.[key],
-}));
-
-const position_gains_input = [
-  ["kp", "Position Control Proportional"],
-  ["ki", "Position Control Integral"],
-  ["kd", "Position Control Derivative"],
-  ["max_output", "Position Control Max Output"],
-].map(([key, label]) => Inputs.number(key, {
-  label,
-  value: motor_controller?.pid_parameters?.position_gains?.[key],
-}));
-
-
-let pid_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
-  [
-    ["Upload Default", wait_previous(async function(value){
-      await motor_controller.upload_pid_parameters(default_pid_parameters);
-      active_pid_parameters_table.value = stringify_active_pid_parameters();
-      return value;
-    })],
-    ["Upload to Driver", wait_previous(async function(value){
-      const pid_parameters = {
-        inductor_angle_gains: {
-          kp: inductor_angle_gains_input[0].value,
-          ki: inductor_angle_gains_input[1].value,
-          kd: inductor_angle_gains_input[2].value,
-          max_output: inductor_angle_gains_input[3].value,
-        },
-        torque_gains: {
-          kp: torque_gains_input[0].value,
-          ki: torque_gains_input[1].value,
-          kd: torque_gains_input[2].value,
-          max_output: torque_gains_input[3].value,
-        },
-        battery_power_gains: {
-          kp: battery_power_gains_input[0].value,
-          ki: battery_power_gains_input[1].value,
-          kd: battery_power_gains_input[2].value,
-          max_output: battery_power_gains_input[3].value,
-        },
-        angular_speed_gains: {
-          kp: angular_speed_gains_input[0].value,
-          ki: angular_speed_gains_input[1].value,
-          kd: angular_speed_gains_input[2].value,
-          max_output: angular_speed_gains_input[3].value,
-        },
-        position_gains: {
-          kp: position_gains_input[0].value,
-          ki: position_gains_input[1].value,
-          kd: position_gains_input[2].value,
-          max_output: position_gains_input[3].value,
-        },
-      };
-
-      await motor_controller.upload_pid_parameters(pid_parameters);
-      active_pid_parameters_table.value = stringify_active_pid_parameters();
-      return value;
-    })],
-    ["Reload from Driver", wait_previous(async function(value){
-      await motor_controller.load_pid_parameters();
-      active_pid_parameters_table.value = stringify_active_pid_parameters();
-      return value;
-    })],
-  ],
-  {
-    label: "PID Parameters",
-    value: motor_controller?.pid_parameters ?? default_pid_parameters,
-  },
-);
-
-
-```
-
 ```js
 // Control Parameters
 // -------------------
@@ -1349,44 +1197,54 @@ function stringify_active_control_parameters() {
 
 let active_control_parameters_table =  Mutable(stringify_active_control_parameters());
 
-const control_parameters_input = [
-  ["rotor_angle_ki", "Rotor Angle KI"],
-  ["rotor_angular_speed_ki", "Rotor Angular Speed KI"],
-  ["rotor_acceleration_ki", "Rotor Acceleration KI"],
-  ["motor_constant_ki", "Motor Constant KI"],
-  ["resistance_ki", "Resistance KI"],
-  ["inductance_ki", "Inductance KI"],
-  ["max_pwm_change", "Maximum PWM Change per cycle"],
-  ["max_angle_change", "Maximum Angle Change per cycle"],
-  ["min_emf_voltage", "Minimum EMF Voltage for detection"],
-  ["min_emf_speed", "Minimum EMF Speed for detection"],
-].map(([key, label]) => Inputs.number(key, {
-  label,
-  value: motor_controller?.control_parameters?.[key],
-}));
+const control_parameters_input = Object.fromEntries(
+  [
+    ["rotor_angle_ki", "Rotor Angle KI"],
+    ["rotor_angular_speed_ki", "Rotor Angular Speed KI"],
+    ["rotor_acceleration_ki", "Rotor Acceleration KI"],
+    ["motor_constant_ki", "Motor Constant KI"],
+    ["resistance_ki", "Resistance KI"],
+    ["inductance_ki", "Inductance KI"],
+    ["max_pwm_change", "Maximum PWM Change per cycle"],
+    ["max_angle_change", "Maximum Angle Change per cycle"],
+    ["min_emf_voltage", "Minimum EMF Voltage for detection"],
+    ["min_emf_speed", "Minimum EMF Speed for detection"],
+    ["lead_angle_control_ki", "Lead Angle Control KI"],
+    ["torque_control_ki", "Torque Control KI"],
+    ["battery_power_control_ki", "Battery Power Control KI"],
+    ["speed_control_ki", "Speed Control KI"],
+  ].map(([key, label]) => [
+    key, 
+    Inputs.number([], {
+      label,
+      value: motor_controller?.control_parameters?.[key],
+    })
+  ])
+);
+
+function show_active_control_parameters() {
+  active_control_parameters_table.value = stringify_active_control_parameters();
+  Object.entries(control_parameters_input).forEach(([key, input]) => {
+    input.value = motor_controller?.control_parameters?.[key];
+  });
+}
 
 let control_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
   [
     ["Upload to Driver", wait_previous(async function(value){
-      const control_parameters = {
-        rotor_angle_ki: control_parameters_input[0].value,
-        rotor_angular_speed_ki: control_parameters_input[1].value,
-        rotor_acceleration_ki: control_parameters_input[2].value,
-        motor_constant_ki: control_parameters_input[3].value,
-        resistance_ki: control_parameters_input[4].value,
-        inductance_ki: control_parameters_input[5].value,
-        max_pwm_change: control_parameters_input[6].value,
-        max_angle_change: control_parameters_input[7].value,
-        min_emf_voltage: control_parameters_input[8].value,
-        min_emf_speed: control_parameters_input[9].value,
-      };
+      const control_parameters = Object.fromEntries(Object.entries(control_parameters_input).map(([key, input]) => [key, input.value]));
       await motor_controller.upload_control_parameters(control_parameters);
-      active_control_parameters_table.value = stringify_active_control_parameters();
+      show_active_control_parameters();
       return value;
     })],
     ["Reload from Driver", wait_previous(async function(value){
       await motor_controller.load_control_parameters();
-      active_control_parameters_table.value = stringify_active_control_parameters();
+      show_active_control_parameters();
+      return value;
+    })],
+    ["Reset to Defaults", wait_previous(async function(value){
+      await motor_controller.reset_control_parameters();
+      show_active_control_parameters();
       return value;
     })],
   ],
