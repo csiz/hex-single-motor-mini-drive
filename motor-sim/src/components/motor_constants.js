@@ -51,7 +51,7 @@ export function unbounded_angle_units_to_degrees(angle){
 // Speed units
 // -----------
 
-export const speed_fixed_point = 32;
+export const speed_fixed_point = 128;
 
 export function speed_units_to_degrees_per_millisecond(speed){
   return unbounded_angle_units_to_degrees(speed / speed_fixed_point) * cycles_per_millisecond;
@@ -61,7 +61,7 @@ export function degrees_per_millisecond_to_speed_units(speed){
   return unbounded_degrees_to_angle_units(speed * speed_fixed_point * millis_per_cycle);
 }
 
-export const acceleration_fixed_point = 32;
+export const acceleration_fixed_point = 512;
 
 export function acceleration_units_to_degrees_per_millisecond_squared(acceleration){
   return speed_units_to_degrees_per_millisecond(acceleration / acceleration_fixed_point) * cycles_per_millisecond;

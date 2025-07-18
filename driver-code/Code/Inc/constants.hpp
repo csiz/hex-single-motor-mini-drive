@@ -276,9 +276,9 @@ inline constexpr int signed_angle(int angle){
 const int max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 // Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
-const int speed_fixed_point = 32;
+const int speed_fixed_point = 128;
 
-static_assert(speed_fixed_point * angle_base - 1 <= max_16bit, "speed_fixed_point * angle_base must be less than 32768 (max 16-bit signed int)");
+static_assert(speed_fixed_point * quarter_circle - 1 <= max_16bit, "speed_fixed_point * 90 degrees must be less than 32768 (max 16-bit signed int)");
 
 // Maximum angular speed that we can represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
@@ -303,7 +303,7 @@ const int motor_constant_fixed_point = 1 << 20;
 const int radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_div_pi;
 
 // Acceleration needs more precision than speed; it's in angle units per pwm cycle per pwm cycle / fixed point series.
-const int acceleration_fixed_point = 32;
+const int acceleration_fixed_point = 512;
 
 // Time dependent constants
 // ------------------------
@@ -338,8 +338,8 @@ const int16_t control_parameters_fixed_point = 4096;
 
 const ControlParameters default_control_parameters = {
     .rotor_angle_ki = 1024,
-    .rotor_angular_speed_ki = 64,
-    .rotor_acceleration_ki = 128,
+    .rotor_angular_speed_ki = 32,
+    .rotor_acceleration_ki = 32,
     .motor_constant_ki = 128,
     .resistance_ki = 0,
     .inductance_ki = 0,

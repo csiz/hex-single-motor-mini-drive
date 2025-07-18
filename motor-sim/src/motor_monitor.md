@@ -10,12 +10,16 @@ Motor Commands
 <div>${connection_status}</div>
 <div>${data_request_buttons}</div>
 <div>${command_options_input}</div>
+<div>${stop_buttons}</div>
 <div>${test_buttons}</div>
-<div>${command_buttons}</div>
 <div>
-  ${command_pwm_slider}
-  ${command_timeout_slider}
-  ${command_secondary_slider}
+  <span>${simple_drive_buttons}</span>
+  <span>${command_timeout_slider}</span>
+  <span>${command_pwm_slider}</span>
+</div>
+<div>
+  <span>${advanced_drive_buttons}</span>
+  <span>${command_secondary_slider}</span>
 </div>
 
 
@@ -389,14 +393,55 @@ const test_buttons = Inputs.button(
   {label: "Test sequence"},
 );
 
-
-
 d3.select(test_buttons).selectAll("button").style("height", "4em");
 
-const command_buttons = Inputs.button(
+
+const stop_buttons = Inputs.button(
   [
-    ["Stop", async function(){
+    ["Stop / Brake", async function(){
       await command(command_codes.SET_STATE_OFF);
+      snapshot_if_checked(0);
+    }],
+    ["Freewheel", async function(){
+      await command(command_codes.SET_STATE_FREEWHEEL);
+      snapshot_if_checked(0);
+    }],
+  ],
+  {label: "Stop Commands"},
+);
+
+d3.select(stop_buttons)
+  .style("margin-top", "1em")
+  .style("margin-bottom", "1em")
+  .selectAll("button")
+    .style("height", "5em")
+    .style("font-weight", "bold")
+    .style("color", "darkred");
+
+const simple_drive_buttons = Inputs.button(
+  [
+    ["Hold U positive", async function(){
+      await command(command_codes.SET_STATE_HOLD_U_POSITIVE);
+      snapshot_if_checked(0);
+    }],
+    ["Hold V positive", async function(){
+      await command(command_codes.SET_STATE_HOLD_V_POSITIVE);
+      snapshot_if_checked(0);
+    }],
+    ["Hold W positive", async function(){
+      await command(command_codes.SET_STATE_HOLD_W_POSITIVE);
+      snapshot_if_checked(0);
+    }],
+    ["Hold U negative", async function(){
+      await command(command_codes.SET_STATE_HOLD_U_NEGATIVE);
+      snapshot_if_checked(0);
+    }],
+    ["Hold V negative", async function(){
+      await command(command_codes.SET_STATE_HOLD_V_NEGATIVE);
+      snapshot_if_checked(0);
+    }],
+    ["Hold W negative", async function(){
+      await command(command_codes.SET_STATE_HOLD_W_NEGATIVE);
       snapshot_if_checked(0);
     }],
     ["Drive 6S +", async function(){
@@ -407,6 +452,15 @@ const command_buttons = Inputs.button(
       await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_pwm: -command_pwm});
       snapshot_if_checked(500);
     }],
+  ],
+  {label: "Simple drive commands"},
+);
+
+d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
+
+
+const advanced_drive_buttons = Inputs.button(
+  [
     ["Drive periodic", async function(){
       await command(command_codes.SET_STATE_DRIVE_PERIODIC);
       snapshot_if_checked(500);
@@ -435,39 +489,10 @@ const command_buttons = Inputs.button(
       await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_pwm: -command_pwm});
       snapshot_if_checked(500);
     }],
-    ["Freewheel", async function(){
-      await command(command_codes.SET_STATE_FREEWHEEL);
-      snapshot_if_checked(0);
-    }],
-    ["Hold U positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_U_POSITIVE);
-      snapshot_if_checked(0);
-    }],
-    ["Hold V positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_V_POSITIVE);
-      snapshot_if_checked(0);
-    }],
-    ["Hold W positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_W_POSITIVE);
-      snapshot_if_checked(0);
-    }],
-    ["Hold U negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_U_NEGATIVE);
-      snapshot_if_checked(0);
-    }],
-    ["Hold V negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_V_NEGATIVE);
-      snapshot_if_checked(0);
-    }],
-    ["Hold W negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_W_NEGATIVE);
-      snapshot_if_checked(0);
-    }],
   ],
-  {label: "Commands"},
+  {label: "Advanced drive commands"},
 );
-
-d3.select(command_buttons).selectAll("button").style("height", "4em");
+d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
 
 ```
 

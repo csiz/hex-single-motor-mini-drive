@@ -349,7 +349,7 @@ void adc_interrupt_handler(){
 
 
     // TODO: reimplement drive modes.
-    // TODO: better command sliders for the drive modes in the UI.
+
 
     // Current angle calculation
     // -------------------------
@@ -394,8 +394,8 @@ void adc_interrupt_handler(){
         // Calculate the new speed based on the angle adjustment.
         // 
         // Note that the angle change is relative to the current speed because of the prediction step.
-        observers.rotor_angular_speed.error = compute_speed * speed_fixed_point * signed_ceil_div(
-            prediction_error * control_parameters.rotor_angular_speed_ki, 
+        observers.rotor_angular_speed.error = compute_speed * signed_ceil_div(
+            speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki, 
             control_parameters_fixed_point
         );
         observers.rotor_angular_speed.value += observers.rotor_angular_speed.error;
@@ -403,8 +403,11 @@ void adc_interrupt_handler(){
         // Calculate the acceleration based on the speed change.
         // 
         // The new speed isn't predicted so we need to diff to the previous acceleration to get the error.
-        observers.rotor_acceleration.error = observers.rotor_angular_speed.error * acceleration_fixed_point - observers.rotor_acceleration.value;
-        observers.rotor_acceleration.value += observers.rotor_acceleration.error * control_parameters.rotor_acceleration_ki / control_parameters_fixed_point;
+        observers.rotor_acceleration.error = signed_ceil_div(
+            (observers.rotor_angular_speed.error * acceleration_fixed_point - observers.rotor_acceleration.value) * control_parameters.rotor_acceleration_ki,
+            control_parameters_fixed_point
+        );
+        observers.rotor_acceleration.value += observers.rotor_acceleration.error;
     } else {
         observers.rotor_angle.error = 0;
         observers.rotor_angle.value = observers.rotor_angle.value;
