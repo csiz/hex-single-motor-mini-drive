@@ -175,58 +175,59 @@ void write_control_parameters(uint8_t * buffer, ControlParameters const& control
 // Message size for each command code that we can receive.
 static inline int get_message_size(uint16_t code) {
     switch (static_cast<MessageCode>(code)) {
-        case NULL_COMMAND:
-            return -1;
-        case STREAM_FULL_READOUTS:
-        case GET_READOUTS_SNAPSHOT:
-        case SET_STATE_OFF:
-        case SET_STATE_DRIVE_6_SECTOR:
-        case SET_STATE_TEST_ALL_PERMUTATIONS:
-        case SET_STATE_FREEWHEEL:
-        case SET_STATE_TEST_GROUND_SHORT:
-        case SET_STATE_TEST_POSITIVE_SHORT:
-        case SET_STATE_TEST_U_DIRECTIONS:
-        case SET_STATE_TEST_U_INCREASING:
-        case SET_STATE_TEST_U_DECREASING:
-        case SET_STATE_TEST_V_INCREASING:
-        case SET_STATE_TEST_V_DECREASING:
-        case SET_STATE_TEST_W_INCREASING:
-        case SET_STATE_TEST_W_DECREASING:
-        case SET_STATE_HOLD_U_POSITIVE:
-        case SET_STATE_HOLD_V_POSITIVE:
-        case SET_STATE_HOLD_W_POSITIVE:
-        case SET_STATE_HOLD_U_NEGATIVE:
-        case SET_STATE_HOLD_V_NEGATIVE:
-        case SET_STATE_HOLD_W_NEGATIVE:
-        case SET_STATE_DRIVE_PERIODIC:
-        case SET_STATE_DRIVE_SMOOTH:
-        case SET_STATE_DRIVE_TORQUE:
-        case SET_STATE_DRIVE_BATTERY_POWER:
-        case GET_CURRENT_FACTORS:
-        case GET_CONTROL_PARAMETERS:
-        case RESET_CONTROL_PARAMETERS:
-        case SAVE_SETTINGS_TO_FLASH:
-        case RUN_UNIT_TEST_FUNKY_ATAN:
-        case RUN_UNIT_TEST_FUNKY_ATAN_PART_2:
-        case RUN_UNIT_TEST_FUNKY_ATAN_PART_3:
-            return min_message_size;
+        case NULL_COMMAND: return -1;
+
+        case STREAM_FULL_READOUTS: return min_message_size;
+        case GET_READOUTS_SNAPSHOT: return min_message_size;
+
+        case SET_STATE_OFF: return min_message_size;
+        case SET_STATE_DRIVE_6_SECTOR: return min_message_size;
+        case SET_STATE_TEST_ALL_PERMUTATIONS: return min_message_size;
+        case SET_STATE_FREEWHEEL: return min_message_size;
+
+        case SET_STATE_TEST_GROUND_SHORT: return min_message_size;
+        case SET_STATE_TEST_POSITIVE_SHORT: return min_message_size;
+
+        case SET_STATE_TEST_U_DIRECTIONS: return min_message_size;
+        case SET_STATE_TEST_U_INCREASING: return min_message_size;
+        case SET_STATE_TEST_U_DECREASING: return min_message_size;
+        case SET_STATE_TEST_V_INCREASING: return min_message_size;
+        case SET_STATE_TEST_V_DECREASING: return min_message_size;
+        case SET_STATE_TEST_W_INCREASING: return min_message_size;
+        case SET_STATE_TEST_W_DECREASING: return min_message_size;
+
+        case SET_STATE_HOLD_U_POSITIVE: return min_message_size;
+        case SET_STATE_HOLD_V_POSITIVE: return min_message_size;
+        case SET_STATE_HOLD_W_POSITIVE: return min_message_size;
+        case SET_STATE_HOLD_U_NEGATIVE: return min_message_size;
+        case SET_STATE_HOLD_V_NEGATIVE: return min_message_size;
+        case SET_STATE_HOLD_W_NEGATIVE: return min_message_size;
+
+        case SET_STATE_DRIVE_PERIODIC: return min_message_size;
+        case SET_STATE_DRIVE_SMOOTH: return min_message_size;
+        case SET_STATE_DRIVE_TORQUE: return min_message_size;
+        case SET_STATE_DRIVE_BATTERY_POWER: return min_message_size;
+
+        case GET_CURRENT_FACTORS: return min_message_size;
+        case GET_CONTROL_PARAMETERS: return min_message_size;
+        case RESET_CONTROL_PARAMETERS: return min_message_size;
+        case SET_ANGLE: return min_message_size;
         
-        case SET_CURRENT_FACTORS:
-            return current_calibration_size;
-        case SET_CONTROL_PARAMETERS:
-            return control_parameters_size;
+        case SAVE_SETTINGS_TO_FLASH: return min_message_size;
 
-        case READOUT:
-            return readout_size;
-        case FULL_READOUT:
-            return full_readout_size;
-        case CURRENT_FACTORS:
-            return current_calibration_size;
-        case CONTROL_PARAMETERS:
-            return control_parameters_size;
+        case RUN_UNIT_TEST_FUNKY_ATAN: return min_message_size;
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_2: return min_message_size;
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_3: return min_message_size;
+        
+        case SET_CURRENT_FACTORS: return current_calibration_size;
+        case SET_CONTROL_PARAMETERS: return control_parameters_size;
 
-        case UNIT_TEST_OUTPUT:
-            return unit_test_size;
+        case READOUT: return readout_size;
+        case FULL_READOUT: return full_readout_size;
+        case CURRENT_FACTORS: return current_calibration_size;
+        case CONTROL_PARAMETERS: return control_parameters_size;
+
+        case UNIT_TEST_OUTPUT: return unit_test_size;
     }
 
     // Unknown message.
@@ -276,14 +277,14 @@ BasicCommand parse_basic_command(uint8_t const * data, size_t size) {
     offset += 2;
     const uint16_t timeout = read_uint16(data + offset);
     offset += 2;
-    const int16_t pwm = read_int16(data + offset);
+    const int16_t value = read_int16(data + offset);
     offset += 2;
-    const int16_t leading_angle = read_int16(data + offset);
+    const int16_t secondary = read_int16(data + offset);
     offset += 2;
 
     if (offset != basic_command_size) error();
 
-    return BasicCommand { code, timeout, pwm, leading_angle };
+    return BasicCommand { code, timeout, value, secondary };
 }
 
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) {

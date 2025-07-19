@@ -68,6 +68,8 @@ export const command_codes = {
   GET_CONTROL_PARAMETERS: 0x404B,
   RESET_CONTROL_PARAMETERS: 0x404C,
 
+  SET_ANGLE: 0x4050,
+
   SAVE_SETTINGS_TO_FLASH: 0x4080,
 
   UNIT_TEST_OUTPUT: 0x5040,
@@ -692,9 +694,9 @@ export const parser_mapping = {
 
 const basic_command_size = 8;
 
-export const default_command_options = {command_timeout: 0, command_pwm: 0, command_secondary: 0, additional_data: undefined};
+export const default_command_options = {command_timeout: 0, command_value: 0, command_secondary: 0, additional_data: undefined};
 
-export function serialise_command({command, command_timeout, command_pwm, command_secondary, additional_data}) {
+export function serialise_command({command, command_timeout, command_value, command_secondary, additional_data}) {
   const {serialise_func} = serialiser_mapping[command] ?? {serialise_func: null};
 
   // Serialise the command with a special serialiser if it exists.
@@ -709,7 +711,7 @@ export function serialise_command({command, command_timeout, command_pwm, comman
   offset += 2;
   view.setUint16(offset, command_timeout);
   offset += 2;
-  view.setInt16(offset, command_pwm);
+  view.setInt16(offset, command_value);
   offset += 2;
   view.setInt16(offset, command_secondary);
   offset += 2;

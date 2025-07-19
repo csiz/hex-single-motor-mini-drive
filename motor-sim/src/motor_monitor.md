@@ -9,13 +9,17 @@ Motor Commands
 <div>${connect_buttons}</div>
 <div>${connection_status}</div>
 <div>${data_request_buttons}</div>
-<div>${command_options_input}</div>
+<div>
+  <span>${command_options_input}</span>
+  <span>${command_snapshot_delay_slider}</span>
+</div>
 <div>${stop_buttons}</div>
 <div>${test_buttons}</div>
 <div>
   <span>${simple_drive_buttons}</span>
   <span>${command_timeout_slider}</span>
-  <span>${command_pwm_slider}</span>
+  <span>${command_value_slider}</span>
+  <span>${command_angle_slider}</span>
 </div>
 <div>
   <span>${advanced_drive_buttons}</span>
@@ -256,9 +260,9 @@ d3.select(command_options_input).select("div label").style("width", "100em");
 
 const command_options = Generators.input(command_options_input);
 
-const command_pwm_slider = inputs_wide_range([0, +1], {value: 0.05, step: 0.001, label: "Command value:"});
+const command_value_slider = inputs_wide_range([0, +1], {value: 0.05, step: 0.001, label: "Command value:"});
 
-const command_pwm_fraction = Generators.input(command_pwm_slider);
+const command_value_fraction = Generators.input(command_value_slider);
 
 const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
 
@@ -267,6 +271,14 @@ const command_timeout_millis = Generators.input(command_timeout_slider);
 const command_secondary_slider = inputs_wide_range([-angle_base/2 + 1, angle_base/2 - 1], {value: 1, step: 1, label: "Secondary value"});
 
 const command_secondary = Generators.input(command_secondary_slider);
+
+const command_angle_slider = inputs_wide_range([-180, 180], {value: 0, step: 1, label: "Command angle (degrees):"});
+
+const command_angle_degrees = Generators.input(command_angle_slider);
+
+const command_snapshot_delay_slider = inputs_wide_range([0, 1000], {value: 500, step: 1, label: "Snapshot delay (ms):"});
+
+const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
 ```
 
 
@@ -301,12 +313,12 @@ function push_data(readout){
 
 
 const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
-const command_pwm = Math.round(command_pwm_fraction * pwm_base);
+const command_value = Math.round(command_value_fraction * pwm_base);
 
 async function command(command, options = {}){
   if (!motor_controller) return;
   
-  await motor_controller.send_command({command, command_timeout, command_pwm, command_secondary, ...options});
+  await motor_controller.send_command({command, command_timeout, command_value, command_secondary, ...options});
 }
 
 let latest_stream_timeout = null;
@@ -322,7 +334,7 @@ function command_and_stream(delay_ms, command, options = {}){
       reset_data();
       // Start reading the data stream.
       await motor_controller.command_and_stream(
-        {command, command_timeout: 0, command_pwm: 0, command_secondary: 0, ...options},
+        {command, command_timeout: 0, command_value: 0, command_secondary: 0, ...options},
         {readout_callback: push_data, ...options});
 
     } catch (error) {
@@ -349,9 +361,9 @@ const data_request_buttons = Inputs.button(
 d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 
 
-function snapshot_if_checked(delay_ms, code = null){
+function snapshot_if_checked(code = null){
   if (command_options.includes("Take snapshot after command")){
-    command_and_stream(delay_ms, code ?? command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
+    command_and_stream(command_snapshot_delay, code ?? command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
   } else {
     if (code) command(code);
   }
@@ -360,34 +372,34 @@ function snapshot_if_checked(delay_ms, code = null){
 const test_buttons = Inputs.button(
   [
     ["Test all permutations", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_ALL_PERMUTATIONS);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
     ["Test ground short", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_GROUND_SHORT);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_GROUND_SHORT);
     }],
     ["Test positive short", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_POSITIVE_SHORT);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_POSITIVE_SHORT);
     }],
     ["Test U directions", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_U_DIRECTIONS);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_U_DIRECTIONS);
     }],
     ["Test U increasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_U_INCREASING);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_U_INCREASING);
     }],
     ["Test U decreasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_U_DECREASING);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_U_DECREASING);
     }],
     ["Test V increasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_INCREASING);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_V_DECREASING);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_INCREASING);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", function(){
-      snapshot_if_checked(0, command_codes.SET_STATE_TEST_W_DECREASING);
+      snapshot_if_checked(command_codes.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Test sequence"},
@@ -422,35 +434,35 @@ const simple_drive_buttons = Inputs.button(
   [
     ["Hold U positive", async function(){
       await command(command_codes.SET_STATE_HOLD_U_POSITIVE);
-      snapshot_if_checked(0);
+      snapshot_if_checked();
     }],
     ["Hold V positive", async function(){
       await command(command_codes.SET_STATE_HOLD_V_POSITIVE);
-      snapshot_if_checked(0);
+      snapshot_if_checked();
     }],
     ["Hold W positive", async function(){
       await command(command_codes.SET_STATE_HOLD_W_POSITIVE);
-      snapshot_if_checked(0);
+      snapshot_if_checked();
     }],
     ["Hold U negative", async function(){
       await command(command_codes.SET_STATE_HOLD_U_NEGATIVE);
-      snapshot_if_checked(0);
+      snapshot_if_checked();
     }],
     ["Hold V negative", async function(){
       await command(command_codes.SET_STATE_HOLD_V_NEGATIVE);
-      snapshot_if_checked(0);
+      snapshot_if_checked();
     }],
     ["Hold W negative", async function(){
       await command(command_codes.SET_STATE_HOLD_W_NEGATIVE);
-      snapshot_if_checked(0);
+      snapshot_if_checked();
     }],
     ["Drive 6S +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_pwm: +command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: +command_value});
+      snapshot_if_checked();
     }],
     ["Drive 6S -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_pwm: -command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: -command_value});
+      snapshot_if_checked();
     }],
   ],
   {label: "Simple drive commands"},
@@ -461,33 +473,37 @@ d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
 
 const advanced_drive_buttons = Inputs.button(
   [
+    ["Set Angle", async function(){
+      await command(command_codes.SET_ANGLE, {command_value: degrees_to_angle_units(command_angle_degrees)});
+      snapshot_if_checked();
+    }],
     ["Drive periodic", async function(){
       await command(command_codes.SET_STATE_DRIVE_PERIODIC);
-      snapshot_if_checked(500);
+      snapshot_if_checked();
     }],
     ["Drive smooth +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_pwm: +command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: +command_value});
+      snapshot_if_checked();
     }],
     ["Drive smooth -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_pwm: -command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: -command_value});
+      snapshot_if_checked();
     }],
     ["Drive torque +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_pwm: +command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: +command_value});
+      snapshot_if_checked();
     }],
     ["Drive torque -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_pwm: -command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: -command_value});
+      snapshot_if_checked();
     }],
     ["Drive power +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_pwm: +command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: +command_value});
+      snapshot_if_checked();
     }],
     ["Drive power -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_pwm: -command_pwm});
-      snapshot_if_checked(500);
+      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_value});
+      snapshot_if_checked();
     }],
   ],
   {label: "Advanced drive commands"},
@@ -1388,6 +1404,7 @@ import {run_current_calibration, compute_current_calibration} from "./components
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, default_current_calibration, max_calibration_current,
+  degrees_to_angle_units, 
 } from "./components/motor_constants.js";
 
 import {unit_test_expected} from "./components/motor_unit_tests.js";

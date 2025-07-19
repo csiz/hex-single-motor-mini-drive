@@ -425,6 +425,10 @@ bool handle_command(MessageBuffer const& buffer) {
             usb_reply_control_parameters = true;
             return false;
 
+        case SET_ANGLE:
+            set_angle(command.value);
+            return false;
+
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
                 save_settings_to_flash(current_calibration, control_parameters);

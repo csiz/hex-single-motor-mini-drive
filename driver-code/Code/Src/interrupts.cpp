@@ -40,7 +40,6 @@ size_t readout_history_read_index = 0;
 // Count the number of consecutive EMF detections; we get good statistics after a threshold number.
 size_t consecutive_emf_detections = 0;
 size_t incorrect_direction_detections = 0;
-
 size_t consecutive_current_detections = 0;
 
 
@@ -128,6 +127,12 @@ void set_motor_command(DriverState const& state, DriverParameters const& paramet
     pending_parameters = parameters;
 }
 
+void set_angle(int16_t angle) {
+    // Disable the ADC interrupt while we modify the readout angle.
+    NVIC_DisableIRQ(ADC1_2_IRQn);
+    readout.angle = normalize_angle(angle);
+    NVIC_EnableIRQ(ADC1_2_IRQn);
+}
 
 // Helper funcs
 // ------------
@@ -335,7 +340,9 @@ void adc_interrupt_handler(){
 
 
     // TODO: reimplement drive modes.
-
+    // TODO: allows sporading missing EMF or current readings
+    // TODO: track EMF fix since startup, ! definitely have a button to set random angle so we can test it
+    // TODO: fix the direction flipping
 
     // Current angle calculation
     // -------------------------

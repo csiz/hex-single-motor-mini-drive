@@ -36,6 +36,9 @@ bool is_motor_safed();
 // Set the motor command to be executed by the interrupt loop.
 void set_motor_command(DriverState const& state, DriverParameters const& parameters);
 
+// Set the motor angle directly, eg. from an external sensor.
+void set_angle(int16_t angle);
+
 
 // Position tracking
 // -----------------

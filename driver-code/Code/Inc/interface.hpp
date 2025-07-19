@@ -55,6 +55,8 @@ enum MessageCode : uint16_t {
     GET_CONTROL_PARAMETERS = 0x404B,
     RESET_CONTROL_PARAMETERS = 0x404C,
 
+    SET_ANGLE = 0x4050,
+
     SAVE_SETTINGS_TO_FLASH = 0x4080,
 
     UNIT_TEST_OUTPUT = 0x5040,
@@ -79,7 +81,7 @@ const size_t current_calibration_size = header_size + sizeof(CurrentCalibration)
 const size_t control_parameters_size = header_size + sizeof(ControlParameters);
 
 const size_t max_message_size = 256;
-const size_t min_message_size = 8;
+const size_t min_message_size = basic_command_size;
 
 
 
