@@ -1256,6 +1256,8 @@ const control_parameters_input = Object.fromEntries(
     ["torque_control_ki", "Torque Control KI"],
     ["battery_power_control_ki", "Battery Power Control KI"],
     ["speed_control_ki", "Speed Control KI"],
+    ["probing_angular_speed", "Probing Angular Speed"],
+    ["probing_max_pwm", "Probing Max PWM"],
   ].map(([key, label]) => [
     key, 
     Inputs.number([], {

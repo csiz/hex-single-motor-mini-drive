@@ -164,6 +164,10 @@ void write_control_parameters(uint8_t * buffer, ControlParameters const& control
     offset += 2;
     write_int16(buffer + offset, control_parameters.speed_control_ki);
     offset += 2;
+    write_int16(buffer + offset, control_parameters.probing_angular_speed);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.probing_max_pwm);
+    offset += 2;
     
     // Check if we wrote the correct number of bytes.
     if (offset != control_parameters_size) error();
@@ -212,7 +216,7 @@ static inline int get_message_size(uint16_t code) {
         case GET_CONTROL_PARAMETERS: return min_message_size;
         case RESET_CONTROL_PARAMETERS: return min_message_size;
         case SET_ANGLE: return min_message_size;
-        
+
         case SAVE_SETTINGS_TO_FLASH: return min_message_size;
 
         case RUN_UNIT_TEST_FUNKY_ATAN: return min_message_size;
@@ -343,6 +347,10 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     control_parameters.battery_power_control_ki = read_int16(data + offset);
     offset += 2;
     control_parameters.speed_control_ki = read_int16(data + offset);
+    offset += 2;
+    control_parameters.probing_angular_speed = read_int16(data + offset);
+    offset += 2;
+    control_parameters.probing_max_pwm = read_int16(data + offset);
     offset += 2;
 
     if (offset != control_parameters_size) error();

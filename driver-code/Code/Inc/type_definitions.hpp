@@ -296,4 +296,10 @@ struct ControlParameters {
 
     // Speed control gain.
     int16_t speed_control_ki;
+
+    // Probing angular speed for initial EMF detection.
+    int16_t probing_angular_speed;
+
+    // Maximum probing PWM value.
+    int16_t probing_max_pwm;
 };

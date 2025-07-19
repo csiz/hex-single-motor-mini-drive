@@ -357,6 +357,8 @@ const ControlParameters default_control_parameters = {
     .torque_control_ki = 0,
     .battery_power_control_ki = 0,
     .speed_control_ki = 0,
+    .probing_angular_speed = speed_fixed_point,
+    .probing_max_pwm = pwm_max_hold,
 };
 
 

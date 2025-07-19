@@ -99,8 +99,6 @@ static inline MotorOutputs update_motor_periodic(
     return pwm_at_angle(pwm_target, target_angle);
 }
 
-const int probing_angular_speed = 32;
-
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
 // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
 static inline MotorOutputs update_motor_smooth(
@@ -113,7 +111,7 @@ static inline MotorOutputs update_motor_smooth(
     const int16_t pwm_target = (
         emf_fix ? 
         clip_to(-pwm_max, +pwm_max, smooth_parameters.pwm_target) :
-        clip_to(-pwm_max_hold, +pwm_max_hold, smooth_parameters.pwm_target)
+        clip_to(-control_parameters.probing_max_pwm, +control_parameters.probing_max_pwm, smooth_parameters.pwm_target)
     );
 
     const int pwm_change = pwm_target - smooth_parameters.pwm_active;
@@ -158,12 +156,12 @@ static inline MotorOutputs update_motor_smooth(
         const int16_t target_angle = normalize_angle(ideal_angle + smooth_parameters.lead_angle_control);
 
         // Update the zero offset in case we lose the emf fix.
-        smooth_parameters.zero_offset = get_zero_offset(readout, target_angle, direction * probing_angular_speed);
+        smooth_parameters.zero_offset = get_zero_offset(readout, target_angle, direction * control_parameters.probing_angular_speed);
 
         return pwm_at_angle(abs_pwm, target_angle);
     } else {
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
-        const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * probing_angular_speed);
+        const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * control_parameters.probing_angular_speed);
 
         // Reset the current angle control; it needs to start from 0 at low speed.
         smooth_parameters.lead_angle_control = 0;
@@ -357,7 +355,7 @@ static inline bool update_motor_control(
             driver_parameters = DriverParameters{
                 .smooth = DriveSmooth{
                     .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_parameters.smooth.duration)),
-                    .zero_offset = get_zero_offset(readout, readout.angle + sign(pending_parameters.smooth.pwm_target) * quarter_circle, probing_angular_speed),
+                    .zero_offset = get_zero_offset(readout, readout.angle + sign(pending_parameters.smooth.pwm_target) * quarter_circle, control_parameters.probing_angular_speed),
                     .pwm_target = static_cast<int16_t>(clip_to(-pwm_max, +pwm_max, pending_parameters.smooth.pwm_target)),
                 }
             };

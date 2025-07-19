@@ -526,7 +526,7 @@ function parse_pid_parameters(data_view) {
 }
 
 
-const control_parameters_size = 30;
+const control_parameters_size = 34;
 function parse_control_parameters(data_view) {
   let offset = header_size;
 
@@ -558,7 +558,11 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const speed_control_ki = data_view.getInt16(offset);
   offset += 2;
-  
+  const probing_angular_speed = data_view.getInt16(offset);
+  offset += 2;
+  const probing_max_pwm = data_view.getInt16(offset);
+  offset += 2;
+
   return {
     rotor_angle_ki,
     rotor_angular_speed_ki,
@@ -573,7 +577,9 @@ function parse_control_parameters(data_view) {
     lead_angle_control_ki,
     torque_control_ki,
     battery_power_control_ki,
-    speed_control_ki
+    speed_control_ki,
+    probing_angular_speed,
+    probing_max_pwm,
   };
 }
 
@@ -670,6 +676,10 @@ function serialise_set_control_parameters(control_parameters) {
   view.setInt16(offset, control_parameters.battery_power_control_ki);
   offset += 2;
   view.setInt16(offset, control_parameters.speed_control_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.probing_angular_speed);
+  offset += 2;
+  view.setInt16(offset, control_parameters.probing_max_pwm);
   offset += 2;
 
   return buffer;
