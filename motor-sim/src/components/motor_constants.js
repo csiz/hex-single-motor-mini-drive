@@ -78,8 +78,22 @@ export const emf_detected_bit_offset = 11;
 export const emf_fix_bit_offset = 10;
 export const current_detected_bit_offset = 9;
 export const current_fix_bit_offset = 8;
+export const incorrect_rotor_angle_bit_offset = 7;
+export const rotor_direction_flip_imminent_bit_offset = 6;
 
 export const hall_state_bit_mask = 0b111 << hall_state_bit_offset;
+
+export function parse_state_flags(state_flags){
+  return {
+    hall_state: (state_flags & hall_state_bit_mask) >> hall_state_bit_offset,
+    emf_detected: (state_flags >> emf_detected_bit_offset) & 0b1,
+    emf_fix: (state_flags >> emf_fix_bit_offset) & 0b1,
+    current_detected: (state_flags >> current_detected_bit_offset) & 0b1,
+    current_fix: (state_flags >> current_fix_bit_offset) & 0b1,
+    incorrect_rotor_angle: (state_flags >> incorrect_rotor_angle_bit_offset) & 0b1,
+    rotor_direction_flip_imminent: (state_flags >> rotor_direction_flip_imminent_bit_offset) & 0b1,
+  };
+}
 
 // Motor control constants
 // -----------------------
@@ -131,38 +145,4 @@ export const default_current_calibration = {
   v_factor: 1.0,
   w_factor: 1.0,
   inductance_factor: 1.0,
-};
-
-
-export const default_pid_parameters = {
-  "current_angle_gains": {
-    "kp": 128,
-    "ki": 8,
-    "kd": 64,
-    "max_output": 256
-  },
-  "torque_gains": {
-    "kp": 0,
-    "ki": 8,
-    "kd": 0,
-    "max_output": 1450
-  },
-  "battery_power_gains": {
-    "kp": 0,
-    "ki": 8,
-    "kd": 0,
-    "max_output": 1450
-  },
-  "angular_speed_gains": {
-    "kp": 1337,
-    "ki": 16,
-    "kd": 8,
-    "max_output": 228
-  },
-  "position_gains": {
-    "kp": 128,
-    "ki": 16,
-    "kd": 8,
-    "max_output": 512
-  }
 };

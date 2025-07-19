@@ -732,7 +732,7 @@ const plot_speed = plot_lines({
   y_label: "Angular Speed (degrees/ms)",
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
-    {y: "angular_speed_error", label: "Magnet Angular Speed Error", color: colors_categories[1]},
+    {y: (d) => d.rotor_acceleration * 10, label: "Rotor Acceleration (10ms speed diff)", color: colors.angle_driven},
   ],
   curve,
 });
@@ -902,6 +902,8 @@ const plot_readout_flags = plot_lines({
     {y: "emf_fix", label: "EMF position fix", color: colors_categories[4]},
     {y: "current_detected", label: "Current detected", color: colors_categories[6]},
     {y: "current_fix", label: "Current position fix", color: colors_categories[7]},
+    {y: "incorrect_rotor_angle", label: "Incorrect Rotor Angle", color: colors_categories[8]},
+    {y: "rotor_direction_flip_imminent", label: "Rotor Direction Flip Imminent", color: colors_categories[9]},
     {y: "hall_u", label: "Hall U", color: colors.u},
     {y: "hall_v", label: "Hall V", color: colors.v},
     {y: "hall_w", label: "Hall W", color: colors.w},
@@ -918,8 +920,8 @@ const plot_motor_values = plot_lines({
   y_label: "Value",
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
-    {y: "rotor_acceleration", label: "Rotor Acceleration", color: colors.angle_driven},
-    {y: "rotor_acceleration_error", label: "Rotor Acceleration Error", color: colors_categories[1]},
+    {y: "phase_resistance", label: "Phase Resistance", color: colors_categories[1]},
+    {y: "phase_inductance", label: "Phase Inductance", color: colors_categories[2]},
     {y: "u_debug", label: "U Debug", color: colors.u},
     {y: "v_debug", label: "V Debug", color: colors.v},
     {y: "w_debug", label: "W Debug", color: colors.w},
@@ -1386,7 +1388,6 @@ import {run_current_calibration, compute_current_calibration} from "./components
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, default_current_calibration, max_calibration_current,
-  default_pid_parameters,
 } from "./components/motor_constants.js";
 
 import {unit_test_expected} from "./components/motor_unit_tests.js";

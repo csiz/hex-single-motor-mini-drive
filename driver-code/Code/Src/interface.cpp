@@ -97,9 +97,9 @@ void write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     
     write_int16(buffer + offset, readout.angle_error);
     offset += 2;
-    write_int16(buffer + offset, readout.angular_speed_error);
+    write_int16(buffer + offset, readout.phase_resistance);
     offset += 2;
-    write_int16(buffer + offset, readout.rotor_acceleration_error);
+    write_int16(buffer + offset, readout.phase_inductance);
     offset += 2;
     write_int16(buffer + offset, readout.u_debug);
     offset += 2;

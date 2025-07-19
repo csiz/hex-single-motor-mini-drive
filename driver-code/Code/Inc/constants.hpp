@@ -47,6 +47,7 @@ const int readout_number_base = 1 << 16;
 const size_t hall_state_bit_offset = 0;
 const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
+
 const size_t emf_detected_bit_offset = 11;
 const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 
@@ -59,6 +60,11 @@ const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 const size_t current_fix_bit_offset = 8;
 const uint16_t current_fix_bit_mask = 0b1 << current_fix_bit_offset;
 
+const size_t incorrect_rotor_angle_bit_offset = 7;
+const uint16_t incorrect_rotor_angle_bit_mask = 0b1 << incorrect_rotor_angle_bit_offset;
+
+const size_t rotor_direction_flip_imminent_bit_offset = 6;
+const uint16_t rotor_direction_flip_imminent_bit_mask = 0b1 << rotor_direction_flip_imminent_bit_offset;
 
 // Position constants
 // ------------------

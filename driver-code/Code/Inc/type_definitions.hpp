@@ -217,11 +217,19 @@ struct FullReadout : public Readout {
     int16_t emf_voltage_magnitude;
     // The measured acceleration of the rotor.
     int16_t rotor_acceleration;
-
-
+    
+    // Error of the angle measured from EMF to the rotor angle prediction.
     int16_t angle_error;
-    int16_t angular_speed_error;
-    int16_t rotor_acceleration_error;
+
+    // The phase resistance; the drag factor for the fixed reference frame current.
+    int16_t phase_resistance;
+
+    // The phase inductance; behaves as if the inductor coil magnetic field had a mass. It's 
+    // smaller than the rotor mass. It controls the ratio between the magnet acceleration
+    // and the (reversely felt) inductor acceleration. Also the classical L/R time constant
+    // for the fixed reference frame current.
+    int16_t phase_inductance;
+
     int16_t u_debug;
     int16_t v_debug;
     int16_t w_debug;
@@ -288,34 +296,4 @@ struct ControlParameters {
 
     // Speed control gain.
     int16_t speed_control_ki;
-};
-
-struct ObserverState {
-    // Current estimate of the observed value.
-    int16_t value;
-    // The last error used to update the observer.
-    int16_t error;
-};
-
-struct Observers {
-    // Position of the rotor magnetic angle.
-    ObserverState rotor_angle;
-
-    // Rotor magnetic angular speed.
-    ObserverState rotor_angular_speed;
-
-    // Average rotor angular acceleration.
-    ObserverState rotor_acceleration;
-
-    // The motor constant; the ratio between the EMF voltage induced in the coils and the magnet angular speed.
-    ObserverState motor_constant;
-    
-    // The phase resistance; the drag factor for the fixed reference frame current.
-    ObserverState resistance;
-
-    // The phase inductance; behaves as if the inductor coil magnetic field had a mass. It's 
-    // smaller than the rotor mass. It controls the ratio between the magnet acceleration
-    // and the (reversely felt) inductor acceleration. Also the classical L/R time constant
-    // for the fixed reference frame current.
-    ObserverState inductance;
 };

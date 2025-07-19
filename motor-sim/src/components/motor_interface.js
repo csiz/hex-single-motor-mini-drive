@@ -13,11 +13,7 @@ import {
   convert_power_to_watts,
   phase_resistance, 
   phase_inductance,
-  emf_detected_bit_offset,
-  hall_state_bit_mask,
-  current_detected_bit_offset,
-  current_fix_bit_offset,
-  emf_fix_bit_offset,
+  parse_state_flags,
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
@@ -133,7 +129,15 @@ function parse_readout(data_view, previous_readout){
   offset += 2;
 
 
-  const hall_state = (state_flags & hall_state_bit_mask);
+  const {
+    hall_state,
+    emf_detected,
+    emf_fix,
+    current_detected,
+    current_fix,
+    incorrect_rotor_angle,
+    rotor_direction_flip_imminent,
+  } = parse_state_flags(state_flags);
 
   const hall_u = Boolean(hall_state & 0b001) * 1;
   const hall_v = Boolean(hall_state & 0b010) * 1;
@@ -144,11 +148,6 @@ function parse_readout(data_view, previous_readout){
   const hall_u_as_angle = hall_u ? hall_v ? + 60 - ε : hall_w ? - 60 + ε :    0 : null;
   const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
-
-  const emf_detected = (state_flags >> emf_detected_bit_offset) & 0b1;
-  const emf_fix = (state_flags >> emf_fix_bit_offset) & 0b1;
-  const current_detected = (state_flags >> current_detected_bit_offset) & 0b1;
-  const current_fix = (state_flags >> current_fix_bit_offset) & 0b1;
 
   // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
   const u_pwm = Math.floor(pwm_commands / pwm_base / pwm_base) % pwm_base;
@@ -232,13 +231,15 @@ function parse_readout(data_view, previous_readout){
     readout_index, 
     time,
     // State flags
+    hall_u,
+    hall_v,
+    hall_w,
     emf_detected,
     emf_fix,
     current_detected,
     current_fix,
-    hall_u,
-    hall_v,
-    hall_w,
+    incorrect_rotor_angle,
+    rotor_direction_flip_imminent,
     // Raw readout values
     u_readout, v_readout, w_readout,
     u_readout_diff, v_readout_diff, w_readout_diff,
@@ -354,15 +355,15 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const emf_voltage_magnitude = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
-  const rotor_acceleration = data_view.getInt16(offset);
+  const rotor_acceleration = acceleration_units_to_degrees_per_millisecond_squared(data_view.getInt16(offset));
   offset += 2;
   
   
   const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const angular_speed_error = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
+  const phase_resistance = data_view.getInt16(offset);
   offset += 2;
-  const rotor_acceleration_error = data_view.getInt16(offset);
+  const phase_inductance = data_view.getInt16(offset);
   offset += 2;
   const u_debug = data_view.getInt16(offset);
   offset += 2;
@@ -409,9 +410,9 @@ function parse_full_readout(data_view, previous_readout){
     emf_voltage_magnitude,
     
     angle_error,
-    angular_speed_error,
     rotor_acceleration,
-    rotor_acceleration_error,
+    phase_resistance,
+    phase_inductance,
   };
 
   if (!previous_readout) return full_readout;
