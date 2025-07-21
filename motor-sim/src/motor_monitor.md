@@ -23,7 +23,7 @@ Motor Commands
 </div>
 <div>
   <span>${advanced_drive_buttons}</span>
-  <span>${command_secondary_slider}</span>
+  <span>${command_second_slider}</span>
 </div>
 
 
@@ -268,9 +268,9 @@ const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycl
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
-const command_secondary_slider = inputs_wide_range([-angle_base/2 + 1, angle_base/2 - 1], {value: 1, step: 1, label: "Secondary value"});
+const command_second_slider = inputs_wide_range([-angle_base/2 + 1, angle_base/2 - 1], {value: 1, step: 1, label: "Secondary value"});
 
-const command_secondary = Generators.input(command_secondary_slider);
+const command_second = Generators.input(command_second_slider);
 
 const command_angle_slider = inputs_wide_range([-180, 180], {value: 0, step: 1, label: "Command angle (degrees):"});
 
@@ -318,7 +318,7 @@ const command_value = Math.round(command_value_fraction * pwm_base);
 async function command(command, options = {}){
   if (!motor_controller) return;
   
-  await motor_controller.send_command({command, command_timeout, command_value, command_secondary, ...options});
+  await motor_controller.send_command({command, command_timeout, command_value, command_second, ...options});
 }
 
 let latest_stream_timeout = null;
@@ -334,7 +334,7 @@ function command_and_stream(delay_ms, command, options = {}){
       reset_data();
       // Start reading the data stream.
       await motor_controller.command_and_stream(
-        {command, command_timeout: 0, command_value: 0, command_secondary: 0, ...options},
+        {command, command_timeout: 0, command_value: 0, command_second: 0, ...options},
         {readout_callback: push_data, ...options});
 
     } catch (error) {

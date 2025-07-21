@@ -171,6 +171,8 @@ export class MotorController {
         byte_array = new Uint8Array();
         this._last_message = null;
         last_message_time = Date.now();
+
+        console.debug("Ignoring data received while not expecting messages:", chunk.length, "bytes");
         continue;
       }
 
@@ -184,14 +186,21 @@ export class MotorController {
 
         const {parse_func, message_size} = parser_mapping[code] ?? {parse_func: null, message_size: null};
 
+        // Handle an unexpected message code.
         if (code != this._expected_code) {
-          // Check if it's a valid message code.
-          if (message_size != null){
-            // Skip this message and continue.
+          
+          
+          if (message_size != null) {
+            // Check if it's a valid message code different than the expected; quietly discard the message.
+            
             offset += message_size;
             bytes_discarded += message_size;
+            console.debug("Ignoring unexpected message code:", code, " expected:", this._expected_code);
+
           } else {
-            // Search each byte until we find the expected code.
+            // Unrecognised message code; we must have read the middle of a message. Iterate over each
+            // byte until we find the expected code indicating the start of our expected message.
+
             offset += 1;
             bytes_discarded += 1;
           }
@@ -212,6 +221,7 @@ export class MotorController {
         if (!parse_func) {
           // We might reach this point if the user requested an unknown code; and we somehow received it.
           const error = new Error(`Unknown message code: ${code}`);
+          
           console.error(error.message);
           this._onerror(error);
           throw error;
@@ -223,15 +233,21 @@ export class MotorController {
         // We have enough data to parse the message; parse it.
         const message = parse_func.call(this, new DataView(byte_array.buffer, offset, message_size), this._last_message);
 
-        // Only advance the offset once we parsed the message (we need to keep collecting data until then).
+        // Advance the offset once we parsed the message.
         offset += message_size;
 
         // Keep track of receive rate statistics.
-        this._last_message = message;
         last_message_time = Date.now();
 
-        // Return the message to the caller if it's valid.
-        if(message) this._onmessage(message);
+        if(message) {
+          // If we have a valid message, report it to the listener.
+          this._last_message = message;
+          this._onmessage(message);
+        } else {
+          // Something was wrong with the message; discard it.
+          bytes_discarded += message_size;
+          console.warn("Message was discarded due to invalid data:", code, byte_array.slice(offset, offset + message_size));
+        }
       }
       
       // Slice our buffer once we have processed all the messages.

@@ -38,7 +38,7 @@ float adc_update_rate = 0.0f;
 
 MessageBuffer usb_receive_buffer = {};
 
-uint8_t usb_response_buffer[max_message_size] = {0};
+MessageBuffer usb_response_buffer = {};
 
 uint16_t usb_stream_state = 0;
 uint16_t usb_stream_last_sent = 0;
@@ -48,10 +48,9 @@ bool usb_wait_full_history = false;
 
 bool usb_reply_current_factors = false;
 bool usb_reply_control_parameters = false;
-
-uint8_t usb_unit_test_buffer[unit_test_size] = {0};
 bool usb_reply_unit_test = false;
 
+UnitTestFunction usb_unit_test_function = nullptr;
 
 // Time of last USB packet sent; used to detect timeouts.
 uint32_t usb_last_send = 0;
@@ -213,16 +212,11 @@ static inline void motor_start_test(PWMSchedule const& schedule){
 }
 
 // Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
-inline bool run_unit_test( void (*test_function)(char * buffer, size_t max_size)) {
+inline bool run_unit_test(UnitTestFunction test_function) {
     if (usb_reply_unit_test) return true; // We are already running a unit test.
 
-    // Clear the USB buffer.
-    memset(usb_unit_test_buffer, 0, unit_test_size);
-
-    write_uint16(usb_unit_test_buffer, MessageCode::UNIT_TEST_OUTPUT); // Write the command code to the buffer.
-
-    // Run the test function and write the results to the USB buffer.
-    test_function(reinterpret_cast<char *>(usb_unit_test_buffer + header_size), unit_test_size - header_size);
+    // Remember which test to run when the USB queue is ready.
+    usb_unit_test_function = test_function;
 
     // Set the flag to indicate that we have a unit test result ready to send.
     usb_reply_unit_test = true;
@@ -232,20 +226,27 @@ inline bool run_unit_test( void (*test_function)(char * buffer, size_t max_size)
 
 // Handle the command on the buffer; returns whether there was an error.
 bool handle_command(MessageBuffer const& buffer) {
-    const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+    // Check the message has a header and tail and passes the CRC check.
+    if (check_message_for_errors(buffer.data, buffer.write_index)) return true;
 
-    switch (static_cast<MessageCode>(command.code)) {
+    // Get the message code from the data header.
+    const uint16_t code = read_uint16(buffer.data);
+
+
+    switch (static_cast<MessageCode>(code)) {
         case NULL_COMMAND:
             // No command received; ignore it.
             return true;
 
-        case STREAM_FULL_READOUTS:
+        case STREAM_FULL_READOUTS: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
             // Cotinuously stream data if timeout > 0.
             usb_stream_state = command.timeout;
             // Also stop the motor if we stop the stream.
             if (not usb_stream_state) set_motor_command(DriverState::OFF, DriverParameters{});
             return false;
-
+        }
         case GET_READOUTS_SNAPSHOT:
             // Cancel streaming; so we can take a data snapshot without interruptions.
             usb_stream_state = 0;
@@ -297,7 +298,9 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
 
         // Drive the motor.
-        case SET_STATE_DRIVE_6_SECTOR:
+        case SET_STATE_DRIVE_6_SECTOR: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
             set_motor_command(
                 DriverState::DRIVE_6_SECTOR,
                 DriverParameters{ .sector = Drive6Sector{ 
@@ -306,102 +309,127 @@ bool handle_command(MessageBuffer const& buffer) {
                 }}
             );
             return false;
+        }
 
-        case SET_STATE_DRIVE_PERIODIC:
+        case SET_STATE_DRIVE_PERIODIC: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
             set_motor_command(
                 DriverState::DRIVE_PERIODIC, 
                 DriverParameters{ .periodic = DrivePeriodic{ 
                     .duration = command.timeout,
                     .zero_offset = 0,
                     .pwm_target = command.value,
-                    .angular_speed = command.secondary
+                    .angular_speed = command.second
                 }}
             );
             return false;
+        }
 
-        case SET_STATE_DRIVE_SMOOTH:
+        case SET_STATE_DRIVE_SMOOTH: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
             set_motor_command(
                 DriverState::DRIVE_SMOOTH, 
                 DriverParameters{ .smooth = DriveSmooth{ 
                     .duration = command.timeout, 
-                    .zero_offset = command.secondary,
+                    .zero_offset = command.second,
                     .pwm_target = command.value
                 }}
             );
             return false;
+        }
 
-        case SET_STATE_DRIVE_TORQUE:
+        case SET_STATE_DRIVE_TORQUE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
             set_motor_command(
                 DriverState::DRIVE_TORQUE, 
                 DriverParameters{ .torque = DriveTorque{ 
                     .duration = command.timeout, 
-                    .zero_offset = command.secondary,
+                    .zero_offset = command.second,
                     .current_target = static_cast<int16_t>(max_drive_current * command.value / pwm_max)
                 }}
             );
             return false;
+        }
 
-        case SET_STATE_DRIVE_BATTERY_POWER:
+        case SET_STATE_DRIVE_BATTERY_POWER: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
             set_motor_command(
                 DriverState::DRIVE_BATTERY_POWER, 
                 DriverParameters{ .battery_power = DriveBatteryPower{ 
                     .duration = command.timeout, 
-                    .zero_offset = command.secondary,
+                    .zero_offset = command.second,
                     .power_target = static_cast<int16_t>(max_drive_power * command.value / pwm_max)
                 }}
             );
             return false;
+        }
 
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
             set_motor_command(DriverState::FREEWHEEL, DriverParameters{});
             return false;
 
-        case SET_STATE_HOLD_U_POSITIVE:
+        case SET_STATE_HOLD_U_POSITIVE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .u_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
+        }
+        case SET_STATE_HOLD_V_POSITIVE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-        case SET_STATE_HOLD_V_POSITIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .v_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
+        }
+        case SET_STATE_HOLD_W_POSITIVE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-        case SET_STATE_HOLD_W_POSITIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .w_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
+        }
+        case SET_STATE_HOLD_U_NEGATIVE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-        case SET_STATE_HOLD_U_NEGATIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .v_duty = static_cast<uint16_t>(command.value),
                 .w_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
+        }
+        case SET_STATE_HOLD_V_NEGATIVE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-        case SET_STATE_HOLD_V_NEGATIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .u_duty = static_cast<uint16_t>(command.value), 
                 .w_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
+        }
+        case SET_STATE_HOLD_W_NEGATIVE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-        case SET_STATE_HOLD_W_NEGATIVE:
             set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
                 .duration = command.timeout, 
                 .u_duty = static_cast<uint16_t>(command.value),
                 .v_duty = static_cast<uint16_t>(command.value)
             }});
             return false;
-
+        }
         case SET_CURRENT_FACTORS:
             current_calibration = parse_current_calibration(buffer.data, buffer.write_index);
             usb_reply_current_factors = true;
@@ -425,9 +453,11 @@ bool handle_command(MessageBuffer const& buffer) {
             usb_reply_control_parameters = true;
             return false;
 
-        case SET_ANGLE:
+        case SET_ANGLE: {
+            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
             set_angle(command.value);
             return false;
+        }
 
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
@@ -477,9 +507,14 @@ inline bool usb_check_queue(size_t len_to_send) {
     return true;
 }
 
-inline void usb_queue_send(uint8_t * data, size_t len_to_send) {
+inline void usb_queue_send(MessageBuffer & buffer) {
     // Send the data to the USB buffer.
-    if(not usb_com_queue_send(data, len_to_send)) error();
+    if(not usb_com_queue_send(buffer.data, buffer.write_index)) {
+        // We should have checked whether we can send, so we should always succeed.
+        error();
+    }
+
+    reset_message_buffer(buffer);
 
     usb_last_send = HAL_GetTick();
 }
@@ -492,8 +527,8 @@ void usb_queue_response(FullReadout const& readout) {
         // We have already sent this readout; don't send it again.
         if (usb_stream_last_sent == readout.readout_number) return;
 
-        write_full_readout(usb_response_buffer, readout);
-        usb_queue_send(usb_response_buffer, full_readout_size);
+        usb_response_buffer.write_index = write_full_readout(usb_response_buffer.data, readout);
+        usb_queue_send(usb_response_buffer);
 
         usb_stream_last_sent = readout.readout_number;
     }
@@ -513,11 +548,11 @@ void usb_queue_response(FullReadout const& readout) {
     // Send unit test response if requested.
     if (usb_reply_unit_test) {
         if (not usb_check_queue(unit_test_size)) return;
-        // The unit test should have filled the buffer with data; send it all.
-        usb_queue_send(usb_unit_test_buffer, unit_test_size);
 
-        // Reset the unit test buffer; using C memory functions.
-        std::memset(usb_unit_test_buffer, 0, unit_test_size);
+        // Run and write the results of the unit test.
+        usb_response_buffer.write_index = write_unit_test(usb_response_buffer.data, usb_unit_test_function);
+        usb_queue_send(usb_response_buffer);
+
         usb_reply_unit_test = false;
     }
 
@@ -526,8 +561,8 @@ void usb_queue_response(FullReadout const& readout) {
         if (not usb_check_queue(control_parameters_size)) return;
 
         // Send the control parameters to the host.
-        write_control_parameters(usb_response_buffer, control_parameters);
-        usb_queue_send(usb_response_buffer, control_parameters_size);
+        usb_response_buffer.write_index = write_control_parameters(usb_response_buffer.data, control_parameters);
+        usb_queue_send(usb_response_buffer);
 
         usb_reply_control_parameters = false;
     }
@@ -538,9 +573,8 @@ void usb_queue_response(FullReadout const& readout) {
         
         // Send the current factors to the host.
 
-        write_current_calibration(usb_response_buffer, current_calibration);
-
-        usb_queue_send(usb_response_buffer, current_calibration_size);
+        usb_response_buffer.write_index = write_current_calibration(usb_response_buffer.data, current_calibration);
+        usb_queue_send(usb_response_buffer);
 
         usb_reply_current_factors = false;
     }
@@ -554,10 +588,8 @@ void usb_queue_response(FullReadout const& readout) {
         if (not readout_history_available()) return readout_history_reset();
         
         // Send the readout to the host.
-        write_readout(usb_response_buffer, readout_history_pop());
-
-        // We checked whether we can send, we should always succeed.
-        usb_queue_send(usb_response_buffer, readout_size);
+        write_readout(usb_response_buffer.data, readout_history_pop());
+        usb_queue_send(usb_response_buffer);
 
         // Readout added to the USB buffer.
         usb_readouts_to_send -= 1;
@@ -586,7 +618,7 @@ void usb_receive_command(){
         }
 
         // Reset the command buffer for the next command.
-        reset_command_buffer(usb_receive_buffer);
+        reset_message_buffer(usb_receive_buffer);
 
         // Reset the receive index to 0 indicating we have no partial command.
         usb_last_receive_index = 0;

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "type_definitions.hpp"
+#include "byte_handling.hpp"
 
 #include <cstdint>
-
 
 // Interface command codes
 // -----------------------
@@ -65,27 +65,34 @@ enum MessageCode : uint16_t {
     RUN_UNIT_TEST_FUNKY_ATAN_PART_3 = 0x5044,
 };
 
-
+const uint16_t END_OF_MESSAGE = 0b0101'0101'0101'0101;
 
 // Expected data sizes
 // -------------------
 
+const size_t max_message_size = 256;
+
 // Command header size (the command code).
 const size_t header_size = 2;
 
-const size_t basic_command_size = sizeof(BasicCommand); // Note; basic command includes the header code.
+const size_t crc_size = 4;
 
-const size_t readout_size = header_size + sizeof(Readout);
-const size_t full_readout_size = header_size + sizeof(FullReadout);
-const size_t current_calibration_size = header_size + sizeof(CurrentCalibration);
-const size_t control_parameters_size = header_size + sizeof(ControlParameters);
+const size_t end_of_message_size = sizeof(END_OF_MESSAGE);
 
-const size_t max_message_size = 256;
+const size_t tail_size = crc_size + end_of_message_size;
+
+const size_t basic_command_size = header_size + sizeof(BasicCommand) + tail_size;
+const size_t readout_size = header_size + sizeof(Readout) + tail_size;
+const size_t full_readout_size = header_size + sizeof(FullReadout) + tail_size;
+const size_t current_calibration_size = header_size + sizeof(CurrentCalibration) + tail_size;
+const size_t control_parameters_size = header_size + sizeof(ControlParameters) + tail_size;
+const size_t unit_test_size = max_message_size;
+
+
 const size_t min_message_size = basic_command_size;
 
 
-
-// Command buffer
+// Message buffer
 // --------------
 
 // Buffer parts of commands until they are complete.
@@ -95,7 +102,7 @@ struct MessageBuffer {
     int bytes_expected = min_message_size;
 };
 
-static inline void reset_command_buffer(MessageBuffer & buffer) {
+static inline void reset_message_buffer(MessageBuffer & buffer) {
     buffer.write_index = 0;
     buffer.bytes_expected = min_message_size;
 }
@@ -109,6 +116,9 @@ static inline void reset_command_buffer(MessageBuffer & buffer) {
 // arguments and returns the number of bytes received. Can receive partial commands.
 bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t * buf, uint16_t len));
 
+
+bool check_message_for_errors(uint8_t const * data, size_t size);
+
 BasicCommand parse_basic_command(uint8_t const * data, size_t size);
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size);
 ControlParameters parse_control_parameters(uint8_t const * data, size_t size);
@@ -117,10 +127,9 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size);
 // ------------
 
 
-void write_readout(uint8_t * buffer, Readout const& readout);
-void write_full_readout(uint8_t * buffer, FullReadout const& full_readout);
-void write_current_calibration(uint8_t * data, CurrentCalibration const& factors);
-void write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters);
+size_t write_readout(uint8_t * buffer, Readout const& readout);
+size_t write_full_readout(uint8_t * buffer, FullReadout const& full_readout);
+size_t write_current_calibration(uint8_t * buffer, CurrentCalibration const& factors);
+size_t write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters);
+size_t write_unit_test(uint8_t * buffer, UnitTestFunction test_function);
 
-// The unit test will write directly to the buffer.
-const size_t unit_test_size = max_message_size;

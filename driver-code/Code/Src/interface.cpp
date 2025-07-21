@@ -3,14 +3,27 @@
 #include "byte_handling.hpp"
 #include "error_handler.hpp"
 
+#include <cstring>
 
 // Serialize data
 // --------------
 
-void write_readout(uint8_t * buffer, Readout const& readout) {
-    size_t offset = 0;
-    write_uint16(buffer + offset, READOUT);
+static inline void write_message_tail(uint8_t * buffer, size_t & offset){
+
+    // TODO: do the CRC calculation.
+    const uint32_t crc = 0;
+
+    write_uint32(buffer + offset, crc);
+    offset += 4;
+
+    write_uint16(buffer + offset, END_OF_MESSAGE);
     offset += 2;
+}
+
+// Write the bare values so we can re-use the code for the full readout.
+static inline size_t write_readout_values(uint8_t * buffer, Readout const& readout) {
+    size_t offset = 0;
+    
     write_uint32(buffer + offset, readout.pwm_commands);
     offset += 4;
     write_uint16(buffer + offset, readout.readout_number);
@@ -38,17 +51,32 @@ void write_readout(uint8_t * buffer, Readout const& readout) {
     write_uint16(buffer + offset, readout.instant_vcc_voltage);
     offset += 2;
 
-    // Check if we wrote the correct number of bytes.
-    if (offset != readout_size) error();
+    return offset;
 }
 
-void write_full_readout(uint8_t * buffer, FullReadout const& readout) {
+size_t write_readout(uint8_t * buffer, Readout const& readout) {
     size_t offset = 0;
-    write_readout(buffer + offset, static_cast<Readout>(readout));
-    offset += readout_size;
+    write_uint16(buffer + offset, READOUT);
+    offset += 2;
+
+    offset += write_readout_values(buffer + offset, readout);
+
+    write_message_tail(buffer, offset);
+
+    // Check if we wrote the correct number of bytes.
+    if (offset != readout_size) error();
+
+    return offset;
+}
+
+size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
+    size_t offset = 0;
 
     // Overwrite command code.
-    write_uint16(buffer + 0, FULL_READOUT);
+    write_uint16(buffer + offset, FULL_READOUT);
+    offset += 2;
+    
+    offset += write_readout_values(buffer + offset, readout);
 
     // Write the additional data.
     write_uint16(buffer + offset, readout.main_loop_rate);
@@ -107,30 +135,60 @@ void write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.w_debug);
     offset += 2;
-    
+
+    write_message_tail(buffer, offset);
+
     // Check if we wrote the correct number of bytes.
     if (offset != full_readout_size) error();
+
+    return offset;
 }
 
-void write_current_calibration(uint8_t * data, CurrentCalibration const& factors) {
+size_t write_current_calibration(uint8_t * buffer, CurrentCalibration const& factors) {
     size_t offset = 0;
-    write_uint16(data + offset, CURRENT_FACTORS);
+    write_uint16(buffer + offset, CURRENT_FACTORS);
     offset += 2;
-    write_int16(data + offset, factors.u_factor);
+    write_int16(buffer + offset, factors.u_factor);
     offset += 2;
-    write_int16(data + offset, factors.v_factor);
+    write_int16(buffer + offset, factors.v_factor);
     offset += 2;
-    write_int16(data + offset, factors.w_factor);
+    write_int16(buffer + offset, factors.w_factor);
     offset += 2;
-    write_int16(data + offset, factors.inductance_factor);
+    write_int16(buffer + offset, factors.inductance_factor);
     offset += 2;
 
+    write_message_tail(buffer, offset);
+    
     // Check if we wrote the correct number of bytes.
     if (offset != current_calibration_size) error();
+
+    return offset;
 }
 
+size_t write_unit_test(uint8_t * buffer, UnitTestFunction test_function){
+    if (test_function == nullptr) error();
 
-void write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters) {
+    // Fully 0 out the buffer so we can write the test output safely.
+    memset(buffer, 0, unit_test_size);
+
+    write_uint16(buffer, MessageCode::UNIT_TEST_OUTPUT);
+
+    const size_t test_data_size = unit_test_size - header_size - tail_size;
+
+    // Run the test function and write the results to the USB buffer.
+    test_function(reinterpret_cast<char *>(buffer + header_size), test_data_size);
+
+    size_t offset = header_size + test_data_size;
+
+    write_message_tail(buffer, offset);
+
+    // Check if we wrote the correct number of bytes.
+    if (offset != unit_test_size) error();
+
+    return offset;
+}
+
+size_t write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters) {
     size_t offset = 0;
 
     write_uint16(buffer + offset, CONTROL_PARAMETERS);
@@ -169,12 +227,31 @@ void write_control_parameters(uint8_t * buffer, ControlParameters const& control
     write_int16(buffer + offset, control_parameters.probing_max_pwm);
     offset += 2;
     
+    write_message_tail(buffer, offset);
+
     // Check if we wrote the correct number of bytes.
     if (offset != control_parameters_size) error();
+
+    return offset;
 }
 
 // Receive data
 // ------------
+
+bool check_message_for_errors(uint8_t const * data, size_t size) {
+    if (size < min_message_size) return true;
+
+    // TODO: Run the cyclic redundancy check (CRC).
+    // const uint32_t crc = read_uint32(data + size - tail_size);
+    // if (crc != calculate_crc(data, size - crc_size)) return true;
+
+    const uint16_t end_of_message = read_uint16(data + size - end_of_message_size);
+
+    if (end_of_message != END_OF_MESSAGE) return true;
+
+    return false;
+}
+
 
 // Message size for each command code that we can receive.
 static inline int get_message_size(uint16_t code) {
@@ -260,7 +337,7 @@ bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t *buf, u
 
     if (expected_size < 0) {
         // Unknown command. Discard the buffer.
-        reset_command_buffer(buffer);
+        reset_message_buffer(buffer);
         // Notify the caller that we have an error.
         return true;
     }
@@ -273,22 +350,28 @@ bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t *buf, u
 }
 
 BasicCommand parse_basic_command(uint8_t const * data, size_t size) {
-    if(size < basic_command_size) error();
+    if(size != basic_command_size) error();
 
-    size_t offset = 0;
+    // Skip the code check for basic commands as it can have multiple values.
+    size_t offset = header_size;
 
-    const uint16_t code = read_uint16(data + offset);
-    offset += 2;
     const uint16_t timeout = read_uint16(data + offset);
     offset += 2;
     const int16_t value = read_int16(data + offset);
     offset += 2;
-    const int16_t secondary = read_int16(data + offset);
+    const int16_t second = read_int16(data + offset);
+    offset += 2;
+    const int16_t third = read_int16(data + offset);
     offset += 2;
 
-    if (offset != basic_command_size) error();
+    if (offset + tail_size != basic_command_size) error();
 
-    return BasicCommand { code, timeout, value, secondary };
+    return BasicCommand { 
+        .timeout = timeout, 
+        .value = value, 
+        .second = second, 
+        .third = third,
+    };
 }
 
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) {
@@ -296,6 +379,7 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
 
     CurrentCalibration current_calibration = {};
 
+    // Yep, skip this too.
     size_t offset = header_size;
 
     current_calibration.u_factor = read_int16(data + offset);
@@ -307,7 +391,7 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
     current_calibration.inductance_factor = read_int16(data + offset);
     offset += 2;
 
-    if (offset != current_calibration_size) error();
+    if (offset + tail_size != current_calibration_size) error();
 
     return current_calibration;
 }
@@ -316,6 +400,7 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
 ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     if(size < control_parameters_size) error();
 
+    // And skip check again.
     size_t offset = header_size;
 
     ControlParameters control_parameters = {};
@@ -353,7 +438,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     control_parameters.probing_max_pwm = read_int16(data + offset);
     offset += 2;
 
-    if (offset != control_parameters_size) error();
+    if (offset + tail_size != control_parameters_size) error();
 
     return control_parameters;
 }

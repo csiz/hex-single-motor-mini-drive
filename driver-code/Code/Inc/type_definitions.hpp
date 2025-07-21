@@ -8,6 +8,9 @@
 // Most useful datatype for this system, the 3 phase coordinates.
 using ThreePhase = std::tuple<int, int, int>;
 
+// Function signature for unit tests; the unit test prints text to the buffer.
+using UnitTestFunction = void (*)(char * buffer, size_t max_size);
+
 // Driver State
 // ------------
 
@@ -240,10 +243,10 @@ struct FullReadout : public Readout {
 // -----------------------
 
 struct BasicCommand {
-    uint16_t code;
     uint16_t timeout;
     int16_t value;
-    int16_t secondary;
+    int16_t second;
+    int16_t third;
 };
 
 struct CurrentCalibration {

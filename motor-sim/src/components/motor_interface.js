@@ -59,10 +59,6 @@ export const command_codes = {
   GET_CURRENT_FACTORS: 0x4041,
   SET_CURRENT_FACTORS: 0x4042,
 
-  PID_PARAMETERS: 0x4046,
-  GET_PID_PARAMETERS: 0x4047,
-  SET_PID_PARAMETERS: 0x4048,
-
   CONTROL_PARAMETERS: 0x4049,
   SET_CONTROL_PARAMETERS: 0x404A,
   GET_CONTROL_PARAMETERS: 0x404B,
@@ -78,8 +74,20 @@ export const command_codes = {
   RUN_UNIT_TEST_FUNKY_ATAN_PART_3: 0x5044,
 }
 
+const END_OF_MESSAGE = 0b0101_0101_0101_0101;
 
-function get_hall_sector({hall_u, hall_v, hall_w}){
+const end_of_message_size = 2;
+const crc_size = 4;
+const tail_size = crc_size + end_of_message_size;
+
+const basic_command_size = 16;
+const readout_size = 36;
+const full_readout_size = 84;
+const current_calibration_size = 16;
+const control_parameters_size = 40;
+const unit_test_size = 256;
+
+export function get_hall_sector({hall_u, hall_v, hall_w}){
   const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
   switch(hall_state){
     case 0b001: return 0;
@@ -92,11 +100,34 @@ function get_hall_sector({hall_u, hall_v, hall_w}){
   }
 }
 
-const readout_size = 30;
 
-function parse_readout(data_view, previous_readout){
-  let offset = header_size;
+function check_message_for_errors(data_view, message_size, message_code) {
+  if (data_view.getUint16(0) !== message_code) {
+    console.warn(`Message code mismatch: expected ${message_code}, got ${data_view.getUint16(0)}`);
+    return true;
+  }
+
+  if (data_view.byteLength != message_size) {
+    console.warn(`Message size mismatch: expected ${message_size}, got ${data_view.byteLength}`);
+    return true;
+  }
+
+  // TODO: Check the CRC.
   
+  const end_of_message = data_view.getUint16(message_size - end_of_message_size);
+  if (end_of_message !== END_OF_MESSAGE) {
+    console.warn(`Message end of message mismatch: expected ${END_OF_MESSAGE}, got ${end_of_message}`);
+    return true;
+  }
+
+  return false;
+}
+
+function parse_readout(data_view, previous_readout, check_errors = true){
+  if (check_errors && check_message_for_errors(data_view, readout_size, command_codes.READOUT)) return null;
+
+  let offset = header_size;
+
   // Get the PWM commands.
   const pwm_commands = data_view.getUint32(offset);
   offset += 4;
@@ -184,9 +215,6 @@ function parse_readout(data_view, previous_readout){
 
   // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
   const readout_diff = !previous_readout ? 0 : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
-  
-  // We have a readout overflow, ignore this readout.
-  if (readout_diff > readout_base / 2) return null;
 
   const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
   const time = readout_index * millis_per_cycle;
@@ -310,14 +338,15 @@ function parse_readout(data_view, previous_readout){
   };
 }
 
-const full_readout_size = 86;
 
 function parse_full_readout(data_view, previous_readout){
-  const readout = parse_readout.call(this, data_view, previous_readout);
+  if(check_message_for_errors(data_view, full_readout_size, command_codes.FULL_READOUT)) return null;
+
+  const readout = parse_readout.call(this, data_view, previous_readout, false);
 
   if (!readout) return null;
 
-  let offset = readout_size;
+  let offset = readout_size - tail_size;
 
   const tick_rate = data_view.getUint16(offset);
   offset += 2;
@@ -448,11 +477,11 @@ function parse_full_readout(data_view, previous_readout){
 }
 
 
-
-const current_calibration_size = 10;
-
 function parse_current_calibration(data_view){
+  if(check_message_for_errors(data_view, current_calibration_size, command_codes.CURRENT_FACTORS)) return null;
+
   let offset = header_size;
+  
   const u_factor = data_view.getInt16(offset) / current_calibration_base;
   offset += 2;
   const v_factor = data_view.getInt16(offset) / current_calibration_base;
@@ -471,63 +500,9 @@ function parse_current_calibration(data_view){
   };
 }
 
-
-const pid_parameters_size = 42;
-function parse_pid_parameters(data_view) {
-  let offset = header_size;
-
-  const inductor_angle_gains = {
-    kp: data_view.getInt16(offset),
-    ki: data_view.getInt16(offset + 2),
-    kd: data_view.getInt16(offset + 4),
-    max_output: data_view.getInt16(offset + 6),
-  };
-  offset += 8;
-
-  const torque_gains = {
-    kp: data_view.getInt16(offset),
-    ki: data_view.getInt16(offset + 2),
-    kd: data_view.getInt16(offset + 4),
-    max_output: data_view.getInt16(offset + 6),
-  };
-  offset += 8;
-
-  const battery_power_gains = {
-    kp: data_view.getInt16(offset),
-    ki: data_view.getInt16(offset + 2),
-    kd: data_view.getInt16(offset + 4),
-    max_output: data_view.getInt16(offset + 6),
-  };
-  offset += 8;
-
-  const angular_speed_gains = {
-    kp: data_view.getInt16(offset),
-    ki: data_view.getInt16(offset + 2),
-    kd: data_view.getInt16(offset + 4),
-    max_output: data_view.getInt16(offset + 6),
-  };
-  offset += 8;
-
-  const position_gains = {
-    kp: data_view.getInt16(offset),
-    ki: data_view.getInt16(offset + 2),
-    kd: data_view.getInt16(offset + 4),
-    max_output: data_view.getInt16(offset + 6),
-  };
-  offset += 8;
-
-  return {
-    inductor_angle_gains,
-    torque_gains,
-    battery_power_gains,
-    angular_speed_gains,
-    position_gains,
-  };
-}
-
-
-const control_parameters_size = 34;
 function parse_control_parameters(data_view) {
+  if(check_message_for_errors(data_view, control_parameters_size, command_codes.CONTROL_PARAMETERS)) return null;
+
   let offset = header_size;
 
   const rotor_angle_ki = data_view.getInt16(offset);
@@ -583,16 +558,49 @@ function parse_control_parameters(data_view) {
   };
 }
 
-const unit_test_size = 256;
+
 function parse_unit_test_output(data_view) {
+  if(check_message_for_errors(data_view, unit_test_size, command_codes.UNIT_TEST_OUTPUT)) return null;
+
   // Get the length of the null terminated string.
   let len = 0;
-  while (data_view.getUint8(header_size + len) !== 0 && len < unit_test_size - header_size) len++;
+  while (data_view.getUint8(header_size + len) !== 0 && len < unit_test_size - header_size - tail_size) len++;
+
   // Return the output as an utf-8 string.
   return new TextDecoder().decode(data_view.buffer.slice(header_size, header_size + len));
 }
 
-function serialise_set_current_calibration(current_calibration) {
+
+export const parser_mapping = {
+  [command_codes.READOUT]: {parse_func: parse_readout, message_size: readout_size},
+  [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
+  [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
+  [command_codes.CONTROL_PARAMETERS]: {parse_func: parse_control_parameters, message_size: control_parameters_size},
+  [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},
+};
+
+
+// Serialisation functions
+// -----------------------
+
+function serialise_message_tail(buffer, offset){
+  // Check that we have exactly enough space to write the tail.
+  if (buffer.length != offset + tail_size) throw new Error(
+    `Message was not serialised correctly, expected size ${offset + tail_size}, got ${buffer.length}`);
+
+  let view = new DataView(buffer.buffer);
+
+  // TODO: Calculate the CRC and append it.
+  // const crc = calculate_crc(buffer);
+
+  const crc = 0;
+  view.setUint32(offset, crc);
+  offset += 4;
+  view.setUint16(offset, END_OF_MESSAGE);
+  offset += 2;
+}
+
+function serialise_current_calibration(current_calibration) {
   const {u_factor, v_factor, w_factor, inductance_factor} = current_calibration;
 
   let buffer = new Uint8Array(current_calibration_size);
@@ -612,37 +620,13 @@ function serialise_set_current_calibration(current_calibration) {
   view.setInt16(offset, Math.floor(inductance_factor * current_calibration_base));
   offset += 2;
 
-  return buffer;
-}
-
-
-function serialise_set_pid_parameters(pid_parameters) {
-  const { inductor_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains } = pid_parameters;
-
-  let buffer = new Uint8Array(pid_parameters_size);
-
-  let view = new DataView(buffer.buffer);
-  let offset = 0;
-
-  view.setUint16(offset, command_codes.SET_PID_PARAMETERS);
-  offset += 2;
-
-  // Serialise each set of gains.
-  for (const gains of [inductor_angle_gains, torque_gains, battery_power_gains, angular_speed_gains, position_gains]) {
-    view.setInt16(offset, gains.kp);
-    offset += 2;
-    view.setInt16(offset, gains.ki);
-    offset += 2;
-    view.setInt16(offset, gains.kd);
-    offset += 2;
-    view.setInt16(offset, gains.max_output);
-    offset += 2;
-  }
+  serialise_message_tail(buffer, offset);
 
   return buffer;
 }
 
-function serialise_set_control_parameters(control_parameters) {
+
+function serialise_control_parameters(control_parameters) {
   let buffer = new Uint8Array(control_parameters_size);
   let view = new DataView(buffer.buffer);
   let offset = 0;
@@ -682,31 +666,20 @@ function serialise_set_control_parameters(control_parameters) {
   view.setInt16(offset, control_parameters.probing_max_pwm);
   offset += 2;
 
+  serialise_message_tail(buffer, offset);
+
   return buffer;
 }
 
 
-export const serialiser_mapping = {
-  [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_set_current_calibration},
-  [command_codes.SET_PID_PARAMETERS]: {serialise_func: serialise_set_pid_parameters},
-  [command_codes.SET_CONTROL_PARAMETERS]: {serialise_func: serialise_set_control_parameters},
+const serialiser_mapping = {
+  [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_current_calibration},
+  [command_codes.SET_CONTROL_PARAMETERS]: {serialise_func: serialise_control_parameters},
 };
 
-export const parser_mapping = {
-  [command_codes.READOUT]: {parse_func: parse_readout, message_size: readout_size},
-  [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
-  [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
-  [command_codes.PID_PARAMETERS]: {parse_func: parse_pid_parameters, message_size: pid_parameters_size},
-  [command_codes.CONTROL_PARAMETERS]: {parse_func: parse_control_parameters, message_size: control_parameters_size},
-  [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},
-};
+export const default_command_options = {command_timeout: 0, command_value: 0, command_second: 0, command_third: 0, additional_data: undefined};
 
-
-const basic_command_size = 8;
-
-export const default_command_options = {command_timeout: 0, command_value: 0, command_secondary: 0, additional_data: undefined};
-
-export function serialise_command({command, command_timeout, command_value, command_secondary, additional_data}) {
+export function serialise_command({command, command_timeout, command_value, command_second, command_third, additional_data}) {
   const {serialise_func} = serialiser_mapping[command] ?? {serialise_func: null};
 
   // Serialise the command with a special serialiser if it exists.
@@ -723,8 +696,12 @@ export function serialise_command({command, command_timeout, command_value, comm
   offset += 2;
   view.setInt16(offset, command_value);
   offset += 2;
-  view.setInt16(offset, command_secondary);
+  view.setInt16(offset, command_second);
   offset += 2;
+  view.setInt16(offset, command_third);
+  offset += 2;
+
+  serialise_message_tail(buffer, offset);
 
   return buffer;
 }

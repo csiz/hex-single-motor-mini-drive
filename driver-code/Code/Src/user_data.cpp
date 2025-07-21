@@ -16,22 +16,22 @@ uint8_t user_data[user_data_size];
 uint8_t page_buffer[FLASH_PAGE_SIZE] = {0};
 
 const size_t current_calibration_offset = 0x00;
-const size_t spare_offset = 0x20;
-const size_t pid_parameters_offset = 0x80;
 const size_t control_parameters_offset = 0xF0;
 
+const uint8_t * const current_calibration_address = user_data + current_calibration_offset;
+const uint8_t * const control_parameters_address = user_data + control_parameters_offset;
+
+
 CurrentCalibration get_current_calibration(){
-    const bool calibration_available = (CURRENT_FACTORS == read_uint16(user_data + current_calibration_offset));
-    return calibration_available ? 
-        parse_current_calibration(user_data + current_calibration_offset, current_calibration_size) :
-        default_current_calibration;
+    const bool missing_calibration = (CURRENT_FACTORS != read_uint16(current_calibration_address));
+    return missing_calibration ? default_current_calibration :
+        parse_current_calibration(current_calibration_address, current_calibration_size);
 }
 
 ControlParameters get_control_parameters() {
-    const bool parameters_available = (CONTROL_PARAMETERS == read_uint16(user_data + control_parameters_offset));
-    return parameters_available ?
-        parse_control_parameters(user_data + control_parameters_offset, control_parameters_size) :
-        default_control_parameters;
+    const bool missing_parameters = (CONTROL_PARAMETERS != read_uint16(control_parameters_address));
+    return missing_parameters ? default_control_parameters :
+        parse_control_parameters(control_parameters_address, control_parameters_size);
 }
 
 uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
