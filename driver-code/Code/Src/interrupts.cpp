@@ -37,10 +37,19 @@ size_t readout_history_read_index = 0;
 // Flag counters
 // -------------
 
-// Count the number of consecutive EMF detections; we get good statistics after a threshold number.
-size_t consecutive_emf_detections = 0;
-size_t incorrect_direction_detections = 0;
-size_t consecutive_current_detections = 0;
+// Count the number of consecutive EMF detections.
+int number_of_emf_detections = 0;
+
+// Count for our belief that the rotor direction is incorrect. The EMF gives the axis
+// of the rotor magnetic field, but we can have a 180 degree error in the direction
+// until we identify the rotation direction.
+int incorrect_direction_detections = 0;
+
+// Track the noisiness of the EMF voltage.
+int emf_voltage_variance = max_16bit;
+
+// Track how many times we think our angle is correct.
+int correct_angle_counter = 0;
 
 
 // Motor driver state
@@ -178,12 +187,13 @@ static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
 
 // Process ADC readings for phase currents when the injected conversion is done.
 void adc_interrupt_handler(){
-    // Note: a single float assignment will costs us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
+    // Note: a single float assignment will cost us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
 
     // Check what time it is on the PWM cycle.
     readout.cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
     
-
+    // Increment the readout number.
+    const uint16_t readout_number = readout.readout_number + 1;
 
     // Start by reading the ADC conversion data
     // ----------------------------------------
@@ -351,56 +361,85 @@ void adc_interrupt_handler(){
 
     const int inductor_angle = normalize_angle(predicted_angle + funky_atan2(beta_current, alpha_current));
 
-    consecutive_current_detections = current_detected * (consecutive_current_detections + 1);
-
-    const bool current_fix = consecutive_current_detections > 4;
-
 
     // Back EMF observer
     // -----------------
 
     // Get the angle measured from EMF relative to the predicted rotor angle.
-    const int rotor_angle_error = funky_atan2(alpha_emf_voltage, -beta_emf_voltage);
+    const int emf_angle_error = funky_atan2(alpha_emf_voltage, -beta_emf_voltage);
 
-    // Calculate the emf voltage as a rotation of the beta voltage. This should always be positive, but let's make sure of it.
-    const int emf_voltage_magnitude = faster_abs(
-        -(get_cos(rotor_angle_error) * beta_emf_voltage - get_sin(rotor_angle_error) * alpha_emf_voltage) / angle_base
+    // Calculate the emf voltage as a rotation of the beta voltage that zeroes out the alpha component.
+    const int instant_emf_voltage_magnitude = faster_abs(
+        -(get_cos(emf_angle_error) * beta_emf_voltage - get_sin(emf_angle_error) * alpha_emf_voltage) / angle_base
     );
 
+    const int emf_voltage_error = instant_emf_voltage_magnitude - readout.emf_voltage_magnitude;
+
+    const int emf_voltage_magnitude = readout.emf_voltage_magnitude + signed_ceil_div(emf_voltage_error, 8);
+
+    const int square_emf_voltage_error = square(emf_voltage_error);
+
+    emf_voltage_variance = min(max_16bit, 1 + (7 * emf_voltage_variance + square_emf_voltage_error) / 8);
+
     // Check if the emf voltage is away from zero with enough confidence.
-    const bool emf_detected = emf_voltage_magnitude > emf_min_voltage;
+    const bool emf_detected = (
+        (square_emf_voltage_error < 3 * emf_voltage_variance) and
+        (square(emf_voltage_magnitude) > 9 * emf_voltage_variance)
+    );
+
+    number_of_emf_detections = clip_to(0, 64, number_of_emf_detections + (emf_detected ? +1 : -1));
+
+    // Let the angle adjust a few steps before using the diff to compute the speed; our initial guess starts
+    // at an arbitrary position so the apparent acceleration is just the angle converging to the correct value.
+    const bool compute_speed = emf_detected and (number_of_emf_detections >= 16);
+
+    // Declare that we have an emf reading after enough detections.
+    const bool emf_fix = number_of_emf_detections >= 32;
+
+    // Memoize the abs of the angular speed as we will use it multiple times.
+    const int abs_angular_speed = faster_abs(readout.angular_speed);
+
+    // Declare we have movement if we're over the threshold speed.
+    const bool movement_fix = abs_angular_speed >= control_parameters.min_emf_speed;
+
+    // Flag for when the EMF angle and speed are both valid for other calculations.
+    const bool emf_and_movement_fix = emf_fix and movement_fix;
+
+    // Check if we have the incorrect rotor angle by checking if the beta EMF voltage has opposite sign to the angular speed.
+    const bool incorrect_rotor_angle_detected = emf_detected and emf_and_movement_fix and (beta_emf_voltage * readout.angular_speed > 0);
+
+    // Keep track in a counter.
+    incorrect_direction_detections = clip_to(0, 32, incorrect_direction_detections + (incorrect_rotor_angle_detected ? +1 : -1));
+
+    // Set the flag for immininent rotor correction, we need to set it over multiple cycles otherwise it might be missed.
+    const bool rotor_direction_flip_imminent = incorrect_direction_detections >= 24;
+
+    // Flip the rotor if we have reached the threshold number of incorrect detections.
+    const bool rotor_direction_flip = incorrect_direction_detections >= 32;
+
+    // Reset the incorrect direction counter on flip.
+    incorrect_direction_detections = (not rotor_direction_flip) * incorrect_direction_detections;
+
+    // Track how many times we think our rotor angle is correct.
+    correct_angle_counter = clip_to(0, 64, correct_angle_counter + (emf_and_movement_fix and (incorrect_direction_detections == 0) ? +1 : -1));
+
+    // Declare the angle to be correct after a threshold certainty.
+    const bool angle_fix = correct_angle_counter >= 32;
+
 
     // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
-    const int prediction_error = angle_or_mirror(rotor_angle_error);
+    const int prediction_error = angle_or_mirror(emf_angle_error);
 
+    // Calculate the angle adjustment error using the parametrized gain.
     const int angle_error = emf_detected * signed_ceil_div(
         prediction_error * control_parameters.rotor_angle_ki,
         control_parameters_fixed_point
     );
 
-    
-    const bool incorrect_rotor_angle_detected = beta_emf_voltage * readout.angular_speed > emf_direction_threshold;
-
-    incorrect_direction_detections = incorrect_rotor_angle_detected * (incorrect_direction_detections + 1);
-
-    consecutive_emf_detections = emf_detected * (consecutive_emf_detections + 1);
-
-    const bool rotor_direction_flip_imminent = incorrect_direction_detections > 6;
-
-    const bool rotor_direction_flip = incorrect_direction_detections > 8;
-    
-    const bool emf_fix = consecutive_emf_detections > 16;
-    
-    // Reset the incorrect direction counter on flip.
-    incorrect_direction_detections = (not rotor_direction_flip) * incorrect_direction_detections;
-
     // Adjust the angle prediction based on the EMF voltage. The EMF voltage must be have opposite sign to the
     // the speed; if it doesn't then we must have fixed on the opposite side of the rotor; rotate 180 to correct it.
     const int updated_angle = normalize_angle(predicted_angle + angle_error + rotor_direction_flip * half_circle);
 
-    // Let the angle adjust a few steps before using the diff to compute the speed; our initial guess starts
-    // at an arbitrary position so the apparent acceleration is just the angle converging to the correct value.
-    const bool compute_speed = consecutive_emf_detections > 4;
 
     // Calculate the new speed based on the angle adjustment.
     // 
@@ -413,7 +452,7 @@ void adc_interrupt_handler(){
                 control_parameters_fixed_point
             ) :
             // Otherwise decay the speed towards zero.
-            -signed_ceil_div(readout.angular_speed, 256)   
+            -signed_ceil_div(readout.angular_speed, 32)
     );
     
     const int updated_speed = readout.angular_speed + speed_error;
@@ -432,11 +471,11 @@ void adc_interrupt_handler(){
     // Calculate the motor constant
     // ----------------------------
 
-    // Note use rotor speed after correction!
+    const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
 
-    const int predicted_emf_voltage = faster_abs(updated_speed) * readout.motor_constant / emf_motor_constant_conversion;
+    const bool compute_motor_constant = emf_and_movement_fix and (emf_voltage_magnitude > control_parameters.min_emf_voltage);
 
-    const int motor_constant_error = emf_fix * (emf_voltage_magnitude - predicted_emf_voltage);
+    const int motor_constant_error = compute_motor_constant * (emf_voltage_magnitude - predicted_emf_voltage);
     const int motor_constant = (
         readout.motor_constant +
         signed_ceil_div(motor_constant_error * control_parameters.motor_constant_ki, control_parameters_fixed_point)
@@ -509,17 +548,16 @@ void adc_interrupt_handler(){
     // 
     // Must be updated before the motor pwm calculation!
 
+    readout.readout_number = readout_number;
+    
     readout.pwm_commands = encode_pwm_commands(motor_outputs);
-
-    // Advance the readout number.
-    readout.readout_number = readout.readout_number + 1;
         
     readout.state_flags = (
         (hall_state << hall_state_bit_offset) |
         (emf_fix << emf_fix_bit_offset) |
         (emf_detected << emf_detected_bit_offset) |
-        (current_fix << current_fix_bit_offset) |
         (current_detected << current_detected_bit_offset) |
+        (angle_fix << angle_fix_bit_offset) |
         (incorrect_rotor_angle_detected << incorrect_rotor_angle_bit_offset) |
         (rotor_direction_flip_imminent << rotor_direction_flip_imminent_bit_offset)
     );
@@ -563,8 +601,8 @@ void adc_interrupt_handler(){
     readout.rotor_acceleration = updated_acceleration;
     readout.angle_error = angle_error;
     
-    // readout.u_debug = ;
-    // readout.v_debug = ;
+    readout.u_debug = emf_voltage_variance;
+    readout.v_debug = driver_parameters.smooth.lead_angle_control;
     // readout.w_debug = ;
     
 

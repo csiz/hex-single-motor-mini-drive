@@ -57,8 +57,8 @@ const uint16_t emf_fix_bit_mask = 0b1 << emf_fix_bit_offset;
 const size_t current_detected_bit_offset = 9;
 const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 
-const size_t current_fix_bit_offset = 8;
-const uint16_t current_fix_bit_mask = 0b1 << current_fix_bit_offset;
+const size_t angle_fix_bit_offset = 8;
+const uint16_t angle_fix_bit_mask = 0b1 << angle_fix_bit_offset;
 
 const size_t incorrect_rotor_angle_bit_offset = 7;
 const uint16_t incorrect_rotor_angle_bit_mask = 0b1 << incorrect_rotor_angle_bit_offset;
@@ -294,14 +294,6 @@ const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_po
 
 static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
 
-// Minimum EMF voltage magnitude.
-const int emf_min_voltage = 180 * voltage_fixed_point / 1000;
-
-// Minimum EMF speed to consider direction detection valid.
-const int emf_min_speed = 20 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second;
-
-// Minimum combined EMF voltage and speed to consider direction detection valid.
-const int emf_direction_threshold = emf_min_voltage * emf_min_speed;
 
 // Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
 const int motor_constant_fixed_point = 1 << 20;
@@ -344,15 +336,15 @@ const int16_t control_parameters_fixed_point = 4096;
 
 const ControlParameters default_control_parameters = {
     .rotor_angle_ki = 1024,
-    .rotor_angular_speed_ki = 32,
+    .rotor_angular_speed_ki = 64,
     .rotor_acceleration_ki = 32,
     .motor_constant_ki = 128,
     .resistance_ki = 0,
     .inductance_ki = 0,
     .max_pwm_change = 8,
     .max_angle_change = 0,
-    .min_emf_voltage = 0,
-    .min_emf_speed = 0,
+    .min_emf_voltage = voltage_fixed_point,
+    .min_emf_speed = static_cast<int16_t>(8.3 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second),
     .lead_angle_control_ki = 8,
     .torque_control_ki = 0,
     .battery_power_control_ki = 0,

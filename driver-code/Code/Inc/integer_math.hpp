@@ -34,8 +34,8 @@ static inline int int_sqrt(int s)
 const int funky_atan2_constant = 4;
 
 static inline int funky_atan2(int y, int x) {
-    // In mod angle_base arithmetic this is equivalent to 0, but allows us to distinguish the 0 case.    
-    if (x == 0 and y == 0) return angle_base;
+    // Return 0 for 0, 0.
+    if (x == 0 and y == 0) return 0;
 
     int result = 0;
     if (x < 0) {

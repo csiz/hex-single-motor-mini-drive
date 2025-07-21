@@ -59,11 +59,11 @@ static inline MotorOutputs update_motor_6_sector(
 }
 
 static inline int16_t get_periodic_angle(FullReadout const& readout, int16_t const& zero_offset, int16_t const& angular_speed) {
-    return normalize_angle(angular_speed * readout.readout_number / speed_fixed_point + zero_offset);
+    return normalize_angle(angular_speed * static_cast<int>(readout.readout_number) / speed_fixed_point + zero_offset);
 }
 
 static inline int16_t get_zero_offset(FullReadout const& readout, int16_t const& target_angle, int16_t const& angular_speed) {
-    return signed_angle(target_angle - angular_speed * readout.readout_number / speed_fixed_point);
+    return signed_angle(target_angle - angular_speed * static_cast<int>(readout.readout_number) / speed_fixed_point);
 }
 
 static inline MotorOutputs pwm_at_angle(
@@ -106,10 +106,10 @@ static inline MotorOutputs update_motor_smooth(
     FullReadout const& readout
 ){
     // Check if we have an accurate readout angle.
-    const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
+    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
 
     const int16_t pwm_target = (
-        emf_fix ? 
+        angle_fix ? 
         clip_to(-pwm_max, +pwm_max, smooth_parameters.pwm_target) :
         clip_to(-control_parameters.probing_max_pwm, +control_parameters.probing_max_pwm, smooth_parameters.pwm_target)
     );
@@ -133,9 +133,9 @@ static inline MotorOutputs update_motor_smooth(
     const int ideal_lead_angle = direction * quarter_circle;
     
     // The ideal angle.
-    const int ideal_angle = readout.angle + ideal_lead_angle;
+    const int ideal_angle = normalize_angle(readout.angle + ideal_lead_angle);
 
-    if (emf_fix) {
+    if (angle_fix) {
         // If we have an accurate position, we can use it to adjust our control.
 
         // Get the error between the measured current and the ideal current angle.
@@ -163,8 +163,11 @@ static inline MotorOutputs update_motor_smooth(
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
         const int probing_angle = get_periodic_angle(readout, smooth_parameters.zero_offset, direction * control_parameters.probing_angular_speed);
 
-        // Reset the current angle control; it needs to start from 0 at low speed.
-        smooth_parameters.lead_angle_control = 0;
+        // Decay the current angle control; it needs to start from 0 at low speed.
+        smooth_parameters.lead_angle_control = signed_ceil_div(
+            -smooth_parameters.lead_angle_control * control_parameters.lead_angle_control_ki,
+            control_parameters_fixed_point
+        );
 
         // Output a capped PWM at the probing angle; moving in a circle slowly.
         return pwm_at_angle(abs_pwm, probing_angle);

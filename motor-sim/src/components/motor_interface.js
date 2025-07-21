@@ -136,7 +136,7 @@ function parse_readout(data_view, previous_readout){
     emf_detected,
     emf_fix,
     current_detected,
-    current_fix,
+    angle_fix,
     incorrect_rotor_angle,
     rotor_direction_flip_imminent,
   } = parse_state_flags(state_flags);
@@ -239,7 +239,7 @@ function parse_readout(data_view, previous_readout){
     emf_detected,
     emf_fix,
     current_detected,
-    current_fix,
+    angle_fix,
     incorrect_rotor_angle,
     rotor_direction_flip_imminent,
     // Raw readout values
