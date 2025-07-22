@@ -34,9 +34,9 @@ Readout readout_history_pop();
 bool is_motor_safed();
 
 // Set the motor command to be executed by the interrupt loop.
-void set_motor_command(DriverState const& state, DriverParameters const& parameters);
+void set_motor_command(DriverState const& driver_state);
 
-// Set the motor angle directly, eg. from an external sensor.
+// Set the rotor angle directly, eg. from an external sensor.
 void set_angle(int16_t angle);
 
 

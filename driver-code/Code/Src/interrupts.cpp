@@ -55,26 +55,23 @@ int correct_angle_counter = 0;
 // Motor driver state
 // ------------------
 
-// Currently active driver state.
-DriverState driver_state = DriverState::OFF;
-
-// Currently active driver parameters (the full motor control state should be stored here).
-DriverParameters driver_parameters = null_driver_parameters;
+// Currently active driver state (the full motor control state should be stored here).
+DriverState driver_state = null_driver_state;
 
 // Must be volatile as it's the interaction flag between main loop and the interrupt handler.
 // 
-// The main loop will set pending_state and pending_parameters to the user command, but only
+// The main loop will set pending_state and pending_state to the user command, but only
 // when the pending_state is DriverState::NO_CHANGE. The interrupt handler will copy the
-// pending_state and pending_parameters to the active state variables, and reset the pending_state.
+// pending_state and pending_state to the active state variables, and reset the pending_state.
 // 
 // Volatile will prevent the compiler from optimizing out the read/write operations to this variable.
 // In our case, the main loop will read this variable in a hot while loop that has no side effects, 
 // expecting the variable to be set by the interrupt handler. The compiler *will* optimize out the
 // while loop unless we mark the variable as volatile.
-volatile DriverState pending_state = DriverState::NO_CHANGE;
+volatile bool new_pending_state = false;
 
-// Parameters for the new driver state.
-DriverParameters pending_parameters = null_driver_parameters;
+// Settings for the new driver state.
+DriverState pending_state = null_driver_state;
 
 // Currently active motor outputs.
 MotorOutputs active_motor_outputs = breaking_motor_outputs;
@@ -125,15 +122,18 @@ static inline bool readout_history_push(Readout const& readout){
 }
 
 bool is_motor_safed(){
-    return (driver_state == DriverState::OFF) || (driver_state == DriverState::FREEWHEEL);
+    return (driver_state.mode == DriverMode::OFF) || (driver_state.mode == DriverMode::FREEWHEEL);
 }
 
-void set_motor_command(DriverState const& state, DriverParameters const& parameters){
+void set_motor_command(DriverState const& driver_state){
     // Don't override a pending command if the interrupt loop didn't copy it to active.
-    while (pending_state != DriverState::NO_CHANGE) continue;
+    while (new_pending_state) continue;
 
-    pending_state = state;
-    pending_parameters = parameters;
+    // Copy the commanded state to the pending queue.
+    pending_state = driver_state;
+
+    // Flag that we have a new command to process.
+    new_pending_state = true;
 }
 
 void set_angle(int16_t angle) {
@@ -606,7 +606,7 @@ void adc_interrupt_handler(){
     readout.emf_voltage_variance = emf_voltage_variance;
     readout.phase_inductance = 0;
     
-    readout.debug_1 = driver_parameters.smooth.lead_angle_control;
+    readout.debug_1 = driver_state.lead_angle_control;
     readout.debug_2 = 0;
     
 
@@ -614,16 +614,14 @@ void adc_interrupt_handler(){
     // Calculate motor outputs
     // -----------------------
 
-    // Update the motor controls using the readout data. Note that it also modifies the driver_state, driver_parameters, and pid_state.
-    const bool critical_error = update_motor_control(
-        active_motor_outputs, driver_state, driver_parameters,
-        pending_state, pending_parameters, readout
-    );
+    // Setup the new state if we were commanded by the main loop.
+    if (new_pending_state) {
+        driver_state = setup_driver_state(pending_state, readout);
+        new_pending_state = false;
+    }
 
-    // Always reset the pending state to be ready for the next command.
-    pending_state = DriverState::NO_CHANGE;
-
-    if (critical_error) error();
+    // Update the motor controls using the readout data.
+    update_motor_control(active_motor_outputs, driver_state, readout);
 
 
     // Try to write the latest readout if there's space.

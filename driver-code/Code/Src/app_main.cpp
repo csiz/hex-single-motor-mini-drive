@@ -208,7 +208,7 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     usb_wait_full_history = true;
 
     // Start the test schedule.
-    set_motor_command(DriverState::SCHEDULE, DriverParameters{ .schedule = &schedule });
+    set_motor_command(DriverState{ .mode = DriverMode::SCHEDULE, .schedule = DriveSchedule{ .pointer = &schedule } });
 }
 
 // Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
@@ -244,7 +244,7 @@ bool handle_command(MessageBuffer const& buffer) {
             // Cotinuously stream data if timeout > 0.
             usb_stream_state = command.timeout;
             // Also stop the motor if we stop the stream.
-            if (not usb_stream_state) set_motor_command(DriverState::OFF, DriverParameters{});
+            if (not usb_stream_state) set_motor_command(DriverState{.mode = DriverMode::OFF});
             return false;
         }
         case GET_READOUTS_SNAPSHOT:
@@ -260,7 +260,7 @@ bool handle_command(MessageBuffer const& buffer) {
         // Turn off the motor driver.
         case SET_STATE_OFF:
             // Repeat command, with the interrupt guards.
-            set_motor_command(DriverState::OFF, DriverParameters{});
+            set_motor_command(DriverState{.mode = DriverMode::OFF});
             return false;
             
         // Measure the motor phase currents.
@@ -301,133 +301,149 @@ bool handle_command(MessageBuffer const& buffer) {
         case SET_STATE_DRIVE_6_SECTOR: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(
-                DriverState::DRIVE_6_SECTOR,
-                DriverParameters{ .sector = Drive6Sector{ 
-                    .duration = command.timeout, 
-                    .pwm_target = command.value, 
-                }}
-            );
+            set_motor_command(DriverState{ 
+                .mode = DriverMode::DRIVE_6_SECTOR, 
+                .duration = command.timeout, 
+                .active_pwm = command.value, 
+            });
             return false;
         }
 
         case SET_STATE_DRIVE_PERIODIC: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(
-                DriverState::DRIVE_PERIODIC, 
-                DriverParameters{ .periodic = DrivePeriodic{ 
-                    .duration = command.timeout,
-                    .zero_offset = 0,
-                    .pwm_target = command.value,
-                    .angular_speed = command.second
-                }}
-            );
+            set_motor_command(DriverState{
+                .mode = DriverMode::DRIVE_PERIODIC, 
+                .duration = command.timeout,
+                .active_angle = command.third,
+                .active_pwm = command.value,
+                .angular_speed = command.second,
+                .angle_residual = 0,
+            });
             return false;
         }
 
         case SET_STATE_DRIVE_SMOOTH: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(
-                DriverState::DRIVE_SMOOTH, 
-                DriverParameters{ .smooth = DriveSmooth{ 
-                    .duration = command.timeout, 
-                    .zero_offset = command.second,
-                    .pwm_target = command.value
-                }}
-            );
+            set_motor_command(DriverState{
+                .mode = DriverMode::DRIVE_SMOOTH, 
+                .duration = command.timeout, 
+                .target_pwm = command.value
+            });
             return false;
         }
 
         case SET_STATE_DRIVE_TORQUE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(
-                DriverState::DRIVE_TORQUE, 
-                DriverParameters{ .torque = DriveTorque{ 
-                    .duration = command.timeout, 
-                    .zero_offset = command.second,
+            set_motor_command(DriverState{
+                .mode = DriverMode::DRIVE_TORQUE, 
+                .duration = command.timeout, 
+                .torque = DriveTorque{ 
                     .current_target = static_cast<int16_t>(max_drive_current * command.value / pwm_max)
-                }}
-            );
+                }
+            });
             return false;
         }
 
         case SET_STATE_DRIVE_BATTERY_POWER: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(
-                DriverState::DRIVE_BATTERY_POWER, 
-                DriverParameters{ .battery_power = DriveBatteryPower{ 
-                    .duration = command.timeout, 
-                    .zero_offset = command.second,
+            set_motor_command(DriverState{
+                .mode = DriverMode::DRIVE_BATTERY_POWER, 
+                .duration = command.timeout, 
+                .battery_power = DriveBatteryPower{ 
                     .power_target = static_cast<int16_t>(max_drive_power * command.value / pwm_max)
-                }}
-            );
+                }
+            });
             return false;
         }
 
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
-            set_motor_command(DriverState::FREEWHEEL, DriverParameters{});
+            set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
             return false;
 
         case SET_STATE_HOLD_U_POSITIVE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
+            set_motor_command(DriverState{ 
+                .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .u_duty = static_cast<uint16_t>(command.value)
-            }});
+                .hold = DriveHold{ 
+                    .duration = command.timeout, 
+                    .u_duty = static_cast<uint16_t>(command.value)
+                }
+            });
             return false;
         }
         case SET_STATE_HOLD_V_POSITIVE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
+            set_motor_command(DriverState{ 
+                .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .v_duty = static_cast<uint16_t>(command.value)
-            }});
+                .hold = DriveHold{ 
+                    .duration = command.timeout, 
+                    .v_duty = static_cast<uint16_t>(command.value)
+                }
+            });
             return false;
         }
         case SET_STATE_HOLD_W_POSITIVE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
+            set_motor_command(DriverState{ 
+                .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .w_duty = static_cast<uint16_t>(command.value)
-            }});
+                .hold = DriveHold{ 
+                    .duration = command.timeout, 
+                    .w_duty = static_cast<uint16_t>(command.value)
+                }
+            });
             return false;
         }
         case SET_STATE_HOLD_U_NEGATIVE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
+            set_motor_command(DriverState{ 
+                .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .v_duty = static_cast<uint16_t>(command.value),
-                .w_duty = static_cast<uint16_t>(command.value)
-            }});
+                .hold = DriveHold{ 
+                    .duration = command.timeout, 
+                    .v_duty = static_cast<uint16_t>(command.value),
+                    .w_duty = static_cast<uint16_t>(command.value)
+                }
+            });
             return false;
         }
         case SET_STATE_HOLD_V_NEGATIVE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
+            set_motor_command(DriverState{ 
+                .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .u_duty = static_cast<uint16_t>(command.value), 
-                .w_duty = static_cast<uint16_t>(command.value)
-            }});
+                .hold = DriveHold{ 
+                    .duration = command.timeout, 
+                    .u_duty = static_cast<uint16_t>(command.value), 
+                    .w_duty = static_cast<uint16_t>(command.value)
+                }
+            });
             return false;
         }
         case SET_STATE_HOLD_W_NEGATIVE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(DriverState::HOLD, DriverParameters{ .hold = PWMStage{ 
+            set_motor_command(DriverState{ 
+                .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .u_duty = static_cast<uint16_t>(command.value),
-                .v_duty = static_cast<uint16_t>(command.value)
-            }});
+                .hold = DriveHold{ 
+                    .duration = command.timeout, 
+                    .u_duty = static_cast<uint16_t>(command.value),
+                    .v_duty = static_cast<uint16_t>(command.value)
+                }
+            });
             return false;
         }
         case SET_CURRENT_FACTORS:

@@ -19,10 +19,10 @@ Motor Commands
   <span>${simple_drive_buttons}</span>
   <span>${command_timeout_slider}</span>
   <span>${command_value_slider}</span>
-  <span>${command_angle_slider}</span>
 </div>
 <div>
   <span>${advanced_drive_buttons}</span>
+  <span>${command_angle_slider}</span>
   <span>${command_second_slider}</span>
 </div>
 

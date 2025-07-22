@@ -14,8 +14,7 @@ using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 // Driver State
 // ------------
 
-enum struct DriverState : uint16_t {
-    NO_CHANGE,
+enum struct DriverMode : uint16_t {
     OFF,
     FREEWHEEL,
     HOLD,
@@ -54,21 +53,18 @@ const MotorOutputs breaking_motor_outputs = {
     .w_duty = 0
 };
 
-struct PWMStage {
+struct DriveHold {
     uint16_t duration; // Duration in PWM cycles.
     uint16_t u_duty; // PWM duty cycle for U phase.
     uint16_t v_duty; // PWM duty cycle for V phase.
     uint16_t w_duty; // PWM duty cycle for W phase.
 };
 
-// The hold command is the same as the motor outputs.
-using DriveHold = PWMStage;
-
 // Number of steps in test schedules.
 const size_t schedule_size = 12;
 
 // Motor driving PWM schedule.
-using PWMSchedule = PWMStage[schedule_size];
+using PWMSchedule = DriveHold[schedule_size];
 
 // Pointer to a PWM schedule to run the test.
 struct DriveSchedule {
@@ -77,57 +73,56 @@ struct DriveSchedule {
     uint16_t stage_counter;
 };
 
-// Drive motor using the 6 sector commutation method.
-struct Drive6Sector {
-    uint16_t duration; // Duration for the command in pwm cycles.
-    int16_t pwm_target;
-};
-
-struct DrivePeriodic {
-    uint16_t duration; // Duration for the command in pwm cycles.
-    int16_t zero_offset; // Initial angle at readout number 0.
-    int16_t pwm_target; // Target PWM value.
-    int16_t angular_speed; // Angular speed for the drive command.
-};
-
-// Drive the motor using FOC targeting a PWM value.
-struct DriveSmooth {
-    uint16_t duration; // Duration for the command in pwm cycles.
-    int16_t zero_offset;
-    int16_t pwm_target;
-    int16_t pwm_active;
-    int16_t lead_angle_control;
-};
-
 // Drive the motor to a specific current target (torque target).
 struct DriveTorque {
-    uint16_t duration; // Duration for the command in pwm cycles.
-    int16_t zero_offset;
-    int16_t current_target; // Target current in fixed point format.
+    int16_t current_target;
     int16_t torque_control;
 };
 
 // Drive the motor to a specific battery power drain.
 struct DriveBatteryPower {
-    uint16_t duration; // Duration for the command in pwm cycles.
-    int16_t zero_offset;
-    int16_t power_target; // Target power in fixed point format.
+    int16_t power_target;
     int16_t battery_power_control;
 };
 
-// Drive parameters for each state.
-union DriverParameters {
-    DriveHold hold;
-    DriveSchedule schedule;
-    Drive6Sector sector;
-    DrivePeriodic periodic;
-    DriveSmooth smooth;
-    DriveTorque torque;
-    DriveBatteryPower battery_power;
+// The complete driver state, these values control the motor behaviour.
+struct DriverState {
+
+    // Motor driving mode (defaults to short circuit breaking).
+    DriverMode mode;
+
+    // Duration for the command in pwm cycles.
+    uint16_t duration;
+
+    // Angle at which the motor is currently driven.
+    int16_t active_angle;
+    
+    // PWM value actively used to drive the motor.
+    int16_t active_pwm;
+    
+    // Angular speed for the drive command.
+    int16_t angular_speed;
+    
+    // The angle fraction remaining. Needed because the angular speed has higher
+    // resolution than the angle; so we need to keep track of partial increments.
+    int16_t angle_residual;
+
+    int16_t target_pwm;
+
+    int16_t lead_angle_control;
+
+    // The additional data depends on the driver mode.
+    union {
+        DriveHold hold;
+        DriveSchedule schedule;
+        DriveTorque torque;
+        DriveBatteryPower battery_power;
+    };
 };
 
-const DriverParameters null_driver_parameters = {};
+const DriverState null_driver_state = {};
 
+const size_t driver_state_size = sizeof(DriverState);
 
 // Response data structures
 // ------------------------
@@ -234,7 +229,7 @@ struct FullReadout : public Readout {
     int16_t phase_inductance;
 
     int16_t emf_voltage_variance;
-    
+
     int16_t debug_1;
     int16_t debug_2;
 };
