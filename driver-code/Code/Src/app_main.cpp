@@ -369,12 +369,12 @@ bool handle_command(MessageBuffer const& buffer) {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
             set_motor_command(DriverState{ 
+                .motor_outputs = MotorOutputs{ 
+                    .enable_flags = enable_flags_all, 
+                    .u_duty = static_cast<uint16_t>(command.value)
+                },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .hold = DriveHold{ 
-                    .duration = command.timeout, 
-                    .u_duty = static_cast<uint16_t>(command.value)
-                }
             });
             return false;
         }
@@ -382,12 +382,12 @@ bool handle_command(MessageBuffer const& buffer) {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
             set_motor_command(DriverState{ 
+                .motor_outputs = MotorOutputs{ 
+                    .enable_flags = enable_flags_all, 
+                    .v_duty = static_cast<uint16_t>(command.value)
+                },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .hold = DriveHold{ 
-                    .duration = command.timeout, 
-                    .v_duty = static_cast<uint16_t>(command.value)
-                }
             });
             return false;
         }
@@ -395,12 +395,12 @@ bool handle_command(MessageBuffer const& buffer) {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
             set_motor_command(DriverState{ 
+                .motor_outputs = MotorOutputs{ 
+                    .enable_flags = enable_flags_all, 
+                    .w_duty = static_cast<uint16_t>(command.value)
+                },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .hold = DriveHold{ 
-                    .duration = command.timeout, 
-                    .w_duty = static_cast<uint16_t>(command.value)
-                }
             });
             return false;
         }
@@ -408,13 +408,13 @@ bool handle_command(MessageBuffer const& buffer) {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
             set_motor_command(DriverState{ 
-                .mode = DriverMode::HOLD,
-                .duration = command.timeout, 
-                .hold = DriveHold{ 
-                    .duration = command.timeout, 
+                .motor_outputs = MotorOutputs{ 
+                    .enable_flags = enable_flags_all, 
                     .v_duty = static_cast<uint16_t>(command.value),
                     .w_duty = static_cast<uint16_t>(command.value)
-                }
+                },
+                .mode = DriverMode::HOLD,
+                .duration = command.timeout, 
             });
             return false;
         }
@@ -422,27 +422,27 @@ bool handle_command(MessageBuffer const& buffer) {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
             set_motor_command(DriverState{ 
+                .motor_outputs = MotorOutputs{ 
+                    .enable_flags = enable_flags_all, 
+                    .u_duty = static_cast<uint16_t>(command.value),
+                    .w_duty = static_cast<uint16_t>(command.value)
+                },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
-                .hold = DriveHold{ 
-                    .duration = command.timeout, 
-                    .u_duty = static_cast<uint16_t>(command.value), 
-                    .w_duty = static_cast<uint16_t>(command.value)
-                }
             });
             return false;
         }
         case SET_STATE_HOLD_W_NEGATIVE: {
             const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
-            set_motor_command(DriverState{ 
-                .mode = DriverMode::HOLD,
-                .duration = command.timeout, 
-                .hold = DriveHold{ 
-                    .duration = command.timeout, 
+            set_motor_command(DriverState{
+                .motor_outputs = MotorOutputs{ 
+                    .enable_flags = enable_flags_all, 
                     .u_duty = static_cast<uint16_t>(command.value),
                     .v_duty = static_cast<uint16_t>(command.value)
-                }
+                },
+                .mode = DriverMode::HOLD,
+                .duration = command.timeout, 
             });
             return false;
         }

@@ -53,7 +53,15 @@ const MotorOutputs breaking_motor_outputs = {
     .w_duty = 0
 };
 
-struct DriveHold {
+// Freewheel motor outputs, used to disconnect the motor phases.
+const MotorOutputs freewheel_motor_outputs = {
+    .enable_flags = enable_flags_none,
+    .u_duty = 0,
+    .v_duty = 0,
+    .w_duty = 0
+};
+
+struct PWMStage {
     uint16_t duration; // Duration in PWM cycles.
     uint16_t u_duty; // PWM duty cycle for U phase.
     uint16_t v_duty; // PWM duty cycle for V phase.
@@ -64,7 +72,7 @@ struct DriveHold {
 const size_t schedule_size = 12;
 
 // Motor driving PWM schedule.
-using PWMSchedule = DriveHold[schedule_size];
+using PWMSchedule = PWMStage[schedule_size];
 
 // Pointer to a PWM schedule to run the test.
 struct DriveSchedule {
@@ -87,6 +95,8 @@ struct DriveBatteryPower {
 
 // The complete driver state, these values control the motor behaviour.
 struct DriverState {
+    // Settings for the 3 phase MOSFET PWM drivers.
+    MotorOutputs motor_outputs = breaking_motor_outputs;
 
     // Motor driving mode (defaults to short circuit breaking).
     DriverMode mode;
@@ -113,7 +123,6 @@ struct DriverState {
 
     // The additional data depends on the driver mode.
     union {
-        DriveHold hold;
         DriveSchedule schedule;
         DriveTorque torque;
         DriveBatteryPower battery_power;
@@ -121,6 +130,11 @@ struct DriverState {
 };
 
 const DriverState null_driver_state = {};
+
+const DriverState breaking_driver_state = {
+    .motor_outputs = breaking_motor_outputs,
+    .mode = DriverMode::OFF
+};
 
 const size_t driver_state_size = sizeof(DriverState);
 

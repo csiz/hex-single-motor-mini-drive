@@ -220,7 +220,7 @@ static inline MotorOutputs update_motor_schedule(
     FullReadout const& readout
 ){
     PWMSchedule const& schedule = *driver_state.schedule.pointer;
-    DriveHold const& schedule_stage = schedule[driver_state.schedule.current_stage];
+    PWMStage const& schedule_stage = schedule[driver_state.schedule.current_stage];
 
     driver_state.schedule.stage_counter += 1;
 
@@ -242,15 +242,9 @@ static inline MotorOutputs update_motor_schedule(
 // Motor control
 // -------------
 
-static inline void set_breaking_control(
-    MotorOutputs & active_motor_outputs,
-    DriverState & driver_state
-){
-    // Set the active motor outputs to breaking.
-    active_motor_outputs = breaking_motor_outputs;
-
-    // Set the driver state to OFF.
-    driver_state = DriverState{ .mode = DriverMode::OFF };
+// Set the driver state to OFF.
+static inline void set_breaking_control(DriverState & driver_state){
+    driver_state = breaking_driver_state;
 }
 
 // Copy the pending driver state with all values clamped to valid ranges.
@@ -260,20 +254,27 @@ static inline DriverState setup_driver_state(
 ){
     switch(pending_state.mode){
         case DriverMode::OFF:
-            return DriverState{.mode = DriverMode::OFF};
+            return DriverState{
+                .motor_outputs = breaking_motor_outputs,
+                .mode = DriverMode::OFF
+            };
 
         case DriverMode::FREEWHEEL:
-            return DriverState{.mode = DriverMode::FREEWHEEL};
+            return DriverState{
+                .motor_outputs = MotorOutputs{.enable_flags = enable_flags_none},
+                .mode = DriverMode::FREEWHEEL
+            };
 
         case DriverMode::HOLD:
             return DriverState{
+                .motor_outputs = MotorOutputs {
+                    .enable_flags = pending_state.motor_outputs.enable_flags,
+                    .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.motor_outputs.u_duty)),
+                    .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.motor_outputs.v_duty)),
+                    .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.motor_outputs.w_duty))
+                },
                 .mode = DriverMode::HOLD,
-                .hold = DriveHold {
-                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.hold.duration)),
-                    .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.hold.u_duty)),
-                    .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.hold.v_duty)),
-                    .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.hold.w_duty))
-                }
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
             };
 
         case DriverMode::SCHEDULE:
@@ -345,73 +346,67 @@ static inline DriverState setup_driver_state(
 }
 
 static inline void update_motor_control(
-    MotorOutputs & active_motor_outputs,
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    if (driver_state.duration-- <= 0) {
-        return set_breaking_control(active_motor_outputs, driver_state);
-    }
-
     // Update the active state.
     switch (driver_state.mode) {
 
         case DriverMode::OFF:
-            active_motor_outputs = breaking_motor_outputs;
+            driver_state.motor_outputs = breaking_motor_outputs;
             return;
 
         case DriverMode::FREEWHEEL:
-            active_motor_outputs = MotorOutputs{
-                .enable_flags = enable_flags_none,
-                .u_duty = 0,
-                .v_duty = 0,
-                .w_duty = 0
-            };
+            driver_state.motor_outputs = freewheel_motor_outputs;
             return;
 
         case DriverMode::HOLD:
-
-            // Set the motor outputs to hold the current settings.
-            active_motor_outputs = MotorOutputs{
-                .enable_flags = enable_flags_all,
-                .u_duty = driver_state.hold.u_duty,
-                .v_duty = driver_state.hold.v_duty,
-                .w_duty = driver_state.hold.w_duty
-            };
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+            // The motor outputs are already set in the setup_driver_state function; do nothing else.
             return;
 
         case DriverMode::SCHEDULE:
             // We're done at the end of the schedule.
             if (driver_state.schedule.pointer == nullptr or driver_state.schedule.current_stage >= schedule_size) {
-                return set_breaking_control(active_motor_outputs, driver_state);
+                return set_breaking_control(driver_state);
             }
-            
-            active_motor_outputs = update_motor_schedule(driver_state, readout);
+
+            driver_state.motor_outputs = update_motor_schedule(driver_state, readout);
             return;
 
         case DriverMode::DRIVE_6_SECTOR:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
             // Update motor outputs for the 6 sector driving.
-            active_motor_outputs = update_motor_6_sector(driver_state, readout);
+            driver_state.motor_outputs = update_motor_6_sector(driver_state, readout);
             return;
 
         case DriverMode::DRIVE_PERIODIC:
-            active_motor_outputs = update_motor_periodic(driver_state, readout);
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            driver_state.motor_outputs = update_motor_periodic(driver_state, readout);
             return;
                 
 
         case DriverMode::DRIVE_SMOOTH:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
             // Update the motor outputs for the smooth driving.
-            active_motor_outputs = update_motor_smooth(driver_state, readout);
+            driver_state.motor_outputs = update_motor_smooth(driver_state, readout);
             return;
 
 
         case DriverMode::DRIVE_TORQUE:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
             // Update the motor outputs for the torque driving.
-            active_motor_outputs = update_motor_torque(driver_state, readout);
+            driver_state.motor_outputs = update_motor_torque(driver_state, readout);
             return;
 
         case DriverMode::DRIVE_BATTERY_POWER:
-            active_motor_outputs = update_motor_battery_power(driver_state, readout);
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+            
+            driver_state.motor_outputs = update_motor_battery_power(driver_state, readout);
             return;
     }
 

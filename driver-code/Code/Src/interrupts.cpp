@@ -56,7 +56,7 @@ int correct_angle_counter = 0;
 // ------------------
 
 // Currently active driver state (the full motor control state should be stored here).
-DriverState driver_state = null_driver_state;
+DriverState driver_state = breaking_driver_state;
 
 // Must be volatile as it's the interaction flag between main loop and the interrupt handler.
 // 
@@ -72,9 +72,6 @@ volatile bool new_pending_state = false;
 
 // Settings for the new driver state.
 DriverState pending_state = null_driver_state;
-
-// Currently active motor outputs.
-MotorOutputs active_motor_outputs = breaking_motor_outputs;
 
 // Keep a record of the previous output; the output switches mid cycle so we need to account for that.
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
@@ -236,10 +233,10 @@ void adc_interrupt_handler(){
     // If we managed to set the compare before the new cycle then it's the mid point; otherwise it's the previous outputs.
     const auto motor_outputs = readout.cycle_end_tick < pwm_base ? 
         previous_motor_outputs : 
-        mid_motor_outputs(previous_motor_outputs, active_motor_outputs);
+        mid_motor_outputs(previous_motor_outputs, driver_state.motor_outputs);
 
     // Remember the outputs for the next cycle.
-    previous_motor_outputs = active_motor_outputs;
+    previous_motor_outputs = driver_state.motor_outputs;
 
     // Calculate the readout differences; we need them to compute current divergence.
 
@@ -349,10 +346,15 @@ void adc_interrupt_handler(){
     ) / angle_base;
 
 
-    // TODO: reimplement drive modes.
-    // TODO: allows sporading missing EMF or current readings
-    // TODO: track EMF fix since startup, ! definitely have a button to set random angle so we can test it
+    // TODO: slowly vary the output angle speed so we don't jerk the motor too hard. Maybe also push the probing speed towards
+    // the rotor speed if the rotor is higher.
+
+    // TODO: add the angle residual tracking to the rotor angle otherwise we have too little resolution and the speed keeps oscillating
+
+    // TODO: now, re-write the drive modes with new driver state struct.
+
     // TODO: fix the direction flipping
+
 
     // Current angle calculation
     // -------------------------
@@ -621,10 +623,10 @@ void adc_interrupt_handler(){
     }
 
     // Update the motor controls using the readout data.
-    update_motor_control(active_motor_outputs, driver_state, readout);
+    update_motor_control(driver_state, readout);
 
 
-    // Try to write the latest readout if there's space.
+    // Try to write the latest readout snippet if there's space.
     readout_history_push(readout);
 
 
@@ -634,7 +636,7 @@ void adc_interrupt_handler(){
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if
     // we set the output registers too late in the cycle.
-    set_motor_outputs(active_motor_outputs);
+    set_motor_outputs(driver_state.motor_outputs);
 
     readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
 
