@@ -233,9 +233,10 @@ struct FullReadout : public Readout {
     // for the fixed reference frame current.
     int16_t phase_inductance;
 
-    int16_t u_debug;
-    int16_t v_debug;
-    int16_t w_debug;
+    int16_t emf_voltage_variance;
+    
+    int16_t debug_1;
+    int16_t debug_2;
 };
 
 

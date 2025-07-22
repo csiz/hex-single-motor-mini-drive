@@ -396,11 +396,11 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const phase_inductance = data_view.getInt16(offset);
   offset += 2;
-  const u_debug = data_view.getInt16(offset);
+  const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const v_debug = data_view.getInt16(offset);
+  const debug_1 = data_view.getInt16(offset);
   offset += 2;
-  const w_debug = data_view.getInt16(offset);
+  const debug_2 = data_view.getInt16(offset);
   offset += 2;
   
 
@@ -431,9 +431,9 @@ function parse_full_readout(data_view, previous_readout){
     emf_power,
     inductive_power,
     
-    u_debug,
-    v_debug,
-    w_debug,
+    emf_voltage_stdev,
+    debug_1,
+    debug_2,
     motor_constant,
     
     inductor_angle,

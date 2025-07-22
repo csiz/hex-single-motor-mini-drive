@@ -375,17 +375,20 @@ void adc_interrupt_handler(){
 
     const int emf_voltage_error = instant_emf_voltage_magnitude - readout.emf_voltage_magnitude;
 
-    const int emf_voltage_magnitude = readout.emf_voltage_magnitude + signed_ceil_div(emf_voltage_error, 8);
+    const int emf_voltage_magnitude = readout.emf_voltage_magnitude + signed_ceil_div(emf_voltage_error, 16);
 
     const int square_emf_voltage_error = square(emf_voltage_error);
 
-    emf_voltage_variance = min(max_16bit, 1 + (7 * emf_voltage_variance + square_emf_voltage_error) / 8);
+    emf_voltage_variance = min(max_16bit, 1 + (15 * emf_voltage_variance + square_emf_voltage_error) / 16);
+
+    const bool emf_is_above_threshold = emf_voltage_magnitude > control_parameters.min_emf_voltage;
+    
+    const bool emf_is_above_noise = square(emf_voltage_magnitude) > 9 * emf_voltage_variance;
+
+    const bool emf_is_accurate = square_emf_voltage_error < 4 * emf_voltage_variance;
 
     // Check if the emf voltage is away from zero with enough confidence.
-    const bool emf_detected = (
-        (square_emf_voltage_error < 3 * emf_voltage_variance) and
-        (square(emf_voltage_magnitude) > 9 * emf_voltage_variance)
-    );
+    const bool emf_detected = emf_is_above_noise and emf_is_accurate;
 
     number_of_emf_detections = clip_to(0, 64, number_of_emf_detections + (emf_detected ? +1 : -1));
 
@@ -445,14 +448,14 @@ void adc_interrupt_handler(){
     // 
     // Note that the angle change is relative to the current speed because of the prediction step.
     const int speed_error = (
-        compute_speed ? 
-            // If we have enough EMF detections, adjust the speed according to the prediction error.
-            signed_ceil_div(
-                speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki, 
-                control_parameters_fixed_point
-            ) :
-            // Otherwise decay the speed towards zero.
-            -signed_ceil_div(readout.angular_speed, 32)
+        // If we have enough EMF detections, adjust the speed according to the prediction error.
+        compute_speed ? signed_ceil_div(
+            speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki, 
+            control_parameters_fixed_point) :    
+        // Maintain speed if we have an EMF reading, even if noisy.
+        emf_is_above_threshold ? 0 :
+        // Otherwise quickly decay the speed towards zero.
+        -signed_ceil_div(readout.angular_speed, 32)
     );
     
     const int updated_speed = readout.angular_speed + speed_error;
@@ -473,7 +476,7 @@ void adc_interrupt_handler(){
 
     const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
 
-    const bool compute_motor_constant = emf_and_movement_fix and (emf_voltage_magnitude > control_parameters.min_emf_voltage);
+    const bool compute_motor_constant = emf_and_movement_fix and emf_is_above_threshold;
 
     const int motor_constant_error = compute_motor_constant * (emf_voltage_magnitude - predicted_emf_voltage);
     const int motor_constant = (
@@ -585,25 +588,26 @@ void adc_interrupt_handler(){
     readout.alpha_emf_voltage = alpha_emf_voltage;
     readout.beta_emf_voltage = beta_emf_voltage;
     
-
-    readout.motor_constant = motor_constant;
-    readout.phase_resistance = 0;
-    readout.phase_inductance = 0;
-    
     readout.total_power = total_power;
     readout.resistive_power = resistive_power;
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
     
-    readout.inductor_angle = inductor_angle;
-    readout.emf_voltage_magnitude = emf_voltage_magnitude;
 
+    readout.motor_constant = motor_constant;
+    readout.inductor_angle = inductor_angle;
+
+    readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.rotor_acceleration = updated_acceleration;
+
     readout.angle_error = angle_error;
+    readout.phase_resistance = 0;
+
+    readout.emf_voltage_variance = emf_voltage_variance;
+    readout.phase_inductance = 0;
     
-    readout.u_debug = emf_voltage_variance;
-    readout.v_debug = driver_parameters.smooth.lead_angle_control;
-    // readout.w_debug = ;
+    readout.debug_1 = driver_parameters.smooth.lead_angle_control;
+    readout.debug_2 = 0;
     
 
     

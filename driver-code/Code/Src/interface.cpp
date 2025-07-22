@@ -129,11 +129,11 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.phase_inductance);
     offset += 2;
-    write_int16(buffer + offset, readout.u_debug);
+    write_int16(buffer + offset, readout.emf_voltage_variance);
     offset += 2;
-    write_int16(buffer + offset, readout.v_debug);
+    write_int16(buffer + offset, readout.debug_1);
     offset += 2;
-    write_int16(buffer + offset, readout.w_debug);
+    write_int16(buffer + offset, readout.debug_2);
     offset += 2;
 
     write_message_tail(buffer, offset);

@@ -872,12 +872,13 @@ const plot_dq0_voltages = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {
-      y: "beta_emf_voltage", label: "EMF Voltage Beta", color: colors.beta_current,
-      draw_extra: setup_stdev_95({stdev: (d) => d.alpha_emf_voltage_stdev}),
-    },
+    {y: "beta_emf_voltage", label: "EMF Voltage Beta", color: colors.beta_current},
     {y: "alpha_emf_voltage", label: "EMF Voltage Alpha", color: colors.alpha_current},
-    {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude},
+    {
+      y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude,
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_stdev}),
+    },
+    {y: "emf_voltage_stdev", label: "EMF Voltage Stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
@@ -938,9 +939,8 @@ const plot_motor_values = plot_lines({
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
     {y: "phase_resistance", label: "Phase Resistance", color: colors_categories[1]},
     {y: "phase_inductance", label: "Phase Inductance", color: colors_categories[2]},
-    {y: "u_debug", label: "U Debug", color: colors.u},
-    {y: "v_debug", label: "V Debug", color: colors.v},
-    {y: "w_debug", label: "W Debug", color: colors.w},
+    {y: "debug_1", label: "Debug 1", color: colors.v},
+    {y: "debug_2", label: "Debug 2", color: colors.w},
   ],
   curve,
 });
