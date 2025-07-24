@@ -371,7 +371,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .u_duty = static_cast<uint16_t>(command.value)
+                    .u_duty = static_cast<uint16_t>(faster_abs(command.value))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
@@ -384,7 +384,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .v_duty = static_cast<uint16_t>(command.value)
+                    .v_duty = static_cast<uint16_t>(faster_abs(command.value))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
@@ -397,7 +397,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .w_duty = static_cast<uint16_t>(command.value)
+                    .w_duty = static_cast<uint16_t>(faster_abs(command.value))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
@@ -410,8 +410,8 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .v_duty = static_cast<uint16_t>(command.value),
-                    .w_duty = static_cast<uint16_t>(command.value)
+                    .v_duty = static_cast<uint16_t>(faster_abs(command.value)),
+                    .w_duty = static_cast<uint16_t>(faster_abs(command.value))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
@@ -424,8 +424,8 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .u_duty = static_cast<uint16_t>(command.value),
-                    .w_duty = static_cast<uint16_t>(command.value)
+                    .u_duty = static_cast<uint16_t>(faster_abs(command.value)),
+                    .w_duty = static_cast<uint16_t>(faster_abs(command.value))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
@@ -438,8 +438,8 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .u_duty = static_cast<uint16_t>(command.value),
-                    .v_duty = static_cast<uint16_t>(command.value)
+                    .u_duty = static_cast<uint16_t>(faster_abs(command.value)),
+                    .v_duty = static_cast<uint16_t>(faster_abs(command.value))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
@@ -604,7 +604,7 @@ void usb_queue_response(FullReadout const& readout) {
         if (not readout_history_available()) return readout_history_reset();
         
         // Send the readout to the host.
-        write_readout(usb_response_buffer.data, readout_history_pop());
+        usb_response_buffer.write_index = write_readout(usb_response_buffer.data, readout_history_pop());
         usb_queue_send(usb_response_buffer);
 
         // Readout added to the USB buffer.

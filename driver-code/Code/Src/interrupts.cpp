@@ -22,7 +22,9 @@
 // ====================
 
 // Electrical and position state
-FullReadout readout = {};
+FullReadout readout = {
+    .emf_voltage_variance = max_16bit,
+};
 
 // History of light readouts so that we can record every cycle for a short snapshot.
 Readout readout_history[history_size] = {};
@@ -34,8 +36,8 @@ size_t readout_history_write_index = 0;
 size_t readout_history_read_index = 0;
 
 
-// Flag counters
-// -------------
+// Additional state
+// ----------------
 
 // Count the number of consecutive EMF detections.
 int number_of_emf_detections = 0;
@@ -45,11 +47,11 @@ int number_of_emf_detections = 0;
 // until we identify the rotation direction.
 int incorrect_direction_detections = 0;
 
-// Track the noisiness of the EMF voltage.
-int emf_voltage_variance = max_16bit;
-
 // Track how many times we think our angle is correct.
 int correct_angle_counter = 0;
+
+// Residual for the angle integration; needed because the speed is higher resolution than the angle.
+int angle_residual = 0;
 
 
 // Motor driver state
@@ -243,60 +245,69 @@ void adc_interrupt_handler(){
     const int u_readout_diff = u_readout - readout.u_readout;
     const int v_readout_diff = v_readout - readout.v_readout;
     const int w_readout_diff = w_readout - readout.w_readout;
-
-
-    // Predict the position based on the previous state.
-    const int predicted_angle = normalize_angle(readout.angle + readout.angular_speed / speed_fixed_point);
-
+    
     // Get calibrated currents.
-
+    
     const auto [u_current, v_current, w_current] = ThreePhase{
         u_readout * current_calibration.u_factor / current_calibration_fixed_point,
         v_readout * current_calibration.v_factor / current_calibration_fixed_point,
         w_readout * current_calibration.w_factor / current_calibration_fixed_point
     };
-
+    
     // Get calibrated current divergence (the time unit is defined 1 per cycle).
-
+    
     const auto [u_current_diff, v_current_diff, w_current_diff] = ThreePhase{
         u_readout_diff * current_calibration.u_factor / current_calibration_fixed_point,
         v_readout_diff * current_calibration.v_factor / current_calibration_fixed_point,
         w_readout_diff * current_calibration.w_factor / current_calibration_fixed_point
     };
-
+    
     // Calibrated conversion factor between current divergence and phase inductance voltage.
     const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
-
+    
     // Calculate the voltage drop across the coil inductance.
-
+    
     const int u_inductor_voltage = u_current_diff * diff_to_voltage / current_fixed_point;
     const int v_inductor_voltage = v_current_diff * diff_to_voltage / current_fixed_point;
     const int w_inductor_voltage = w_current_diff * diff_to_voltage / current_fixed_point;
-
+    
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     
     const int u_resistive_voltage = u_current * phase_current_to_voltage / current_fixed_point;
     const int v_resistive_voltage = v_current * phase_current_to_voltage / current_fixed_point;
     const int w_resistive_voltage = w_current * phase_current_to_voltage / current_fixed_point;
-
+    
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage.
-
+    
     const auto [u_drive_voltage, v_drive_voltage, w_drive_voltage] = adjust_to_sum_zero(ThreePhase{
         round_div(motor_outputs.u_duty * vcc_voltage, pwm_base),
         round_div(motor_outputs.v_duty * vcc_voltage, pwm_base),
         round_div(motor_outputs.w_duty * vcc_voltage, pwm_base)
     });
-
+    
     // Infer the back EMF voltages for each phase.
     // 
     // Calculate the EMF voltage as the remainder after subtracting the electric circuit voltages.
     // By Kirchoffs laws the total voltage must sum to 0.
-
+    
     const int u_emf_voltage = -(u_drive_voltage - u_resistive_voltage - u_inductor_voltage);
     const int v_emf_voltage = -(v_drive_voltage - v_resistive_voltage - v_inductor_voltage);
     const int w_emf_voltage = -(w_drive_voltage - w_resistive_voltage - w_inductor_voltage);
 
+
+    // Predict the position; keeping track of fractional angles. By our definition the time
+    // unit is 1 per cycle; so the angle spanned by the rotor is exactly the angular speed.
+    const int angle_hires_diff = readout.angular_speed + angle_residual;
+
+    // TODO: integrate rotations here.
     
+    // Compute and normalize the new rotor angle.
+    const int predicted_angle = normalize_angle(readout.angle + angle_hires_diff / speed_fixed_point);
+
+    // Keep track of the remaining angle fraction spanned according to the angular speed, but for which the integer angle
+    // doesn't change value. Hopefully the compiler makes the % operation free considering it follows the division above.
+    angle_residual = angle_hires_diff % speed_fixed_point;
+
     // Calculate the park transformed currents and voltages
     // 
     // Use gradient descent to estimate the inductor current angle. We don't have compute to
@@ -349,8 +360,6 @@ void adc_interrupt_handler(){
     // TODO: slowly vary the output angle speed so we don't jerk the motor too hard. Maybe also push the probing speed towards
     // the rotor speed if the rotor is higher.
 
-    // TODO: add the angle residual tracking to the rotor angle otherwise we have too little resolution and the speed keeps oscillating
-
     // TODO: now, re-write the drive modes with new driver state struct.
 
     // TODO: fix the direction flipping
@@ -377,26 +386,26 @@ void adc_interrupt_handler(){
 
     const int emf_voltage_error = instant_emf_voltage_magnitude - readout.emf_voltage_magnitude;
 
-    const int emf_voltage_magnitude = readout.emf_voltage_magnitude + signed_ceil_div(emf_voltage_error, 16);
+    const int emf_voltage_magnitude = readout.emf_voltage_magnitude + signed_ceil_div(emf_voltage_error, 8);
 
     const int square_emf_voltage_error = square(emf_voltage_error);
 
-    emf_voltage_variance = min(max_16bit, 1 + (15 * emf_voltage_variance + square_emf_voltage_error) / 16);
+    const int emf_voltage_variance = min(max_16bit, 1 + (7 * readout.emf_voltage_variance + square_emf_voltage_error) / 8);
 
     const bool emf_is_above_threshold = emf_voltage_magnitude > control_parameters.min_emf_voltage;
     
-    const bool emf_is_above_noise = square(emf_voltage_magnitude) > 9 * emf_voltage_variance;
+    const bool emf_is_above_noise = square(emf_voltage_magnitude) > 4 * emf_voltage_variance;
 
-    const bool emf_is_accurate = square_emf_voltage_error < 4 * emf_voltage_variance;
+    const bool emf_is_accurate = emf_is_above_noise and (square_emf_voltage_error < 4 * emf_voltage_variance);
 
     // Check if the emf voltage is away from zero with enough confidence.
-    const bool emf_detected = emf_is_above_noise and emf_is_accurate;
+    const bool emf_detected = emf_is_above_noise or emf_is_above_threshold;
 
     number_of_emf_detections = clip_to(0, 64, number_of_emf_detections + (emf_detected ? +1 : -1));
 
     // Let the angle adjust a few steps before using the diff to compute the speed; our initial guess starts
     // at an arbitrary position so the apparent acceleration is just the angle converging to the correct value.
-    const bool compute_speed = emf_detected and (number_of_emf_detections >= 16);
+    const bool compute_speed = emf_is_accurate and (number_of_emf_detections >= 16);
 
     // Declare that we have an emf reading after enough detections.
     const bool emf_fix = number_of_emf_detections >= 32;
@@ -411,16 +420,16 @@ void adc_interrupt_handler(){
     const bool emf_and_movement_fix = emf_fix and movement_fix;
 
     // Check if we have the incorrect rotor angle by checking if the beta EMF voltage has opposite sign to the angular speed.
-    const bool incorrect_rotor_angle_detected = emf_detected and emf_and_movement_fix and (beta_emf_voltage * readout.angular_speed > 0);
+    const bool incorrect_rotor_angle_detected = emf_is_accurate and emf_and_movement_fix and (beta_emf_voltage * readout.angular_speed > 0);
 
     // Keep track in a counter.
-    incorrect_direction_detections = clip_to(0, 32, incorrect_direction_detections + (incorrect_rotor_angle_detected ? +1 : -1));
+    incorrect_direction_detections = clip_to(0, 64, incorrect_direction_detections + (incorrect_rotor_angle_detected ? +1 : -1));
 
     // Set the flag for immininent rotor correction, we need to set it over multiple cycles otherwise it might be missed.
-    const bool rotor_direction_flip_imminent = incorrect_direction_detections >= 24;
+    const bool rotor_direction_flip_imminent = incorrect_direction_detections >= 48;
 
     // Flip the rotor if we have reached the threshold number of incorrect detections.
-    const bool rotor_direction_flip = incorrect_direction_detections >= 32;
+    const bool rotor_direction_flip = incorrect_direction_detections >= 64;
 
     // Reset the incorrect direction counter on flip.
     incorrect_direction_detections = (not rotor_direction_flip) * incorrect_direction_detections;
@@ -433,10 +442,10 @@ void adc_interrupt_handler(){
 
 
     // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
-    const int prediction_error = angle_or_mirror(emf_angle_error);
+    const int prediction_error = emf_is_accurate * emf_detected * angle_or_mirror(emf_angle_error);
 
     // Calculate the angle adjustment error using the parametrized gain.
-    const int angle_error = emf_detected * signed_ceil_div(
+    const int angle_error = signed_ceil_div(
         prediction_error * control_parameters.rotor_angle_ki,
         control_parameters_fixed_point
     );
@@ -455,9 +464,9 @@ void adc_interrupt_handler(){
             speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki, 
             control_parameters_fixed_point) :    
         // Maintain speed if we have an EMF reading, even if noisy.
-        emf_is_above_threshold ? 0 :
+        emf_is_above_noise ? 0 :
         // Otherwise quickly decay the speed towards zero.
-        -signed_ceil_div(readout.angular_speed, 32)
+        -signed_ceil_div(readout.angular_speed, 16)
     );
     
     const int updated_speed = readout.angular_speed + speed_error;
@@ -618,7 +627,7 @@ void adc_interrupt_handler(){
 
     // Setup the new state if we were commanded by the main loop.
     if (new_pending_state) {
-        driver_state = setup_driver_state(pending_state, readout);
+        driver_state = setup_driver_state(driver_state, pending_state, readout);
         new_pending_state = false;
     }
 

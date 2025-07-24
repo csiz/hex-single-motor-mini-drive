@@ -62,9 +62,13 @@ static inline MotorOutputs update_motor_6_sector(
     };
 }
 
-static inline MotorOutputs pwm_at_angle(const int16_t active_pwm, const int16_t target_angle) {
-    const int abs_pwm = faster_abs(active_pwm);
-    const int angle = target_angle + (active_pwm < 0 ? half_circle : 0);
+// Get the motor outputs at the specified active_pwm and active_angle.
+static inline MotorOutputs update_motor_at_angle(DriverState const& driver_state) {
+    // The PWM counter value must be positive, we use the sign to determine the direction.
+    const int abs_pwm = faster_abs(driver_state.active_pwm);
+    
+    // Use the active angle or flip it depending on the sign of the PWM.
+    const int angle = driver_state.active_angle + (driver_state.active_pwm < 0 ? half_circle : 0);
 
     // Get the voltage for the three phases from the waveform table.
 
@@ -91,7 +95,7 @@ static inline MotorOutputs update_motor_periodic(
 
     driver_state.angle_residual = active_angle_hires_diff % speed_fixed_point;
 
-    return pwm_at_angle(driver_state.active_pwm, driver_state.active_angle);
+    return update_motor_at_angle(driver_state);
 }
 
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
@@ -102,6 +106,7 @@ static inline MotorOutputs update_motor_smooth(
 ){
     // Check if we have an accurate readout angle.
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
+    const bool current_detected = readout.state_flags & current_detected_bit_offset;
 
     const int16_t target_pwm = (
         angle_fix ? 
@@ -109,32 +114,34 @@ static inline MotorOutputs update_motor_smooth(
         clip_to(-control_parameters.probing_max_pwm, +control_parameters.probing_max_pwm, driver_state.target_pwm)
     );
 
-    const int pwm_change = target_pwm - driver_state.active_pwm;
+    const int pwm_error = target_pwm - driver_state.active_pwm;
 
-    driver_state.active_pwm += clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pwm_change);
-
-    // Get the abs value of the target PWM.
-    const int16_t abs_pwm = faster_abs(driver_state.active_pwm);
+    driver_state.active_pwm += clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pwm_error);
 
     // Base the direction on the sign of the target PWM.
-    const int direction = sign(driver_state.active_pwm);
+    const int active_pwm_direction = sign(driver_state.active_pwm);
 
 
-    // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
-    // 
-    // Of course, the inductors take a while to charge and the rotor is producing an EMF
-    // which all interacts with the current. However, the current that we end up measuring
-    // should be as close to the 90 degrees as possible for maximum torque per current use.
-    const int ideal_lead_angle = direction * quarter_circle;
-    
-    // The ideal angle.
-    const int ideal_angle = normalize_angle(readout.angle + ideal_lead_angle);
+    // Calculate the predicted active angle (we want to maintain constant speed in angular coordinate space).
+    const int active_angle_hires_diff = driver_state.angular_speed + driver_state.angle_residual;
+
+    driver_state.active_angle = normalize_angle(driver_state.active_angle + active_angle_hires_diff / speed_fixed_point);
+
+    driver_state.angle_residual = active_angle_hires_diff % speed_fixed_point;
+
 
     if (angle_fix) {
         // If we have an accurate position, we can use it to adjust our control.
+        
+        // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+        // 
+        // Of course, the inductors take a while to charge and the rotor is producing an EMF
+        // which all interacts with the current. However, the current that we end up measuring
+        // should be as close to the 90 degrees as possible for maximum torque per current use.
+        const int ideal_angle = normalize_angle(readout.angle + quarter_circle);
 
         // Get the error between the measured current and the ideal current angle.
-        const int lead_angle_error = signed_angle(ideal_angle - readout.inductor_angle);
+        const int lead_angle_error = active_pwm_direction * current_detected * signed_angle(ideal_angle - readout.inductor_angle);
 
         // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
         driver_state.lead_angle_control = clip_to(
@@ -145,27 +152,42 @@ static inline MotorOutputs update_motor_smooth(
                 control_parameters_fixed_point
             )
         );
+
+        const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle_control);
         
         // Compensate the target angle by the control output. At high speed we need
         // to lead by more than 90 degrees to compensate for the RL time constant.
-        const int16_t active_angle = normalize_angle(ideal_angle + driver_state.lead_angle_control);
+        const int active_angle_error = clip_to(
+            -control_parameters.max_angle_change,
+            +control_parameters.max_angle_change,
+            signed_angle(target_angle - driver_state.active_angle)
+        );
 
-        // Update the driving angle in case we lose the EMF fix.
-        driver_state.active_angle = active_angle;
+        // Update the driving angle.
+        driver_state.active_angle = normalize_angle(driver_state.active_angle + active_angle_error);
 
-        return pwm_at_angle(abs_pwm, active_angle);
+        // Match the angular speed to the rotor speed.
+        driver_state.angular_speed = readout.angular_speed;
+
+        return update_motor_at_angle(driver_state);
     } else {
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
 
         // Decay the current angle control; it needs to start from 0 at low speed.
-        driver_state.lead_angle_control = signed_ceil_div(
+        driver_state.lead_angle_control += signed_ceil_div(
             -driver_state.lead_angle_control * control_parameters.lead_angle_control_ki,
             control_parameters_fixed_point
         );
 
-        driver_state.angular_speed = direction * control_parameters.probing_angular_speed;
+        // Speed should be the max between the probing speed and current rotor speed. We always want
+        // to probe at some minimum speed, but also want to keep up with the rotor in case it gets going.
+        driver_state.angular_speed = active_pwm_direction * max(
+            control_parameters.probing_angular_speed,
+            // Use the speed value in the direction of movement; negative values will be handled by the max.
+            active_pwm_direction * readout.angular_speed
+        );
 
-        return update_motor_periodic(driver_state, readout);
+        return update_motor_at_angle(driver_state);
     }
 }
 
@@ -249,6 +271,7 @@ static inline void set_breaking_control(DriverState & driver_state){
 
 // Copy the pending driver state with all values clamped to valid ranges.
 static inline DriverState setup_driver_state(
+    DriverState const& driver_state,
     DriverState const& pending_state,
     FullReadout const& readout
 ){
@@ -314,13 +337,17 @@ static inline DriverState setup_driver_state(
             };
 
         case DriverMode::DRIVE_SMOOTH:
+            // Maintain a some of the previous state so we can smoothly transition to the new state.
             return DriverState{
                 .mode = DriverMode::DRIVE_SMOOTH,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = static_cast<int16_t>(normalize_angle(
-                    readout.angle + sign(pending_state.target_pwm) * quarter_circle
-                )),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle :
+                    static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
+                .active_pwm = driver_state.active_pwm,
+                .angular_speed = driver_state.angular_speed,
+                .angle_residual = driver_state.angle_residual,
                 .target_pwm = static_cast<int16_t>(clip_to(-pwm_max, +pwm_max, pending_state.target_pwm)),
+                .lead_angle_control = driver_state.lead_angle_control,
             };
             
         case DriverMode::DRIVE_TORQUE:
