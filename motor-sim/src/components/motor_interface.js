@@ -138,19 +138,19 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   offset += 2;
 
   // Get the raw readout values.
-  const u_readout = current_conversion * data_view.getInt16(offset);
+  const u_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const v_readout = current_conversion * data_view.getInt16(offset);
+  const v_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const w_readout = current_conversion * data_view.getInt16(offset);
+  const w_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
   const ref_readout = current_conversion * (data_view.getInt16(offset) - expected_ref_readout);
   offset += 2;
-  const u_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
+  const u_current_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
   offset += 2;
-  const v_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
+  const v_current_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
   offset += 2;
-  const w_readout_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
+  const w_current_diff = current_conversion * data_view.getInt16(offset) / millis_per_cycle;
   offset += 2;
 
   // Get electric angle data. Angle 0 means the rotor North is aligned when holding positive current on the U phase.
@@ -198,14 +198,11 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const drive_voltage_magnitude = Math.sqrt(drive_voltage_alpha * drive_voltage_alpha + drive_voltage_beta * drive_voltage_beta);
 
 
-  const scaled_u_current = u_readout * this.current_calibration.u_factor;
-  const scaled_v_current = v_readout * this.current_calibration.v_factor;
-  const scaled_w_current = w_readout * this.current_calibration.w_factor;
-  const avg_current = (scaled_u_current + scaled_v_current + scaled_w_current) / 3.0;
+  const u_readout = u_current / this.current_calibration.u_factor;
+  const v_readout = v_current / this.current_calibration.v_factor;
+  const w_readout = w_current / this.current_calibration.w_factor;
 
-  const u_current = scaled_u_current - avg_current;
-  const v_current = scaled_v_current - avg_current;
-  const w_current = scaled_w_current - avg_current;
+  const avg_current = (u_current + v_current + w_current) / 3.0;
 
   const [web_alpha_current, web_beta_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(angle));
 
@@ -219,14 +216,10 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
   const time = readout_index * millis_per_cycle;
 
-  const scaled_u_current_diff = u_readout_diff * this.current_calibration.u_factor;
-  const scaled_v_current_diff = v_readout_diff * this.current_calibration.v_factor;
-  const scaled_w_current_diff = w_readout_diff * this.current_calibration.w_factor;
-  const avg_current_diff = (scaled_u_current_diff + scaled_v_current_diff + scaled_w_current_diff) / 3.0;
-  
-  const u_current_diff = scaled_u_current_diff - avg_current_diff;
-  const v_current_diff = scaled_v_current_diff - avg_current_diff;
-  const w_current_diff = scaled_w_current_diff - avg_current_diff;
+  const u_readout_diff = u_current_diff / this.current_calibration.u_factor;
+  const v_readout_diff = v_current_diff / this.current_calibration.v_factor;
+  const w_readout_diff = w_current_diff / this.current_calibration.w_factor;
+
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
   const u_L_voltage = u_current_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor;

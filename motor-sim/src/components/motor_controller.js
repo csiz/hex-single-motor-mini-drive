@@ -260,7 +260,7 @@ export class MotorController {
   /* Send a command to the motor driver. */
   async send_command({command, ...command_options}) {
     if (!this._port.writable) return;
-    const buffer = serialise_command({...default_command_options,command, ...command_options});
+    const buffer = serialise_command({...default_command_options, command, ...command_options});
     await this._writer.write(buffer);
   }
 

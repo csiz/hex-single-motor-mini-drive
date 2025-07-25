@@ -149,20 +149,20 @@ struct Readout{
     // Driver state flags; packed into a single 16-bit value.
     uint16_t state_flags;
     // Raw phase U current readout (ADC value).
-    int16_t u_readout;
+    int16_t u_current;
     // Raw phase V current readout (ADC value).
-    int16_t v_readout;
+    int16_t v_current;
     // Raw phase W current readout (ADC value).
-    int16_t w_readout;
+    int16_t w_current;
     // Raw reference readout (ADC value); this is the reference voltage for the current 
     // readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
     int16_t ref_readout;
     // Phase U current readout difference to previous readout.
-    int16_t u_readout_diff;
+    int16_t u_current_diff;
     // Phase V current readout difference to previous readout.
-    int16_t v_readout_diff;
+    int16_t v_current_diff;
     // Phase W current readout difference to previous readout.
-    int16_t w_readout_diff;
+    int16_t w_current_diff;
     // Best estimate for the rotor magnetic angle.
     int16_t angle;
     // Best estimate for the rotor magnetic angular speed.

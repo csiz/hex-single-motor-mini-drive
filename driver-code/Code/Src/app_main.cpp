@@ -207,6 +207,8 @@ static inline void motor_start_test(PWMSchedule const& schedule){
     // Stop emptying the readouts queue; we want to keep the test data.
     usb_wait_full_history = true;
 
+    usb_readouts_to_send = history_size;
+
     // Start the test schedule.
     set_motor_command(DriverState{ .mode = DriverMode::SCHEDULE, .schedule = DriveSchedule{ .pointer = &schedule } });
 }

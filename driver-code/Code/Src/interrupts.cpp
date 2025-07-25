@@ -242,27 +242,20 @@ void adc_interrupt_handler(){
     // Remember the outputs for the next cycle.
     previous_motor_outputs = driver_state.motor_outputs;
 
-    // Calculate the readout differences; we need them to compute current divergence.
-
-    const int u_readout_diff = u_readout - readout.u_readout;
-    const int v_readout_diff = v_readout - readout.v_readout;
-    const int w_readout_diff = w_readout - readout.w_readout;
-    
     // Get calibrated currents.
-    
     const auto [u_current, v_current, w_current] = ThreePhase{
         u_readout * current_calibration.u_factor / current_calibration_fixed_point,
         v_readout * current_calibration.v_factor / current_calibration_fixed_point,
         w_readout * current_calibration.w_factor / current_calibration_fixed_point
     };
-    
+
+
     // Get calibrated current divergence (the time unit is defined 1 per cycle).
+
+    const int u_current_diff = u_current - readout.u_current;
+    const int v_current_diff = v_current - readout.v_current;
+    const int w_current_diff = w_current - readout.w_current;
     
-    const auto [u_current_diff, v_current_diff, w_current_diff] = ThreePhase{
-        u_readout_diff * current_calibration.u_factor / current_calibration_fixed_point,
-        v_readout_diff * current_calibration.v_factor / current_calibration_fixed_point,
-        w_readout_diff * current_calibration.w_factor / current_calibration_fixed_point
-    };
     
     // Calibrated conversion factor between current divergence and phase inductance voltage.
     const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
@@ -591,13 +584,13 @@ void adc_interrupt_handler(){
 
     readout.ref_readout = ref_readout;
 
-    readout.u_readout = u_readout;
-    readout.v_readout = v_readout;
-    readout.w_readout = w_readout;
+    readout.u_current = u_current;
+    readout.v_current = v_current;
+    readout.w_current = w_current;
 
-    readout.u_readout_diff = u_readout_diff;
-    readout.v_readout_diff = v_readout_diff;
-    readout.w_readout_diff = w_readout_diff;
+    readout.u_current_diff = u_current_diff;
+    readout.v_current_diff = v_current_diff;
+    readout.w_current_diff = w_current_diff;
     
     readout.temperature = temperature;
     readout.vcc_voltage = vcc_voltage;
