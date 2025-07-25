@@ -296,6 +296,23 @@ void adc_interrupt_handler(){
     const int v_emf_voltage = -(v_drive_voltage - v_resistive_voltage - v_inductor_voltage);
     const int w_emf_voltage = -(w_drive_voltage - w_resistive_voltage - w_inductor_voltage);
 
+    // Position Update
+    // ---------------
+
+    // Flip the rotor if we have reached the threshold number of incorrect detections.
+    const bool rotor_direction_flip = incorrect_direction_detections >= 32;
+
+    // Flip the rotor angle if we have reached the threshold number of incorrect detections.
+    // 
+    // Note: do this before computing any DQ0 values as they should be consistent with the angle.
+    if (rotor_direction_flip) {
+        // It should be normalized below.
+        readout.angle += half_circle;
+
+        // Reset the incorrect direction counter on flip.
+        incorrect_direction_detections = 0;
+    }
+
 
     // Predict the position; keeping track of fractional angles. By our definition the time
     // unit is 1 per cycle; so the angle spanned by the rotor is exactly the angular speed.
@@ -430,11 +447,6 @@ void adc_interrupt_handler(){
     // Set the flag for immininent rotor correction, we need to set it over multiple cycles otherwise it might be missed.
     const bool rotor_direction_flip_imminent = incorrect_direction_detections >= 48;
 
-    // Flip the rotor if we have reached the threshold number of incorrect detections.
-    const bool rotor_direction_flip = incorrect_direction_detections >= 64;
-
-    // Reset the incorrect direction counter on flip.
-    incorrect_direction_detections = (not rotor_direction_flip) * incorrect_direction_detections;
 
     // Track how many times we think our rotor angle is correct.
     correct_angle_counter = clip_to(0, 64, correct_angle_counter + (emf_and_movement_fix and (incorrect_direction_detections == 0) ? +1 : -1));
@@ -452,9 +464,8 @@ void adc_interrupt_handler(){
         control_parameters_fixed_point
     );
 
-    // Adjust the angle prediction based on the EMF voltage. The EMF voltage must be have opposite sign to the
-    // the speed; if it doesn't then we must have fixed on the opposite side of the rotor; rotate 180 to correct it.
-    const int updated_angle = normalize_angle(predicted_angle + angle_error + rotor_direction_flip * half_circle);
+    // Calculate the new angle based on the angle adjustment.
+    const int updated_angle = normalize_angle(predicted_angle + angle_error);
 
 
     // Calculate the new speed based on the angle adjustment.
