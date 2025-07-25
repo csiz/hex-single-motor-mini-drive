@@ -260,7 +260,7 @@ d3.select(command_options_input).select("div label").style("width", "100em");
 
 const command_options = Generators.input(command_options_input);
 
-const command_pwm_slider = inputs_wide_range([0, +1], {value: 0.05, step: 0.001, label: "Command value:"});
+const command_pwm_slider = inputs_wide_range([0, 0.8], {value: 0.05, step: 0.001, label: "Command value:"});
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
