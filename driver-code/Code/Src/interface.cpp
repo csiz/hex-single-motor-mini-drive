@@ -48,7 +48,7 @@ static inline size_t write_readout_values(uint8_t * buffer, Readout const& reado
     offset += 2;
     write_int16(buffer + offset, readout.angular_speed);
     offset += 2;
-    write_uint16(buffer + offset, readout.instant_vcc_voltage);
+    write_uint16(buffer + offset, readout.vcc_voltage);
     offset += 2;
 
     return offset;
@@ -85,7 +85,7 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.temperature);
     offset += 2;
-    write_uint16(buffer + offset, readout.vcc_voltage);
+    write_uint16(buffer + offset, readout.debug_3);
     offset += 2;
     
     write_int16(buffer + offset, readout.cycle_start_tick);

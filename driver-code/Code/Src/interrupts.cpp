@@ -227,6 +227,8 @@ void adc_interrupt_handler(){
     // Do the data calculations
     // ------------------------
 
+    // Average the temperature readings.
+    const int temperature = round_div(instant_temperature * 1 + readout.temperature * 3, 4);
 
     // Average out the VCC voltage; it should be relatively stable so average to reduce our error.
     const int vcc_voltage = round_div(instant_vcc_voltage + readout.vcc_voltage * 3, 4);
@@ -586,9 +588,7 @@ void adc_interrupt_handler(){
     readout.v_readout_diff = v_readout_diff;
     readout.w_readout_diff = w_readout_diff;
     
-    readout.temperature = round_div(instant_temperature * 1 + readout.temperature * 15, 16);
-
-    readout.instant_vcc_voltage = instant_vcc_voltage;
+    readout.temperature = temperature;
     readout.vcc_voltage = vcc_voltage;
 
     readout.angle = updated_angle;

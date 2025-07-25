@@ -772,8 +772,7 @@ const plot_measured_voltage = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "instant_vcc_voltage", label: "VCC Voltage", color: colors.u},
-    {y: "vcc_voltage", label: "Avg VCC Voltage", color: colors.v},
+    {y: "vcc_voltage", label: "VCC Voltage", color: colors.v},
   ],
   curve,
 });

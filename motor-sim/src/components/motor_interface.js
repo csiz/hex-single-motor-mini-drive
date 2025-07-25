@@ -158,7 +158,7 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   offset += 2;
   const angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
-  const instant_vcc_voltage = calculate_voltage(data_view.getInt16(offset));
+  const vcc_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
 
 
@@ -189,9 +189,9 @@ function parse_readout(data_view, previous_readout, check_errors = true){
 
   const avg_pwm = (u_pwm + v_pwm + w_pwm) / 3;
 
-  const u_drive_voltage = (u_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
-  const v_drive_voltage = (v_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
-  const w_drive_voltage = (w_pwm - avg_pwm) * instant_vcc_voltage / pwm_base;
+  const u_drive_voltage = (u_pwm - avg_pwm) * vcc_voltage / pwm_base;
+  const v_drive_voltage = (v_pwm - avg_pwm) * vcc_voltage / pwm_base;
+  const w_drive_voltage = (w_pwm - avg_pwm) * vcc_voltage / pwm_base;
 
   const [drive_voltage_alpha, drive_voltage_beta] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
   const drive_voltage_angle = radians_to_degrees(Math.atan2(drive_voltage_beta, drive_voltage_alpha));
@@ -296,7 +296,7 @@ function parse_readout(data_view, previous_readout, check_errors = true){
     hall_w_as_angle,
     angle,
     angular_speed,
-    instant_vcc_voltage,
+    vcc_voltage,
     web_alpha_emf_voltage, web_beta_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 
@@ -354,7 +354,7 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const temperature = calculate_temperature(data_view.getUint16(offset));
   offset += 2;
-  const vcc_voltage = calculate_voltage(data_view.getUint16(offset));
+  const debug_3 = data_view.getInt16(offset);
   offset += 2;
   const cycle_start_tick = data_view.getInt16(offset);
   offset += 2;
@@ -404,7 +404,7 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   
 
-  const battery_current = total_power / vcc_voltage;
+  const battery_current = total_power / readout.vcc_voltage;
 
 
   const inductor_angle_offset = normalize_degrees(inductor_angle - readout.angle);
@@ -415,8 +415,7 @@ function parse_full_readout(data_view, previous_readout){
     tick_rate,
     adc_update_rate,
     temperature,
-    vcc_voltage,
-
+    
     cycle_start_tick,
     cycle_end_tick,
     

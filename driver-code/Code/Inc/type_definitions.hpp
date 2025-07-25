@@ -168,7 +168,7 @@ struct Readout{
     // Best estimate for the rotor magnetic angular speed.
     int16_t angular_speed;
     // Instantaneous VCC voltage readout (ADC value); from resistance divider.
-    int16_t instant_vcc_voltage;
+    int16_t vcc_voltage;
 };
 
 struct FullReadout : public Readout {
@@ -178,8 +178,6 @@ struct FullReadout : public Readout {
     uint16_t adc_update_rate;
     // Instantaneous temperature readout (ADC value); from the temperature sensor.
     uint16_t temperature;
-    // Average VCC voltage; smoothed out over some cycles.
-    uint16_t vcc_voltage;
 
     // PWM counter value at the start of the control update. Should occur 
     // immediately after the halfway point.
@@ -245,7 +243,8 @@ struct FullReadout : public Readout {
     int16_t emf_voltage_variance;
 
     int16_t debug_1;
-    int16_t debug_2;
+    int16_t debug_2;    
+    int16_t debug_3;
 };
 
 
