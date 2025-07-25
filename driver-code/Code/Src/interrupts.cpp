@@ -233,14 +233,11 @@ void adc_interrupt_handler(){
     // Average out the VCC voltage; it should be relatively stable so average to reduce our error.
     const int vcc_voltage = round_div(instant_vcc_voltage + readout.vcc_voltage * 3, 4);
 
-    // Calculate our outputs on the motor phases.
-    // If we managed to set the compare before the new cycle then it's the mid point; otherwise it's the previous outputs.
-    const auto motor_outputs = readout.cycle_end_tick < pwm_base ? 
-        previous_motor_outputs : 
-        mid_motor_outputs(previous_motor_outputs, driver_state.motor_outputs);
+    // Calculate our outputs on the motor phases. The outputs are set mid-cycle.
+    const auto motor_outputs = mid_motor_outputs(previous_motor_outputs, driver_state.motor_outputs);
 
     // Remember the outputs for the next cycle.
-    previous_motor_outputs = driver_state.motor_outputs;
+    previous_motor_outputs = motor_outputs;
 
     // Get calibrated currents.
     const auto [u_current, v_current, w_current] = ThreePhase{
@@ -251,12 +248,11 @@ void adc_interrupt_handler(){
 
 
     // Get calibrated current divergence (the time unit is defined 1 per cycle).
+    const int u_current_diff = ((u_current - readout.u_current) + readout.u_current_diff) / 2;
+    const int v_current_diff = ((v_current - readout.v_current) + readout.v_current_diff) / 2;
+    const int w_current_diff = ((w_current - readout.w_current) + readout.w_current_diff) / 2;
 
-    const int u_current_diff = u_current - readout.u_current;
-    const int v_current_diff = v_current - readout.v_current;
-    const int w_current_diff = w_current - readout.w_current;
-    
-    
+
     // Calibrated conversion factor between current divergence and phase inductance voltage.
     const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
     
