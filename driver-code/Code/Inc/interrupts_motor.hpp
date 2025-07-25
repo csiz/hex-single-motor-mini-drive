@@ -179,13 +179,9 @@ static inline MotorOutputs update_motor_smooth(
             control_parameters_fixed_point
         );
 
-        // Speed should be the max between the probing speed and current rotor speed. We always want
-        // to probe at some minimum speed, but also want to keep up with the rotor in case it gets going.
-        driver_state.angular_speed = active_pwm_direction * max(
-            control_parameters.probing_angular_speed,
-            // Use the speed value in the direction of movement; negative values will be handled by the max.
-            active_pwm_direction * readout.angular_speed
-        );
+
+        // Use the probing speed.
+        driver_state.angular_speed = active_pwm_direction * control_parameters.probing_angular_speed;
 
         return update_motor_at_angle(driver_state);
     }
