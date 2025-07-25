@@ -41,8 +41,8 @@ export async function run_current_calibration(motor_controller){
   const settle_timeout = Math.floor((settle_time + 300) * cycles_per_millisecond);
   const settle_strength = Math.floor(pwm_base * 2 / 10);
 
-  const drive_options = {command_timeout: settle_timeout, command_pwm: settle_strength};
-  const test_options = {command_timeout: 0, command_pwm: 0};
+  const drive_options = {command_timeout: settle_timeout, command_value: settle_strength};
+  const test_options = {command_timeout: 0, command_value: 0};
 
   console.info("Current calibration starting");
 
