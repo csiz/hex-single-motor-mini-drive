@@ -226,6 +226,10 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.probing_max_pwm);
     offset += 2;
+    write_int16(buffer + offset, control_parameters.emf_angle_correction_variance_threshold);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.spare);
+    offset += 2;
     
     write_message_tail(buffer, offset);
 
@@ -436,6 +440,10 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     control_parameters.probing_angular_speed = read_int16(data + offset);
     offset += 2;
     control_parameters.probing_max_pwm = read_int16(data + offset);
+    offset += 2;
+    control_parameters.emf_angle_correction_variance_threshold = read_int16(data + offset);
+    offset += 2;
+    control_parameters.spare = read_int16(data + offset);
     offset += 2;
 
     if (offset + tail_size != control_parameters_size) error();

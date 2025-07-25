@@ -351,6 +351,8 @@ const ControlParameters default_control_parameters = {
     .speed_control_ki = 0,
     .probing_angular_speed = speed_fixed_point,
     .probing_max_pwm = pwm_max_hold,
+    .emf_angle_correction_variance_threshold = square(15 * angle_base / 360),
+    .spare = 4,
 };
 
 

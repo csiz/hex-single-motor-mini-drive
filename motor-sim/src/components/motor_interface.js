@@ -84,7 +84,7 @@ const basic_command_size = 16;
 const readout_size = 36;
 const full_readout_size = 84;
 const current_calibration_size = 16;
-const control_parameters_size = 40;
+const control_parameters_size = 44;
 const unit_test_size = 256;
 
 export function get_hall_sector({hall_u, hall_v, hall_w}){
@@ -536,6 +536,10 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const probing_max_pwm = data_view.getInt16(offset);
   offset += 2;
+  const emf_angle_correction_variance_threshold = data_view.getInt16(offset);
+  offset += 2;
+  const spare = data_view.getInt16(offset);
+  offset += 2;
 
   return {
     rotor_angle_ki,
@@ -554,6 +558,8 @@ function parse_control_parameters(data_view) {
     speed_control_ki,
     probing_angular_speed,
     probing_max_pwm,
+    emf_angle_correction_variance_threshold,
+    spare,
   };
 }
 
@@ -663,6 +669,10 @@ function serialise_control_parameters(control_parameters) {
   view.setInt16(offset, control_parameters.probing_angular_speed);
   offset += 2;
   view.setInt16(offset, control_parameters.probing_max_pwm);
+  offset += 2;
+  view.setInt16(offset, control_parameters.emf_angle_correction_variance_threshold);
+  offset += 2;
+  view.setInt16(offset, control_parameters.spare);
   offset += 2;
 
   serialise_message_tail(buffer, offset);

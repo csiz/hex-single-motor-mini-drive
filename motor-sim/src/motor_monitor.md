@@ -1266,6 +1266,8 @@ const control_parameters_input = Object.fromEntries(
     ["speed_control_ki", "Speed Control KI"],
     ["probing_angular_speed", "Probing Angular Speed"],
     ["probing_max_pwm", "Probing Max PWM"],
+    ["emf_angle_correction_variance_threshold", "EMF Angle Correction Variance Threshold"],
+    ["spare", "Spare"],
   ].map(([key, label]) => [
     key, 
     Inputs.number([], {

@@ -314,4 +314,10 @@ struct ControlParameters {
 
     // Maximum probing PWM value.
     int16_t probing_max_pwm;
+
+    // Maximum EMF angle correction variance when it's too noisy to update the angle.
+    int16_t emf_angle_correction_variance_threshold;
+
+    // Spare
+    int16_t spare;
 };
