@@ -175,6 +175,46 @@ static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
     };
 }
 
+static inline ThreePhase operator - (ThreePhase const& a, ThreePhase const& b) {
+    return ThreePhase {
+        std::get<0>(a) - std::get<0>(b),
+        std::get<1>(a) - std::get<1>(b),
+        std::get<2>(a) - std::get<2>(b)
+    };
+}
+
+static inline ThreePhase operator + (ThreePhase const& a, ThreePhase const& b) {
+    return ThreePhase {
+        std::get<0>(a) + std::get<0>(b),
+        std::get<1>(a) + std::get<1>(b),
+        std::get<2>(a) + std::get<2>(b)
+    };
+}
+
+static inline ThreePhase operator / (ThreePhase const& a, int b) {
+    return ThreePhase {
+        std::get<0>(a) / b,
+        std::get<1>(a) / b,
+        std::get<2>(a) / b
+    };
+}
+
+static inline ThreePhase operator * (ThreePhase const& a, int b) {
+    return ThreePhase {
+        std::get<0>(a) * b,
+        std::get<1>(a) * b,
+        std::get<2>(a) * b
+    };
+}
+
+static inline int dot(ThreePhase const& a, ThreePhase const& b) {
+    return (
+        std::get<0>(a) * std::get<0>(b) +
+        std::get<1>(a) * std::get<1>(b) +
+        std::get<2>(a) * std::get<2>(b)
+    );
+}
+
 
 // Interrupt handlers
 // ------------------
@@ -240,37 +280,38 @@ void adc_interrupt_handler(){
     previous_motor_outputs = motor_outputs;
 
     // Get calibrated currents.
-    const auto [u_current, v_current, w_current] = ThreePhase{
+    
+    const ThreePhase currents = ThreePhase{
         u_readout * current_calibration.u_factor / current_calibration_fixed_point,
         v_readout * current_calibration.v_factor / current_calibration_fixed_point,
         w_readout * current_calibration.w_factor / current_calibration_fixed_point
     };
 
+    const ThreePhase previous_currents = ThreePhase{
+        readout.u_current, readout.v_current, readout.w_current
+    };
 
-    // Get calibrated current divergence (the time unit is defined 1 per cycle).
-    const int u_current_diff = ((u_current - readout.u_current) + readout.u_current_diff) / 2;
-    const int v_current_diff = ((v_current - readout.v_current) + readout.v_current_diff) / 2;
-    const int w_current_diff = ((w_current - readout.w_current) + readout.w_current_diff) / 2;
+    const ThreePhase previous_currents_diff = ThreePhase{
+        readout.u_current_diff,
+        readout.v_current_diff,
+        readout.w_current_diff
+    };
+
+    // Get calibrated current divergence (the time unit is defined 1 per cycle).    
+    const ThreePhase currents_diff = ((currents - previous_currents) + previous_currents_diff) / 2;
 
 
     // Calibrated conversion factor between current divergence and phase inductance voltage.
     const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
     
     // Calculate the voltage drop across the coil inductance.
-    
-    const int u_inductor_voltage = u_current_diff * diff_to_voltage / current_fixed_point;
-    const int v_inductor_voltage = v_current_diff * diff_to_voltage / current_fixed_point;
-    const int w_inductor_voltage = w_current_diff * diff_to_voltage / current_fixed_point;
-    
+    const ThreePhase inductor_voltages = currents_diff * diff_to_voltage / current_fixed_point;
+
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    
-    const int u_resistive_voltage = u_current * phase_current_to_voltage / current_fixed_point;
-    const int v_resistive_voltage = v_current * phase_current_to_voltage / current_fixed_point;
-    const int w_resistive_voltage = w_current * phase_current_to_voltage / current_fixed_point;
-    
+    const ThreePhase resistive_voltages = currents * phase_current_to_voltage / current_fixed_point;
+
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage.
-    
-    const auto [u_drive_voltage, v_drive_voltage, w_drive_voltage] = adjust_to_sum_zero(ThreePhase{
+    const ThreePhase drive_voltages = adjust_to_sum_zero(ThreePhase{
         round_div(motor_outputs.u_duty * vcc_voltage, pwm_base),
         round_div(motor_outputs.v_duty * vcc_voltage, pwm_base),
         round_div(motor_outputs.w_duty * vcc_voltage, pwm_base)
@@ -280,10 +321,7 @@ void adc_interrupt_handler(){
     // 
     // Calculate the EMF voltage as the remainder after subtracting the electric circuit voltages.
     // By Kirchoffs laws the total voltage must sum to 0.
-    
-    const int u_emf_voltage = -(u_drive_voltage - u_resistive_voltage - u_inductor_voltage);
-    const int v_emf_voltage = -(v_drive_voltage - v_resistive_voltage - v_inductor_voltage);
-    const int w_emf_voltage = -(w_drive_voltage - w_resistive_voltage - w_inductor_voltage);
+    const ThreePhase emf_voltages = inductor_voltages + resistive_voltages - drive_voltages;
 
     // Position Update
     // ---------------
@@ -316,6 +354,10 @@ void adc_interrupt_handler(){
     // doesn't change value. Hopefully the compiler makes the % operation free considering it follows the division above.
     angle_residual = angle_hires_diff % speed_fixed_point;
 
+
+    // Switching to DQ0 Frame
+    // ----------------------
+
     // Calculate the park transformed currents and voltages
     // 
     // Use gradient descent to estimate the inductor current angle. We don't have compute to
@@ -331,38 +373,26 @@ void adc_interrupt_handler(){
     
     // First alias the trig functions based on the predicted rotor angle.
 
-    const int u_cos = get_cos(predicted_angle);
-    const int v_cos = get_cos(predicted_angle - third_circle);
-    const int w_cos = get_cos(predicted_angle - two_thirds_circle);
-    const int u_neg_sin = -get_sin(predicted_angle);
-    const int v_neg_sin = -get_sin(predicted_angle - third_circle);
-    const int w_neg_sin = -get_sin(predicted_angle - two_thirds_circle);
+    const ThreePhase cos = ThreePhase{
+        get_cos(predicted_angle),
+        get_cos(predicted_angle - third_circle),
+        get_cos(predicted_angle - two_thirds_circle)
+    };
+    const ThreePhase neg_sin = ThreePhase{
+        -get_sin(predicted_angle),
+        -get_sin(predicted_angle - third_circle),
+        -get_sin(predicted_angle - two_thirds_circle)
+    };
 
     // Park transform the currents and voltages.
 
-    const int alpha_current = (
-        u_current * u_cos +
-        v_current * v_cos +
-        w_current * w_cos
-    ) / angle_base;
+    const int alpha_current = dot(currents, cos) / angle_base;
 
-    const int beta_current = (
-        u_current * u_neg_sin +
-        v_current * v_neg_sin +
-        w_current * w_neg_sin
-    ) / angle_base;
+    const int beta_current = dot(currents, neg_sin) / angle_base;
 
-    const int alpha_emf_voltage = (
-        u_emf_voltage * u_cos +
-        v_emf_voltage * v_cos +
-        w_emf_voltage * w_cos
-    ) / angle_base;
+    const int alpha_emf_voltage = dot(emf_voltages, cos) / angle_base;
 
-    const int beta_emf_voltage = (
-        u_emf_voltage * u_neg_sin +
-        v_emf_voltage * v_neg_sin +
-        w_emf_voltage * w_neg_sin
-    ) / angle_base;
+    const int beta_emf_voltage = dot(emf_voltages, neg_sin) / angle_base;
 
 
     // TODO: slowly vary the output angle speed so we don't jerk the motor too hard. Maybe also push the probing speed towards
@@ -499,18 +529,10 @@ void adc_interrupt_handler(){
 
 
     // Calculate the power values using the phase currents and voltages.
-    
-    const int resistive_power = (
-        u_current * u_resistive_voltage + 
-        v_current * v_resistive_voltage + 
-        w_current * w_resistive_voltage
-    ) / voltage_current_div_power_fixed_point;
 
-    const int inductive_power = (
-        u_current * u_inductor_voltage + 
-        v_current * v_inductor_voltage + 
-        w_current * w_inductor_voltage
-    ) / voltage_current_div_power_fixed_point;
+    const int resistive_power = dot(currents, resistive_voltages) / voltage_current_div_power_fixed_point;
+
+    const int inductive_power = dot(currents, inductor_voltages) / voltage_current_div_power_fixed_point;
 
     // Nope, the phase currents lie! We should assume the motor is behaving rationally and
     // smoothly while our measurements are noisy and lagged at high speed. Theoretically
@@ -580,14 +602,14 @@ void adc_interrupt_handler(){
 
     readout.ref_readout = ref_readout;
 
-    readout.u_current = u_current;
-    readout.v_current = v_current;
-    readout.w_current = w_current;
+    readout.u_current = std::get<0>(currents);
+    readout.v_current = std::get<1>(currents);
+    readout.w_current = std::get<2>(currents);
 
-    readout.u_current_diff = u_current_diff;
-    readout.v_current_diff = v_current_diff;
-    readout.w_current_diff = w_current_diff;
-    
+    readout.u_current_diff = std::get<0>(currents_diff);
+    readout.v_current_diff = std::get<1>(currents_diff);
+    readout.w_current_diff = std::get<2>(currents_diff);
+
     readout.temperature = temperature;
     readout.vcc_voltage = vcc_voltage;
 
