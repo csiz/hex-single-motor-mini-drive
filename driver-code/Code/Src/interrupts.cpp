@@ -53,6 +53,12 @@ int correct_angle_counter = 0;
 // Residual for the angle integration; needed because the speed is higher resolution than the angle.
 int angle_residual = 0;
 
+// Keep the active output as ThreePhase to avoid a conversion.
+ThreePhase motor_outputs = {0, 0, 0};
+
+// Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
+ThreePhase previous_motor_outputs = {0, 0, 0};
+
 
 // Motor driver state
 // ------------------
@@ -75,8 +81,6 @@ volatile bool new_pending_state = false;
 // Settings for the new driver state.
 DriverState pending_state = null_driver_state;
 
-// Keep a record of the previous output; the output switches mid cycle so we need to account for that.
-MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
 
 // Interrupt Data Interface
@@ -145,23 +149,22 @@ void set_angle(int16_t angle) {
 // Helper funcs
 // ------------
 
-// Combine the motor duty cycles into a single 32-bit value; because it barely fits.
-static inline uint32_t encode_pwm_commands(MotorOutputs const & outputs){
-    return (
-        outputs.u_duty * pwm_base * pwm_base +
-        outputs.v_duty * pwm_base +
-        outputs.w_duty
-    );
+
+static inline ThreePhase get_duties(MotorOutputs const & outputs) {
+    return ThreePhase{
+        static_cast<int>(outputs.u_duty),
+        static_cast<int>(outputs.v_duty),
+        static_cast<int>(outputs.w_duty)
+    };
 }
 
-// Get the average between two motor outputs.
-static inline MotorOutputs mid_motor_outputs(MotorOutputs const & a, MotorOutputs const & b){
-    return MotorOutputs{
-        .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>((a.u_duty + b.u_duty) / 2),
-        .v_duty = static_cast<uint16_t>((a.v_duty + b.v_duty) / 2),
-        .w_duty = static_cast<uint16_t>((a.w_duty + b.w_duty) / 2)
-    };
+// Combine the motor duty cycles into a single 32-bit value; because it barely fits.
+static inline uint32_t encode_pwm_commands(ThreePhase const & outputs){
+    return (
+        std::get<0>(outputs) * pwm_base * pwm_base +
+        std::get<1>(outputs) * pwm_base +
+        std::get<2>(outputs)
+    );
 }
 
 // Adjust the three-phase values so that their sum is zero.
@@ -273,22 +276,22 @@ void adc_interrupt_handler(){
     // Average out the VCC voltage; it should be relatively stable so average to reduce our error.
     const int vcc_voltage = round_div(instant_vcc_voltage + readout.vcc_voltage * 3, 4);
 
-    // Calculate our outputs on the motor phases. The outputs are set mid-cycle.
-    const auto motor_outputs = mid_motor_outputs(previous_motor_outputs, driver_state.motor_outputs);
+    // Calculate our outputs on the motor phases. The outputs are delayed by one cycle.
+    motor_outputs = (previous_motor_outputs + motor_outputs) / 2;
 
-    // Remember the outputs for the next cycle.
-    previous_motor_outputs = motor_outputs;
+    // Store the current motor outputs.
+    previous_motor_outputs = get_duties(driver_state.motor_outputs);
 
-    // Get calibrated currents.
-    
+    // Extract the previous currents as ThreePhase.
+    const ThreePhase previous_currents = ThreePhase{
+        readout.u_current, readout.v_current, readout.w_current
+    };
+
+    // Calculate calibrated currents.
     const ThreePhase currents = ThreePhase{
         u_readout * current_calibration.u_factor / current_calibration_fixed_point,
         v_readout * current_calibration.v_factor / current_calibration_fixed_point,
         w_readout * current_calibration.w_factor / current_calibration_fixed_point
-    };
-
-    const ThreePhase previous_currents = ThreePhase{
-        readout.u_current, readout.v_current, readout.w_current
     };
 
     const ThreePhase previous_currents_diff = ThreePhase{
@@ -311,11 +314,7 @@ void adc_interrupt_handler(){
     const ThreePhase resistive_voltages = currents * phase_current_to_voltage / current_fixed_point;
 
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage.
-    const ThreePhase drive_voltages = adjust_to_sum_zero(ThreePhase{
-        round_div(motor_outputs.u_duty * vcc_voltage, pwm_base),
-        round_div(motor_outputs.v_duty * vcc_voltage, pwm_base),
-        round_div(motor_outputs.w_duty * vcc_voltage, pwm_base)
-    });
+    const ThreePhase drive_voltages = adjust_to_sum_zero(motor_outputs) * vcc_voltage / pwm_base;
     
     // Infer the back EMF voltages for each phase.
     // 
