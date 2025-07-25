@@ -166,8 +166,8 @@ static inline MotorOutputs update_motor_smooth(
         // Update the driving angle.
         driver_state.active_angle = normalize_angle(driver_state.active_angle + active_angle_error);
 
-        // Match the angular speed to the rotor speed.
-        driver_state.angular_speed = readout.angular_speed;
+        // Push our speed towards the target angle.
+        driver_state.angular_speed += active_angle_error * speed_fixed_point / 2;
 
         return update_motor_at_angle(driver_state);
     } else {
