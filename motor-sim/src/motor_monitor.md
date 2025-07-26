@@ -915,6 +915,7 @@ const plot_pwm_settings = plot_lines({
     {y: "u_pwm", label: "PWM U", color: colors.u},
     {y: "v_pwm", label: "PWM V", color: colors.v},
     {y: "w_pwm", label: "PWM W", color: colors.w},
+    {y: "live_max_pwm", label: "Live Max PWM", color: colors_categories[0]},
   ],
   curve,
 });

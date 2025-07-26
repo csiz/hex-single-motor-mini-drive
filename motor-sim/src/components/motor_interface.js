@@ -355,7 +355,7 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const temperature = calculate_temperature(data_view.getUint16(offset));
   offset += 2;
-  const debug_3 = data_view.getInt16(offset);
+  const live_max_pwm = data_view.getInt16(offset);
   offset += 2;
   const cycle_start_tick = data_view.getInt16(offset);
   offset += 2;
@@ -410,6 +410,7 @@ function parse_full_readout(data_view, previous_readout){
     tick_rate,
     adc_update_rate,
     temperature,
+    live_max_pwm,
     
     cycle_start_tick,
     cycle_end_tick,
@@ -428,7 +429,6 @@ function parse_full_readout(data_view, previous_readout){
     emf_angle_error_stdev,
     debug_1,
     debug_2,
-    debug_3,
     motor_constant,
     
     inductor_angle,

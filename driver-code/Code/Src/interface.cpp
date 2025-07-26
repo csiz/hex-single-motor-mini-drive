@@ -89,7 +89,7 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_uint16(buffer + offset, readout.temperature);
     offset += 2;
-    write_uint16(buffer + offset, readout.debug_3);
+    write_uint16(buffer + offset, readout.live_max_pwm);
     offset += 2;
     
     write_int16(buffer + offset, readout.cycle_start_tick);

@@ -185,6 +185,8 @@ struct FullReadout : public Readout {
     uint16_t adc_update_rate;
     // Instantaneous temperature readout (ADC value); from the temperature sensor.
     uint16_t temperature;
+    // Current maximum PWM allowed by the driver.
+    uint16_t live_max_pwm;
 
     // PWM counter value at the start of the control update. Should occur 
     // immediately after the halfway point.
@@ -245,8 +247,7 @@ struct FullReadout : public Readout {
     int16_t emf_angle_error_variance;
 
     int16_t debug_1;
-    int16_t debug_2;    
-    int16_t debug_3;
+    int16_t debug_2;
 };
 
 

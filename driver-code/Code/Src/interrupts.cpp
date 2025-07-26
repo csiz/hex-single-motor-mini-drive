@@ -23,6 +23,7 @@
 
 // Electrical and position state
 FullReadout readout = {
+    .live_max_pwm = pwm_max,
     .emf_angle_error_variance = max_16bit,
 };
 
@@ -216,6 +217,12 @@ void adc_interrupt_handler(){
 
     // Average out the VCC voltage; it should be relatively stable so average to reduce our error.
     const int vcc_voltage = (instant_vcc_voltage + readout.vcc_voltage * 3) / 4;
+
+    // Reduce the maximum output PWM to keep the MOSFET drivers in their operating voltage range.
+    const uint16_t live_max_pwm = clip_to(
+        0, pwm_max,
+        readout.live_max_pwm + (vcc_voltage - vcc_mosfet_driver_undervoltage) / vcc_limiting_divisor
+    );
 
     // Calculate our outputs on the motor phases. The outputs are delayed by one cycle.
     motor_outputs = (previous_motor_outputs + motor_outputs) / 2;
@@ -529,6 +536,7 @@ void adc_interrupt_handler(){
 
 
     readout.temperature = temperature;
+    readout.live_max_pwm = live_max_pwm;
 
     readout.alpha_current = alpha_current;
     readout.beta_current = beta_current;
@@ -552,7 +560,7 @@ void adc_interrupt_handler(){
     
     readout.debug_1 = driver_state.lead_angle_control;
     readout.debug_2 = 0;
-    readout.debug_3 = 0;
+
     
 
     

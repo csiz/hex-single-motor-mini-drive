@@ -52,7 +52,10 @@ static inline MotorOutputs update_motor_6_sector(
     const uint16_t voltage_phase_v = motor_sector_driving_table[hall_sector][1];
     const uint16_t voltage_phase_w = motor_sector_driving_table[hall_sector][2];
 
-    const uint16_t abs_pwm = faster_abs(driver_state.active_pwm);
+    const uint16_t abs_pwm = min(
+        readout.live_max_pwm,
+        faster_abs(driver_state.active_pwm)
+    );
 
     return MotorOutputs{
         .enable_flags = enable_flags_all,
@@ -63,12 +66,17 @@ static inline MotorOutputs update_motor_6_sector(
 }
 
 // Get the motor outputs at the specified active_pwm and active_angle.
-static inline MotorOutputs update_motor_at_angle(DriverState const& driver_state) {
+static inline MotorOutputs update_motor_at_angle(
+    DriverState & driver_state,
+    FullReadout const& readout
+) {
     // The PWM counter value must be positive, we use the sign to determine the direction.
-    const int abs_pwm = faster_abs(driver_state.active_pwm);
-    
+    const int abs_pwm = min(readout.live_max_pwm, faster_abs(driver_state.active_pwm));
+
     // Use the active angle or flip it depending on the sign of the PWM.
     const int angle = driver_state.active_angle + (driver_state.active_pwm < 0 ? half_circle : 0);
+
+    driver_state.active_pwm = driver_state.active_pwm < 0 ? -abs_pwm : abs_pwm;
 
     // Get the voltage for the three phases from the waveform table.
 
@@ -95,7 +103,7 @@ static inline MotorOutputs update_motor_periodic(
 
     driver_state.angle_residual = active_angle_hires_diff % speed_fixed_point;
 
-    return update_motor_at_angle(driver_state);
+    return update_motor_at_angle(driver_state, readout);
 }
 
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
@@ -110,7 +118,7 @@ static inline MotorOutputs update_motor_smooth(
 
     const int16_t target_pwm = (
         angle_fix ? 
-        clip_to(-pwm_max, +pwm_max, driver_state.target_pwm) :
+        driver_state.target_pwm :
         clip_to(-control_parameters.probing_max_pwm, +control_parameters.probing_max_pwm, driver_state.target_pwm)
     );
 
@@ -169,7 +177,7 @@ static inline MotorOutputs update_motor_smooth(
         // Push our speed towards the target angle.
         driver_state.angular_speed += active_angle_error * speed_fixed_point / 2;
 
-        return update_motor_at_angle(driver_state);
+        return update_motor_at_angle(driver_state, readout);
     } else {
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
 
@@ -183,7 +191,7 @@ static inline MotorOutputs update_motor_smooth(
         // Use the probing speed.
         driver_state.angular_speed = active_pwm_direction * control_parameters.probing_angular_speed;
 
-        return update_motor_at_angle(driver_state);
+        return update_motor_at_angle(driver_state, readout);
     }
 }
 

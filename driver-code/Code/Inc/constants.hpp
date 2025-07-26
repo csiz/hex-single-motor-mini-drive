@@ -144,6 +144,10 @@ const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_fl
 // Conversion factor between current and phase resistance voltage.
 const int phase_current_to_voltage = round_div(phase_resistance * voltage_fixed_point, resistance_fixed_point);
 
+const int vcc_limiting_divisor = 16;
+
+// The drivers need over 8V to power the MOSFETs.
+const int vcc_mosfet_driver_undervoltage = voltage_fixed_point * 8 + vcc_limiting_divisor;
 
 // Power conversion: 1 power unit = 1/224 W.
 const int power_fixed_point = 4 * voltage_fixed_point;
@@ -158,6 +162,8 @@ const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_poin
 const int voltage_current_div_power_fixed_point = current_fixed_point / power_div_voltage_fixed_point;
 
 const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 / 2;
+
+
 
 // Timing and PWM constants
 // ------------------------
