@@ -260,7 +260,7 @@ d3.select(command_options_input).select("div label").style("width", "100em");
 
 const command_options = Generators.input(command_options_input);
 
-const command_pwm_slider = inputs_wide_range([0, 0.8], {value: 0.05, step: 0.001, label: "Command value:"});
+const command_pwm_slider = inputs_wide_range([0, 1.0], {value: 0.05, step: 0.001, label: "Command value:"});
 
 const command_pwm_fraction = Generators.input(command_pwm_slider);
 
@@ -725,10 +725,12 @@ const plot_electric_position = plot_lines({
   y_domain: [-180, 180],
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
-    {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
     {y: (d) => d.current_detected ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
-    {y: (d) => d.emf_detected ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
+    {
+      y: (d) => d.emf_detected ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle,
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
+    },
   ],
   curve,
 });
@@ -742,7 +744,12 @@ const plot_electric_offsets = plot_lines({
   y_label: "Angle (degrees)",
   channels: [
     {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
-    {y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
+    {
+      y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle,
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
+    },
+    {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
+    {y: "emf_angle_error_stdev", label: "EMF Angle Error (stdev)", color: d3.color(colors.voltage_angle).darker(1)},
   ],
   curve,
 });
@@ -882,11 +889,8 @@ const plot_dq0_voltages = plot_lines({
   channels: [
     {y: "beta_emf_voltage", label: "EMF Voltage Beta", color: colors.beta_current},
     {y: "alpha_emf_voltage", label: "EMF Voltage Alpha", color: colors.alpha_current},
-    {
-      y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude,
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_voltage_stdev}),
-    },
-    {y: "emf_voltage_stdev", label: "EMF Voltage Stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
+    {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude},
+    {y: "emf_angle_error_stdev", label: "EMF Voltage Stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
     {y: "web_alpha_emf_voltage", label: "Voltage Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_emf_voltage", label: "Voltage Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
@@ -1266,7 +1270,7 @@ const control_parameters_input = Object.fromEntries(
     ["speed_control_ki", "Speed Control KI"],
     ["probing_angular_speed", "Probing Angular Speed"],
     ["probing_max_pwm", "Probing Max PWM"],
-    ["emf_angle_correction_variance_threshold", "EMF Angle Correction Variance Threshold"],
+    ["emf_angle_error_variance_threshold", "EMF Angle Correction Variance Threshold"],
     ["spare", "Spare"],
   ].map(([key, label]) => [
     key, 

@@ -242,7 +242,7 @@ struct FullReadout : public Readout {
     // for the fixed reference frame current.
     int16_t phase_inductance;
 
-    int16_t emf_voltage_variance;
+    int16_t emf_angle_error_variance;
 
     int16_t debug_1;
     int16_t debug_2;    
@@ -318,7 +318,7 @@ struct ControlParameters {
     int16_t probing_max_pwm;
 
     // Maximum EMF angle correction variance when it's too noisy to update the angle.
-    int16_t emf_angle_correction_variance_threshold;
+    int16_t emf_angle_error_variance_threshold;
 
     // Spare
     int16_t spare;

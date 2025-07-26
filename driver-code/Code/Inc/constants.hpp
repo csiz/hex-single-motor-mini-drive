@@ -338,12 +338,12 @@ const ControlParameters default_control_parameters = {
     .rotor_angle_ki = 1024,
     .rotor_angular_speed_ki = 64,
     .rotor_acceleration_ki = 32,
-    .motor_constant_ki = 128,
+    .motor_constant_ki = 32,
     .resistance_ki = 0,
     .inductance_ki = 0,
     .max_pwm_change = 8,
     .max_angle_change = 8,
-    .min_emf_voltage = voltage_fixed_point,
+    .min_emf_voltage = voltage_fixed_point * 150 / 1000,
     .min_emf_speed = static_cast<int16_t>(8.3 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second),
     .lead_angle_control_ki = 8,
     .torque_control_ki = 0,
@@ -351,7 +351,7 @@ const ControlParameters default_control_parameters = {
     .speed_control_ki = 0,
     .probing_angular_speed = speed_fixed_point,
     .probing_max_pwm = pwm_max_hold,
-    .emf_angle_correction_variance_threshold = square(15 * angle_base / 360),
+    .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .spare = 4,
 };
 

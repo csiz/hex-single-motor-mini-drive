@@ -391,7 +391,7 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const phase_inductance = data_view.getInt16(offset);
   offset += 2;
-  const emf_voltage_stdev = calculate_voltage(Math.sqrt(data_view.getInt16(offset)));
+  const emf_angle_error_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
   const debug_1 = data_view.getInt16(offset);
   offset += 2;
@@ -425,7 +425,7 @@ function parse_full_readout(data_view, previous_readout){
     emf_power,
     inductive_power,
     
-    emf_voltage_stdev,
+    emf_angle_error_stdev,
     debug_1,
     debug_2,
     debug_3,
@@ -530,7 +530,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const probing_max_pwm = data_view.getInt16(offset);
   offset += 2;
-  const emf_angle_correction_variance_threshold = data_view.getInt16(offset);
+  const emf_angle_error_variance_threshold = data_view.getInt16(offset);
   offset += 2;
   const spare = data_view.getInt16(offset);
   offset += 2;
@@ -552,7 +552,7 @@ function parse_control_parameters(data_view) {
     speed_control_ki,
     probing_angular_speed,
     probing_max_pwm,
-    emf_angle_correction_variance_threshold,
+    emf_angle_error_variance_threshold,
     spare,
   };
 }
@@ -664,7 +664,7 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.probing_max_pwm);
   offset += 2;
-  view.setInt16(offset, control_parameters.emf_angle_correction_variance_threshold);
+  view.setInt16(offset, control_parameters.emf_angle_error_variance_threshold);
   offset += 2;
   view.setInt16(offset, control_parameters.spare);
   offset += 2;

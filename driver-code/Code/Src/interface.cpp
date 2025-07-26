@@ -127,7 +127,7 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.phase_inductance);
     offset += 2;
-    write_int16(buffer + offset, readout.emf_voltage_variance);
+    write_int16(buffer + offset, readout.emf_angle_error_variance);
     offset += 2;
     write_int16(buffer + offset, readout.debug_1);
     offset += 2;
@@ -224,7 +224,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.probing_max_pwm);
     offset += 2;
-    write_int16(buffer + offset, control_parameters.emf_angle_correction_variance_threshold);
+    write_int16(buffer + offset, control_parameters.emf_angle_error_variance_threshold);
     offset += 2;
     write_int16(buffer + offset, control_parameters.spare);
     offset += 2;
@@ -439,7 +439,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.probing_max_pwm = read_int16(data + offset);
     offset += 2;
-    control_parameters.emf_angle_correction_variance_threshold = read_int16(data + offset);
+    control_parameters.emf_angle_error_variance_threshold = read_int16(data + offset);
     offset += 2;
     control_parameters.spare = read_int16(data + offset);
     offset += 2;
