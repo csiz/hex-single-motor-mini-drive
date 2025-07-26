@@ -46,9 +46,13 @@ static inline size_t write_readout_values(uint8_t * buffer, Readout const& reado
     offset += 2;
     write_uint16(buffer + offset, readout.angle);
     offset += 2;
+    write_int16(buffer + offset, readout.angle_adjustment);
+    offset += 2;
     write_int16(buffer + offset, readout.angular_speed);
     offset += 2;
     write_uint16(buffer + offset, readout.vcc_voltage);
+    offset += 2;
+    write_int16(buffer + offset, readout.emf_voltage_magnitude);
     offset += 2;
 
     return offset;
@@ -117,13 +121,7 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.inductor_angle);
     offset += 2;
-    write_int16(buffer + offset, readout.emf_voltage_magnitude);
-    offset += 2;
     write_int16(buffer + offset, readout.rotor_acceleration);
-    offset += 2;
-
-    
-    write_int16(buffer + offset, readout.angle_error);
     offset += 2;
     write_int16(buffer + offset, readout.phase_resistance);
     offset += 2;

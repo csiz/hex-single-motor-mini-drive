@@ -101,7 +101,7 @@ export function parse_state_flags(state_flags){
 export const pwm_base = 1536; // 0x0600
 export const pwm_period = 2 * pwm_base;
 export const max_timeout = 0xFFFF;
-export const history_size = 360;
+export const history_size = 336;
 export const readout_base = 0x10000;
 
 export const voltage_reference = 3.3; // V

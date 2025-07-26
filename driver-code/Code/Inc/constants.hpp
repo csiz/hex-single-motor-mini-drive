@@ -7,7 +7,7 @@
 #include "math_utils.hpp"
 
 // Data storage available.
-const size_t history_size = 360;
+const size_t history_size = 336;
 
 
 // Unit definitions

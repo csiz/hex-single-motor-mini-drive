@@ -11,6 +11,7 @@ using ThreePhase = std::tuple<int, int, int>;
 // Function signature for unit tests; the unit test prints text to the buffer.
 using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 
+
 // Driver State
 // ------------
 
@@ -165,10 +166,16 @@ struct Readout{
     int16_t w_current_diff;
     // Best estimate for the rotor magnetic angle.
     int16_t angle;
+    // Error of the angle measured from EMF to the rotor angle prediction.
+    int16_t angle_adjustment;
     // Best estimate for the rotor magnetic angular speed.
     int16_t angular_speed;
     // Instantaneous VCC voltage readout (ADC value); from resistance divider.
     int16_t vcc_voltage;
+    // EMF voltage magnitude. The EMF is always along the beta direction, but we can have errors in the
+    // measurements and the rotor position and thus we see alpha component as well. We can rotate the
+    // EMF voltage vector fully to the beta direction and get closer to the actual EMF voltage magnitude.
+    int16_t emf_voltage_magnitude;
 };
 
 struct FullReadout : public Readout {
@@ -219,17 +226,12 @@ struct FullReadout : public Readout {
     // All of the above statements are equivalent; because they relate the relative position
     // and velocity between the inductor coil magnetic field and the rotor magnetic field.
     int16_t motor_constant;
+
     // The current angle.
     int16_t inductor_angle;
-    // EMF voltage magnitude. The EMF is always along the beta direction, but we can have errors in the
-    // measurements and the rotor position and thus we see alpha component as well. We can rotate the
-    // EMF voltage vector fully to the beta direction and get closer to the actual EMF voltage magnitude.
-    int16_t emf_voltage_magnitude;
+
     // The measured acceleration of the rotor.
     int16_t rotor_acceleration;
-    
-    // Error of the angle measured from EMF to the rotor angle prediction.
-    int16_t angle_error;
 
     // The phase resistance; the drag factor for the fixed reference frame current.
     int16_t phase_resistance;

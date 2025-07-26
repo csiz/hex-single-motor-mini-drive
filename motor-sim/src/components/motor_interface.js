@@ -81,7 +81,7 @@ const crc_size = 4;
 const tail_size = crc_size + end_of_message_size;
 
 const basic_command_size = 16;
-const readout_size = 36;
+const readout_size = 40;
 const full_readout_size = 84;
 const current_calibration_size = 16;
 const control_parameters_size = 44;
@@ -156,9 +156,13 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   // Get electric angle data. Angle 0 means the rotor North is aligned when holding positive current on the U phase.
   const angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
+  const angle_adjustment = angle_units_to_degrees(data_view.getInt16(offset));
+  offset += 2;
   const angular_speed = speed_units_to_degrees_per_millisecond(data_view.getInt16(offset));
   offset += 2;
   const vcc_voltage = calculate_voltage(data_view.getInt16(offset));
+  offset += 2;
+  const emf_voltage_magnitude = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
 
 
@@ -288,8 +292,10 @@ function parse_readout(data_view, previous_readout, check_errors = true){
     hall_v_as_angle,
     hall_w_as_angle,
     angle,
+    angle_adjustment,
     angular_speed,
     vcc_voltage,
+    emf_voltage_magnitude,
     web_alpha_emf_voltage, web_beta_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 
@@ -377,13 +383,7 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const inductor_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const emf_voltage_magnitude = calculate_voltage(data_view.getInt16(offset));
-  offset += 2;
   const rotor_acceleration = acceleration_units_to_degrees_per_millisecond_squared(data_view.getInt16(offset));
-  offset += 2;
-  
-  
-  const angle_error = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
   const phase_resistance = data_view.getInt16(offset);
   offset += 2;
@@ -426,13 +426,12 @@ function parse_full_readout(data_view, previous_readout){
     emf_voltage_stdev,
     debug_1,
     debug_2,
+    debug_3,
     motor_constant,
     
     inductor_angle,
     inductor_angle_offset,
-    emf_voltage_magnitude,
     
-    angle_error,
     rotor_acceleration,
     phase_resistance,
     phase_inductance,

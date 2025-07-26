@@ -725,7 +725,7 @@ const plot_electric_position = plot_lines({
   y_domain: [-180, 180],
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
-    {y: "angle_error", label: "Magnet Angle Error", color: colors_categories[1]},
+    {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
     {y: (d) => d.current_detected ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.01 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
     {y: (d) => d.web_emf_voltage_magnitude > 0.05 ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},

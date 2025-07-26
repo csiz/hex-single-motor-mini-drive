@@ -394,13 +394,13 @@ void adc_interrupt_handler(){
     const int prediction_error = emf_is_accurate * emf_detected * angle_or_mirror(emf_angle_error);
 
     // Calculate the angle adjustment error using the parametrized gain.
-    const int angle_error = signed_ceil_div(
+    const int angle_adjustment = signed_ceil_div(
         prediction_error * control_parameters.rotor_angle_ki,
         control_parameters_fixed_point
     );
 
     // Calculate the new angle based on the angle adjustment.
-    const int updated_angle = normalize_angle(predicted_angle + angle_error);
+    const int updated_angle = normalize_angle(predicted_angle + angle_adjustment);
 
 
     // Calculate the new speed based on the angle adjustment.
@@ -502,9 +502,9 @@ void adc_interrupt_handler(){
     // 
     // Must be updated before the motor pwm calculation!
 
-    readout.readout_number = readout_number;
-    
     readout.pwm_commands = encode_pwm_commands(motor_outputs);
+    
+    readout.readout_number = readout_number;
         
     readout.state_flags = (
         (hall_state << hall_state_bit_offset) |
@@ -516,21 +516,25 @@ void adc_interrupt_handler(){
         (rotor_direction_flip_imminent << rotor_direction_flip_imminent_bit_offset)
     );
 
-    readout.ref_readout = ref_readout;
-
+    
     readout.u_current = std::get<0>(currents);
     readout.v_current = std::get<1>(currents);
     readout.w_current = std::get<2>(currents);
 
+    readout.ref_readout = ref_readout;
+    
     readout.u_current_diff = std::get<0>(currents_diff);
     readout.v_current_diff = std::get<1>(currents_diff);
     readout.w_current_diff = std::get<2>(currents_diff);
 
-    readout.temperature = temperature;
-    readout.vcc_voltage = vcc_voltage;
-
     readout.angle = updated_angle;
+    readout.angle_adjustment = angle_adjustment;
     readout.angular_speed = updated_speed;
+    readout.vcc_voltage = vcc_voltage;
+    readout.emf_voltage_magnitude = emf_voltage_magnitude;
+
+
+    readout.temperature = temperature;
 
     readout.alpha_current = alpha_current;
     readout.beta_current = beta_current;
@@ -546,10 +550,7 @@ void adc_interrupt_handler(){
     readout.motor_constant = motor_constant;
     readout.inductor_angle = inductor_angle;
 
-    readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.rotor_acceleration = updated_acceleration;
-
-    readout.angle_error = angle_error;
     readout.phase_resistance = 0;
 
     readout.emf_voltage_variance = emf_voltage_variance;
@@ -557,6 +558,7 @@ void adc_interrupt_handler(){
     
     readout.debug_1 = driver_state.lead_angle_control;
     readout.debug_2 = 0;
+    readout.debug_3 = 0;
     
 
     
@@ -571,7 +573,6 @@ void adc_interrupt_handler(){
 
     // Update the motor controls using the readout data.
     update_motor_control(driver_state, readout);
-
 
     // Try to write the latest readout snippet if there's space.
     readout_history_push(readout);
