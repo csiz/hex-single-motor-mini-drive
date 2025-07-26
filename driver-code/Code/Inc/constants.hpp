@@ -503,7 +503,20 @@ static inline int16_t get_sin(const int16_t angle) {
     return sin_lookup[normalize_angle(angle)];
 }
 
+static inline ThreePhase get_three_phase_sin(int16_t angle) {
+    angle = normalize_angle(angle);
+    return {
+        sin_lookup[angle],
+        sin_lookup[(angle + two_thirds_circle) & angle_bit_mask],
+        sin_lookup[(angle + third_circle) & angle_bit_mask]
+    };
+}
+
 // For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
 static inline int16_t get_cos(const int16_t angle) {
     return get_sin(angle + quarter_circle);
+}
+
+static inline ThreePhase get_three_phase_cos(int16_t angle) {
+    return get_three_phase_sin(angle + quarter_circle);
 }

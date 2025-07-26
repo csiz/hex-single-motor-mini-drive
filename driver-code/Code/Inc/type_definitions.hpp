@@ -321,3 +321,120 @@ struct ControlParameters {
     // Spare
     int16_t spare;
 };
+
+
+
+// Three phase helper functions
+// ----------------------------
+
+
+// Extract the three phase duty cycles from the motor outputs.
+static inline ThreePhase get_duties(MotorOutputs const& outputs) {
+    return ThreePhase{
+        static_cast<int>(outputs.u_duty),
+        static_cast<int>(outputs.v_duty),
+        static_cast<int>(outputs.w_duty)
+    };
+}
+
+// Extract the three phase currents from the readout.
+static inline ThreePhase get_currents(FullReadout const& readout) {
+    return ThreePhase{
+        readout.u_current,
+        readout.v_current,
+        readout.w_current
+    };
+}
+
+// Extract the three phase currents differences from the readout.
+static inline ThreePhase get_currents_diff(FullReadout const& readout) {
+    return ThreePhase{
+        readout.u_current_diff,
+        readout.v_current_diff,
+        readout.w_current_diff
+    };
+}
+
+// Grab the calibration factors as a three phase tuple.
+static inline ThreePhase get_calibration_factors(CurrentCalibration const& calibration) {
+    return ThreePhase{
+        calibration.u_factor,
+        calibration.v_factor,
+        calibration.w_factor
+    };
+}
+
+
+// Adjust the three-phase values so that their sum is zero.
+static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
+    // Adjust the values so that their sum is zero.
+    const int avg = (std::get<0>(values) + std::get<1>(values) + std::get<2>(values)) / 3;
+    return ThreePhase{
+        std::get<0>(values) - avg,
+        std::get<1>(values) - avg,
+        std::get<2>(values) - avg
+    };
+}
+
+// Element-wise difference.
+static inline ThreePhase operator - (ThreePhase const& a, ThreePhase const& b) {
+    return ThreePhase {
+        std::get<0>(a) - std::get<0>(b),
+        std::get<1>(a) - std::get<1>(b),
+        std::get<2>(a) - std::get<2>(b)
+    };
+}
+
+// Element-wise addition.
+static inline ThreePhase operator + (ThreePhase const& a, ThreePhase const& b) {
+    return ThreePhase {
+        std::get<0>(a) + std::get<0>(b),
+        std::get<1>(a) + std::get<1>(b),
+        std::get<2>(a) + std::get<2>(b)
+    };
+}
+
+// Scalar multiplication.
+static inline ThreePhase operator * (ThreePhase const& a, int b) {
+    return ThreePhase {
+        std::get<0>(a) * b,
+        std::get<1>(a) * b,
+        std::get<2>(a) * b
+    };
+}
+
+// Element-wise multiplication.
+static inline ThreePhase operator * (ThreePhase const& a, ThreePhase const& b) {
+    return ThreePhase {
+        std::get<0>(a) * std::get<0>(b),
+        std::get<1>(a) * std::get<1>(b),
+        std::get<2>(a) * std::get<2>(b)
+    };
+}
+
+// Scalar division.
+static inline ThreePhase operator / (ThreePhase const& a, int b) {
+    return ThreePhase {
+        std::get<0>(a) / b,
+        std::get<1>(a) / b,
+        std::get<2>(a) / b
+    };
+}
+
+// Element-wise division.
+static inline ThreePhase operator / (ThreePhase const& a, ThreePhase const& b) {
+    return ThreePhase {
+        std::get<0>(a) / std::get<0>(b),
+        std::get<1>(a) / std::get<1>(b),
+        std::get<2>(a) / std::get<2>(b)
+    };
+}
+
+// Dot product between three phase vectors.
+static inline int dot(ThreePhase const& a, ThreePhase const& b) {
+    return (
+        std::get<0>(a) * std::get<0>(b) +
+        std::get<1>(a) * std::get<1>(b) +
+        std::get<2>(a) * std::get<2>(b)
+    );
+}
