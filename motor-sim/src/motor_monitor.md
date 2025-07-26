@@ -727,8 +727,8 @@ const plot_electric_position = plot_lines({
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
     {y: (d) => d.current_detected ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
-    {y: (d) => d.web_current_magnitude > 0.01 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
-    {y: (d) => d.web_emf_voltage_magnitude > 0.05 ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
+    {y: (d) => d.web_current_magnitude > 0.010 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
+    {y: (d) => d.emf_detected ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
   ],
   curve,
 });
@@ -742,7 +742,7 @@ const plot_electric_offsets = plot_lines({
   y_label: "Angle (degrees)",
   channels: [
     {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
-    {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
+    {y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle},
   ],
   curve,
 });

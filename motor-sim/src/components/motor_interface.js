@@ -166,6 +166,8 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   offset += 2;
 
 
+  const predicted_angle = normalize_degrees(angle - angle_adjustment);
+
   const {
     hall_state,
     emf_detected,
@@ -208,9 +210,9 @@ function parse_readout(data_view, previous_readout, check_errors = true){
 
   const avg_current = (u_current + v_current + w_current) / 3.0;
 
-  const [web_alpha_current, web_beta_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(angle));
+  const [web_alpha_current, web_beta_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(predicted_angle));
 
-  const web_inductor_angle = normalize_degrees(angle + radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current)));
+  const web_inductor_angle = normalize_degrees(predicted_angle + radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current)));
   const web_current_magnitude = Math.sqrt(web_alpha_current * web_alpha_current + web_beta_current * web_beta_current);
 
 
@@ -238,10 +240,10 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const v_emf_voltage = -v_drive_voltage + v_L_voltage + v_R_voltage;
   const w_emf_voltage = -w_drive_voltage + w_L_voltage + w_R_voltage;
 
-  const [web_alpha_emf_voltage, web_beta_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(angle));
+  const [web_alpha_emf_voltage, web_beta_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(predicted_angle));
 
   const emf_voltage_angle_offset = radians_to_degrees(Math.atan2(web_beta_emf_voltage, web_alpha_emf_voltage));
-  const web_emf_voltage_angle = normalize_degrees(angle + emf_voltage_angle_offset);
+  const web_emf_voltage_angle = normalize_degrees(predicted_angle + emf_voltage_angle_offset);
   const web_emf_voltage_magnitude = Math.sqrt(web_alpha_emf_voltage * web_alpha_emf_voltage + web_beta_emf_voltage * web_beta_emf_voltage);
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
