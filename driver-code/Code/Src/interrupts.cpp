@@ -340,15 +340,17 @@ void adc_interrupt_handler(){
     const int emf_angle_offset = funky_atan2(alpha_emf_voltage, -beta_emf_voltage);
 
     // Calculate the emf voltage as a rotation of the beta voltage that zeroes out the alpha component.
-    const int emf_voltage_magnitude = faster_abs(
+    const int instant_emf_voltage_magnitude = faster_abs(
         -(get_cos(emf_angle_offset) * beta_emf_voltage - get_sin(emf_angle_offset) * alpha_emf_voltage) / angle_base
     );
+
+    const int emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) / 4;
 
     const int emf_angle_error = angle_or_mirror(emf_angle_offset);
 
     const int emf_angle_error_variance = min(
         max_16bit,
-        1 + (square(emf_angle_error - previous_emf_angle_error) + 3 * readout.emf_angle_error_variance) / 4
+        1 + (square(emf_angle_error - previous_emf_angle_error) + readout.emf_angle_error_variance * 3) / 4
     );
 
     previous_emf_angle_error = emf_angle_error;
@@ -356,7 +358,7 @@ void adc_interrupt_handler(){
     // Check if the EMF voltage is away from zero with enough confidence.
     const bool emf_detected = (
         (emf_angle_error_variance < control_parameters.emf_angle_error_variance_threshold) and
-        (emf_voltage_magnitude > control_parameters.min_emf_voltage)
+        (instant_emf_voltage_magnitude > control_parameters.min_emf_voltage)
     );
 
     number_of_emf_detections = clip_to(0, 64, number_of_emf_detections + (emf_detected ? +1 : -1));

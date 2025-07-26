@@ -116,15 +116,22 @@ static inline MotorOutputs update_motor_smooth(
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_offset;
 
-    const int16_t target_pwm = (
-        angle_fix ? 
-        driver_state.target_pwm :
-        clip_to(-control_parameters.probing_max_pwm, +control_parameters.probing_max_pwm, driver_state.target_pwm)
+    const int pwm_for_emf_compensation = -readout.beta_emf_voltage * pwm_waveform_base / readout.vcc_voltage;
+
+    // Adjust the target PWM to be close to the current EMF voltage (which is 0 at standstill).
+    const int16_t target_pwm = clip_to(
+        pwm_for_emf_compensation - control_parameters.probing_max_pwm, 
+        pwm_for_emf_compensation + control_parameters.probing_max_pwm, 
+        driver_state.target_pwm
     );
 
     const int pwm_error = target_pwm - driver_state.active_pwm;
 
-    driver_state.active_pwm += clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pwm_error);
+    driver_state.active_pwm += clip_to(
+        -control_parameters.max_pwm_change, 
+        +control_parameters.max_pwm_change, 
+        pwm_error
+    );
 
     // Base the direction on the sign of the target PWM.
     const int active_pwm_direction = sign(driver_state.active_pwm);
@@ -175,7 +182,7 @@ static inline MotorOutputs update_motor_smooth(
         driver_state.active_angle = normalize_angle(driver_state.active_angle + active_angle_error);
 
         // Push our speed towards the target angle.
-        driver_state.angular_speed += active_angle_error * speed_fixed_point / 2;
+        driver_state.angular_speed += active_angle_error;
 
         return update_motor_at_angle(driver_state, readout);
     } else {
@@ -186,7 +193,6 @@ static inline MotorOutputs update_motor_smooth(
             -driver_state.lead_angle_control * control_parameters.lead_angle_control_ki,
             control_parameters_fixed_point
         );
-
 
         // Use the probing speed.
         driver_state.angular_speed = active_pwm_direction * control_parameters.probing_angular_speed;

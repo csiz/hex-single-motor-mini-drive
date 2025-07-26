@@ -144,6 +144,7 @@ const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_fl
 // Conversion factor between current and phase resistance voltage.
 const int phase_current_to_voltage = round_div(phase_resistance * voltage_fixed_point, resistance_fixed_point);
 
+// Divisor used to limit the PWM so that VCC remains in range.
 const int vcc_limiting_divisor = 16;
 
 // The drivers need over 8V to power the MOSFETs.
