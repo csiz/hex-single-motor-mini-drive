@@ -156,19 +156,19 @@ static inline MotorOutputs update_motor_smooth(
         const int ideal_angle = normalize_angle(readout.angle + quarter_circle);
 
         // Get the error between the measured current and the ideal current angle.
-        const int lead_angle_error = signed_ceil_div(
+        const int lead_angle_error = (
             active_pwm_direction * current_detected * signed_angle(ideal_angle - readout.inductor_angle) *
-            control_parameters.lead_angle_control_ki, control_parameters_fixed_point
+            control_parameters.lead_angle_control_ki
         );
 
         // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
         driver_state.lead_angle_control = clip_to(
-            -half_circle,
-            +half_circle,
+            -max_lead_angle_control,
+            +max_lead_angle_control,
             driver_state.lead_angle_control + lead_angle_error
         );
 
-        const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle_control);
+        const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle_control / control_parameters_fixed_point);
         
         // Compensate the target angle by the control output. At high speed we need
         // to lead by more than 90 degrees to compensate for the RL time constant.
@@ -208,22 +208,22 @@ static inline MotorOutputs update_motor_torque(
     // Calculate the target current in fixed point format.
     const int16_t current_target = driver_state.torque.current_target;
 
+    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
-    const int control_error = signed_ceil_div(
-        (current_target - current_detected * readout.beta_current) *
-        control_parameters.torque_control_ki, control_parameters_fixed_point
-    );
+    const int measured_current = (angle_fix and current_detected) * readout.beta_current;
+
+    const int control_error = (current_target - measured_current) * control_parameters.torque_control_ki;
 
     // Update the PID control for the torque.
-    driver_state.torque.torque_control = (
-        (driver_state.target_pwm - driver_state.active_pwm) * control_error > 0 ?
-        driver_state.active_pwm + control_error :
-        driver_state.target_pwm + control_error
+    driver_state.torque.torque_control = clip_to(
+        (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
+        (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
+        driver_state.torque.torque_control + control_error
     );
 
     // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.torque.torque_control;
+    driver_state.target_pwm = driver_state.torque.torque_control / control_parameters_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }

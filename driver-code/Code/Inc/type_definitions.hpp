@@ -85,7 +85,7 @@ struct DriveSchedule {
 // Drive the motor to a specific current target (torque target).
 struct DriveTorque {
     int16_t current_target;
-    int16_t torque_control;
+    int32_t torque_control;
 };
 
 // Drive the motor to a specific battery power drain.
@@ -120,7 +120,8 @@ struct DriverState {
 
     int16_t target_pwm;
 
-    int16_t lead_angle_control;
+    int32_t lead_angle_control;
+
 
     // The additional data depends on the driver mode.
     union {

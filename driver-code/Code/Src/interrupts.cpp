@@ -62,6 +62,8 @@ ThreePhase previous_motor_outputs = {0, 0, 0};
 
 int previous_emf_angle_error = 0;
 
+int32_t motor_constant = 0;
+
 // Motor driver state
 // ------------------
 
@@ -438,10 +440,7 @@ void adc_interrupt_handler(){
 
     const int motor_constant_error = emf_and_movement_fix * (emf_voltage_magnitude - predicted_emf_voltage);
 
-    const int motor_constant = (
-        readout.motor_constant +
-        motor_constant_error * control_parameters.motor_constant_ki / control_parameters_fixed_point
-    );
+    motor_constant += motor_constant_error * control_parameters.motor_constant_ki;
 
 
     // Calculate the power values using the phase currents and voltages.
@@ -548,7 +547,7 @@ void adc_interrupt_handler(){
     readout.inductive_power = inductive_power;
     
 
-    readout.motor_constant = motor_constant;
+    readout.motor_constant = motor_constant / control_parameters_fixed_point;
     readout.inductor_angle = inductor_angle;
 
     readout.rotor_acceleration = updated_acceleration;
@@ -557,8 +556,8 @@ void adc_interrupt_handler(){
     readout.emf_angle_error_variance = emf_angle_error_variance;
     readout.phase_inductance = 0;
     
-    readout.debug_1 = driver_state.lead_angle_control;
-    readout.debug_2 = driver_state.torque.torque_control;
+    readout.debug_1 = driver_state.lead_angle_control / control_parameters_fixed_point;
+    readout.debug_2 = driver_state.target_pwm;
 
     
 

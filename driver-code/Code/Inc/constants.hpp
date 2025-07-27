@@ -353,7 +353,7 @@ const ControlParameters default_control_parameters = {
     .min_emf_voltage = voltage_fixed_point * 150 / 1000,
     .min_emf_speed = static_cast<int16_t>(8.3 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second),
     .lead_angle_control_ki = 8,
-    .torque_control_ki = 8,
+    .torque_control_ki = 32,
     .battery_power_control_ki = 0,
     .speed_control_ki = 0,
     .probing_angular_speed = speed_fixed_point,
@@ -362,6 +362,7 @@ const ControlParameters default_control_parameters = {
     .spare = 4,
 };
 
+const int max_lead_angle_control = third_circle * control_parameters_fixed_point;
 
 // Waveform and Trigonometric tables
 // ---------------------------------
