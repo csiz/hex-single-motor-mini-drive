@@ -319,11 +319,8 @@ void adc_interrupt_handler(){
     const int beta_emf_voltage = -dot(emf_voltages, three_phase_sin) / angle_base;
 
 
-    // TODO: slowly vary the output angle speed so we don't jerk the motor too hard. Maybe also push the probing speed towards
-    // the rotor speed if the rotor is higher.
-
-    // TODO: now, re-write the drive modes with new driver state struct.
-
+    // TODO: restore the battery power drive mode too
+    // TODO: scale the control integrals by another fixed point so we have more resolution
 
     // Current angle calculation
     // -------------------------
@@ -561,7 +558,7 @@ void adc_interrupt_handler(){
     readout.phase_inductance = 0;
     
     readout.debug_1 = driver_state.lead_angle_control;
-    readout.debug_2 = 0;
+    readout.debug_2 = driver_state.torque.torque_control;
 
     
 

@@ -343,7 +343,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::DRIVE_TORQUE, 
                 .duration = command.timeout, 
                 .torque = DriveTorque{ 
-                    .current_target = static_cast<int16_t>(max_drive_current * command.value / pwm_max)
+                    .current_target = static_cast<int16_t>(command.value)
                 }
             });
             return false;

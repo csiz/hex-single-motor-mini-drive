@@ -24,6 +24,7 @@ Motor Commands
   <span>${advanced_drive_buttons}</span>
   <span>${command_angle_slider}</span>
   <span>${command_angular_speed_slider}</span>
+  <span>${command_torque_current_slider}</span>
 </div>
 
 
@@ -258,6 +259,10 @@ const command_options_input = Inputs.checkbox(
 d3.select(command_options_input).select("div").style("width", "100%");
 d3.select(command_options_input).select("div label").style("width", "100em");
 
+const command_snapshot_delay_slider = inputs_wide_range([0, 1000], {value: 500, step: 1, label: "Snapshot delay (ms):"});
+
+const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
+
 const command_options = Generators.input(command_options_input);
 
 const command_pwm_slider = inputs_wide_range([0, 1.0], {value: 0.05, step: 0.001, label: "Command value:"});
@@ -276,12 +281,11 @@ const command_angle_slider = inputs_wide_range([-180, 180], {value: 0, step: 1, 
 
 const command_angle_degrees = Generators.input(command_angle_slider);
 
-const command_snapshot_delay_slider = inputs_wide_range([0, 1000], {value: 500, step: 1, label: "Snapshot delay (ms):"});
+const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 1, step: 0.001, label: "Command torque (Amps):"});
 
-const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
+const command_torque_current_amps = Generators.input(command_torque_current_slider);
+
 ```
-
-
 
 ```js
 // Data stream output
@@ -319,6 +323,9 @@ const command_pwm = Math.round(command_pwm_fraction * pwm_base);
 const command_angle = degrees_to_angle_units(command_angle_degrees);
 
 const command_angular_speed = degrees_per_millisecond_to_speed_units(command_angular_speed_degrees_div_ms);
+
+const command_torque_current = Math.floor(command_torque_current_amps / current_conversion);
+
 
 async function command(command, options = {}){
   if (!motor_controller) return;
@@ -499,11 +506,11 @@ const advanced_drive_buttons = Inputs.button(
       snapshot_if_checked();
     }],
     ["Drive torque +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: +command_pwm});
+      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: +command_torque_current});
       snapshot_if_checked();
     }],
     ["Drive torque -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: -command_pwm});
+      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: -command_torque_current});
       snapshot_if_checked();
     }],
     ["Drive power +", async function(){
@@ -1422,6 +1429,7 @@ import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, default_current_calibration, max_calibration_current,
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
+  current_conversion, max_drive_current,
 } from "./components/motor_constants.js";
 
 import {unit_test_expected} from "./components/motor_unit_tests.js";

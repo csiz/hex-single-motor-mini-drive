@@ -114,7 +114,7 @@ static inline MotorOutputs update_motor_smooth(
 ){
     // Check if we have an accurate readout angle.
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
-    const bool current_detected = readout.state_flags & current_detected_bit_offset;
+    const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
     const int pwm_for_emf_compensation = -readout.beta_emf_voltage * pwm_waveform_base / readout.vcc_voltage;
 
@@ -156,16 +156,16 @@ static inline MotorOutputs update_motor_smooth(
         const int ideal_angle = normalize_angle(readout.angle + quarter_circle);
 
         // Get the error between the measured current and the ideal current angle.
-        const int lead_angle_error = active_pwm_direction * current_detected * signed_angle(ideal_angle - readout.inductor_angle);
+        const int lead_angle_error = signed_ceil_div(
+            active_pwm_direction * current_detected * signed_angle(ideal_angle - readout.inductor_angle) *
+            control_parameters.lead_angle_control_ki, control_parameters_fixed_point
+        );
 
         // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
         driver_state.lead_angle_control = clip_to(
-            - half_circle,
-            + half_circle,
-            driver_state.lead_angle_control + signed_ceil_div(
-                lead_angle_error * control_parameters.lead_angle_control_ki,
-                control_parameters_fixed_point
-            )
+            -half_circle,
+            +half_circle,
+            driver_state.lead_angle_control + lead_angle_error
         );
 
         const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle_control);
@@ -208,14 +208,18 @@ static inline MotorOutputs update_motor_torque(
     // Calculate the target current in fixed point format.
     const int16_t current_target = driver_state.torque.current_target;
 
+    const bool current_detected = readout.state_flags & current_detected_bit_mask;
+
+    const int control_error = signed_ceil_div(
+        (current_target - current_detected * readout.beta_current) *
+        control_parameters.torque_control_ki, control_parameters_fixed_point
+    );
+
     // Update the PID control for the torque.
-    driver_state.torque.torque_control = clip_to(
-        -pwm_max,
-        +pwm_max,
-        signed_ceil_div(
-            (current_target - readout.beta_current) * control_parameters.torque_control_ki, 
-            control_parameters_fixed_point
-        )
+    driver_state.torque.torque_control = (
+        (driver_state.target_pwm - driver_state.active_pwm) * control_error > 0 ?
+        driver_state.active_pwm + control_error :
+        driver_state.target_pwm + control_error
     );
 
     // Get the target PWM after torque control.
@@ -364,8 +368,15 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_TORQUE,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle :
+                    static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
+                .active_pwm = driver_state.active_pwm,
+                .angular_speed = driver_state.angular_speed,
+                .angle_residual = driver_state.angle_residual,
+                .lead_angle_control = driver_state.lead_angle_control,
                 .torque = DriveTorque{
                     .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.torque.current_target)),
+                    .torque_control = driver_state.torque.torque_control,
                 }
             };
 

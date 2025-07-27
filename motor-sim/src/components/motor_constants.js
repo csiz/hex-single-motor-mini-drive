@@ -136,6 +136,8 @@ export function convert_power_to_watts(power){
 // Maximum current we can measure in Amperes.
 export const max_measurable_current = adc_base * current_conversion / 2; // Halved because we can measure negative current too.
 
+export const max_drive_current = 6.0;
+
 export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
 
 export const current_calibration_base = 1024; // Base for fixed point multiplication.

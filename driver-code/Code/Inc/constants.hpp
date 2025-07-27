@@ -105,8 +105,8 @@ const float current_conversion_float = adc_voltage_reference / (adc_max_value * 
 // Current conversion: 1 current unit = 1/248 A.
 const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_float);
 
-// 4A max DQ0 driving current.
-const int16_t max_drive_current = 4 * current_fixed_point;
+// 6A max DQ0 driving current.
+const int16_t max_drive_current = 6 * current_fixed_point;
 
 
 // Resistance of the motor phase windings & mosfet; in Ohm.
@@ -353,7 +353,7 @@ const ControlParameters default_control_parameters = {
     .min_emf_voltage = voltage_fixed_point * 150 / 1000,
     .min_emf_speed = static_cast<int16_t>(8.3 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second),
     .lead_angle_control_ki = 8,
-    .torque_control_ki = 0,
+    .torque_control_ki = 8,
     .battery_power_control_ki = 0,
     .speed_control_ki = 0,
     .probing_angular_speed = speed_fixed_point,
