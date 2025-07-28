@@ -115,6 +115,7 @@ static inline MotorOutputs update_motor_smooth(
     // Check if we have an accurate readout angle.
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
+    const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
 
     const int pwm_for_emf_compensation = -readout.beta_emf_voltage * pwm_waveform_base / readout.vcc_voltage;
 
@@ -144,29 +145,30 @@ static inline MotorOutputs update_motor_smooth(
 
     driver_state.active_angle_residual = active_angle_hires_diff % speed_fixed_point;
 
+    // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+    // 
+    // Of course, the inductors take a while to charge and the rotor is producing an EMF
+    // which all interacts with the current. However, the current that we end up measuring
+    // should be as close to the 90 degrees as possible for maximum torque per current use.
+    const int ideal_angle = normalize_angle(readout.angle + quarter_circle);
+
+    const int ideal_angle_diff = current_detected * signed_angle(ideal_angle - readout.inductor_angle);
+
+    // Get the error between the measured current and the ideal current angle.
+    const int lead_angle_error = control_parameters.lead_angle_control_ki * (
+        emf_detected ? active_pwm_direction * ideal_angle_diff :
+        -sign(driver_state.lead_angle_control)
+    );
+
+    // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
+    driver_state.lead_angle_control = clip_to(
+        -max_lead_angle_control,
+        +max_lead_angle_control,
+        driver_state.lead_angle_control + lead_angle_error
+    );
 
     if (angle_fix) {
         // If we have an accurate position, we can use it to adjust our control.
-        
-        // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
-        // 
-        // Of course, the inductors take a while to charge and the rotor is producing an EMF
-        // which all interacts with the current. However, the current that we end up measuring
-        // should be as close to the 90 degrees as possible for maximum torque per current use.
-        const int ideal_angle = normalize_angle(readout.angle + quarter_circle);
-
-        // Get the error between the measured current and the ideal current angle.
-        const int lead_angle_error = (
-            active_pwm_direction * current_detected * signed_angle(ideal_angle - readout.inductor_angle) *
-            control_parameters.lead_angle_control_ki
-        );
-
-        // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-        driver_state.lead_angle_control = clip_to(
-            -max_lead_angle_control,
-            +max_lead_angle_control,
-            driver_state.lead_angle_control + lead_angle_error
-        );
 
         const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle_control / control_parameters_fixed_point);
         
@@ -187,12 +189,6 @@ static inline MotorOutputs update_motor_smooth(
         return update_motor_at_angle(driver_state, readout);
     } else {
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
-
-        // Decay the current angle control; it needs to start from 0 at low speed.
-        driver_state.lead_angle_control += signed_ceil_div(
-            -driver_state.lead_angle_control * control_parameters.lead_angle_control_ki,
-            control_parameters_fixed_point
-        );
 
         // Use the probing speed.
         driver_state.angular_speed = active_pwm_direction * control_parameters.probing_angular_speed;
