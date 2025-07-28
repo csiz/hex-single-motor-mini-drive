@@ -221,7 +221,7 @@ void adc_interrupt_handler(){
     const int vcc_voltage = (instant_vcc_voltage + readout.vcc_voltage * 3) / 4;
 
     // Reduce the maximum output PWM to keep the MOSFET drivers in their operating voltage range.
-    const uint16_t live_max_pwm = clip_to(
+    const int live_max_pwm = clip_to(
         0, pwm_max,
         readout.live_max_pwm + (vcc_voltage - vcc_mosfet_driver_undervoltage) / vcc_limiting_divisor
     );
@@ -238,11 +238,8 @@ void adc_interrupt_handler(){
     // Get calibrated current divergence (the time unit is defined 1 per cycle).    
     const ThreePhase currents_diff = ((currents - get_currents(readout)) + get_currents_diff(readout)) / 2;
 
-    // Calibrated conversion factor between current divergence and phase inductance voltage.
-    const int diff_to_voltage = phase_readout_diff_per_cycle_to_voltage * current_calibration.inductance_factor / current_calibration_fixed_point;
-    
     // Calculate the voltage drop across the coil inductance.
-    const ThreePhase inductor_voltages = currents_diff * diff_to_voltage / current_fixed_point;
+    const ThreePhase inductor_voltages = currents_diff * current_calibration.inductance_factor / phase_diff_conversion;
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const ThreePhase resistive_voltages = currents * phase_current_to_voltage / current_fixed_point;
@@ -307,7 +304,10 @@ void adc_interrupt_handler(){
     
     // First alias the trig functions based on the predicted rotor angle.
 
+    // Cosines of the predicted angle with respect to each phase.
     const ThreePhase three_phase_cos = get_three_phase_cos(predicted_angle);
+
+    // Sines of the predicted angle with respect to each phase.
     const ThreePhase three_phase_sin = get_three_phase_sin(predicted_angle);
     
     // Park transform the currents and voltages.
@@ -322,7 +322,7 @@ void adc_interrupt_handler(){
 
 
     // TODO: restore the battery power drive mode too
-    // TODO: scale the control integrals by another fixed point so we have more resolution
+
 
     // Current angle calculation
     // -------------------------
@@ -403,7 +403,7 @@ void adc_interrupt_handler(){
     );
 
     // Calculate the new angle based on the angle adjustment.
-    const int updated_angle = normalize_angle(predicted_angle + angle_adjustment);
+    const int angle = normalize_angle(predicted_angle + angle_adjustment);
 
 
     // Calculate the new speed based on the angle adjustment.
@@ -429,7 +429,8 @@ void adc_interrupt_handler(){
         (speed_error * acceleration_fixed_point - readout.rotor_acceleration) * control_parameters.rotor_acceleration_ki,
         control_parameters_fixed_point
     );
-    const int updated_acceleration = readout.rotor_acceleration + acceleration_error;
+
+    const int rotor_acceleration = readout.rotor_acceleration + acceleration_error;
 
 
 
@@ -449,27 +450,7 @@ void adc_interrupt_handler(){
 
     const int inductive_power = dot(currents, inductor_voltages) / voltage_current_div_power_fixed_point;
 
-    // Nope, the phase currents lie! We should assume the motor is behaving rationally and
-    // smoothly while our measurements are noisy and lagged at high speed. Theoretically
-    // the equations below give the correct power values, but it's actually better to
-    // compute power from the DQ0 transformed values with some adjustments.
-    // 
-    // const int wrong_emf_power = -(
-    //     u_current * u_emf_voltage + 
-    //     v_current * v_emf_voltage + 
-    //     w_current * w_emf_voltage
-    // ) / voltage_current_div_power_fixed_point;
-
-    // const int wrong_total_power = -(
-    //     u_current * u_drive_voltage + 
-    //     v_current * v_drive_voltage + 
-    //     w_current * w_drive_voltage
-    // ) / voltage_current_div_power_fixed_point;
-
-    // By assuming the motor moves smoothly we claim the beta current is closer to the
-    // measured magnitude of the DQ0 current. We then adjust our beta current using
-    // a Taylor expansion for small alpha current. The system uses the real beta current
-    // not what we measure; thus we compute the emf power using our massaged DQ0 values.
+    // Use the DQ0 transformed values to calculate the EMF power quickly. We also have a chance to 
     const int emf_power = -beta_current * beta_emf_voltage / dq0_to_power_fixed_point;
 
     // Compute the real total power used from the balance of powers.
@@ -526,7 +507,7 @@ void adc_interrupt_handler(){
     readout.v_current_diff = std::get<1>(currents_diff);
     readout.w_current_diff = std::get<2>(currents_diff);
 
-    readout.angle = updated_angle;
+    readout.angle = angle;
     readout.angle_adjustment = angle_adjustment;
     readout.angular_speed = updated_speed;
     readout.vcc_voltage = vcc_voltage;
@@ -550,7 +531,7 @@ void adc_interrupt_handler(){
     readout.motor_constant = motor_constant / control_parameters_fixed_point;
     readout.inductor_angle = inductor_angle;
 
-    readout.rotor_acceleration = updated_acceleration;
+    readout.rotor_acceleration = rotor_acceleration;
     readout.phase_resistance = 0;
 
     readout.emf_angle_error_variance = emf_angle_error_variance;

@@ -27,3 +27,5 @@ Tools needed:
 TODO: install procedure
 TODO: compile procedure
 TODO: upload procedure
+TODO: control interface description
+TODO: update the file descriptions above

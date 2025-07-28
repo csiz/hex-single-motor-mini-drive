@@ -281,7 +281,7 @@ const command_angle_slider = inputs_wide_range([-180, 180], {value: 0, step: 1, 
 
 const command_angle_degrees = Generators.input(command_angle_slider);
 
-const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 1, step: 0.001, label: "Command torque (Amps):"});
+const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.200, step: 0.010, label: "Command torque (Amps):"});
 
 const command_torque_current_amps = Generators.input(command_torque_current_slider);
 

@@ -28,7 +28,10 @@ common mode voltage seems to fix it. Is that the only way to measure all current
 [ ] Think about connectors better, drop USB (the esp32 will have USB-C).
 [ ] Drop voltage regulator and rely on master board for 3.3V; filter it though.
 [ ] Look for thinner IDC connector, and definitely SMD version for easier routing, use of space behind connector.
-
+[ ] Add voltage probes for the phase connectors so we can measure voltage both during driving and open connections.
+We need to measure driving voltage to make sure our MOSFETS are turned on and giving us the voltage we command!
+[ ] Use Kelvin sense resistors for the current measurement to avoid the unknown solder resistance.
+[ ] Drop the Hall sensors!
 
 
 Need to implement in the circuit

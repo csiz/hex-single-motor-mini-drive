@@ -103,10 +103,10 @@ const float amplifier_gain = 20.0;
 const float current_conversion_float = adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
 
 // Current conversion: 1 current unit = 1/248 A.
-const int16_t current_fixed_point = static_cast<int16_t>(1/current_conversion_float);
+const int current_fixed_point = 1 / current_conversion_float;
 
 // 6A max DQ0 driving current.
-const int16_t max_drive_current = 6 * current_fixed_point;
+const int max_drive_current = 6 * current_fixed_point;
 
 
 // Resistance of the motor phase windings & mosfet; in Ohm.
@@ -116,7 +116,7 @@ const float phase_inductance_float = 0.000'145;
 
 const int inductance_fixed_point = 1 << 22;
 
-const int16_t phase_inductance = static_cast<int16_t>(phase_inductance_float * inductance_fixed_point);
+const int phase_inductance = phase_inductance_float * inductance_fixed_point;
 
 
 // Resistance of the motor phase windings & mosfet; in Ohm. Assuming the motor is a 3 phase star connected motor.
@@ -172,44 +172,44 @@ const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 /
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 12MHz (72MHz / 6). A cycle is 6 ticks.
 
 // Temperature ADC conversion time: 12.5 cycles + 71.5 cycles = 84 cycles = 7us.
-const uint16_t temperature_sample_time = (71.5 + 12.5)*6;
+const int temperature_sample_time = (71.5 + 12.5)*6;
 
 // Current ADC conversion time: 12.5 cycles + 1.5 cycles = 14 cycles = 1.16us.
-const uint16_t current_sample_time = (1.5 + 12.5)*6;
+const int current_sample_time = (1.5 + 12.5)*6;
 
-const uint16_t current_sample_lead_time = (1.5 + 12.5 + 1.5)*6 / 2;
+const int current_sample_lead_time = (1.5 + 12.5 + 1.5)*6 / 2;
 
 // The ADC will read the temperature first then 2 phase currents; try to time the sampling 
 // time of the phase currents symmetrically around the peak of the PWM cycle.
-const int16_t sample_lead_time = temperature_sample_time + current_sample_lead_time;
+const int sample_lead_time = temperature_sample_time + current_sample_lead_time;
 
 
 // Ticks per second at 72MHz clock speed. Each tick is ~13.89ns.
 const int ticks_per_second = 72'000'000;
 
 // Auto-reload value for the PWM timer.
-const uint16_t pwm_autoreload = pwm_base - 1;
+const int pwm_autoreload = pwm_base - 1;
 
 // Number of MCU clock ticks per PWM cycle; counting up then down.
-const uint16_t pwm_period = 2 * pwm_base; 
+const int pwm_period = 2 * pwm_base; 
 
 // Number of PWM cycles per second: 3072 ticks = 42.7us @ 72MHz = 23.4KHz
 const int pwm_cycles_per_second = ticks_per_second / pwm_period;
 
 // Maximum duty cycle for the high side mosfet needs to allow some off time for 
 // the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
-const uint16_t minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
+const int minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
 
 // Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
 // bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
-const uint16_t pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty); 
+const int pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty); 
 
 // Maximum duty for hold commands.
-const uint16_t pwm_max_hold = pwm_base * 2 / 10;
+const int pwm_max_hold = pwm_base * 2 / 10;
 
 // Maximum time (in pwm cycles) while a command is in effect.
-const uint16_t max_timeout = 0xFFFF;
+const int max_timeout = 0xFFFF;
 
 
 
@@ -310,25 +310,9 @@ const int radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_d
 // Acceleration needs more precision than speed; it's in angle units per pwm cycle per pwm cycle / fixed point series.
 const int acceleration_fixed_point = 512;
 
-// Time dependent constants
-// ------------------------
-
-const int phase_readout_diff_per_cycle_to_voltage = round_div(
-    pwm_cycles_per_second * phase_inductance * voltage_fixed_point,
-    inductance_fixed_point
-);
-
-
-const int emf_motor_constant_conversion = (
-    motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
-);
-
-const int emf_motor_constant_error_conversion = emf_motor_constant_conversion / 64;
-
 
 // Calibration and Control Parameters
 // ----------------------------------
-
 
 const int16_t current_calibration_fixed_point = 1024;
 
@@ -363,6 +347,21 @@ const ControlParameters default_control_parameters = {
 };
 
 const int max_lead_angle_control = third_circle * control_parameters_fixed_point;
+
+
+// Calculation precomputed constants
+// ---------------------------------
+
+const int phase_diff_conversion = (
+    inductance_fixed_point * current_fixed_point / phase_inductance * 
+    current_calibration_fixed_point / pwm_cycles_per_second / voltage_fixed_point
+);
+
+const int emf_motor_constant_conversion = (
+    motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
+);
+
+
 
 // Waveform and Trigonometric tables
 // ---------------------------------
