@@ -276,14 +276,15 @@ void adc_interrupt_handler(){
     // unit is 1 per cycle; so the angle spanned by the rotor is exactly the angular speed.
     const int angle_hires_diff = readout.angular_speed + angle_residual;
 
-    // TODO: integrate rotations here.
+    // Advance the angle and the angle residual.
+    const int unnormalized_predicted_angle = readout.angle + angle_hires_diff / speed_fixed_point;
     
-    // Compute and normalize the new rotor angle.
-    const int predicted_angle = normalize_angle(readout.angle + angle_hires_diff / speed_fixed_point);
-
     // Keep track of the remaining angle fraction spanned according to the angular speed, but for which the integer angle
     // doesn't change value. Hopefully the compiler makes the % operation free considering it follows the division above.
     angle_residual = angle_hires_diff % speed_fixed_point;
+
+    // Compute and normalize the new rotor angle.
+    const int predicted_angle = normalize_angle(unnormalized_predicted_angle);
 
 
     // Switching to DQ0 Frame
@@ -337,8 +338,9 @@ void adc_interrupt_handler(){
 
     // Calculate the emf voltage as a rotation of the beta voltage that zeroes out the alpha component.
     const int instant_emf_voltage_magnitude = faster_abs(
-        -(get_cos(emf_angle_offset) * beta_emf_voltage - get_sin(emf_angle_offset) * alpha_emf_voltage) / angle_base
-    );
+        get_cos(emf_angle_offset) * beta_emf_voltage - 
+        get_sin(emf_angle_offset) * alpha_emf_voltage
+    ) / angle_base;
 
     const int emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) / 4;
 
@@ -403,8 +405,23 @@ void adc_interrupt_handler(){
     );
 
     // Calculate the new angle based on the angle adjustment.
-    const int angle = normalize_angle(predicted_angle + angle_adjustment);
+    const int unnormalized_angle = unnormalized_predicted_angle + angle_adjustment;
 
+    const int rotations_increment = (
+        unnormalized_angle < 0 ? -1 : 
+        unnormalized_angle > angle_base ? +1 : 
+        0
+    );
+
+    const int angle = unnormalized_angle - rotations_increment * angle_base;
+
+    const int unnormalized_rotations = readout.rotations + rotations_increment;
+
+    const int rotations = (
+        unnormalized_rotations > max_16bit ? -max_16bit : 
+        unnormalized_rotations < -max_16bit ? +max_16bit : 
+        unnormalized_rotations
+    );
 
     // Calculate the new speed based on the angle adjustment.
     // 
@@ -535,7 +552,7 @@ void adc_interrupt_handler(){
     readout.inductor_angle = inductor_angle;
 
     readout.rotor_acceleration = rotor_acceleration;
-    readout.phase_resistance = 0;
+    readout.rotations = rotations;
 
     readout.emf_angle_error_variance = emf_angle_error_variance;
     readout.phase_inductance = 0;

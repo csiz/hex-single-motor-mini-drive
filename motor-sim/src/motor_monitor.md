@@ -962,7 +962,7 @@ const plot_motor_values = plot_lines({
   y_label: "Value",
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
-    {y: "phase_resistance", label: "Phase Resistance", color: colors_categories[1]},
+    {y: "rotations", label: "Rotations", color: colors_categories[1]},
     {y: "phase_inductance", label: "Phase Inductance", color: colors_categories[2]},
     {y: "debug_1", label: "Debug 1", color: colors.v},
     {y: "debug_2", label: "Debug 2", color: colors.w},

@@ -14,7 +14,8 @@ const size_t history_size = 336;
 // ----------------
 
 // Maximum value we can use in signed 32 bit multiplication.
-const int max_16bit = (1 << 15) - 1; // 32767
+const int int_16bit_base = 1 << 15; // 32768
+const int max_16bit = int_16bit_base - 1; // 32767
 
 
 // PWM base value; representing full on duty cycle.

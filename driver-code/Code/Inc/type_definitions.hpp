@@ -236,8 +236,8 @@ struct FullReadout : public Readout {
     // The measured acceleration of the rotor.
     int16_t rotor_acceleration;
 
-    // The phase resistance; the drag factor for the fixed reference frame current.
-    int16_t phase_resistance;
+    // Integrated number of EMF deduced rotor angle rotations since startup.
+    int16_t rotations;
 
     // The phase inductance; behaves as if the inductor coil magnetic field had a mass. It's 
     // smaller than the rotor mass. It controls the ratio between the magnet acceleration

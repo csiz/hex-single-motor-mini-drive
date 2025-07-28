@@ -294,6 +294,7 @@ function parse_readout(data_view, previous_readout, check_errors = true){
     hall_v_as_angle,
     hall_w_as_angle,
     angle,
+    predicted_angle,
     angle_adjustment,
     angular_speed,
     vcc_voltage,
@@ -387,7 +388,7 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const rotor_acceleration = acceleration_units_to_degrees_per_millisecond_squared(data_view.getInt16(offset));
   offset += 2;
-  const phase_resistance = data_view.getInt16(offset);
+  const rotations = data_view.getInt16(offset);
   offset += 2;
   const phase_inductance = data_view.getInt16(offset);
   offset += 2;
@@ -402,7 +403,7 @@ function parse_full_readout(data_view, previous_readout){
   const battery_current = total_power / readout.vcc_voltage;
 
 
-  const inductor_angle_offset = normalize_degrees(inductor_angle - readout.angle);
+  const inductor_angle_offset = normalize_degrees(inductor_angle - readout.predicted_angle);
 
 
   const full_readout = {
@@ -435,7 +436,7 @@ function parse_full_readout(data_view, previous_readout){
     inductor_angle_offset,
     
     rotor_acceleration,
-    phase_resistance,
+    rotations,
     phase_inductance,
   };
 

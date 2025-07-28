@@ -152,9 +152,10 @@ static inline MotorOutputs update_motor_smooth(
     // should be as close to the 90 degrees as possible for maximum torque per current use.
     const int ideal_angle = normalize_angle(readout.angle + quarter_circle);
 
+    // Get the error between the measured current and the ideal current angle.
     const int ideal_angle_diff = current_detected * signed_angle(ideal_angle - readout.inductor_angle);
 
-    // Get the error between the measured current and the ideal current angle.
+    // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
     const int lead_angle_error = control_parameters.lead_angle_control_ki * (
         emf_detected ? active_pwm_direction * ideal_angle_diff :
         -sign(driver_state.lead_angle_control)
@@ -207,7 +208,15 @@ static inline MotorOutputs update_motor_torque(
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
-    const int measured_current = (angle_fix and current_detected) * readout.beta_current;
+    const int inductor_angle_offset = signed_angle(readout.inductor_angle - (readout.angle - readout.angle_adjustment));
+
+    const int current_magnitude = -(
+        get_cos(inductor_angle_offset) * readout.alpha_current - 
+        get_sin(inductor_angle_offset) * readout.beta_current
+    ) / angle_base;
+
+
+    const int measured_current = (angle_fix and current_detected) * sign(readout.beta_current) * current_magnitude;
 
     const int control_error = (current_target - measured_current) * control_parameters.torque_control_ki;
 

@@ -123,7 +123,7 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.rotor_acceleration);
     offset += 2;
-    write_int16(buffer + offset, readout.phase_resistance);
+    write_int16(buffer + offset, readout.rotations);
     offset += 2;
     write_int16(buffer + offset, readout.phase_inductance);
     offset += 2;
