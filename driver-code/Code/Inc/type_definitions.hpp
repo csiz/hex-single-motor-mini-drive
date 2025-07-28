@@ -84,14 +84,14 @@ struct DriveSchedule {
 
 // Drive the motor to a specific current target (torque target).
 struct DriveTorque {
-    int16_t current_target;
     int32_t torque_control;
+    int16_t current_target;
 };
 
 // Drive the motor to a specific battery power drain.
 struct DriveBatteryPower {
-    int16_t power_target;
-    int16_t battery_power_control;
+    int32_t battery_power_control;
+    int16_t target_power;
 };
 
 // The complete driver state, these values control the motor behaviour.
@@ -116,7 +116,7 @@ struct DriverState {
     
     // The angle fraction remaining. Needed because the angular speed has higher
     // resolution than the angle; so we need to keep track of partial increments.
-    int16_t angle_residual;
+    int16_t active_angle_residual;
 
     int16_t target_pwm;
 
@@ -323,7 +323,7 @@ struct ControlParameters {
     int16_t emf_angle_error_variance_threshold;
 
     // Spare
-    int16_t spare;
+    int16_t min_emf_for_motor_constant;
 };
 
 

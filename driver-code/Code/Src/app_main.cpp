@@ -320,7 +320,6 @@ bool handle_command(MessageBuffer const& buffer) {
                 .active_angle = command.third,
                 .active_pwm = command.value,
                 .angular_speed = command.second,
-                .angle_residual = 0,
             });
             return false;
         }
@@ -356,7 +355,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::DRIVE_BATTERY_POWER, 
                 .duration = command.timeout, 
                 .battery_power = DriveBatteryPower{ 
-                    .power_target = static_cast<int16_t>(max_drive_power * command.value / pwm_max)
+                    .target_power = static_cast<int16_t>(command.value)
                 }
             });
             return false;

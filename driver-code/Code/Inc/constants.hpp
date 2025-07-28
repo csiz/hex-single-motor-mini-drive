@@ -47,7 +47,6 @@ const int readout_number_base = 1 << 16;
 const size_t hall_state_bit_offset = 0;
 const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
-
 const size_t emf_detected_bit_offset = 11;
 const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 
@@ -329,21 +328,21 @@ const ControlParameters default_control_parameters = {
     .rotor_angle_ki = 1024,
     .rotor_angular_speed_ki = 64,
     .rotor_acceleration_ki = 32,
-    .motor_constant_ki = 32,
+    .motor_constant_ki = 8,
     .resistance_ki = 0,
     .inductance_ki = 0,
     .max_pwm_change = 8,
     .max_angle_change = 8,
     .min_emf_voltage = voltage_fixed_point * 150 / 1000,
-    .min_emf_speed = static_cast<int16_t>(8.3 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second),
+    .min_emf_speed = static_cast<int16_t>(5 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second),
     .lead_angle_control_ki = 8,
     .torque_control_ki = 32,
-    .battery_power_control_ki = 0,
-    .speed_control_ki = 0,
+    .battery_power_control_ki = 8,
+    .speed_control_ki = 8,
     .probing_angular_speed = speed_fixed_point,
     .probing_max_pwm = pwm_max_hold,
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
-    .spare = 4,
+    .min_emf_for_motor_constant = voltage_fixed_point * 1,
 };
 
 const int max_lead_angle_control = third_circle * control_parameters_fixed_point;

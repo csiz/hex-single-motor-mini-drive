@@ -97,11 +97,11 @@ static inline MotorOutputs update_motor_periodic(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    const int active_angle_hires_diff = driver_state.angular_speed + driver_state.angle_residual;
+    const int active_angle_hires_diff = driver_state.angular_speed + driver_state.active_angle_residual;
 
     driver_state.active_angle = normalize_angle(driver_state.active_angle + active_angle_hires_diff / speed_fixed_point);
 
-    driver_state.angle_residual = active_angle_hires_diff % speed_fixed_point;
+    driver_state.active_angle_residual = active_angle_hires_diff % speed_fixed_point;
 
     return update_motor_at_angle(driver_state, readout);
 }
@@ -138,11 +138,11 @@ static inline MotorOutputs update_motor_smooth(
 
 
     // Calculate the predicted active angle (we want to maintain constant speed in angular coordinate space).
-    const int active_angle_hires_diff = driver_state.angular_speed + driver_state.angle_residual;
+    const int active_angle_hires_diff = driver_state.angular_speed + driver_state.active_angle_residual;
 
     driver_state.active_angle = normalize_angle(driver_state.active_angle + active_angle_hires_diff / speed_fixed_point);
 
-    driver_state.angle_residual = active_angle_hires_diff % speed_fixed_point;
+    driver_state.active_angle_residual = active_angle_hires_diff % speed_fixed_point;
 
 
     if (angle_fix) {
@@ -206,7 +206,7 @@ static inline MotorOutputs update_motor_torque(
     FullReadout const& readout
 ){
     // Calculate the target current in fixed point format.
-    const int16_t current_target = driver_state.torque.current_target;
+    const int current_target = driver_state.torque.current_target;
 
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
@@ -228,23 +228,39 @@ static inline MotorOutputs update_motor_torque(
     return update_motor_smooth(driver_state, readout);
 }
 
+// Drive motor using up to a target battery power consumption.
+// 
+// The sign of the target power determines the direction of driving. When motor breaking, we
+// try to absorb the target power instead and use it to charge the battery.
 static inline MotorOutputs update_motor_battery_power(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    const bool direction_is_negative = driver_state.battery_power.power_target < 0;
+    // Note that total power will be 0 when not driving; in that case we want to
+    // counter the EMF voltage to minimize phase resistance heating, but we don't
+    // want to absorb more power than the target setting.
 
-    driver_state.battery_power.battery_power_control = clip_to(
-        -pwm_max,
-        +pwm_max,
-        signed_ceil_div(
-            (max(0, -readout.total_power) - faster_abs(driver_state.battery_power.power_target)) * control_parameters.battery_power_control_ki,
-            control_parameters_fixed_point
-        )
+    const int target_power = driver_state.battery_power.target_power;
+    
+    const bool total_power_dominates = faster_abs(readout.total_power) > faster_abs(readout.emf_power);
+
+    const int measured_power = (total_power_dominates ? 
+        sign(driver_state.active_pwm) * readout.total_power :
+        -sign(readout.beta_emf_voltage) * readout.emf_power
     );
 
-    // Get the target PWM after power control.
-    driver_state.target_pwm = clip_to(-pwm_max, pwm_max, (direction_is_negative ? -1 : 1) * driver_state.battery_power.battery_power_control);
+    const int control_error = (target_power - measured_power) * control_parameters.battery_power_control_ki;
+
+
+    // Update the PID control for the torque.
+    driver_state.battery_power.battery_power_control = clip_to(
+        (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
+        (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
+        driver_state.battery_power.battery_power_control + control_error
+    );
+
+    // Get the target PWM after torque control.
+    driver_state.target_pwm = driver_state.battery_power.battery_power_control / control_parameters_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -347,7 +363,7 @@ static inline DriverState setup_driver_state(
                 )),
                 .active_pwm = static_cast<int16_t>(min(pwm_max_hold, faster_abs(pending_state.active_pwm))),
                 .angular_speed = static_cast<int16_t>(clip_to(-max_angular_speed, max_angular_speed, pending_state.angular_speed)),
-                .angle_residual = 0,
+                .active_angle_residual = 0,
             };
 
         case DriverMode::DRIVE_SMOOTH:
@@ -359,7 +375,7 @@ static inline DriverState setup_driver_state(
                     static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .angle_residual = driver_state.angle_residual,
+                .active_angle_residual = driver_state.active_angle_residual,
                 .target_pwm = static_cast<int16_t>(clip_to(-pwm_max, +pwm_max, pending_state.target_pwm)),
                 .lead_angle_control = driver_state.lead_angle_control,
             };
@@ -372,11 +388,11 @@ static inline DriverState setup_driver_state(
                     static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .angle_residual = driver_state.angle_residual,
+                .active_angle_residual = driver_state.active_angle_residual,
                 .lead_angle_control = driver_state.lead_angle_control,
                 .torque = DriveTorque{
+                    .torque_control = driver_state.mode == DriverMode::DRIVE_TORQUE ? driver_state.torque.torque_control : 0,
                     .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.torque.current_target)),
-                    .torque_control = driver_state.torque.torque_control,
                 }
             };
 
@@ -384,8 +400,15 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_BATTERY_POWER,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle :
+                    static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
+                .active_pwm = driver_state.active_pwm,
+                .angular_speed = driver_state.angular_speed,
+                .active_angle_residual = driver_state.active_angle_residual,
+                .lead_angle_control = driver_state.lead_angle_control,
                 .battery_power = DriveBatteryPower{
-                    .power_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.battery_power.power_target)),
+                    .battery_power_control = driver_state.mode == DriverMode::DRIVE_BATTERY_POWER ? driver_state.battery_power.battery_power_control : 0,
+                    .target_power = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.battery_power.target_power)),
                 }
             };
     }

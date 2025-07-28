@@ -129,14 +129,21 @@ export const current_conversion = adc_voltage_reference / (adc_base * motor_shun
 const power_fixed_point = 448; // Fixed point for power calculations.
 
 // Convert power units to Watts.
-export function convert_power_to_watts(power){
+export function convert_power_units_to_watts(power){
   return power / power_fixed_point;
+}
+
+// Convert Watts to power units.
+export function convert_watts_to_power_units(watts){
+  return watts * power_fixed_point;
 }
 
 // Maximum current we can measure in Amperes.
 export const max_measurable_current = adc_base * current_conversion / 2; // Halved because we can measure negative current too.
 
 export const max_drive_current = 6.0;
+
+export const max_drive_power = 12;
 
 export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
 

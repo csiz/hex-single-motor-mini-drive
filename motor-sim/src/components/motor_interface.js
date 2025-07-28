@@ -10,7 +10,7 @@ import {
   angle_units_to_degrees, 
   speed_units_to_degrees_per_millisecond,
   acceleration_units_to_degrees_per_millisecond_squared,
-  convert_power_to_watts,
+  convert_power_units_to_watts,
   phase_resistance, 
   phase_inductance,
   parse_state_flags,
@@ -372,13 +372,13 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
 
 
-  const total_power = convert_power_to_watts(data_view.getInt16(offset));
+  const total_power = convert_power_units_to_watts(data_view.getInt16(offset));
   offset += 2;
-  const resistive_power = convert_power_to_watts(data_view.getInt16(offset));
+  const resistive_power = convert_power_units_to_watts(data_view.getInt16(offset));
   offset += 2;
-  const emf_power = convert_power_to_watts(data_view.getInt16(offset));
+  const emf_power = convert_power_units_to_watts(data_view.getInt16(offset));
   offset += 2;
-  const inductive_power = convert_power_to_watts(data_view.getInt16(offset));
+  const inductive_power = convert_power_units_to_watts(data_view.getInt16(offset));
   offset += 2;
 
   const motor_constant = data_view.getInt16(offset);
@@ -532,7 +532,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const emf_angle_error_variance_threshold = data_view.getInt16(offset);
   offset += 2;
-  const spare = data_view.getInt16(offset);
+  const min_emf_for_motor_constant = data_view.getInt16(offset);
   offset += 2;
 
   return {
@@ -553,7 +553,7 @@ function parse_control_parameters(data_view) {
     probing_angular_speed,
     probing_max_pwm,
     emf_angle_error_variance_threshold,
-    spare,
+    min_emf_for_motor_constant,
   };
 }
 
@@ -666,7 +666,7 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.emf_angle_error_variance_threshold);
   offset += 2;
-  view.setInt16(offset, control_parameters.spare);
+  view.setInt16(offset, control_parameters.min_emf_for_motor_constant);
   offset += 2;
 
   serialise_message_tail(buffer, offset);

@@ -321,9 +321,6 @@ void adc_interrupt_handler(){
     const int beta_emf_voltage = -dot(emf_voltages, three_phase_sin) / angle_base;
 
 
-    // TODO: restore the battery power drive mode too
-
-
     // Current angle calculation
     // -------------------------
 
@@ -387,8 +384,11 @@ void adc_interrupt_handler(){
     // Set the flag for immininent rotor correction, we need to set it over multiple cycles otherwise it might be missed.
     const bool rotor_direction_flip_imminent = incorrect_direction_detections >= 24;
 
-    // Track how many times we think our rotor angle is correct.
-    correct_angle_counter = clip_to(0, 64, correct_angle_counter + (emf_and_movement_fix and (incorrect_direction_detections == 0) ? +1 : -1));
+    // Our angle is incorrect if we're detecting a flip; or if we don't have an EMF reading whilst driving the motor.
+    const bool incorrect_angle = incorrect_direction_detections or (driver_state.active_pwm and not emf_fix);
+
+    // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
+    correct_angle_counter = clip_to(0, 1024, correct_angle_counter + (incorrect_angle ? -1 : emf_and_movement_fix));
 
     // Declare the angle to be correct after a threshold certainty.
     const bool angle_fix = correct_angle_counter >= 32;
@@ -439,33 +439,36 @@ void adc_interrupt_handler(){
 
     const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
 
-    const int motor_constant_error = emf_and_movement_fix * (emf_voltage_magnitude - predicted_emf_voltage);
+    const bool compute_motor_constant = emf_and_movement_fix and (emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
+
+    const int motor_constant_error = compute_motor_constant * (emf_voltage_magnitude - predicted_emf_voltage);
 
     motor_constant += motor_constant_error * control_parameters.motor_constant_ki;
 
 
-    // Calculate the power values using the phase currents and voltages.
+    // Calculate the power use
+    // -----------------------
 
+    // Resistive power is the power dissipated in the motor coils and MOSFETs.
     const int resistive_power = dot(currents, resistive_voltages) / voltage_current_div_power_fixed_point;
 
+    // Inductive power is the power transfered to the motor inductors.
     const int inductive_power = dot(currents, inductor_voltages) / voltage_current_div_power_fixed_point;
 
+    // EMF power is the power transferred into the rotor movement, driving the motor.
+    // 
     // Use the DQ0 transformed values to calculate the EMF power quickly. We also have a chance to 
+    // smooth out the values to better approximate the real power use.
     const int emf_power = -beta_current * beta_emf_voltage / dq0_to_power_fixed_point;
 
-    // Compute the real total power used from the balance of powers.
-    // 
-    // Resistive power is the power dissipated in the motor coils and MOSFETs.
-    // EMF power is the power transferred into the rotor movement, driving the motor.
-    // Inductive power is the power transfered to the motor inductance.
-    // The total power is the power transferred to the battery.
+    // The total power is the power used from the battery. It will be positive when driving
+    // the motor, meaning that we drain the battery. If this is negative it means we are charging
+    // the battery by slowing down the motor (regenerative breaking).
     // 
     // The balance of all powers must be zero assuming no other source or sink of power. Thus
     // we can compute the total power from the others; mostly determined by EMF. The resistive
     // power is quite reliable and inductive_power is very small.
-    const int total_power = -(resistive_power + emf_power + inductive_power);
-
-
+    const int total_power = resistive_power + inductive_power + emf_power;
 
 
     // Get hall sensor state
@@ -487,13 +490,13 @@ void adc_interrupt_handler(){
     readout.readout_number = readout_number;
         
     readout.state_flags = (
-        (hall_state << hall_state_bit_offset) |
         (emf_fix << emf_fix_bit_offset) |
         (emf_detected << emf_detected_bit_offset) |
         (current_detected << current_detected_bit_offset) |
         (angle_fix << angle_fix_bit_offset) |
         (incorrect_rotor_angle_detected << incorrect_rotor_angle_bit_offset) |
-        (rotor_direction_flip_imminent << rotor_direction_flip_imminent_bit_offset)
+        (rotor_direction_flip_imminent << rotor_direction_flip_imminent_bit_offset) |
+        (hall_state << hall_state_bit_offset)
     );
 
     

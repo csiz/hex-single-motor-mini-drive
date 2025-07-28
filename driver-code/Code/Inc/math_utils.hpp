@@ -10,6 +10,7 @@ static inline constexpr int min(int a, int b){
     return a < b ? a : b;
 }
 
+
 // Get the larger between two numbers.
 static inline constexpr int max(int a, int b){
     return a > b ? a : b;

@@ -226,7 +226,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.emf_angle_error_variance_threshold);
     offset += 2;
-    write_int16(buffer + offset, control_parameters.spare);
+    write_int16(buffer + offset, control_parameters.min_emf_for_motor_constant);
     offset += 2;
     
     write_message_tail(buffer, offset);
@@ -441,7 +441,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.emf_angle_error_variance_threshold = read_int16(data + offset);
     offset += 2;
-    control_parameters.spare = read_int16(data + offset);
+    control_parameters.min_emf_for_motor_constant = read_int16(data + offset);
     offset += 2;
 
     if (offset + tail_size != control_parameters_size) error();

@@ -25,6 +25,7 @@ Motor Commands
   <span>${command_angle_slider}</span>
   <span>${command_angular_speed_slider}</span>
   <span>${command_torque_current_slider}</span>
+  <span>${command_power_slider}</span>
 </div>
 
 
@@ -285,6 +286,9 @@ const command_torque_current_slider = inputs_wide_range([0, max_drive_current], 
 
 const command_torque_current_amps = Generators.input(command_torque_current_slider);
 
+const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 0.200, step: 0.010, label: "Command power (Watts):"});
+
+const command_power_watts = Generators.input(command_power_slider);
 ```
 
 ```js
@@ -326,6 +330,7 @@ const command_angular_speed = degrees_per_millisecond_to_speed_units(command_ang
 
 const command_torque_current = Math.floor(command_torque_current_amps / current_conversion);
 
+const command_power = convert_watts_to_power_units(command_power_watts);
 
 async function command(command, options = {}){
   if (!motor_controller) return;
@@ -445,27 +450,27 @@ d3.select(stop_buttons)
 const simple_drive_buttons = Inputs.button(
   [
     ["Hold U positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_U_POSITIVE, {command_value: Math.abs(command_pwm)});
+      await command(command_codes.SET_STATE_HOLD_U_POSITIVE, {command_value: command_pwm});
       snapshot_if_checked();
     }],
     ["Hold V positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_V_POSITIVE, {command_value: Math.abs(command_pwm)});
+      await command(command_codes.SET_STATE_HOLD_V_POSITIVE, {command_value: command_pwm});
       snapshot_if_checked();
     }],
     ["Hold W positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_W_POSITIVE, {command_value: Math.abs(command_pwm)});
+      await command(command_codes.SET_STATE_HOLD_W_POSITIVE, {command_value: command_pwm});
       snapshot_if_checked();
     }],
     ["Hold U negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_U_NEGATIVE, {command_value: Math.abs(command_pwm)});
+      await command(command_codes.SET_STATE_HOLD_U_NEGATIVE, {command_value: command_pwm});
       snapshot_if_checked();
     }],
     ["Hold V negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_V_NEGATIVE, {command_value: Math.abs(command_pwm)});
+      await command(command_codes.SET_STATE_HOLD_V_NEGATIVE, {command_value: command_pwm});
       snapshot_if_checked();
     }],
     ["Hold W negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_W_NEGATIVE, {command_value: Math.abs(command_pwm)});
+      await command(command_codes.SET_STATE_HOLD_W_NEGATIVE, {command_value: command_pwm});
       snapshot_if_checked();
     }],
     ["Drive 6S +", async function(){
@@ -491,7 +496,7 @@ const advanced_drive_buttons = Inputs.button(
     }],
     ["Drive periodic", async function(){
       await command(command_codes.SET_STATE_DRIVE_PERIODIC, {
-        command_value: +command_pwm, 
+        command_value: command_pwm, 
         command_second: command_angular_speed, 
         command_third: command_angle,
       });
@@ -514,11 +519,11 @@ const advanced_drive_buttons = Inputs.button(
       snapshot_if_checked();
     }],
     ["Drive power +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: +command_pwm});
+      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: +command_power});
       snapshot_if_checked();
     }],
     ["Drive power -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_pwm});
+      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
       snapshot_if_checked();
     }],
   ],
@@ -1279,7 +1284,7 @@ const control_parameters_input = Object.fromEntries(
     ["probing_angular_speed", "Probing Angular Speed"],
     ["probing_max_pwm", "Probing Max PWM"],
     ["emf_angle_error_variance_threshold", "EMF Angle Correction Variance Threshold"],
-    ["spare", "Spare"],
+    ["min_emf_for_motor_constant", "Minimum EMF to compute the motor constant"],
   ].map(([key, label]) => [
     key, 
     Inputs.number([], {
@@ -1429,7 +1434,7 @@ import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, default_current_calibration, max_calibration_current,
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
-  current_conversion, max_drive_current,
+  current_conversion, max_drive_current, max_drive_power, convert_power_units_to_watts, convert_watts_to_power_units,
 } from "./components/motor_constants.js";
 
 import {unit_test_expected} from "./components/motor_unit_tests.js";
