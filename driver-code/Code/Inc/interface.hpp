@@ -49,6 +49,12 @@ enum MessageCode : uint16_t {
     CURRENT_FACTORS = 0x4040,
     GET_CURRENT_FACTORS = 0x4041,
     SET_CURRENT_FACTORS = 0x4042,
+    RESET_CURRENT_FACTORS = 0x4043,
+
+    HALL_POSITIONS = 0x4044,
+    GET_HALL_POSITIONS = 0x4045,
+    SET_HALL_POSITIONS = 0x4046,
+    RESET_HALL_POSITIONS = 0x4047,
 
     CONTROL_PARAMETERS = 0x4049,
     SET_CONTROL_PARAMETERS = 0x404A,
@@ -85,6 +91,7 @@ const size_t basic_command_size = header_size + sizeof(BasicCommand) + tail_size
 const size_t readout_size = header_size + sizeof(Readout) + tail_size;
 const size_t full_readout_size = header_size + sizeof(FullReadout) + tail_size;
 const size_t current_calibration_size = header_size + sizeof(CurrentCalibration) + tail_size;
+const size_t position_calibration_size = header_size + sizeof(PositionCalibration) + tail_size;
 const size_t control_parameters_size = header_size + sizeof(ControlParameters) + tail_size;
 const size_t unit_test_size = max_message_size;
 
@@ -122,6 +129,7 @@ bool check_message_for_errors(uint8_t const * data, size_t size);
 BasicCommand parse_basic_command(uint8_t const * data, size_t size);
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size);
 ControlParameters parse_control_parameters(uint8_t const * data, size_t size);
+PositionCalibration parse_position_calibration(uint8_t const * data, size_t size);
 
 // Sending data
 // ------------
@@ -130,6 +138,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size);
 size_t write_readout(uint8_t * buffer, Readout const& readout);
 size_t write_full_readout(uint8_t * buffer, FullReadout const& full_readout);
 size_t write_current_calibration(uint8_t * buffer, CurrentCalibration const& factors);
+size_t write_position_calibration(uint8_t * data, PositionCalibration const & position_calibration);
 size_t write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters);
 size_t write_unit_test(uint8_t * buffer, UnitTestFunction test_function);
 

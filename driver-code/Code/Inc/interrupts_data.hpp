@@ -43,6 +43,9 @@ void set_angle(int16_t angle);
 // Position tracking
 // -----------------
 
+// Position calibration data. These are the trigger angles for each hall sensor output.
+extern PositionCalibration position_calibration;
+
 // Current calibration factors.
 extern CurrentCalibration current_calibration;
 

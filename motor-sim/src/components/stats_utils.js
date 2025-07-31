@@ -65,19 +65,3 @@ export function weighted_product_of_normals_by_variance({mean_a, variance_a, wei
 
   return {mean, variance};
 }
-
-export function approx_cdf_normal_via_sin(x, mean, stdev) {
-  const scale = 2.4;
-
-  return x < mean - scale * stdev ? 0 : x > mean + scale * stdev ? 1 :
-    0.5 * (1 + Math.sin(Math.PI/2 * (x - mean) / (scale * stdev)));
-}
-
-export function approx_cdf_normal(x, mean, stdev) {
-  const scale = 2;
-  const variance = scale * scale * stdev * stdev;
-  const square_diff = (x - mean) * (x - mean);
-  const positive = x - mean >= 0;
-
-  return square_diff > variance ? (positive ? 1 : 0) : (positive ? 0.5 : 0.0);
-}

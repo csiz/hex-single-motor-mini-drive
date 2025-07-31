@@ -256,15 +256,20 @@ struct FullReadout : public Readout {
     int16_t target_pwm;
 };
 
+// Parameters data structures
+// --------------------------
 
-// Command data structures
-// -----------------------
 
-struct BasicCommand {
-    uint16_t timeout;
-    int16_t value;
-    int16_t second;
-    int16_t third;
+using TriggerAngles = std::array<std::array<uint16_t, 2>, 6>;
+using TriggerAngleVariances = std::array<std::array<uint16_t, 2>, 6>;
+using CenterAngles = std::array<uint16_t, 6>;
+using CenterVariances = std::array<uint16_t, 6>;
+
+struct PositionCalibration {
+    TriggerAngles sector_transition_angles;
+    TriggerAngleVariances sector_transition_variances;
+    CenterAngles sector_center_angles;
+    CenterVariances sector_center_variances;
 };
 
 struct CurrentCalibration {
@@ -273,7 +278,6 @@ struct CurrentCalibration {
     int16_t w_factor;
     int16_t inductance_factor;
 };
-
 
 struct ControlParameters {
     // Magnet position integral gain.
@@ -329,6 +333,17 @@ struct ControlParameters {
 
     // Spare
     int16_t min_emf_for_motor_constant;
+};
+
+
+// Command data structures
+// -----------------------
+
+struct BasicCommand {
+    uint16_t timeout;
+    int16_t value;
+    int16_t second;
+    int16_t third;
 };
 
 

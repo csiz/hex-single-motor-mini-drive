@@ -314,12 +314,7 @@ const data = d3.range(...domain, span / 500).map((x) => {
 
   const pdf_a_mul_pdf_b = pdf_a * pdf_b;
   const pdf_ab = pdf_normal(x, ab_mean, ab_stdev);
-
-  const approx_cdf_a = approx_cdf_normal(-x, -lower, lower_stdev);
-  const approx_cdf_b = approx_cdf_normal(x, upper, upper_stdev);
-
   
-
 
   const untriggered_pdf = pdf_prior * (1.0 - cdf_a) * (1.0 - cdf_b);
   const a_triggered_pdf = pdf_prior * cdf_a;
@@ -335,8 +330,6 @@ const data = d3.range(...domain, span / 500).map((x) => {
     pdf_b,
     cdf_a,
     cdf_b,
-    approx_cdf_a,
-    approx_cdf_b,
     untriggered_pdf,
     a_triggered_pdf,
     b_triggered_pdf,
@@ -381,14 +374,6 @@ const bounded_example_plot = plot_lines({
       draw_extra: setup_faint_area({y0: 0, y1: "b_triggered_pdf"}),
     },
     {
-      y: "pdf_a", label: "PDF a", color: colors.a,
-      draw_extra: setup_v_line({x_value: (d) => d.lower, dasharray: "2,9"}),
-    },
-    {
-      y: "pdf_b", label: "PDF b", color: colors.b,
-      draw_extra: setup_v_line({x_value: (d) => d.upper, dasharray: "2,7"}),
-    },
-    {
       y: "cdf_a", label: "CDF a", color: d3.color(colors.a).darker(1),
       draw_extra: setup_v_line({x_value: (d) => d.lower, dasharray: "2,9"}),
     },
@@ -396,8 +381,6 @@ const bounded_example_plot = plot_lines({
       y: "cdf_b", label: "CDF b", color: d3.color(colors.b).darker(1),
       draw_extra: setup_v_line({x_value: (d) => d.upper, dasharray: "2,7"}),
     },
-    {y: "approx_cdf_a", label: "Approx CDF a", color: d3.color(colors.a).brighter(1)},
-    {y: "approx_cdf_b", label: "Approx CDF b", color: d3.color(colors.b).brighter(1)},
   ],
 });
 
@@ -444,7 +427,7 @@ autosave_inputs({
 
 import {plot_lines, setup_faint_area, horizontal_step, setup_v_line} from "./components/plotting_utils.js";
 import {autosave_inputs, inputs_wide_range} from "./components/input_utils.js";
-import {cdf_normal, pdf_normal, quantile_normal, weighted_product_of_normals, approx_cdf_normal} from "./components/stats_utils.js";
+import {cdf_normal, pdf_normal, quantile_normal, weighted_product_of_normals} from "./components/stats_utils.js";
 
 function normalize_extent(data, ys) {
   const norms = ys.map(y => {

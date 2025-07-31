@@ -30,7 +30,8 @@ common mode voltage seems to fix it. Is that the only way to measure all current
 [ ] Look for thinner IDC connector, and definitely SMD version for easier routing, use of space behind connector.
 [ ] Add voltage probes for the phase connectors so we can measure voltage both during driving and open connections.
 We need to measure driving voltage to make sure our MOSFETS are turned on and giving us the voltage we command!
-[ ] Use Kelvin sense resistors for the current measurement to avoid the unknown solder resistance.
+[ ] Use Kelvin sense resistors (or pad hack) for the current measurement to avoid the unknown solder resistance.
+https://www.analog.com/media/en/analog-dialogue/volume-46/number-2/articles/optimize-high-current-sensing-accuracy.pdf
 [x] Don't drop the hall sensors, yet!
 [ ] The big problem with our measurements occurs when we switch from continuous 0 output from the low mosfet to mixed
 output with the high mosfet. Any amount of mixed output seems to add an offset to our current measurement. Might be

@@ -163,6 +163,41 @@ size_t write_current_calibration(uint8_t * buffer, CurrentCalibration const& fac
     return offset;
 }
 
+size_t write_position_calibration(uint8_t * buffer, PositionCalibration const& position_calibration) {
+    size_t offset = 0;
+    write_uint16(buffer + offset, HALL_POSITIONS);
+    offset += 2;
+
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_transition_angles[i][0]);
+        offset += 2;
+        write_uint16(buffer + offset, position_calibration.sector_transition_angles[i][1]);
+        offset += 2;
+    }
+
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_transition_variances[i][0]);
+        offset += 2;
+        write_uint16(buffer + offset, position_calibration.sector_transition_variances[i][1]);
+        offset += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_center_angles[i]);
+        offset += 2;
+    }
+    for (int i = 0; i < 6; i++){
+        write_uint16(buffer + offset, position_calibration.sector_center_variances[i]);
+        offset += 2;
+    }
+
+    write_message_tail(buffer, offset);
+
+    // Check if we wrote the correct number of bytes.
+    if (offset != position_calibration_size) error();
+
+    return offset;
+}
+
 size_t write_unit_test(uint8_t * buffer, UnitTestFunction test_function){
     if (test_function == nullptr) error();
 
@@ -292,6 +327,9 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_DRIVE_BATTERY_POWER: return min_message_size;
 
         case GET_CURRENT_FACTORS: return min_message_size;
+        case RESET_CURRENT_FACTORS: return min_message_size;
+        case GET_HALL_POSITIONS: return min_message_size;
+        case RESET_HALL_POSITIONS: return min_message_size;
         case GET_CONTROL_PARAMETERS: return min_message_size;
         case RESET_CONTROL_PARAMETERS: return min_message_size;
         case SET_ANGLE: return min_message_size;
@@ -303,11 +341,13 @@ static inline int get_message_size(uint16_t code) {
         case RUN_UNIT_TEST_FUNKY_ATAN_PART_3: return min_message_size;
         
         case SET_CURRENT_FACTORS: return current_calibration_size;
+        case SET_HALL_POSITIONS: return position_calibration_size;
         case SET_CONTROL_PARAMETERS: return control_parameters_size;
 
         case READOUT: return readout_size;
         case FULL_READOUT: return full_readout_size;
         case CURRENT_FACTORS: return current_calibration_size;
+        case HALL_POSITIONS: return position_calibration_size;
         case CONTROL_PARAMETERS: return control_parameters_size;
 
         case UNIT_TEST_OUTPUT: return unit_test_size;
@@ -398,6 +438,41 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
     return current_calibration;
 }
 
+PositionCalibration parse_position_calibration(uint8_t const * data, size_t size) {
+    if(size < position_calibration_size) error();
+
+    PositionCalibration position_calibration = {};
+    
+    size_t offset = header_size;
+
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_transition_angles[i][0] = read_uint16(data + offset);
+        offset += 2;
+        position_calibration.sector_transition_angles[i][1] = read_uint16(data + offset);
+        offset += 2;
+    }
+
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_transition_variances[i][0] = read_uint16(data + offset);
+        offset += 2;
+        position_calibration.sector_transition_variances[i][1] = read_uint16(data + offset);
+        offset += 2;
+    }
+
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_center_angles[i] = read_uint16(data + offset);
+        offset += 2;
+    }
+
+    for (int i = 0; i < 6; i++){
+        position_calibration.sector_center_variances[i] = read_uint16(data + offset);
+        offset += 2;
+    }
+
+    if (offset + tail_size != position_calibration_size) error();
+
+    return position_calibration;
+}
 
 ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     if(size < control_parameters_size) error();

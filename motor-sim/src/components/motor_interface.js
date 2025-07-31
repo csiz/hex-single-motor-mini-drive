@@ -8,6 +8,7 @@ import {
   calculate_voltage,
   current_calibration_base,
   angle_units_to_degrees, 
+  degrees_to_angle_units,
   speed_units_to_degrees_per_millisecond,
   acceleration_units_to_degrees_per_millisecond_squared,
   convert_power_units_to_watts,
@@ -17,7 +18,8 @@ import {
 } from './motor_constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
-import {square, dq0_transform, exponential_stats, clarke_transform} from './math_utils.js';
+import {square, dq0_transform, exponential_stats} from './math_utils.js';
+import {accumulate_position_from_hall} from './motor_position_kalman_filter.js';
 
 export const header_size = 2; // 2 bytes
 
@@ -58,6 +60,12 @@ export const command_codes = {
   CURRENT_FACTORS: 0x4040,
   GET_CURRENT_FACTORS: 0x4041,
   SET_CURRENT_FACTORS: 0x4042,
+  RESET_CURRENT_FACTORS: 0x4043,
+
+  HALL_POSITIONS: 0x4044,
+  GET_HALL_POSITIONS: 0x4045,
+  SET_HALL_POSITIONS: 0x4046,
+  RESET_HALL_POSITIONS: 0x4047,
 
   CONTROL_PARAMETERS: 0x4049,
   SET_CONTROL_PARAMETERS: 0x404A,
@@ -84,6 +92,7 @@ const basic_command_size = 16;
 const readout_size = 40;
 const full_readout_size = 84;
 const current_calibration_size = 16;
+const position_calibration_size = 80;
 const control_parameters_size = 44;
 const unit_test_size = 256;
 
@@ -182,6 +191,10 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const hall_v = Boolean(hall_state & 0b010) * 1;
   const hall_w = Boolean(hall_state & 0b100) * 1;
 
+  const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
+
+  const is_hall_transition = hall_sector !== null && hall_sector !== previous_readout?.hall_sector;
+
   // Approximate the angle for the 6 sectors of the hall sensor; for plotting.
   const ε = 2;
   const hall_u_as_angle = hall_u ? hall_v ? + 60 - ε : hall_w ? - 60 + ε :    0 : null;
@@ -254,61 +267,67 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const steady_state_beta_current = drive_voltage_magnitude / phase_resistance;
 
 
-  const readout = {
-    // Index
-    readout_number,
-    readout_index, 
-    time,
-    // State flags
-    hall_u,
-    hall_v,
-    hall_w,
-    emf_detected,
-    emf_fix,
-    current_detected,
-    angle_fix,
-    incorrect_rotor_angle,
-    rotor_direction_flip_imminent,
-    // Raw readout values
-    u_readout, v_readout, w_readout,
-    u_readout_diff, v_readout_diff, w_readout_diff,
-    ref_readout,
-    // Readouts converted to physical dimensions
-    u_current, v_current, w_current, avg_current,
-    web_alpha_current, web_beta_current, 
-    web_current_magnitude,
-    web_inductor_angle, 
+  const readout = accumulate_position_from_hall(
+    {
+      // Index
+      readout_number,
+      readout_index, 
+      time,
+      // State flags
+      hall_u,
+      hall_v,
+      hall_w,
+      hall_sector,
+      is_hall_transition,
+      emf_detected,
+      emf_fix,
+      current_detected,
+      angle_fix,
+      incorrect_rotor_angle,
+      rotor_direction_flip_imminent,
+      // Raw readout values
+      u_readout, v_readout, w_readout,
+      u_readout_diff, v_readout_diff, w_readout_diff,
+      ref_readout,
+      // Readouts converted to physical dimensions
+      u_current, v_current, w_current, avg_current,
+      web_alpha_current, web_beta_current, 
+      web_current_magnitude,
+      web_inductor_angle, 
 
-    u_current_diff, v_current_diff, w_current_diff,
-    u_pwm, v_pwm, w_pwm,
-    u_drive_voltage, v_drive_voltage, w_drive_voltage,
-    drive_voltage_alpha,
-    drive_voltage_beta,
-    drive_voltage_angle, 
-    drive_voltage_angle_offset,
-    drive_voltage_magnitude,
-    steady_state_beta_current,
-    u_emf_voltage, v_emf_voltage, w_emf_voltage,
-    u_R_voltage, v_R_voltage, w_R_voltage,
-    u_L_voltage, v_L_voltage, w_L_voltage,
-    hall_u_as_angle,
-    hall_v_as_angle,
-    hall_w_as_angle,
-    angle,
-    predicted_angle,
-    angle_adjustment,
-    angular_speed,
-    vcc_voltage,
-    emf_voltage_magnitude,
-    web_alpha_emf_voltage, web_beta_emf_voltage, 
-    web_emf_voltage_magnitude,
-    web_emf_voltage_angle, 
-    emf_voltage_angle_offset,
-    web_total_power,
-    web_emf_power,
-    web_resistive_power,
-    web_inductive_power,
-  };
+      u_current_diff, v_current_diff, w_current_diff,
+      u_pwm, v_pwm, w_pwm,
+      u_drive_voltage, v_drive_voltage, w_drive_voltage,
+      drive_voltage_alpha,
+      drive_voltage_beta,
+      drive_voltage_angle, 
+      drive_voltage_angle_offset,
+      drive_voltage_magnitude,
+      steady_state_beta_current,
+      u_emf_voltage, v_emf_voltage, w_emf_voltage,
+      u_R_voltage, v_R_voltage, w_R_voltage,
+      u_L_voltage, v_L_voltage, w_L_voltage,
+      hall_u_as_angle,
+      hall_v_as_angle,
+      hall_w_as_angle,
+      angle,
+      predicted_angle,
+      angle_adjustment,
+      angular_speed,
+      vcc_voltage,
+      emf_voltage_magnitude,
+      web_alpha_emf_voltage, web_beta_emf_voltage, 
+      web_emf_voltage_magnitude,
+      web_emf_voltage_angle, 
+      emf_voltage_angle_offset,
+      web_total_power,
+      web_emf_power,
+      web_resistive_power,
+      web_inductive_power,
+    }, 
+    previous_readout, 
+    this.position_calibration,
+  );
 
   if (!previous_readout) return readout;
 
@@ -336,8 +355,10 @@ function parse_readout(data_view, previous_readout, check_errors = true){
 
   return {
     ...readout,
-    web_emf_voltage_magnitude_avg, web_emf_voltage_magnitude_stdev,
-    web_current_magnitude_avg, web_current_magnitude_stdev,
+    web_emf_voltage_magnitude_avg, 
+    web_emf_voltage_magnitude_stdev,
+    web_current_magnitude_avg, 
+    web_current_magnitude_stdev,
   };
 }
 
@@ -495,6 +516,47 @@ function parse_current_calibration(data_view){
   };
 }
 
+
+function parse_position_calibration(data_view){
+  if(check_message_for_errors(data_view, position_calibration_size, command_codes.HALL_POSITIONS)) return null;
+
+  let offset = header_size;
+  const sector_transition_degrees = Array.from(Array(6), () => Array.from(Array(2), () => {
+    const value = data_view.getUint16(offset);
+    offset += 2;
+    return angle_units_to_degrees(value);
+  }));
+  
+  const sector_transition_stdev = Array.from(Array(6), () => Array.from(Array(2), () => {
+    // We receive the variance, not the stdev.
+    const value = data_view.getUint16(offset);
+    offset += 2;
+    return angle_units_to_degrees(Math.sqrt(value));
+  }));
+
+  const sector_center_degrees = Array.from(Array(6), () => {
+    const value = data_view.getUint16(offset);
+    offset += 2;
+    return angle_units_to_degrees(value);
+  });
+
+  const sector_center_stdev = Array.from(Array(6), () => {
+    // We receive the variance, not the stdev.
+    const value = data_view.getUint16(offset);
+    offset += 2;
+    return angle_units_to_degrees(Math.sqrt(value));
+  });
+
+  return {
+    sector_transition_degrees,
+    sector_transition_stdev,
+    sector_center_degrees,
+    sector_center_stdev,
+  };
+}
+
+
+
 function parse_control_parameters(data_view) {
   if(check_message_for_errors(data_view, control_parameters_size, command_codes.CONTROL_PARAMETERS)) return null;
 
@@ -576,6 +638,7 @@ export const parser_mapping = {
   [command_codes.READOUT]: {parse_func: parse_readout, message_size: readout_size},
   [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
   [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
+  [command_codes.HALL_POSITIONS]: {parse_func: parse_position_calibration, message_size: position_calibration_size},
   [command_codes.CONTROL_PARAMETERS]: {parse_func: parse_control_parameters, message_size: control_parameters_size},
   [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},
 };
@@ -626,6 +689,52 @@ function serialise_current_calibration(current_calibration) {
   return buffer;
 }
 
+function serialise_set_position_calibration(position_calibration) {
+  const {
+    sector_transition_degrees, 
+    sector_transition_stdev, 
+    sector_center_degrees, 
+    sector_center_stdev,
+  } = position_calibration;
+
+  let buffer = new Uint8Array(position_calibration_size);
+
+  let view = new DataView(buffer.buffer);
+
+  let offset = 0;
+  view.setUint16(offset, command_codes.SET_HALL_POSITIONS);
+  offset += 2;
+
+  for (let i = 0; i < 6; i++) {
+    for (let j = 0; j < 2; j++) {
+      view.setUint16(offset, degrees_to_angle_units(sector_transition_degrees[i][j]));
+      offset += 2;
+    }
+  }
+
+  for (let i = 0; i < 6; i++) {
+    for (let j = 0; j < 2; j++) {
+      // Send variance, not stdev.
+      view.setUint16(offset, Math.pow(degrees_to_angle_units(sector_transition_stdev[i][j]), 2));
+      offset += 2;
+    }
+  }
+
+  for (let i = 0; i < 6; i++) {
+    view.setUint16(offset, degrees_to_angle_units(sector_center_degrees[i]));
+    offset += 2;
+  }
+
+  for (let i = 0; i < 6; i++) {
+    // Send variance, not stdev.
+    view.setUint16(offset, Math.pow(degrees_to_angle_units(sector_center_stdev[i]), 2));
+    offset += 2;
+  }
+
+  serialise_message_tail(buffer, offset);
+
+  return buffer;
+}
 
 function serialise_control_parameters(control_parameters) {
   let buffer = new Uint8Array(control_parameters_size);
@@ -679,6 +788,7 @@ function serialise_control_parameters(control_parameters) {
 
 const serialiser_mapping = {
   [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_current_calibration},
+  [command_codes.SET_HALL_POSITIONS]: {serialise_func: serialise_set_position_calibration},
   [command_codes.SET_CONTROL_PARAMETERS]: {serialise_func: serialise_control_parameters},
 };
 

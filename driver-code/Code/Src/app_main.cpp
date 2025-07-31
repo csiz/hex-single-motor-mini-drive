@@ -48,6 +48,7 @@ bool usb_wait_full_history = false;
 
 bool usb_reply_current_factors = false;
 bool usb_reply_control_parameters = false;
+bool usb_reply_hall_positions = false;
 bool usb_reply_unit_test = false;
 
 UnitTestFunction usb_unit_test_function = nullptr;
@@ -434,6 +435,23 @@ bool handle_command(MessageBuffer const& buffer) {
             current_calibration = parse_current_calibration(buffer.data, buffer.write_index);
             usb_reply_current_factors = true;
             return false;
+            
+        case RESET_CURRENT_FACTORS:
+            // Reset the current factors to the default values.
+            current_calibration = default_current_calibration;
+            usb_reply_current_factors = true;
+            return false;
+
+        case SET_HALL_POSITIONS:
+            position_calibration = parse_position_calibration(buffer.data, buffer.write_index);
+            usb_reply_hall_positions = true;
+            return false;
+
+        case RESET_HALL_POSITIONS:
+            // Reset the hall positions to the default values.
+            position_calibration = default_position_calibration;
+            usb_reply_hall_positions = true;
+            return false;
 
         case SET_CONTROL_PARAMETERS:
             control_parameters = parse_control_parameters(buffer.data, buffer.write_index);
@@ -448,6 +466,9 @@ bool handle_command(MessageBuffer const& buffer) {
         case GET_CURRENT_FACTORS:
             usb_reply_current_factors = true;
             return false;
+        case GET_HALL_POSITIONS:
+            usb_reply_hall_positions = true;
+            return false;
 
         case GET_CONTROL_PARAMETERS:
             usb_reply_control_parameters = true;
@@ -460,9 +481,10 @@ bool handle_command(MessageBuffer const& buffer) {
 
         case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
-                save_settings_to_flash(current_calibration, control_parameters);
+                save_settings_to_flash(current_calibration, position_calibration, control_parameters);
 
                 current_calibration = get_current_calibration();
+                position_calibration = get_position_calibration();
                 control_parameters = get_control_parameters();
                 
                 return false;
@@ -473,6 +495,7 @@ bool handle_command(MessageBuffer const& buffer) {
         // We shouldn't receive these messages; the driver only sends them.
         case CURRENT_FACTORS:
         case CONTROL_PARAMETERS:
+        case HALL_POSITIONS:
         case READOUT:
         case FULL_READOUT:
         case UNIT_TEST_OUTPUT:
@@ -576,6 +599,17 @@ void usb_queue_response(FullReadout const& readout) {
         usb_queue_send(usb_response_buffer);
 
         usb_reply_current_factors = false;
+    }
+
+    // Send trigger angles if requested.
+    if (usb_reply_hall_positions) {
+        if(not usb_check_queue(position_calibration_size)) return;
+        
+        // Send the trigger angles to the host.
+        usb_response_buffer.write_index = write_position_calibration(usb_response_buffer.data, position_calibration);
+        usb_queue_send(usb_response_buffer);
+
+        usb_reply_hall_positions = false;
     }
 
     // Queue the readout history to the send buffer.

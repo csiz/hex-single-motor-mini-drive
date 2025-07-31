@@ -86,14 +86,16 @@ export class MotorController {
     this._onmessage = null;
     this._onerror = null;
     this._last_message = null;
+    this._last_message_time = null;
 
     this._expected_code = 0;
 
     this.receive_rate_timescale = 0.5; // seconds
     this.receive_rate_min_period = 0.050; // seconds
 
-    this.current_calibration = default_current_calibration;
-    this.control_parameters = {};
+    this.current_calibration = null;
+    this.control_parameters = null;
+    this.position_calibration = null;
   }
 
 
@@ -131,7 +133,7 @@ export class MotorController {
     let receive_rate = 0.0;
 
     this._last_message = null;
-    let last_message_time = Date.now();
+    this._last_message_time = Date.now();
 
     let byte_array = new Uint8Array();
 
@@ -170,7 +172,7 @@ export class MotorController {
         bytes_discarded += chunk.length;
         byte_array = new Uint8Array();
         this._last_message = null;
-        last_message_time = Date.now();
+        this._last_message_time = Date.now();
 
         console.debug("Ignoring data received while not expecting messages:", chunk.length, "bytes");
         continue;
@@ -237,7 +239,7 @@ export class MotorController {
         offset += message_size;
 
         // Keep track of receive rate statistics.
-        last_message_time = Date.now();
+        this._last_message_time = Date.now();
 
         if(message) {
           // If we have a valid message, report it to the listener.
@@ -381,18 +383,76 @@ export class MotorController {
     }
   }
 
-  async load_pid_parameters(){
+  async upload_current_calibration(current_calibration){
+    if(!current_calibration) return;
+
     try {
       const data = await this.command_and_read(
-        {command: command_codes.GET_PID_PARAMETERS}, 
-        {expected_code: command_codes.PID_PARAMETERS, expected_messages: 1},
+        {command: command_codes.SET_CURRENT_FACTORS, additional_data: current_calibration}, 
+        {expected_code: command_codes.CURRENT_FACTORS, expected_messages: 1},
       );
-      if (data.length != 1) throw new Error("Invalid PID parameters data");
-      this.pid_parameters = data[0];
+      if (data.length != 1) throw new Error("Invalid current calibration data");
+      this.current_calibration = data[0];
     } catch (error) {
-      console.error("Error loading PID parameters:", error);
+      console.error("Error uploading current calibration:", error);
     }
   }
+
+  async reset_current_calibration(){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.RESET_CURRENT_FACTORS},
+        {expected_code: command_codes.CURRENT_FACTORS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid current calibration data");
+      this.current_calibration = data[0];
+    } catch (error) {
+      console.error("Error resetting current calibration:", error);
+    }
+  }
+
+
+  async load_position_calibration(){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.GET_HALL_POSITIONS}, 
+        {expected_code: command_codes.HALL_POSITIONS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid position calibration data");
+      this.position_calibration = data[0];
+    } catch (error) {
+      console.error("Error loading position calibration:", error);
+    }
+  }
+
+  async upload_position_calibration(position_calibration){
+    if(!position_calibration) return;
+
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.SET_HALL_POSITIONS, additional_data: position_calibration}, 
+        {expected_code: command_codes.HALL_POSITIONS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid position calibration data");
+      this.position_calibration = data[0];
+    } catch (error) {
+      console.error("Error uploading position calibration:", error);
+    }
+  }
+
+  async reset_position_calibration(){
+    try {
+      const data = await this.command_and_read(
+        {command: command_codes.RESET_HALL_POSITIONS}, 
+        {expected_code: command_codes.HALL_POSITIONS, expected_messages: 1},
+      );
+      if (data.length != 1) throw new Error("Invalid position calibration data");
+      this.position_calibration = data[0];
+    } catch (error) {
+      console.error("Error resetting position calibration:", error);
+    }
+  }
+
 
   async load_control_parameters(){
     try {
@@ -407,33 +467,9 @@ export class MotorController {
     }
   }
 
-  async upload_current_calibration(current_calibration){
-    try {
-      const data = await this.command_and_read(
-        {command: command_codes.SET_CURRENT_FACTORS, additional_data: current_calibration}, 
-        {expected_code: command_codes.CURRENT_FACTORS, expected_messages: 1},
-      );
-      if (data.length != 1) throw new Error("Invalid current calibration data");
-      this.current_calibration = data[0];
-    } catch (error) {
-      console.error("Error uploading current calibration:", error);
-    }
-  }
-
-  async upload_pid_parameters(pid_parameters){
-    try {
-      const data = await this.command_and_read(
-        {command: command_codes.SET_PID_PARAMETERS, additional_data: pid_parameters}, 
-        {expected_code: command_codes.PID_PARAMETERS, expected_messages: 1},
-      );
-      if (data.length != 1) throw new Error("Invalid PID parameters data");
-      this.pid_parameters = data[0];
-    } catch (error) {
-      console.error("Error uploading PID parameters:", error);
-    }
-  }
-
   async upload_control_parameters(control_parameters){
+    if(!control_parameters) return;
+
     try {
       const data = await this.command_and_read(
         {command: command_codes.SET_CONTROL_PARAMETERS, additional_data: control_parameters}, 

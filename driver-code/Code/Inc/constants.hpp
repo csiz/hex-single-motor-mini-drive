@@ -294,6 +294,23 @@ inline constexpr int signed_angle(int angle){
     return ((angle + one_and_half_circle) & angle_bit_mask) - half_circle;
 }
 
+// Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
+const int default_sector_transition_variance = square(10 * angle_base / 360);
+
+// Variance of a gaussian spread over the entire sector.
+const int default_sector_center_variance = square(30 * angle_base / 360);
+
+// Ensure that our biggest variance is small enough to be usable in gaussian updates while staying < max_16bit.
+static_assert(default_sector_center_variance < max_16bit, "max_variance must be less than 32768 (max 16-bit signed int)");
+
+// The hall sensors trigger later than expected going each direction.
+const int default_hysterisis = 5 * angle_base / 360;
+
+
+
+// Speed and acceleration constants
+// --------------------------------
+
 // Note speed values written in degrees per ms and converted to speed units.
 
 // Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
@@ -324,6 +341,46 @@ const int acceleration_fixed_point = 512;
 
 // Calibration and Control Parameters
 // ----------------------------------
+
+const PositionCalibration default_position_calibration = {
+    // The angle at which we transition to this sector. The first is when rotating in the
+    // positive direction; second for the negative direction.
+    .sector_transition_angles = {{
+        {330 * angle_base / 360 + default_hysterisis,  30 * angle_base / 360 - default_hysterisis},
+        { 30 * angle_base / 360 + default_hysterisis,  90 * angle_base / 360 - default_hysterisis},
+        { 90 * angle_base / 360 + default_hysterisis, 150 * angle_base / 360 - default_hysterisis},
+        {150 * angle_base / 360 + default_hysterisis, 210 * angle_base / 360 - default_hysterisis},
+        {210 * angle_base / 360 + default_hysterisis, 270 * angle_base / 360 - default_hysterisis},
+        {270 * angle_base / 360 + default_hysterisis, 330 * angle_base / 360 - default_hysterisis},
+    }},
+    // Variance of each sector transition; we can calibrate it.
+    .sector_transition_variances = {{
+        {default_sector_transition_variance, default_sector_transition_variance},
+        {default_sector_transition_variance, default_sector_transition_variance},
+        {default_sector_transition_variance, default_sector_transition_variance},
+        {default_sector_transition_variance, default_sector_transition_variance},
+        {default_sector_transition_variance, default_sector_transition_variance},
+        {default_sector_transition_variance, default_sector_transition_variance},
+    }},
+    // The center of each hall sector; the motor should rest at these poles.
+    .sector_center_angles = {{
+        (  0 * angle_base / 360),
+        ( 60 * angle_base / 360),
+        (120 * angle_base / 360),
+        (180 * angle_base / 360),
+        (240 * angle_base / 360),
+        (300 * angle_base / 360),
+    }},
+    // Variance of the centers.
+    .sector_center_variances = {{
+        default_sector_center_variance,
+        default_sector_center_variance,
+        default_sector_center_variance,
+        default_sector_center_variance,
+        default_sector_center_variance,
+        default_sector_center_variance,
+    }},
+};
 
 const int16_t current_calibration_fixed_point = 1024;
 
