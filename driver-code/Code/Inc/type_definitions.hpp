@@ -246,10 +246,14 @@ struct FullReadout : public Readout {
     // Magnitude of the phase current in the DQ0 coordinate frame.
     int16_t current_magnitude;
 
+    // Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
     int16_t emf_angle_error_variance;
 
-    int16_t debug_1;
-    int16_t debug_2;
+    // Lead angle for the motor driving; used to adjust the phase voltages to drive the motor efficiently.
+    int16_t lead_angle;
+
+    // Target PWM value for the motor outputs, value set by the advanced control algorithms.
+    int16_t target_pwm;
 };
 
 

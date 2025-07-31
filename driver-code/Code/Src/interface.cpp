@@ -129,9 +129,9 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.emf_angle_error_variance);
     offset += 2;
-    write_int16(buffer + offset, readout.debug_1);
+    write_int16(buffer + offset, readout.lead_angle);
     offset += 2;
-    write_int16(buffer + offset, readout.debug_2);
+    write_int16(buffer + offset, readout.target_pwm);
     offset += 2;
 
     write_message_tail(buffer, offset);
@@ -352,7 +352,7 @@ bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t *buf, u
 }
 
 BasicCommand parse_basic_command(uint8_t const * data, size_t size) {
-    if(size != basic_command_size) error();
+    if(size != basic_command_size) return {};
 
     // Skip the code check for basic commands as it can have multiple values.
     size_t offset = header_size;

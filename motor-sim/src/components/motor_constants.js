@@ -58,7 +58,7 @@ export function speed_units_to_degrees_per_millisecond(speed){
 }
 
 export function degrees_per_millisecond_to_speed_units(speed){
-  return unbounded_degrees_to_angle_units(speed * speed_fixed_point * millis_per_cycle);
+  return unbounded_degrees_to_angle_units(speed * speed_fixed_point / cycles_per_millisecond);
 }
 
 export const max_angular_speed = speed_units_to_degrees_per_millisecond(11928);

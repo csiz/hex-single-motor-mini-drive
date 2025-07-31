@@ -5,6 +5,7 @@
 #include <stm32f1xx_ll_tim.h>
 
 #include "type_definitions.hpp"
+#include "constants.hpp"
 
 // Motor PWM control
 // -----------------
@@ -62,9 +63,9 @@ static inline void disable_motor_outputs(){
 
 // Set all motor outputs according to the MotorOutputs struct.
 static inline void set_motor_outputs(MotorOutputs const & outputs){
-    LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty);
-    LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty);
-    LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty);
+    LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty + pwm_min);
+    LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty + pwm_min);
+    LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty + pwm_min);
     switch(outputs.enable_flags) {
         case 0b000:
             disable_motor_outputs();

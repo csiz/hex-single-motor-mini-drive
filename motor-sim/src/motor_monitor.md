@@ -761,6 +761,7 @@ const plot_electric_position = plot_lines({
       y: (d) => d.emf_detected ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
     },
+    {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
   ],
   curve,
 });
@@ -775,11 +776,13 @@ const plot_electric_offsets = plot_lines({
   channels: [
     {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
     {
-      y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset (online - chip)", color: colors.voltage_angle,
+      y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
     },
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
     {y: "emf_angle_error_stdev", label: "EMF Angle Error (stdev)", color: d3.color(colors.voltage_angle).darker(1)},
+    {y: "lead_angle", label: "Lead Angle", color: colors.v},
+    {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle_offset : null, label: "Drive Voltage Angle Offset", color: colors_categories[2]},
   ],
   curve,
 });
@@ -941,12 +944,12 @@ const plot_pwm_settings = plot_lines({
   x: "time",
   x_label: "Time (ms)",
   y_label: "PWM",
-  y_domain: [0, pwm_base],
   channels: [
     {y: "u_pwm", label: "PWM U", color: colors.u},
     {y: "v_pwm", label: "PWM V", color: colors.v},
     {y: "w_pwm", label: "PWM W", color: colors.w},
     {y: "live_max_pwm", label: "Live Max PWM", color: colors_categories[0]},
+    {y: "target_pwm", label: "Target PWM", color: colors_categories[1]},
   ],
   curve,
 });
@@ -982,8 +985,6 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "debug_1", label: "Debug 1", color: colors.v},
-    {y: "debug_2", label: "Debug 2", color: colors.w},
   ],
   curve,
 });

@@ -202,7 +202,7 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const [drive_voltage_alpha, drive_voltage_beta] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
   const drive_voltage_angle = radians_to_degrees(Math.atan2(drive_voltage_beta, drive_voltage_alpha));
   const drive_voltage_magnitude = Math.sqrt(drive_voltage_alpha * drive_voltage_alpha + drive_voltage_beta * drive_voltage_beta);
-
+  const drive_voltage_angle_offset = normalize_degrees(drive_voltage_angle - predicted_angle);
 
   const u_readout = u_current / this.current_calibration.u_factor;
   const v_readout = v_current / this.current_calibration.v_factor;
@@ -284,7 +284,8 @@ function parse_readout(data_view, previous_readout, check_errors = true){
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
     drive_voltage_alpha,
     drive_voltage_beta,
-    drive_voltage_angle,
+    drive_voltage_angle, 
+    drive_voltage_angle_offset,
     drive_voltage_magnitude,
     steady_state_beta_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,
@@ -394,9 +395,9 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const emf_angle_error_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
-  const debug_1 = data_view.getInt16(offset);
+  const lead_angle = angle_units_to_degrees(data_view.getInt16(offset));
   offset += 2;
-  const debug_2 = data_view.getInt16(offset);
+  const target_pwm = data_view.getInt16(offset);
   offset += 2;
   
 
@@ -428,8 +429,8 @@ function parse_full_readout(data_view, previous_readout){
     inductive_power,
     
     emf_angle_error_stdev,
-    debug_1,
-    debug_2,
+    lead_angle,
+    target_pwm,
     motor_constant,
     
     inductor_angle,

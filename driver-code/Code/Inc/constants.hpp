@@ -208,7 +208,13 @@ const int minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
 // Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
 // bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
-const int pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty); 
+const int pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty) - 2;
+
+// Because of the current electronic design (v0) the current measurement degrades if the
+// phase is set exactly to 0; we'll set it to the lowest on value. The phase voltage 
+// difference won't change at all. Therefore this setting doesn't affect our driving algorithm
+// besides consuming another unit of the PWM range, but this is less than the bootstrapping...
+const int pwm_min = 2;
 
 // Maximum duty for hold commands.
 const int pwm_max_hold = pwm_base * 2 / 10;
@@ -365,7 +371,6 @@ const int phase_diff_conversion = (
 const int emf_motor_constant_conversion = (
     motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
 );
-
 
 
 // Waveform and Trigonometric tables

@@ -31,7 +31,10 @@ common mode voltage seems to fix it. Is that the only way to measure all current
 [ ] Add voltage probes for the phase connectors so we can measure voltage both during driving and open connections.
 We need to measure driving voltage to make sure our MOSFETS are turned on and giving us the voltage we command!
 [ ] Use Kelvin sense resistors for the current measurement to avoid the unknown solder resistance.
-[ ] Drop the Hall sensors!
+[x] Don't drop the hall sensors, yet!
+[ ] The big problem with our measurements occurs when we switch from continuous 0 output from the low mosfet to mixed
+output with the high mosfet. Any amount of mixed output seems to add an offset to our current measurement. Might be
+worth putting the current sense only on the low mosfet branch.
 
 
 Need to implement in the circuit

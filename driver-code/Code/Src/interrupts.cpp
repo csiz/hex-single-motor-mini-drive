@@ -62,7 +62,11 @@ ThreePhase previous_motor_outputs = {0, 0, 0};
 
 int previous_emf_angle_error = 0;
 
-int32_t motor_constant = 0;
+int32_t motor_constant_observer = 0;
+
+int32_t rotor_acceleration_observer = 0;
+
+int32_t angular_speed_observer = 0;
 
 
 // Motor driver state
@@ -439,24 +443,23 @@ void adc_interrupt_handler(){
     // Note that the angle change is relative to the current speed because of the prediction step.
     const int speed_error = (
         // If we have enough EMF detections, adjust the speed according to the prediction error.
-        compute_speed ? speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki / control_parameters_fixed_point :    
+        compute_speed ? speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki :
         // Maintain speed if we have an EMF reading, even if noisy.
         emf_detected ? 0 :
         // Otherwise drop the speed to 0.
-        -readout.angular_speed
+        -angular_speed_observer
     );
     
-    const int updated_speed = readout.angular_speed + speed_error;
+    angular_speed_observer += speed_error;
 
+    const int angular_speed = angular_speed_observer / control_parameters_fixed_point;
+    
     // Calculate the acceleration based on the speed change.
     // 
     // The new speed isn't predicted so we need to diff to the previous acceleration to get the error.
-    const int acceleration_error = (
-        (speed_error * acceleration_fixed_point - readout.rotor_acceleration) * control_parameters.rotor_acceleration_ki / control_parameters_fixed_point
-    );
+    const int acceleration_error = ((angular_speed - readout.angular_speed) * acceleration_fixed_point - readout.rotor_acceleration);
 
-    const int rotor_acceleration = readout.rotor_acceleration + acceleration_error;
-
+    rotor_acceleration_observer += acceleration_error * control_parameters.rotor_acceleration_ki;
 
 
     // Calculate the motor constant
@@ -468,7 +471,7 @@ void adc_interrupt_handler(){
 
     const int motor_constant_error = compute_motor_constant * (emf_voltage_magnitude - predicted_emf_voltage);
 
-    motor_constant += motor_constant_error * control_parameters.motor_constant_ki;
+    motor_constant_observer += motor_constant_error * control_parameters.motor_constant_ki;
 
 
     // Calculate the power use
@@ -528,7 +531,7 @@ void adc_interrupt_handler(){
 
     readout.angle = angle;
     readout.angle_adjustment = angle_adjustment;
-    readout.angular_speed = updated_speed;
+    readout.angular_speed = angular_speed;
     readout.vcc_voltage = vcc_voltage;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
 
@@ -547,17 +550,17 @@ void adc_interrupt_handler(){
     readout.inductive_power = inductive_power;
     
 
-    readout.motor_constant = motor_constant / control_parameters_fixed_point;
+    readout.motor_constant = motor_constant_observer / control_parameters_fixed_point;
     readout.inductor_angle = inductor_angle;
 
-    readout.rotor_acceleration = rotor_acceleration;
+    readout.rotor_acceleration = rotor_acceleration_observer / control_parameters_fixed_point;
     readout.rotations = rotations;
 
     readout.emf_angle_error_variance = emf_angle_error_variance;
     readout.current_magnitude = current_magnitude;
     
-    readout.debug_1 = driver_state.lead_angle_control / control_parameters_fixed_point;
-    readout.debug_2 = driver_state.target_pwm;
+    readout.lead_angle = driver_state.lead_angle_control / control_parameters_fixed_point;
+    readout.target_pwm = driver_state.target_pwm;
 
     
     // Calculate motor outputs
