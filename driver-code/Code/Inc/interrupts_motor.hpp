@@ -7,28 +7,20 @@
 #include "byte_handling.hpp"
 #include "math_utils.hpp"
 #include "integer_math.hpp"
-#include "error_handler.hpp"
 
-#include <cstdlib>
+// The interrupts must not enter the error handler!
+// 
+// The error handle will block forever, however we must safe the motor no matter what. The interrupt loop
+// will always timeout any command and return to a safe state if it doesn't receive new commands from the
+// main app loop.
+// 
+// Do not: #include "error_handler.hpp"
+
 
 // Motor Control Functions
 // =======================
 
-// Linearly add two motor outputs together; note that we don't do bounds checking here.
-static inline MotorOutputs add_motor_outputs(
-    MotorOutputs const& a,
-    MotorOutputs const& b
-){
-    // Assume that all phases are enabled; we don't do bounds checking here.
-
-    return MotorOutputs{
-        .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>(a.u_duty + b.u_duty),
-        .v_duty = static_cast<uint16_t>(a.v_duty + b.v_duty),
-        .w_duty = static_cast<uint16_t>(a.w_duty + b.w_duty)
-    };
-}
-
+// Update the motor outputs using simple 6 sector driving based on the hall sensors.
 static inline MotorOutputs update_motor_6_sector(
     DriverState const& driver_state,
     FullReadout const& readout
@@ -65,7 +57,7 @@ static inline MotorOutputs update_motor_6_sector(
     };
 }
 
-// Get the motor outputs at the specified active_pwm and active_angle.
+// Set the motor outputs to the specified active_pwm and active_angle.
 static inline MotorOutputs update_motor_at_angle(
     DriverState & driver_state,
     FullReadout const& readout
@@ -92,7 +84,7 @@ static inline MotorOutputs update_motor_at_angle(
     };
 }
 
-// Drive the inductors around the circle at the specified PWM and speed. Open loop control.
+// Drive the inductors around a circle at the specified PWM and speed (open loop control).
 static inline MotorOutputs update_motor_periodic(
     DriverState & driver_state,
     FullReadout const& readout
@@ -108,6 +100,7 @@ static inline MotorOutputs update_motor_periodic(
 
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
 // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
+// The PWM is varried smoothly and is bounded by the back EMF from the rotating magnet.
 static inline MotorOutputs update_motor_smooth(
     DriverState & driver_state,
     FullReadout const& readout
@@ -198,6 +191,10 @@ static inline MotorOutputs update_motor_smooth(
     }
 }
 
+// Drive the motor with the desired output current (note the DQ0 current is 3/2 phase current).
+// This mode also uses the smooth driving algorithm to drive using field oriented control, thus
+// keeping the current as close to 90 degrees ahead of the magnetic angle as possible. Allowing
+// control of the torque produced by the motor which will be proportional to the current target.
 static inline MotorOutputs update_motor_torque(
     DriverState & driver_state,
     FullReadout const& readout
@@ -221,14 +218,14 @@ static inline MotorOutputs update_motor_torque(
     const int control_error = (current_target - measured_current) * control_parameters.torque_control_ki;
 
     // Update the PID control for the torque.
-    driver_state.torque.torque_control = clip_to(
+    driver_state.pwm_control = clip_to(
         (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
         (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
-        driver_state.torque.torque_control + control_error
+        driver_state.pwm_control + control_error
     );
 
     // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.torque.torque_control / control_parameters_fixed_point;
+    driver_state.target_pwm = driver_state.pwm_control / control_parameters_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -258,20 +255,31 @@ static inline MotorOutputs update_motor_battery_power(
 
 
     // Update the PID control for the torque.
-    driver_state.battery_power.battery_power_control = clip_to(
+    driver_state.pwm_control = clip_to(
         (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
         (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
-        driver_state.battery_power.battery_power_control + control_error
+        driver_state.pwm_control + control_error
     );
 
     // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.battery_power.battery_power_control / control_parameters_fixed_point;
+    driver_state.target_pwm = driver_state.pwm_control / control_parameters_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
 
+// static inline MotorOutputs update_motor_seek_angle(
+//     DriverState & driver_state,
+//     FullReadout const& readout
+// ){
+//     // TODO: ...
+    
+//     // const int target_rotation = driver_state.seek_angle.target_rotation;
 
+//     // const int control_error = target_rotation - readout.rotations;
 
+// }
+
+// Drive the motor using a fixed schedule for the PWM outputs.
 static inline MotorOutputs update_motor_schedule(
     DriverState & driver_state,
     FullReadout const& readout
@@ -289,9 +297,9 @@ static inline MotorOutputs update_motor_schedule(
     
     return MotorOutputs{
         .enable_flags = enable_flags_all,
-        .u_duty = schedule_stage.u_duty,
-        .v_duty = schedule_stage.v_duty,
-        .w_duty = schedule_stage.w_duty
+        .u_duty = static_cast<uint16_t>(schedule_stage.u_duty * driver_state.target_pwm / pwm_base),
+        .v_duty = static_cast<uint16_t>(schedule_stage.v_duty * driver_state.target_pwm / pwm_base),
+        .w_duty = static_cast<uint16_t>(schedule_stage.w_duty * driver_state.target_pwm / pwm_base)
     };
 }
 
@@ -337,7 +345,7 @@ static inline DriverState setup_driver_state(
 
         case DriverMode::SCHEDULE:
             // We should not enter testing mode without a valid schedule.
-            if (pending_state.schedule.pointer == nullptr) error();
+            if (pending_state.schedule.pointer == nullptr) return breaking_driver_state;
 
             // Clear the readouts buffer of old data.
             readout_history_reset();
@@ -345,6 +353,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::SCHEDULE,
                 .duration = history_size,
+                .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, pending_state.target_pwm)),
                 .schedule = DriveSchedule{
                     .pointer = pending_state.schedule.pointer,
                     .current_stage = 0,
@@ -395,8 +404,8 @@ static inline DriverState setup_driver_state(
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
                 .lead_angle_control = driver_state.lead_angle_control,
+                .pwm_control = driver_state.pwm_control,
                 .torque = DriveTorque{
-                    .torque_control = driver_state.mode == DriverMode::DRIVE_TORQUE ? driver_state.torque.torque_control : 0,
                     .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.torque.current_target)),
                 }
             };
@@ -411,8 +420,8 @@ static inline DriverState setup_driver_state(
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
                 .lead_angle_control = driver_state.lead_angle_control,
+                .pwm_control = driver_state.pwm_control,
                 .battery_power = DriveBatteryPower{
-                    .battery_power_control = driver_state.mode == DriverMode::DRIVE_BATTERY_POWER ? driver_state.battery_power.battery_power_control : 0,
                     .target_power = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.battery_power.target_power)),
                 }
             };
@@ -421,18 +430,21 @@ static inline DriverState setup_driver_state(
     return null_driver_state;
 }
 
+// Update the motor outputs based on the active driver state and measured phase currents and other derived values.
 static inline void update_motor_control(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    // Update the active state.
+    // Update based on the active mode.
     switch (driver_state.mode) {
-
+        
         case DriverMode::OFF:
+            // Continously reset the motor outputs to breaking state.
             driver_state.motor_outputs = breaking_motor_outputs;
             return;
 
         case DriverMode::FREEWHEEL:
+            // Continuously reset the motor outputs to freewheel state.
             driver_state.motor_outputs = freewheel_motor_outputs;
             return;
 
@@ -441,9 +453,12 @@ static inline void update_motor_control(
             // The motor outputs are already set in the setup_driver_state function; do nothing else.
             return;
 
-        case DriverMode::SCHEDULE:
+        case DriverMode::SCHEDULE: 
             // We're done at the end of the schedule.
-            if (driver_state.schedule.pointer == nullptr or driver_state.schedule.current_stage >= schedule_size) {
+            if (
+                driver_state.schedule.pointer == nullptr or 
+                driver_state.schedule.current_stage >= schedule_size
+            ) {
                 return set_breaking_control(driver_state);
             }
 
@@ -487,5 +502,5 @@ static inline void update_motor_control(
     }
 
     // If we get here, we have an unknown/corrupted driver state.
-    return;
+    return set_breaking_control(driver_state);
 }

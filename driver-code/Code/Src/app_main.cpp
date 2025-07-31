@@ -1,7 +1,7 @@
 #include "app_main.hpp"
 
 #include "user_data.hpp"
-#include "motor_control.hpp"
+#include "test_schedules.hpp"
 #include "interrupts.hpp"
 #include "interrupts_data.hpp"
 #include "interface.hpp"
@@ -200,17 +200,21 @@ void app_init() {
     initialize_angle_tracking();
 }
 
-static inline void motor_start_test(PWMSchedule const& schedule){
+static inline void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {
     // Clear the readouts buffer of old data.
     readout_history_reset();
     
     // Stop emptying the readouts queue; we want to keep the test data.
-    usb_wait_full_history = true;
+    usb_wait_full_history = take_snapshot;
 
-    usb_readouts_to_send = history_size;
+    usb_readouts_to_send = take_snapshot ? history_size : 0;
 
     // Start the test schedule.
-    set_motor_command(DriverState{ .mode = DriverMode::SCHEDULE, .schedule = DriveSchedule{ .pointer = &schedule } });
+    set_motor_command(DriverState{ 
+        .mode = DriverMode::SCHEDULE,
+        .target_pwm = value,
+        .schedule = DriveSchedule{ .pointer = &schedule } 
+    });
 }
 
 // Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
@@ -234,6 +238,8 @@ bool handle_command(MessageBuffer const& buffer) {
     // Get the message code from the data header.
     const uint16_t code = read_uint16(buffer.data);
 
+    const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+
 
     switch (static_cast<MessageCode>(code)) {
         case NULL_COMMAND:
@@ -241,8 +247,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return true;
 
         case STREAM_FULL_READOUTS: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             // Cotinuously stream data if timeout > 0.
             usb_stream_state = command.timeout;
             // Also stop the motor if we stop the stream.
@@ -268,41 +272,39 @@ bool handle_command(MessageBuffer const& buffer) {
         // Measure the motor phase currents.
         
         case SET_STATE_TEST_ALL_PERMUTATIONS:
-            motor_start_test(test_all_permutations);
+            motor_start_test(test_all_permutations, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_GROUND_SHORT:
-            motor_start_test(test_ground_short);
+            motor_start_test(test_ground_short, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_POSITIVE_SHORT:
-            motor_start_test(test_positive_short);
+            motor_start_test(test_positive_short, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_U_DIRECTIONS:
-            motor_start_test(test_u_directions);
+            motor_start_test(test_u_directions, command.value, command.timeout > 0);
             return false;
 
         case SET_STATE_TEST_U_INCREASING:
-            motor_start_test(test_u_increasing);
+            motor_start_test(test_u_increasing, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_U_DECREASING:
-            motor_start_test(test_u_decreasing);
+            motor_start_test(test_u_decreasing, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_V_INCREASING:
-            motor_start_test(test_v_increasing);
+            motor_start_test(test_v_increasing, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_V_DECREASING:
-            motor_start_test(test_v_decreasing);
+            motor_start_test(test_v_decreasing, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_W_INCREASING:
-            motor_start_test(test_w_increasing);
+            motor_start_test(test_w_increasing, command.value, command.timeout > 0);
             return false;
         case SET_STATE_TEST_W_DECREASING:
-            motor_start_test(test_w_decreasing);
+            motor_start_test(test_w_decreasing, command.value, command.timeout > 0);
             return false;
 
         // Drive the motor.
         case SET_STATE_DRIVE_6_SECTOR: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{ 
                 .mode = DriverMode::DRIVE_6_SECTOR, 
                 .duration = command.timeout, 
@@ -312,8 +314,6 @@ bool handle_command(MessageBuffer const& buffer) {
         }
 
         case SET_STATE_DRIVE_PERIODIC: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_PERIODIC, 
                 .duration = command.timeout,
@@ -325,8 +325,6 @@ bool handle_command(MessageBuffer const& buffer) {
         }
 
         case SET_STATE_DRIVE_SMOOTH: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_SMOOTH, 
                 .duration = command.timeout, 
@@ -336,8 +334,6 @@ bool handle_command(MessageBuffer const& buffer) {
         }
 
         case SET_STATE_DRIVE_TORQUE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_TORQUE, 
                 .duration = command.timeout, 
@@ -349,8 +345,6 @@ bool handle_command(MessageBuffer const& buffer) {
         }
 
         case SET_STATE_DRIVE_BATTERY_POWER: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_BATTERY_POWER, 
                 .duration = command.timeout, 
@@ -367,8 +361,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
 
         case SET_STATE_HOLD_U_POSITIVE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
@@ -380,8 +372,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
         }
         case SET_STATE_HOLD_V_POSITIVE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
@@ -393,8 +383,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
         }
         case SET_STATE_HOLD_W_POSITIVE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
@@ -406,8 +394,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
         }
         case SET_STATE_HOLD_U_NEGATIVE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
@@ -420,8 +406,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
         }
         case SET_STATE_HOLD_V_NEGATIVE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
-
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
@@ -434,7 +418,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
         }
         case SET_STATE_HOLD_W_NEGATIVE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
 
             set_motor_command(DriverState{
                 .motor_outputs = MotorOutputs{ 
@@ -471,7 +454,6 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
 
         case SET_ANGLE: {
-            const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
             set_angle(command.value);
             return false;
         }

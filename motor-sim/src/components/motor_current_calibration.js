@@ -35,14 +35,15 @@ export const current_calibration_zones = [
 
 
 
-export async function run_current_calibration(motor_controller){
+export async function run_current_calibration(motor_controller, max_pwm_value){
 
   const settle_time = 100;
   const settle_timeout = Math.floor((settle_time + 300) * cycles_per_millisecond);
-  const settle_strength = Math.floor(pwm_base * 2 / 10);
+  const settle_strength = Math.floor(max_pwm_value * 2 / 10);
 
   const drive_options = {command_timeout: settle_timeout, command_value: settle_strength};
-  const test_options = {command_timeout: 0, command_value: 0};
+  const test_options = {command_timeout: 1, command_value: max_pwm_value};
+  const read_options = {expected_messages: history_size, expected_code: command_codes.READOUT};
 
   console.info("Current calibration starting");
 
@@ -52,7 +53,7 @@ export async function run_current_calibration(motor_controller){
   await wait(settle_time);
   const u_positive_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_U_INCREASING, ...test_options},
-    {expected_messages: history_size});
+    read_options);
 
   console.info("U positive done");
 
@@ -60,7 +61,7 @@ export async function run_current_calibration(motor_controller){
   await wait(settle_time);
   const w_negative_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_W_DECREASING, ...test_options},
-    {expected_messages: history_size});
+    read_options);
 
   console.info("W negative done");
 
@@ -68,7 +69,7 @@ export async function run_current_calibration(motor_controller){
   await wait(settle_time);
   const v_positive_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_V_INCREASING, ...test_options},
-    {expected_messages: history_size});
+    read_options);
 
   console.info("V positive done");
 
@@ -76,7 +77,7 @@ export async function run_current_calibration(motor_controller){
   await wait(settle_time);
   const u_negative_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_U_DECREASING, ...test_options},
-    {expected_messages: history_size});
+    read_options);
 
   console.info("U negative done");
 
@@ -84,7 +85,7 @@ export async function run_current_calibration(motor_controller){
   await wait(settle_time);
   const w_positive_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_W_INCREASING, ...test_options},
-    {expected_messages: history_size});
+    read_options);
 
   console.info("W positive done");
 
@@ -92,7 +93,7 @@ export async function run_current_calibration(motor_controller){
   await wait(settle_time);
   const v_negative_readout = await motor_controller.command_and_read(
     {command: command_codes.SET_STATE_TEST_V_DECREASING, ...test_options},
-    {expected_messages: history_size});
+    read_options);
 
   console.info("V negative done");
 
@@ -330,10 +331,9 @@ function compute_calibration_instance({u_positive, u_negative, v_positive, v_neg
     );
 
     const is_invalid = (
-      u_resistance_weight < 0.2 ||
-      v_resistance_weight < 0.2 ||
-      w_resistance_weight < 0.2 ||
-      inductance_weight < 0.01
+      u_resistance_weight < 0.1 ||
+      v_resistance_weight < 0.1 ||
+      w_resistance_weight < 0.1
     );
 
     if (is_invalid) {

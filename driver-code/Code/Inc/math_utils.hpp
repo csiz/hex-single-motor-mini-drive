@@ -16,23 +16,23 @@ static inline constexpr int max(int a, int b){
     return a > b ? a : b;
 }
 
-// Clip a value between two limits; params are (low high value).
+// Clip a value between two limits; params are (low, high, value).
 static inline constexpr int clip_to(int low, int high, int value){
     return min(high, max(low, value));
 }
 
+// Sign of x or 0 if x is 0.
 static inline constexpr int sign(int x){
     return (x > 0) - (x < 0);
 }
 
-
+// Divide x by y and round to the nearest integer.
 static inline constexpr int round_div(const int x, const int y) {
-    // Round the division to the nearest integer.
     return (x + y / 2) / y;
 }
 
+// Divide x by y and round to the nearest integer away from zero.
 static inline constexpr int signed_ceil_div(const int x, const int y) {
-    // Ceil of the division away from zero.
     return sign(x) + (x / y);
 }
 

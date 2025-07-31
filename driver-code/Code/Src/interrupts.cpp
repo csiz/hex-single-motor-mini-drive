@@ -211,6 +211,13 @@ void adc_interrupt_handler(){
     const uint16_t instant_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
 
 
+    // Get hall sensor state
+    // ---------------------
+
+    // Read new data from the hall sensors.
+    const uint8_t hall_state = read_hall_sensors_state();
+
+
     // Do the data calculations
     // ------------------------
 
@@ -486,15 +493,6 @@ void adc_interrupt_handler(){
     // we can compute the total power from the others; mostly determined by EMF. The resistive
     // power is quite reliable and inductive_power is very small.
     const int total_power = resistive_power + inductive_power + emf_power;
-
-
-    // Get hall sensor state
-    // ---------------------
-    // 
-    // For debugging purposes...
-
-    // Read new data from the hall sensors.
-    const uint8_t hall_state = read_hall_sensors_state();
 
 
     // Write the latest readout data

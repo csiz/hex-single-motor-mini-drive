@@ -11,22 +11,22 @@
 static inline uint8_t get_hall_sector(const uint8_t hall_state){
     // Get the hall sector from the state.
     switch (hall_state & 0b111) {
-        case 0b000: // no hall sensors; either it's not ready or no magnet
-            return hall_sector_base; // Out of range, indicates invalid.
-        case 0b001: // hall U active; 0 degrees
-            return 0;
-        case 0b011: // hall U and hall V active; 60 degrees
-            return 1;
-        case 0b010: // hall V active; 120 degrees
-            return 2;
-        case 0b110: // hall V and hall W active; 180 degrees
-            return 3;
-        case 0b100: // hall W active; 240 degrees
-            return 4;
-        case 0b101: // hall U and hall W active; 300 degrees
-            return 5;
-        case 0b111: // all hall sensors active; this would be quite unusual; but carry on
-            return hall_sector_base; // Out of range, indicates invalid.
+        // No hall sensors; either it's not powered or no magnet
+        case 0b000: return hall_sector_base; // Out of range, indicates invalid.
+        // Hall U active; 0 degrees
+        case 0b001: return 0;
+        // Hall U and hall V active; angle is 60 degrees.
+        case 0b011: return 1;
+        // Hall V active; angle is 120 degrees.
+        case 0b010: return 2;
+        // Hall V and hall W active; angle is 180 degrees.
+        case 0b110: return 3;
+        // Hall W active; angle is 240 degrees.
+        case 0b100: return 4;
+        // Hall U and hall W active; angle is 300 degrees.
+        case 0b101: return 5;
+        // All hall sensors active; this would be quite unusual; but carry on.
+        case 0b111: return hall_sector_base; // Out of range, indicates invalid.
     }
     // We shouldn't reach here.
     return hall_sector_base;

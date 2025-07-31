@@ -21,39 +21,46 @@ const uint32_t pwm_w_enable_bits = LL_TIM_CHANNEL_CH3 | LL_TIM_CHANNEL_CH3N;
 const uint32_t pwm_enable_bits = pwm_u_enable_bits | pwm_v_enable_bits | pwm_w_enable_bits;
 
 
-
+// Disable (tri-state / floating connection) the motor phase U.
 static inline void disable_motor_u_output(){
     LL_TIM_CC_DisableChannel(TIM1, pwm_u_enable_bits);
 }
 
+// Enable the motor phase U output.
 static inline void enable_motor_u_output(){
     LL_TIM_CC_EnableChannel(TIM1, pwm_u_enable_bits);
 }
 
+// Disable (tri-state / floating connection) the motor phase V.
 static inline void disable_motor_v_output(){
     LL_TIM_CC_DisableChannel(TIM1, pwm_v_enable_bits);
 }
 
+// Enable the motor phase V output.
 static inline void enable_motor_v_output(){
     LL_TIM_CC_EnableChannel(TIM1, pwm_v_enable_bits);
 }
 
+// Disable (tri-state / floating connection) the motor phase W.
 static inline void disable_motor_w_output(){
     LL_TIM_CC_DisableChannel(TIM1, pwm_w_enable_bits);
 }
 
+// Enable the motor phase W output.
 static inline void enable_motor_w_output(){
     LL_TIM_CC_EnableChannel(TIM1, pwm_w_enable_bits);
 }
 
+// Enable all motor outputs.
 static inline void enable_motor_outputs(){
     LL_TIM_CC_EnableChannel(TIM1, pwm_enable_bits);
 }
-
+// Disable all motor outputs (tri-state / floating connections).
 static inline void disable_motor_outputs(){
     LL_TIM_CC_DisableChannel(TIM1, pwm_enable_bits);
 }
 
+// Set all motor outputs according to the MotorOutputs struct.
 static inline void set_motor_outputs(MotorOutputs const & outputs){
     LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty);
     LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty);
@@ -61,40 +68,40 @@ static inline void set_motor_outputs(MotorOutputs const & outputs){
     switch(outputs.enable_flags) {
         case 0b000:
             disable_motor_outputs();
-            break;
+            return;
+        case 0b111:
+            enable_motor_outputs();
+            return;
         case 0b001:
             enable_motor_u_output();
             disable_motor_v_output();
             disable_motor_w_output();
-            break;
+            return;
         case 0b010:
             disable_motor_u_output();
             enable_motor_v_output();
             disable_motor_w_output();
-            break;
+            return;
         case 0b011:
             enable_motor_u_output();
             enable_motor_v_output();
             disable_motor_w_output();
-            break;
+            return;
         case 0b100:
             disable_motor_u_output();
             disable_motor_v_output();
             enable_motor_w_output();
-            break;
+            return;
         case 0b101:
             enable_motor_u_output();
             disable_motor_v_output();
             enable_motor_w_output();
-            break;
+            return;
         case 0b110:
             disable_motor_u_output();
             enable_motor_v_output();
             enable_motor_w_output();
-            break;
-        case 0b111:
-            enable_motor_outputs();
-            break;
+            return;
     }
 }
 
@@ -103,6 +110,7 @@ static inline void set_motor_outputs(MotorOutputs const & outputs){
 // LED functions
 // -------------
 
+// Enable the LED channels: TIM2_CH4, TIM3_CH1, TIM3_CH2.
 static inline void enable_LED_channels(){
 	// Green LED.
 	LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH4);
@@ -112,18 +120,22 @@ static inline void enable_LED_channels(){
 	LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH2);
 }
 
+// Set the intensity of the RED light.
 static inline void set_RED_LED(uint8_t r){
     LL_TIM_OC_SetCompareCH2(TIM3, LL_TIM_GetAutoReload(TIM3)  * r / 0xFF);
 }
 
+// Set the intensity of the GREEN light.
 static inline void set_GREEN_LED(uint8_t g){
     LL_TIM_OC_SetCompareCH4(TIM2, LL_TIM_GetAutoReload(TIM2) * g / 0xFF);
 }
 
+// Set the intensity of the BLUE light.
 static inline void set_BLUE_LED(uint8_t b){
     LL_TIM_OC_SetCompareCH1(TIM3, LL_TIM_GetAutoReload(TIM3) * b / 0xFF);
 }
 
+// Set RGB colour for the indicator light.
 static inline void set_LED_RGB_colours(uint8_t r, uint8_t g, uint8_t b){
     set_RED_LED(r);
     set_GREEN_LED(g);

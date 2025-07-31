@@ -84,8 +84,8 @@ const PWMSchedule test_u_increasing = {
     {short_duration, pwm_base * 6 / 10,   0,         0},
     {short_duration, pwm_base * 7 / 10,   0,         0},
     {short_duration, pwm_base * 8 / 10,   0,         0},
-    {short_duration, pwm_base * 9 / 10,   0,         0},
-    {short_duration, 0,                   0,         0},
+    {short_duration, pwm_base * 4 / 10,   0,         0},
+    {short_duration, pwm_base * 2 / 10,   0,         0},
     {short_duration, 0,                   0,         0},
 };
 
@@ -99,8 +99,8 @@ const PWMSchedule test_u_decreasing = {
     {short_duration, 0,                   pwm_base * 6 / 10, pwm_base * 6 / 10},
     {short_duration, 0,                   pwm_base * 7 / 10, pwm_base * 7 / 10},
     {short_duration, 0,                   pwm_base * 8 / 10, pwm_base * 8 / 10},
-    {short_duration, 0,                   pwm_base * 9 / 10, pwm_base * 9 / 10},
-    {short_duration, 0,                   0,                 0},
+    {short_duration, 0,                   pwm_base * 4 / 10, pwm_base * 4 / 10},
+    {short_duration, 0,                   pwm_base * 2 / 10, pwm_base * 2 / 10},
     {short_duration, 0,                   0,                 0}
 };
 
@@ -114,8 +114,8 @@ const PWMSchedule test_v_increasing = {
     {short_duration, 0,                   pwm_base * 6 / 10, 0},
     {short_duration, 0,                   pwm_base * 7 / 10, 0},
     {short_duration, 0,                   pwm_base * 8 / 10, 0},
-    {short_duration, 0,                   pwm_base * 9 / 10, 0},
-    {short_duration, 0,                   0,                 0},
+    {short_duration, 0,                   pwm_base * 4 / 10, 0},
+    {short_duration, 0,                   pwm_base * 2 / 10, 0},
     {short_duration, 0,                   0,                 0}
 };
 
@@ -129,8 +129,8 @@ const PWMSchedule test_v_decreasing = {
     {short_duration, pwm_base * 6 / 10,   0,         pwm_base * 6 / 10},
     {short_duration, pwm_base * 7 / 10,   0,         pwm_base * 7 / 10},
     {short_duration, pwm_base * 8 / 10,   0,         pwm_base * 8 / 10},
-    {short_duration, pwm_base * 9 / 10,   0,         pwm_base * 9 / 10},
-    {short_duration, 0,                   0,         0},
+    {short_duration, pwm_base * 4 / 10,   0,         pwm_base * 4 / 10},
+    {short_duration, pwm_base * 2 / 10,   0,         pwm_base * 2 / 10},
     {short_duration, 0,                   0,         0}
 };
 
@@ -144,8 +144,8 @@ const PWMSchedule test_w_increasing = {
     {short_duration, 0,                   0,         pwm_base * 6 / 10},
     {short_duration, 0,                   0,         pwm_base * 7 / 10},
     {short_duration, 0,                   0,         pwm_base * 8 / 10},
-    {short_duration, 0,                   0,         pwm_base * 9 / 10},
-    {short_duration, 0,                   0,         0},
+    {short_duration, 0,                   0,         pwm_base * 4 / 10},
+    {short_duration, 0,                   0,         pwm_base * 2 / 10},
     {short_duration, 0,                   0,         0}
 };
 
@@ -159,7 +159,7 @@ const PWMSchedule test_w_decreasing = {
     {short_duration, pwm_base * 6 / 10,   pwm_base * 6 / 10, 0},
     {short_duration, pwm_base * 7 / 10,   pwm_base * 7 / 10, 0},
     {short_duration, pwm_base * 8 / 10,   pwm_base * 8 / 10, 0},
-    {short_duration, pwm_base * 9 / 10,   pwm_base * 9 / 10, 0},
-    {short_duration, 0,                   0,         0},
+    {short_duration, pwm_base * 4 / 10,   pwm_base * 4 / 10, 0},
+    {short_duration, pwm_base * 2 / 10,   pwm_base * 2 / 10, 0},
     {short_duration, 0,                   0,         0}
 };

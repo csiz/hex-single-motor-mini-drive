@@ -77,6 +77,7 @@ Current Calibration Procedures
 
 <div class="card tight">
   <div>${current_calibration_buttons}</div>
+  <div>${current_calibration_pwm_slider}</div>
   <div>Number of calibration data sets: ${current_calibration.results.length}</div>
 </div>
 <div class="card tight">
@@ -319,6 +320,7 @@ function push_data(readout){
 // Control functions
 // -----------------
 
+const command_snapshot = command_options.includes("Take snapshot after command");
 
 const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
 
@@ -332,7 +334,7 @@ const command_torque_current = Math.floor(command_torque_current_amps / current_
 
 const command_power = convert_watts_to_power_units(command_power_watts);
 
-async function command(command, options = {}){
+async function send_command(command, options = {}){
   if (!motor_controller) return;
   
   await motor_controller.send_command({command, command_timeout, ...options});
@@ -340,7 +342,7 @@ async function command(command, options = {}){
 
 let latest_stream_timeout = null;
 
-function command_and_stream(delay_ms, command, options = {}){
+function command_and_stream(command, options = {}, delay_ms = 0){
   if (latest_stream_timeout) clearTimeout(latest_stream_timeout);
   latest_stream_timeout = null;
 
@@ -348,7 +350,6 @@ function command_and_stream(delay_ms, command, options = {}){
 
   latest_stream_timeout = setTimeout(async function(){
     try {
-      reset_data();
       // Start reading the data stream.
       await motor_controller.command_and_stream(
         {command, ...options},
@@ -362,14 +363,16 @@ function command_and_stream(delay_ms, command, options = {}){
 
 const data_request_buttons = Inputs.button(
   [
-    ["ADC snapshot", function(){
-      command_and_stream(0, command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
+    ["Uninterrupted snapshot", function(){
+      reset_data();
+      command_and_stream(command_codes.GET_READOUTS_SNAPSHOT, {expected_code: command_codes.READOUT, expected_messages: history_size});
     }],
-    ["ADC stream", function(){
-      command_and_stream(0, command_codes.STREAM_FULL_READOUTS, {expected_code: command_codes.FULL_READOUT, command_timeout: 1});
+    ["Stream 3 phase data", function(){
+      reset_data();
+      command_and_stream(command_codes.STREAM_FULL_READOUTS, {expected_code: command_codes.FULL_READOUT, command_timeout: 1});
     }],
     ["STOP stream", async function(){
-      await command(command_codes.STREAM_FULL_READOUTS, {command_timeout: 0});
+      await send_command(command_codes.STREAM_FULL_READOUTS, {command_timeout: 0});
     }],
   ],
   {label: "Read data"},
@@ -378,45 +381,53 @@ const data_request_buttons = Inputs.button(
 d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 
 
-function snapshot_if_checked(code = null){
-  if (command_options.includes("Take snapshot after command")){
-    command_and_stream(command_snapshot_delay, code ?? command_codes.GET_READOUTS_SNAPSHOT, {expected_messages: history_size});
+const test_command_options = {
+  command_value: command_pwm, 
+  command_timeout: command_snapshot, 
+  expected_messages: command_snapshot ? history_size : 0,
+  expected_code: command_snapshot ? command_codes.READOUT : command_codes.FULL_READOUT,
+};
+
+async function test_command(command){
+  if (command_snapshot){
+    reset_data();
+    command_and_stream(command, test_command_options)
   } else {
-    if (code) command(code);
+    await send_command(command, test_command_options);
   }
 }
 
 const test_buttons = Inputs.button(
   [
     ["Test all permutations", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_ALL_PERMUTATIONS);
+      test_command(command_codes.SET_STATE_TEST_ALL_PERMUTATIONS, test_command_options);
     }],
     ["Test ground short", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_GROUND_SHORT);
+      test_command(command_codes.SET_STATE_TEST_GROUND_SHORT, test_command_options);
     }],
     ["Test positive short", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_POSITIVE_SHORT);
+      test_command(command_codes.SET_STATE_TEST_POSITIVE_SHORT, test_command_options);
     }],
     ["Test U directions", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_U_DIRECTIONS);
+      test_command(command_codes.SET_STATE_TEST_U_DIRECTIONS, test_command_options);
     }],
     ["Test U increasing", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_U_INCREASING);
+      test_command(command_codes.SET_STATE_TEST_U_INCREASING, test_command_options);
     }],
     ["Test U decreasing", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_U_DECREASING);
+      test_command(command_codes.SET_STATE_TEST_U_DECREASING, test_command_options);
     }],
     ["Test V increasing", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_V_INCREASING);
+      test_command(command_codes.SET_STATE_TEST_V_INCREASING, test_command_options);
     }],
     ["Test V decreasing", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_V_DECREASING);
+      test_command(command_codes.SET_STATE_TEST_V_DECREASING, test_command_options);
     }],
     ["Test W increasing", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_W_INCREASING);
+      test_command(command_codes.SET_STATE_TEST_W_INCREASING, test_command_options);
     }],
     ["Test W decreasing", function(){
-      snapshot_if_checked(command_codes.SET_STATE_TEST_W_DECREASING);
+      test_command(command_codes.SET_STATE_TEST_W_DECREASING, test_command_options);
     }],
   ],
   {label: "Test sequence"},
@@ -425,15 +436,31 @@ const test_buttons = Inputs.button(
 d3.select(test_buttons).selectAll("button").style("height", "4em");
 
 
+async function snapshot_if_checked(command, options = {}){
+  await send_command(command, {
+    expected_code: command_codes.FULL_READOUT,
+    ...options,
+  });
+
+  if (command_snapshot){
+    command_and_stream(
+      command_codes.GET_READOUTS_SNAPSHOT, 
+      {
+        expected_messages: history_size, 
+        expected_code: command_codes.READOUT,
+      },
+      command_snapshot_delay,
+    );
+  }
+}
+
 const stop_buttons = Inputs.button(
   [
     ["Stop / Brake", async function(){
-      await command(command_codes.SET_STATE_OFF);
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_OFF);
     }],
     ["Freewheel", async function(){
-      await command(command_codes.SET_STATE_FREEWHEEL);
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_FREEWHEEL);
     }],
   ],
   {label: "Stop Commands"},
@@ -450,36 +477,28 @@ d3.select(stop_buttons)
 const simple_drive_buttons = Inputs.button(
   [
     ["Hold U positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_U_POSITIVE, {command_value: command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_HOLD_U_POSITIVE, {command_value: command_pwm});
     }],
     ["Hold V positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_V_POSITIVE, {command_value: command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_HOLD_V_POSITIVE, {command_value: command_pwm});
     }],
     ["Hold W positive", async function(){
-      await command(command_codes.SET_STATE_HOLD_W_POSITIVE, {command_value: command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_HOLD_W_POSITIVE, {command_value: command_pwm});
     }],
     ["Hold U negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_U_NEGATIVE, {command_value: command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_HOLD_U_NEGATIVE, {command_value: command_pwm});
     }],
     ["Hold V negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_V_NEGATIVE, {command_value: command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_HOLD_V_NEGATIVE, {command_value: command_pwm});
     }],
     ["Hold W negative", async function(){
-      await command(command_codes.SET_STATE_HOLD_W_NEGATIVE, {command_value: command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_HOLD_W_NEGATIVE, {command_value: command_pwm});
     }],
     ["Drive 6S +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: +command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: +command_pwm});
     }],
     ["Drive 6S -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: -command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: -command_pwm});
     }],
   ],
   {label: "Simple drive commands"},
@@ -491,40 +510,32 @@ d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
 const advanced_drive_buttons = Inputs.button(
   [
     ["Set Angle", async function(){
-      await command(command_codes.SET_ANGLE, {command_value: command_angle});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_ANGLE, {command_value: command_angle});
     }],
     ["Drive periodic", async function(){
-      await command(command_codes.SET_STATE_DRIVE_PERIODIC, {
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_PERIODIC, {
         command_value: command_pwm, 
         command_second: command_angular_speed, 
         command_third: command_angle,
       });
-      snapshot_if_checked();
     }],
     ["Drive smooth +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: +command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: +command_pwm});
     }],
     ["Drive smooth -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: -command_pwm});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: -command_pwm});
     }],
     ["Drive torque +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: +command_torque_current});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: +command_torque_current});
     }],
     ["Drive torque -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: -command_torque_current});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: -command_torque_current});
     }],
     ["Drive power +", async function(){
-      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: +command_power});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: +command_power});
     }],
     ["Drive power -", async function(){
-      await command(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
-      snapshot_if_checked();
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
     }],
   ],
   {label: "Advanced drive commands"},
@@ -993,11 +1004,17 @@ autosave_inputs(monitoring_plots);
 ```
 
 
-
-
 ```js
 // Current calibration
 // -------------------
+
+const current_calibration_pwm_slider = inputs_wide_range([0, pwm_base], {value: pwm_base, step: 1.0, label: "Calibration max PWM:"});
+
+const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
+```
+
+```js
+
 
 function stringify_active_current_calibration() {
   return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
@@ -1010,7 +1027,7 @@ const default_current_calibration_result = {results: [], ...compute_current_cali
 const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
     ["Start Current Calibration", wait_previous(async function(value){
-      const calibration_data = await run_current_calibration(motor_controller);
+      const calibration_data = await run_current_calibration(motor_controller, current_calibration_pwm);
       const results = [...value.results, calibration_data];
       return {results, ...compute_current_calibration(results)};
     })],
