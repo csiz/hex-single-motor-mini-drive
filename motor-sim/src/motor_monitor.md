@@ -275,7 +275,7 @@ const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycl
 
 const command_timeout_millis = Generators.input(command_timeout_slider);
 
-const command_angular_speed_slider = inputs_wide_range([-1000, +1000], {value: 1, step: 0.1, label: "Angular speed value (degrees/ms)"});
+const command_angular_speed_slider = inputs_wide_range([0, max_angular_speed], {value: 1, step: 0.1, label: "Angular speed value (degrees/ms)"});
 
 const command_angular_speed_degrees_div_ms = Generators.input(command_angular_speed_slider);
 
@@ -512,10 +512,17 @@ const advanced_drive_buttons = Inputs.button(
     ["Set Angle", async function(){
       await snapshot_if_checked(command_codes.SET_ANGLE, {command_value: command_angle});
     }],
-    ["Drive periodic", async function(){
+    ["Drive periodic +", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_DRIVE_PERIODIC, {
         command_value: command_pwm, 
-        command_second: command_angular_speed, 
+        command_second: +command_angular_speed, 
+        command_third: command_angle,
+      });
+    }],
+    ["Drive periodic -", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_PERIODIC, {
+        command_value: command_pwm, 
+        command_second: -command_angular_speed, 
         command_third: command_angle,
       });
     }],
@@ -1451,7 +1458,8 @@ import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, default_current_calibration, max_calibration_current,
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
-  current_conversion, max_drive_current, max_drive_power, convert_power_units_to_watts, convert_watts_to_power_units,
+  current_conversion, max_drive_current, max_drive_power, max_angular_speed,
+  convert_power_units_to_watts, convert_watts_to_power_units,
 } from "./components/motor_constants.js";
 
 import {unit_test_expected} from "./components/motor_unit_tests.js";

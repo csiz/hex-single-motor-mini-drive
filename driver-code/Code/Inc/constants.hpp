@@ -298,7 +298,7 @@ const int speed_fixed_point = 128;
 
 static_assert(speed_fixed_point * quarter_circle - 1 <= max_16bit, "speed_fixed_point * 90 degrees must be less than 32768 (max 16-bit signed int)");
 
-// Maximum angular speed that we can represent in the fixed point representation.
+// Maximum angular speed that we want to represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
 
 // Minimum speed in rotor revolutions per minute (RPM) that we can represent with our units.
