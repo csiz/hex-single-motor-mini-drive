@@ -390,7 +390,7 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const rotations = data_view.getInt16(offset);
   offset += 2;
-  const phase_inductance = data_view.getInt16(offset);
+  const current_magnitude = current_conversion * data_view.getInt16(offset);
   offset += 2;
   const emf_angle_error_stdev = angle_units_to_degrees(Math.sqrt(data_view.getInt16(offset)));
   offset += 2;
@@ -437,7 +437,7 @@ function parse_full_readout(data_view, previous_readout){
     
     rotor_acceleration,
     rotations,
-    phase_inductance,
+    current_magnitude,
   };
 
   if (!previous_readout) return full_readout;

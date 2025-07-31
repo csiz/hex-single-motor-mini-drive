@@ -243,11 +243,8 @@ struct FullReadout : public Readout {
     // Integrated number of EMF deduced rotor angle rotations since startup.
     int16_t rotations;
 
-    // The phase inductance; behaves as if the inductor coil magnetic field had a mass. It's 
-    // smaller than the rotor mass. It controls the ratio between the magnet acceleration
-    // and the (reversely felt) inductor acceleration. Also the classical L/R time constant
-    // for the fixed reference frame current.
-    int16_t phase_inductance;
+    // Magnitude of the phase current in the DQ0 coordinate frame.
+    int16_t current_magnitude;
 
     int16_t emf_angle_error_variance;
 

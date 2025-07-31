@@ -13,8 +13,13 @@ const size_t history_size = 336;
 // Unit definitions
 // ----------------
 
-// Maximum value we can use in signed 32 bit multiplication.
+// One over the maximum value we can use in signed 16 bit multiplication.
 const int int_16bit_base = 1 << 15; // 32768
+
+// Double the int base; number of values in an int16_t.
+const int int_16bit_span = 1 << 16; // 65536
+
+// Maximum value we can use in signed 32 bit multiplication.
 const int max_16bit = int_16bit_base - 1; // 32767
 
 
@@ -142,7 +147,7 @@ const float voltage_conversion_float = adc_voltage_reference / (adc_max_value * 
 const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_float);
 
 // Conversion factor between current and phase resistance voltage.
-const int phase_current_to_voltage = round_div(phase_resistance * voltage_fixed_point, resistance_fixed_point);
+const int phase_current_to_voltage = phase_resistance * voltage_fixed_point / resistance_fixed_point;
 
 // Divisor used to limit the PWM so that VCC remains in range.
 const int vcc_limiting_divisor = 16;

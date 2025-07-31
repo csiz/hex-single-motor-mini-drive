@@ -205,15 +205,7 @@ static inline MotorOutputs update_motor_torque(
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
-    const int inductor_angle_offset = signed_angle(readout.inductor_angle - (readout.angle - readout.angle_adjustment));
-
-    const int current_magnitude = -(
-        get_cos(inductor_angle_offset) * readout.alpha_current - 
-        get_sin(inductor_angle_offset) * readout.beta_current
-    ) / angle_base;
-
-
-    const int measured_current = (angle_fix and current_detected) * sign(readout.beta_current) * current_magnitude;
+    const int measured_current = (angle_fix and current_detected) * sign(readout.beta_current) * readout.current_magnitude;
 
     const int control_error = (current_target - measured_current) * control_parameters.torque_control_ki;
 

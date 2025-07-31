@@ -890,6 +890,7 @@ const plot_dq0_currents = plot_lines({
   channels: [
     {y: "alpha_current", label: "Current Alpha", color: colors.alpha_current},
     {y: "beta_current", label: "Current Beta", color: colors.beta_current},
+    {y: "current_magnitude", label: "Current Magnitude", color: colors_categories[2]},
     {y: "web_alpha_current", label: "Current Alpha (computed online)", color: d3.color(colors.alpha_current).brighter(1)},
     {y: "web_beta_current", label: "Current Beta (computed online)", color: d3.color(colors.beta_current).brighter(1)},
     {y: "steady_state_beta_current", label: "Steady State Beta Current", color: d3.color(colors.alpha_current).darker(1)},
@@ -974,7 +975,6 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "phase_inductance", label: "Phase Inductance", color: colors_categories[2]},
     {y: "debug_1", label: "Debug 1", color: colors.v},
     {y: "debug_2", label: "Debug 2", color: colors.w},
   ],

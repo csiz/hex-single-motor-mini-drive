@@ -64,6 +64,7 @@ int previous_emf_angle_error = 0;
 
 int32_t motor_constant = 0;
 
+
 // Motor driver state
 // ------------------
 
@@ -302,13 +303,7 @@ void adc_interrupt_handler(){
     // Use gradient descent to estimate the inductor current angle. We don't have compute to
     // calculate the angle with atan2, so we treat it as an optimization problem over multiple
     // cycles. With cycles at 23KHz, we converge quickly, especially at high current values.
-    // 
-    // Since the motor induced currents are smooth, we should also maintain smooth output to
-    // help our lack of compute. If both driving and emf voltages vary smoothly the current
-    // angle must also vary smoothly.
-    //
-    // Exponentially average the values below to reduce noise, 1 : 3 parts coorresponds to 150us half life
-    // at our cycle frequency.
+
     
     // First alias the trig functions based on the predicted rotor angle.
 
@@ -332,11 +327,21 @@ void adc_interrupt_handler(){
     // Current angle calculation
     // -------------------------
 
-    const bool current_detected = square(alpha_current) + square(beta_current) > 16;
+    // Exponentially average some value to reduce noise. A ratio of 1 to 3 parts coorresponds to 150us half life
+    // at our cycle frequency.
 
-    const int inductor_angle = normalize_angle(predicted_angle + funky_atan2(beta_current, alpha_current));
+    const int inductor_angle_offset = funky_atan2(beta_current, alpha_current);
+    
+    const int inductor_angle = normalize_angle(predicted_angle + inductor_angle_offset);
+    
+    const int current_magnitude = faster_abs(
+        get_cos(inductor_angle_offset) * alpha_current + 
+        get_sin(inductor_angle_offset) * beta_current
+    ) / angle_base;
+    
+    const bool current_detected = current_magnitude > 4;
 
-
+    
     // Back EMF observer
     // -----------------
 
@@ -406,20 +411,19 @@ void adc_interrupt_handler(){
     const int prediction_error = emf_detected * emf_angle_error;
 
     // Calculate the angle adjustment error using the parametrized gain.
-    const int angle_adjustment = signed_ceil_div(
-        prediction_error * control_parameters.rotor_angle_ki,
-        control_parameters_fixed_point
-    );
+    const int angle_adjustment = prediction_error * control_parameters.rotor_angle_ki / control_parameters_fixed_point;
 
     // Calculate the new angle based on the angle adjustment.
     const int unnormalized_angle = unnormalized_predicted_angle + angle_adjustment;
 
+    // Increment rotations if we have moved outside the 0 to 2*pi range.
     const int rotations_increment = (
         unnormalized_angle < 0 ? -1 : 
         unnormalized_angle > angle_base ? +1 : 
         0
     );
 
+    // Calculate the new angle and keep it normalized using the rotations calculation.
     const int angle = unnormalized_angle - rotations_increment * angle_base;
 
     const int unnormalized_rotations = readout.rotations + rotations_increment;
@@ -435,13 +439,11 @@ void adc_interrupt_handler(){
     // Note that the angle change is relative to the current speed because of the prediction step.
     const int speed_error = (
         // If we have enough EMF detections, adjust the speed according to the prediction error.
-        compute_speed ? signed_ceil_div(
-            speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki, 
-            control_parameters_fixed_point) :    
+        compute_speed ? speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki / control_parameters_fixed_point :    
         // Maintain speed if we have an EMF reading, even if noisy.
         emf_detected ? 0 :
-        // Otherwise quickly decay the speed towards zero.
-        -signed_ceil_div(readout.angular_speed, 16)
+        // Otherwise drop the speed to 0.
+        -readout.angular_speed
     );
     
     const int updated_speed = readout.angular_speed + speed_error;
@@ -449,9 +451,8 @@ void adc_interrupt_handler(){
     // Calculate the acceleration based on the speed change.
     // 
     // The new speed isn't predicted so we need to diff to the previous acceleration to get the error.
-    const int acceleration_error = signed_ceil_div(
-        (speed_error * acceleration_fixed_point - readout.rotor_acceleration) * control_parameters.rotor_acceleration_ki,
-        control_parameters_fixed_point
+    const int acceleration_error = (
+        (speed_error * acceleration_fixed_point - readout.rotor_acceleration) * control_parameters.rotor_acceleration_ki / control_parameters_fixed_point
     );
 
     const int rotor_acceleration = readout.rotor_acceleration + acceleration_error;
@@ -553,12 +554,10 @@ void adc_interrupt_handler(){
     readout.rotations = rotations;
 
     readout.emf_angle_error_variance = emf_angle_error_variance;
-    readout.phase_inductance = 0;
+    readout.current_magnitude = current_magnitude;
     
     readout.debug_1 = driver_state.lead_angle_control / control_parameters_fixed_point;
     readout.debug_2 = driver_state.target_pwm;
-
-    
 
     
     // Calculate motor outputs
