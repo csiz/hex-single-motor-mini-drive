@@ -205,7 +205,14 @@ static inline MotorOutputs update_motor_torque(
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
-    const int measured_current = (angle_fix and current_detected) * sign(current_target) * readout.current_magnitude;
+    const int measured_current = (angle_fix and current_detected) * (
+        // Rely on the sign of the target current because we are driving with the smooth 
+        // mode which always targets the current at 90 degrees ahead of the magnetic angle.
+        current_target > 0 ? +readout.current_magnitude : 
+        current_target < 0 ? -readout.current_magnitude : 
+        // But if set to 0, we always have to cancel the beta_current.
+        readout.beta_current
+    );
 
     const int control_error = (current_target - measured_current) * control_parameters.torque_control_ki;
 
