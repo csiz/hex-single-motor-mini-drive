@@ -414,8 +414,9 @@ const ControlParameters default_control_parameters = {
     .min_emf_for_motor_constant = voltage_fixed_point * 1,
 };
 
-const int max_lead_angle_control = third_circle * control_parameters_fixed_point;
+const int max_lead_angle_control = 60 * angle_base / 360 * control_parameters_fixed_point;
 
+const int max_pwm_control = pwm_max * control_parameters_fixed_point;
 
 // Calculation precomputed constants
 // ---------------------------------

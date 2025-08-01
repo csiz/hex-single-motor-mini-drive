@@ -161,10 +161,12 @@ static inline MotorOutputs update_motor_smooth(
         driver_state.lead_angle_control + lead_angle_error
     );
 
+    driver_state.lead_angle = driver_state.lead_angle_control / control_parameters_fixed_point;
+
     if (angle_fix) {
         // If we have an accurate position, we can use it to adjust our control.
 
-        const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle_control / control_parameters_fixed_point);
+        const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle);
         
         // Compensate the target angle by the control output. At high speed we need
         // to lead by more than 90 degrees to compensate for the RL time constant.
@@ -199,28 +201,37 @@ static inline MotorOutputs update_motor_torque(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    // Calculate the target current in fixed point format.
+    // Alias the current target.
     const int current_target = driver_state.torque.current_target;
 
-    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
+    // Squash very low currents to 0 to avoid noise.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
-    const int measured_current = (angle_fix and current_detected) * (
+    // Use the current target sign when we don't have an angle fix.
+    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
+
+    // Get the signed current magnitude to compare against the target.
+    const int measured_current = current_detected * (
+        angle_fix ? sign(readout.beta_current) * readout.current_magnitude : 
         // Rely on the sign of the target current because we are driving with the smooth 
         // mode which always targets the current at 90 degrees ahead of the magnetic angle.
         current_target > 0 ? +readout.current_magnitude : 
         current_target < 0 ? -readout.current_magnitude : 
-        // But if set to 0, we always have to cancel the beta_current.
+        // If current_target == 0, we should cancel the beta_current. Our output is going
+        // to be along the beta_current direction so we trapped ourselves to only be able
+        // to cancel this current. Our smooth algorithm will try to keep the alpha_current
+        // near 0 over time.
         readout.beta_current
     );
 
-    const int control_error = (current_target - measured_current) * control_parameters.torque_control_ki;
+    // Calculate the difference between the target and measured current.
+    const int control_error = (current_target - measured_current);
 
     // Update the PID control for the torque.
     driver_state.target_pwm_control = clip_to(
-        (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
-        (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
-        driver_state.target_pwm_control + control_error
+        -max_pwm_control,
+        +max_pwm_control,
+        driver_state.target_pwm_control + control_error * control_parameters.torque_control_ki
     );
 
     // Get the target PWM after torque control.
@@ -255,8 +266,8 @@ static inline MotorOutputs update_motor_battery_power(
 
     // Update the PID control for the torque.
     driver_state.target_pwm_control = clip_to(
-        (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
-        (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
+        -max_pwm_control,
+        +max_pwm_control,
         driver_state.target_pwm_control + control_error
     );
 

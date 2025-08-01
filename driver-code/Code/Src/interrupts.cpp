@@ -461,6 +461,7 @@ void adc_interrupt_handler(){
 
     rotor_acceleration_observer += acceleration_error * control_parameters.rotor_acceleration_ki;
 
+    const int rotor_acceleration = rotor_acceleration_observer / control_parameters_fixed_point;
 
     // Calculate the motor constant
     // ----------------------------
@@ -473,6 +474,7 @@ void adc_interrupt_handler(){
 
     motor_constant_observer += motor_constant_error * control_parameters.motor_constant_ki;
 
+    const int motor_constant = motor_constant_observer / control_parameters_fixed_point;
 
     // Calculate the power use
     // -----------------------
@@ -549,16 +551,16 @@ void adc_interrupt_handler(){
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
     
-    readout.motor_constant = motor_constant_observer / control_parameters_fixed_point;
+    readout.motor_constant = motor_constant;
     readout.inductor_angle = inductor_angle;
 
-    readout.rotor_acceleration = rotor_acceleration_observer / control_parameters_fixed_point;
+    readout.rotor_acceleration = rotor_acceleration;
     readout.rotations = rotations;
 
     readout.emf_angle_error_variance = emf_angle_error_variance;
     readout.current_magnitude = current_magnitude;
     
-    readout.lead_angle = driver_state.lead_angle_control / control_parameters_fixed_point;
+    readout.lead_angle = driver_state.lead_angle;
     readout.target_pwm = driver_state.target_pwm;
 
     
