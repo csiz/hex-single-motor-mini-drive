@@ -113,36 +113,50 @@ struct DriverState {
     // PWM value actively used to drive the motor.
     int16_t active_pwm;
     
-    // Angular speed for the drive command.
+    // Angular speed at which the active_angle is spinning.
     int16_t angular_speed;
     
     // The angle fraction remaining. Needed because the angular speed has higher
     // resolution than the angle; so we need to keep track of partial increments.
     int16_t active_angle_residual;
 
+    // The target PWM value that we are aiming for with the smooth control. This
+    // target can be set by the advanced control algorithms.
     int16_t target_pwm;
 
-    int32_t lead_angle_control;
+    // The lead angle value used to adjust the angle of the driven phase
+    // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
+    int16_t lead_angle;
 
-    int32_t pwm_control;
+    // Higher resolution control value for the target PWM.
+    int32_t target_pwm_control;
+
+    // Higher resolution control value for the lead angle.
+    int32_t lead_angle_control;
 
     // The additional data depends on the driver mode.
     union {
+        // Drive the motor using a fixed PWM schedule.
         DriveSchedule schedule;
+        // Drive the motor to a specific torque target.
         DriveTorque torque;
+        // Drive the motor to a specific battery power drain.
         DriveBatteryPower battery_power;
+        // Drive the motor to a specific angle.
         SeekAngle seek_angle;
     };
 };
 
-const DriverState null_driver_state = {};
-
+// Driver state for safely breaking the motor.
 const DriverState breaking_driver_state = {
     .motor_outputs = breaking_motor_outputs,
     .mode = DriverMode::OFF
 };
 
+// Size of the DriverState structure (we want to keep it small for performance).
 const size_t driver_state_size = sizeof(DriverState);
+
+static_assert(driver_state_size <= 64, "DriverState size exceeds 64 bytes, try to make it smaller!");
 
 // Response data structures
 // ------------------------
@@ -259,16 +273,43 @@ struct FullReadout : public Readout {
 // Parameters data structures
 // --------------------------
 
-
+// Hall sensor angles at the switching points between the sectors.
 using TriggerAngles = std::array<std::array<uint16_t, 2>, 6>;
+// Variances for the hall sensor angles at the switching points between the sectors.
 using TriggerAngleVariances = std::array<std::array<uint16_t, 2>, 6>;
+// Center angles of the Hall sensor sectors.
 using CenterAngles = std::array<uint16_t, 6>;
+// Variances for the center angles of the Hall sensor sectors.
 using CenterVariances = std::array<uint16_t, 6>;
 
+// Hall sensor position calibration data.
+// 
+// Apparently, millimiter precision in the placement of the hall sensor chips means an error up to 
+// 30 degrees in the electrical angle of the magnetic rotor. Note that for each physical rotation
+// of the magnet there are N magnet poles times P coil pairs rotations of the electrical angle.
+// 
+// With this big of an error, we need to calibrate the hall sensor positions using the angle
+// inferred from the back EMF voltage induced in the coils.
 struct PositionCalibration {
+
+    // The angle at the transition to the current sector from the left and from the right.
+    // 
+    // By "left" I mean the hall sector has transitioned from a lower to a higher number,
+    // the rotor has a positive speed and is rotating counter-clockwise (trigonometric direction).
+    // The left angle is lower than the right angle.
+    // 
+    // Note that the left angle of a sector and the right angle of the previous sector do not
+    // coincide because the hall sensors have a designed hysterisis that latches the output.
     TriggerAngles sector_transition_angles;
+
+    // The variance of the angles (it is expensive to compute the standard deviation with 
+    // a square root but we only need the variance, so we only store the variance).
     TriggerAngleVariances sector_transition_variances;
+
+    // The center angle of each sector; the average of the left and right angles.
     CenterAngles sector_center_angles;
+
+    // The variance of the center angles; at the moment it represents the span of the hall sector.
     CenterVariances sector_center_variances;
 };
 
@@ -279,7 +320,9 @@ struct CurrentCalibration {
     int16_t inductance_factor;
 };
 
+// Parameters used in the motor control loop.
 struct ControlParameters {
+
     // Magnet position integral gain.
     int16_t rotor_angle_ki;
 
@@ -331,7 +374,7 @@ struct ControlParameters {
     // Maximum EMF angle correction variance when it's too noisy to update the angle.
     int16_t emf_angle_error_variance_threshold;
 
-    // Spare
+    // Minium EMF voltage to compute the motor constant.
     int16_t min_emf_for_motor_constant;
 };
 

@@ -88,7 +88,7 @@ DriverState driver_state = breaking_driver_state;
 volatile bool new_pending_state = false;
 
 // Settings for the new driver state.
-DriverState pending_state = null_driver_state;
+DriverState pending_state = breaking_driver_state;
 
 
 
@@ -530,11 +530,11 @@ void adc_interrupt_handler(){
     readout.w_current_diff = std::get<2>(currents_diff);
 
     readout.angle = angle;
+
     readout.angle_adjustment = angle_adjustment;
     readout.angular_speed = angular_speed;
     readout.vcc_voltage = vcc_voltage;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
-
 
     readout.temperature = temperature;
     readout.live_max_pwm = live_max_pwm;
@@ -549,7 +549,6 @@ void adc_interrupt_handler(){
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
     
-
     readout.motor_constant = motor_constant_observer / control_parameters_fixed_point;
     readout.inductor_angle = inductor_angle;
 

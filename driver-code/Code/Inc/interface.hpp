@@ -71,44 +71,64 @@ enum MessageCode : uint16_t {
     RUN_UNIT_TEST_FUNKY_ATAN_PART_3 = 0x5044,
 };
 
+// Bit pattern used to mark the end of a message.
 const uint16_t END_OF_MESSAGE = 0b0101'0101'0101'0101;
 
 // Expected data sizes
 // -------------------
 
+// The maximum size of a message that we send or receive.
 const size_t max_message_size = 256;
 
 // Command header size (the command code).
 const size_t header_size = 2;
 
+// Size of the cyclic redundancy check (CRC) at the end of the message.
 const size_t crc_size = 4;
 
+// Size of the end of message marker. We output a fixed bit pattern at the end of each message.
 const size_t end_of_message_size = sizeof(END_OF_MESSAGE);
 
+// The size of the tail of the message; CRC and end of message marker.
 const size_t tail_size = crc_size + end_of_message_size;
 
+// Size of the generic command message.
 const size_t basic_command_size = header_size + sizeof(BasicCommand) + tail_size;
+
+// Size of the compact readout message.
 const size_t readout_size = header_size + sizeof(Readout) + tail_size;
+
+// Size of the complete state readout message.
 const size_t full_readout_size = header_size + sizeof(FullReadout) + tail_size;
+
+// Size of the current calibration message.
 const size_t current_calibration_size = header_size + sizeof(CurrentCalibration) + tail_size;
+
+// Size of the position calibration message.
 const size_t position_calibration_size = header_size + sizeof(PositionCalibration) + tail_size;
+
+// Size of the control parameters message.
 const size_t control_parameters_size = header_size + sizeof(ControlParameters) + tail_size;
+
+// Size of the unit test output message. We set the message size to the maximum and adjust
+// the test output buffer size to account for the header and tail.
 const size_t unit_test_size = max_message_size;
 
-
+// The basic command is the smallest message that we send or receive.
 const size_t min_message_size = basic_command_size;
 
 
 // Message buffer
 // --------------
 
-// Buffer parts of commands until they are complete.
+// Buffer bits of command data until we receive a complete message.
 struct MessageBuffer {
     uint8_t data[max_message_size] = {};
     size_t write_index = 0;
     int bytes_expected = min_message_size;
 };
 
+// Quickly reset the message buffer by resetting the write index and expected bytes (does not clear the data).
 static inline void reset_message_buffer(MessageBuffer & buffer) {
     buffer.write_index = 0;
     buffer.bytes_expected = min_message_size;
@@ -123,8 +143,9 @@ static inline void reset_message_buffer(MessageBuffer & buffer) {
 // arguments and returns the number of bytes received. Can receive partial commands.
 bool buffer_command(MessageBuffer & buffer, int receive_function(uint8_t * buf, uint16_t len));
 
-
+// Run the cyclic redundancy check (CRC) on the message data and check if the message is valid.
 bool check_message_for_errors(uint8_t const * data, size_t size);
+
 
 BasicCommand parse_basic_command(uint8_t const * data, size_t size);
 CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size);

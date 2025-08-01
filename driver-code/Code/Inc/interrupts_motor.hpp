@@ -217,14 +217,14 @@ static inline MotorOutputs update_motor_torque(
     const int control_error = (current_target - measured_current) * control_parameters.torque_control_ki;
 
     // Update the PID control for the torque.
-    driver_state.pwm_control = clip_to(
+    driver_state.target_pwm_control = clip_to(
         (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
         (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
-        driver_state.pwm_control + control_error
+        driver_state.target_pwm_control + control_error
     );
 
     // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.pwm_control / control_parameters_fixed_point;
+    driver_state.target_pwm = driver_state.target_pwm_control / control_parameters_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -254,14 +254,14 @@ static inline MotorOutputs update_motor_battery_power(
 
 
     // Update the PID control for the torque.
-    driver_state.pwm_control = clip_to(
+    driver_state.target_pwm_control = clip_to(
         (driver_state.active_pwm - control_parameters.probing_max_pwm) * control_parameters_fixed_point,
         (driver_state.active_pwm + control_parameters.probing_max_pwm) * control_parameters_fixed_point,
-        driver_state.pwm_control + control_error
+        driver_state.target_pwm_control + control_error
     );
 
     // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.pwm_control / control_parameters_fixed_point;
+    driver_state.target_pwm = driver_state.target_pwm_control / control_parameters_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -402,8 +402,8 @@ static inline DriverState setup_driver_state(
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
+                .target_pwm_control = driver_state.target_pwm_control,
                 .lead_angle_control = driver_state.lead_angle_control,
-                .pwm_control = driver_state.pwm_control,
                 .torque = DriveTorque{
                     .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.torque.current_target)),
                 }
@@ -418,15 +418,15 @@ static inline DriverState setup_driver_state(
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
+                .target_pwm_control = driver_state.target_pwm_control,
                 .lead_angle_control = driver_state.lead_angle_control,
-                .pwm_control = driver_state.pwm_control,
                 .battery_power = DriveBatteryPower{
                     .target_power = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.battery_power.target_power)),
                 }
             };
     }
 
-    return null_driver_state;
+    return breaking_driver_state;
 }
 
 // Update the motor outputs based on the active driver state and measured phase currents and other derived values.
