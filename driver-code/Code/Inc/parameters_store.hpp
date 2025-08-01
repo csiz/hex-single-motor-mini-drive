@@ -15,6 +15,7 @@ CurrentCalibration get_current_calibration();
 
 // Load the control parameters from flash memory.
 ControlParameters get_control_parameters();
+
 // Load the position calibration from flash memory.
 PositionCalibration get_position_calibration();
 
