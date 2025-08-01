@@ -78,6 +78,11 @@ int32_t rotor_acceleration_observer = 0;
 
 int32_t angular_speed_observer = 0;
 
+int16_t angle_adjustment_residual = 0;
+
+// Start with the missing hall sector marker.
+uint8_t previous_hall_sector = hall_sector_base;
+
 
 // Motor driver state
 // ------------------
@@ -232,6 +237,12 @@ void adc_interrupt_handler(){
     // Read new data from the hall sensors.
     const uint8_t hall_state = read_hall_sensors_state();
 
+    const uint8_t hall_sector = get_hall_sector(hall_state);
+
+    const bool hall_valid = hall_sector < hall_sector_base;
+
+    const int hall_angle = hall_valid ? position_calibration.sector_center_angles[hall_sector] : 0;
+
 
     // Do the data calculations
     // ------------------------
@@ -357,6 +368,7 @@ void adc_interrupt_handler(){
 
     const int current_magnitude = (instant_current_magnitude + readout.current_magnitude * 3) / 4;
     
+
     // Back EMF angle observer
     // -----------------------
 
@@ -408,7 +420,11 @@ void adc_interrupt_handler(){
     const bool incorrect_angle = incorrect_direction_detections or (driver_state.active_pwm and not emf_fix);
 
     // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
-    correct_angle_counter = clip_to(0, angle_fix_max, correct_angle_counter + (incorrect_angle ? -1 : emf_fix));
+    correct_angle_counter = clip_to(
+        0, angle_fix_max, 
+        // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
+        correct_angle_counter + (incorrect_angle ? -1 : emf_fix) + (hall_valid * control_parameters.hall_angle_ki > 0 ? +1 : 0)
+    );
 
     // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
     const int prediction_error = emf_detected * emf_angle_error;
@@ -417,12 +433,22 @@ void adc_interrupt_handler(){
     // Angle update
     // ------------
 
+    const int hall_prediction_error = hall_valid * signed_angle(hall_angle - predicted_angle);
+
     // Declare the angle to be correct after a threshold certainty.
     const bool angle_fix = correct_angle_counter >= angle_fix_threshold;
     
     // Calculate the angle adjustment error using the parametrized gain.
-    const int angle_adjustment = prediction_error * control_parameters.rotor_angle_ki / control_parameters_fixed_point;
-
+    const int angle_adjustment_hires = (
+        angle_adjustment_residual +
+        prediction_error * control_parameters.rotor_angle_ki +
+        (not emf_detected) * hall_prediction_error * control_parameters.hall_angle_ki
+    );
+    
+    const int angle_adjustment = angle_adjustment_hires / control_parameters_fixed_point;
+    
+    angle_adjustment_residual = angle_adjustment_hires % control_parameters_fixed_point;
+    
     // Calculate the new angle based on the angle adjustment.
     const int unnormalized_angle = unnormalized_predicted_angle + angle_adjustment;
 

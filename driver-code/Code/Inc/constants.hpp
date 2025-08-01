@@ -29,6 +29,9 @@ const uint16_t pwm_base = 1536;
 // Base and number of hall sectors.
 const uint8_t hall_sector_base = 6;
 
+// Half the number of hall sectors; use to determine direction.
+const uint8_t hall_sector_half_base = hall_sector_base / 2;
+
 // Angle units of a full circle: 1 angle unit = (tau = 2pi) / 1024.
 // 
 // Note that speed units and acceleration units are defined as angle units
@@ -397,18 +400,18 @@ const ControlParameters default_control_parameters = {
     .rotor_angle_ki = 1024,
     .rotor_angular_speed_ki = 64,
     .rotor_acceleration_ki = 32,
-    .motor_constant_ki = 8,
+    .motor_constant_ki = 2,
     .resistance_ki = 0,
     .inductance_ki = 0,
     .max_pwm_change = 8,
     .max_angle_change = 8,
-    .min_emf_voltage = voltage_fixed_point * 150 / 1000,
-    .min_emf_speed = static_cast<int16_t>(5 * angle_base / 360 * speed_fixed_point * 1000 / pwm_cycles_per_second),
-    .lead_angle_control_ki = 8,
+    .min_emf_voltage = voltage_fixed_point * 100 / 1000,
+    .hall_angle_ki = 32,
+    .lead_angle_control_ki = 4,
     .torque_control_ki = 32,
     .battery_power_control_ki = 8,
     .speed_control_ki = 8,
-    .probing_angular_speed = speed_fixed_point,
+    .probing_angular_speed = speed_fixed_point / 2,
     .probing_max_pwm = pwm_max_hold,
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .min_emf_for_motor_constant = voltage_fixed_point * 1,

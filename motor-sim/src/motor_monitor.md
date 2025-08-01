@@ -1333,7 +1333,7 @@ const control_parameters_input = Object.fromEntries(
     ["max_pwm_change", "Maximum PWM Change per cycle"],
     ["max_angle_change", "Maximum Angle Change per cycle"],
     ["min_emf_voltage", "Minimum EMF Voltage for detection"],
-    ["min_emf_speed", "Minimum EMF Speed for detection"],
+    ["hall_angle_ki", "Position adjustment from hall angle KI"],
     ["lead_angle_control_ki", "Lead Angle Control KI"],
     ["torque_control_ki", "Torque Control KI"],
     ["battery_power_control_ki", "Battery Power Control KI"],

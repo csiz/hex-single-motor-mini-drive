@@ -350,8 +350,8 @@ struct ControlParameters {
     // Minimum EMF voltage to consider EMF detected (above the noise level)
     int16_t min_emf_voltage;
     
-    // Minimum speed when we are certain to detect the EMF voltage.
-    int16_t min_emf_speed;
+    // Integral gain for the hall angle adjustment (0 to ignore).
+    int16_t hall_angle_ki;
 
     // Lead angle integral gain for efficient driving.
     int16_t lead_angle_control_ki;

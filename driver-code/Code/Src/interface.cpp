@@ -245,7 +245,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.min_emf_voltage);
     offset += 2;
-    write_int16(buffer + offset, control_parameters.min_emf_speed);
+    write_int16(buffer + offset, control_parameters.hall_angle_ki);
     offset += 2;
     write_int16(buffer + offset, control_parameters.lead_angle_control_ki);
     offset += 2;
@@ -500,7 +500,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.min_emf_voltage = read_int16(data + offset);
     offset += 2;
-    control_parameters.min_emf_speed = read_int16(data + offset);
+    control_parameters.hall_angle_ki = read_int16(data + offset);
     offset += 2;
     control_parameters.lead_angle_control_ki = read_int16(data + offset);
     offset += 2;

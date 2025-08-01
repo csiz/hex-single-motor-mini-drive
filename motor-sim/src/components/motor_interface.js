@@ -580,7 +580,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const min_emf_voltage = data_view.getInt16(offset);
   offset += 2;
-  const min_emf_speed = data_view.getInt16(offset);
+  const hall_angle_ki = data_view.getInt16(offset);
   offset += 2;
   const lead_angle_control_ki = data_view.getInt16(offset);
   offset += 2;
@@ -609,7 +609,7 @@ function parse_control_parameters(data_view) {
     max_pwm_change,
     max_angle_change,
     min_emf_voltage,
-    min_emf_speed,
+    hall_angle_ki,
     lead_angle_control_ki,
     torque_control_ki,
     battery_power_control_ki,
@@ -761,7 +761,7 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.min_emf_voltage);
   offset += 2;
-  view.setInt16(offset, control_parameters.min_emf_speed);
+  view.setInt16(offset, control_parameters.hall_angle_ki);
   offset += 2;
   view.setInt16(offset, control_parameters.lead_angle_control_ki);
   offset += 2;
