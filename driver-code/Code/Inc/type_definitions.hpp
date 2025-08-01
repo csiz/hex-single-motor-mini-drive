@@ -24,7 +24,8 @@ enum struct DriverMode : uint16_t {
     DRIVE_PERIODIC,
     DRIVE_SMOOTH,
     DRIVE_TORQUE,
-    DRIVE_BATTERY_POWER
+    DRIVE_BATTERY_POWER,
+    SEEK_ANGLE,
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -92,8 +93,11 @@ struct DriveBatteryPower {
     int16_t target_power;
 };
 
+// Drive the motor to a specific position.
 struct SeekAngle {
-    int16_t target_rotation; // Target rotation to seek.
+    int16_t target_rotation;
+    int16_t max_power;
+    int16_t seeking_power_p;
 };
 
 // The complete driver state, these values control the motor behaviour.

@@ -356,6 +356,19 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
         }
 
+        case SET_STATE_SEEK_ANGLE_WITH_POWER: {
+            set_motor_command(DriverState{
+                .mode = DriverMode::SEEK_ANGLE, 
+                .duration = command.timeout, 
+                .seek_angle = SeekAngle{
+                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
+                    .max_power = static_cast<int16_t>(clip_to(0, max_drive_power, command.second)),
+                    .seeking_power_p = static_cast<int16_t>(clip_to(0, max_drive_power, command.third))
+                }
+            });
+            return false;
+        }
+
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
             set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });

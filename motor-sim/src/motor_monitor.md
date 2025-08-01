@@ -26,6 +26,8 @@ Motor Commands
   <span>${command_angular_speed_slider}</span>
   <span>${command_torque_current_slider}</span>
   <span>${command_power_slider}</span>
+  <span>${command_seek_rotation_slider}</span>
+  <span>${command_seek_power_p_slider}</span>
 </div>
 
 
@@ -324,6 +326,16 @@ const command_torque_current_amps = Generators.input(command_torque_current_slid
 const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 0.200, step: 0.010, label: "Command power (Watts):"});
 
 const command_power_watts = Generators.input(command_power_slider);
+
+const max_seek_rotation = (max_16bit + 1) / 32;
+
+const command_seek_rotation_slider = inputs_wide_range([-max_seek_rotation, +max_seek_rotation], {value: 0, step: 1, label: "Seek angle (rotations):"});
+
+const command_seek_rotation = Generators.input(command_seek_rotation_slider);
+
+const command_seek_power_p_slider = inputs_wide_range([0, max_drive_power / 10], {value: 0.010, step: 0.010, label: "Seek power (Watts / rotation):"});
+
+const command_seek_power_p_watts = Generators.input(command_seek_power_p_slider);
 ```
 
 ```js
@@ -367,6 +379,8 @@ const command_angular_speed = degrees_per_millisecond_to_speed_units(command_ang
 const command_torque_current = Math.floor(command_torque_current_amps / current_conversion);
 
 const command_power = convert_watts_to_power_units(command_power_watts);
+
+const command_seek_power_p = convert_watts_to_power_units(command_seek_power_p_watts);
 
 async function send_command(command, options = {}){
   if (!motor_controller) return;
@@ -577,6 +591,13 @@ const advanced_drive_buttons = Inputs.button(
     }],
     ["Drive power -", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
+    }],
+    ["Seek angle", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER, {
+        command_value: command_seek_rotation, 
+        command_second: command_power,
+        command_third: command_seek_power_p,
+      });
     }],
   ],
   {label: "Advanced drive commands"},
@@ -1697,7 +1718,7 @@ import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
   history_size, max_calibration_current,
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
-  current_conversion, max_drive_current, max_drive_power, max_angular_speed,
+  current_conversion, max_drive_current, max_drive_power, max_angular_speed, max_16bit,
   convert_power_units_to_watts, convert_watts_to_power_units,
 } from "./components/motor_constants.js";
 

@@ -28,6 +28,9 @@ export const millis_per_cycle = 1.0/cycles_per_millisecond;
 // Angle units
 // -----------
 
+// Maximum value for a 16 bit signed integer.
+export const max_16bit = 32767;
+
 export const angle_base = 1024;
 
 // Convert degrees to angle units.

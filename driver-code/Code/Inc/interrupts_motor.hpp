@@ -277,17 +277,30 @@ static inline MotorOutputs update_motor_battery_power(
     return update_motor_smooth(driver_state, readout);
 }
 
-// static inline MotorOutputs update_motor_seek_angle(
-//     DriverState & driver_state,
-//     FullReadout const& readout
-// ){
-//     // TODO: ...
-    
-//     // const int target_rotation = driver_state.seek_angle.target_rotation;
+static inline MotorOutputs update_motor_seek_angle(
+    DriverState & driver_state,
+    FullReadout const& readout
+){
+    const SeekAngle seek_parameters = driver_state.seek_angle;
 
-//     // const int control_error = target_rotation - readout.rotations;
+    const int control_error = seek_parameters.target_rotation - readout.rotations;
 
-// }
+    const int target_power = seek_parameters.seeking_power_p * control_error;
+
+    // Swap the SeekAngle for BatteryPower so we run the power control mode.
+    driver_state.battery_power.target_power = clip_to(
+        -seek_parameters.max_power,
+        +seek_parameters.max_power,
+        target_power
+    );
+
+    const MotorOutputs motor_outputs = update_motor_battery_power(driver_state, readout);
+
+    // Restore the SeekAngle parameters.
+    driver_state.seek_angle = seek_parameters;
+
+    return motor_outputs;
+}
 
 // Drive the motor using a fixed schedule for the PWM outputs.
 static inline MotorOutputs update_motor_schedule(
@@ -395,8 +408,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_SMOOTH,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle :
-                    static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
@@ -408,8 +420,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_TORQUE,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle :
-                    static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
@@ -424,8 +435,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_BATTERY_POWER,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle :
-                    static_cast<int16_t>(normalize_angle(readout.angle + sign(pending_state.target_pwm) * quarter_circle)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
@@ -433,6 +443,22 @@ static inline DriverState setup_driver_state(
                 .lead_angle_control = driver_state.lead_angle_control,
                 .battery_power = DriveBatteryPower{
                     .target_power = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.battery_power.target_power)),
+                }
+            };
+
+        case DriverMode::SEEK_ANGLE:
+            return DriverState{
+                .mode = DriverMode::SEEK_ANGLE,
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
+                .active_pwm = driver_state.active_pwm,
+                .angular_speed = driver_state.angular_speed,
+                .active_angle_residual = driver_state.active_angle_residual,
+                .lead_angle_control = driver_state.lead_angle_control,
+                .seek_angle = SeekAngle{
+                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
+                    .max_power = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.max_power)),
+                    .seeking_power_p = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.seeking_power_p)),
                 }
             };
     }
@@ -508,6 +534,13 @@ static inline void update_motor_control(
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
             
             driver_state.motor_outputs = update_motor_battery_power(driver_state, readout);
+            return;
+
+        case DriverMode::SEEK_ANGLE:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            // Update the motor outputs for the seek angle driving.
+            driver_state.motor_outputs = update_motor_seek_angle(driver_state, readout);
             return;
     }
 
