@@ -267,16 +267,19 @@ static inline MotorOutputs update_motor_seek_angle_power(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    const int control_error = driver_state.seek_angle.target_rotation - readout.rotations;
-
-    const int target_power = driver_state.seek_angle.secondary_kp * control_error;
-
-    // Swap the SeekAngle for BatteryPower so we run the power control mode.
-    driver_state.secondary_target = clip_to(
-        -driver_state.seek_angle.max_secondary,
-        +driver_state.seek_angle.max_secondary,
-        target_power
+    const int position_error = clip_to(-max_seek_error, +max_seek_error, 
+        (driver_state.seek_angle.target_rotation - readout.rotations) * seek_angle_coarseness +
+        signed_angle(driver_state.seek_angle.target_angle - readout.angle) / min_seek_angle_error
     );
+
+    const int max_power = driver_state.seek_angle.max_secondary_target;
+
+    const int pid_control = clip_to(-control_parameters_fixed_point, +control_parameters_fixed_point,
+        + control_parameters.seek_via_power_kp * position_error / seek_error_reference
+        - control_parameters.seek_via_power_kd * readout.angular_speed / seek_speed_reference
+    );
+
+    driver_state.secondary_target = max_power * pid_control / control_parameters_fixed_point;
 
     return update_motor_battery_power(driver_state, readout);
 }
@@ -285,16 +288,19 @@ static inline MotorOutputs update_motor_seek_angle_torque(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    const int control_error = driver_state.seek_angle.target_rotation - readout.rotations;
-
-    const int target_current = driver_state.seek_angle.secondary_kp * control_error;
-
-    // Swap the SeekAngle for BatteryPower so we run the power control mode.
-    driver_state.secondary_target = clip_to(
-        -driver_state.seek_angle.max_secondary,
-        +driver_state.seek_angle.max_secondary,
-        target_current
+    const int position_error = clip_to(-max_seek_error, +max_seek_error, 
+        (driver_state.seek_angle.target_rotation - readout.rotations) * seek_angle_coarseness +
+        signed_angle(driver_state.seek_angle.target_angle - readout.angle) / min_seek_angle_error
     );
+
+    const int max_current = driver_state.seek_angle.max_secondary_target;
+
+    const int pid_control = clip_to(-control_parameters_fixed_point, +control_parameters_fixed_point,
+        + control_parameters.seek_via_torque_kp * position_error / seek_error_reference
+        - control_parameters.seek_via_torque_kd * readout.angular_speed / seek_speed_reference
+    );
+
+    driver_state.secondary_target = max_current * pid_control / control_parameters_fixed_point;
 
     return update_motor_torque(driver_state, readout);
 }
@@ -450,8 +456,8 @@ static inline DriverState setup_driver_state(
                 .lead_angle_control = driver_state.lead_angle_control,
                 .seek_angle = SeekAngle{
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
-                    .max_secondary = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.max_secondary)),
-                    .secondary_kp = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.secondary_kp)),
+                    .target_angle = static_cast<int16_t>(normalize_angle(pending_state.seek_angle.target_angle)),
+                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_power, pending_state.seek_angle.max_secondary_target)),
                 }
             };
 
@@ -466,8 +472,8 @@ static inline DriverState setup_driver_state(
                 .lead_angle_control = driver_state.lead_angle_control,
                 .seek_angle = SeekAngle{
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
-                    .max_secondary = static_cast<int16_t>(clip_to(0, max_drive_current, pending_state.seek_angle.max_secondary)),
-                    .secondary_kp = static_cast<int16_t>(clip_to(0, max_drive_current, pending_state.seek_angle.secondary_kp)),
+                    .target_angle = static_cast<int16_t>(normalize_angle(pending_state.seek_angle.target_angle)),
+                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_current, pending_state.seek_angle.max_secondary_target)),
                 }
             };
     }

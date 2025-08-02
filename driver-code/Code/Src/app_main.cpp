@@ -358,8 +358,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 .duration = command.timeout, 
                 .seek_angle = SeekAngle{
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
-                    .max_secondary = static_cast<int16_t>(clip_to(0, max_drive_power, command.second)),
-                    .secondary_kp = static_cast<int16_t>(clip_to(0, max_drive_power, command.third))
+                    .target_angle = static_cast<int16_t>(normalize_angle(command.second)),
+                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_power, +command.third)),
                 }
             });
             return false;
@@ -371,8 +371,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 .duration = command.timeout, 
                 .seek_angle = SeekAngle{
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
-                    .max_secondary = static_cast<int16_t>(clip_to(0, max_drive_current, command.second)),
-                    .secondary_kp = static_cast<int16_t>(clip_to(0, max_drive_current, command.third))
+                    .target_angle = static_cast<int16_t>(normalize_angle(command.second)),
+                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_current, +command.third)),
                 }
             });
             return false;

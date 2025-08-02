@@ -95,7 +95,7 @@ const readout_size = 40;
 const full_readout_size = 84;
 const current_calibration_size = 16;
 const position_calibration_size = 80;
-const control_parameters_size = 44;
+const control_parameters_size = 64;
 const unit_test_size = 256;
 
 export function get_hall_sector({hall_u, hall_v, hall_w}){
@@ -572,6 +572,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const motor_constant_ki = data_view.getInt16(offset);
   offset += 2;
+
   const resistance_ki = data_view.getInt16(offset);
   offset += 2;
   const inductance_ki = data_view.getInt16(offset);
@@ -580,6 +581,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const max_angle_change = data_view.getInt16(offset);
   offset += 2;
+
   const min_emf_voltage = data_view.getInt16(offset);
   offset += 2;
   const hall_angle_ki = data_view.getInt16(offset);
@@ -588,6 +590,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const torque_control_ki = data_view.getInt16(offset);
   offset += 2;
+
   const battery_power_control_ki = data_view.getInt16(offset);
   offset += 2;
   const speed_control_ki = data_view.getInt16(offset);
@@ -596,10 +599,34 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const probing_max_pwm = data_view.getInt16(offset);
   offset += 2;
+
   const emf_angle_error_variance_threshold = data_view.getInt16(offset);
   offset += 2;
   const min_emf_for_motor_constant = data_view.getInt16(offset);
   offset += 2;
+  const max_resistive_power = data_view.getInt16(offset);
+  offset += 2;
+  const resistive_power_ki = data_view.getInt16(offset);
+  offset += 2;
+
+  const max_angular_speed = data_view.getInt16(offset);
+  offset += 2;
+  const spare_1 = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_torque_ki = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_torque_kp = data_view.getInt16(offset);
+  offset += 2;
+
+  const seek_via_torque_kd = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_power_ki = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_power_kp = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_power_kd = data_view.getInt16(offset);
+  offset += 2;
+
 
   return {
     rotor_angle_ki,
@@ -620,6 +647,16 @@ function parse_control_parameters(data_view) {
     probing_max_pwm,
     emf_angle_error_variance_threshold,
     min_emf_for_motor_constant,
+    max_resistive_power,
+    resistive_power_ki,
+    max_angular_speed,
+    spare_1,
+    seek_via_torque_ki,
+    seek_via_torque_kp,
+    seek_via_torque_kd,
+    seek_via_power_ki,
+    seek_via_power_kp,
+    seek_via_power_kd,
   };
 }
 
@@ -753,6 +790,7 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.motor_constant_ki);
   offset += 2;
+
   view.setInt16(offset, control_parameters.resistance_ki);
   offset += 2;
   view.setInt16(offset, control_parameters.inductance_ki);
@@ -761,6 +799,7 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.max_angle_change);
   offset += 2;
+
   view.setInt16(offset, control_parameters.min_emf_voltage);
   offset += 2;
   view.setInt16(offset, control_parameters.hall_angle_ki);
@@ -769,6 +808,7 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.torque_control_ki);
   offset += 2;
+
   view.setInt16(offset, control_parameters.battery_power_control_ki);
   offset += 2;
   view.setInt16(offset, control_parameters.speed_control_ki);
@@ -777,9 +817,32 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.probing_max_pwm);
   offset += 2;
+
   view.setInt16(offset, control_parameters.emf_angle_error_variance_threshold);
   offset += 2;
   view.setInt16(offset, control_parameters.min_emf_for_motor_constant);
+  offset += 2;
+  view.setInt16(offset, control_parameters.max_resistive_power);
+  offset += 2;
+  view.setInt16(offset, control_parameters.resistive_power_ki);
+  offset += 2;
+
+  view.setInt16(offset, control_parameters.max_angular_speed);
+  offset += 2;
+  view.setInt16(offset, control_parameters.spare_1);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_torque_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_torque_kp);
+  offset += 2;
+
+  view.setInt16(offset, control_parameters.seek_via_torque_kd);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_power_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_power_kp);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_power_kd);
   offset += 2;
 
   serialise_message_tail(buffer, offset);

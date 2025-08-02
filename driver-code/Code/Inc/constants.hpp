@@ -326,6 +326,9 @@ static_assert(speed_fixed_point * quarter_circle - 1 <= max_16bit, "speed_fixed_
 // Maximum angular speed that we want to represent in the fixed point representation.
 const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
 
+// Largest angle we could traverse take in a single cycle when going at the maximum speed.
+const int max_angle_step = max_angular_speed / speed_fixed_point;
+
 // Minimum speed in rotor revolutions per minute (RPM) that we can represent with our units.
 const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_point / rotor_revolutions_per_electric;
 
@@ -339,7 +342,6 @@ const int radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_d
 
 // Acceleration needs more precision than speed; it's in angle units per pwm cycle per pwm cycle / fixed point series.
 const int acceleration_fixed_point = 512;
-
 
 // Calibration and Control Parameters
 // ----------------------------------
@@ -396,29 +398,60 @@ const CurrentCalibration default_current_calibration = {
 const int16_t control_parameters_fixed_point = 4096;
 
 const ControlParameters default_control_parameters = {
+
     .rotor_angle_ki = 1024,
     .rotor_angular_speed_ki = 64,
     .rotor_acceleration_ki = 32,
     .motor_constant_ki = 2,
+    
     .resistance_ki = 0,
     .inductance_ki = 0,
     .max_pwm_change = 8,
     .max_angle_change = 8,
+
     .min_emf_voltage = voltage_fixed_point * 100 / 1000,
     .hall_angle_ki = 32,
     .lead_angle_control_ki = 4,
     .torque_control_ki = 32,
+
     .battery_power_control_ki = 8,
     .speed_control_ki = 8,
     .probing_angular_speed = speed_fixed_point / 2,
     .probing_max_pwm = pwm_max_hold,
+
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .min_emf_for_motor_constant = voltage_fixed_point * 1,
+    .max_resistive_power = 0,
+    .resistive_power_ki = 0,
+
+    .max_angular_speed = max_angular_speed,
+    .spare_1 = 0,
+    .seek_via_torque_ki = 0,
+    .seek_via_torque_kp = 256,
+    
+    .seek_via_torque_kd = 256,
+    .seek_via_power_ki = 0,
+    .seek_via_power_kp = 256,
+    .seek_via_power_kd = 256,
 };
 
 const int max_lead_angle_control = 60 * angle_base / 360 * control_parameters_fixed_point;
 
 const int max_pwm_control = pwm_max * control_parameters_fixed_point;
+
+// Maximum rotations to use in the PID angle seeking loop.
+const int max_seek_rotations_error = 1024;
+
+const int min_seek_angle_error = hall_sector_span;
+
+const int seek_angle_coarseness = angle_base / min_seek_angle_error;
+
+const int max_seek_error = max_seek_rotations_error * seek_angle_coarseness;
+
+const int seek_error_reference = max_seek_error / 16;
+
+const int seek_speed_reference = max_angular_speed / 16;
+
 
 // Calculation precomputed constants
 // ---------------------------------
@@ -431,6 +464,8 @@ const int phase_diff_conversion = (
 const int emf_motor_constant_conversion = (
     motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
 );
+
+const int max_angular_speed_observer = max_angular_speed * control_parameters_fixed_point;
 
 
 // Waveform and Trigonometric tables

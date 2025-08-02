@@ -493,7 +493,11 @@ void adc_interrupt_handler(){
         -angular_speed_observer
     );
     
-    angular_speed_observer += speed_adjustment;
+    angular_speed_observer = clip_to(
+        -max_angular_speed_observer, 
+        +max_angular_speed_observer, 
+        angular_speed_observer + speed_adjustment
+    );
 
     const int angular_speed = angular_speed_observer / control_parameters_fixed_point;
     
@@ -510,7 +514,7 @@ void adc_interrupt_handler(){
     // Calculate the motor constant
     // ----------------------------
 
-    const int predicted_emf_voltage = faster_abs(readout.angular_speed) * readout.motor_constant / emf_motor_constant_conversion;
+    const int predicted_emf_voltage = faster_abs(angular_speed) * readout.motor_constant / emf_motor_constant_conversion;
 
     const bool compute_motor_constant = angle_fix and (emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
 

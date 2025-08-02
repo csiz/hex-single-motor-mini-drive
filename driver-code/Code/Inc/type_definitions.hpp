@@ -87,8 +87,9 @@ struct DriveSchedule {
 // Drive the motor to a specific position.
 struct SeekAngle {
     int16_t target_rotation;
-    int16_t max_secondary;
-    int16_t secondary_kp;
+    int16_t target_angle;
+    int16_t max_secondary_target;
+    int16_t secondary_target_residual;
 };
 
 // The complete driver state, these values control the motor behaviour.
@@ -329,6 +330,7 @@ struct ControlParameters {
     // Motor constant integral gain.
     int16_t motor_constant_ki;
     
+
     // Phase resistance gain.
     int16_t resistance_ki;
     
@@ -341,6 +343,7 @@ struct ControlParameters {
     // Maximum target angle change per cycle.
     int16_t max_angle_change;
     
+
     // Minimum EMF voltage to consider EMF detected (above the noise level)
     int16_t min_emf_voltage;
     
@@ -352,6 +355,7 @@ struct ControlParameters {
 
     // Torque control gain.
     int16_t torque_control_ki;
+
 
     // Battery power control gain.
     int16_t battery_power_control_ki;
@@ -365,11 +369,34 @@ struct ControlParameters {
     // Maximum probing PWM value.
     int16_t probing_max_pwm;
 
+
     // Maximum EMF angle correction variance when it's too noisy to update the angle.
     int16_t emf_angle_error_variance_threshold;
 
     // Minium EMF voltage to compute the motor constant.
     int16_t min_emf_for_motor_constant;
+
+    int16_t max_resistive_power;
+
+    int16_t resistive_power_ki;
+
+
+    int16_t max_angular_speed;
+
+    int16_t spare_1;
+
+    int16_t seek_via_torque_ki;
+
+    int16_t seek_via_torque_kp;
+    
+
+    int16_t seek_via_torque_kd;
+
+    int16_t seek_via_power_ki;
+
+    int16_t seek_via_power_kp;
+
+    int16_t seek_via_power_kd;
 };
 
 

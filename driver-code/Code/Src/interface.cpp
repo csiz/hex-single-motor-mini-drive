@@ -235,6 +235,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.motor_constant_ki);
     offset += 2;
+
     write_int16(buffer + offset, control_parameters.resistance_ki);
     offset += 2;
     write_int16(buffer + offset, control_parameters.inductance_ki);
@@ -243,6 +244,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.max_angle_change);
     offset += 2;
+
     write_int16(buffer + offset, control_parameters.min_emf_voltage);
     offset += 2;
     write_int16(buffer + offset, control_parameters.hall_angle_ki);
@@ -251,6 +253,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.torque_control_ki);
     offset += 2;
+
     write_int16(buffer + offset, control_parameters.battery_power_control_ki);
     offset += 2;
     write_int16(buffer + offset, control_parameters.speed_control_ki);
@@ -259,10 +262,34 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.probing_max_pwm);
     offset += 2;
+
     write_int16(buffer + offset, control_parameters.emf_angle_error_variance_threshold);
     offset += 2;
     write_int16(buffer + offset, control_parameters.min_emf_for_motor_constant);
     offset += 2;
+    write_int16(buffer + offset, control_parameters.max_resistive_power);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.resistive_power_ki);
+    offset += 2;
+
+    write_int16(buffer + offset, control_parameters.max_angular_speed);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.spare_1);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_torque_ki);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_torque_kp);
+    offset += 2;
+    
+    write_int16(buffer + offset, control_parameters.seek_via_torque_kd);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_power_ki);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_power_kp);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_power_kd);
+    offset += 2;
+    
     
     write_message_tail(buffer, offset);
 
@@ -492,6 +519,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.motor_constant_ki = read_int16(data + offset);
     offset += 2;
+
     control_parameters.resistance_ki = read_int16(data + offset);
     offset += 2;
     control_parameters.inductance_ki = read_int16(data + offset);
@@ -500,6 +528,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.max_angle_change = read_int16(data + offset);
     offset += 2;
+
     control_parameters.min_emf_voltage = read_int16(data + offset);
     offset += 2;
     control_parameters.hall_angle_ki = read_int16(data + offset);
@@ -508,6 +537,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.torque_control_ki = read_int16(data + offset);
     offset += 2;
+
     control_parameters.battery_power_control_ki = read_int16(data + offset);
     offset += 2;
     control_parameters.speed_control_ki = read_int16(data + offset);
@@ -516,10 +546,34 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.probing_max_pwm = read_int16(data + offset);
     offset += 2;
+
     control_parameters.emf_angle_error_variance_threshold = read_int16(data + offset);
     offset += 2;
     control_parameters.min_emf_for_motor_constant = read_int16(data + offset);
     offset += 2;
+    control_parameters.max_resistive_power = read_int16(data + offset);
+    offset += 2;
+    control_parameters.resistive_power_ki = read_int16(data + offset);
+    offset += 2;
+
+    control_parameters.max_angular_speed = read_int16(data + offset);
+    offset += 2;
+    control_parameters.spare_1 = read_int16(data + offset);
+    offset += 2;
+    control_parameters.seek_via_torque_ki = read_int16(data + offset);
+    offset += 2;
+    control_parameters.seek_via_torque_kp = read_int16(data + offset);
+    offset += 2;
+
+    control_parameters.seek_via_torque_kd = read_int16(data + offset);
+    offset += 2;
+    control_parameters.seek_via_power_ki = read_int16(data + offset);
+    offset += 2;
+    control_parameters.seek_via_power_kp = read_int16(data + offset);
+    offset += 2;
+    control_parameters.seek_via_power_kd = read_int16(data + offset);
+    offset += 2;
+
 
     if (offset + tail_size != control_parameters_size) error();
 

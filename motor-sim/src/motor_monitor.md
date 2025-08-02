@@ -27,8 +27,6 @@ Motor Commands
   <span>${command_torque_current_slider}</span>
   <span>${command_power_slider}</span>
   <span>${command_seek_rotation_slider}</span>
-  <span>${command_seek_power_kp_slider}</span>
-  <span>${command_seek_current_kp_slider}</span>
 </div>
 
 
@@ -333,14 +331,6 @@ const max_seek_rotation = (max_16bit + 1) / 32;
 const command_seek_rotation_slider = inputs_wide_range([-max_seek_rotation, +max_seek_rotation], {value: 0, step: 1, label: "Seek angle (rotations):"});
 
 const command_seek_rotation = Generators.input(command_seek_rotation_slider);
-
-const command_seek_power_kp_slider = inputs_wide_range([0, max_drive_power / 10], {value: 0.010, step: 0.010, label: "Seek power (Watts / rotation):"});
-
-const command_seek_power_kp_watts = Generators.input(command_seek_power_kp_slider);
-
-const command_seek_current_kp_slider = inputs_wide_range([0, max_drive_current / 10], {value: 0.010, step: 0.010, label: "Seek current (Amps / rotation):"});
-
-const command_seek_current_kp_amps = Generators.input(command_seek_current_kp_slider);
 ```
 
 ```js
@@ -384,10 +374,6 @@ const command_angular_speed = degrees_per_millisecond_to_speed_units(command_ang
 const command_torque_current = Math.floor(command_torque_current_amps / current_conversion);
 
 const command_power = convert_watts_to_power_units(command_power_watts);
-
-const command_seek_power_kp = convert_watts_to_power_units(command_seek_power_kp_watts);
-
-const command_seek_current_kp = Math.round(command_seek_current_kp_amps / current_conversion);
 
 async function send_command(command, options = {}){
   if (!motor_controller) return;
@@ -602,15 +588,15 @@ const advanced_drive_buttons = Inputs.button(
     ["Seek angle (power)", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER, {
         command_value: command_seek_rotation, 
-        command_second: command_power,
-        command_third: command_seek_power_kp,
+        command_second: command_angle,
+        command_third: command_power,
       });
     }],
     ["Seek angle (torque)", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE, {
         command_value: command_seek_rotation, 
-        command_second: command_torque_current,
-        command_third: command_seek_current_kp,
+        command_second: command_angle,
+        command_third: command_torque_current,
       });
     }],
     
@@ -1378,6 +1364,16 @@ const control_parameters_input = Object.fromEntries(
     ["probing_max_pwm", "Probing Max PWM"],
     ["emf_angle_error_variance_threshold", "EMF Angle Correction Variance Threshold"],
     ["min_emf_for_motor_constant", "Minimum EMF to compute the motor constant"],
+    ["max_resistive_power", "Maximum Resistive Power"],
+    ["resistive_power_ki", "Resistive Power KI"],
+    ["max_angular_speed", "Maximum Angular Speed"],
+    ["spare_1", "Spare 1"],
+    ["seek_via_torque_ki", "Seek via Torque KI"],
+    ["seek_via_torque_kp", "Seek via Torque KP"],
+    ["seek_via_torque_kd", "Seek via Torque KD"],
+    ["seek_via_power_ki", "Seek via Power KI"],
+    ["seek_via_power_kp", "Seek via Power KP"],
+    ["seek_via_power_kd", "Seek via Power KD"],
   ].map(([key, label]) => [
     key, 
     Inputs.number([], {
