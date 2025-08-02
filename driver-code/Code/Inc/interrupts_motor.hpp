@@ -202,7 +202,7 @@ static inline MotorOutputs update_motor_torque(
     FullReadout const& readout
 ){
     // Alias the current target.
-    const int current_target = driver_state.torque.current_target;
+    const int current_target = driver_state.secondary_target;
 
     // Squash very low currents to 0 to avoid noise.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
@@ -252,8 +252,8 @@ static inline MotorOutputs update_motor_battery_power(
     // counter the EMF voltage to minimize phase resistance heating, but we don't
     // want to absorb more power than the target setting.
 
-    const int target_power = driver_state.battery_power.target_power;
-    
+    const int target_power = driver_state.secondary_target;
+
     const bool total_power_dominates = faster_abs(readout.total_power) > faster_abs(readout.emf_power);
 
     const int measured_power = (total_power_dominates ? 
@@ -277,29 +277,40 @@ static inline MotorOutputs update_motor_battery_power(
     return update_motor_smooth(driver_state, readout);
 }
 
-static inline MotorOutputs update_motor_seek_angle(
+static inline MotorOutputs update_motor_seek_angle_power(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    const SeekAngle seek_parameters = driver_state.seek_angle;
+    const int control_error = driver_state.seek_angle.target_rotation - readout.rotations;
 
-    const int control_error = seek_parameters.target_rotation - readout.rotations;
-
-    const int target_power = seek_parameters.seeking_power_p * control_error;
+    const int target_power = driver_state.seek_angle.secondary_kp * control_error;
 
     // Swap the SeekAngle for BatteryPower so we run the power control mode.
-    driver_state.battery_power.target_power = clip_to(
-        -seek_parameters.max_power,
-        +seek_parameters.max_power,
+    driver_state.secondary_target = clip_to(
+        -driver_state.seek_angle.max_secondary,
+        +driver_state.seek_angle.max_secondary,
         target_power
     );
 
-    const MotorOutputs motor_outputs = update_motor_battery_power(driver_state, readout);
+    return update_motor_battery_power(driver_state, readout);
+}
 
-    // Restore the SeekAngle parameters.
-    driver_state.seek_angle = seek_parameters;
+static inline MotorOutputs update_motor_seek_angle_torque(
+    DriverState & driver_state,
+    FullReadout const& readout
+){
+    const int control_error = driver_state.seek_angle.target_rotation - readout.rotations;
 
-    return motor_outputs;
+    const int target_current = driver_state.seek_angle.secondary_kp * control_error;
+
+    // Swap the SeekAngle for BatteryPower so we run the power control mode.
+    driver_state.secondary_target = clip_to(
+        -driver_state.seek_angle.max_secondary,
+        +driver_state.seek_angle.max_secondary,
+        target_current
+    );
+
+    return update_motor_torque(driver_state, readout);
 }
 
 // Drive the motor using a fixed schedule for the PWM outputs.
@@ -426,9 +437,7 @@ static inline DriverState setup_driver_state(
                 .active_angle_residual = driver_state.active_angle_residual,
                 .target_pwm_control = driver_state.target_pwm_control,
                 .lead_angle_control = driver_state.lead_angle_control,
-                .torque = DriveTorque{
-                    .current_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.torque.current_target)),
-                }
+                .secondary_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target)),
             };
 
         case DriverMode::DRIVE_BATTERY_POWER:
@@ -441,14 +450,12 @@ static inline DriverState setup_driver_state(
                 .active_angle_residual = driver_state.active_angle_residual,
                 .target_pwm_control = driver_state.target_pwm_control,
                 .lead_angle_control = driver_state.lead_angle_control,
-                .battery_power = DriveBatteryPower{
-                    .target_power = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.battery_power.target_power)),
-                }
+                .secondary_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target)),
             };
 
-        case DriverMode::SEEK_ANGLE:
+        case DriverMode::SEEK_ANGLE_POWER:
             return DriverState{
-                .mode = DriverMode::SEEK_ANGLE,
+                .mode = DriverMode::SEEK_ANGLE_POWER,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
                 .active_pwm = driver_state.active_pwm,
@@ -457,8 +464,24 @@ static inline DriverState setup_driver_state(
                 .lead_angle_control = driver_state.lead_angle_control,
                 .seek_angle = SeekAngle{
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
-                    .max_power = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.max_power)),
-                    .seeking_power_p = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.seeking_power_p)),
+                    .max_secondary = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.max_secondary)),
+                    .secondary_kp = static_cast<int16_t>(clip_to(0, max_drive_power, pending_state.seek_angle.secondary_kp)),
+                }
+            };
+
+        case DriverMode::SEEK_ANGLE_TORQUE:
+            return DriverState{
+                .mode = DriverMode::SEEK_ANGLE_TORQUE,
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
+                .active_pwm = driver_state.active_pwm,
+                .angular_speed = driver_state.angular_speed,
+                .active_angle_residual = driver_state.active_angle_residual,
+                .lead_angle_control = driver_state.lead_angle_control,
+                .seek_angle = SeekAngle{
+                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
+                    .max_secondary = static_cast<int16_t>(clip_to(0, max_drive_current, pending_state.seek_angle.max_secondary)),
+                    .secondary_kp = static_cast<int16_t>(clip_to(0, max_drive_current, pending_state.seek_angle.secondary_kp)),
                 }
             };
     }
@@ -536,11 +559,18 @@ static inline void update_motor_control(
             driver_state.motor_outputs = update_motor_battery_power(driver_state, readout);
             return;
 
-        case DriverMode::SEEK_ANGLE:
+        case DriverMode::SEEK_ANGLE_POWER:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
-            // Update the motor outputs for the seek angle driving.
-            driver_state.motor_outputs = update_motor_seek_angle(driver_state, readout);
+            // Update the motor outputs for the seek angle driving using power control.
+            driver_state.motor_outputs = update_motor_seek_angle_power(driver_state, readout);
+            return;
+
+        case DriverMode::SEEK_ANGLE_TORQUE:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            // Update the motor outputs for the seek angle driving using torque control.
+            driver_state.motor_outputs = update_motor_seek_angle_torque(driver_state, readout);
             return;
     }
 

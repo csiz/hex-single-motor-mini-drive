@@ -25,7 +25,8 @@ enum struct DriverMode : uint16_t {
     DRIVE_SMOOTH,
     DRIVE_TORQUE,
     DRIVE_BATTERY_POWER,
-    SEEK_ANGLE,
+    SEEK_ANGLE_POWER,
+    SEEK_ANGLE_TORQUE,
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -83,21 +84,11 @@ struct DriveSchedule {
     uint16_t stage_counter;
 };
 
-// Drive the motor to a specific current target (torque target).
-struct DriveTorque {
-    int16_t current_target;
-};
-
-// Drive the motor to a specific battery power drain.
-struct DriveBatteryPower {
-    int16_t target_power;
-};
-
 // Drive the motor to a specific position.
 struct SeekAngle {
     int16_t target_rotation;
-    int16_t max_power;
-    int16_t seeking_power_p;
+    int16_t max_secondary;
+    int16_t secondary_kp;
 };
 
 // The complete driver state, these values control the motor behaviour.
@@ -138,14 +129,13 @@ struct DriverState {
     // Higher resolution control value for the lead angle.
     int32_t lead_angle_control;
 
+    int16_t secondary_target;
+
     // The additional data depends on the driver mode.
     union {
         // Drive the motor using a fixed PWM schedule.
         DriveSchedule schedule;
-        // Drive the motor to a specific torque target.
-        DriveTorque torque;
-        // Drive the motor to a specific battery power drain.
-        DriveBatteryPower battery_power;
+
         // Drive the motor to a specific angle.
         SeekAngle seek_angle;
     };

@@ -27,7 +27,8 @@ Motor Commands
   <span>${command_torque_current_slider}</span>
   <span>${command_power_slider}</span>
   <span>${command_seek_rotation_slider}</span>
-  <span>${command_seek_power_p_slider}</span>
+  <span>${command_seek_power_kp_slider}</span>
+  <span>${command_seek_current_kp_slider}</span>
 </div>
 
 
@@ -333,9 +334,13 @@ const command_seek_rotation_slider = inputs_wide_range([-max_seek_rotation, +max
 
 const command_seek_rotation = Generators.input(command_seek_rotation_slider);
 
-const command_seek_power_p_slider = inputs_wide_range([0, max_drive_power / 10], {value: 0.010, step: 0.010, label: "Seek power (Watts / rotation):"});
+const command_seek_power_kp_slider = inputs_wide_range([0, max_drive_power / 10], {value: 0.010, step: 0.010, label: "Seek power (Watts / rotation):"});
 
-const command_seek_power_p_watts = Generators.input(command_seek_power_p_slider);
+const command_seek_power_kp_watts = Generators.input(command_seek_power_kp_slider);
+
+const command_seek_current_kp_slider = inputs_wide_range([0, max_drive_current / 10], {value: 0.010, step: 0.010, label: "Seek current (Amps / rotation):"});
+
+const command_seek_current_kp_amps = Generators.input(command_seek_current_kp_slider);
 ```
 
 ```js
@@ -380,7 +385,9 @@ const command_torque_current = Math.floor(command_torque_current_amps / current_
 
 const command_power = convert_watts_to_power_units(command_power_watts);
 
-const command_seek_power_p = convert_watts_to_power_units(command_seek_power_p_watts);
+const command_seek_power_kp = convert_watts_to_power_units(command_seek_power_kp_watts);
+
+const command_seek_current_kp = Math.round(command_seek_current_kp_amps / current_conversion);
 
 async function send_command(command, options = {}){
   if (!motor_controller) return;
@@ -592,13 +599,21 @@ const advanced_drive_buttons = Inputs.button(
     ["Drive power -", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
     }],
-    ["Seek angle", async function(){
+    ["Seek angle (power)", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER, {
         command_value: command_seek_rotation, 
         command_second: command_power,
-        command_third: command_seek_power_p,
+        command_third: command_seek_power_kp,
       });
     }],
+    ["Seek angle (torque)", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE, {
+        command_value: command_seek_rotation, 
+        command_second: command_torque_current,
+        command_third: command_seek_current_kp,
+      });
+    }],
+    
   ],
   {label: "Advanced drive commands"},
 );

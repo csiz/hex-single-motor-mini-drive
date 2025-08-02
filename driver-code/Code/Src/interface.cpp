@@ -326,6 +326,7 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_DRIVE_TORQUE: return min_message_size;
         case SET_STATE_DRIVE_BATTERY_POWER: return min_message_size;
         case SET_STATE_SEEK_ANGLE_WITH_POWER: return min_message_size;
+        case SET_STATE_SEEK_ANGLE_WITH_TORQUE: return min_message_size;
 
         case GET_CURRENT_FACTORS: return min_message_size;
         case RESET_CURRENT_FACTORS: return min_message_size;
