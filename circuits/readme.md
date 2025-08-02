@@ -36,6 +36,7 @@ https://www.analog.com/media/en/analog-dialogue/volume-46/number-2/articles/opti
 [ ] The big problem with our measurements occurs when we switch from continuous 0 output from the low mosfet to mixed
 output with the high mosfet. Any amount of mixed output seems to add an offset to our current measurement. Might be
 worth putting the current sense only on the low mosfet branch.
+[ ] Choose a different mosfet driver to lower the minimum voltage under 5V.
 
 
 Need to implement in the circuit

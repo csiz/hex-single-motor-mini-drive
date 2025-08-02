@@ -7,13 +7,19 @@ velocity, and/or force. The driver will maintain the current wave exactly 90 deg
 of phase to the EMF wave for maximum efficieny. Position is tracked via hall sensors and
 EMF feedback.
 
-Maximum recommended limits: 20V, 3A(continuous), 10A(instant).
+Electrical ranges: 
+- Maximum motor voltage: 20V
+- Maximum current: 10A
+- Minimum motor voltage: 8.5V
+- Nominal circuit voltage: 3.3V
 
-This project has 4 main components:
+
+This project has 4 main components, for details look at the `readme.md` files in each directory:
 * A brushless motor simulator and motor principles explainer; under `motor-sim`.
 * The driver PCB schematic and manufacturing files; under `circuits`.
 * Custom driver firmware with Kalman filter position tracking and FOC driving logic; under `driver-code`.
 * Driver control and monitoring webapp; also under `motor-sim`, the page titled `motor-monitor.md`.
+
 
 Screenshots
 -----------
