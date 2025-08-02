@@ -5,10 +5,17 @@
 
 #include "io.hpp"
 #include "constants.hpp"
-#include "error_handler.hpp"
 #include "type_definitions.hpp"
-
 #include "integer_math.hpp"
+
+// The interrupts must not enter the error handler!
+// 
+// The error handle will block forever, however we must safe the motor no matter what. The interrupt loop
+// will always timeout any command and return to a safe state if it doesn't receive new commands from the
+// main app loop.
+// 
+// Do not: #include "error_handler.hpp"
+
 
 #include <stm32f1xx_ll_adc.h>
 #include <stm32f1xx_ll_tim.h>
@@ -203,7 +210,7 @@ void adc_interrupt_handler(){
     // ----------------------------------------
 
     // Double check the ADC end of conversion flag was set.
-    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) error();
+    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) return set_motor_outputs(breaking_motor_outputs);
 
     
     // U and W phases are measured at the same time, followed by V and the reference voltage.
@@ -644,7 +651,7 @@ void adc_interrupt_handler(){
 
 void tim1_update_interrupt_handler(){
     // We shouldn't trigger this, but including for documentation.
-    error();
+    return set_motor_outputs(breaking_motor_outputs);
     
     // Timer 1 is updated every motor PWM cycle; at ~ 70KHz.
     
@@ -655,7 +662,7 @@ void tim1_update_interrupt_handler(){
 
 void tim2_global_handler(){
     // We shouldn't trigger this, but including for documentation.
-    error();
+    return set_motor_outputs(breaking_motor_outputs);
 
     // The TIM2 updates at a frequency of about 1KHz. Our motor might rotate slower than this
     // so we have to count updates (overflows) between hall sensor triggers.
