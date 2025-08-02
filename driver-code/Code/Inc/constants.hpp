@@ -29,9 +29,6 @@ const uint16_t pwm_base = 1536;
 // Base and number of hall sectors.
 const uint8_t hall_sector_base = 6;
 
-// Half the number of hall sectors; use to determine direction.
-const uint8_t hall_sector_half_base = hall_sector_base / 2;
-
 // Angle units of a full circle: 1 angle unit = (tau = 2pi) / 1024.
 // 
 // Note that speed units and acceleration units are defined as angle units
@@ -255,7 +252,6 @@ const uint16_t motor_sector_driving_negative[6][3] {
 // Position tracking defaults
 // --------------------------
 
-
 // Define a lot of constants. First, we need to define angles as integers because 
 // we can't (shouldn't) use floating point arithmetic in the interrupt handlers.
 // Then define the time units. Then speed units, further scaled by a constant to
@@ -296,6 +292,9 @@ inline constexpr int normalize_angle(int angle){
 inline constexpr int signed_angle(int angle){
     return ((angle + one_and_half_circle) & angle_bit_mask) - half_circle;
 }
+
+// The angle units per hall sector; 60 degrees.
+const int hall_sector_span = angle_base / hall_sector_base;
 
 // Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
 const int default_sector_transition_variance = square(10 * angle_base / 360);

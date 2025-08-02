@@ -207,22 +207,8 @@ static inline MotorOutputs update_motor_torque(
     // Squash very low currents to 0 to avoid noise.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
-    // Use the current target sign when we don't have an angle fix.
-    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
-
     // Get the signed current magnitude to compare against the target.
-    const int measured_current = current_detected * (
-        angle_fix ? sign(readout.beta_current) * readout.current_magnitude : 
-        // Rely on the sign of the target current because we are driving with the smooth 
-        // mode which always targets the current at 90 degrees ahead of the magnetic angle.
-        current_target > 0 ? +readout.current_magnitude : 
-        current_target < 0 ? -readout.current_magnitude : 
-        // If current_target == 0, we should cancel the beta_current. Our output is going
-        // to be along the beta_current direction so we trapped ourselves to only be able
-        // to cancel this current. Our smooth algorithm will try to keep the alpha_current
-        // near 0 over time.
-        readout.beta_current
-    );
+    const int measured_current = current_detected * sign(readout.beta_current) * readout.current_magnitude;
 
     // Calculate the difference between the target and measured current.
     const int control_error = (current_target - measured_current);

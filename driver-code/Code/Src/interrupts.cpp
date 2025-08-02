@@ -248,7 +248,7 @@ void adc_interrupt_handler(){
 
     const bool hall_valid = hall_sector < hall_sector_base;
 
-    const int hall_angle = hall_valid ? position_calibration.sector_center_angles[hall_sector] : 0;
+    const int hall_angle = hall_sector * hall_sector_span;
 
 
     // Do the data calculations
