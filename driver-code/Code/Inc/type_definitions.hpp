@@ -89,7 +89,7 @@ struct SeekAngle {
     int16_t target_rotation;
     int16_t target_angle;
     int16_t max_secondary_target;
-    int16_t secondary_target_residual;
+    int32_t error_integral;
 };
 
 // The complete driver state, these values control the motor behaviour.

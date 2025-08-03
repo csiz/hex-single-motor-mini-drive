@@ -448,9 +448,13 @@ const int seek_angle_coarseness = angle_base / min_seek_angle_error;
 
 const int max_seek_error = max_seek_rotations_error * seek_angle_coarseness;
 
-const int seek_error_reference = max_seek_error / 16;
+const int seek_error_reference = 16;
 
-const int seek_speed_reference = max_angular_speed / 16;
+const int seek_speed_reference = 32;
+
+const int seek_integral_reference = 4096;
+
+const int max_seek_integral = max_16bit * seek_error_reference;
 
 
 // Calculation precomputed constants
