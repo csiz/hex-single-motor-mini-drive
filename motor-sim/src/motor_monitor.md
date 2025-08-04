@@ -26,6 +26,9 @@ Motor Commands
   <span>${command_angular_speed_slider}</span>
   <span>${command_torque_current_slider}</span>
   <span>${command_power_slider}</span>
+</div>
+<div>
+  <span>${seek_drive_buttons}</span>
   <span>${command_seek_rotation_slider}</span>
 </div>
 
@@ -585,9 +588,24 @@ const advanced_drive_buttons = Inputs.button(
     ["Drive power -", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
     }],
+  ],
+  {label: "Advanced drive commands"},
+);
+d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
+
+
+const seek_drive_buttons = Inputs.button(
+  [
     ["Seek angle (power)", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER, {
         command_value: command_seek_rotation, 
+        command_second: command_angle,
+        command_third: command_power,
+      });
+    }],
+    ["Go to zero (power)", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER, {
+        command_value: 0, 
         command_second: command_angle,
         command_third: command_power,
       });
@@ -599,12 +617,19 @@ const advanced_drive_buttons = Inputs.button(
         command_third: command_torque_current,
       });
     }],
-    
+    ["Go to zero (torque)", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE, {
+        command_value: 0, 
+        command_second: command_angle,
+        command_third: command_torque_current,
+      });
+    }],
   ],
-  {label: "Advanced drive commands"},
+  {label: "Seek to target position"},
 );
-d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
+d3.select(seek_drive_buttons).selectAll("button").style("height", "4em");
 
+  
 ```
 
 
