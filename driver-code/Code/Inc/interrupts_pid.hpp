@@ -9,7 +9,7 @@
 static inline int16_t compute_seek_pid_control(
     SeekAngle & seek_angle,
     FullReadout const& readout,
-    const int16_t integral_speed_prediction,
+    const int16_t k_prediction,
     const int16_t ki,
     const int16_t kp,
     const int16_t kd
@@ -22,7 +22,7 @@ static inline int16_t compute_seek_pid_control(
     const int position_error = clip_to(-max_seek_error, +max_seek_error, 
         (seek_angle.target_rotation - readout.rotations) * seek_rotation_multiplier +
         signed_angle(seek_angle.target_angle - readout.angle) / seek_angle_divisor +
-        integral_speed_prediction * position_error_speed / seek_pid_fixed_point
+        k_prediction * position_error_speed / seek_pid_fixed_point
     );
 
     // Decay the integral term over time.

@@ -389,14 +389,23 @@ struct ControlParameters {
 
     int16_t max_angular_speed;
 
-    int16_t integral_speed_prediction;
+    int16_t max_power_draw;
+
+    int16_t power_draw_ki;
+
+    int16_t spare_1;
+    
+
+    int16_t seek_via_torque_k_prediction;
 
     int16_t seek_via_torque_ki;
 
     int16_t seek_via_torque_kp;
-    
 
     int16_t seek_via_torque_kd;
+
+
+    int16_t seek_via_power_k_prediction;
 
     int16_t seek_via_power_ki;
 

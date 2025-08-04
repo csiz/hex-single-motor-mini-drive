@@ -95,7 +95,7 @@ const readout_size = 40;
 const full_readout_size = 88;
 const current_calibration_size = 16;
 const position_calibration_size = 80;
-const control_parameters_size = 64;
+const control_parameters_size = 72;
 const unit_test_size = 256;
 
 export function get_hall_sector({hall_u, hall_v, hall_w}){
@@ -617,14 +617,23 @@ function parse_control_parameters(data_view) {
 
   const max_angular_speed = data_view.getInt16(offset);
   offset += 2;
-  const integral_speed_prediction = data_view.getInt16(offset);
+  const max_power_draw = data_view.getInt16(offset);
+  offset += 2;
+  const power_draw_ki = data_view.getInt16(offset);
+  offset += 2;
+  const spare_1 = data_view.getInt16(offset);
+  offset += 2;
+  
+  const seek_via_torque_k_prediction = data_view.getInt16(offset);
   offset += 2;
   const seek_via_torque_ki = data_view.getInt16(offset);
   offset += 2;
   const seek_via_torque_kp = data_view.getInt16(offset);
   offset += 2;
-
   const seek_via_torque_kd = data_view.getInt16(offset);
+  offset += 2;
+
+  const seek_via_power_k_prediction = data_view.getInt16(offset);
   offset += 2;
   const seek_via_power_ki = data_view.getInt16(offset);
   offset += 2;
@@ -656,10 +665,14 @@ function parse_control_parameters(data_view) {
     max_resistive_power,
     resistive_power_ki,
     max_angular_speed,
-    integral_speed_prediction,
+    max_power_draw,
+    power_draw_ki,
+    spare_1,
+    seek_via_torque_k_prediction,
     seek_via_torque_ki,
     seek_via_torque_kp,
     seek_via_torque_kd,
+    seek_via_power_k_prediction,
     seek_via_power_ki,
     seek_via_power_kp,
     seek_via_power_kd,
@@ -835,7 +848,7 @@ function serialise_control_parameters(control_parameters) {
 
   view.setInt16(offset, control_parameters.max_angular_speed);
   offset += 2;
-  view.setInt16(offset, control_parameters.integral_speed_prediction);
+  view.setInt16(offset, control_parameters.seek_via_torque_k_prediction);
   offset += 2;
   view.setInt16(offset, control_parameters.seek_via_torque_ki);
   offset += 2;

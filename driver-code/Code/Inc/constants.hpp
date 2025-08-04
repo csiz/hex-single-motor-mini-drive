@@ -414,7 +414,7 @@ const ControlParameters default_control_parameters = {
     .max_angle_change = 8,
 
     .min_emf_voltage = voltage_fixed_point * 100 / 1000,
-    .hall_angle_ki = 32,
+    .hall_angle_ki = 256,
     .lead_angle_control_ki = 4,
     .torque_control_ki = 32,
 
@@ -429,10 +429,16 @@ const ControlParameters default_control_parameters = {
     .resistive_power_ki = 0,
 
     .max_angular_speed = max_angular_speed,
-    .integral_speed_prediction = 2048,
+    .max_power_draw = 0,
+    .power_draw_ki = 0,
+    .spare_1 = 0,
+
+    .seek_via_torque_k_prediction = 2048,
     .seek_via_torque_ki = 256,
     .seek_via_torque_kp = 1024,
     .seek_via_torque_kd = 256,
+
+    .seek_via_power_k_prediction = 2048,
     .seek_via_power_ki = 64,
     .seek_via_power_kp = 1024,
     .seek_via_power_kd = 256,

@@ -275,7 +275,7 @@ static inline MotorOutputs update_motor_seek_angle_power(
     const int pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
         readout,
-        control_parameters.integral_speed_prediction,
+        control_parameters.seek_via_power_k_prediction,
         control_parameters.seek_via_power_ki,
         control_parameters.seek_via_power_kp,
         control_parameters.seek_via_power_kd
@@ -295,7 +295,7 @@ static inline MotorOutputs update_motor_seek_angle_torque(
     const int pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
         readout,
-        control_parameters.integral_speed_prediction,
+        control_parameters.seek_via_torque_k_prediction,
         control_parameters.seek_via_torque_ki,
         control_parameters.seek_via_torque_kp,
         control_parameters.seek_via_torque_kd
