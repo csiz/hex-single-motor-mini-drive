@@ -133,6 +133,10 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.target_pwm);
     offset += 2;
+    write_int16(buffer + offset, readout.secondary_target);
+    offset += 2;
+    write_int16(buffer + offset, readout.debug_1);
+    offset += 2;
 
     write_message_tail(buffer, offset);
 
@@ -274,7 +278,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
 
     write_int16(buffer + offset, control_parameters.max_angular_speed);
     offset += 2;
-    write_int16(buffer + offset, control_parameters.spare_1);
+    write_int16(buffer + offset, control_parameters.integral_speed_prediction);
     offset += 2;
     write_int16(buffer + offset, control_parameters.seek_via_torque_ki);
     offset += 2;
@@ -558,7 +562,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
 
     control_parameters.max_angular_speed = read_int16(data + offset);
     offset += 2;
-    control_parameters.spare_1 = read_int16(data + offset);
+    control_parameters.integral_speed_prediction = read_int16(data + offset);
     offset += 2;
     control_parameters.seek_via_torque_ki = read_int16(data + offset);
     offset += 2;

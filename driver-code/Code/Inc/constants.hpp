@@ -395,7 +395,11 @@ const CurrentCalibration default_current_calibration = {
     .inductance_factor = current_calibration_fixed_point,
 };
 
+// Fixed point for most control parameters and most other floating point values.
 const int16_t control_parameters_fixed_point = 4096;
+
+// Fixed point for the PID control values and PID output.
+const int16_t seek_pid_fixed_point = 1024;
 
 const ControlParameters default_control_parameters = {
 
@@ -425,36 +429,48 @@ const ControlParameters default_control_parameters = {
     .resistive_power_ki = 0,
 
     .max_angular_speed = max_angular_speed,
-    .spare_1 = 0,
-    .seek_via_torque_ki = 0,
-    .seek_via_torque_kp = 256,
-    
+    .integral_speed_prediction = 2048,
+    .seek_via_torque_ki = 256,
+    .seek_via_torque_kp = 1024,
     .seek_via_torque_kd = 256,
-    .seek_via_power_ki = 0,
-    .seek_via_power_kp = 256,
+    .seek_via_power_ki = 64,
+    .seek_via_power_kp = 1024,
     .seek_via_power_kd = 256,
 };
 
+// Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.
 const int max_lead_angle_control = 60 * angle_base / 360 * control_parameters_fixed_point;
 
+// Hi resolution value for pwm_max, used for the 32bit control integral.
 const int max_pwm_control = pwm_max * control_parameters_fixed_point;
 
-// Maximum rotations to use in the PID angle seeking loop.
-const int max_seek_rotations_error = 1024;
+// Maximum rotations to use in the PID angle seeking loop (max rotations should imply max control when KP == 1.0).
+const int max_seek_rotations_error = 128;
 
-const int min_seek_angle_error = hall_sector_span;
+// The angle is too high resolution for seeking; we need to lower the resolution.
+const int seek_angle_divisor = 32;
 
-const int seek_angle_coarseness = angle_base / min_seek_angle_error;
+// Number of angle divisions per rotation; used to convert rotations into the seeking angle units.
+const int seek_rotation_multiplier = angle_base / seek_angle_divisor;
 
-const int max_seek_error = max_seek_rotations_error * seek_angle_coarseness;
+const int seek_position_error_reference = max_seek_rotations_error * seek_rotation_multiplier;
 
-const int seek_error_reference = 16;
+// Maximum error in the seek angle; double the control output to overcome the differential term.
+const int max_seek_error = 2 * seek_position_error_reference;
 
-const int seek_speed_reference = 32;
 
-const int seek_integral_reference = 4096;
+const int seek_speed_error_reference = max_angular_speed / 4;
 
-const int max_seek_integral = max_16bit * seek_error_reference;
+const int seek_integral_duration = 32;
+
+// The divisor for the seek integral; we accumulate the error over a few cycles and then divide by this value.
+const int seek_integral_divisor = max_seek_error * seek_integral_duration;
+
+// Cap the integral term to 1/2 of the maximum control output so it doesn't overpower the P and D terms.
+const int max_seek_integral_control = (seek_pid_fixed_point / 2);
+
+// Maximum value to accumulate in the seek integral.
+const int max_seek_integral = seek_integral_divisor * max_seek_integral_control;
 
 
 // Calculation precomputed constants

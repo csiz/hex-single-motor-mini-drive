@@ -263,6 +263,12 @@ struct FullReadout : public Readout {
 
     // Target PWM value for the motor outputs, value set by the advanced control algorithms.
     int16_t target_pwm;
+
+    // Target for the advanced control algorithms.
+    int16_t secondary_target;
+
+    // Spare debug output.
+    int16_t debug_1;
 };
 
 // Parameters data structures
@@ -383,7 +389,7 @@ struct ControlParameters {
 
     int16_t max_angular_speed;
 
-    int16_t spare_1;
+    int16_t integral_speed_prediction;
 
     int16_t seek_via_torque_ki;
 

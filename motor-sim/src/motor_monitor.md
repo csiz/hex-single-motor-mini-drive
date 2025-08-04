@@ -1041,6 +1041,8 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
+    {y: "secondary_target", label: "Secondary Target", color: colors_categories[2]},
+    {y: "debug_1", label: "Debug 1", color: colors_categories[3]},
   ],
   curve,
 });
@@ -1367,7 +1369,7 @@ const control_parameters_input = Object.fromEntries(
     ["max_resistive_power", "Maximum Resistive Power"],
     ["resistive_power_ki", "Resistive Power KI"],
     ["max_angular_speed", "Maximum Angular Speed"],
-    ["spare_1", "Spare 1"],
+    ["integral_speed_prediction", "Integral speed prediction factor"],
     ["seek_via_torque_ki", "Seek via Torque KI"],
     ["seek_via_torque_kp", "Seek via Torque KP"],
     ["seek_via_torque_kd", "Seek via Torque KD"],

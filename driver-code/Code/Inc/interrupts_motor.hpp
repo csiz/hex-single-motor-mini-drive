@@ -264,29 +264,18 @@ static inline MotorOutputs update_motor_battery_power(
     return update_motor_smooth(driver_state, readout);
 }
 
-static inline int get_seek_error(
-    DriverState const& driver_state,
-    FullReadout const& readout
-){
-    // Get the error between the target angle and the current angle.
-    return clip_to(-max_seek_error, +max_seek_error, 
-        (driver_state.seek_angle.target_rotation - readout.rotations) * seek_angle_coarseness +
-        signed_angle(driver_state.seek_angle.target_angle - readout.angle) / min_seek_angle_error
-    );
-}
+
+
+
 
 static inline MotorOutputs update_motor_seek_angle_power(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    const int position_error = get_seek_error(driver_state, readout);
-
-    const int speed_of_error = -readout.angular_speed;
-    
     const int pid_control = compute_seek_pid_control(
-        driver_state.seek_angle.error_integral,
-        position_error,
-        speed_of_error,
+        driver_state.seek_angle,
+        readout,
+        control_parameters.integral_speed_prediction,
         control_parameters.seek_via_power_ki,
         control_parameters.seek_via_power_kp,
         control_parameters.seek_via_power_kd
@@ -294,7 +283,7 @@ static inline MotorOutputs update_motor_seek_angle_power(
 
     const int max_power = driver_state.seek_angle.max_secondary_target;
 
-    driver_state.secondary_target = max_power * pid_control / control_parameters_fixed_point;
+    driver_state.secondary_target = max_power * pid_control / seek_pid_fixed_point;
 
     return update_motor_battery_power(driver_state, readout);
 }
@@ -303,14 +292,10 @@ static inline MotorOutputs update_motor_seek_angle_torque(
     DriverState & driver_state,
     FullReadout const& readout
 ){
-    const int position_error = get_seek_error(driver_state, readout);
-
-    const int speed_of_error = -readout.angular_speed;
-
     const int pid_control = compute_seek_pid_control(
-        driver_state.seek_angle.error_integral,
-        position_error,
-        speed_of_error,
+        driver_state.seek_angle,
+        readout,
+        control_parameters.integral_speed_prediction,
         control_parameters.seek_via_torque_ki,
         control_parameters.seek_via_torque_kp,
         control_parameters.seek_via_torque_kd
@@ -318,7 +303,7 @@ static inline MotorOutputs update_motor_seek_angle_torque(
 
     const int max_current = driver_state.seek_angle.max_secondary_target;
 
-    driver_state.secondary_target = max_current * pid_control / control_parameters_fixed_point;
+    driver_state.secondary_target = max_current * pid_control / seek_pid_fixed_point;
 
     return update_motor_torque(driver_state, readout);
 }
@@ -471,6 +456,7 @@ static inline DriverState setup_driver_state(
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
+                .target_pwm_control = driver_state.target_pwm_control,
                 .lead_angle_control = driver_state.lead_angle_control,
                 .seek_angle = SeekAngle{
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
@@ -488,6 +474,7 @@ static inline DriverState setup_driver_state(
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .active_angle_residual = driver_state.active_angle_residual,
+                .target_pwm_control = driver_state.target_pwm_control,
                 .lead_angle_control = driver_state.lead_angle_control,
                 .seek_angle = SeekAngle{
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),

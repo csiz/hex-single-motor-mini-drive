@@ -614,7 +614,9 @@ void adc_interrupt_handler(){
     
     readout.lead_angle = driver_state.lead_angle;
     readout.target_pwm = driver_state.target_pwm;
-
+    
+    readout.secondary_target = driver_state.secondary_target;
+    readout.debug_1 = driver_state.seek_angle.error_integral / seek_integral_divisor;
     
     // Calculate motor outputs
     // -----------------------

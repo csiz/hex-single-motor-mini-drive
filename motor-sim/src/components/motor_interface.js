@@ -92,7 +92,7 @@ const tail_size = crc_size + end_of_message_size;
 
 const basic_command_size = 16;
 const readout_size = 40;
-const full_readout_size = 84;
+const full_readout_size = 88;
 const current_calibration_size = 16;
 const position_calibration_size = 80;
 const control_parameters_size = 64;
@@ -422,7 +422,10 @@ function parse_full_readout(data_view, previous_readout){
   offset += 2;
   const target_pwm = data_view.getInt16(offset);
   offset += 2;
-  
+  const secondary_target = data_view.getInt16(offset);
+  offset += 2;
+  const debug_1 = data_view.getInt16(offset);
+  offset += 2;
 
   const battery_current = total_power / readout.vcc_voltage;
 
@@ -452,8 +455,6 @@ function parse_full_readout(data_view, previous_readout){
     inductive_power,
     
     emf_angle_error_stdev,
-    lead_angle,
-    target_pwm,
     motor_constant,
     
     inductor_angle,
@@ -462,6 +463,11 @@ function parse_full_readout(data_view, previous_readout){
     rotor_acceleration,
     rotations,
     current_magnitude,
+
+    lead_angle,
+    target_pwm,
+    secondary_target,
+    debug_1,
   };
 
   if (!previous_readout) return full_readout;
@@ -611,7 +617,7 @@ function parse_control_parameters(data_view) {
 
   const max_angular_speed = data_view.getInt16(offset);
   offset += 2;
-  const spare_1 = data_view.getInt16(offset);
+  const integral_speed_prediction = data_view.getInt16(offset);
   offset += 2;
   const seek_via_torque_ki = data_view.getInt16(offset);
   offset += 2;
@@ -650,7 +656,7 @@ function parse_control_parameters(data_view) {
     max_resistive_power,
     resistive_power_ki,
     max_angular_speed,
-    spare_1,
+    integral_speed_prediction,
     seek_via_torque_ki,
     seek_via_torque_kp,
     seek_via_torque_kd,
@@ -829,7 +835,7 @@ function serialise_control_parameters(control_parameters) {
 
   view.setInt16(offset, control_parameters.max_angular_speed);
   offset += 2;
-  view.setInt16(offset, control_parameters.spare_1);
+  view.setInt16(offset, control_parameters.integral_speed_prediction);
   offset += 2;
   view.setInt16(offset, control_parameters.seek_via_torque_ki);
   offset += 2;
