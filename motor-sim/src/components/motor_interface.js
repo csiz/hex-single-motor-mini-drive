@@ -621,7 +621,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const power_draw_ki = data_view.getInt16(offset);
   offset += 2;
-  const spare_1 = data_view.getInt16(offset);
+  const max_pwm = data_view.getInt16(offset);
   offset += 2;
   
   const seek_via_torque_k_prediction = data_view.getInt16(offset);
@@ -667,7 +667,7 @@ function parse_control_parameters(data_view) {
     max_angular_speed,
     max_power_draw,
     power_draw_ki,
-    spare_1,
+    max_pwm,
     seek_via_torque_k_prediction,
     seek_via_torque_ki,
     seek_via_torque_kp,
@@ -848,14 +848,23 @@ function serialise_control_parameters(control_parameters) {
 
   view.setInt16(offset, control_parameters.max_angular_speed);
   offset += 2;
+  view.setInt16(offset, control_parameters.max_power_draw);
+  offset += 2;
+  view.setInt16(offset, control_parameters.power_draw_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.max_pwm);
+  offset += 2;
+
   view.setInt16(offset, control_parameters.seek_via_torque_k_prediction);
   offset += 2;
   view.setInt16(offset, control_parameters.seek_via_torque_ki);
   offset += 2;
   view.setInt16(offset, control_parameters.seek_via_torque_kp);
   offset += 2;
-
   view.setInt16(offset, control_parameters.seek_via_torque_kd);
+  offset += 2;
+  
+  view.setInt16(offset, control_parameters.seek_via_power_k_prediction);
   offset += 2;
   view.setInt16(offset, control_parameters.seek_via_power_ki);
   offset += 2;

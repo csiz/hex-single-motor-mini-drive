@@ -90,6 +90,10 @@ int16_t angle_adjustment_residual = 0;
 // Start with the missing hall sector marker.
 uint8_t previous_hall_sector = hall_sector_base;
 
+int32_t resistive_power_observer = 0;
+
+int32_t total_power_observer = 0;
+
 
 // Motor driver state
 // ------------------
@@ -259,12 +263,6 @@ void adc_interrupt_handler(){
 
     // Average out the VCC voltage; it should be relatively stable so average to reduce our error.
     const int vcc_voltage = (instant_vcc_voltage + readout.vcc_voltage * 3) / 4;
-
-    // Reduce the maximum output PWM to keep the MOSFET drivers in their operating voltage range.
-    const int live_max_pwm = clip_to(
-        0, pwm_max,
-        readout.live_max_pwm + (vcc_voltage - vcc_mosfet_driver_undervoltage) / vcc_limiting_divisor
-    );
 
     // Calculate our outputs on the motor phases. The outputs are delayed by one cycle.
     motor_outputs = (previous_motor_outputs + motor_outputs) / 2;
@@ -514,7 +512,9 @@ void adc_interrupt_handler(){
     // Calculate the motor constant
     // ----------------------------
 
-    const int predicted_emf_voltage = faster_abs(angular_speed) * readout.motor_constant / emf_motor_constant_conversion;
+    const int abs_angular_speed = faster_abs(angular_speed);
+
+    const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
 
     const bool compute_motor_constant = angle_fix and (emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
 
@@ -551,6 +551,38 @@ void adc_interrupt_handler(){
     // we can compute the total power from the others; mostly determined by EMF. The resistive
     // power is quite reliable and inductive_power is very small.
     const int total_power = resistive_power + inductive_power + emf_power;
+
+
+    // Cap the maximum PWM
+    // -------------------
+
+    const int avg_resistive_power = resistive_power_observer / control_parameters_fixed_point;
+    
+    resistive_power_observer += (resistive_power - avg_resistive_power) * control_parameters.resistive_power_ki;
+
+    const int avg_total_power = total_power_observer / control_parameters_fixed_point;
+
+    total_power_observer += (total_power - avg_total_power) * control_parameters.power_draw_ki;
+
+
+    // Reduce the maximum output PWM to keep within safe limits:
+    // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
+    // let the battery recharge our local capacitors.
+    // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
+    // 3. The total power is a good proxy for total current consumed from the battery.
+    // 4. We want to limit the maximum speed.
+    const int pwm_penalty = (
+        max(vcc_mosfet_driver_undervoltage - vcc_voltage,
+        max(avg_resistive_power - control_parameters.max_resistive_power,
+        max(avg_total_power - control_parameters.max_power_draw,
+        max(abs_angular_speed - control_parameters.max_angular_speed,
+        0))))
+    ) / limiting_divisor;
+    
+    const int live_max_pwm = clip_to(
+        0, control_parameters.max_pwm,
+        readout.live_max_pwm + 1 - pwm_penalty
+    );
 
 
     // Write the latest readout data
@@ -616,7 +648,7 @@ void adc_interrupt_handler(){
     readout.target_pwm = driver_state.target_pwm;
     
     readout.secondary_target = driver_state.secondary_target;
-    readout.debug_1 = driver_state.seek_angle.error_integral / seek_integral_divisor;
+    readout.debug_1 = pwm_penalty; // driver_state.seek_angle.error_integral / seek_integral_divisor;
     
     // Calculate motor outputs
     // -----------------------

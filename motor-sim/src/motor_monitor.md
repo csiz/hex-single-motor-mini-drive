@@ -1396,7 +1396,7 @@ const control_parameters_input = Object.fromEntries(
     ["max_angular_speed", "Maximum Angular Speed"],
     ["max_power_draw", "Max Power Draw"],
     ["power_draw_ki", "Power Draw KI"],
-    ["spare_1", "Spare 1"],
+    ["max_pwm", "Maximum PWM allowed"],
     ["seek_via_torque_k_prediction", "Integral speed prediction factor"],
     ["seek_via_torque_ki", "Seek via Torque KI"],
     ["seek_via_torque_kp", "Seek via Torque KP"],

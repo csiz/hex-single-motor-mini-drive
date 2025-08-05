@@ -282,7 +282,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.power_draw_ki);
     offset += 2;
-    write_int16(buffer + offset, control_parameters.spare_1);
+    write_int16(buffer + offset, control_parameters.max_pwm);
     offset += 2;
 
     write_int16(buffer + offset, control_parameters.seek_via_torque_k_prediction);
@@ -575,7 +575,7 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     offset += 2;
     control_parameters.power_draw_ki = read_int16(data + offset);
     offset += 2;
-    control_parameters.spare_1 = read_int16(data + offset);
+    control_parameters.max_pwm = read_int16(data + offset);
     offset += 2;
 
     control_parameters.seek_via_torque_k_prediction = read_int16(data + offset);

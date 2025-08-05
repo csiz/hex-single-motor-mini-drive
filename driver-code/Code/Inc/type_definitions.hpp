@@ -393,7 +393,7 @@ struct ControlParameters {
 
     int16_t power_draw_ki;
 
-    int16_t spare_1;
+    int16_t max_pwm;
     
 
     int16_t seek_via_torque_k_prediction;

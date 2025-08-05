@@ -149,11 +149,11 @@ const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_fl
 // Conversion factor between current and phase resistance voltage.
 const int phase_current_to_voltage = phase_resistance * voltage_fixed_point / resistance_fixed_point;
 
-// Divisor used to limit the PWM so that VCC remains in range.
-const int vcc_limiting_divisor = 16;
+// Divisor used to limit the PWM per cycle.
+const int limiting_divisor = 256;
 
 // The drivers need over 8V to power the MOSFETs.
-const int vcc_mosfet_driver_undervoltage = voltage_fixed_point * 8 + vcc_limiting_divisor;
+const int vcc_mosfet_driver_undervoltage = voltage_fixed_point * 8 + limiting_divisor;
 
 // Power conversion: 1 power unit = 1/224 W.
 const int power_fixed_point = 4 * voltage_fixed_point;
@@ -168,7 +168,6 @@ const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_poin
 const int voltage_current_div_power_fixed_point = current_fixed_point / power_div_voltage_fixed_point;
 
 const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 / 2;
-
 
 
 // Timing and PWM constants
@@ -425,13 +424,13 @@ const ControlParameters default_control_parameters = {
 
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .min_emf_for_motor_constant = voltage_fixed_point * 1,
-    .max_resistive_power = 0,
-    .resistive_power_ki = 0,
+    .max_resistive_power = power_fixed_point * 2,
+    .resistive_power_ki = 1,
 
     .max_angular_speed = max_angular_speed,
-    .max_power_draw = 0,
-    .power_draw_ki = 0,
-    .spare_1 = 0,
+    .max_power_draw = max_drive_power,
+    .power_draw_ki = 1,
+    .max_pwm = pwm_max,
 
     .seek_via_torque_k_prediction = 2048,
     .seek_via_torque_ki = 256,
