@@ -149,11 +149,8 @@ const int16_t voltage_fixed_point = static_cast<int16_t>(1/voltage_conversion_fl
 // Conversion factor between current and phase resistance voltage.
 const int phase_current_to_voltage = phase_resistance * voltage_fixed_point / resistance_fixed_point;
 
-// Divisor used to limit the PWM per cycle.
-const int limiting_divisor = 256;
-
 // The drivers need over 8V to power the MOSFETs.
-const int vcc_mosfet_driver_undervoltage = voltage_fixed_point * 8 + limiting_divisor;
+const int vcc_mosfet_driver_undervoltage = voltage_fixed_point * 8;
 
 // Power conversion: 1 power unit = 1/224 W.
 const int power_fixed_point = 4 * voltage_fixed_point;
@@ -168,6 +165,11 @@ const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_poin
 const int voltage_current_div_power_fixed_point = current_fixed_point / power_div_voltage_fixed_point;
 
 const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 / 2;
+
+// Divisor used to limit the PWM per cycle.
+const int limiting_divisor = 512;
+
+const int limiting_divisor_m1 = limiting_divisor - 1;
 
 
 // Timing and PWM constants
@@ -200,20 +202,20 @@ const int pwm_period = 2 * pwm_base;
 // Number of PWM cycles per second: 3072 ticks = 42.7us @ 72MHz = 23.4KHz
 const int pwm_cycles_per_second = ticks_per_second / pwm_period;
 
-// Maximum duty cycle for the high side mosfet needs to allow some off time for 
-// the bootstrap capacitor to charge so it has enough voltage to turn mosfet on.
+// Maximum duty cycle for the high side MOSFETs needs to allow some off time for the
+// bootstrap capacitor to charge so it has enough voltage to turn high side MOSFET on.
 const int minimum_bootstrap_duty = 16; // 16/72MHz = 222ns
 
-// Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
-// bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
-// enough time to connect all low side mosfets to ground in order to sample phase currents.
-const int pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty) - 2;
-
-// Because of the current electronic design (v0) the current measurement degrades if the
+// Because of this version's electronic design (v0) the current measurement degrades if the
 // phase is set exactly to 0; we'll set it to the lowest on value. The phase voltage 
 // difference won't change at all. Therefore this setting doesn't affect our driving algorithm
 // besides consuming another unit of the PWM range, but this is less than the bootstrapping...
 const int pwm_min = 2;
+
+// Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
+// bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
+// enough time to connect all low side mosfets to ground in order to sample phase currents.
+const int pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty) - pwm_min;
 
 // Maximum duty for hold commands.
 const int pwm_max_hold = pwm_base * 2 / 10;
@@ -226,7 +228,7 @@ const int max_timeout = 0xFFFF;
 // Motor control tables
 // --------------------
 
-// Motor voltage fraction for the 6-step commutation.
+// Motor PWM settings for 6-step commutation in the positive direction (counter-clockwise).
 const uint16_t motor_sector_driving_positive[6][3] = {
     {0,        pwm_base, 0       },
     {0,        pwm_base, pwm_base},
@@ -236,8 +238,8 @@ const uint16_t motor_sector_driving_positive[6][3] = {
     {pwm_base, pwm_base, 0       },
 };
 
-// Surpirsingly good schedule for the 6-step commutation.
-const uint16_t motor_sector_driving_negative[6][3] {
+// Motor PWM settings for 6-step commutation in the negative direction (clockwise).
+const uint16_t motor_sector_driving_negative[6][3] = {
     {0,        0,        pwm_base},
     {pwm_base, 0,        pwm_base},
     {pwm_base, 0,        0       },
@@ -337,14 +339,17 @@ static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less tha
 // Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
 const int motor_constant_fixed_point = 1 << 20;
 
+// Conversion factor between our speed units and radians per second.
 const int radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_div_pi;
 
 // Acceleration needs more precision than speed; it's in angle units per pwm cycle per pwm cycle / fixed point series.
 const int acceleration_fixed_point = 512;
 
+
 // Calibration and Control Parameters
 // ----------------------------------
 
+// By default assume the hall sensors are perfectly placed 120 degrees apart.
 const PositionCalibration default_position_calibration = {
     // The angle at which we transition to this sector. The first is when rotating in the
     // positive direction; second for the negative direction.
@@ -385,8 +390,10 @@ const PositionCalibration default_position_calibration = {
     }},
 };
 
+// Fixed point representation of the current calibration factors.
 const int16_t current_calibration_fixed_point = 1024;
 
+// By default assume the current calibration is 1.0 for all phases and inductance.
 const CurrentCalibration default_current_calibration = {
     .u_factor = current_calibration_fixed_point,
     .v_factor = current_calibration_fixed_point,
@@ -395,11 +402,14 @@ const CurrentCalibration default_current_calibration = {
 };
 
 // Fixed point for most control parameters and most other floating point values.
-const int16_t control_parameters_fixed_point = 4096;
+const int16_t hires_fixed_point = 4096;
 
 // Fixed point for the PID control values and PID output.
 const int16_t seek_pid_fixed_point = 1024;
 
+// The default control parameters should be set to reasonable values for any motor.
+// 
+// The reset button will reload these values.
 const ControlParameters default_control_parameters = {
 
     .rotor_angle_ki = 1024,
@@ -420,7 +430,7 @@ const ControlParameters default_control_parameters = {
     .battery_power_control_ki = 8,
     .speed_control_ki = 8,
     .probing_angular_speed = speed_fixed_point / 2,
-    .probing_max_pwm = pwm_max_hold,
+    .max_pwm_difference = pwm_max_hold,
 
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .min_emf_for_motor_constant = voltage_fixed_point * 1,
@@ -444,10 +454,10 @@ const ControlParameters default_control_parameters = {
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.
-const int max_lead_angle_control = 60 * angle_base / 360 * control_parameters_fixed_point;
+const int max_lead_angle_control = 60 * angle_base / 360 * hires_fixed_point;
 
 // Hi resolution value for pwm_max, used for the 32bit control integral.
-const int max_pwm_control = pwm_max * control_parameters_fixed_point;
+const int max_pwm_control = pwm_max * hires_fixed_point;
 
 // Maximum rotations to use in the PID angle seeking loop (max rotations should imply max control when KP == 1.0).
 const int max_seek_rotations_error = 128;
@@ -463,9 +473,10 @@ const int seek_position_error_reference = max_seek_rotations_error * seek_rotati
 // Maximum error in the seek angle; double the control output to overcome the differential term.
 const int max_seek_error = 2 * seek_position_error_reference;
 
-
+// Reference speed for the PID control (the derivative term is the speed).
 const int seek_speed_error_reference = max_angular_speed / 4;
 
+// Duration to maximize the seek integral at the maximum error.
 const int seek_integral_duration = 32;
 
 // The divisor for the seek integral; we accumulate the error over a few cycles and then divide by this value.
@@ -481,16 +492,20 @@ const int max_seek_integral = seek_integral_divisor * max_seek_integral_control;
 // Calculation precomputed constants
 // ---------------------------------
 
+// Conversion factor between current difference and the implied inductor voltage given the phase inductance (V = L * di/dt).
 const int phase_diff_conversion = (
     inductance_fixed_point * current_fixed_point / phase_inductance * 
     current_calibration_fixed_point / pwm_cycles_per_second / voltage_fixed_point
 );
 
+// Conversion factor between the motor constant and our speed/voltage units.
 const int emf_motor_constant_conversion = (
     motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
 );
 
-const int max_angular_speed_observer = max_angular_speed * control_parameters_fixed_point;
+// Cap for the high resolution angular speed observer. This caps the high resolution observer so that the 
+// low resolution output is capped to the maximum angular speed.
+const int max_angular_speed_observer = max_angular_speed * hires_fixed_point;
 
 
 // Waveform and Trigonometric tables
@@ -498,6 +513,8 @@ const int max_angular_speed_observer = max_angular_speed * control_parameters_fi
 
 static_assert(angle_base == 1024, "angle_base must be 4096 for the sine and cosine lookup tables to work correctly");
 
+// Waveform for driving the coil phases at the specifed angle. Check the `3 Phase Tricks` page for 
+// the illustrated explanation and the generated table.
 const uint16_t phases_waveform[1024] = {
     1331, 1335, 1340, 1345, 1349, 1354, 1358, 1362, 1367, 1371, 1375, 1379, 1384, 1388, 1392, 1396,
     1400, 1403, 1407, 1411, 1415, 1418, 1422, 1426, 1429, 1432, 1436, 1439, 1442, 1446, 1449, 1452,
@@ -565,10 +582,13 @@ const uint16_t phases_waveform[1024] = {
     1400, 1396, 1392, 1388, 1384, 1379, 1375, 1371, 1367, 1362, 1358, 1354, 1349, 1345, 1340, 1335
 };
 
+// Get the PWM fraction at the specified angle.
 static inline int16_t get_phase_pwm(const int16_t angle) {
     return phases_waveform[normalize_angle(angle)];
 }
 
+// Lookup table for the sine function; 1024 entries for a full circle (2*pi). Table is also found
+// on the `3 Phase Tricks` page.
 const int16_t sin_lookup[1024] = {
         0,     6,    13,    19,    25,    31,    38,    44,    50,    57,    63,    69,    75,    82,    88,    94,
       100,   107,   113,   119,   125,   132,   138,   144,   150,   156,   163,   169,   175,   181,   187,   194,
@@ -636,10 +656,12 @@ const int16_t sin_lookup[1024] = {
      -100,   -94,   -88,   -82,   -75,   -69,   -63,   -57,   -50,   -44,   -38,   -31,   -25,   -19,   -13,    -6
 };
 
+// Get the sine value for the given angle.
 static inline int16_t get_sin(const int16_t angle) {
     return sin_lookup[normalize_angle(angle)];
 }
 
+// Get the sine value for the angle and the 120 degrees phase shifts on either side.
 static inline ThreePhase get_three_phase_sin(int16_t angle) {
     angle = normalize_angle(angle);
     return {
@@ -654,6 +676,7 @@ static inline int16_t get_cos(const int16_t angle) {
     return get_sin(angle + quarter_circle);
 }
 
+// Get the cosine value for the angle and the 120 degrees phase shifts on either side.
 static inline ThreePhase get_three_phase_cos(int16_t angle) {
     return get_three_phase_sin(angle + quarter_circle);
 }

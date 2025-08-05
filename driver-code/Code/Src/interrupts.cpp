@@ -450,9 +450,9 @@ void adc_interrupt_handler(){
         (not emf_detected) * hall_prediction_error * control_parameters.hall_angle_ki
     );
     
-    const int angle_adjustment = angle_adjustment_hires / control_parameters_fixed_point;
+    const int angle_adjustment = angle_adjustment_hires / hires_fixed_point;
     
-    angle_adjustment_residual = angle_adjustment_hires % control_parameters_fixed_point;
+    angle_adjustment_residual = angle_adjustment_hires % hires_fixed_point;
     
     // Calculate the new angle based on the angle adjustment.
     const int unnormalized_angle = unnormalized_predicted_angle + angle_adjustment;
@@ -497,7 +497,7 @@ void adc_interrupt_handler(){
         angular_speed_observer + speed_adjustment
     );
 
-    const int angular_speed = angular_speed_observer / control_parameters_fixed_point;
+    const int angular_speed = angular_speed_observer / hires_fixed_point;
     
     // Calculate the acceleration based on the speed change.
     // 
@@ -506,7 +506,7 @@ void adc_interrupt_handler(){
 
     rotor_acceleration_observer += acceleration_error * control_parameters.rotor_acceleration_ki;
 
-    const int rotor_acceleration = rotor_acceleration_observer / control_parameters_fixed_point;
+    const int rotor_acceleration = rotor_acceleration_observer / hires_fixed_point;
 
 
     // Calculate the motor constant
@@ -522,7 +522,7 @@ void adc_interrupt_handler(){
 
     motor_constant_observer += motor_constant_error * control_parameters.motor_constant_ki;
 
-    const int motor_constant = motor_constant_observer / control_parameters_fixed_point;
+    const int motor_constant = motor_constant_observer / hires_fixed_point;
 
 
     // Calculate the power use
@@ -556,12 +556,18 @@ void adc_interrupt_handler(){
     // Cap the maximum PWM
     // -------------------
 
-    const int avg_resistive_power = resistive_power_observer / control_parameters_fixed_point;
+    // Calculate slowly varying averages of the resistive power; this represents the energy
+    // dissipated in the motor coils which should be proportional to the temperature rise.
+    const int avg_resistive_power = resistive_power_observer / hires_fixed_point;
     
+    // Update the higher resolution observer.
     resistive_power_observer += (resistive_power - avg_resistive_power) * control_parameters.resistive_power_ki;
 
-    const int avg_total_power = total_power_observer / control_parameters_fixed_point;
+    // Calculate slowly varying averages of the total power; this represents the energy
+    // drawn from the battery. At constant voltage, this is proportional to the current drawn.
+    const int avg_total_power = total_power_observer / hires_fixed_point;
 
+    // Update the higher resolution observer.
     total_power_observer += (total_power - avg_total_power) * control_parameters.power_draw_ki;
 
 
@@ -571,18 +577,19 @@ void adc_interrupt_handler(){
     // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
     // 3. The total power is a good proxy for total current consumed from the battery.
     // 4. We want to limit the maximum speed.
-    const int pwm_penalty = (
-        max(vcc_mosfet_driver_undervoltage - vcc_voltage,
-        max(avg_resistive_power - control_parameters.max_resistive_power,
-        max(avg_total_power - control_parameters.max_power_draw,
-        max(abs_angular_speed - control_parameters.max_angular_speed,
-        0))))
-    ) / limiting_divisor;
-    
-    const int live_max_pwm = clip_to(
-        0, control_parameters.max_pwm,
-        readout.live_max_pwm + 1 - pwm_penalty
-    );
+    // 
+    // +limiting_divisor_m1 so we do ceiling of the division.
+    // 
+    // The penalty should normally be negative indicating we can increase the PWM.
+    const int pwm_penalty = (max(
+        vcc_mosfet_driver_undervoltage - vcc_voltage,
+        avg_resistive_power - control_parameters.max_resistive_power,
+        avg_total_power - control_parameters.max_power_draw,
+        abs_angular_speed - control_parameters.max_angular_speed
+    ) + limiting_divisor_m1) / limiting_divisor;
+
+    const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm + 1 - pwm_penalty);
+
 
 
     // Write the latest readout data
@@ -648,8 +655,9 @@ void adc_interrupt_handler(){
     readout.target_pwm = driver_state.target_pwm;
     
     readout.secondary_target = driver_state.secondary_target;
-    readout.debug_1 = pwm_penalty; // driver_state.seek_angle.error_integral / seek_integral_divisor;
+    readout.debug_1 = driver_state.seek_angle.error_integral / seek_integral_divisor;
     
+
     // Calculate motor outputs
     // -----------------------
 

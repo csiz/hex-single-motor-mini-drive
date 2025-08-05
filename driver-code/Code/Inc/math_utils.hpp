@@ -16,9 +16,18 @@ static inline constexpr int max(int a, int b){
     return a > b ? a : b;
 }
 
+static inline constexpr int max(int a, int b, int c, int d){
+    return max(max(a, b), max(c, d));
+}
+
 // Clip a value between two limits; params are (low, high, value).
 static inline constexpr int clip_to(int low, int high, int value){
     return min(high, max(low, value));
+}
+
+// Clip a value to a signed 16-bit range.
+static inline constexpr int16_t clip_to_short(int low, int high, int value){
+    return static_cast<int16_t>(clip_to(low, high, value));
 }
 
 // Sign of x or 0 if x is 0.

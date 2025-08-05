@@ -2,12 +2,15 @@
 
 #include "byte_handling.hpp"
 #include "error_handler.hpp"
+#include "math_utils.hpp"
+#include "constants.hpp"
 
 #include <cstring>
 
 // Serialize data
 // --------------
 
+// Write the message tail with CRC and end of message marker.
 static inline void write_message_tail(uint8_t * buffer, size_t & offset){
 
     // TODO: do the CRC calculation.
@@ -264,7 +267,7 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     offset += 2;
     write_int16(buffer + offset, control_parameters.probing_angular_speed);
     offset += 2;
-    write_int16(buffer + offset, control_parameters.probing_max_pwm);
+    write_int16(buffer + offset, control_parameters.max_pwm_difference);
     offset += 2;
 
     write_int16(buffer + offset, control_parameters.emf_angle_error_variance_threshold);
@@ -466,13 +469,13 @@ CurrentCalibration parse_current_calibration(uint8_t const * data, size_t size) 
     // Yep, skip this too.
     size_t offset = header_size;
 
-    current_calibration.u_factor = read_int16(data + offset);
+    current_calibration.u_factor = clip_to_short(1, +max_16bit, read_int16(data + offset));
     offset += 2;
-    current_calibration.v_factor = read_int16(data + offset);
+    current_calibration.v_factor = clip_to_short(1, +max_16bit, read_int16(data + offset));
     offset += 2;
-    current_calibration.w_factor = read_int16(data + offset);
+    current_calibration.w_factor = clip_to_short(1, +max_16bit, read_int16(data + offset));
     offset += 2;
-    current_calibration.inductance_factor = read_int16(data + offset);
+    current_calibration.inductance_factor = clip_to_short(1, +max_16bit, read_int16(data + offset));
     offset += 2;
 
     if (offset + tail_size != current_calibration_size) error();
@@ -524,76 +527,76 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
 
     ControlParameters control_parameters = {};
 
-    control_parameters.rotor_angle_ki = read_int16(data + offset);
+    control_parameters.rotor_angle_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.rotor_angular_speed_ki = read_int16(data + offset);
+    control_parameters.rotor_angular_speed_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.rotor_acceleration_ki = read_int16(data + offset);
+    control_parameters.rotor_acceleration_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.motor_constant_ki = read_int16(data + offset);
-    offset += 2;
-
-    control_parameters.resistance_ki = read_int16(data + offset);
-    offset += 2;
-    control_parameters.inductance_ki = read_int16(data + offset);
-    offset += 2;
-    control_parameters.max_pwm_change = read_int16(data + offset);
-    offset += 2;
-    control_parameters.max_angle_change = read_int16(data + offset);
+    control_parameters.motor_constant_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
 
-    control_parameters.min_emf_voltage = read_int16(data + offset);
+    control_parameters.resistance_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.hall_angle_ki = read_int16(data + offset);
+    control_parameters.inductance_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.lead_angle_control_ki = read_int16(data + offset);
+    control_parameters.max_pwm_change = clip_to_short(0, pwm_max, read_int16(data + offset));
     offset += 2;
-    control_parameters.torque_control_ki = read_int16(data + offset);
-    offset += 2;
-
-    control_parameters.battery_power_control_ki = read_int16(data + offset);
-    offset += 2;
-    control_parameters.speed_control_ki = read_int16(data + offset);
-    offset += 2;
-    control_parameters.probing_angular_speed = read_int16(data + offset);
-    offset += 2;
-    control_parameters.probing_max_pwm = read_int16(data + offset);
+    control_parameters.max_angle_change = clip_to_short(0, angle_base, read_int16(data + offset));
     offset += 2;
 
-    control_parameters.emf_angle_error_variance_threshold = read_int16(data + offset);
+    control_parameters.min_emf_voltage = clip_to_short(1, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.min_emf_for_motor_constant = read_int16(data + offset);
+    control_parameters.hall_angle_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.max_resistive_power = read_int16(data + offset);
+    control_parameters.lead_angle_control_ki = clip_to_short(-max_16bit, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.resistive_power_ki = read_int16(data + offset);
-    offset += 2;
-
-    control_parameters.max_angular_speed = read_int16(data + offset);
-    offset += 2;
-    control_parameters.max_power_draw = read_int16(data + offset);
-    offset += 2;
-    control_parameters.power_draw_ki = read_int16(data + offset);
-    offset += 2;
-    control_parameters.max_pwm = read_int16(data + offset);
+    control_parameters.torque_control_ki = clip_to_short(-max_16bit, max_16bit, read_int16(data + offset));
     offset += 2;
 
-    control_parameters.seek_via_torque_k_prediction = read_int16(data + offset);
+    control_parameters.battery_power_control_ki = clip_to_short(-max_16bit, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.seek_via_torque_ki = read_int16(data + offset);
+    control_parameters.speed_control_ki = clip_to_short(-max_16bit, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.seek_via_torque_kp = read_int16(data + offset);
+    control_parameters.probing_angular_speed = clip_to_short(1, max_angular_speed, read_int16(data + offset));
     offset += 2;
-    control_parameters.seek_via_torque_kd = read_int16(data + offset);
+    control_parameters.max_pwm_difference = clip_to_short(1, pwm_max, read_int16(data + offset));
     offset += 2;
 
-    control_parameters.seek_via_power_k_prediction = read_int16(data + offset);
+    control_parameters.emf_angle_error_variance_threshold = clip_to_short(1, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.seek_via_power_ki = read_int16(data + offset);
+    control_parameters.min_emf_for_motor_constant = clip_to_short(1, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.seek_via_power_kp = read_int16(data + offset);
+    control_parameters.max_resistive_power = clip_to_short(1, max_16bit, read_int16(data + offset));
     offset += 2;
-    control_parameters.seek_via_power_kd = read_int16(data + offset);
+    control_parameters.resistive_power_ki = clip_to_short(1, max_16bit, read_int16(data + offset));
+    offset += 2;
+
+    control_parameters.max_angular_speed = clip_to_short(1, max_angular_speed, read_int16(data + offset));
+    offset += 2;
+    control_parameters.max_power_draw = clip_to_short(1, max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.power_draw_ki = clip_to_short(1, max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.max_pwm = clip_to_short(1, pwm_max, read_int16(data + offset));
+    offset += 2;
+
+    control_parameters.seek_via_torque_k_prediction = clip_to_short(0, max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_torque_ki = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_torque_kp = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_torque_kd = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+
+    control_parameters.seek_via_power_k_prediction = clip_to_short(0, max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_power_ki = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_power_kp = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_power_kd = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
     offset += 2;
 
 

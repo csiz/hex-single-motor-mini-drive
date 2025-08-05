@@ -15,17 +15,38 @@ using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 // Driver State
 // ------------
 
+// Driving modes for the motor control loop.
 enum struct DriverMode : uint16_t {
+    // All motor outputs are set to 0, the coils are all connected to ground slowing down the motor.
     OFF,
+    // Motor outputs are tri-state / floating. The motor coils are not connected to the driver and the
+    // motor is free to spin. Note that at large speeds the motor will generate a back EMF that can
+    // overcome the MOSFETs body diodes and effectively turn the MOSFETs on. At that point the motor
+    // will break, behaving as in the OFF mode. The only way to prevent it is to disconnect the cable.
     FREEWHEEL,
+    // Hold the commanded duty cycle for each phase.
     HOLD,
+    // Drive the motor using a time indexed schedule with a sequence of hold commands.
     SCHEDULE,
+    // Drive the motor using 6 sector driving. This is the usual drive mode for BLDC motor speed controllers (which are not FOC).
     DRIVE_6_SECTOR,
+    // Drive the motor with an open loop periodic excitation of the motor coils. The phases are
+    // driven around a circle at the specified PWM and speed.
     DRIVE_PERIODIC,
+    // Drive the motor using FOC targeting a PWM value. The active driving PWM and the active angle are
+    // varied smoothly and target a current that is as close to 90 degrees ahead of the magnetic angle so
+    // that we maximize the driving efficiency.
     DRIVE_SMOOTH,
+    // Drive the motor using a fast, integral only, PID loop to control the torque (coil current) produced by the motor.
     DRIVE_TORQUE,
+    // Drive the motor using a fast, integral only, PID loop to control the battery power (battery current) consumed by the motor.
     DRIVE_BATTERY_POWER,
+    // Drive the motor to a specific angle. Uses a secondary PID loop to control the power consumed 
+    // by the motor to achieve the target angle.
     SEEK_ANGLE_POWER,
+    // Drive the motor to a specific angle. Uses a secondary PID loop to control the torque produced
+    // by the motor to achieve the target angle. Without the integral or derivative term this drive
+    // mode will make the motor behave like a spring.
     SEEK_ANGLE_TORQUE,
 };
 
@@ -65,10 +86,14 @@ const MotorOutputs freewheel_motor_outputs = {
 };
 
 struct PWMStage {
-    uint16_t duration; // Duration in PWM cycles.
-    uint16_t u_duty; // PWM duty cycle for U phase.
-    uint16_t v_duty; // PWM duty cycle for V phase.
-    uint16_t w_duty; // PWM duty cycle for W phase.
+    // Duration of the stage in PWM cycles.
+    uint16_t duration;
+    // PWM duty cycle for U phase.
+    uint16_t u_duty;
+    // PWM duty cycle for V phase.
+    uint16_t v_duty;
+    // PWM duty cycle for W phase.
+    uint16_t w_duty;
 };
 
 // Number of steps in test schedules.
@@ -79,16 +104,23 @@ using PWMSchedule = PWMStage[schedule_size];
 
 // Pointer to a PWM schedule to run the test.
 struct DriveSchedule {
+    // Pointer to the schedule data.
     PWMSchedule const* pointer;
+    // Current stage in the schedule.
     uint16_t current_stage;
+    // Counter for the time spent (number of cycles) in the current stage.
     uint16_t stage_counter;
 };
 
 // Drive the motor to a specific position.
 struct SeekAngle {
+    // The target rotation index we want the motor to drive towards.
     int16_t target_rotation;
+    // The target angle. This is the fractional part of the target rotation.
     int16_t target_angle;
+    // The maximum control value (torque, power or speed) used to drive the motor to the target angle.
     int16_t max_secondary_target;
+    // The high resolution integral error for the PID control loop.
     int32_t error_integral;
 };
 
@@ -314,14 +346,29 @@ struct PositionCalibration {
     CenterVariances sector_center_variances;
 };
 
+// Calibration factors for the current sensors.
+//
+// The soldering joints vary during manufacturing and therefore they affect the total
+// resistance of the shunt resistors. We can calibrate for this effect by multiplying
+// the readout by a factor for each phase.
+// 
+// For the v1 design, we shall improve the shunt resistors and soldering pad design to
+// to improve the accuracy. We can then switch to automatically calibrating the phase
+// resistance and motor inductance. For now we calibrate using the motor monitor app.
 struct CurrentCalibration {
+    // Adjustment factor for the U phase current readout.
     int16_t u_factor;
+    // Adjustment factor for the V phase current readout.
     int16_t v_factor;
+    // Adjustment factor for the W phase current readout.
     int16_t w_factor;
+    // Adjustment factor for the motor inductance; used to calibrate the coil inductance.
     int16_t inductance_factor;
 };
 
-// Parameters used in the motor control loop.
+// Parameters used in the motor control loop; for detailed descriptions check the
+// motor monitor page. It's useful to modify the values and inspect the changes to
+// the respective variables in the readout while driving a physical motor.
 struct ControlParameters {
 
     // Magnet position integral gain.
@@ -372,8 +419,8 @@ struct ControlParameters {
     // Probing angular speed for initial EMF detection.
     int16_t probing_angular_speed;
 
-    // Maximum probing PWM value.
-    int16_t probing_max_pwm;
+    // Maximum PWM difference from motor PWM required to compensate back EMF.
+    int16_t max_pwm_difference;
 
 
     // Maximum EMF angle correction variance when it's too noisy to update the angle.
@@ -382,35 +429,43 @@ struct ControlParameters {
     // Minium EMF voltage to compute the motor constant.
     int16_t min_emf_for_motor_constant;
 
+    // Maximum resistive power that can be dissipated in the motor coils.
     int16_t max_resistive_power;
 
+    // Resistive power long duration average observer gain.
     int16_t resistive_power_ki;
 
 
+    // Maximum angular speed of the motor.
     int16_t max_angular_speed;
 
+    // Maximum power draw from the battery (proxy for maximum current).
     int16_t max_power_draw;
 
+    // Power draw long duration average observer gain.
     int16_t power_draw_ki;
 
+    // Maximum PWM value for the motor outputs.
     int16_t max_pwm;
     
 
+    // Seek via torque, prediction duration factor for integral error.
     int16_t seek_via_torque_k_prediction;
-
+    // Seek via torque, integral gain for the PID control.
     int16_t seek_via_torque_ki;
-
+    // Seek via torque, proportional gain for the PID control.
     int16_t seek_via_torque_kp;
-
+    // Seek via torque, derivative gain for the PID control.
     int16_t seek_via_torque_kd;
 
 
+    // Seek via power, prediction duration factor for integral error.
     int16_t seek_via_power_k_prediction;
-
+    // Seek via power, integral gain for the PID control.
     int16_t seek_via_power_ki;
-
+    // Seek via power, proportional gain for the PID control.
     int16_t seek_via_power_kp;
-
+    // Seek via power, derivative gain for the PID control.
     int16_t seek_via_power_kd;
 };
 
@@ -418,10 +473,19 @@ struct ControlParameters {
 // Command data structures
 // -----------------------
 
+// There is a minimum packed size for each message, so all messages (commands from
+// the perspective of driver) will contain a minimal amount of data. Most driving
+// commands will only use these fields to keep the command size small. Additional
+// parameters can be set through the control parameters structure.
 struct BasicCommand {
+    // Duration to run each command in PWM cycles. Note that all driving commands
+    // are timed and the motor turns off when it loses contact with the controller.
     uint16_t timeout;
+    // The main command value.
     int16_t value;
+    // Additional value depending on the command type.
     int16_t second;
+    // Third value depending on the command type.
     int16_t third;
 };
 

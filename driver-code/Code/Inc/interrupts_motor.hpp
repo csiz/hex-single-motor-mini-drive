@@ -115,8 +115,8 @@ static inline MotorOutputs update_motor_smooth(
 
     // Adjust the target PWM to be close to the current EMF voltage (which is 0 at standstill).
     const int16_t target_pwm = clip_to(
-        pwm_for_emf_compensation - control_parameters.probing_max_pwm, 
-        pwm_for_emf_compensation + control_parameters.probing_max_pwm, 
+        pwm_for_emf_compensation - control_parameters.max_pwm_difference, 
+        pwm_for_emf_compensation + control_parameters.max_pwm_difference, 
         driver_state.target_pwm
     );
 
@@ -162,7 +162,7 @@ static inline MotorOutputs update_motor_smooth(
         driver_state.lead_angle_control + lead_angle_error
     );
 
-    driver_state.lead_angle = driver_state.lead_angle_control / control_parameters_fixed_point;
+    driver_state.lead_angle = driver_state.lead_angle_control / hires_fixed_point;
 
     if (angle_fix) {
         // If we have an accurate position, we can use it to adjust our control.
@@ -222,7 +222,7 @@ static inline MotorOutputs update_motor_torque(
     );
 
     // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.target_pwm_control / control_parameters_fixed_point;
+    driver_state.target_pwm = driver_state.target_pwm_control / hires_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -259,7 +259,7 @@ static inline MotorOutputs update_motor_battery_power(
     );
 
     // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.target_pwm_control / control_parameters_fixed_point;
+    driver_state.target_pwm = driver_state.target_pwm_control / hires_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }

@@ -1373,45 +1373,153 @@ let active_control_parameters_table =  Mutable(stringify_active_control_paramete
 
 const control_parameters_input = Object.fromEntries(
   [
-    ["rotor_angle_ki", "Rotor Angle KI"],
-    ["rotor_angular_speed_ki", "Rotor Angular Speed KI"],
-    ["rotor_acceleration_ki", "Rotor Acceleration KI"],
-    ["motor_constant_ki", "Motor Constant KI"],
-    ["resistance_ki", "Resistance KI"],
-    ["inductance_ki", "Inductance KI"],
-    ["max_pwm_change", "Maximum PWM Change per cycle"],
-    ["max_angle_change", "Maximum Angle Change per cycle"],
-    ["min_emf_voltage", "Minimum EMF Voltage for detection"],
-    ["hall_angle_ki", "Position adjustment from hall angle KI"],
-    ["lead_angle_control_ki", "Lead Angle Control KI"],
-    ["torque_control_ki", "Torque Control KI"],
-    ["battery_power_control_ki", "Battery Power Control KI"],
-    ["speed_control_ki", "Speed Control KI"],
-    ["probing_angular_speed", "Probing Angular Speed"],
-    ["probing_max_pwm", "Probing Max PWM"],
-    ["emf_angle_error_variance_threshold", "EMF Angle Correction Variance Threshold"],
-    ["min_emf_for_motor_constant", "Minimum EMF to compute the motor constant"],
-    ["max_resistive_power", "Maximum Resistive Power"],
-    ["resistive_power_ki", "Resistive Power KI"],
-    ["max_angular_speed", "Maximum Angular Speed"],
-    ["max_power_draw", "Max Power Draw"],
-    ["power_draw_ki", "Power Draw KI"],
-    ["max_pwm", "Maximum PWM allowed"],
-    ["seek_via_torque_k_prediction", "Integral speed prediction factor"],
-    ["seek_via_torque_ki", "Seek via Torque KI"],
-    ["seek_via_torque_kp", "Seek via Torque KP"],
-    ["seek_via_torque_kd", "Seek via Torque KD"],
-    ["seek_via_power_k_prediction", "Seek via Power K Prediction"],
-    ["seek_via_power_ki", "Seek via Power KI"],
-    ["seek_via_power_kp", "Seek via Power KP"],
-    ["seek_via_power_kd", "Seek via Power KD"],
-  ].map(([key, label]) => [
-    key, 
-    Inputs.number([], {
+    ["rotor_angle_ki", {
+      label: "Rotor Angle KI", 
+      description: "Integral gain for the rotor angle observer from the measured EMF angle.",
+    }],
+    ["rotor_angular_speed_ki", {
+      label: "Rotor Angular Speed KI", 
+      description: `Integral gain for speed of the angle based on the same error used for the EMF angle (an 
+      incorrect angle prediction implies a speed error as well).`
+    }],
+    ["rotor_acceleration_ki", {
+      label: "Rotor Acceleration KI", 
+      description: "Integral gain for the rotor acceleration observer; same as above, more resolution."
+    }],
+    ["motor_constant_ki", {
+      label: "Motor Constant KI", 
+      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
+    }],
+    ["resistance_ki", {
+      label: "Resistance KI", 
+      description: "Integral gain for the resistance measurement of the motor coils."
+    }],
+    ["inductance_ki", {
+      label: "Inductance KI", 
+      description: "Integral gain for the inductance measurement of the motor coils."
+    }],
+    ["max_pwm_change", {
+      label: "Maximum PWM Change per cycle", 
+      description: "Maximum allowed change in PWM per control cycle. We want to increase PWM smoothly to make our math stable."
+    }],
+    ["max_angle_change", {
+      label: "Maximum Angle Change per cycle", 
+      description: `Maximum allowed change in the actively driving angle per control cycle (this 
+      change is relative to the angle predicted at the active driving speed).`
+    }],
+    ["min_emf_voltage", {
+      label: "Minimum EMF Voltage for detection", 
+      description: `Minimum EMF voltage required to declare EMF detected. There is noise in the EMF measurement, so
+      we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated.`
+    }],
+    ["hall_angle_ki", {
+      label: "Position adjustment from hall angle KI", 
+      description: "Integral gain for the angle adjustment based on the hall sensors."
+    }],
+    ["lead_angle_control_ki", {
+      label: "Lead Angle Control KI",
+      description: "Lead angle control gain. The lead angle controls how far ahead we drive the voltage for maximum torque/efficiency."
+    }],
+    ["torque_control_ki", {
+      label: "Torque Control KI",
+      description: "Torque control gain. Controls how fast we adjust the PWM to achieve the desired torque."
+    }],
+    ["battery_power_control_ki", {
+      label: "Battery Power Control KI",
+      description: "Battery power control gain. Controls how fast we adjust the PWM to achieve the desired battery power."
+    }],
+    ["speed_control_ki", {
+      label: "Speed Control KI",
+      description: "Speed control gain. Controls how fast we adjust the PWM to achieve the desired speed."
+    }],
+    ["probing_angular_speed", {
+      label: "Probing Angular Speed",
+      description: `Probing angular speed. We use this default speed to drive a current around the coils in order to
+      move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
+    }],
+    ["max_pwm_difference", {
+      label: "Max PWM Difference",
+      description: `Maximum PWM allowed compared to the PWM required to compensate for the back EMF. This allows us to
+      drive the motor at the maximum speed allowed by our voltage source whilst capping the PWM component that generates
+      driving current. Note that this is the maximum PWM allowed whilst the motor is stationary and back EMF is 0.`
+    }],
+    ["emf_angle_error_variance_threshold", {
+      label: "EMF Variance Threshold",
+      description: "Variance for the EMF angle when it is too noisy to use. If the variance is above this threshold we don't use to for the angle calculation."
+    }],
+    ["min_emf_for_motor_constant", {
+      label: "Threshold for motor constant",
+      description: "Minimum EMF voltage magnitude required to compute the motor constant. Below this threshold it is too noisy because we divide by voltage."
+    }],
+    ["max_resistive_power", {
+      label: "Maximum Resistive Power",
+      description: "Maximum resistive power allowed. This is a proxy for the maximum temperature of the motor coils."
+    }],
+    ["resistive_power_ki", {
+      label: "Resistive Power KI",
+      description: "Resistive power integral gain. How fast we average the resistive power to avoid spikes."
+    }],
+    ["max_angular_speed", {
+      label: "Maximum Angular Speed",
+      description: "Maximum angular speed allowed."
+    }],
+    ["max_power_draw", {
+      label: "Max Power Draw",
+      description: "Maximum power draw allowed. This is a proxy for the maximum current draw at constant supply voltage."
+    }],
+    ["power_draw_ki", {
+      label: "Power Draw KI",
+      description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
+    }],
+    ["max_pwm", {
+      label: "Maximum PWM allowed",
+      description: "Maximum PWM value allowed. We must reserve some of the PWM range for current measurements and MOSFET driver boost capacitor charging."
+    }],
+    ["seek_via_torque_k_prediction", {
+      label: "Seek via Torque prediction factor",
+      description: "We compute the integral error using the predicted position a few milliseconds ahead. This parameter controls how far ahead we predict."
+    }],
+    ["seek_via_torque_ki", {
+      label: "Seek via Torque KI",
+      description: "Seek via torque integral gain. How fast we adjust the driving power to adjust for small errors."
+    }],
+    ["seek_via_torque_kp", {
+      label: "Seek via Torque KP",
+      description: "Seek via torque proportional gain. The spring constant for the torque control; the torque we apply per distance from the target."
+    }],
+    ["seek_via_torque_kd", {
+      label: "Seek via Torque KD",
+      description: "Seek via torque derivative gain. Dampening factor to lower torque when the error is decreasing quickly."
+    }],
+    ["seek_via_power_k_prediction", {
+      label: "Seek via Power prediction factor",
+      description: "We compute the integral error using the predicted position a few milliseconds ahead. This parameter controls how far ahead we predict."
+    }],
+    ["seek_via_power_ki", {
+      label: "Seek via Power KI",
+      description: "Seek via power integral gain. How fast we adjust the driving power to adjust for small errors."
+    }],
+    ["seek_via_power_kp", {
+      label: "Seek via Power KP",
+      description: "Seek via power proportional gain. This is effectively battery current draw per distance from the target."
+    }],
+    ["seek_via_power_kd", {
+      label: "Seek via Power KD",
+      description: "Seek via power derivative gain. Dampening factor to lower power when the error is decreasing quickly."
+    }],
+  ].map(([key, {label, description}]) => {
+
+    let parameter_input = Inputs.number([], {
       label,
       value: motor_controller?.control_parameters?.[key],
-    })
-  ])
+    });
+
+    d3.select(parameter_input).style("width", "100%").style("margin", "1em 0em 1em 0em")
+      .select("div").style("width", "50em")
+        .append("span").text(description).style("margin", "0em 1em 0em 1em").style("width", "100em");
+
+    return [key, parameter_input];
+  })
 );
 
 function show_active_control_parameters() {

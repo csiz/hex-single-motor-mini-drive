@@ -603,7 +603,7 @@ function parse_control_parameters(data_view) {
   offset += 2;
   const probing_angular_speed = data_view.getInt16(offset);
   offset += 2;
-  const probing_max_pwm = data_view.getInt16(offset);
+  const max_pwm_difference = data_view.getInt16(offset);
   offset += 2;
 
   const emf_angle_error_variance_threshold = data_view.getInt16(offset);
@@ -659,7 +659,7 @@ function parse_control_parameters(data_view) {
     battery_power_control_ki,
     speed_control_ki,
     probing_angular_speed,
-    probing_max_pwm,
+    max_pwm_difference,
     emf_angle_error_variance_threshold,
     min_emf_for_motor_constant,
     max_resistive_power,
@@ -834,7 +834,7 @@ function serialise_control_parameters(control_parameters) {
   offset += 2;
   view.setInt16(offset, control_parameters.probing_angular_speed);
   offset += 2;
-  view.setInt16(offset, control_parameters.probing_max_pwm);
+  view.setInt16(offset, control_parameters.max_pwm_difference);
   offset += 2;
 
   view.setInt16(offset, control_parameters.emf_angle_error_variance_threshold);
