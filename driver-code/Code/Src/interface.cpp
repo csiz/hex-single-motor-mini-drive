@@ -306,6 +306,14 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     write_int16(buffer + offset, control_parameters.seek_via_power_kd);
     offset += 2;
     
+    write_int16(buffer + offset, control_parameters.seek_via_speed_k_prediction);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_speed_ki);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_speed_kp);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.seek_via_speed_kd);
+    offset += 2;
     
     write_message_tail(buffer, offset);
 
@@ -368,8 +376,10 @@ static inline int get_message_size(uint16_t code) {
         case SET_STATE_DRIVE_SMOOTH: return min_message_size;
         case SET_STATE_DRIVE_TORQUE: return min_message_size;
         case SET_STATE_DRIVE_BATTERY_POWER: return min_message_size;
+        case SET_STATE_DRIVE_SPEED: return min_message_size;
         case SET_STATE_SEEK_ANGLE_WITH_POWER: return min_message_size;
         case SET_STATE_SEEK_ANGLE_WITH_TORQUE: return min_message_size;
+        case SET_STATE_SEEK_ANGLE_WITH_SPEED: return min_message_size;
 
         case GET_CURRENT_FACTORS: return min_message_size;
         case RESET_CURRENT_FACTORS: return min_message_size;
@@ -597,6 +607,15 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     control_parameters.seek_via_power_kp = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
     offset += 2;
     control_parameters.seek_via_power_kd = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+
+    control_parameters.seek_via_speed_k_prediction = clip_to_short(0, max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_speed_ki = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_speed_kp = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.seek_via_speed_kd = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
     offset += 2;
 
 

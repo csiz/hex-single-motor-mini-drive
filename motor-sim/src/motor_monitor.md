@@ -588,6 +588,12 @@ const advanced_drive_buttons = Inputs.button(
     ["Drive power -", async function(){
       await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
     }],
+    ["Drive speed +", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SPEED, {command_value: +command_angular_speed});
+    }],
+    ["Drive speed -", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SPEED, {command_value: -command_angular_speed});
+    }],
   ],
   {label: "Advanced drive commands"},
 );
@@ -622,6 +628,20 @@ const seek_drive_buttons = Inputs.button(
         command_value: 0, 
         command_second: command_angle,
         command_third: command_torque_current,
+      });
+    }],
+    ["Seek angle (speed)", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_SPEED, {
+        command_value: command_seek_rotation, 
+        command_second: command_angle,
+        command_third: command_angular_speed,
+      });
+    }],
+    ["Go to zero (speed)", async function(){
+      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_SPEED, {
+        command_value: 0, 
+        command_second: command_angle,
+        command_third: command_angular_speed,
       });
     }],
   ],
@@ -1506,6 +1526,22 @@ const control_parameters_input = Object.fromEntries(
     ["seek_via_power_kd", {
       label: "Seek via Power KD",
       description: "Seek via power derivative gain. Dampening factor to lower power when the error is decreasing quickly."
+    }],
+    ["seek_via_speed_k_prediction", {
+      label: "Seek via Speed prediction factor",
+      description: "We compute the integral error using the predicted position a few milliseconds ahead. This parameter controls how far ahead we predict."
+    }],
+    ["seek_via_speed_ki", {
+      label: "Seek via Speed KI",
+      description: "Seek via speed integral gain. How fast we adjust the driving speed to adjust for small errors."
+    }],
+    ["seek_via_speed_kp", {
+      label: "Seek via Speed KP",
+      description: "Seek via speed proportional gain. The speed we apply per distance from the target."
+    }],
+    ["seek_via_speed_kd", {
+      label: "Seek via Speed KD",
+      description: "Seek via speed derivative gain. Dampening factor to lower speed when the error is decreasing quickly."
     }],
   ].map(([key, {label, description}]) => {
 

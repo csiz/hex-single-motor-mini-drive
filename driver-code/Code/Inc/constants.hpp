@@ -453,6 +453,11 @@ const ControlParameters default_control_parameters = {
     .seek_via_power_ki = 64,
     .seek_via_power_kp = 1024,
     .seek_via_power_kd = 256,
+
+    .seek_via_speed_k_prediction = 0,
+    .seek_via_speed_ki = 0,
+    .seek_via_speed_kp = 1024,
+    .seek_via_speed_kd = 256,
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

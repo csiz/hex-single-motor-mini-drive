@@ -41,6 +41,8 @@ enum struct DriverMode : uint16_t {
     DRIVE_TORQUE,
     // Drive the motor using a fast, integral only, PID loop to control the battery power (battery current) consumed by the motor.
     DRIVE_BATTERY_POWER,
+    // Drive the motor using a fast, integral only, PID loop to control the speed of the motor.
+    DRIVE_SPEED,
     // Drive the motor to a specific angle. Uses a secondary PID loop to control the power consumed 
     // by the motor to achieve the target angle.
     SEEK_ANGLE_POWER,
@@ -48,6 +50,8 @@ enum struct DriverMode : uint16_t {
     // by the motor to achieve the target angle. Without the integral or derivative term this drive
     // mode will make the motor behave like a spring.
     SEEK_ANGLE_TORQUE,
+    // Drive the motor to a specific angle. Uses a secondary PID loop to control the speed of the motor.
+    SEEK_ANGLE_SPEED,
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -467,6 +471,15 @@ struct ControlParameters {
     int16_t seek_via_power_kp;
     // Seek via power, derivative gain for the PID control.
     int16_t seek_via_power_kd;
+
+    // Seek via speed, prediction duration factor for integral error.
+    int16_t seek_via_speed_k_prediction;
+    // Seek via speed, integral gain for the PID control.
+    int16_t seek_via_speed_ki;
+    // Seek via speed, proportional gain for the PID control.
+    int16_t seek_via_speed_kp;
+    // Seek via speed, derivative gain for the PID control.
+    int16_t seek_via_speed_kd;
 };
 
 

@@ -352,6 +352,15 @@ bool handle_command(MessageBuffer const& buffer) {
             return false;
         }
 
+        case SET_STATE_DRIVE_SPEED: {
+            set_motor_command(DriverState{
+                .mode = DriverMode::DRIVE_SPEED, 
+                .duration = command.timeout,
+                .secondary_target = static_cast<int16_t>(clip_to(-max_angular_speed, +max_angular_speed, command.value)),
+            });
+            return false;
+        }
+
         case SET_STATE_SEEK_ANGLE_WITH_POWER: {
             set_motor_command(DriverState{
                 .mode = DriverMode::SEEK_ANGLE_POWER, 
@@ -373,6 +382,19 @@ bool handle_command(MessageBuffer const& buffer) {
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
                     .target_angle = static_cast<int16_t>(normalize_angle(command.second)),
                     .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_current, +command.third)),
+                }
+            });
+            return false;
+        }
+
+        case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
+            set_motor_command(DriverState{
+                .mode = DriverMode::SEEK_ANGLE_SPEED, 
+                .duration = command.timeout, 
+                .seek_angle = SeekAngle{
+                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
+                    .target_angle = static_cast<int16_t>(normalize_angle(command.second)),
+                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_angular_speed, +command.third)),
                 }
             });
             return false;

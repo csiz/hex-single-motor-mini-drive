@@ -56,8 +56,10 @@ export const command_codes = {
   SET_STATE_DRIVE_SMOOTH: 0x4030,
   SET_STATE_DRIVE_TORQUE: 0x4031,
   SET_STATE_DRIVE_BATTERY_POWER: 0x4032,
-  SET_STATE_SEEK_ANGLE_WITH_POWER: 0x4033,
-  SET_STATE_SEEK_ANGLE_WITH_TORQUE: 0x4034,
+  SET_STATE_DRIVE_SPEED: 0x4033,
+  SET_STATE_SEEK_ANGLE_WITH_POWER: 0x4034,
+  SET_STATE_SEEK_ANGLE_WITH_TORQUE: 0x4035,
+  SET_STATE_SEEK_ANGLE_WITH_SPEED: 0x4036,
 
   CURRENT_FACTORS: 0x4040,
   GET_CURRENT_FACTORS: 0x4041,
@@ -95,7 +97,7 @@ const readout_size = 40;
 const full_readout_size = 88;
 const current_calibration_size = 16;
 const position_calibration_size = 80;
-const control_parameters_size = 72;
+const control_parameters_size = 80;
 const unit_test_size = 256;
 
 export function get_hall_sector({hall_u, hall_v, hall_w}){
@@ -642,6 +644,14 @@ function parse_control_parameters(data_view) {
   const seek_via_power_kd = data_view.getInt16(offset);
   offset += 2;
 
+  const seek_via_speed_k_prediction = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_speed_ki = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_speed_kp = data_view.getInt16(offset);
+  offset += 2;
+  const seek_via_speed_kd = data_view.getInt16(offset);
+  offset += 2;
 
   return {
     rotor_angle_ki,
@@ -676,6 +686,10 @@ function parse_control_parameters(data_view) {
     seek_via_power_ki,
     seek_via_power_kp,
     seek_via_power_kd,
+    seek_via_speed_k_prediction,
+    seek_via_speed_ki,
+    seek_via_speed_kp,
+    seek_via_speed_kd,
   };
 }
 
@@ -871,6 +885,15 @@ function serialise_control_parameters(control_parameters) {
   view.setInt16(offset, control_parameters.seek_via_power_kp);
   offset += 2;
   view.setInt16(offset, control_parameters.seek_via_power_kd);
+  offset += 2;
+
+  view.setInt16(offset, control_parameters.seek_via_speed_k_prediction);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_speed_ki);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_speed_kp);
+  offset += 2;
+  view.setInt16(offset, control_parameters.seek_via_speed_kd);
   offset += 2;
 
   serialise_message_tail(buffer, offset);

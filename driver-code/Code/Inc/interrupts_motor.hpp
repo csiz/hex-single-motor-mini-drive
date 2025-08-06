@@ -265,7 +265,28 @@ static inline MotorOutputs update_motor_battery_power(
 }
 
 
+static inline MotorOutputs update_motor_speed(
+    DriverState & driver_state,
+    FullReadout const& readout
+){
+    // Alias the speed target.
+    const int speed_target = driver_state.secondary_target;
 
+    // Calculate the difference between the target and measured current.
+    const int control_error = (speed_target - readout.angular_speed);
+
+    // Update the PID control for the torque.
+    driver_state.target_pwm_control = clip_to(
+        -max_pwm_control,
+        +max_pwm_control,
+        driver_state.target_pwm_control + control_error * control_parameters.speed_control_ki
+    );
+
+    // Get the target PWM after speed control.
+    driver_state.target_pwm = driver_state.target_pwm_control / hires_fixed_point;
+
+    return update_motor_smooth(driver_state, readout);
+}
 
 
 static inline MotorOutputs update_motor_seek_angle_power(
@@ -306,6 +327,26 @@ static inline MotorOutputs update_motor_seek_angle_torque(
     driver_state.secondary_target = max_current * pid_control / seek_pid_fixed_point;
 
     return update_motor_torque(driver_state, readout);
+}
+
+static inline MotorOutputs update_motor_seek_angle_speed(
+    DriverState & driver_state,
+    FullReadout const& readout
+){
+    const int pid_control = compute_seek_pid_control(
+        driver_state.seek_angle,
+        readout,
+        control_parameters.seek_via_speed_k_prediction,
+        control_parameters.seek_via_speed_ki,
+        control_parameters.seek_via_speed_kp,
+        control_parameters.seek_via_speed_kd
+    );
+
+    const int max_speed = driver_state.seek_angle.max_secondary_target;
+
+    driver_state.secondary_target = max_speed * pid_control / seek_pid_fixed_point;
+
+    return update_motor_speed(driver_state, readout);
 }
 
 // Drive the motor using a fixed schedule for the PWM outputs.
@@ -448,6 +489,19 @@ static inline DriverState setup_driver_state(
                 .secondary_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target)),
             };
 
+        case DriverMode::DRIVE_SPEED:
+            return DriverState{
+                .mode = DriverMode::DRIVE_SPEED,
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
+                .active_pwm = driver_state.active_pwm,
+                .angular_speed = driver_state.angular_speed,
+                .active_angle_residual = driver_state.active_angle_residual,
+                .target_pwm_control = driver_state.target_pwm_control,
+                .lead_angle_control = driver_state.lead_angle_control,
+                .secondary_target = static_cast<int16_t>(clip_to(-max_angular_speed, +max_angular_speed, pending_state.secondary_target)),
+            };
+
         case DriverMode::SEEK_ANGLE_POWER:
             return DriverState{
                 .mode = DriverMode::SEEK_ANGLE_POWER,
@@ -480,6 +534,24 @@ static inline DriverState setup_driver_state(
                     .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
                     .target_angle = static_cast<int16_t>(normalize_angle(pending_state.seek_angle.target_angle)),
                     .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_current, pending_state.seek_angle.max_secondary_target)),
+                    .error_integral = driver_state.seek_angle.error_integral
+                }
+            };
+
+        case DriverMode::SEEK_ANGLE_SPEED:
+            return DriverState{
+                .mode = DriverMode::SEEK_ANGLE_SPEED,
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
+                .active_pwm = driver_state.active_pwm,
+                .angular_speed = driver_state.angular_speed,
+                .active_angle_residual = driver_state.active_angle_residual,
+                .target_pwm_control = driver_state.target_pwm_control,
+                .lead_angle_control = driver_state.lead_angle_control,
+                .seek_angle = SeekAngle{
+                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
+                    .target_angle = static_cast<int16_t>(normalize_angle(pending_state.seek_angle.target_angle)),
+                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_angular_speed, pending_state.seek_angle.max_secondary_target)),
                     .error_integral = driver_state.seek_angle.error_integral
                 }
             };
@@ -558,6 +630,12 @@ static inline void update_motor_control(
             driver_state.motor_outputs = update_motor_battery_power(driver_state, readout);
             return;
 
+        case DriverMode::DRIVE_SPEED:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+            
+            driver_state.motor_outputs = update_motor_speed(driver_state, readout);
+            return;
+
         case DriverMode::SEEK_ANGLE_POWER:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
@@ -570,6 +648,13 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the seek angle driving using torque control.
             driver_state.motor_outputs = update_motor_seek_angle_torque(driver_state, readout);
+            return;
+        
+        case DriverMode::SEEK_ANGLE_SPEED:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+            
+            // Update the motor outputs for the seek angle driving using speed control.
+            driver_state.motor_outputs = update_motor_seek_angle_speed(driver_state, readout);
             return;
     }
 
