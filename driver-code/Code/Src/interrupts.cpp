@@ -627,7 +627,7 @@ void adc_interrupt_handler(){
         abs_angular_speed - control_parameters.max_angular_speed
     ) + limiting_divisor_m1) / limiting_divisor;
 
-    const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm + 1 - pwm_penalty);
+    const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);
 
 
 

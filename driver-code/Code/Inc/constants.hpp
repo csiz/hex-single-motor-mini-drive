@@ -167,8 +167,9 @@ const int voltage_current_div_power_fixed_point = current_fixed_point / power_di
 const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 / 2;
 
 // Divisor used to limit the PWM per cycle.
-const int limiting_divisor = 512;
+const int limiting_divisor = 128;
 
+// We also need the divisor minus one for ceiling division.
 const int limiting_divisor_m1 = limiting_divisor - 1;
 
 
