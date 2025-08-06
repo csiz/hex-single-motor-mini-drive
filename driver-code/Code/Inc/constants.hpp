@@ -164,6 +164,7 @@ const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_poin
 // Directly convert voltage * current to power in fixed point format.
 const int voltage_current_div_power_fixed_point = current_fixed_point / power_div_voltage_fixed_point;
 
+// Our dq0 transformation lead to a factor or 3/2 overestimation for the current and therefore power.
 const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 / 2;
 
 // Divisor used to limit the PWM per cycle.

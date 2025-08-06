@@ -214,9 +214,9 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const v_drive_voltage = (v_pwm - avg_pwm) * vcc_voltage / pwm_base;
   const w_drive_voltage = (w_pwm - avg_pwm) * vcc_voltage / pwm_base;
 
-  const [drive_voltage_alpha, drive_voltage_beta] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
-  const drive_voltage_angle = radians_to_degrees(Math.atan2(drive_voltage_beta, drive_voltage_alpha));
-  const drive_voltage_magnitude = Math.sqrt(drive_voltage_alpha * drive_voltage_alpha + drive_voltage_beta * drive_voltage_beta);
+  const [drive_voltage_direct, drive_voltage_quadrature] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
+  const drive_voltage_angle = radians_to_degrees(Math.atan2(drive_voltage_quadrature, drive_voltage_direct));
+  const drive_voltage_magnitude = Math.sqrt(drive_voltage_direct * drive_voltage_direct + drive_voltage_quadrature * drive_voltage_quadrature);
   const drive_voltage_angle_offset = normalize_degrees(drive_voltage_angle - predicted_angle);
 
   const u_readout = u_current / this.current_calibration.u_factor;
@@ -225,10 +225,10 @@ function parse_readout(data_view, previous_readout, check_errors = true){
 
   const avg_current = (u_current + v_current + w_current) / 3.0;
 
-  const [web_alpha_current, web_beta_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(predicted_angle));
+  const [web_direct_current, web_quadrature_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(predicted_angle));
 
-  const web_inductor_angle = normalize_degrees(predicted_angle + radians_to_degrees(Math.atan2(web_beta_current, web_alpha_current)));
-  const web_current_magnitude = Math.sqrt(web_alpha_current * web_alpha_current + web_beta_current * web_beta_current);
+  const web_inductor_angle = normalize_degrees(predicted_angle + radians_to_degrees(Math.atan2(web_quadrature_current, web_direct_current)));
+  const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
 
 
   // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
@@ -255,18 +255,18 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const v_emf_voltage = -v_drive_voltage + v_L_voltage + v_R_voltage;
   const w_emf_voltage = -w_drive_voltage + w_L_voltage + w_R_voltage;
 
-  const [web_alpha_emf_voltage, web_beta_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(predicted_angle));
+  const [web_direct_emf_voltage, web_quadrature_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, degrees_to_radians(predicted_angle));
 
-  const emf_voltage_angle_offset = radians_to_degrees(Math.atan2(web_beta_emf_voltage, web_alpha_emf_voltage));
+  const emf_voltage_angle_offset = radians_to_degrees(Math.atan2(web_quadrature_emf_voltage, web_direct_emf_voltage));
   const web_emf_voltage_angle = normalize_degrees(predicted_angle + emf_voltage_angle_offset);
-  const web_emf_voltage_magnitude = Math.sqrt(web_alpha_emf_voltage * web_alpha_emf_voltage + web_beta_emf_voltage * web_beta_emf_voltage);
+  const web_emf_voltage_magnitude = Math.sqrt(web_direct_emf_voltage * web_direct_emf_voltage + web_quadrature_emf_voltage * web_quadrature_emf_voltage);
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
   const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
   const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
-  const steady_state_beta_current = drive_voltage_magnitude / phase_resistance;
+  const steady_state_drive_current = drive_voltage_magnitude / phase_resistance;
 
 
   const readout = accumulate_position_from_hall(
@@ -293,19 +293,19 @@ function parse_readout(data_view, previous_readout, check_errors = true){
       ref_readout,
       // Readouts converted to physical dimensions
       u_current, v_current, w_current, avg_current,
-      web_alpha_current, web_beta_current, 
+      web_direct_current, web_quadrature_current, 
       web_current_magnitude,
       web_inductor_angle, 
 
       u_current_diff, v_current_diff, w_current_diff,
       u_pwm, v_pwm, w_pwm,
       u_drive_voltage, v_drive_voltage, w_drive_voltage,
-      drive_voltage_alpha,
-      drive_voltage_beta,
+      drive_voltage_direct,
+      drive_voltage_quadrature,
       drive_voltage_angle, 
       drive_voltage_angle_offset,
       drive_voltage_magnitude,
-      steady_state_beta_current,
+      steady_state_drive_current,
       u_emf_voltage, v_emf_voltage, w_emf_voltage,
       u_R_voltage, v_R_voltage, w_R_voltage,
       u_L_voltage, v_L_voltage, w_L_voltage,
@@ -318,7 +318,7 @@ function parse_readout(data_view, previous_readout, check_errors = true){
       angular_speed,
       vcc_voltage,
       emf_voltage_magnitude,
-      web_alpha_emf_voltage, web_beta_emf_voltage, 
+      web_direct_emf_voltage, web_quadrature_emf_voltage, 
       web_emf_voltage_magnitude,
       web_emf_voltage_angle, 
       emf_voltage_angle_offset,
@@ -387,13 +387,13 @@ function parse_full_readout(data_view, previous_readout){
   const cycle_end_tick = data_view.getInt16(offset);
   offset += 2;
 
-  const alpha_current = current_conversion * data_view.getInt16(offset);
+  const direct_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const beta_current = current_conversion * data_view.getInt16(offset);
+  const quadrature_current = current_conversion * data_view.getInt16(offset);
   offset += 2;
-  const alpha_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  const direct_emf_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
-  const beta_emf_voltage = calculate_voltage(data_view.getInt16(offset));
+  const quadrature_emf_voltage = calculate_voltage(data_view.getInt16(offset));
   offset += 2;
 
 
@@ -443,10 +443,10 @@ function parse_full_readout(data_view, previous_readout){
     cycle_start_tick,
     cycle_end_tick,
     
-    alpha_current,
-    beta_current,
-    alpha_emf_voltage,
-    beta_emf_voltage,
+    direct_current,
+    quadrature_current,
+    direct_emf_voltage,
+    quadrature_emf_voltage,
     
     battery_current,
     total_power,

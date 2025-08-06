@@ -101,13 +101,13 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
 
 
-    write_int16(buffer + offset, readout.alpha_current);
+    write_int16(buffer + offset, readout.direct_current);
     offset += 2;
-    write_int16(buffer + offset, readout.beta_current);
+    write_int16(buffer + offset, readout.quadrature_current);
     offset += 2;
-    write_int16(buffer + offset, readout.alpha_emf_voltage);
+    write_int16(buffer + offset, readout.direct_emf_voltage);
     offset += 2;
-    write_int16(buffer + offset, readout.beta_emf_voltage);
+    write_int16(buffer + offset, readout.quadrature_emf_voltage);
     offset += 2;
 
 

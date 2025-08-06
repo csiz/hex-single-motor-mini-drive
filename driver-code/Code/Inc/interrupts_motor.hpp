@@ -111,7 +111,7 @@ static inline MotorOutputs update_motor_smooth(
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
     const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
 
-    const int pwm_for_emf_compensation = -readout.beta_emf_voltage * pwm_waveform_base / readout.vcc_voltage;
+    const int pwm_for_emf_compensation = -readout.quadrature_emf_voltage * pwm_waveform_base / readout.vcc_voltage;
 
     // Adjust the target PWM to be close to the current EMF voltage (which is 0 at standstill).
     const int16_t target_pwm = clip_to(
@@ -209,7 +209,7 @@ static inline MotorOutputs update_motor_torque(
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
     // Get the signed current magnitude to compare against the target.
-    const int measured_current = current_detected * sign(readout.beta_current) * readout.current_magnitude;
+    const int measured_current = current_detected * sign(readout.quadrature_current) * readout.current_magnitude;
 
     // Calculate the difference between the target and measured current.
     const int control_error = (current_target - measured_current);
@@ -245,7 +245,7 @@ static inline MotorOutputs update_motor_battery_power(
 
     const int measured_power = (total_power_dominates ? 
         sign(driver_state.active_pwm) * readout.total_power :
-        -sign(readout.beta_emf_voltage) * readout.emf_power
+        -sign(readout.quadrature_emf_voltage) * readout.emf_power
     );
 
     const int control_error = (target_power - measured_power) * control_parameters.battery_power_control_ki;

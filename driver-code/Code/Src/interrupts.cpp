@@ -245,7 +245,7 @@ void adc_interrupt_handler(){
     const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
 
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
-    // Flip the sign of V because we accidentally wired it the other way (the right way...). Oopsie doopsie.
+    // Flip the sign of V because we accidentally wired it the other way (the correct way...). Oopsie doopsie.
     const ThreePhase readouts = {
         -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout),
         +(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout),
@@ -382,34 +382,45 @@ void adc_interrupt_handler(){
     // Sines of the predicted angle with respect to each phase.
     const ThreePhase three_phase_sin = get_three_phase_sin(predicted_angle);
     
-    // Park transform the currents and voltages.
+    // Park transform the currents and voltages: https://en.wikipedia.org/wiki/Direct-quadrature-zero_transformation
+    // 
+    // We assume the currents and emf voltages sum to 0 (eeeeh, they're close usually, works better if not adjusted).
+    // 
+    // In that case we can rotate our frame of reference to align ourselves with the rotor magnetic field. We then 
+    // measure the current and EMF voltage projected on this line (direct) or perpendicular to it (quadrature).
+    // 
+    // The back EMF generated is always along the quadrature axis. The current direction is mostly under our control,
+    // if we want to drive the motor efficiently we must also align the current along the quadrature axis.
 
-    const int alpha_current = dot(currents, three_phase_cos) / angle_base;
+    const int direct_current = dot(currents, three_phase_cos) / angle_base;
 
-    const int beta_current = -dot(currents, three_phase_sin) / angle_base;
+    const int quadrature_current = -dot(currents, three_phase_sin) / angle_base;
 
-    const int alpha_emf_voltage = dot(emf_voltages, three_phase_cos) / angle_base;
+    const int direct_emf_voltage = dot(emf_voltages, three_phase_cos) / angle_base;
 
-    const int beta_emf_voltage = -dot(emf_voltages, three_phase_sin) / angle_base;
+    const int quadrature_emf_voltage = -dot(emf_voltages, three_phase_sin) / angle_base;
 
 
     // Current angle calculation
     // -------------------------
 
-    // Exponentially average some value to reduce noise. A ratio of 1 to 3 parts coorresponds to 150us half life
-    // at our cycle frequency.
-
-    const int inductor_angle_offset = funky_atan2(beta_current, alpha_current);
+    // Calculate the angle at which the current is running on the motor coils. The angle offset is
+    // with respect to the predicted angle as that was the angle used in the park transform.
+    const int inductor_angle_offset = funky_atan2(quadrature_current, direct_current);
     
+    // Current angle in the stator frame of reference.
     const int inductor_angle = normalize_angle(predicted_angle + inductor_angle_offset);
     
+    // Calculate the magnitude by rotating the current vector entirely on the quadrature axis.
     const int instant_current_magnitude = faster_abs(
-        get_cos(inductor_angle_offset) * alpha_current + 
-        get_sin(inductor_angle_offset) * beta_current
+        get_cos(inductor_angle_offset) * direct_current + 
+        get_sin(inductor_angle_offset) * quadrature_current
     ) / angle_base;
 
+    // The current measurements have a low noise floor, but it's not 0.
     const bool current_detected = instant_current_magnitude > 4;
 
+    // Average the current magnitude over a short duration to reduce noise.
     const int current_magnitude = (instant_current_magnitude + readout.current_magnitude * 3) / 4;
     
 
@@ -417,23 +428,29 @@ void adc_interrupt_handler(){
     // -----------------------
 
     // Get the angle measured from EMF relative to the predicted rotor angle.
-    const int emf_angle_offset = funky_atan2(alpha_emf_voltage, -beta_emf_voltage);
+    const int emf_angle_offset = funky_atan2(direct_emf_voltage, -quadrature_emf_voltage);
 
-    // Calculate the emf voltage as a rotation of the beta voltage that zeroes out the alpha component.
+    // Calculate the emf voltage as a rotation of the quad voltage that zeroes out the direct component.
     const int instant_emf_voltage_magnitude = faster_abs(
-        get_cos(emf_angle_offset) * beta_emf_voltage - 
-        get_sin(emf_angle_offset) * alpha_emf_voltage
+        get_cos(emf_angle_offset) * quadrature_emf_voltage - 
+        get_sin(emf_angle_offset) * direct_emf_voltage
     ) / angle_base;
 
+    // Average the EMF voltage magnitude over a short duration to reduce noise.
     const int emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) / 4;
 
+    // The rotor angle inferred from the EMF can be either aligned with the positive quadrature direction or 
+    // the negative. It's going to be aligned with the negative direction when we have the rotor switches
+    // from positive to negative speed. The angle becomes extremely noisy at standstill (crossing 0 speed).
     const int emf_angle_error = angle_or_mirror(emf_angle_offset);
 
+    // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
     const int emf_angle_error_variance = min(
         max_16bit,
         1 + (square(emf_angle_error - previous_emf_angle_error) + readout.emf_angle_error_variance * 3) / 4
     );
 
+    // Store the current error for the noise calculation next cycle.
     previous_emf_angle_error = emf_angle_error;
 
     // Check if the EMF voltage is away from zero with enough confidence.
@@ -442,6 +459,7 @@ void adc_interrupt_handler(){
         (instant_emf_voltage_magnitude > control_parameters.min_emf_voltage)
     );
 
+    // Keep track of how many EMF detections we have in a row.
     number_of_emf_detections = clip_to(0, emf_fix_max, number_of_emf_detections + (emf_detected ? +1 : -1));
 
     // Let the angle adjust a few steps before using the diff to compute the speed; our initial guess starts
@@ -451,8 +469,8 @@ void adc_interrupt_handler(){
     // Declare that we have an emf reading after enough detections.
     const bool emf_fix = number_of_emf_detections >= emf_fix_threshold;
 
-    // Check if we have the incorrect rotor angle by checking if the beta EMF voltage has opposite sign to the angular speed.
-    const bool incorrect_rotor_angle_detected = emf_fix and (beta_emf_voltage * readout.angular_speed > 0);
+    // Check if we have the incorrect rotor angle by checking if the quad EMF voltage has opposite sign to the angular speed.
+    const bool incorrect_rotor_angle_detected = emf_fix and (quadrature_emf_voltage * readout.angular_speed > 0);
 
     // Keep of the number of times we detected an incorrect direction for the speed and EMF sign.
     incorrect_direction_detections = max(0, incorrect_direction_detections + (incorrect_rotor_angle_detected ? +1 : -1));
@@ -477,20 +495,25 @@ void adc_interrupt_handler(){
     // Angle update
     // ------------
 
-    const int hall_prediction_error = hall_valid * signed_angle(hall_angle - predicted_angle);
+    // When we don't have an angle estimate from the back EMF, then calculate the angle adjustment from
+    // the hall sensors when the hall sensors are valid.
+    const int hall_prediction_error = (not emf_detected) * hall_valid * signed_angle(hall_angle - predicted_angle);
 
     // Declare the angle to be correct after a threshold certainty.
     const bool angle_fix = correct_angle_counter >= angle_fix_threshold;
     
-    // Calculate the angle adjustment error using the parametrized gain.
+    // Calculate the angle adjustment error using the parametrized gains. The
+    // hall gain can be set to 0 to disable the hall sensor angle correction.
     const int angle_adjustment_hires = (
         angle_adjustment_residual +
         prediction_error * control_parameters.rotor_angle_ki +
-        (not emf_detected) * hall_prediction_error * control_parameters.hall_angle_ki
+        hall_prediction_error * control_parameters.hall_angle_ki
     );
     
+    // Use the same high resolution trick as for the `angle_residual` to accumulate fractional adjustments.
     const int angle_adjustment = angle_adjustment_hires / hires_fixed_point;
-    
+
+    // The compiler should optimize the modulo after the same division above.
     angle_adjustment_residual = angle_adjustment_hires % hires_fixed_point;
     
     // Calculate the new angle based on the angle adjustment.
@@ -506,8 +529,12 @@ void adc_interrupt_handler(){
     // Calculate the new angle and keep it normalized using the rotations calculation.
     const int angle = unnormalized_angle - rotations_increment * angle_base;
 
+    // Calculate the new rotation index.
     const int unnormalized_rotations = readout.rotations + rotations_increment;
 
+    // Normalize the rotations to the 16-bit range. Note that we don't use the minimum
+    // negative 16 bit value so that calculations with the negative of rotations are still
+    // in the valid range for signed 16 bit arithmetic.
     const int rotations = (
         unnormalized_rotations > max_16bit ? -max_16bit : 
         unnormalized_rotations < -max_16bit ? +max_16bit : 
@@ -530,6 +557,7 @@ void adc_interrupt_handler(){
         -angular_speed_observer
     );
     
+    // Clamp the speed observer such that the low resolution speed is clamped to `max_angular_speed`.
     angular_speed_observer = clip_to(
         -max_angular_speed_observer, 
         +max_angular_speed_observer, 
@@ -538,11 +566,12 @@ void adc_interrupt_handler(){
 
     const int angular_speed = angular_speed_observer / hires_fixed_point;
     
-    // Calculate the acceleration based on the speed change.
-    // 
-    // The new speed isn't predicted so we need to diff to the previous acceleration to get the error.
+    // Calculate the acceleration based on the speed change. We can use gradient descent to slowly
+    // decrease our speed error. Equivalent to an exponential moving average, however framing it as
+    // a gradient descent allows us to integrate the error into a higher resolution observer.
     const int acceleration_error = ((angular_speed - readout.angular_speed) * acceleration_fixed_point - readout.rotor_acceleration);
 
+    // Update the high resolution observer for the rotor acceleration.
     rotor_acceleration_observer += acceleration_error * control_parameters.rotor_acceleration_ki;
 
     const int rotor_acceleration = rotor_acceleration_observer / hires_fixed_point;
@@ -550,15 +579,26 @@ void adc_interrupt_handler(){
 
     // Calculate the motor constant
     // ----------------------------
+    // 
+    // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
+    // 
+    // It is also the ratio between the torque produced by the motor and the quadrature current. We 
+    // can compute the motor constant from the a spinning motor and use it to estimate our torque.
+    // 
+    // We calculate the motor constant by gradient descent using the configured integral gain.
 
+    // The voltage magnitude is always positive, also use the positive angular speed.
     const int abs_angular_speed = faster_abs(angular_speed);
 
     const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
 
+    // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
     const bool compute_motor_constant = angle_fix and (emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
 
+    // Get the error (gradient) for the motor constant observer.
     const int motor_constant_error = compute_motor_constant * (emf_voltage_magnitude - predicted_emf_voltage);
 
+    // Adjust the high resolution observer for the motor constant.
     motor_constant_observer += motor_constant_error * control_parameters.motor_constant_ki;
 
     const int motor_constant = motor_constant_observer / hires_fixed_point;
@@ -578,8 +618,8 @@ void adc_interrupt_handler(){
     // Use the DQ0 transformed values to calculate the EMF power quickly. We also have a chance to 
     // smooth out the values to better approximate the real power use.
     const int emf_power = - (
-        sign(beta_current) * current_magnitude * 
-        sign(beta_emf_voltage) * emf_voltage_magnitude 
+        sign(quadrature_current) * current_magnitude * 
+        sign(quadrature_emf_voltage) * emf_voltage_magnitude 
     ) / dq0_to_power_fixed_point;
 
     // The total power is the power used from the battery. It will be positive when driving
@@ -671,10 +711,10 @@ void adc_interrupt_handler(){
     readout.temperature = temperature;
     readout.live_max_pwm = live_max_pwm;
 
-    readout.alpha_current = alpha_current;
-    readout.beta_current = beta_current;
-    readout.alpha_emf_voltage = alpha_emf_voltage;
-    readout.beta_emf_voltage = beta_emf_voltage;
+    readout.direct_current = direct_current;
+    readout.quadrature_current = quadrature_current;
+    readout.direct_emf_voltage = direct_emf_voltage;
+    readout.quadrature_emf_voltage = quadrature_emf_voltage;
     
     readout.total_power = total_power;
     readout.resistive_power = resistive_power;

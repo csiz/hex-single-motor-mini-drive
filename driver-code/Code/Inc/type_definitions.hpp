@@ -243,13 +243,13 @@ struct FullReadout : public Readout {
     int16_t cycle_end_tick;
 
     // Current in DQ0 coordinates; aligned with the rotor angle.
-    int16_t alpha_current;
+    int16_t direct_current;
     // Current in DQ0 coordinates; crossed with the rotor angle.
-    int16_t beta_current;
+    int16_t quadrature_current;
     // EMF voltage in DQ0 coordinates; aligned with the rotor angle.
-    int16_t alpha_emf_voltage;
+    int16_t direct_emf_voltage;
     // EMF voltage in DQ0 coordinates; crossed with the rotor angle.
-    int16_t beta_emf_voltage;
+    int16_t quadrature_emf_voltage;
 
     // Total power used/given to VCC line (the battery usually).
     int16_t total_power;
