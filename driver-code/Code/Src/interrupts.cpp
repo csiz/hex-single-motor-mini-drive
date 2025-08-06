@@ -3,6 +3,8 @@
 #include "interrupts_angle.hpp"
 #include "interrupts_motor.hpp"
 
+#include "parameters_store.hpp"
+
 #include "io.hpp"
 #include "constants.hpp"
 #include "type_definitions.hpp"
@@ -21,12 +23,15 @@
 #include <stm32f1xx_ll_tim.h>
 #include <stm32f1xx_ll_gpio.h>
 
+// Interrupt loop
+// ==============
 
 // Try really hard to keep interrupts fast. Use short inline functions that only rely 
 // on chip primitives; don't use division, multiplication, or floating point operations.
 
+
 // Interrupt Loop State
-// ====================
+// --------------------
 
 // Electrical and position state
 FullReadout readout = {
@@ -121,6 +126,16 @@ DriverState pending_state = breaking_driver_state;
 // Interrupt Data Interface
 // ------------------------
 
+
+// Initialize the loop control parameters and the calibration data. Either load 
+// them from the flash or use the defaults.
+
+PositionCalibration position_calibration = get_position_calibration();
+CurrentCalibration current_calibration = get_current_calibration();
+ControlParameters control_parameters = get_control_parameters();
+
+// Guard the data access by disabling the ADC interrupt while we read/write the data.
+
 FullReadout get_readout(){
     // Disable the ADC interrupt while we read the latest readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
@@ -160,6 +175,7 @@ static inline bool readout_history_push(Readout const& readout){
 }
 
 bool is_motor_safed(){
+    // Consider both motor breaking and freewheeling as safe states.
     return (driver_state.mode == DriverMode::OFF) || (driver_state.mode == DriverMode::FREEWHEEL);
 }
 
@@ -225,6 +241,7 @@ void adc_interrupt_handler(){
     // For reference a PWM period is 1536 ticks, so the PWM frequency is 72MHz / 1536 / 2 = 23.4KHz.
     // The PWM period lasts 1/23.4KHz = 42.7us.
 
+    // Read the reference voltage first; this is the voltage of the reference line for the current sense amplifier.
     const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
 
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
@@ -238,7 +255,10 @@ void adc_interrupt_handler(){
     // Note that the reference voltage is only connected to the current sense amplifier, not the
     // microcontroller. The ADC reference voltage is 3.3V.
 
+    // Also read the controller chip temperature.
     const uint16_t instant_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+
+    // And motor supply voltage.
     const uint16_t instant_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
 
 
@@ -248,32 +268,48 @@ void adc_interrupt_handler(){
     // Read new data from the hall sensors.
     const uint8_t hall_state = read_hall_sensors_state();
 
+    // There are 3 hall sensors each getting turned on by a positive magnetic field. When 2 sensors
+    // are on at the same time, we infer that the rotor is halfway between the two sensors. When a
+    // single sensor is on the rotor north must be very close to that sensor. This divides the circle
+    // into 6 sectors, we number the sectors from 0 to 5 with 0 indicating rotor north over hall sensor U.
     const uint8_t hall_sector = get_hall_sector(hall_state);
 
+    // Use `hall_sector_base` to flag for invalid hall sensor readings. This happens when no sensors are
+    // active, or if they are all on for some reason (probably the sensor type).
     const bool hall_valid = hall_sector < hall_sector_base;
 
+    // Calculate the angle of the hall reading in our angle units.
     const int hall_angle = hall_sector * hall_sector_span;
 
 
     // Do the data calculations
     // ------------------------
 
-    // Average the temperature readings.
+    // Average the temperature readings since we are sampling quicker than the manufacturer indicates.
+    // We can't extend the sampling time longer than it is set at the moment (about half the recommendation),
+    // so we have to massage the readings for noise. Temperature varies slowly anyway.
     const int temperature = (instant_temperature + readout.temperature * 3) / 4;
 
-    // Average out the VCC voltage; it should be relatively stable so average to reduce our error.
+    // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const int vcc_voltage = (instant_vcc_voltage + readout.vcc_voltage * 3) / 4;
 
-    // Calculate our outputs on the motor phases. The outputs are delayed by one cycle.
+    // Calculate our outputs on the motor phases. The outputs are delayed by one cycle and then
+    // quickly averaged over time (half life of 1 cycle). The averaging is masking some effects
+    // from the inductance, but averaging like this greatly reduces the noise in inferred EMF
+    // readings so... we keep it.
     motor_outputs = (previous_motor_outputs + motor_outputs) / 2;
 
-    // Store the current motor outputs.
+    // Store the active motor outputs for the next cycle. 
     previous_motor_outputs = get_duties(driver_state.motor_outputs);
 
     // Calculate calibrated currents.
     const ThreePhase currents = readouts * get_calibration_factors(current_calibration) / current_calibration_fixed_point;
 
-    // Get calibrated current divergence (the time unit is defined 1 per cycle).    
+    // Get calibrated current divergence (the time unit is defined as 1 per cycle). We average out the
+    // current diffs exactly as we do with the motor outputs; this seems to work best, can't explain why.
+    //
+    // I've attempted to use the finite differences approach `diff(x) = ((x[n] - x[n-1]) + (x[n+1] - x[n])) / (2 * dt)`
+    // but it doesn't work as well as averaging both motor outputs and single step current diff.
     const ThreePhase currents_diff = ((currents - get_currents(readout)) + get_currents_diff(readout)) / 2;
 
     // Calculate the voltage drop across the coil inductance.
@@ -282,13 +318,15 @@ void adc_interrupt_handler(){
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const ThreePhase resistive_voltages = currents * phase_current_to_voltage / current_fixed_point;
 
-    // Calculate the driven phase voltages from our PWM settings and the VCC voltage.
+    // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
+    // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
+    // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
     const ThreePhase drive_voltages = adjust_to_sum_zero(motor_outputs) * vcc_voltage / pwm_base;
     
     // Infer the back EMF voltages for each phase.
     // 
     // Calculate the EMF voltage as the remainder after subtracting the electric circuit voltages.
-    // By Kirchoffs laws the total voltage must sum to 0.
+    // By Kirchoffs laws the total voltage of all of our components must sum to 0.
     const ThreePhase emf_voltages = inductor_voltages + resistive_voltages - drive_voltages;
 
 
@@ -310,15 +348,16 @@ void adc_interrupt_handler(){
     }
 
 
-    // Predict the position; keeping track of fractional angles. By our definition the time
-    // unit is 1 per cycle; so the angle spanned by the rotor is exactly the angular speed.
+    // Predict the position; keeping track of fractional angles at the same resolution as
+    // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
+    // the rotor is exactly the angular speed.
     const int angle_hires_diff = readout.angular_speed + angle_residual;
 
     // Advance the angle and the angle residual.
     const int unnormalized_predicted_angle = readout.angle + angle_hires_diff / speed_fixed_point;
     
-    // Keep track of the remaining angle fraction spanned according to the angular speed, but for which the integer angle
-    // doesn't change value. Hopefully the compiler makes the % operation free considering it follows the division above.
+    // Keep track of the remaining angle fraction spanned according to the angular speed for which the integer angle
+    // doesn't change. Hopefully the compiler makes the % operation free considering it follows the division above.
     angle_residual = angle_hires_diff % speed_fixed_point;
 
     // Compute and normalize the new rotor angle.
