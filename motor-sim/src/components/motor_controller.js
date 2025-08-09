@@ -186,7 +186,7 @@ export class MotorController {
 
         const code = message_header.getUint16(0);
 
-        const {parse_func, message_size} = parser_mapping[code] ?? {parse_func: null, message_size: null};
+        const {parse_function, message_size} = parser_mapping[code] ?? {parse_function: null, message_size: null};
 
         // Handle an unexpected message code.
         if (code != this._expected_code) {
@@ -220,7 +220,7 @@ export class MotorController {
         wrong_code_count = 0;
 
         // Ensure we have a parsing function for the message code.
-        if (!parse_func) {
+        if (!parse_function) {
           // We might reach this point if the user requested an unknown code; and we somehow received it.
           const error = new Error(`Unknown message code: ${code}`);
           
@@ -233,7 +233,7 @@ export class MotorController {
         if (byte_array.length < offset + message_size) break;
 
         // We have enough data to parse the message; parse it.
-        const message = parse_func.call(this, new DataView(byte_array.buffer, offset, message_size), this._last_message);
+        const message = parse_function.call(this, new DataView(byte_array.buffer, offset, message_size), this._last_message);
 
         // Advance the offset once we parsed the message.
         offset += message_size;

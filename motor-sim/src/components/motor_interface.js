@@ -707,12 +707,12 @@ function parse_unit_test_output(data_view) {
 
 
 export const parser_mapping = {
-  [command_codes.READOUT]: {parse_func: parse_readout, message_size: readout_size},
-  [command_codes.FULL_READOUT]: {parse_func: parse_full_readout, message_size: full_readout_size},
-  [command_codes.CURRENT_FACTORS]: {parse_func: parse_current_calibration, message_size: current_calibration_size},
-  [command_codes.HALL_POSITIONS]: {parse_func: parse_position_calibration, message_size: position_calibration_size},
-  [command_codes.CONTROL_PARAMETERS]: {parse_func: parse_control_parameters, message_size: control_parameters_size},
-  [command_codes.UNIT_TEST_OUTPUT]: {parse_func: parse_unit_test_output, message_size: unit_test_size},
+  [command_codes.READOUT]: {parse_function: parse_readout, message_size: readout_size},
+  [command_codes.FULL_READOUT]: {parse_function: parse_full_readout, message_size: full_readout_size},
+  [command_codes.CURRENT_FACTORS]: {parse_function: parse_current_calibration, message_size: current_calibration_size},
+  [command_codes.HALL_POSITIONS]: {parse_function: parse_position_calibration, message_size: position_calibration_size},
+  [command_codes.CONTROL_PARAMETERS]: {parse_function: parse_control_parameters, message_size: control_parameters_size},
+  [command_codes.UNIT_TEST_OUTPUT]: {parse_function: parse_unit_test_output, message_size: unit_test_size},
 };
 
 
@@ -903,20 +903,27 @@ function serialise_control_parameters(control_parameters) {
 
 
 const serialiser_mapping = {
-  [command_codes.SET_CURRENT_FACTORS]: {serialise_func: serialise_current_calibration},
-  [command_codes.SET_HALL_POSITIONS]: {serialise_func: serialise_set_position_calibration},
-  [command_codes.SET_CONTROL_PARAMETERS]: {serialise_func: serialise_control_parameters},
+  [command_codes.SET_CURRENT_FACTORS]: {serialise_function: serialise_current_calibration},
+  [command_codes.SET_HALL_POSITIONS]: {serialise_function: serialise_set_position_calibration},
+  [command_codes.SET_CONTROL_PARAMETERS]: {serialise_function: serialise_control_parameters},
 };
 
 export const default_command_options = {command_timeout: 0, command_value: 0, command_second: 0, command_third: 0, additional_data: undefined};
 
 export function serialise_command({command, command_timeout, command_value, command_second, command_third, additional_data}) {
-  const {serialise_func} = serialiser_mapping[command] ?? {serialise_func: null};
 
-  // Serialise the command with a special serialiser if it exists.
-  if (serialise_func) return serialise_func.call(this, additional_data);
+  // Write advanced command if passed additional data.
+  if (additional_data !== undefined) {
+    const serialiser = serialiser_mapping[command];
+    if (!serialiser) {
+      console.error("No serialiser found for command:", command);
+      throw new Error("Missing serialiser");
+    }
+    return serialiser.serialise_function.call(this, additional_data);
+  }
 
-  // Otherwise, serialise a basic command.
+  // Otherwise, write a basic command.
+  
   let buffer = new Uint8Array(basic_command_size);
 
   let view = new DataView(buffer.buffer);
