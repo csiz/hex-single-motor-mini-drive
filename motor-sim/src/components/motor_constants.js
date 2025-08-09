@@ -154,10 +154,3 @@ export const max_drive_power = 12;
 export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
 
 export const current_calibration_base = 1024; // Base for fixed point multiplication.
-
-export const default_current_calibration = {
-  u_factor: 1.0,
-  v_factor: 1.0,
-  w_factor: 1.0,
-  inductance_factor: 1.0,
-};

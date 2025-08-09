@@ -36,6 +36,10 @@ export const current_calibration_zones = [
 
 
 export async function run_current_calibration(motor_controller, max_pwm_value){
+  if (!motor_controller.current_calibration) {
+    console.error("We didn't load the active calibration data from the driver, we can't proceed without it.");
+    throw new Error("Missing current calibration data");
+  }
 
   const settle_time = 100;
   const settle_timeout = Math.floor((settle_time + 300) * cycles_per_millisecond);

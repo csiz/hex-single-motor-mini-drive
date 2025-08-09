@@ -3,7 +3,7 @@ import {serial as serial_polyfill} from "web-serial-polyfill";
 import {wait} from "./async_utils.js";
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, command_codes, serialise_command, header_size, default_command_options} from "./motor_interface.js";
-import {default_current_calibration, history_size} from "./motor_constants.js";
+import {history_size} from "./motor_constants.js";
 
 export { command_codes };
 
