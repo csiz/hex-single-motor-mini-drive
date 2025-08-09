@@ -233,7 +233,7 @@ export class MotorController {
         if (byte_array.length < offset + message_size) break;
 
         // We have enough data to parse the message; parse it.
-        const message = parse_function.call(this, new DataView(byte_array.buffer, offset, message_size), this._last_message);
+        const message = parse_function(new DataView(byte_array.buffer, offset, message_size), this._last_message, this);
 
         // Advance the offset once we parsed the message.
         offset += message_size;

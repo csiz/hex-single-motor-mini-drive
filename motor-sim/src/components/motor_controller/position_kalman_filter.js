@@ -30,10 +30,9 @@ export function accumulate_position_from_hall(readout, prev_readout, position_ca
 
   const {time, hall_sector, is_hall_transition} = readout;
 
-  if (hall_sector == null) return readout;
+  if (hall_sector == null) return {};
 
   if (!prev_readout || prev_readout.hall_sector == null) return {
-    ...readout,
     web_angle: sector_center_degrees[hall_sector],
     web_angle_stdev: sector_center_stdev[hall_sector],
     web_angular_speed: 0,
@@ -132,7 +131,6 @@ export function accumulate_position_from_hall(readout, prev_readout, position_ca
   const web_angular_speed = predicted_angular_speed + speed_adjustment;
 
   return {
-    ...readout,
     web_angle,
     web_angle_stdev: Math.min(web_angle_stdev, distance_to_hall_center_stdev),
     web_angular_speed,

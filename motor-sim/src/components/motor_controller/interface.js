@@ -21,6 +21,7 @@ import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angul
 import {square, dq0_transform, exponential_stats} from './math_utils.js';
 import {accumulate_position_from_hall} from './position_kalman_filter.js';
 
+
 export const header_size = 2; // 2 bytes
 
 export const command_codes = {
@@ -136,9 +137,7 @@ function check_message_for_errors(data_view, message_size, message_code) {
   return false;
 }
 
-function parse_readout(data_view, previous_readout, check_errors = true){
-  if (check_errors && check_message_for_errors(data_view, readout_size, command_codes.READOUT)) return null;
-
+function parse_readout_base(data_view, previous_readout, controller){
   let offset = header_size;
 
   // Get the PWM commands.
@@ -221,9 +220,9 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const drive_voltage_magnitude = Math.sqrt(drive_voltage_direct * drive_voltage_direct + drive_voltage_quadrature * drive_voltage_quadrature);
   const drive_voltage_angle_offset = normalize_degrees(drive_voltage_angle - predicted_angle);
 
-  const u_readout = u_current / this.current_calibration.u_factor;
-  const v_readout = v_current / this.current_calibration.v_factor;
-  const w_readout = w_current / this.current_calibration.w_factor;
+  const u_readout = u_current / controller.current_calibration.u_factor;
+  const v_readout = v_current / controller.current_calibration.v_factor;
+  const w_readout = w_current / controller.current_calibration.w_factor;
 
   const avg_current = (u_current + v_current + w_current) / 3.0;
 
@@ -239,15 +238,15 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
   const time = readout_index * millis_per_cycle;
 
-  const u_readout_diff = u_current_diff / this.current_calibration.u_factor;
-  const v_readout_diff = v_current_diff / this.current_calibration.v_factor;
-  const w_readout_diff = w_current_diff / this.current_calibration.w_factor;
+  const u_readout_diff = u_current_diff / controller.current_calibration.u_factor;
+  const v_readout_diff = v_current_diff / controller.current_calibration.v_factor;
+  const w_readout_diff = w_current_diff / controller.current_calibration.w_factor;
 
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_current_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor;
-  const v_L_voltage = v_current_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor;
-  const w_L_voltage = w_current_diff * 1000 * phase_inductance * this.current_calibration.inductance_factor;
+  const u_L_voltage = u_current_diff * 1000 * phase_inductance * controller.current_calibration.inductance_factor;
+  const v_L_voltage = v_current_diff * 1000 * phase_inductance * controller.current_calibration.inductance_factor;
+  const w_L_voltage = w_current_diff * 1000 * phase_inductance * controller.current_calibration.inductance_factor;
 
   const u_R_voltage = phase_resistance * u_current;
   const v_R_voltage = phase_resistance * v_current;
@@ -270,68 +269,78 @@ function parse_readout(data_view, previous_readout, check_errors = true){
 
   const steady_state_drive_current = drive_voltage_magnitude / phase_resistance;
 
+  const partial_readout = {
+    // Index
+    readout_number,
+    readout_index,
+    time,
+    // State flags
+    hall_u,
+    hall_v,
+    hall_w,
+    hall_sector,
+    is_hall_transition,
+    emf_detected,
+    emf_fix,
+    current_detected,
+    angle_fix,
+    incorrect_rotor_angle,
+    rotor_direction_flip_imminent,
+    // Raw readout values
+    u_readout, v_readout, w_readout,
+    u_readout_diff, v_readout_diff, w_readout_diff,
+    ref_readout,
+    // Readouts converted to physical dimensions
+    u_current, v_current, w_current, avg_current,
+    web_direct_current, web_quadrature_current, 
+    web_current_magnitude,
+    web_inductor_angle, 
 
-  const readout = accumulate_position_from_hall(
-    {
-      // Index
-      readout_number,
-      readout_index, 
-      time,
-      // State flags
-      hall_u,
-      hall_v,
-      hall_w,
-      hall_sector,
-      is_hall_transition,
-      emf_detected,
-      emf_fix,
-      current_detected,
-      angle_fix,
-      incorrect_rotor_angle,
-      rotor_direction_flip_imminent,
-      // Raw readout values
-      u_readout, v_readout, w_readout,
-      u_readout_diff, v_readout_diff, w_readout_diff,
-      ref_readout,
-      // Readouts converted to physical dimensions
-      u_current, v_current, w_current, avg_current,
-      web_direct_current, web_quadrature_current, 
-      web_current_magnitude,
-      web_inductor_angle, 
+    u_current_diff, v_current_diff, w_current_diff,
+    u_pwm, v_pwm, w_pwm,
+    u_drive_voltage, v_drive_voltage, w_drive_voltage,
+    drive_voltage_direct,
+    drive_voltage_quadrature,
+    drive_voltage_angle, 
+    drive_voltage_angle_offset,
+    drive_voltage_magnitude,
+    steady_state_drive_current,
+    u_emf_voltage, v_emf_voltage, w_emf_voltage,
+    u_R_voltage, v_R_voltage, w_R_voltage,
+    u_L_voltage, v_L_voltage, w_L_voltage,
+    hall_u_as_angle,
+    hall_v_as_angle,
+    hall_w_as_angle,
+    angle,
+    predicted_angle,
+    angle_adjustment,
+    angular_speed,
+    vcc_voltage,
+    emf_voltage_magnitude,
+    web_direct_emf_voltage, web_quadrature_emf_voltage, 
+    web_emf_voltage_magnitude,
+    web_emf_voltage_angle, 
+    emf_voltage_angle_offset,
+    web_total_power,
+    web_emf_power,
+    web_resistive_power,
+    web_inductive_power,
+  };
 
-      u_current_diff, v_current_diff, w_current_diff,
-      u_pwm, v_pwm, w_pwm,
-      u_drive_voltage, v_drive_voltage, w_drive_voltage,
-      drive_voltage_direct,
-      drive_voltage_quadrature,
-      drive_voltage_angle, 
-      drive_voltage_angle_offset,
-      drive_voltage_magnitude,
-      steady_state_drive_current,
-      u_emf_voltage, v_emf_voltage, w_emf_voltage,
-      u_R_voltage, v_R_voltage, w_R_voltage,
-      u_L_voltage, v_L_voltage, w_L_voltage,
-      hall_u_as_angle,
-      hall_v_as_angle,
-      hall_w_as_angle,
-      angle,
-      predicted_angle,
-      angle_adjustment,
-      angular_speed,
-      vcc_voltage,
-      emf_voltage_magnitude,
-      web_direct_emf_voltage, web_quadrature_emf_voltage, 
-      web_emf_voltage_magnitude,
-      web_emf_voltage_angle, 
-      emf_voltage_angle_offset,
-      web_total_power,
-      web_emf_power,
-      web_resistive_power,
-      web_inductive_power,
-    }, 
-    previous_readout, 
-    this.position_calibration,
-  );
+  const {
+    web_angle,
+    web_angle_stdev,
+    web_angular_speed,
+    web_angular_speed_stdev
+  } = accumulate_position_from_hall(partial_readout, previous_readout, controller.position_calibration);
+
+  const readout = {
+    ...partial_readout,
+    web_angle,
+    web_angle_stdev,
+    web_angular_speed,
+    web_angular_speed_stdev
+  };
 
   if (!previous_readout) return readout;
 
@@ -339,7 +348,6 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   const dt = time - previous_readout.time;
 
   const exp_stats = exponential_stats(dt, 2.0);
-
 
   const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
     web_emf_voltage_magnitude,
@@ -366,11 +374,16 @@ function parse_readout(data_view, previous_readout, check_errors = true){
   };
 }
 
+function parse_readout(data_view, previous_readout, controller){
+  if(check_message_for_errors(data_view, readout_size, command_codes.READOUT)) return null;
 
-function parse_full_readout(data_view, previous_readout){
+  return parse_readout_base(data_view, previous_readout, controller);
+}
+
+function parse_full_readout(data_view, previous_readout, controller){
   if(check_message_for_errors(data_view, full_readout_size, command_codes.FULL_READOUT)) return null;
 
-  const readout = parse_readout.call(this, data_view, previous_readout, false);
+  const readout = parse_readout_base(data_view, previous_readout, controller);
 
   if (!readout) return null;
 
@@ -919,7 +932,7 @@ export function serialise_command({command, command_timeout, command_value, comm
       console.error("No serialiser found for command:", command);
       throw new Error("Missing serialiser");
     }
-    return serialiser.serialise_function.call(this, additional_data);
+    return serialiser.serialise_function(additional_data);
   }
 
   // Otherwise, write a basic command.
