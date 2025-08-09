@@ -78,3 +78,7 @@ export function timeout_promise(promise, timeout) {
 export function clean_id(id) {
   return id.replace(/[^a-zA-Z0-9_]/g, "_");
 }
+
+export function valid_number(value) {
+  return (typeof value === "number" && !isNaN(value) && isFinite(value));
+}

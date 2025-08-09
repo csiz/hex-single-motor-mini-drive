@@ -15,11 +15,11 @@ import {
   phase_resistance, 
   phase_inductance,
   parse_state_flags,
-} from './motor_constants.js';
+} from './constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
 import {square, dq0_transform, exponential_stats} from './math_utils.js';
-import {accumulate_position_from_hall} from './motor_position_kalman_filter.js';
+import {accumulate_position_from_hall} from './position_kalman_filter.js';
 
 export const header_size = 2; // 2 bytes
 

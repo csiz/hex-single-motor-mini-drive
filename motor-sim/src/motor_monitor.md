@@ -1892,13 +1892,13 @@ import {
   inputs_wide_range,  
 } from "./components/input_utils.js";
 
-import {interpolate_degrees, normalize_degrees} from "./components/angular_math.js";
+import {interpolate_degrees, normalize_degrees} from "./components/motor_controller/angular_math.js";
 
-import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller.js";
+import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller/motor_controller.js";
 
-import {run_current_calibration, compute_current_calibration} from "./components/motor_current_calibration.js";
+import {run_current_calibration, compute_current_calibration} from "./components/motor_controller/current_calibration.js";
 
-import {run_position_calibration, compute_position_calibration} from "./components/motor_position_calibration.js";
+import {run_position_calibration, compute_position_calibration} from "./components/motor_controller/position_calibration.js";
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
@@ -1906,8 +1906,8 @@ import {
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
   current_conversion, max_drive_current, max_drive_power, max_angular_speed, max_16bit,
   convert_power_units_to_watts, convert_watts_to_power_units,
-} from "./components/motor_constants.js";
+} from "./components/motor_controller/constants.js";
 
-import {unit_test_expected} from "./components/motor_unit_tests.js";
+import {unit_test_expected} from "./components/motor_controller/driver_unit_tests.js";
 
 ```

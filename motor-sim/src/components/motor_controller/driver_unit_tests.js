@@ -1,4 +1,4 @@
-import { command_codes } from "./motor_interface.js";
+import { command_codes } from "./interface.js";
 
 export const unit_test_expected = {
   [command_codes.RUN_UNIT_TEST_FUNKY_ATAN]: `\

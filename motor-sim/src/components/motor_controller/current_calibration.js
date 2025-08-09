@@ -1,5 +1,5 @@
-import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance, phase_inductance} from "./motor_constants.js";
-import {command_codes} from "./motor_interface.js";
+import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance, phase_inductance} from "./constants.js";
+import {command_codes} from "./interface.js";
 import {wait} from "./async_utils.js";
 import {square, invalid_to_zero} from "./math_utils.js";
 import {zip_records} from "./data_utils.js";

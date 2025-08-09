@@ -1,5 +1,5 @@
-import {pwm_base, cycles_per_millisecond, history_size} from "./motor_constants.js";
-import {command_codes} from "./motor_interface.js";
+import {pwm_base, cycles_per_millisecond, history_size} from "./constants.js";
+import {command_codes} from "./interface.js";
 import {wait} from "./async_utils.js";
 import {circular_stats_degrees, interpolate_degrees, positive_degrees} from "./angular_math.js";
 import * as d3 from "d3";

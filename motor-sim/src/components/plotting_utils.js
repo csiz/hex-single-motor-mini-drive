@@ -5,7 +5,7 @@ import * as d3 from "d3";
 
 import {merge_input_value} from "./input_utils.js";
 
-import {valid_number} from "./math_utils.js";
+import {valid_number} from "./utils.js";
 
 const stdev_95_z_score = 1.959964; // 95% confidence interval for normal distribution
 const stdev_99_z_score = 2.575829; // 99% confidence interval for normal distribution
