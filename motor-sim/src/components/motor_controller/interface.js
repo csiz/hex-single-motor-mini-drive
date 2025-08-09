@@ -89,6 +89,8 @@ export const command_codes = {
 
 const END_OF_MESSAGE = 0b0101_0101_0101_0101;
 
+const max_message_size = 256;
+
 const end_of_message_size = 2;
 const crc_size = 4;
 const tail_size = crc_size + end_of_message_size;
@@ -99,7 +101,10 @@ const full_readout_size = 88;
 const current_calibration_size = 16;
 const position_calibration_size = 80;
 const control_parameters_size = 80;
-const unit_test_size = 256;
+const unit_test_size = max_message_size;
+
+const min_message_size = basic_command_size;
+
 
 export function get_hall_sector({hall_u, hall_v, hall_w}){
   const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
