@@ -21,6 +21,8 @@ import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angul
 import {square, dq0_transform, exponential_stats} from './math_utils.js';
 import {accumulate_position_from_hall} from './position_kalman_filter.js';
 
+// Command code header
+// -------------------
 
 export const header_size = 2; // 2 bytes
 
@@ -103,7 +105,9 @@ const position_calibration_size = 80;
 const control_parameters_size = 80;
 const unit_test_size = max_message_size;
 
-const min_message_size = basic_command_size;
+
+// Maximum time between readouts to consider them part of the same series.
+const readout_series_timeout = 500;
 
 
 export function get_hall_sector({hall_u, hall_v, hall_w}){
@@ -142,7 +146,9 @@ function check_message_for_errors(data_view, message_size, message_code) {
   return false;
 }
 
-function parse_readout_base(data_view, previous_readout, controller){
+function parse_readout_base(data_view, previous_readout, {current_calibration, position_calibration}) {
+  const local_time = Date.now();
+
   let offset = header_size;
 
   // Get the PWM commands.
@@ -201,7 +207,6 @@ function parse_readout_base(data_view, previous_readout, controller){
 
   const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
 
-  const is_hall_transition = hall_sector !== null && hall_sector !== previous_readout?.hall_sector;
 
   // Approximate the angle for the 6 sectors of the hall sensor; for plotting.
   const ε = 2;
@@ -225,9 +230,9 @@ function parse_readout_base(data_view, previous_readout, controller){
   const drive_voltage_magnitude = Math.sqrt(drive_voltage_direct * drive_voltage_direct + drive_voltage_quadrature * drive_voltage_quadrature);
   const drive_voltage_angle_offset = normalize_degrees(drive_voltage_angle - predicted_angle);
 
-  const u_readout = u_current / controller.current_calibration.u_factor;
-  const v_readout = v_current / controller.current_calibration.v_factor;
-  const w_readout = w_current / controller.current_calibration.w_factor;
+  const u_readout = u_current / current_calibration.u_factor;
+  const v_readout = v_current / current_calibration.v_factor;
+  const w_readout = w_current / current_calibration.w_factor;
 
   const avg_current = (u_current + v_current + w_current) / 3.0;
 
@@ -237,21 +242,15 @@ function parse_readout_base(data_view, previous_readout, controller){
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
 
 
-  // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
-  const readout_diff = !previous_readout ? 0 : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
-
-  const readout_index = !previous_readout ? 0 : previous_readout.readout_index + readout_diff;
-  const time = readout_index * millis_per_cycle;
-
-  const u_readout_diff = u_current_diff / controller.current_calibration.u_factor;
-  const v_readout_diff = v_current_diff / controller.current_calibration.v_factor;
-  const w_readout_diff = w_current_diff / controller.current_calibration.w_factor;
+  const u_readout_diff = u_current_diff / current_calibration.u_factor;
+  const v_readout_diff = v_current_diff / current_calibration.v_factor;
+  const w_readout_diff = w_current_diff / current_calibration.w_factor;
 
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_current_diff * 1000 * phase_inductance * controller.current_calibration.inductance_factor;
-  const v_L_voltage = v_current_diff * 1000 * phase_inductance * controller.current_calibration.inductance_factor;
-  const w_L_voltage = w_current_diff * 1000 * phase_inductance * controller.current_calibration.inductance_factor;
+  const u_L_voltage = u_current_diff * 1000 * phase_inductance * current_calibration.inductance_factor;
+  const v_L_voltage = v_current_diff * 1000 * phase_inductance * current_calibration.inductance_factor;
+  const w_L_voltage = w_current_diff * 1000 * phase_inductance * current_calibration.inductance_factor;
 
   const u_R_voltage = phase_resistance * u_current;
   const v_R_voltage = phase_resistance * v_current;
@@ -274,11 +273,70 @@ function parse_readout_base(data_view, previous_readout, controller){
 
   const steady_state_drive_current = drive_voltage_magnitude / phase_resistance;
 
-  const partial_readout = {
+
+  // Time indexing
+  // -------------
+
+  // It's the first readout in the series if the previous readout is older than the timeout duration.
+  const is_first_readout = !previous_readout || (previous_readout.local_time + readout_series_timeout < local_time);
+
+  // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
+  const readout_number_diff = is_first_readout ? undefined : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
+
+  const readout_index = is_first_readout ? 0 : previous_readout.readout_index + readout_number_diff;
+
+  const time = is_first_readout ? 0 : readout_index * millis_per_cycle;
+
+  // Time units are milliseconds.
+  const dt = is_first_readout ? undefined : time - previous_readout.time;
+
+
+  // Infer angle with the Kalman filter
+  // ----------------------------------
+
+  const is_hall_transition = (hall_sector !== null) && (hall_sector !== previous_readout?.hall_sector);
+
+  const {
+    web_angle,
+    web_angle_stdev,
+    web_angular_speed,
+    web_angular_speed_stdev,
+  } = accumulate_position_from_hall({dt, hall_sector, is_hall_transition}, previous_readout, {position_calibration});
+
+
+  // Running averages
+  // ----------------
+  
+  const exp_stats = exponential_stats(dt, 2.0);
+
+  const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
+    web_emf_voltage_magnitude,
+    {
+      average: previous_readout?.web_emf_voltage_magnitude_avg,
+      stdev: previous_readout?.web_emf_voltage_magnitude_stdev,
+    },
+  );
+
+  const {average: web_current_magnitude_avg, stdev: web_current_magnitude_stdev} = exp_stats(
+    web_current_magnitude,
+    {
+      average: previous_readout?.web_current_magnitude_avg,
+      stdev: previous_readout?.web_current_magnitude_stdev,
+    },
+  );
+
+
+  // Return the complete readout
+  // ---------------------------
+
+  return {
+    local_time,
     // Index
     readout_number,
+    readout_number_diff,
     readout_index,
     time,
+    dt,
     // State flags
     hall_u,
     hall_v,
@@ -330,48 +388,10 @@ function parse_readout_base(data_view, previous_readout, controller){
     web_emf_power,
     web_resistive_power,
     web_inductive_power,
-  };
-
-  const {
     web_angle,
     web_angle_stdev,
     web_angular_speed,
-    web_angular_speed_stdev
-  } = accumulate_position_from_hall(partial_readout, previous_readout, controller.position_calibration);
-
-  const readout = {
-    ...partial_readout,
-    web_angle,
-    web_angle_stdev,
-    web_angular_speed,
-    web_angular_speed_stdev
-  };
-
-  if (!previous_readout) return readout;
-
-  // Time units are milliseconds.
-  const dt = time - previous_readout.time;
-
-  const exp_stats = exponential_stats(dt, 2.0);
-
-  const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
-    web_emf_voltage_magnitude,
-    {
-      average: previous_readout.web_emf_voltage_magnitude_avg,
-      stdev: previous_readout.web_emf_voltage_magnitude_stdev,
-    },
-  );
-
-  const {average: web_current_magnitude_avg, stdev: web_current_magnitude_stdev} = exp_stats(
-    web_current_magnitude,
-    {
-      average: previous_readout.web_current_magnitude_avg,
-      stdev: previous_readout.web_current_magnitude_stdev,
-    },
-  );
-
-  return {
-    ...readout,
+    web_angular_speed_stdev,
     web_emf_voltage_magnitude_avg, 
     web_emf_voltage_magnitude_stdev,
     web_current_magnitude_avg, 
@@ -379,16 +399,16 @@ function parse_readout_base(data_view, previous_readout, controller){
   };
 }
 
-function parse_readout(data_view, previous_readout, controller){
+function parse_readout(data_view, previous_readout, calibration_data){
   if(check_message_for_errors(data_view, readout_size, command_codes.READOUT)) return null;
 
-  return parse_readout_base(data_view, previous_readout, controller);
+  return parse_readout_base(data_view, previous_readout, calibration_data);
 }
 
-function parse_full_readout(data_view, previous_readout, controller){
+function parse_full_readout(data_view, previous_readout, calibration_data){
   if(check_message_for_errors(data_view, full_readout_size, command_codes.FULL_READOUT)) return null;
 
-  const readout = parse_readout_base(data_view, previous_readout, controller);
+  const readout = parse_readout_base(data_view, previous_readout, calibration_data);
 
   if (!readout) return null;
 
@@ -452,8 +472,25 @@ function parse_full_readout(data_view, previous_readout, controller){
 
   const inductor_angle_offset = normalize_degrees(inductor_angle - readout.predicted_angle);
 
+  const exp_stats = exponential_stats(readout.dt, 2.0);
 
-  const full_readout = {
+  const {average: emf_power_avg, stdev: emf_power_stdev} = exp_stats(
+    emf_power,
+    {
+      average: previous_readout?.emf_power_avg,
+      stdev: previous_readout?.emf_power_stdev,
+    },
+  );
+
+  const {average: total_power_avg, stdev: total_power_stdev} = exp_stats(
+    total_power,
+    {
+      average: previous_readout?.total_power_avg,
+      stdev: previous_readout?.total_power_stdev,
+    },
+  );
+
+  return {
     ...readout,
     tick_rate,
     adc_update_rate,
@@ -470,8 +507,12 @@ function parse_full_readout(data_view, previous_readout, controller){
     
     battery_current,
     total_power,
+    total_power_avg, 
+    total_power_stdev,
     resistive_power,
     emf_power,
+    emf_power_avg, 
+    emf_power_stdev,
     inductive_power,
     
     emf_angle_error_stdev,
@@ -490,34 +531,6 @@ function parse_full_readout(data_view, previous_readout, controller){
     debug_1,
   };
 
-  if (!previous_readout) return full_readout;
-
-  const dt = readout.time - previous_readout.time;
-
-  const exp_stats = exponential_stats(dt, 2.0);
-
-
-    const {average: emf_power_avg, stdev: emf_power_stdev} = exp_stats(
-    emf_power,
-    {
-      average: previous_readout.emf_power_avg,
-      stdev: previous_readout.emf_power_stdev,
-    },
-  );
-
-  const {average: total_power_avg, stdev: total_power_stdev} = exp_stats(
-    total_power,
-    {
-      average: previous_readout.total_power_avg,
-      stdev: previous_readout.total_power_stdev,
-    },
-  );
-
-  return {
-    ...full_readout,
-    emf_power_avg, emf_power_stdev,
-    total_power_avg, total_power_stdev,
-  };
 }
 
 

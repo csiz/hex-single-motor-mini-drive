@@ -14,21 +14,26 @@ export async function run_position_calibration(motor_controller) {
 
   const drive_strength = Math.floor(pwm_base * 2 / 10);
 
-  const test_options = {command_timeout: 1, command_value: 0};
+  const test_options = {
+    command_timeout: 1, 
+    command_value: 0,
+    expected_messages: history_size,
+    expected_code: command_codes.READOUT,
+  };
 
   await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_value: +drive_strength, command_timeout: drive_timeout});  
   await wait(drive_time);
-  const drive_positive = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
-    {expected_messages: history_size});
+  const drive_positive = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options
+  });
 
   console.info("Drive positive done");
 
   await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_value: -drive_strength, command_timeout: drive_timeout});
   await wait(drive_time);
-  const drive_negative = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options},
-    {expected_messages: history_size});
+  const drive_negative = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options
+  });
 
 
   console.info("Drive negative done");

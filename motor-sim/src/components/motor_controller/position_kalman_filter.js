@@ -1,5 +1,6 @@
 import {normalize_degrees} from "./angular_math.js";
 import {product_of_normals, add_stdev, weighted_product_of_normals, cdf_normal} from "./stats_utils.js";
+import {valid_number} from "./math_utils.js"
 
 // Calculate Data
 // --------------
@@ -20,7 +21,8 @@ const initial_angular_speed_stdev = 50.0;
 
 const minimum_acceleration = 0.1;
 
-export function accumulate_position_from_hall(readout, prev_readout, position_calibration){
+
+export function accumulate_position_from_hall(readout, prev_readout, {position_calibration}){
   const {
     sector_center_degrees, 
     sector_center_stdev, 
@@ -28,19 +30,24 @@ export function accumulate_position_from_hall(readout, prev_readout, position_ca
     sector_transition_stdev,
   } = position_calibration;
 
-  const {time, hall_sector, is_hall_transition} = readout;
+  const {dt, hall_sector, is_hall_transition} = readout;
 
-  if (hall_sector == null) return {};
+  if (!valid_number(hall_sector)) return {};
 
-  if (!prev_readout || prev_readout.hall_sector == null) return {
-    web_angle: sector_center_degrees[hall_sector],
-    web_angle_stdev: sector_center_stdev[hall_sector],
-    web_angular_speed: 0,
-    web_angular_speed_stdev: initial_angular_speed_stdev,
+  function get_sector_center(hall_sector){
+    if (hall_sector === null) return {};
+
+    return {
+      web_angle: sector_center_degrees[hall_sector],
+      web_angle_stdev: sector_center_stdev[hall_sector],
+      web_angular_speed: 0,
+      web_angular_speed_stdev: initial_angular_speed_stdev,
+    }
   }
 
+  if (!prev_readout) return get_sector_center(hall_sector);
+
   const {
-    time: prev_time,
     hall_sector: prev_hall_sector,
     web_angle: prev_web_angle,
     web_angle_stdev: prev_web_angle_stdev,
@@ -48,7 +55,15 @@ export function accumulate_position_from_hall(readout, prev_readout, position_ca
     web_angular_speed_stdev: prev_web_angular_speed_stdev,
   } = prev_readout;
 
-  const dt = time - prev_time;
+  const previous_angle_valid = (
+    valid_number(prev_web_angle) && 
+    valid_number(prev_web_angle_stdev) &&
+    valid_number(prev_web_angular_speed) &&
+    valid_number(prev_web_angular_speed_stdev) &&
+    valid_number(prev_hall_sector)
+  );
+
+  if (!previous_angle_valid) return get_sector_center(hall_sector);
 
   const direction = is_hall_transition ? hall_transition_direction(prev_hall_sector, hall_sector) : Math.sign(prev_web_angular_speed);
 

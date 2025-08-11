@@ -46,8 +46,12 @@ export async function run_current_calibration(motor_controller, max_pwm_value){
   const settle_strength = Math.floor(max_pwm_value * 2 / 10);
 
   const drive_options = {command_timeout: settle_timeout, command_value: settle_strength};
-  const test_options = {command_timeout: 1, command_value: max_pwm_value};
-  const read_options = {expected_messages: history_size, expected_code: command_codes.READOUT};
+  const test_options = {
+    command_timeout: 1, 
+    command_value: max_pwm_value,
+    expected_messages: history_size,
+    expected_code: command_codes.READOUT,
+  };
 
   console.info("Current calibration starting");
 
@@ -55,51 +59,51 @@ export async function run_current_calibration(motor_controller, max_pwm_value){
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const u_positive_readout = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_U_INCREASING, ...test_options},
-    read_options);
+  const u_positive_readout = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_U_INCREASING, ...test_options
+  });
 
-  console.info("U positive done");
+  console.info("U positive done:", u_positive_readout);
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const w_negative_readout = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_W_DECREASING, ...test_options},
-    read_options);
+  const w_negative_readout = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_W_DECREASING, ...test_options
+  });
 
-  console.info("W negative done");
+  console.info("W negative done:", w_negative_readout);
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const v_positive_readout = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_V_INCREASING, ...test_options},
-    read_options);
+  const v_positive_readout = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_V_INCREASING, ...test_options
+  });
 
-  console.info("V positive done");
+  console.info("V positive done:", v_positive_readout);
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_U_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const u_negative_readout = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_U_DECREASING, ...test_options},
-    read_options);
+  const u_negative_readout = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_U_DECREASING, ...test_options
+  });
 
-  console.info("U negative done");
+  console.info("U negative done:", u_negative_readout);
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_W_POSITIVE, ...drive_options});
   await wait(settle_time);
-  const w_positive_readout = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_W_INCREASING, ...test_options},
-    read_options);
+  const w_positive_readout = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_W_INCREASING, ...test_options
+  });
 
-  console.info("W positive done");
+  console.info("W positive done:", w_positive_readout);
 
   await motor_controller.send_command({command: command_codes.SET_STATE_HOLD_V_NEGATIVE, ...drive_options});
   await wait(settle_time);
-  const v_negative_readout = await motor_controller.command_and_read(
-    {command: command_codes.SET_STATE_TEST_V_DECREASING, ...test_options},
-    read_options);
+  const v_negative_readout = await motor_controller.send_command_and_await_reply({
+    command: command_codes.SET_STATE_TEST_V_DECREASING, ...test_options
+  });
 
-  console.info("V negative done");
+  console.info("V negative done:", v_negative_readout);
 
   const times = d3.range(history_size).map((i) => i * millis_per_cycle);
 
@@ -266,7 +270,7 @@ function compute_calibration_instance({u_positive, u_negative, v_positive, v_neg
   let inductance_factor = 1.0;
 
   const learning_rate = 0.20;
-  const max_iterations = 500;
+  const max_iterations = 1000;
   const stability_threshold = 0.000_01;
 
   let iterations = [];

@@ -166,9 +166,6 @@ Unit Tests
 
 ```js
 
-const stdev_95_z_score = 1.959964; // 95% confidence interval for normal distribution
-
-
 const colors = {
   u: "rgb(117, 112, 179)",
   v: "rgb(217, 95, 2)",
@@ -190,9 +187,40 @@ const colors = {
 
 const colors_categories = Object.values(colors);
 
+```
 
+
+```js
+// Data stream output
+// ------------------
+
+
+const target_data_size = 4000 / millis_per_cycle;
+const max_data_size = 2 * target_data_size;
+
+
+let data = Mutable([]);
+
+function set_data(new_data){
+  data.value = new_data;
+}
+
+function reset_data(){
+  data.value = [];
+};
+
+function push_data(readout){
+  if (readout.readout_index === 0) return (data.value = [readout]);
+
+  let new_data = (data.value.length > max_data_size) ? data.value.slice(-target_data_size) : data.value;
+
+  new_data.push(readout);
+
+  set_data(new_data);
+};
 
 ```
+
 
 ```js
 
@@ -246,14 +274,17 @@ async function connect_motor_controller(){
   try {
     await disconnect_motor_controller(false);
 
-    const new_controller = await connect_usb_motor_controller();
+    const new_controller = await connect_usb_motor_controller({
+      onstatus: display_connection_stats,
+      onmessage: push_data,
+    });
 
     connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
 
     // Wait for the reading loop and calibrations in parallel.
     await Promise.all([
-      new_controller.reading_loop(display_connection_stats),
+      new_controller.reading_loop(),
       (async function(){
         await new_controller.load_current_calibration();
         await new_controller.load_position_calibration();
@@ -336,28 +367,6 @@ const command_seek_rotation_slider = inputs_wide_range([-max_seek_rotation, +max
 const command_seek_rotation = Generators.input(command_seek_rotation_slider);
 ```
 
-```js
-// Data stream output
-// ------------------
-
-
-const target_data_size = 4000 / millis_per_cycle;
-const max_data_size = 2 * target_data_size;
-
-
-let data = Mutable([]);
-
-function reset_data(){
-  data.value = [];
-};
-
-function push_data(readout){
-  data.value.push(readout);
-  if (data.value.length > max_data_size) data.value = data.value.slice(-target_data_size);
-  data.value = data.value;
-};
-
-```
 
 
 ```js
@@ -378,45 +387,40 @@ const command_torque_current = Math.floor(command_torque_current_amps / current_
 
 const command_power = convert_watts_to_power_units(command_power_watts);
 
-async function send_command(command, options = {}){
+async function send_command({command, ...command_options}){
   if (!motor_controller) return;
-  
-  await motor_controller.send_command({command, command_timeout, ...options});
+
+  await motor_controller.send_command({command, command_timeout, ...command_options});
 }
 
-let latest_stream_timeout = null;
-
-function command_and_stream(command, options = {}, delay_ms = 0){
-  if (latest_stream_timeout) clearTimeout(latest_stream_timeout);
-  latest_stream_timeout = null;
-
+async function take_readout_snapshot(command_options = {}){
   if (!motor_controller) return;
 
-  latest_stream_timeout = setTimeout(async function(){
-    try {
-      // Start reading the data stream.
-      await motor_controller.command_and_stream(
-        {command, ...options},
-        {readout_callback: push_data, ...options});
+  const {
+    command = command_codes.GET_READOUTS_SNAPSHOT,
+    expected_code = command_codes.READOUT,
+    expected_messages = history_size,
+  } = command_options;
 
-    } catch (error) {
-      console.error("Error streaming data:", error);
-    }
-  }, delay_ms);
+  const reply_data = await motor_controller.send_command_and_await_reply({
+    command,
+    expected_code,
+    expected_messages,
+    ...command_options,
+  });
+
+  set_data(reply_data);
 }
 
 const data_request_buttons = Inputs.button(
   [
-    ["Uninterrupted snapshot", function(){
-      reset_data();
-      command_and_stream(command_codes.GET_READOUTS_SNAPSHOT, {expected_code: command_codes.READOUT, expected_messages: history_size});
-    }],
+    ["Uninterrupted snapshot", function(){ take_readout_snapshot(); }],
     ["Stream 3 phase data", function(){
       reset_data();
-      command_and_stream(command_codes.STREAM_FULL_READOUTS, {expected_code: command_codes.FULL_READOUT, command_timeout: 1});
+      send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 1});
     }],
     ["STOP stream", async function(){
-      await send_command(command_codes.STREAM_FULL_READOUTS, {command_timeout: 0});
+      await send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 0});
     }],
   ],
   {label: "Read data"},
@@ -428,50 +432,49 @@ d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 const test_command_options = {
   command_value: command_pwm, 
   command_timeout: command_snapshot, 
-  expected_messages: command_snapshot ? history_size : 0,
-  expected_code: command_snapshot ? command_codes.READOUT : command_codes.FULL_READOUT,
+  expected_messages: history_size,
+  expected_code: command_codes.READOUT,
 };
 
 async function test_command(command){
   if (command_snapshot){
-    reset_data();
-    command_and_stream(command, test_command_options)
+    await take_readout_snapshot({command, ...test_command_options})
   } else {
-    await send_command(command, test_command_options);
+    await send_command({command, ...test_command_options});
   }
 }
 
 const test_buttons = Inputs.button(
   [
     ["Test all permutations", function(){
-      test_command(command_codes.SET_STATE_TEST_ALL_PERMUTATIONS, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
     ["Test ground short", function(){
-      test_command(command_codes.SET_STATE_TEST_GROUND_SHORT, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_GROUND_SHORT);
     }],
     ["Test positive short", function(){
-      test_command(command_codes.SET_STATE_TEST_POSITIVE_SHORT, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_POSITIVE_SHORT);
     }],
     ["Test U directions", function(){
-      test_command(command_codes.SET_STATE_TEST_U_DIRECTIONS, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_U_DIRECTIONS);
     }],
     ["Test U increasing", function(){
-      test_command(command_codes.SET_STATE_TEST_U_INCREASING, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_U_INCREASING);
     }],
     ["Test U decreasing", function(){
-      test_command(command_codes.SET_STATE_TEST_U_DECREASING, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_U_DECREASING);
     }],
     ["Test V increasing", function(){
-      test_command(command_codes.SET_STATE_TEST_V_INCREASING, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", function(){
-      test_command(command_codes.SET_STATE_TEST_V_DECREASING, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", function(){
-      test_command(command_codes.SET_STATE_TEST_W_INCREASING, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", function(){
-      test_command(command_codes.SET_STATE_TEST_W_DECREASING, test_command_options);
+      test_command(command_codes.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Test sequence"},
@@ -480,20 +483,17 @@ const test_buttons = Inputs.button(
 d3.select(test_buttons).selectAll("button").style("height", "4em");
 
 
-async function snapshot_if_checked(command, options = {}){
-  await send_command(command, {
-    expected_code: command_codes.FULL_READOUT,
-    ...options,
-  });
+let snapshot_delay_timeout = null;
+
+async function snapshot_if_checked({command, ...command_options}){
+  await send_command({command, ...command_options});
 
   if (command_snapshot){
-    command_and_stream(
-      command_codes.GET_READOUTS_SNAPSHOT, 
-      {
-        expected_messages: history_size, 
-        expected_code: command_codes.READOUT,
-      },
-      command_snapshot_delay,
+    if (snapshot_delay_timeout) clearTimeout(snapshot_delay_timeout);
+
+    snapshot_delay_timeout = setTimeout(
+      async function(){ await take_readout_snapshot(); }, 
+      command_snapshot_delay
     );
   }
 }
@@ -520,29 +520,29 @@ d3.select(stop_buttons)
 
 const simple_drive_buttons = Inputs.button(
   [
-    ["Hold U positive", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_HOLD_U_POSITIVE, {command_value: command_pwm});
-    }],
-    ["Hold V positive", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_HOLD_V_POSITIVE, {command_value: command_pwm});
-    }],
-    ["Hold W positive", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_HOLD_W_POSITIVE, {command_value: command_pwm});
-    }],
-    ["Hold U negative", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_HOLD_U_NEGATIVE, {command_value: command_pwm});
-    }],
-    ["Hold V negative", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_HOLD_V_NEGATIVE, {command_value: command_pwm});
-    }],
-    ["Hold W negative", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_HOLD_W_NEGATIVE, {command_value: command_pwm});
-    }],
     ["Drive 6S +", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: +command_pwm});
+      await snapshot_if_checked({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_value: +command_pwm});
     }],
     ["Drive 6S -", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_6_SECTOR, {command_value: -command_pwm});
+      await snapshot_if_checked({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_value: -command_pwm});
+    }],
+    ["Hold U positive", async function(){
+      await snapshot_if_checked({command: command_codes.SET_STATE_HOLD_U_POSITIVE, command_value: command_pwm});
+    }],
+    ["Hold V positive", async function(){
+      await snapshot_if_checked({command: command_codes.SET_STATE_HOLD_V_POSITIVE, command_value: command_pwm});
+    }],
+    ["Hold W positive", async function(){
+      await snapshot_if_checked({command: command_codes.SET_STATE_HOLD_W_POSITIVE, command_value: command_pwm});
+    }],
+    ["Hold U negative", async function(){
+      await snapshot_if_checked({command: command_codes.SET_STATE_HOLD_U_NEGATIVE, command_value: command_pwm});
+    }],
+    ["Hold V negative", async function(){
+      await snapshot_if_checked({command: command_codes.SET_STATE_HOLD_V_NEGATIVE, command_value: command_pwm});
+    }],
+    ["Hold W negative", async function(){
+      await snapshot_if_checked({command: command_codes.SET_STATE_HOLD_W_NEGATIVE, command_value: command_pwm});
     }],
   ],
   {label: "Simple drive commands"},
@@ -554,45 +554,74 @@ d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
 const advanced_drive_buttons = Inputs.button(
   [
     ["Set Angle", async function(){
-      await snapshot_if_checked(command_codes.SET_ANGLE, {command_value: command_angle});
+      await snapshot_if_checked({
+        command: command_codes.SET_ANGLE, 
+        command_value: command_angle,
+      });
     }],
     ["Drive periodic +", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_PERIODIC, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_PERIODIC,
         command_value: command_pwm, 
         command_second: +command_angular_speed, 
         command_third: command_angle,
       });
     }],
     ["Drive periodic -", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_PERIODIC, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_PERIODIC,
         command_value: command_pwm, 
         command_second: -command_angular_speed, 
         command_third: command_angle,
       });
     }],
     ["Drive smooth +", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: +command_pwm});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_SMOOTH,
+        command_value: +command_pwm
+      });
     }],
     ["Drive smooth -", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SMOOTH, {command_value: -command_pwm});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_SMOOTH,
+        command_value: -command_pwm
+      });
     }],
     ["Drive torque +", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: +command_torque_current});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_TORQUE,
+        command_value: +command_torque_current
+      });
     }],
     ["Drive torque -", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_TORQUE, {command_value: -command_torque_current});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_TORQUE,
+        command_value: -command_torque_current
+      });
     }],
     ["Drive power +", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: +command_power});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_BATTERY_POWER,
+        command_value: +command_power
+      });
     }],
     ["Drive power -", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_BATTERY_POWER, {command_value: -command_power});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_BATTERY_POWER,
+        command_value: -command_power
+      });
     }],
     ["Drive speed +", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SPEED, {command_value: +command_angular_speed});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_SPEED,
+        command_value: +command_angular_speed
+      });
     }],
     ["Drive speed -", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_DRIVE_SPEED, {command_value: -command_angular_speed});
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_DRIVE_SPEED,
+        command_value: -command_angular_speed
+      });
     }],
   ],
   {label: "Advanced drive commands"},
@@ -603,42 +632,48 @@ d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
 const seek_drive_buttons = Inputs.button(
   [
     ["Seek angle (power)", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER,
         command_value: command_seek_rotation, 
         command_second: command_angle,
         command_third: command_power,
       });
     }],
     ["Go to zero (power)", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER,
         command_value: 0, 
         command_second: command_angle,
         command_third: command_power,
       });
     }],
     ["Seek angle (torque)", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
         command_value: command_seek_rotation, 
         command_second: command_angle,
         command_third: command_torque_current,
       });
     }],
     ["Go to zero (torque)", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
         command_value: 0, 
         command_second: command_angle,
         command_third: command_torque_current,
       });
     }],
     ["Seek angle (speed)", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_SPEED, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_SEEK_ANGLE_WITH_SPEED,
         command_value: command_seek_rotation, 
         command_second: command_angle,
         command_third: command_angular_speed,
       });
     }],
     ["Go to zero (speed)", async function(){
-      await snapshot_if_checked(command_codes.SET_STATE_SEEK_ANGLE_WITH_SPEED, {
+      await snapshot_if_checked({
+        command: command_codes.SET_STATE_SEEK_ANGLE_WITH_SPEED,
         command_value: 0, 
         command_second: command_angle,
         command_third: command_angular_speed,
@@ -1818,10 +1853,11 @@ let unit_test_results = Mutable([]);
 async function command_unit_test(test_code, subtitle){
   const expected = unit_test_expected[test_code];
 
-  const output = (await motor_controller.command_and_read(
-    {command: test_code},
-    {expected_messages: 1, expected_code: command_codes.UNIT_TEST_OUTPUT},
-  ))[0];
+  const output = await motor_controller.send_command_and_await_reply({
+    command: test_code,
+    expected_messages: 1,
+    expected_code: command_codes.UNIT_TEST_OUTPUT,
+  });
 
   const passed = output == expected;
 
@@ -1909,5 +1945,7 @@ import {
 } from "./components/motor_controller/constants.js";
 
 import {unit_test_expected} from "./components/motor_controller/driver_unit_tests.js";
+
+import _ from "lodash";
 
 ```
