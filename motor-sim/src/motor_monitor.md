@@ -219,17 +219,18 @@ function push_data(readout){
   set_data(new_data);
 };
 
-```
 
-
-```js
+// Initialize Motor Driver via USB
+// -------------------------------
 
 let motor_controller = Mutable(null);
 
 let connection_status = Mutable(html`<pre>Not connected.</pre>`);
 
 
-function display_connection_error(error){
+function handle_connection_error(error){
+  motor_controller.value = null;
+
   if (error.message === "EOF") {
     connection_status.value = html`<pre>End of connection.</pre>`;
   } else if (error.name === "NotFoundError") {
@@ -277,31 +278,24 @@ async function connect_motor_controller(){
     const new_controller = await connect_usb_motor_controller({
       onstatus: display_connection_stats,
       onmessage: push_data,
+      onready: () => {
+        connection_status.value = html`<pre>Connected, waiting for your commands.</pre>`;
+        motor_controller.value = new_controller;
+      },
+      onerror: handle_connection_error,
     });
 
     connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
-
-    // Wait for the reading loop and calibrations in parallel.
-    await Promise.all([
-      new_controller.reading_loop(),
-      (async function(){
-        await new_controller.load_current_calibration();
-        await new_controller.load_position_calibration();
-        await new_controller.load_control_parameters();
-        motor_controller.value = new_controller;
-      })(),
-    ]);
+    await new_controller.start_reading_loop();
 
   } catch (error) {
-    motor_controller.value = null;
-
-    display_connection_error(error);
+    handle_connection_error(error);
   }
 }
 
+// Disconnect when the notebook is reloaded.
 invalidation.then(disconnect_motor_controller);
-
 
 
 const connect_buttons = Inputs.button(
@@ -316,6 +310,7 @@ const connect_buttons = Inputs.button(
 d3.select(connect_buttons).selectAll("button").style("height", "3em");
 
 
+// Automatically connect the motor driver if we have permissions from previous session.
 connect_motor_controller();
 ```
 

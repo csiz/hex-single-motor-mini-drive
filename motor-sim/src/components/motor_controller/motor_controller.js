@@ -36,7 +36,7 @@ async function maybe_prompt_port(){
 }
 
 /* Request a COM port and try to connect to the motor driver. */
-export async function connect_usb_motor_controller({onstatus, onmessage, onerror}){
+export async function connect_usb_motor_controller(controller_options){
   const port = await maybe_prompt_port();
 
   if (!port) return;
@@ -64,7 +64,7 @@ export async function connect_usb_motor_controller({onstatus, onmessage, onerror
   if (!port.readable) throw new Error("Port unreadable");
   if (!port.writable) throw new Error("Port unwritable");
 
-  async function forget_port(){
+  async function close_port(){
     await port.readable.cancel();
 
     await port.close();
@@ -73,10 +73,8 @@ export async function connect_usb_motor_controller({onstatus, onmessage, onerror
   return new MotorController({
     writable: port.writable,
     readable: port.readable,
-    forget_port,
-    onstatus,
-    onmessage,
-    onerror
+    close_port,
+    ...controller_options
   });
 }
 
@@ -101,18 +99,20 @@ export class MotorController {
   constructor({
     writable,
     readable,
-    forget_port,
+    close_port,
     onstatus = () => {},
     onmessage = () => {},
     onerror = () => {},
+    onready = () => {},
   }){
     this.writer = writable.getWriter();
     this.reader = readable.getReader();
-    this.forget_port = forget_port;
+    this.close_port = close_port;
 
     this.onmessage = onmessage;
     this.onerror = onerror;
     this.onstatus = onstatus;
+    this.onready = onready;
 
     // Time duration for averaging the `receive_rate`.
     this.receive_rate_timescale = 0.5; // seconds
@@ -139,12 +139,35 @@ export class MotorController {
         await this.writer.abort();
         this.writer = null;
       }
-      await this.forget_port();
+      await this.close_port();
     } catch (error) {
       // Ignore network errors when forgetting, likely due to previous disconnect.
       if (error.name != "NetworkError" && error.name != "InvalidStateError") throw error;
     }
   }
+
+  /* Start the reading loop after loading configuration parameters from the driver. */
+  async start_reading_loop(){
+    try {
+      // Start the reading loop and then the parameter requests in parallel.
+      return await Promise.all([
+        this.reading_loop(),
+        (async () => {
+          await this.load_current_calibration();
+          await this.load_position_calibration();
+          await this.load_control_parameters();
+          console.info("Motor controller is ready.");
+          this.onready(this);
+        })(),
+      ]);
+
+    } catch (error) {
+      // If we have an error, we need to forget the port and report the error.
+      await this.forget();
+      this.onerror(error);
+    }
+  }
+
 
   /* Start reading messages from the motor driver.
     * Only one reading loop should be active per controller instance.
@@ -449,5 +472,4 @@ export class MotorController {
       throw error;
     }
   }
-
 }
