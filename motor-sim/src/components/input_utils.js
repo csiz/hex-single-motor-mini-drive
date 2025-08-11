@@ -20,6 +20,12 @@ export function inputs_wide_range(...args) {
   return result;
 }
 
+export async function * transformed_input_value(input, transform) {
+  for await (const value of Generators.input(input)) {
+    yield transform(value);
+  }
+}
+
 export function enabled_checkbox(data, {...options}){
   return Inputs.checkbox(data, {value: data, ...options});
 }

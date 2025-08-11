@@ -312,9 +312,11 @@ d3.select(connect_buttons).selectAll("button").style("height", "3em");
 
 // Automatically connect the motor driver if we have permissions from previous session.
 connect_motor_controller();
-```
 
-```js
+
+// Setup input sliders
+// -------------------
+
 const command_options_input = Inputs.checkbox(
   ["Take snapshot after command"],
   {
@@ -322,38 +324,39 @@ const command_options_input = Inputs.checkbox(
     label: "Command options:",
   },
 );
+
 d3.select(command_options_input).select("div").style("width", "100%");
 d3.select(command_options_input).select("div label").style("width", "100em");
+
+const command_snapshot = transformed_input_value(command_options_input, (options) => options.includes("Take snapshot after command"));
 
 const command_snapshot_delay_slider = inputs_wide_range([0, 1000], {value: 500, step: 1, label: "Snapshot delay (ms):"});
 
 const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
 
-const command_options = Generators.input(command_options_input);
-
 const command_pwm_slider = inputs_wide_range([0, 1.0], {value: 0.05, step: 0.001, label: "Command value:"});
 
-const command_pwm_fraction = Generators.input(command_pwm_slider);
+const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.round(value * pwm_base));
 
 const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
 
-const command_timeout_millis = Generators.input(command_timeout_slider);
+const command_timeout = transformed_input_value(command_timeout_slider, (millis) => Math.floor(millis * cycles_per_millisecond));
 
 const command_angular_speed_slider = inputs_wide_range([0, max_angular_speed], {value: 1, step: 0.1, label: "Angular speed value (degrees/ms)"});
 
-const command_angular_speed_degrees_div_ms = Generators.input(command_angular_speed_slider);
+const command_angular_speed = transformed_input_value(command_angular_speed_slider, degrees_per_millisecond_to_speed_units);
 
 const command_angle_slider = inputs_wide_range([-180, 180], {value: 0, step: 1, label: "Command angle (degrees):"});
 
-const command_angle_degrees = Generators.input(command_angle_slider);
+const command_angle = transformed_input_value(command_angle_slider, degrees_to_angle_units);
 
 const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.200, step: 0.010, label: "Command torque (Amps):"});
 
-const command_torque_current_amps = Generators.input(command_torque_current_slider);
+const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => Math.floor(amps / current_conversion));
 
 const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 0.200, step: 0.010, label: "Command power (Watts):"});
 
-const command_power_watts = Generators.input(command_power_slider);
+const command_power = transformed_input_value(command_power_slider, convert_watts_to_power_units);
 
 const max_seek_rotation = (max_16bit + 1) / 32;
 
@@ -367,20 +370,6 @@ const command_seek_rotation = Generators.input(command_seek_rotation_slider);
 ```js
 // Control functions
 // -----------------
-
-const command_snapshot = command_options.includes("Take snapshot after command");
-
-const command_timeout = Math.floor(command_timeout_millis * cycles_per_millisecond);
-
-const command_pwm = Math.round(command_pwm_fraction * pwm_base);
-
-const command_angle = degrees_to_angle_units(command_angle_degrees);
-
-const command_angular_speed = degrees_per_millisecond_to_speed_units(command_angular_speed_degrees_div_ms);
-
-const command_torque_current = Math.floor(command_torque_current_amps / current_conversion);
-
-const command_power = convert_watts_to_power_units(command_power_watts);
 
 async function send_command({command, ...command_options}){
   if (!motor_controller) return;
@@ -687,8 +676,8 @@ d3.select(seek_drive_buttons).selectAll("button").style("height", "4em");
 
 ```js
 
-// Plotting
-// --------
+// Readout Plotting
+// ----------------
 
 const max_timeline_period = 2000; // ms
 
@@ -1920,7 +1909,7 @@ import {round, timeout_promise, wait}  from "./components/utils.js";
 import {
   enabled_checkbox, autosave_inputs, any_checked_input, 
   set_input_value, merge_input_value, wait_previous,
-  inputs_wide_range,  
+  inputs_wide_range, transformed_input_value,
 } from "./components/input_utils.js";
 
 import {interpolate_degrees, normalize_degrees} from "./components/motor_controller/angular_math.js";
