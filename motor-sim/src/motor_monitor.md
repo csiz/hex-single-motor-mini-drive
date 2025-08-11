@@ -396,6 +396,41 @@ async function take_readout_snapshot(command_options = {}){
   set_data(reply_data);
 }
 
+const test_command_options = {
+  command_value: command_pwm, 
+  command_timeout: command_snapshot, 
+  expected_messages: history_size,
+  expected_code: command_codes.READOUT,
+};
+
+async function test_command(command){
+  if (command_snapshot){
+    await take_readout_snapshot({command, ...test_command_options})
+  } else {
+    await send_command({command, ...test_command_options});
+  }
+}
+
+// Keep track of the timeout so we only take one snapshot. (Like lodash debounce.)
+let snapshot_delay_timeout = null;
+
+async function snapshot_if_checked({command, ...command_options}){
+  await send_command({command, ...command_options});
+
+  if (command_snapshot){
+    if (snapshot_delay_timeout) clearTimeout(snapshot_delay_timeout);
+
+    snapshot_delay_timeout = setTimeout(
+      async function(){ await take_readout_snapshot(); }, 
+      command_snapshot_delay
+    );
+  }
+}
+
+
+// All the buttons
+// ---------------
+
 const data_request_buttons = Inputs.button(
   [
     ["Uninterrupted snapshot", function(){ take_readout_snapshot(); }],
@@ -411,22 +446,6 @@ const data_request_buttons = Inputs.button(
 );
 
 d3.select(data_request_buttons).selectAll("button").style("height", "4em");
-
-
-const test_command_options = {
-  command_value: command_pwm, 
-  command_timeout: command_snapshot, 
-  expected_messages: history_size,
-  expected_code: command_codes.READOUT,
-};
-
-async function test_command(command){
-  if (command_snapshot){
-    await take_readout_snapshot({command, ...test_command_options})
-  } else {
-    await send_command({command, ...test_command_options});
-  }
-}
 
 const test_buttons = Inputs.button(
   [
@@ -466,21 +485,6 @@ const test_buttons = Inputs.button(
 
 d3.select(test_buttons).selectAll("button").style("height", "4em");
 
-
-let snapshot_delay_timeout = null;
-
-async function snapshot_if_checked({command, ...command_options}){
-  await send_command({command, ...command_options});
-
-  if (command_snapshot){
-    if (snapshot_delay_timeout) clearTimeout(snapshot_delay_timeout);
-
-    snapshot_delay_timeout = setTimeout(
-      async function(){ await take_readout_snapshot(); }, 
-      command_snapshot_delay
-    );
-  }
-}
 
 const stop_buttons = Inputs.button(
   [
