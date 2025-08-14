@@ -164,9 +164,9 @@ export class MotorController {
       ]);
 
     } catch (error) {
+      this.onerror(error);
       // If we have an error, we need to forget the port and report the error.
       await this.forget();
-      this.onerror(error);
     }
   }
 

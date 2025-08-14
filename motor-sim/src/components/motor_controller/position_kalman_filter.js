@@ -23,6 +23,8 @@ const minimum_acceleration = 0.1;
 
 
 export function accumulate_position_from_hall(readout, prev_readout, {position_calibration}){
+  if (!position_calibration) return {};
+
   const {
     sector_center_degrees, 
     sector_center_stdev, 

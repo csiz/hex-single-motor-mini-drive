@@ -230,9 +230,13 @@ function parse_readout_base(data_view, previous_readout, {current_calibration, p
   const drive_voltage_magnitude = Math.sqrt(drive_voltage_direct * drive_voltage_direct + drive_voltage_quadrature * drive_voltage_quadrature);
   const drive_voltage_angle_offset = normalize_degrees(drive_voltage_angle - predicted_angle);
 
-  const u_readout = u_current / current_calibration.u_factor;
-  const v_readout = v_current / current_calibration.v_factor;
-  const w_readout = w_current / current_calibration.w_factor;
+  const u_factor = (current_calibration?.u_factor ?? 1);
+  const v_factor = (current_calibration?.v_factor ?? 1);
+  const w_factor = (current_calibration?.w_factor ?? 1);
+
+  const u_readout = u_current / u_factor;
+  const v_readout = v_current / v_factor;
+  const w_readout = w_current / w_factor;
 
   const avg_current = (u_current + v_current + w_current) / 3.0;
 
@@ -241,16 +245,16 @@ function parse_readout_base(data_view, previous_readout, {current_calibration, p
   const web_inductor_angle = normalize_degrees(predicted_angle + radians_to_degrees(Math.atan2(web_quadrature_current, web_direct_current)));
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
 
+  const u_readout_diff = u_current_diff / u_factor;
+  const v_readout_diff = v_current_diff / v_factor;
+  const w_readout_diff = w_current_diff / w_factor;
 
-  const u_readout_diff = u_current_diff / current_calibration.u_factor;
-  const v_readout_diff = v_current_diff / current_calibration.v_factor;
-  const w_readout_diff = w_current_diff / current_calibration.w_factor;
-
+  const inductance_factor = (current_calibration?.inductance_factor ?? 1);
 
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_current_diff * 1000 * phase_inductance * current_calibration.inductance_factor;
-  const v_L_voltage = v_current_diff * 1000 * phase_inductance * current_calibration.inductance_factor;
-  const w_L_voltage = w_current_diff * 1000 * phase_inductance * current_calibration.inductance_factor;
+  const u_L_voltage = u_current_diff * 1000 * phase_inductance * inductance_factor;
+  const v_L_voltage = v_current_diff * 1000 * phase_inductance * inductance_factor;
+  const w_L_voltage = w_current_diff * 1000 * phase_inductance * inductance_factor;
 
   const u_R_voltage = phase_resistance * u_current;
   const v_R_voltage = phase_resistance * v_current;

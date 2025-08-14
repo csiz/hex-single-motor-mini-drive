@@ -37,6 +37,7 @@ Motor Commands
 
 <div>${connect_buttons}</div>
 <div>${connection_status}</div>
+<div>${opened_ports_radio}</div>
 <div>${data_request_buttons}</div>
 <div>
   <span>${command_options_input}</span>
@@ -206,7 +207,7 @@ let data = Mutable([]);
 let motor_controller = Mutable(null);
 
 // Opened USB ports, and respectively the motor controllers and data associated with each.
-let opened_ports = Mutable({});
+let opened_ports = Mutable(new Map());
 
 // Prominently displayed status for the motor monitor page.
 let connection_status = Mutable(html`<pre>Not connected.</pre>`);
@@ -215,54 +216,108 @@ let connection_status = Mutable(html`<pre>Not connected.</pre>`);
 // Data management
 // ---------------
 
-function set_data(new_data){
-  data.value = new_data;
+function set_readout_series(new_data, controller){
+  if (controller === motor_controller.value) data.value = new_data;
+
+  opened_ports.value.get(controller.port).data = new_data;
 }
 
-function reset_data(){
-  data.value = [];
-};
-
-
-function update_data(data, readout){
+function update_readout_series(readout, port){
   // Reset the data when the controller detects a new readout series and resets the index to 0.
-  if (readout.readout_index === 0) return [readout];
-  // Usually append the new readout to the data array whilst capping the maximum stored size.
-  else return capped_push(data, readout);
+  const first_readout = (readout.readout_index === 0);
+
+  const previous_data = opened_ports.value.get(port)?.data ?? [];
+
+  const new_data = first_readout ? [readout] : capped_push(previous_data, readout);
+
+  if (port === motor_controller.value.port) data.value = new_data;
+
+  opened_ports.value.get(port).data = new_data;
 };
 
+
+function set_status(status, port){
+  if (!motor_controller.value || port === motor_controller.value.port) connection_status.value = status;
+
+  opened_ports.value.get(port).status = status;
+}
+
+function set_error(error, port){
+  if (!motor_controller.value || port === motor_controller.value.port) {
+    connection_status.value = displayable_connection_error(error);
+  }
+
+  opened_ports.value.get(port).error = error;
+}
+
+function set_controller(controller, port){
+  opened_ports.value.get(port).motor_controller = controller;
+}
+
+function switch_to_port(port){
+  const port_state = opened_ports.value.get(port);
+
+  if (!port_state) return false;
+
+  motor_controller.value = port_state.motor_controller;
+  connection_status.value = port_state.error ? displayable_connection_error(port_state.error) : port_state.status;
+  data.value = port_state.data;
+
+  return true;
+}
 
 // Initialize Motor Driver via USB
 // -------------------------------
 
 
-// TODO: Need to switch the datastreams together with the active motor controller.
 async function connect_motor_controller(){
-  // TODO: probably need to store a mapping between ports and active connections so we don't reopen the same
-  // port twice. 
   try {
     const port = await maybe_prompt_port();
 
+    if (!port) return;
+
+    // Switch to the existing motor controller if this port is already opened and initialized.
+    if (switch_to_port(port)) return;
+
+    // Append this port to the opened ports list so we can capture it's errors too.
+    opened_ports.value = opened_ports.value.set(port, {
+      motor_controller: null,
+      data: [],
+      status: html`<pre>Opening USB com port.</pre>`,
+      error: undefined,
+    });
+
+    // Switch the display to the newly opening port.
+    switch_to_port(port);
+
     const opened_port = await open_usb_com_port(port);
-  
-    connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
+
+    set_status(html`<pre>Connected, waiting for configuration data.</pre>`, port);
 
     await start_motor_controller_loop({
       opened_port,
       onstatus: (status) => {
-        connection_status.value = html`<pre>Connected; ${format_data_rate(status)}.</pre>`;
+        set_status(html`<pre>Connected; ${format_data_rate(status)}.</pre>`, port);
       },
       onmessage: (readout) => {
-        set_data(update_data(data.value, readout));
+        update_readout_series(readout, port);
       },
-      onready: (new_controller) => {
-        connection_status.value = html`<pre>Connected, waiting for your commands.</pre>`;
-        motor_controller.value = new_controller;
+      onready: (controller) => {
+        set_controller(controller, port);
+
+        set_status(html`<pre>Connected, waiting for your commands.</pre>`, port);
+
+        // Set this controller as the active motor controller.
+        switch_to_port(port);
       },
       onerror: (error) => {
-        connection_status.value = displayable_connection_error(error);
+        set_error(error, port);
       },
-      onclose: () => {},
+      onclose: () => {
+        opened_ports.value.delete(port);
+        // Self assign to update the `Mutable`.
+        opened_ports.value = opened_ports.value;
+      },
     });
   } catch (error) {
     connection_status.value = displayable_connection_error(error);
@@ -351,6 +406,21 @@ const command_seek_rotation = Generators.input(command_seek_rotation_slider);
 ```
 ```js
 
+const opened_ports_radio = Inputs.radio(
+  opened_ports.keys(),
+  {
+    label: "Opened ports", 
+    value: motor_controller?.port,
+    format: (port, i) => {
+      return html`<pre>Motor ${i}</pre>`;
+    },
+  }
+);
+opened_ports_radio.addEventListener("input", function(){
+  const port = opened_ports_radio.value;
+  if (port) switch_to_port(port);
+});
+
 // Control functions
 // -----------------
 
@@ -371,14 +441,17 @@ async function take_readout_snapshot(command_options = {}){
     expected_messages = history_size,
   } = command_options;
 
-  const reply_data = await motor_controller.send_command_and_await_reply({
+  // Remember the current controller before we await.
+  const controller = motor_controller;
+
+  const reply_data = await controller.send_command_and_await_reply({
     command,
     expected_code,
     expected_messages,
     ...command_options,
   });
 
-  set_data(reply_data);
+  set_readout_series(reply_data, controller);
 }
 
 // Run the test driving commands. The test commands can send a snapshot taken
