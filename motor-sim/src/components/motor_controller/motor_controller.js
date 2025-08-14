@@ -28,7 +28,7 @@ async function grab_ports(){
 }
 
 /* Prompt for a motor driver port if we can't get it automatically. */
-async function maybe_prompt_port(){
+export async function maybe_prompt_port(){
   const ports = await grab_ports();
   if (ports.length == 1) return ports[0];
   return await serial.requestPort({filters: [{usbVendorId: USBD_VID, usbProductId: USBD_PID_FS}]});
@@ -36,9 +36,7 @@ async function maybe_prompt_port(){
 }
 
 /* Request a COM port and try to connect to the motor driver. */
-export async function connect_usb_motor_controller(controller_options){
-  const port = await maybe_prompt_port();
-
+export async function open_usb_com_port(port){
   if (!port) return;
 
   let tries = 10;
@@ -61,27 +59,17 @@ export async function connect_usb_motor_controller(controller_options){
 
   if (tries <= 0) throw new Error("Port open failed; InvalidStateError after all retries.");
 
-  if (!port.readable) throw new Error("Port unreadable");
-  if (!port.writable) throw new Error("Port unwritable");
-
-  async function close_port(){
-    await port.readable.cancel();
-
-    await port.close();
-  }
-
-  return new MotorController({
-    writable: port.writable,
-    readable: port.readable,
-    close_port,
-    ...controller_options
-  });
+  return port;
 }
 
 
 // Motor driver control
 // --------------------
 
+export async function start_motor_controller_loop(options){
+  const controller = new MotorController(options);
+  await controller.start_reading_loop();
+}
 
 /* Motor driver controller using a javascript webapp. 
 
@@ -97,22 +85,27 @@ Parameters:
 */
 export class MotorController {
   constructor({
-    writable,
-    readable,
-    close_port,
+    opened_port,
     onstatus = () => {},
     onmessage = () => {},
     onerror = () => {},
     onready = () => {},
+    onclose = () => {},
   }){
-    this.writer = writable.getWriter();
-    this.reader = readable.getReader();
-    this.close_port = close_port;
+    if (!opened_port) throw new Error("Invalid port provided");
+    if (!opened_port.readable) throw new Error("Port unreadable");
+    if (!opened_port.writable) throw new Error("Port unwritable");
+
+
+    this.port = opened_port;
+    this.writer = opened_port.writable.getWriter();
+    this.reader = opened_port.readable.getReader();
 
     this.onmessage = onmessage;
     this.onerror = onerror;
     this.onstatus = onstatus;
     this.onready = onready;
+    this.onclose = onclose;
 
     // Time duration for averaging the `receive_rate`.
     this.receive_rate_timescale = 0.5; // seconds
@@ -139,10 +132,19 @@ export class MotorController {
         await this.writer.abort();
         this.writer = null;
       }
-      await this.close_port();
+      
+      await this.port.readable.cancel();
+
+      await this.port.close();
+
+      await this.onclose();
+
     } catch (error) {
       // Ignore network errors when forgetting, likely due to previous disconnect.
-      if (error.name != "NetworkError" && error.name != "InvalidStateError") throw error;
+      if (error.name != "NetworkError" && error.name != "InvalidStateError") {
+        this.onerror(error);
+        throw error;
+      }
     }
   }
 
@@ -287,6 +289,10 @@ export class MotorController {
       // Slice our buffer once we have processed all the messages; we can have leftover data.
       if (offset) byte_array = byte_array.slice(offset);
     }
+  }
+
+  reset_history(){
+    this.last_message.clear();
   }
 
   /* Send a command to the motor driver. */

@@ -1,7 +1,36 @@
 ---
 title: Motor monitor
 ---
+
+<!-- This is the monitor page for the motor controller, the code here is used to showcase
+the typical usage of the javascript motor interface in order to control the motor.
+
+Note that we are using the Observable Framework (https://observablehq.com/framework/) for
+reactivity. The code blocks encoded by ```js ... ``` are reactive and will automatically
+update when the underlying data changes. Most top level variables are effectively async 
+iterators and the framework allows us to work with them as if they are simple variables,
+simplifying the code. It also allows for imports and misc functions to be written last.
+
+The code is organized as follow:
+
+1. The HTML layout is specified at the top.
+
+2. The first code block contains the connecting logic for the motor controller and handles
+the resulting data stream and status updates. We can connect to multiple motors at a time.
+
+3. The second block defines the interactive buttons and inputs for controlling the motor.
+
+4. The following blocks setup the plotting and motor feedback. The UI configuration is
+long and verbose, but intentionally kept on this page for completeness. You may use ctrl+F
+to search for any term visible on the application page. Every bit of text from the motor
+monitor page can be found written somewhere in this file.
+
+5. Finally we have on device unit tests, imports, and other utility code.
+
+-->
+
 <main class="hero">
+
 
 Motor Commands
 --------------
@@ -164,42 +193,27 @@ Unit Tests
 
 </main>
 
-```js
-
-const colors = {
-  u: "rgb(117, 112, 179)",
-  v: "rgb(217, 95, 2)",
-  w: "rgb(231, 41, 138)",
-  web_angle: "rgb(178, 228, 0)",
-  angle: "rgb(39, 163, 185)",
-  web_current_magnitude: "rgb(197, 152, 67)",
-  inductor_angle: "rgb(102, 166, 30)",
-  voltage_angle: "rgb(0, 185, 124)",
-  angle_driven: "rgb(166, 30, 132)",
-  angular_speed: "rgb(41, 194, 173)",
-  web_angular_speed: "rgb(156, 196, 47)",
-  direct_current: "rgb(199, 0, 57)",
-  quadrature_current: "rgb(26, 82, 118)",
-  other: "rgb(27, 158, 119)",
-  ref_readout: "rgb(102, 102, 102)",
-  sum: "rgb(0, 0, 0)",
-};
-
-const colors_categories = Object.values(colors);
-
-```
 
 
 ```js
-// Data stream output
-// ------------------
+// USB Connection and Data
+// -----------------------
 
-
-const target_data_size = 4000 / millis_per_cycle;
-const max_data_size = 2 * target_data_size;
-
-
+// Active data to be displayed on the main plots.
 let data = Mutable([]);
+
+// Active motor controller (can be null or selected from multiple motor connections).
+let motor_controller = Mutable(null);
+
+// Opened USB ports, and respectively the motor controllers and data associated with each.
+let opened_ports = Mutable({});
+
+// Prominently displayed status for the motor monitor page.
+let connection_status = Mutable(html`<pre>Not connected.</pre>`);
+
+
+// Data management
+// ---------------
 
 function set_data(new_data){
   data.value = new_data;
@@ -209,47 +223,50 @@ function reset_data(){
   data.value = [];
 };
 
-function push_data(readout){
-  if (readout.readout_index === 0) return (data.value = [readout]);
 
-  let new_data = (data.value.length > max_data_size) ? data.value.slice(-target_data_size) : data.value;
-
-  new_data.push(readout);
-
-  set_data(new_data);
+function update_data(data, readout){
+  // Reset the data when the controller detects a new readout series and resets the index to 0.
+  if (readout.readout_index === 0) return [readout];
+  // Usually append the new readout to the data array whilst capping the maximum stored size.
+  else return capped_push(data, readout);
 };
 
 
 // Initialize Motor Driver via USB
 // -------------------------------
 
-let motor_controller = Mutable(null);
 
-let connection_status = Mutable(html`<pre>Not connected.</pre>`);
+// TODO: Need to switch the datastreams together with the active motor controller.
+async function connect_motor_controller(){
+  // TODO: probably need to store a mapping between ports and active connections so we don't reopen the same
+  // port twice. 
+  try {
+    const port = await maybe_prompt_port();
 
+    const opened_port = await open_usb_com_port(port);
+  
+    connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
 
-function handle_connection_error(error){
-  motor_controller.value = null;
-
-  if (error.message === "EOF") {
-    connection_status.value = html`<pre>End of connection.</pre>`;
-  } else if (error.name === "NotFoundError") {
-    connection_status.value = html`<pre style="color: red">No device found or nothing selected.</pre>`;
-  } else if (error.name === "SecurityError") {
-    connection_status.value = html`<pre style="color: red">Permission for port dialog denied.</pre>`;
-  } else if (error.name === "NetworkError") {
-    connection_status.value = html`<pre style="color: red">Connection lost.</pre>`;
-  } else {
-    connection_status.value = html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`;
-    throw error;
+    await start_motor_controller_loop({
+      opened_port,
+      onstatus: (status) => {
+        connection_status.value = html`<pre>Connected; ${format_data_rate(status)}.</pre>`;
+      },
+      onmessage: (readout) => {
+        set_data(update_data(data.value, readout));
+      },
+      onready: (new_controller) => {
+        connection_status.value = html`<pre>Connected, waiting for your commands.</pre>`;
+        motor_controller.value = new_controller;
+      },
+      onerror: (error) => {
+        connection_status.value = displayable_connection_error(error);
+      },
+      onclose: () => {},
+    });
+  } catch (error) {
+    connection_status.value = displayable_connection_error(error);
   }
-}
-
-function format_bytes(bytes){
-  if (bytes < 1024) return `${bytes.toFixed(2)} bytes`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
 }
 
 async function disconnect_motor_controller(show_status = true){
@@ -263,41 +280,17 @@ async function disconnect_motor_controller(show_status = true){
   }
 }
 
-function display_connection_stats({bytes_received, bytes_discarded, receive_rate}){
-  bytes_received = `received: ${format_bytes(bytes_received).padStart(12)}`;
-  bytes_discarded = `discarded: ${format_bytes(bytes_discarded).padStart(12)}`;
-  receive_rate = `download rate: ${format_bytes(receive_rate).padStart(12)}/s`;
 
-  connection_status.value = html`<pre>Connected; ${bytes_received}; ${receive_rate}; ${bytes_discarded}.</pre>`;
-}
+// Setup Buttons and Inputs
+// ------------------------
 
-async function connect_motor_controller(){
-  try {
-    await disconnect_motor_controller(false);
-
-    const new_controller = await connect_usb_motor_controller({
-      onstatus: display_connection_stats,
-      onmessage: push_data,
-      onready: () => {
-        connection_status.value = html`<pre>Connected, waiting for your commands.</pre>`;
-        motor_controller.value = new_controller;
-      },
-      onerror: handle_connection_error,
-    });
-
-    connection_status.value = html`<pre>Connected, waiting for data.</pre>`;
-
-    await new_controller.start_reading_loop();
-
-  } catch (error) {
-    handle_connection_error(error);
-  }
-}
+// Automatically connect the motor driver if we have permissions from previous session.
+connect_motor_controller();
 
 // Disconnect when the notebook is reloaded.
 invalidation.then(disconnect_motor_controller);
 
-
+// Buttons to manually connect, disconnect and manage multiple motor connections.
 const connect_buttons = Inputs.button(
   [
     ["Connect", connect_motor_controller],
@@ -306,16 +299,9 @@ const connect_buttons = Inputs.button(
   ],
   {label: "Connect to COM"},
 );
-
 d3.select(connect_buttons).selectAll("button").style("height", "3em");
 
-
-// Automatically connect the motor driver if we have permissions from previous session.
-connect_motor_controller();
-
-
-// Setup input sliders
-// -------------------
+// The following variables are pairs of input html elements and their corresponding input value observers.
 
 const command_options_input = Inputs.checkbox(
   ["Take snapshot after command"],
@@ -324,59 +310,58 @@ const command_options_input = Inputs.checkbox(
     label: "Command options:",
   },
 );
-
 d3.select(command_options_input).select("div").style("width", "100%");
 d3.select(command_options_input).select("div label").style("width", "100em");
-
 const command_snapshot = transformed_input_value(command_options_input, (options) => options.includes("Take snapshot after command"));
 
+// Delay the command snapshot by a set millisecond duration from the start of the main command.
 const command_snapshot_delay_slider = inputs_wide_range([0, 1000], {value: 500, step: 1, label: "Snapshot delay (ms):"});
-
 const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
 
+// Slider to choose the command specific PWM setting.
 const command_pwm_slider = inputs_wide_range([0, 1.0], {value: 0.05, step: 0.001, label: "Command value:"});
-
 const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.round(value * pwm_base));
 
+// Timeout duration for each command. For safety, the motor runs each drive command for a short period until commanded again.
 const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
-
 const command_timeout = transformed_input_value(command_timeout_slider, (millis) => Math.floor(millis * cycles_per_millisecond));
 
+// Choose the angular speed target for certain commands.
 const command_angular_speed_slider = inputs_wide_range([0, max_angular_speed], {value: 1, step: 0.1, label: "Angular speed value (degrees/ms)"});
-
 const command_angular_speed = transformed_input_value(command_angular_speed_slider, degrees_per_millisecond_to_speed_units);
 
+// Choose the target angle for certain commands.
 const command_angle_slider = inputs_wide_range([-180, 180], {value: 0, step: 1, label: "Command angle (degrees):"});
-
 const command_angle = transformed_input_value(command_angle_slider, degrees_to_angle_units);
 
+// Choose the torque target for torque driving modes.
 const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.200, step: 0.010, label: "Command torque (Amps):"});
-
 const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => Math.floor(amps / current_conversion));
 
+// Choose the power target for power driving modes.
 const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 0.200, step: 0.010, label: "Command power (Watts):"});
-
 const command_power = transformed_input_value(command_power_slider, convert_watts_to_power_units);
 
-const max_seek_rotation = (max_16bit + 1) / 32;
-
-const command_seek_rotation_slider = inputs_wide_range([-max_seek_rotation, +max_seek_rotation], {value: 0, step: 1, label: "Seek angle (rotations):"});
-
+// Choose the position for target seeking.
+const command_seek_rotation_slider = inputs_wide_range([-1024, +1024], {value: 0, step: 1, label: "Seek angle (rotations):"});
 const command_seek_rotation = Generators.input(command_seek_rotation_slider);
+
+
+// We must start a new code cell for the variables above to become observables.
 ```
-
-
-
 ```js
+
 // Control functions
 // -----------------
 
+// Send a command, automatically adding the shared timeout parameter.
 async function send_command({command, ...command_options}){
   if (!motor_controller) return;
 
   await motor_controller.send_command({command, command_timeout, ...command_options});
 }
 
+// Take a snapshot of continuously recorded readouts from the motor controller.
 async function take_readout_snapshot(command_options = {}){
   if (!motor_controller) return;
 
@@ -396,35 +381,30 @@ async function take_readout_snapshot(command_options = {}){
   set_data(reply_data);
 }
 
-const test_command_options = {
-  command_value: command_pwm, 
-  command_timeout: command_snapshot, 
-  expected_messages: history_size,
-  expected_code: command_codes.READOUT,
-};
-
+// Run the test driving commands. The test commands can send a snapshot taken
+// during the test procedure if requested (using the timeout parameter as a flag.)
 async function test_command(command){
+  const test_command_options = {
+    command_value: command_pwm, 
+    expected_messages: history_size,
+    expected_code: command_codes.READOUT,
+  };
+
   if (command_snapshot){
-    await take_readout_snapshot({command, ...test_command_options})
+    await take_readout_snapshot({command, ...test_command_options, command_timeout: 1})
   } else {
-    await send_command({command, ...test_command_options});
+    await send_command({command, ...test_command_options, command_timeout: 0});
   }
 }
 
-// Keep track of the timeout so we only take one snapshot. (Like lodash debounce.)
-let snapshot_delay_timeout = null;
+// Take a snapshot after a user specified delay using a slider in the UI.
+const delayed_readout_snapshot = _.debounce(take_readout_snapshot, command_snapshot_delay);
 
+// Take a snapshot if the snapshot option is checked in the UI.
 async function snapshot_if_checked({command, ...command_options}){
   await send_command({command, ...command_options});
 
-  if (command_snapshot){
-    if (snapshot_delay_timeout) clearTimeout(snapshot_delay_timeout);
-
-    snapshot_delay_timeout = setTimeout(
-      async function(){ await take_readout_snapshot(); }, 
-      command_snapshot_delay
-    );
-  }
+  if (command_snapshot) delayed_readout_snapshot();
 }
 
 
@@ -433,10 +413,12 @@ async function snapshot_if_checked({command, ...command_options}){
 
 const data_request_buttons = Inputs.button(
   [
-    ["Uninterrupted snapshot", function(){ take_readout_snapshot(); }],
-    ["Stream 3 phase data", function(){
-      reset_data();
-      send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 1});
+    ["Uninterrupted snapshot", async function(){ 
+      await take_readout_snapshot(); 
+    }],
+    ["Stream 3 phase data", async function(){
+      motor_controller.reset_history();
+      await send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 1});
     }],
     ["STOP stream", async function(){
       await send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 0});
@@ -444,7 +426,6 @@ const data_request_buttons = Inputs.button(
   ],
   {label: "Read data"},
 );
-
 d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 
 const test_buttons = Inputs.button(
@@ -482,7 +463,6 @@ const test_buttons = Inputs.button(
   ],
   {label: "Test sequence"},
 );
-
 d3.select(test_buttons).selectAll("button").style("height", "4em");
 
 
@@ -535,7 +515,6 @@ const simple_drive_buttons = Inputs.button(
   ],
   {label: "Simple drive commands"},
 );
-
 d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
 
 
@@ -1901,8 +1880,8 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
 ```
 
 ```js
-// Imports
-// -------
+// Imports, Constants & Helpers
+// ----------------------------
 
 import {plot_lines, plot_line, setup_faint_area, horizontal_step, setup_stdev_95, draw_line} from "./components/plotting_utils.js";
 
@@ -1918,7 +1897,7 @@ import {
 
 import {interpolate_degrees, normalize_degrees} from "./components/motor_controller/angular_math.js";
 
-import {command_codes, connect_usb_motor_controller, MotorController} from "./components/motor_controller/motor_controller.js";
+import {command_codes, open_usb_com_port, maybe_prompt_port, start_motor_controller_loop} from "./components/motor_controller/motor_controller.js";
 
 import {run_current_calibration, compute_current_calibration} from "./components/motor_controller/current_calibration.js";
 
@@ -1935,5 +1914,85 @@ import {
 import {unit_test_expected} from "./components/motor_controller/driver_unit_tests.js";
 
 import _ from "lodash";
+
+
+
+const colors = {
+  u: "rgb(117, 112, 179)",
+  v: "rgb(217, 95, 2)",
+  w: "rgb(231, 41, 138)",
+  web_angle: "rgb(178, 228, 0)",
+  angle: "rgb(39, 163, 185)",
+  web_current_magnitude: "rgb(197, 152, 67)",
+  inductor_angle: "rgb(102, 166, 30)",
+  voltage_angle: "rgb(0, 185, 124)",
+  angle_driven: "rgb(166, 30, 132)",
+  angular_speed: "rgb(41, 194, 173)",
+  web_angular_speed: "rgb(156, 196, 47)",
+  direct_current: "rgb(199, 0, 57)",
+  quadrature_current: "rgb(26, 82, 118)",
+  other: "rgb(27, 158, 119)",
+  ref_readout: "rgb(102, 102, 102)",
+  sum: "rgb(0, 0, 0)",
+};
+
+const colors_categories = Object.values(colors);
+
+// Connection info formatting utils
+// --------------------------------
+
+// Format a floating number of bytes with the common endings KiB, MiB, GiB (products of 1024).
+function format_bytes(bytes){
+  if (bytes < 1024) return `${bytes.toFixed(2)} bytes`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+}
+
+// Format the receiving data rate from the connection status.
+function format_data_rate({bytes_received, bytes_discarded, receive_rate}){
+  bytes_received = `received: ${format_bytes(bytes_received).padStart(12)}`;
+  bytes_discarded = `discarded: ${format_bytes(bytes_discarded).padStart(12)}`;
+  receive_rate = `download rate: ${format_bytes(receive_rate).padStart(12)}/s`;
+
+  return `${bytes_received} | ${bytes_discarded} | ${receive_rate}`;
+}
+
+// Format the connection error message as an html element.
+function displayable_connection_error(error){
+  if (error.message === "EOF") {
+    return html`<pre>End of connection.</pre>`;
+  } else if (error.name === "NotFoundError") {
+    return html`<pre style="color: purple">No device found or nothing selected.</pre>`;
+  } else if (error.name === "SecurityError") {
+    return html`<pre style="color: purple">Permission for port dialog denied.</pre>`;
+  } else if (error.name === "NetworkError") {
+    return html`<pre style="color: red">Transmission error to usb device.</pre>`;
+  } else {
+    console.error("Motor connection error:", error);
+    return html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`;
+  }
+}
+
+
+// Memory consumption capping
+// --------------------------
+
+// Desired amount of data readouts per motor driver to keep in memory.
+const target_data_size = 64000 / millis_per_cycle;
+
+// Maximum amount of data readouts per motor driver to keep in memory, is
+// used so we don't resize the array with every new readout. When the max
+// cap is reached we resize to the target size, amortizing resize ops.
+const max_data_size = 2 * target_data_size;
+
+// Push to array, but keep array size capped to a limit.
+function capped_push(data, value){
+  let new_data = (data.length > max_data_size) ? data.slice(-target_data_size) : data;
+
+  new_data.push(value);
+
+  return new_data;
+}
 
 ```
