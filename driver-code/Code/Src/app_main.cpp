@@ -65,6 +65,10 @@ size_t usb_last_receive_index = 0;
 // Maximum time to wait for a USB packet to be sent.
 const uint32_t USB_TIMEOUT = 500;
 
+
+int32_t motor_constant_observer = 0;
+
+
 // Setup ADC for reading motor phase currents.
 void adc_init(){
 
@@ -309,7 +313,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{ 
                 .mode = DriverMode::DRIVE_6_SECTOR, 
                 .duration = command.timeout, 
-                .active_pwm = command.value, 
+                .active_pwm = clip_to_short(-pwm_max, +pwm_max, command.value * control_parameters.motor_direction),
             });
             return false;
         }
@@ -319,8 +323,8 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::DRIVE_PERIODIC, 
                 .duration = command.timeout,
                 .active_angle = command.third,
-                .active_pwm = command.value,
-                .angular_speed = command.second,
+                .active_pwm = clip_to_short(0, +pwm_max, command.value),
+                .angular_speed = clip_to_short(-max_angular_speed, +max_angular_speed, command.second * control_parameters.motor_direction),
             });
             return false;
         }
@@ -329,7 +333,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_SMOOTH, 
                 .duration = command.timeout, 
-                .target_pwm = command.value
+                .target_pwm = clip_to_short(-pwm_max, +pwm_max, command.value * control_parameters.motor_direction),
             });
             return false;
         }
@@ -338,7 +342,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_TORQUE, 
                 .duration = command.timeout,
-                .secondary_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, command.value)),
+                .secondary_target = clip_to_short(-max_drive_current, +max_drive_current, command.value * control_parameters.motor_direction),
             });
             return false;
         }
@@ -347,7 +351,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_BATTERY_POWER, 
                 .duration = command.timeout,
-                .secondary_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, command.value)),
+                .secondary_target = clip_to_short(-max_drive_power, +max_drive_power, command.value * control_parameters.motor_direction),
             });
             return false;
         }
@@ -356,7 +360,7 @@ bool handle_command(MessageBuffer const& buffer) {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_SPEED, 
                 .duration = command.timeout,
-                .secondary_target = static_cast<int16_t>(clip_to(-max_angular_speed, +max_angular_speed, command.value)),
+                .secondary_target = clip_to_short(-max_angular_speed, +max_angular_speed, command.value * control_parameters.motor_direction),
             });
             return false;
         }
@@ -366,9 +370,9 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::SEEK_ANGLE_POWER, 
                 .duration = command.timeout, 
                 .seek_angle = SeekAngle{
-                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
-                    .target_angle = static_cast<int16_t>(normalize_angle(command.second)),
-                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_power, +command.third)),
+                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, command.value * control_parameters.motor_direction),
+                    .target_angle = static_cast<int16_t>(normalize_angle(command.second * control_parameters.motor_direction)),
+                    .max_secondary_target = clip_to_short(0, max_drive_power, command.third),
                 }
             });
             return false;
@@ -379,9 +383,9 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::SEEK_ANGLE_TORQUE, 
                 .duration = command.timeout, 
                 .seek_angle = SeekAngle{
-                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
-                    .target_angle = static_cast<int16_t>(normalize_angle(command.second)),
-                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_current, +command.third)),
+                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, command.value * control_parameters.motor_direction),
+                    .target_angle = static_cast<int16_t>(normalize_angle(command.second * control_parameters.motor_direction)),
+                    .max_secondary_target = clip_to_short(0, max_drive_current, command.third),
                 }
             });
             return false;
@@ -392,9 +396,9 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::SEEK_ANGLE_SPEED, 
                 .duration = command.timeout, 
                 .seek_angle = SeekAngle{
-                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, command.value)),
-                    .target_angle = static_cast<int16_t>(normalize_angle(command.second)),
-                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_angular_speed, +command.third)),
+                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, command.value * control_parameters.motor_direction),
+                    .target_angle = static_cast<int16_t>(normalize_angle(command.second * control_parameters.motor_direction)),
+                    .max_secondary_target = clip_to_short(0, max_angular_speed, command.third),
                 }
             });
             return false;
@@ -585,6 +589,12 @@ inline void usb_queue_send(MessageBuffer & buffer) {
     usb_last_send = HAL_GetTick();
 }
 
+inline Readout adjust_direction(Readout && readout){
+    readout.angle = normalize_angle(control_parameters.motor_direction * readout.angle);
+    readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
+    readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
+    return readout;
+}
 
 void usb_queue_response(FullReadout const& readout) {
     if(usb_stream_state){
@@ -665,7 +675,7 @@ void usb_queue_response(FullReadout const& readout) {
         if (not readout_history_available()) return readout_history_reset();
         
         // Send the readout to the host.
-        usb_response_buffer.write_index = write_readout(usb_response_buffer.data, readout_history_pop());
+        usb_response_buffer.write_index = write_readout(usb_response_buffer.data, adjust_direction(readout_history_pop()));
         usb_queue_send(usb_response_buffer);
 
         // Readout added to the USB buffer.
@@ -735,8 +745,53 @@ void app_tick() {
         last_readout_number = readout.readout_number;
     }
 
+    
+    // Calculate the motor constant
+    // ----------------------------
+    // 
+    // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
+    // 
+    // It is also the ratio between the torque produced by the motor and the quadrature current. We 
+    // can compute the motor constant from the a spinning motor and use it to estimate our torque.
+    // 
+    // We calculate the motor constant by gradient descent using the configured integral gain.
+
+    // The voltage magnitude is always positive, also use the positive angular speed.
+    const int abs_angular_speed = faster_abs(readout.angular_speed);
+
+    const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
+
+    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
+
+    // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
+    const bool compute_motor_constant = angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
+
+    // Get the error (gradient) for the motor constant observer.
+    const int motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
+
+    // Adjust the high resolution observer for the motor constant.
+    motor_constant_observer += motor_constant_error * control_parameters.motor_constant_ki;
+
+    const int motor_constant = motor_constant_observer / hires_fixed_point;
+
+
+    // Write all values
+    // ----------------
+    
     readout.main_loop_rate = static_cast<int>(main_loop_rate);
     readout.adc_update_rate = static_cast<int>(adc_update_rate);
+    readout.motor_constant = motor_constant;
+
+    // Adjust direction
+    // ----------------
+
+    readout.angle = normalize_angle(control_parameters.motor_direction * readout.angle);
+    readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
+    readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
+
+    readout.rotations = control_parameters.motor_direction * readout.rotations;
+    readout.rotor_acceleration = control_parameters.motor_direction * readout.rotor_acceleration;
+
 
     // USB comms
     // ---------

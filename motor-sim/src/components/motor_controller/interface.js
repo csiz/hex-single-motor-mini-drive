@@ -468,7 +468,7 @@ function parse_full_readout(data_view, previous_readout, calibration_data){
   offset += 2;
   const secondary_target = data_view.getInt16(offset);
   offset += 2;
-  const debug_1 = data_view.getInt16(offset);
+  const seek_integral = data_view.getInt16(offset);
   offset += 2;
 
   const battery_current = total_power / readout.vcc_voltage;
@@ -532,7 +532,7 @@ function parse_full_readout(data_view, previous_readout, calibration_data){
     lead_angle,
     target_pwm,
     secondary_target,
-    debug_1,
+    seek_integral,
   };
 
 }
@@ -616,9 +616,9 @@ function parse_control_parameters(data_view) {
   const motor_constant_ki = data_view.getInt16(offset);
   offset += 2;
 
-  const resistance_ki = data_view.getInt16(offset);
+  const motor_direction = data_view.getInt16(offset);
   offset += 2;
-  const inductance_ki = data_view.getInt16(offset);
+  const incorrect_direction_threshold = data_view.getInt16(offset);
   offset += 2;
   const max_pwm_change = data_view.getInt16(offset);
   offset += 2;
@@ -693,8 +693,8 @@ function parse_control_parameters(data_view) {
     rotor_angular_speed_ki,
     rotor_acceleration_ki,
     motor_constant_ki,
-    resistance_ki,
-    inductance_ki,
+    motor_direction,
+    incorrect_direction_threshold,
     max_pwm_change,
     max_angle_change,
     min_emf_voltage,
@@ -859,9 +859,9 @@ function serialise_control_parameters(control_parameters) {
   view.setInt16(offset, control_parameters.motor_constant_ki);
   offset += 2;
 
-  view.setInt16(offset, control_parameters.resistance_ki);
+  view.setInt16(offset, control_parameters.motor_direction);
   offset += 2;
-  view.setInt16(offset, control_parameters.inductance_ki);
+  view.setInt16(offset, control_parameters.incorrect_direction_threshold);
   offset += 2;
   view.setInt16(offset, control_parameters.max_pwm_change);
   offset += 2;

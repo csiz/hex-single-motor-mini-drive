@@ -64,8 +64,7 @@ const int emf_fix_max = 64;
 // until we identify the rotation direction.
 int incorrect_direction_detections = 0;
 
-const int incorrect_direction_threshold = 128;
-const int incorrect_direction_warning = 96;
+const int incorrect_direction_warning = 64;
 
 // Track how many times we think our angle is correct.
 int correct_angle_counter = 0;
@@ -83,8 +82,6 @@ ThreePhase motor_outputs = {0, 0, 0};
 ThreePhase previous_motor_outputs = {0, 0, 0};
 
 int previous_emf_angle_error = 0;
-
-int32_t motor_constant_observer = 0;
 
 int32_t rotor_acceleration_observer = 0;
 
@@ -334,7 +331,7 @@ void adc_interrupt_handler(){
     // ---------------
 
     // Flip the rotor if we have reached the threshold number of incorrect detections.
-    const bool rotor_direction_flip = incorrect_direction_detections >= incorrect_direction_threshold;
+    const bool rotor_direction_flip = incorrect_direction_detections >= control_parameters.incorrect_direction_threshold;
 
     // Flip the rotor angle if we have reached the threshold number of incorrect detections.
     // 
@@ -470,9 +467,9 @@ void adc_interrupt_handler(){
     const bool emf_fix = number_of_emf_detections >= emf_fix_threshold;
 
     // Check if we have the incorrect rotor angle by checking if the quad EMF voltage has opposite sign to the angular speed.
-    const bool incorrect_rotor_angle_detected = emf_fix and (quadrature_emf_voltage * readout.angular_speed > 0);
+    const bool incorrect_rotor_angle_detected = emf_fix and (quadrature_emf_voltage * readout.angular_speed > 32);
 
-    // Keep of the number of times we detected an incorrect direction for the speed and EMF sign.
+    // Keep track of the number of times we detected an incorrect direction for the speed and EMF sign.
     incorrect_direction_detections = max(0, incorrect_direction_detections + (incorrect_rotor_angle_detected ? +1 : -1));
 
     // Set the flag for immininent rotor correction, we need to set it over multiple cycles otherwise it might be missed.
@@ -577,33 +574,6 @@ void adc_interrupt_handler(){
     const int rotor_acceleration = rotor_acceleration_observer / hires_fixed_point;
 
 
-    // Calculate the motor constant
-    // ----------------------------
-    // 
-    // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
-    // 
-    // It is also the ratio between the torque produced by the motor and the quadrature current. We 
-    // can compute the motor constant from the a spinning motor and use it to estimate our torque.
-    // 
-    // We calculate the motor constant by gradient descent using the configured integral gain.
-
-    // The voltage magnitude is always positive, also use the positive angular speed.
-    const int abs_angular_speed = faster_abs(angular_speed);
-
-    const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
-
-    // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
-    const bool compute_motor_constant = angle_fix and (emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
-
-    // Get the error (gradient) for the motor constant observer.
-    const int motor_constant_error = compute_motor_constant * (emf_voltage_magnitude - predicted_emf_voltage);
-
-    // Adjust the high resolution observer for the motor constant.
-    motor_constant_observer += motor_constant_error * control_parameters.motor_constant_ki;
-
-    const int motor_constant = motor_constant_observer / hires_fixed_point;
-
-
     // Calculate the power use
     // -----------------------
 
@@ -655,7 +625,6 @@ void adc_interrupt_handler(){
     // let the battery recharge our local capacitors.
     // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
     // 3. The total power is a good proxy for total current consumed from the battery.
-    // 4. We want to limit the maximum speed.
     // 
     // +limiting_divisor_m1 so we do ceiling of the division.
     // 
@@ -663,8 +632,7 @@ void adc_interrupt_handler(){
     const int pwm_penalty = (max(
         vcc_mosfet_driver_undervoltage - vcc_voltage,
         avg_resistive_power - control_parameters.max_resistive_power,
-        avg_total_power - control_parameters.max_power_draw,
-        abs_angular_speed - control_parameters.max_angular_speed
+        avg_total_power - control_parameters.max_power_draw
     ) + limiting_divisor_m1) / limiting_divisor;
 
     const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);
@@ -721,7 +689,6 @@ void adc_interrupt_handler(){
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
     
-    readout.motor_constant = motor_constant;
     readout.inductor_angle = inductor_angle;
 
     readout.rotor_acceleration = rotor_acceleration;
@@ -734,7 +701,7 @@ void adc_interrupt_handler(){
     readout.target_pwm = driver_state.target_pwm;
     
     readout.secondary_target = driver_state.secondary_target;
-    readout.debug_1 = driver_state.seek_angle.error_integral / seek_integral_divisor;
+    readout.seek_integral = driver_state.seek_angle.error_integral / seek_integral_divisor;
     
 
     // Calculate motor outputs

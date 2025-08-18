@@ -531,7 +531,7 @@ const data_request_buttons = Inputs.button(
 
       for (const {motor_controller} of opened_ports.values()) {
         if (!motor_controller) continue;
-        await motor_controller.send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 0});
+        motor_controller.send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 0});
       }
     }],
   ],
@@ -1310,7 +1310,7 @@ const plot_motor_values = plot_lines({
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
     {y: "secondary_target", label: "Secondary Target", color: colors_categories[2]},
-    {y: "debug_1", label: "Debug 1", color: colors_categories[3]},
+    {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
   ],
   curve,
 });
@@ -1633,13 +1633,13 @@ const control_parameters_input = Object.fromEntries(
       label: "Motor Constant KI", 
       description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
     }],
-    ["resistance_ki", {
-      label: "Resistance KI", 
-      description: "Integral gain for the resistance measurement of the motor coils."
+    ["motor_direction", {
+      label: "Motor direction", 
+      description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."
     }],
-    ["inductance_ki", {
-      label: "Inductance KI", 
-      description: "Integral gain for the inductance measurement of the motor coils."
+    ["incorrect_direction_threshold", {
+      label: "Incorrect Direction Threshold", 
+      description: "Number of incorrect direction detections before flipping the angle."
     }],
     ["max_pwm_change", {
       label: "Maximum PWM Change per cycle", 

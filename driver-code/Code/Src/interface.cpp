@@ -138,7 +138,7 @@ size_t write_full_readout(uint8_t * buffer, FullReadout const& readout) {
     offset += 2;
     write_int16(buffer + offset, readout.secondary_target);
     offset += 2;
-    write_int16(buffer + offset, readout.debug_1);
+    write_int16(buffer + offset, readout.seek_integral);
     offset += 2;
 
     write_message_tail(buffer, offset);
@@ -243,9 +243,9 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     write_int16(buffer + offset, control_parameters.motor_constant_ki);
     offset += 2;
 
-    write_int16(buffer + offset, control_parameters.resistance_ki);
+    write_int16(buffer + offset, control_parameters.motor_direction);
     offset += 2;
-    write_int16(buffer + offset, control_parameters.inductance_ki);
+    write_int16(buffer + offset, control_parameters.incorrect_direction_threshold);
     offset += 2;
     write_int16(buffer + offset, control_parameters.max_pwm_change);
     offset += 2;
@@ -546,9 +546,9 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     control_parameters.motor_constant_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
     offset += 2;
 
-    control_parameters.resistance_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
+    control_parameters.motor_direction = read_int16(data + offset) >= 0 ? +1 : -1;
     offset += 2;
-    control_parameters.inductance_ki = clip_to_short(0, max_16bit, read_int16(data + offset));
+    control_parameters.incorrect_direction_threshold = clip_to_short(1, max_16bit, read_int16(data + offset));
     offset += 2;
     control_parameters.max_pwm_change = clip_to_short(0, pwm_max, read_int16(data + offset));
     offset += 2;

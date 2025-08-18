@@ -419,8 +419,8 @@ const ControlParameters default_control_parameters = {
     .rotor_acceleration_ki = 32,
     .motor_constant_ki = 2,
     
-    .resistance_ki = 0,
-    .inductance_ki = 0,
+    .motor_direction = +1,
+    .incorrect_direction_threshold = 256,
     .max_pwm_change = 8,
     .max_angle_change = 8,
 
@@ -444,8 +444,8 @@ const ControlParameters default_control_parameters = {
     .power_draw_ki = 1,
     .max_pwm = pwm_max,
 
-    .seek_via_torque_k_prediction = 2048,
-    .seek_via_torque_ki = 256,
+    .seek_via_torque_k_prediction = 0,
+    .seek_via_torque_ki = 0,
     .seek_via_torque_kp = 1024,
     .seek_via_torque_kd = 256,
 

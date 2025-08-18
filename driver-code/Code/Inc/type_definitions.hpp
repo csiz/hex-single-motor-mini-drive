@@ -304,7 +304,7 @@ struct FullReadout : public Readout {
     int16_t secondary_target;
 
     // Spare debug output.
-    int16_t debug_1;
+    int16_t seek_integral;
 };
 
 // Parameters data structures
@@ -388,11 +388,11 @@ struct ControlParameters {
     int16_t motor_constant_ki;
     
 
-    // Phase resistance gain.
-    int16_t resistance_ki;
-    
-    // Inductance gain.
-    int16_t inductance_ki;
+    // Sign of the motor direction (positive by default, negative to reverse turning direction).
+    int16_t motor_direction;
+
+    // Number of incorrect direction detections before we flip our motor angle.
+    int16_t incorrect_direction_threshold;
     
     // Maximum PWM adjustment per cycle.
     int16_t max_pwm_change;
