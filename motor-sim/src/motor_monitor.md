@@ -60,6 +60,7 @@ Motor Commands
 <div>
   <span>${seek_drive_buttons}</span>
   <span>${command_seek_rotation_slider}</span>
+  <span>${shared_seek_buttons}</span>
 </div>
 
 
@@ -216,10 +217,10 @@ let connection_status = Mutable(html`<pre>Not connected.</pre>`);
 // Data management
 // ---------------
 
-function set_readout_series(new_data, controller){
-  if (controller === motor_controller.value) data.value = new_data;
+function set_readout_series(new_data, port){
+  if (port === motor_controller.value?.port) data.value = new_data;
 
-  opened_ports.value.get(controller.port).data = new_data;
+  opened_ports.value.get(port).data = new_data;
 }
 
 function update_readout_series(readout, port){
@@ -230,7 +231,7 @@ function update_readout_series(readout, port){
 
   const new_data = first_readout ? [readout] : capped_push(previous_data, readout);
 
-  if (port === motor_controller.value.port) data.value = new_data;
+  if (port === motor_controller.value?.port) data.value = new_data;
 
   opened_ports.value.get(port).data = new_data;
 };
@@ -451,7 +452,7 @@ async function take_readout_snapshot(command_options = {}){
     ...command_options,
   });
 
-  set_readout_series(reply_data, controller);
+  set_readout_series(reply_data, controller.port);
 }
 
 // Run the test driving commands. The test commands can send a snapshot taken
@@ -481,20 +482,57 @@ async function snapshot_if_checked({command, ...command_options}){
 }
 
 
+async function stream_all_motors(){
+  for (const {motor_controller} of opened_ports.values()) {
+    if (!motor_controller) continue;
+    motor_controller.reset_history();
+    await motor_controller.send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 1});
+  }
+}
+
+let command_interval = null;
+const command_loop_period = 1;
+
+function stop_command_loop(){
+  if(command_interval) {
+    clearInterval(command_interval);
+    command_interval = null;
+  }
+}
+
+function start_command_loop(loop_function){
+  stop_command_loop();
+  stream_all_motors();
+  command_interval = setInterval(loop_function, command_loop_period);
+}
+
 // All the buttons
 // ---------------
+
+
 
 const data_request_buttons = Inputs.button(
   [
     ["Uninterrupted snapshot", async function(){ 
       await take_readout_snapshot(); 
     }],
-    ["Stream 3 phase data", async function(){
+    ["Stream motor data", async function(){
       motor_controller.reset_history();
       await send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 1});
     }],
     ["STOP stream", async function(){
+      stop_command_loop();
+
       await send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 0});
+    }],
+    ["Stream all motors", stream_all_motors],
+    ["Stop all motors", async function(){
+      stop_command_loop();
+
+      for (const {motor_controller} of opened_ports.values()) {
+        if (!motor_controller) continue;
+        await motor_controller.send_command({command: command_codes.STREAM_FULL_READOUTS, command_timeout: 0});
+      }
     }],
   ],
   {label: "Read data"},
@@ -542,11 +580,23 @@ d3.select(test_buttons).selectAll("button").style("height", "4em");
 const stop_buttons = Inputs.button(
   [
     ["Stop / Brake", async function(){
+      stop_command_loop();
+
       await snapshot_if_checked(command_codes.SET_STATE_OFF);
     }],
     ["Freewheel", async function(){
+      stop_command_loop();
+
       await snapshot_if_checked(command_codes.SET_STATE_FREEWHEEL);
     }],
+    ["Stop all motors", async function(){
+      stop_command_loop();
+
+      for (const {motor_controller} of opened_ports.values()) {
+        if (!motor_controller) continue;
+        await motor_controller.send_command({command: command_codes.SET_STATE_OFF});
+      }
+    }]
   ],
   {label: "Stop Commands"},
 );
@@ -724,7 +774,105 @@ const seek_drive_buttons = Inputs.button(
 );
 d3.select(seek_drive_buttons).selectAll("button").style("height", "4em");
 
-  
+
+
+const shared_prediction_millis = 100;
+
+function get_average_position(){
+  const valid_ports = Array.from(opened_ports.values()).filter(({motor_controller, data}) => {
+    return motor_controller && data?.length >= 1;
+  });
+
+  if (valid_ports.length < 2) return;
+
+  return Math.round(d3.mean(valid_ports, ({data}) => {
+    const last_readout = _.last(data);
+    return last_readout.rotations + last_readout.angular_speed / 360 * shared_prediction_millis;
+  }));
+}
+
+
+const shared_seek_buttons = Inputs.button(
+  [
+    ["Virtual spring", function(){
+
+      start_command_loop(() => {
+        const target_position = get_average_position();
+        if (!_.isFinite(target_position)) return;
+
+        command_seek_rotation_slider.value = target_position;
+
+        for (const {motor_controller: controller} of opened_ports.values()) {
+          if (!controller) continue;
+
+          controller.send_command({
+            command: command_codes.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
+            command_timeout: command_timeout,
+            command_second: command_angle,
+            command_third: command_torque_current,
+            command_value: target_position,
+          });
+        }
+      });
+
+    }],
+
+    ["Follow selected motor", function(){
+
+      start_command_loop(() => {
+        // Can't use the `data` generator because it updates too fast and stops our buttons from working.
+        const target_position = _.last(Array.from(opened_ports.values()).filter(({motor_controller: controller}) => {
+          return motor_controller === controller;
+        })[0]?.data)?.rotations;
+
+        if (!_.isFinite(target_position)) return;
+
+        command_seek_rotation_slider.value = target_position;
+
+        for (const {motor_controller: controller} of opened_ports.values()) {
+          if (!controller) continue;
+
+          controller.send_command({
+            command: command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER,
+            command_timeout: command_timeout,
+            command_second: command_angle,
+            command_third: controller === motor_controller ? 0 : command_power,
+            command_value: target_position,
+          });
+        }
+      });
+
+    }],
+
+    ["Match all positions", function(){
+
+      start_command_loop(() => {
+        const target_position = get_average_position();
+        if (!_.isFinite(target_position)) return;
+
+        command_seek_rotation_slider.value = target_position;
+
+        for (const {motor_controller: controller} of opened_ports.values()) {
+          if (!controller) continue;
+
+          controller.send_command({
+            command: command_codes.SET_STATE_SEEK_ANGLE_WITH_POWER,
+            command_timeout: command_timeout,
+            command_second: command_angle,
+            command_third: command_power,
+            command_value: target_position,
+          });
+        }
+      });
+
+    }],
+  ],
+  {label: "Multi-motor control"},
+);
+d3.select(shared_seek_buttons).selectAll("button").style("height", "4em");
+
+
+invalidation.then(stop_command_loop);
 ```
 
 
@@ -2052,7 +2200,7 @@ function displayable_connection_error(error){
 // --------------------------
 
 // Desired amount of data readouts per motor driver to keep in memory.
-const target_data_size = 64000 / millis_per_cycle;
+const target_data_size = 64000 / (millis_per_cycle * 4);
 
 // Maximum amount of data readouts per motor driver to keep in memory, is
 // used so we don't resize the array with every new readout. When the max

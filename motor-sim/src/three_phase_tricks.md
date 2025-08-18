@@ -49,7 +49,7 @@ Trig and waveform lookup tables
 
 ```js
 
-import {angle_base, pwm_base} from "./components/motor_constants.js";
+import {angle_base, pwm_base} from "./components/motor_controller/constants.js";
 
 const phi = d3.range(angle_base).map(x => 2 * Math.PI * x / angle_base);
 function phase_func(t){

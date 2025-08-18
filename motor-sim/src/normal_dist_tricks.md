@@ -70,13 +70,15 @@ of the current hall sector when no hall transition is detected. What we'll do is
 it is that we should have detected a hall transition given our position statistics. If we should have
 detected a transition but didn't we will adjust the position estimate towards the center of the current 
 hall sector. This is an approximation to the actual posterior distribution of the position statistics.
-We can visualize the actual posterior distribution in the plot below because we have enough computing 
-power on any device that can run a browser.
+We can visualize the actual posterior distribution in the plot below even if we don't have enough compute
+to deduce it on device.
 
-We consider the probability of the motor position being greater than the hall sector crossover point, given the
-current position estimate and its variance. Google Gemini has blessed us with a clear and accurate description:
+<div class="card tight">
+    <div>${bounded_example_input}</div>
+    <div>${bounded_example_plot}</div>
+</div>
 
-It sounds like the project involves a **Bayesian inference problem where our data (or evidence) comes from a probabilistic comparison.**
+### The absence of evidence is evidence of the absence
 
 * We have a **parameter of interest**, let's call it ${tex`X_0`}. Your **prior belief** about ${tex`X_0`} is described by a Gaussian probability density function (PDF) with mean ${tex`\mu_0`} and standard deviation ${tex`\sigma_0`}, which we can denote as ${tex`p(x_0) = \mathcal{N}(x_0|\mu_0, \sigma_0^2)`}.
 
@@ -96,26 +98,8 @@ It sounds like the project involves a **Bayesian inference problem where our dat
     2.  If our measurement is "${tex`X_0 < X_1`}":
         ${tex`p(x_0 | X_0 < X_1) \propto p(x_0) \cdot (1 - \text{CDF}_{X_1}(x_0))`}
 
-The "problem" can be described using terms like:
-
-* **Bayesian inference with a probabilistic comparative likelihood:** The likelihood is not based on a direct measurement of ${tex`X_0`} with some noise, but on the probability of ${tex`X_0`} satisfying an inequality with respect to another random variable.
-* **Updating with binary outcome from stochastic comparison:** Our data is binary (greater than / less than), and this outcome depends on a comparison where one of the terms (${tex`X_1`}) is stochastic.
-* **A model with a Probit-type likelihood:** The use of a Gaussian CDF as the likelihood function is characteristic of Probit models, which are often used for binary outcomes that depend on an underlying latent variable exceeding a threshold. Here, ${tex`X_0`} is like the latent variable, and ${tex`X_1`} is a stochastic threshold.
-
 In essence, we're updating our beliefs about ${tex`X_0`} based on whether it "passed" or "failed" a test where the benchmark (${tex`X_1`}) was itself uncertain. The two posterior distributions represent our updated beliefs about ${tex`X_0`} in these two distinct scenarios.
 
-### The absence of evidence is evidence of the absence
-
-Enough with the maths, the plot below shows how we should update our belief about the motor position every motor cycle. First we predict the our prior for the motor position then we check if a hall transition was detected. 
-* If the detection matches our prediction, we gain little information, but confirm our prior is correct, thus the new estimate remains the same as the initial prediction.
-* When the prediction is wrong, we update the position for 2 cases:
-  1. If the hall transition was detected when we didn't predict it, the motor must have sped up towards the detected sector. The new position is close to the trigger point (the position between 2 sectors).
-  2. A transition was predicted but none was detected, then the motor must have slowed down. The updated position moves slightly towards the center of the current sector.
-
-<div class="card tight">
-    <div>${bounded_example_input}</div>
-    <div>${bounded_example_plot}</div>
-</div>
 
 
 Combining Normal Distributions
@@ -427,7 +411,7 @@ autosave_inputs({
 
 import {plot_lines, setup_faint_area, horizontal_step, setup_v_line} from "./components/plotting_utils.js";
 import {autosave_inputs, inputs_wide_range} from "./components/input_utils.js";
-import {cdf_normal, pdf_normal, quantile_normal, weighted_product_of_normals} from "./components/stats_utils.js";
+import {cdf_normal, pdf_normal, quantile_normal, weighted_product_of_normals} from "./components/motor_controller/stats_utils.js";
 
 function normalize_extent(data, ys) {
   const norms = ys.map(y => {
