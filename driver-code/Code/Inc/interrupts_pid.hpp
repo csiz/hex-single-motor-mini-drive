@@ -15,14 +15,13 @@ static inline int16_t compute_seek_pid_control(
     const int16_t kd
 ) {
     // The derivative of the error is negative the angular speed.
-    const int position_error_speed = -readout.angular_speed;
+    const int position_error_derivative = -readout.angular_speed;
     
     // Get the error between the target angle and the current angle; predicted to
-    // a future position determined by the kd term.
+    // a future position determined by prediction parameter.
     const int uncapped_position_error = (
         (seek_angle.target_rotation - readout.rotations) * seek_rotation_multiplier +
-        signed_angle(seek_angle.target_angle - readout.angle) / seek_angle_divisor +
-        k_prediction * position_error_speed / seek_pid_fixed_point
+        k_prediction * position_error_derivative / seek_pid_fixed_point
     );
 
     // Cap to the maximum seek error which is set to 2x the maximum control output so
@@ -38,7 +37,7 @@ static inline int16_t compute_seek_pid_control(
         
     // Derivative term with respect to the reference speed.
     const int derivative = clip_to(-seek_pid_fixed_point, +seek_pid_fixed_point,
-        kd * position_error_speed / seek_speed_error_reference
+        kd * position_error_derivative / seek_speed_error_reference
     );
 
     // Calculate the new integral term using the predicted position error (to minimize oscillations).

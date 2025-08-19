@@ -632,7 +632,8 @@ void adc_interrupt_handler(){
     const int pwm_penalty = (max(
         vcc_mosfet_driver_undervoltage - vcc_voltage,
         avg_resistive_power - control_parameters.max_resistive_power,
-        avg_total_power - control_parameters.max_power_draw
+        avg_total_power - control_parameters.max_power_draw,
+        faster_abs(angular_speed) - control_parameters.max_angular_speed
     ) + limiting_divisor_m1) / limiting_divisor;
 
     const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);

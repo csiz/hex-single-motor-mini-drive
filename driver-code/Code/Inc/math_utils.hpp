@@ -16,8 +16,8 @@ static inline constexpr int max(int a, int b){
     return a > b ? a : b;
 }
 
-static inline constexpr int max(int a, int b, int c){
-    return max(max(a, b), c);
+static inline constexpr int max(int a, int b, int c, int d){
+    return max(max(a, b), max(c, d));
 }
 
 // Clip a value between two limits; params are (low, high, value).
