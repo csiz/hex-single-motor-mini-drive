@@ -724,10 +724,16 @@ void adc_interrupt_handler(){
     // Set Motor Outputs!!
     // -------------------
 
+    // Disable the update for the control registers so we can write all 3.
+    LL_TIM_DisableUpdateEvent(TIM1);
+
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if
     // we set the output registers too late in the cycle.
     set_motor_outputs(driver_state.motor_outputs);
+
+    // Re-enable the update for the control registers now that we've written all 3.
+    LL_TIM_EnableUpdateEvent(TIM1);
 
     readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
 
