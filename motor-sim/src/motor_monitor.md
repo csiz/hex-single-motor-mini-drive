@@ -2200,7 +2200,7 @@ function displayable_connection_error(error){
 // --------------------------
 
 // Desired amount of data readouts per motor driver to keep in memory.
-const target_data_size = 64000 / (millis_per_cycle * 4);
+const target_data_size = 4000 / (millis_per_cycle * 4);
 
 // Maximum amount of data readouts per motor driver to keep in memory, is
 // used so we don't resize the array with every new readout. When the max
