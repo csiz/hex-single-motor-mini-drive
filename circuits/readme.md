@@ -1,12 +1,34 @@
+Need to implement in the new circuit
+------------------------------------
+
+[ ] Measure power line voltage.
+[ ] Re-pick voltage boost capacitor and resistor pair.
+[ ] Re-pick gate oscillation damping resistor for the inputs to the power MOSFET.
+[ ] Crystal oscilator and pick matching caps.
+[ ] Power regulator.
+[ ] USB-C connector maybe?
+[ ] Debugging connection with the trace line.
+[ ] 4 half bridge outputs
+[ ] 4 voltage inputs for the 4 outputs
+[ ] 1 voltage input for VCC
+[ ] 2 (preferably 4) current inputs from the 4 outputs
+[ ] maybe 1 current input for total current
+[ ] SPI connection to main board. Not ~I2C~, it's too slow and consumes too much current. SPI will need
+a chip select pin, but allows for parallel devices. SPI has hardware CRC calculation, seems useful.
+[ ] Spare I2C connection for the magnetic sensors.
+[ ] Status LED.
+
+
+
 TODO for next circuit
 ---------------------
 
 The AO4266E switching parameter uses Rgen = 3ohm, I think this is their recommended gate resistance.
 [ ] Measure gate turn on characteristics of existing circuit...
 [ ] Maybe switch to a oscillation damping gate resistor of 3ohm.
-[ ] Definitely need to think about daisy chaining these, maybe use a signal buffer/transciever with an enable pin,
-and/or mosfet switch for the chip power on.
-[ ] Oppsies I flipped the sign of the V phase current measurement lines.
+[x] Definitely need to think about daisy chaining these, maybe use a signal buffer/transciever with an enable pin,
+and/or mosfet switch for the chip power on. I2C to master board is probably the best and easiest way.
+[ ] Oopsies I flipped the sign of the V phase current measurement lines.
 [ ] The boost gate should maybe be connected to the driver side of the shunt resistor. At the moment we're measuring current used to charge the high gate.
 [ ] There's a summing option for the current measurments. Try outputing U, V, U+V, U+V+W using the 4th spare output.
 [ ] ! Think carefully about the shunt resistor placement, there's big interference going on if we measure during high side. Timing it around ground as
@@ -37,25 +59,7 @@ https://www.analog.com/media/en/analog-dialogue/volume-46/number-2/articles/opti
 output with the high mosfet. Any amount of mixed output seems to add an offset to our current measurement. Might be
 worth putting the current sense only on the low mosfet branch.
 [ ] Choose a different mosfet driver to lower the minimum voltage under 5V.
-
-
-Need to implement in the circuit
---------------------------------
-
-[v] Measure power line voltage.
-[v] Pick voltage boost capacitor and resistor pair.
-[v] Pick gate oscillation damping resistor for the inputs to the power MOSFET.
-[v] Crystal oscilator. Need to improve motor control timing and UART, USB. Also, we need it to get to 72MHz!
-	[v] Pick matching caps.
-	[v] Connect and verify!
-[v] Get micro USB for the convenience. Will also need to add 3V3 power regulator and ferrite bead for input filtering.
-	[v] Special note for STM32F103 line to add pull up resistor for D+ line.
-	[v] Connect and verify!
-[v] Debugging connection with the trace line.
-[v] UART connection to main board.
-[v] I2C header? And some power line holes as alternative connector to be friendly to hobbyist use. Also for the magnetic encoder.
-[v] Add a status LED.
-[v] How to connect leftover pins?
+[ ] Make it work with steppers...
 
 
 
