@@ -452,7 +452,6 @@ struct ControlParameters {
     // Maximum PWM value for the motor outputs.
     int16_t max_pwm;
     
-
     // Seek via torque, prediction duration factor for integral error.
     int16_t seek_via_torque_k_prediction;
     // Seek via torque, integral gain for the PID control.
@@ -480,6 +479,12 @@ struct ControlParameters {
     int16_t seek_via_speed_kp;
     // Seek via speed, derivative gain for the PID control.
     int16_t seek_via_speed_kd;
+
+    // Resistance of motor coils per phase (star configuration).
+    int16_t phase_resistance;
+
+    // Inductance of motor coils per phase (star configuration).
+    int16_t phase_inductance;
 };
 
 

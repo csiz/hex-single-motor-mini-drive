@@ -315,6 +315,11 @@ size_t write_control_parameters(uint8_t * buffer, ControlParameters const& contr
     write_int16(buffer + offset, control_parameters.seek_via_speed_kd);
     offset += 2;
     
+    write_int16(buffer + offset, control_parameters.phase_resistance);
+    offset += 2;
+    write_int16(buffer + offset, control_parameters.phase_inductance);
+    offset += 2;
+
     write_message_tail(buffer, offset);
 
     // Check if we wrote the correct number of bytes.
@@ -618,6 +623,10 @@ ControlParameters parse_control_parameters(uint8_t const * data, size_t size) {
     control_parameters.seek_via_speed_kd = clip_to_short(-max_16bit, +max_16bit, read_int16(data + offset));
     offset += 2;
 
+    control_parameters.phase_resistance = clip_to_short(1, max_16bit, read_int16(data + offset));
+    offset += 2;
+    control_parameters.phase_inductance = clip_to_short(1, max_16bit, read_int16(data + offset));
+    offset += 2;
 
     if (offset + tail_size != control_parameters_size) error();
 

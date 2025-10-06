@@ -1766,6 +1766,14 @@ const control_parameters_input = Object.fromEntries(
       label: "Seek via Speed KD",
       description: "Seek via speed derivative gain. Dampening factor to lower speed when the error is decreasing quickly."
     }],
+    ["phase_resistance", {
+      label: "Phase Resistance",
+      description: "Resistance of each motor phase in star configuration. Used to compute the resistive voltage drop and power loss."
+    }],
+    ["phase_inductance", {
+      label: "Phase Inductance",
+      description: "Inductance of each motor phase in star configuration. Used to compute the inductive voltage drop."
+    }],
   ].map(([key, {label, description}]) => {
 
     let parameter_input = Inputs.number([], {

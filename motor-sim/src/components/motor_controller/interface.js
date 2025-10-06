@@ -102,7 +102,7 @@ const readout_size = 40;
 const full_readout_size = 88;
 const current_calibration_size = 16;
 const position_calibration_size = 80;
-const control_parameters_size = 80;
+const control_parameters_size = 84;
 const unit_test_size = max_message_size;
 
 
@@ -688,6 +688,11 @@ function parse_control_parameters(data_view) {
   const seek_via_speed_kd = data_view.getInt16(offset);
   offset += 2;
 
+  const phase_resistance = data_view.getInt16(offset);
+  offset += 2;
+  const phase_inductance = data_view.getInt16(offset);
+  offset += 2;
+
   return {
     rotor_angle_ki,
     rotor_angular_speed_ki,
@@ -725,6 +730,8 @@ function parse_control_parameters(data_view) {
     seek_via_speed_ki,
     seek_via_speed_kp,
     seek_via_speed_kd,
+    phase_resistance,
+    phase_inductance,
   };
 }
 
@@ -929,6 +936,11 @@ function serialise_control_parameters(control_parameters) {
   view.setInt16(offset, control_parameters.seek_via_speed_kp);
   offset += 2;
   view.setInt16(offset, control_parameters.seek_via_speed_kd);
+  offset += 2;
+
+  view.setInt16(offset, control_parameters.phase_resistance);
+  offset += 2;
+  view.setInt16(offset, control_parameters.phase_inductance);
   offset += 2;
 
   serialise_message_tail(buffer, offset);
