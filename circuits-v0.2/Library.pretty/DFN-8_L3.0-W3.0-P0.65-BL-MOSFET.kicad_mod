@@ -1,4 +1,4 @@
-(footprint "DFN-8_L3.0-W3.0-P0.65-BL"
+(footprint "DFN-8_L3.0-W3.0-P0.65-BL-MOSFET"
 	(version 20241229)
 	(generator "pcbnew")
 	(generator_version "9.0")
@@ -14,7 +14,7 @@
 			)
 		)
 	)
-	(property "Value" "DFN-8_L3.0-W3.0-P0.65-BL"
+	(property "Value" "DFN-8_L3.0-W3.0-P0.65-BL-MOSFET"
 		(at -0.0525 3.005 0)
 		(layer "F.Fab")
 		(hide yes)
@@ -321,53 +321,53 @@
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(uuid "7d160756-e502-4d3c-92d2-5799d93d83b3")
 	)
-	(pad "2" smd rect
+	(pad "1" smd rect
 		(at -0.325 1.5 180)
 		(size 0.4 0.8)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(uuid "56b3a85b-7e1b-4e1c-be13-c3b9b4e72d49")
 	)
-	(pad "3" smd rect
+	(pad "1" smd rect
 		(at 0.325 1.5 180)
 		(size 0.4 0.8)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(uuid "c8b27e9a-a2d4-40c3-8909-66842b861841")
 	)
-	(pad "4" smd rect
+	(pad "2" smd rect
 		(at 0.975 1.5 180)
 		(size 0.4 0.8)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(uuid "5e8126bd-dcda-41fb-859e-3d5512fe56e6")
 	)
-	(pad "5" smd rect
-		(at 0.975 -1.5 180)
-		(size 0.4 0.8)
-		(layers "F.Cu" "F.Mask" "F.Paste")
-		(uuid "aac1432c-fb7a-4127-b2af-7020b085c717")
-	)
-	(pad "6" smd rect
-		(at 0.325 -1.5 180)
-		(size 0.4 0.8)
-		(layers "F.Cu" "F.Mask" "F.Paste")
-		(uuid "30377e58-75ad-494b-8803-5602aad70317")
-	)
-	(pad "7" smd rect
-		(at -0.325 -1.5 180)
-		(size 0.4 0.8)
-		(layers "F.Cu" "F.Mask" "F.Paste")
-		(uuid "471e98e8-8332-4520-8467-d0f720fb6b13")
-	)
-	(pad "8" smd rect
+	(pad "3" smd rect
 		(at -0.975 -1.5 180)
 		(size 0.4 0.8)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(uuid "80d335bd-b83a-4c75-8108-c00d9cf721f6")
 	)
-	(pad "9" smd rect
+	(pad "3" smd rect
+		(at -0.325 -1.5 180)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "471e98e8-8332-4520-8467-d0f720fb6b13")
+	)
+	(pad "3" smd rect
 		(at 0 -0.35)
 		(size 2.4 2.1)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(uuid "e13cf593-e444-4d40-b51f-5049c1ca8391")
+	)
+	(pad "3" smd rect
+		(at 0.325 -1.5 180)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "30377e58-75ad-494b-8803-5602aad70317")
+	)
+	(pad "3" smd rect
+		(at 0.975 -1.5 180)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "aac1432c-fb7a-4127-b2af-7020b085c717")
 	)
 	(embedded_fonts no)
 )
