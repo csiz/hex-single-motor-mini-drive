@@ -7,7 +7,12 @@
     "hidden_nets": [
       "VCC",
       "GND",
-      "3V3"
+      "5V",
+      "3V3",
+      "M1",
+      "M2",
+      "M3",
+      "M4"
     ],
     "high_contrast_mode": 0,
     "net_color_mode": 1,

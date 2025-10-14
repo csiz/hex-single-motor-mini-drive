@@ -12704,6 +12704,16 @@
 	)
 	(wire
 		(pts
+			(xy 52.07 299.72) (xy 54.61 299.72)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4dc07ea7-31c4-4b76-8edb-1a1013b35f36")
+	)
+	(wire
+		(pts
 			(xy 115.57 313.69) (xy 121.92 313.69)
 		)
 		(stroke
@@ -15124,7 +15134,7 @@
 	)
 	(wire
 		(pts
-			(xy 345.44 139.7) (xy 342.9 139.7)
+			(xy 342.9 139.7) (xy 345.44 139.7)
 		)
 		(stroke
 			(width 0)
@@ -16302,6 +16312,46 @@
 		)
 		(uuid "ffbc7e87-f273-4113-9fe2-44d0769bb170")
 	)
+	(label "Gate-2-Negative"
+		(at 267.97 201.93 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "006c7836-d2e0-4047-a223-3df47efe501f")
+	)
+	(label "Gate-4-Negative"
+		(at 411.48 201.93 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "0be666a8-c915-4e93-a0d1-752f11d3c9cf")
+	)
+	(label "Red-LED"
+		(at 317.5 139.7 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "1f246aa7-d1d1-41f6-81be-99d39c108ff8")
+	)
+	(label "Shunt-3"
+		(at 354.33 212.09 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "2a31f6d3-4c3a-49ab-aab2-37b80fb9198a")
+	)
 	(label "USB:5V"
 		(at 55.88 193.04 0)
 		(effects
@@ -16311,6 +16361,156 @@
 			(justify left bottom)
 		)
 		(uuid "2dea69ce-1ebe-4608-8991-ba8a9be3200e")
+	)
+	(label "Shunt-2"
+		(at 278.13 212.09 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "2e3964e1-25d7-4497-b087-0e3905683632")
+	)
+	(label "Buck-Bootstrap-Capacitor"
+		(at 57.15 317.5 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "38793706-a67f-45d2-97c3-1091a010404f")
+	)
+	(label "Gate-4-Positive"
+		(at 430.53 184.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "3ea87bea-5284-44c5-8f04-75615e18f5d4")
+	)
+	(label "Gate-3-Negative"
+		(at 345.44 201.93 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "57eb6187-736a-43e4-9d60-6d45f68f3ca5")
+	)
+	(label "Blue-LED"
+		(at 344.17 147.32 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "5a698b89-34fa-43a1-8900-c52d67408ce1")
+	)
+	(label "Shunt-1"
+		(at 212.09 212.09 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "830bdd24-70df-4381-82b0-31f37fe58777")
+	)
+	(label "Gate-3-Positive"
+		(at 364.49 184.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "96bec442-4760-4b7b-acac-9a8aa9e91143")
+	)
+	(label "Gate-2-Positive"
+		(at 288.29 184.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "bf012c55-0b5f-48bb-87ab-8aa0410d26a5")
+	)
+	(label "Gate-1-Positive"
+		(at 222.25 184.15 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "c61ee6cb-ed06-49a8-80dd-27fc20f86f16")
+	)
+	(label "LDO-Bypass-Capacitor"
+		(at 71.12 252.73 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "d4f792d6-9332-4971-a3c8-12f78577d414")
+	)
+	(label "Gate-1-Negative"
+		(at 201.93 201.93 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e3f8985d-a6fc-4d59-9512-17020d0e5d7b")
+	)
+	(label "Buck-Probe-Point"
+		(at 124.46 317.5 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e84db6ea-1d90-4d5b-a50e-0dead71525a6")
+	)
+	(label "Buck-Output-SW"
+		(at 81.28 302.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e9a18114-90f9-47b2-9ba3-f08f4e87faba")
+	)
+	(label "Green-LED"
+		(at 344.17 139.7 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "f4327eb9-fd76-4d74-81e2-6797c7550f12")
+	)
+	(label "Shunt-4"
+		(at 420.37 212.09 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "f5b51eaf-9619-4356-9d4d-91c8c13a01e4")
 	)
 	(global_label "N-Gate-1"
 		(shape input)
@@ -19108,7 +19308,7 @@
 	)
 	(global_label "Buck-FB"
 		(shape input)
-		(at 54.61 299.72 180)
+		(at 52.07 299.72 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -19118,7 +19318,7 @@
 		)
 		(uuid "b0543f8b-5809-4aaa-8013-e2c58bd8f261")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 43.1581 299.72 0)
+			(at 40.6181 299.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
