@@ -1,19 +1,10 @@
 {
   "board": {
-    "active_layer": 0,
+    "active_layer": 7,
     "active_layer_preset": "",
     "auto_track_width": true,
     "hidden_netclasses": [],
-    "hidden_nets": [
-      "VCC",
-      "GND",
-      "5V",
-      "3V3",
-      "M1",
-      "M2",
-      "M3",
-      "M4"
-    ],
+    "hidden_nets": [],
     "high_contrast_mode": 0,
     "net_color_mode": 1,
     "opacity": {
@@ -82,6 +73,8 @@
       false,
       false,
       false,
+      false,
+      false,
       false
     ],
     "col_order": [
@@ -94,7 +87,9 @@
       6,
       7,
       8,
-      9
+      9,
+      10,
+      11
     ],
     "col_widths": [
       162,
@@ -106,7 +101,9 @@
       91,
       71,
       91,
-      91
+      91,
+      91,
+      461
     ],
     "custom_group_rules": [],
     "expanded_rows": [],
