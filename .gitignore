@@ -9,6 +9,9 @@
 /circuits-v0.2/production/backups
 /circuits-v0.2/hex-minidrive-backups
 
+/circuits-v0.3/fp-info-cache
+/circuits-v0.3/production/backups
+/circuits-v0.3/hex-minidrive-backups
 
 /driver-code/Debug/*
 /driver-code/hex-mini-drive Debug.launch
