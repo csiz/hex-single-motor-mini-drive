@@ -1,10 +1,15 @@
 .vscode/*
 
-/circuits/hex-mini-drive-backups/*
+/circuits/hex-mini-drive-backups
 /circuits/fp-info-cache
-/circuits/production/backups/*
-/circuits/fp-info-cache
-/circuits/~hex-mini-drive.kicad_sch.lck
+/circuits/production/backups
+
+
+/circuits-v0.2/fp-info-cache
+/circuits-v0.2/production/backups
+/circuits-v0.2/hex-minidrive-backups
+
+
 /driver-code/Debug/*
 /driver-code/hex-mini-drive Debug.launch
 /driver-code/Release/*
@@ -22,9 +27,4 @@
 /driver-code/cmake/stm32cubemx/*
 /motor-sim/src/.observablehq/*
 /motor-sim/.vscode
-circuits/~hex-mini-drive.kicad_pcb.lck
-circuits-v0.2/Library.bak
-/circuits-v0.2/hex-minidrive-backups
-circuits-v0.2/fp-info-cache
-circuits-v0.2/\#auto_saved_files\#
-/circuits-v0.2/production/backups
+/circuits/~hex-mini-drive.kicad_pcb.lck
