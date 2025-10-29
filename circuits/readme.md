@@ -4,7 +4,14 @@ TODO for next circuit
 [ ] Think about connectors better. We should either drop or double down on USB-C. It would be very user friendly and the power delivery 
 allows us to pick the 9-24V we need, but might be cumbersombe to control 24 devices. The SPI bus with slim connectors let's us keep it 
 tight and in-house. Would we want a cheap single-sided board with USB-C and also a compact double sided assembly without USB at all.
+... Let's go for double sided compact without USB, with the better stm32g4 with 5 opamps (so we can also ditch the opamp).
+[ ] Maybe switch to a oscillation damping gate resistor of 3ohm. The AO4266E switching parameter uses 
+Rgen = 3ohm, I think this is their recommended gate resistance.
+[ ] USB-C footprint was correct with the cutouts. What we have now is incorrect!
 
+[ ] Need master circuit.
+[ ] Need flexi rotation I2C sensors.
+[ ] Via diameter was too small, should be at least 0.2/0.45
 
 
 Need to implement in the new circuit
