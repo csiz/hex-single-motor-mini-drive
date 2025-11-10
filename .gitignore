@@ -36,3 +36,4 @@ symbols-and-footprints/Library.bak
 /master-circuit/master-circuit-backups
 /sensor-circuit/production/backups
 sensor-circuit/fp-info-cache
+master-circuit/fp-info-cache
