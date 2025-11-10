@@ -31,3 +31,4 @@
 /motor-sim/src/.observablehq/*
 /motor-sim/.vscode
 /circuits/~hex-mini-drive.kicad_pcb.lck
+symbols-and-footprints/Library.bak
