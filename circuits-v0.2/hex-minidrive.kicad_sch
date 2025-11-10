@@ -4,6 +4,12 @@
 	(generator_version "9.0")
 	(uuid "6bf5b9e4-6327-427a-bca2-98205d99bd27")
 	(paper "A2")
+	(title_block
+		(title "Hex mini servo driver")
+		(rev "version 0.2")
+		(company "Hex Robotics Limited")
+		(comment 1 "Author: Calin Mocanu")
+	)
 	(lib_symbols
 		(symbol "Library:0603B103K500NT Capacitor 10nF"
 			(exclude_from_sim no)
