@@ -18,6 +18,7 @@
 	(property "Value" "DHVQFN-16_L3.5-W2.5-P0.50-BL-EP"
 		(at -0.0855 2.465 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "1d53033f-d024-4ef9-b081-c0657ebf72a2")
 		(effects
 			(font

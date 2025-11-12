@@ -18,6 +18,7 @@
 	(property "Value" "LED0603-RD"
 		(at -0.045 1.521 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "a9c277e8-a8e2-4d3f-9b71-86d74a63f510")
 		(effects
 			(font

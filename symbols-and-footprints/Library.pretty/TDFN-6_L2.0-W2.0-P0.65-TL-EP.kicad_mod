@@ -18,6 +18,7 @@
 	(property "Value" "TDFN-6_L2.0-W2.0-P0.65-TL-EP"
 		(at -0.1255 2.0005 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "910244f2-b9bc-4395-bd9b-cc899e548a41")
 		(effects
 			(font

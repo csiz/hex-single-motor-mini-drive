@@ -4,7 +4,7 @@
 	(generator_version "9.0")
 	(layer "F.Cu")
 	(property "Reference" "U?"
-		(at 0 -2.8875 0)
+		(at 0 1.7 0)
 		(layer "F.SilkS")
 		(uuid "14992bd8-e82e-4c54-bef0-57aca0f0ec95")
 		(effects
@@ -17,6 +17,7 @@
 	(property "Value" "FPC-SMD_18P-P0.50_FPC-05F-18PH20"
 		(at 0 6.1 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "d8a50cfc-df5d-435c-a9ac-aa534207aa20")
 		(effects
 			(font

@@ -51,7 +51,13 @@
           "min_clearance": 0.5
         }
       },
-      "diff_pair_dimensions": [],
+      "diff_pair_dimensions": [
+        {
+          "gap": 0.0,
+          "via_gap": 0.0,
+          "width": 0.0
+        }
+      ],
       "drc_exclusions": [],
       "meta": {
         "version": 2
@@ -117,12 +123,12 @@
       },
       "rules": {
         "max_error": 0.005,
-        "min_clearance": 0.0,
-        "min_connection": 0.0,
-        "min_copper_edge_clearance": 0.5,
+        "min_clearance": 0.2,
+        "min_connection": 0.2,
+        "min_copper_edge_clearance": 0.2,
         "min_groove_width": 0.0,
-        "min_hole_clearance": 0.25,
-        "min_hole_to_hole": 0.25,
+        "min_hole_clearance": 0.2,
+        "min_hole_to_hole": 0.3,
         "min_microvia_diameter": 0.2,
         "min_microvia_drill": 0.1,
         "min_resolved_spokes": 2,
@@ -130,8 +136,8 @@
         "min_text_height": 0.8,
         "min_text_thickness": 0.08,
         "min_through_hole_diameter": 0.3,
-        "min_track_width": 0.0,
-        "min_via_annular_width": 0.1,
+        "min_track_width": 0.2,
+        "min_via_annular_width": 0.2,
         "min_via_diameter": 0.5,
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": true
@@ -180,7 +186,12 @@
           "td_width_to_size_filter_ratio": 0.9
         }
       ],
-      "track_widths": [],
+      "track_widths": [
+        0.0,
+        0.3,
+        0.6,
+        3.0
+      ],
       "tuning_pattern_settings": {
         "diff_pair_defaults": {
           "corner_radius_percentage": 80,
@@ -207,7 +218,20 @@
           "spacing": 0.6
         }
       },
-      "via_dimensions": [],
+      "via_dimensions": [
+        {
+          "diameter": 0.0,
+          "drill": 0.0
+        },
+        {
+          "diameter": 0.5,
+          "drill": 0.3
+        },
+        {
+          "diameter": 0.8,
+          "drill": 0.5
+        }
+      ],
       "zones_allow_external_fillets": false
     },
     "ipc2581": {
@@ -429,8 +453,8 @@
       "no_connect_connected": "warning",
       "no_connect_dangling": "warning",
       "pin_not_connected": "error",
-      "pin_not_driven": "error",
-      "pin_to_pin": "warning",
+      "pin_not_driven": "ignore",
+      "pin_to_pin": "ignore",
       "power_pin_not_driven": "error",
       "same_local_global_label": "warning",
       "similar_label_and_power": "warning",
@@ -613,6 +637,130 @@
     [
       "240d81ac-e9d7-42ea-a748-33df14683b07",
       "Root"
+    ],
+    [
+      "a943ad6c-b248-4d64-9bf5-4ae591141dd6",
+      "back-to-back-mosfets1"
+    ],
+    [
+      "7f67bd6e-a7f9-48b1-aa8a-4a0845d6f6c9",
+      "back-to-back-mosfets2"
+    ],
+    [
+      "997e956e-2d3f-47a3-991e-478dabe4a82d",
+      "back-to-back-mosfets3"
+    ],
+    [
+      "e5556145-7a45-4d81-bcd4-6b93a85b8194",
+      "group-of-8-servo-connectors"
+    ],
+    [
+      "9cfd329d-1e4b-4ddb-9a5b-c9ceb29b7167",
+      "master-to-servo-connector"
+    ],
+    [
+      "1f4bd980-80e1-4712-808a-6efe72a14cf4",
+      "master-to-servo-connector1"
+    ],
+    [
+      "c9713dd8-b2e2-4f54-93d1-473f98134227",
+      "master-to-servo-connector2"
+    ],
+    [
+      "5a3e51d4-00b7-42d2-85a3-3dbcf942a307",
+      "master-to-servo-connector3"
+    ],
+    [
+      "c87713f8-3e5c-4935-b338-e1d45aca0d19",
+      "master-to-servo-connector4"
+    ],
+    [
+      "1dff0df5-fc7d-48cd-bb5c-9001f7b61122",
+      "master-to-servo-connector5"
+    ],
+    [
+      "105e1ec4-4722-47d9-8ecd-822053bd2e19",
+      "master-to-servo-connector6"
+    ],
+    [
+      "d4b211a5-c800-4e3a-8ec4-d082f25fa99d",
+      "master-to-servo-connector7"
+    ],
+    [
+      "07dd894a-a677-4867-9a80-03490d776b7d",
+      "group-of-8-servo-connectors1"
+    ],
+    [
+      "105e1ec4-4722-47d9-8ecd-822053bd2e19",
+      "master-to-servo-connector6"
+    ],
+    [
+      "1dff0df5-fc7d-48cd-bb5c-9001f7b61122",
+      "master-to-servo-connector5"
+    ],
+    [
+      "c87713f8-3e5c-4935-b338-e1d45aca0d19",
+      "master-to-servo-connector4"
+    ],
+    [
+      "5a3e51d4-00b7-42d2-85a3-3dbcf942a307",
+      "master-to-servo-connector3"
+    ],
+    [
+      "1f4bd980-80e1-4712-808a-6efe72a14cf4",
+      "master-to-servo-connector1"
+    ],
+    [
+      "9cfd329d-1e4b-4ddb-9a5b-c9ceb29b7167",
+      "master-to-servo-connector"
+    ],
+    [
+      "c9713dd8-b2e2-4f54-93d1-473f98134227",
+      "master-to-servo-connector2"
+    ],
+    [
+      "d4b211a5-c800-4e3a-8ec4-d082f25fa99d",
+      "master-to-servo-connector7"
+    ],
+    [
+      "1de2ebe0-3144-4ba5-879d-b7b7f508a713",
+      "group-of-8-servo-connectors2"
+    ],
+    [
+      "105e1ec4-4722-47d9-8ecd-822053bd2e19",
+      "master-to-servo-connector6"
+    ],
+    [
+      "c618d416-88fb-4eed-83fb-6afc0f3a88df",
+      "back-to-back-mosfets"
+    ],
+    [
+      "1dff0df5-fc7d-48cd-bb5c-9001f7b61122",
+      "master-to-servo-connector5"
+    ],
+    [
+      "c87713f8-3e5c-4935-b338-e1d45aca0d19",
+      "master-to-servo-connector4"
+    ],
+    [
+      "5a3e51d4-00b7-42d2-85a3-3dbcf942a307",
+      "master-to-servo-connector3"
+    ],
+    [
+      "1f4bd980-80e1-4712-808a-6efe72a14cf4",
+      "master-to-servo-connector1"
+    ],
+    [
+      "9cfd329d-1e4b-4ddb-9a5b-c9ceb29b7167",
+      "master-to-servo-connector"
+    ],
+    [
+      "c9713dd8-b2e2-4f54-93d1-473f98134227",
+      "master-to-servo-connector2"
+    ],
+    [
+      "d4b211a5-c800-4e3a-8ec4-d082f25fa99d",
+      "master-to-servo-connector7"
     ]
   ],
   "text_variables": {}

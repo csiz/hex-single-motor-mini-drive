@@ -18,6 +18,7 @@
 	(property "Value" "WLCSP-6_L1.2-W0.8-P0.40-TL"
 		(at -0.04175 1.6005 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "86dae14b-730e-43b8-aa12-3c50fcac84df")
 		(effects
 			(font

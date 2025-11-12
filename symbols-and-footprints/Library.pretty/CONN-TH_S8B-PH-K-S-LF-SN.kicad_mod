@@ -17,6 +17,7 @@
 	(property "Value" "CONN-TH_S8B-PH-K-S-LF-SN"
 		(at 0.014966 2.4775 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "611894cf-7785-41a4-86c9-0e36ef5d3ee2")
 		(effects
 			(font

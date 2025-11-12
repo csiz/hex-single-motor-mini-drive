@@ -17,6 +17,7 @@
 	(property "Value" "HDR-TH_4P-P2.54-V-M"
 		(at -0.014967 2.280433 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "49b108fc-ea6a-45bc-8ceb-9734c1a2e6e8")
 		(effects
 			(font

@@ -18,6 +18,7 @@
 	(property "Value" "WDFN-5_L3.1-W3.1-P0.65-BL_1"
 		(at -0.22575 2.262 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "dbe5c602-d4e8-4ed2-af43-24d79e71c817")
 		(effects
 			(font

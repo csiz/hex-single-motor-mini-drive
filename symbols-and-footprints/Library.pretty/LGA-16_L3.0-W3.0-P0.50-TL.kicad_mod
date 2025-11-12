@@ -18,6 +18,7 @@
 	(property "Value" "LGA-16_L3.0-W3.0-P0.50-TL"
 		(at -0.17475 2.775 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "90663c1e-4a98-42b7-9a99-6407edb7411e")
 		(effects
 			(font

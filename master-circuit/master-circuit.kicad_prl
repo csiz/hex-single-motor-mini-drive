@@ -4,7 +4,16 @@
     "active_layer_preset": "",
     "auto_track_width": true,
     "hidden_netclasses": [],
-    "hidden_nets": [],
+    "hidden_nets": [
+      "GND",
+      "3V3",
+      "VCC",
+      "TX",
+      "SPI3_MOSI",
+      "RX",
+      "SPI3_MISO",
+      "SPI3_CLK"
+    ],
     "high_contrast_mode": 0,
     "net_color_mode": 1,
     "opacity": {

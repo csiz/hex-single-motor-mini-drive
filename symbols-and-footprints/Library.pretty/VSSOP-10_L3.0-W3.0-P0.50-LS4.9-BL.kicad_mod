@@ -17,6 +17,7 @@
 	(property "Value" "VSSOP-10_L3.0-W3.0-P0.50-LS4.9-BL"
 		(at -0.014967 3.975 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "be6f6266-7606-4db7-ba24-495037a83b2a")
 		(effects
 			(font

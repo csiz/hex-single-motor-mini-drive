@@ -17,6 +17,7 @@
 	(property "Value" "WIRELM-SMD_ESP32-S3-WROOM-1"
 		(at 0 12.1 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "0c4a9d06-5bc8-473a-942d-04d4c6b0ea52")
 		(effects
 			(font

@@ -17,6 +17,7 @@
 	(property "Value" "SW-SMD_4P-L5.1-W5.1-P3.70-LS6.5-TL_H1.5"
 		(at 0 3.5505 0)
 		(layer "F.Fab")
+		(hide yes)
 		(uuid "a4e0012c-6f9c-48c9-94b3-682bf2794977")
 		(effects
 			(font
