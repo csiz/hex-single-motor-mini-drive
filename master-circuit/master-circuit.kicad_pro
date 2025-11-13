@@ -188,9 +188,13 @@
       ],
       "track_widths": [
         0.0,
+        0.2,
         0.3,
+        0.4,
         0.6,
-        3.0
+        1.0,
+        1.5,
+        2.0
       ],
       "tuning_pattern_settings": {
         "diff_pair_defaults": {
@@ -230,6 +234,10 @@
         {
           "diameter": 0.8,
           "drill": 0.5
+        },
+        {
+          "diameter": 1.0,
+          "drill": 0.6
         }
       ],
       "zones_allow_external_fillets": false
@@ -497,6 +505,28 @@
         "via_diameter": 0.6,
         "via_drill": 0.3,
         "wire_width": 6
+      },
+      {
+        "clearance": 0.2,
+        "name": "Power",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 0,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.6,
+        "via_diameter": 1.0,
+        "via_drill": 0.6
+      },
+      {
+        "clearance": 0.3,
+        "diff_pair_gap": 0.3,
+        "diff_pair_width": 0.3,
+        "name": "Signals",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 1,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.3,
+        "via_diameter": 0.6,
+        "via_drill": 0.3
       }
     ],
     "meta": {
@@ -504,7 +534,12 @@
     },
     "net_colors": null,
     "netclass_assignments": null,
-    "netclass_patterns": []
+    "netclass_patterns": [
+      {
+        "netclass": "Power",
+        "pattern": "VCC|VBUS"
+      }
+    ]
   },
   "pcbnew": {
     "last_paths": {

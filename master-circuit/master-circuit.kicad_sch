@@ -11388,6 +11388,17 @@
 		)
 		(uuid "dc3c1500-2bac-45e3-8980-6a94e01c0624")
 	)
+	(text "USB Source/Sink Controller"
+		(exclude_from_sim no)
+		(at 19.05 335.026 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "ee8ff4b2-db56-4f7e-84ec-a60210a46c13")
+	)
 	(text "3V3 power regulator and filtering"
 		(exclude_from_sim no)
 		(at 121.92 193.04 0)
@@ -11398,6 +11409,17 @@
 			(justify left)
 		)
 		(uuid "f61ed793-7f81-4ffc-9197-4bb5b40a8233")
+	)
+	(text "USB to UART transceiver"
+		(exclude_from_sim no)
+		(at 23.622 279.146 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "f76b9ef0-1032-4781-8cc2-c0f39467687d")
 	)
 	(text "TOUCH_RESET always high to enable the chip."
 		(exclude_from_sim no)
