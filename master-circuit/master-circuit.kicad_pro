@@ -48,7 +48,7 @@
         "silk_text_thickness": 0.1,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.5
+          "min_clearance": 0.2
         }
       },
       "diff_pair_dimensions": [
@@ -58,7 +58,24 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "copper_edge_clearance|102587500|88550000|2fd37070-17ce-4b0d-b13b-363c6b603407|93e47661-345c-4b65-bea6-be696c95f1a7",
+          ""
+        ],
+        [
+          "copper_edge_clearance|102587500|94382421|43f4792c-562d-471f-bdd5-732ff6ff53ab|59726593-9089-414e-a4f6-fdeae0f2d009",
+          ""
+        ],
+        [
+          "copper_edge_clearance|207662500|87067579|c3dfba35-6d28-4ca2-a61b-80d4f84bd662|9dee9e55-409f-4198-8e6e-5d0a76c7130b",
+          ""
+        ],
+        [
+          "copper_edge_clearance|207662500|92900000|68dd0a8f-a7f8-436e-9146-be50142e8136|43096664-cb19-4e81-9c1b-b9ee192cceb1",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -101,8 +118,8 @@
         "pth_inside_courtyard": "ignore",
         "shorting_items": "error",
         "silk_edge_clearance": "warning",
-        "silk_over_copper": "warning",
-        "silk_overlap": "warning",
+        "silk_over_copper": "ignore",
+        "silk_overlap": "ignore",
         "skew_out_of_range": "error",
         "solder_mask_bridge": "error",
         "starved_thermal": "error",
@@ -137,7 +154,7 @@
         "min_text_thickness": 0.08,
         "min_through_hole_diameter": 0.3,
         "min_track_width": 0.2,
-        "min_via_annular_width": 0.2,
+        "min_via_annular_width": 0.1,
         "min_via_diameter": 0.5,
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": true
@@ -508,6 +525,18 @@
       },
       {
         "clearance": 0.2,
+        "diff_pair_gap": 0.3,
+        "diff_pair_width": 0.3,
+        "name": "GroupSignals",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 1,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.2,
+        "via_diameter": 0.5,
+        "via_drill": 0.3
+      },
+      {
+        "clearance": 0.2,
         "name": "Power",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 0,
@@ -515,18 +544,6 @@
         "track_width": 0.6,
         "via_diameter": 1.0,
         "via_drill": 0.6
-      },
-      {
-        "clearance": 0.3,
-        "diff_pair_gap": 0.3,
-        "diff_pair_width": 0.3,
-        "name": "Signals",
-        "pcb_color": "rgba(0, 0, 0, 0.000)",
-        "priority": 1,
-        "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "track_width": 0.3,
-        "via_diameter": 0.6,
-        "via_drill": 0.3
       }
     ],
     "meta": {
@@ -538,6 +555,10 @@
       {
         "netclass": "Power",
         "pattern": "VCC|VBUS"
+      },
+      {
+        "netclass": "GroupSignals",
+        "pattern": "/group*"
       }
     ]
   },
