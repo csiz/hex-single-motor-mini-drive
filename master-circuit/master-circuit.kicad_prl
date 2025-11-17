@@ -8,7 +8,6 @@
     ],
     "hidden_nets": [
       "GND",
-      "3V3",
       "/group-of-8-servo-connectors/master-to-servo-connector/SERVO_CS",
       "/group-of-8-servo-connectors/master-to-servo-connector/SERVO_BOOT0{slash}STOP",
       "/group-of-8-servo-connectors/master-to-servo-connector/SERVO_NRST",
@@ -133,7 +132,7 @@
       "conflict_shadows",
       "shapes"
     ],
-    "visible_layers": "ffffffff_ffffffff_fffffff5_fffdffdf",
+    "visible_layers": "ffffffff_ffffffff_fffffff5_fffdffff",
     "zone_display_mode": 0
   },
   "git": {
