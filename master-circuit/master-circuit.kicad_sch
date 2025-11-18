@@ -20964,7 +20964,7 @@
 			)
 		)
 	)
-	(global_label "SENSORS_VBUS_PINS"
+	(global_label "SENSORS_VBUS"
 		(shape input)
 		(at 151.13 245.11 180)
 		(fields_autoplaced yes)
@@ -20976,7 +20976,7 @@
 		)
 		(uuid "81f9e1ff-0762-4659-b5cb-e30b8a8a64eb")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 128.1877 245.11 0)
+			(at 133.5701 245.11 0)
 			(effects
 				(font
 					(size 1.27 1.27)
