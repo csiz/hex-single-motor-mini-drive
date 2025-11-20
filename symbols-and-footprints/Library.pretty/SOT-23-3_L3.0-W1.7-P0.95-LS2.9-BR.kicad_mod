@@ -4,7 +4,7 @@
 	(generator_version "9.0")
 	(layer "F.Cu")
 	(property "Reference" "U?"
-		(at 0 2.30225 180)
+		(at 0 -2.30225 0)
 		(layer "F.SilkS")
 		(uuid "ff794bde-4b40-4016-8eea-70f5023db0cb")
 		(effects
@@ -188,6 +188,16 @@
 		(uuid "22e708d8-3f51-4d27-872e-07a996408ddc")
 	)
 	(fp_line
+		(start -0.85 -1.5)
+		(end 0.85 -1.5)
+		(stroke
+			(width 0.051)
+			(type default)
+		)
+		(layer "User.2")
+		(uuid "370cbf47-4537-4d7c-8356-08a41d6e1651")
+	)
+	(fp_line
 		(start -0.85 1.5)
 		(end -0.85 -1.5)
 		(stroke
@@ -206,16 +216,6 @@
 		)
 		(layer "User.2")
 		(uuid "c2693091-7e75-4b53-9009-4e4f1d4c1c6c")
-	)
-	(fp_line
-		(start 0.85 1.5)
-		(end -0.85 1.5)
-		(stroke
-			(width 0.051)
-			(type default)
-		)
-		(layer "User.2")
-		(uuid "370cbf47-4537-4d7c-8356-08a41d6e1651")
 	)
 	(fp_poly
 		(pts

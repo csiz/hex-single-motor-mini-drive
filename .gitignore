@@ -13,6 +13,16 @@
 /circuits-v0.3/production/backups
 /circuits-v0.3/hex-minidrive-backups
 
+/master-circuit/master-circuit-backups
+/master-circuit/fp-info-cache
+/master-circuit/production/backups
+/master-circuit/~*.lck
+
+/sensor-circuit/sensor-circuit-backups
+/sensor-circuit/production/backups
+/sensor-circuit/fp-info-cache
+/sensor-circuit/~*.lck
+
 /driver-code/Debug/*
 /driver-code/hex-mini-drive Debug.launch
 /driver-code/Release/*
@@ -31,9 +41,7 @@
 /motor-sim/src/.observablehq/*
 /motor-sim/.vscode
 /circuits/~hex-mini-drive.kicad_pcb.lck
+
 symbols-and-footprints/Library.bak
-/sensor-circuit/sensor-circuit-backups
-/master-circuit/master-circuit-backups
-/sensor-circuit/production/backups
-sensor-circuit/fp-info-cache
-master-circuit/fp-info-cache
+
+
