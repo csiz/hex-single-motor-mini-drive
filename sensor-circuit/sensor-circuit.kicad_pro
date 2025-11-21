@@ -82,7 +82,7 @@
         "hole_clearance": "error",
         "hole_to_hole": "warning",
         "holes_co_located": "warning",
-        "invalid_outline": "error",
+        "invalid_outline": "ignore",
         "isolated_copper": "warning",
         "item_on_disabled_layer": "error",
         "items_not_allowed": "error",
@@ -632,6 +632,46 @@
     [
       "25b47d73-fc7c-4ebb-8019-73e21cab9fec",
       "Root"
+    ],
+    [
+      "c50847f0-19ed-4b92-9766-c3d16ed9f3c9",
+      "sensor-circuit-singlet"
+    ],
+    [
+      "d2a4c10c-959a-4e46-92c3-53a2f75944e0",
+      "sensor-circuit-singlet1"
+    ],
+    [
+      "589e3ee2-c15f-49c1-b22f-1714379b8481",
+      "sensor-circuit-singlet2"
+    ],
+    [
+      "62ffd503-954e-4faf-a16d-953f5a371665",
+      "sensor-circuit-singlet3"
+    ],
+    [
+      "798234c4-169b-4246-9907-dd35bd47517a",
+      "sensor-circuit-singlet4"
+    ],
+    [
+      "efba67b4-e5d7-4569-bd5e-1daa2bd73f34",
+      "sensor-circuit-singlet5"
+    ],
+    [
+      "d20ab2a7-c44f-44cd-b781-bb4efa3e83f7",
+      "sensor-circuit-singlet6"
+    ],
+    [
+      "1023188b-65ec-4882-ac03-ecf69e34db26",
+      "sensor-circuit-singlet7"
+    ],
+    [
+      "834a1403-de39-4548-81e8-806a1f6ad779",
+      "sensor-circuit-singlet8"
+    ],
+    [
+      "7e75018f-ea56-43e1-91c1-a22e4dd70442",
+      "sensor-circuit-singlet9"
     ]
   ],
   "text_variables": {}

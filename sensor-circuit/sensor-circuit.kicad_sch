@@ -10,2100 +10,423 @@
 		(company "Hex Robotics Limited")
 		(comment 1 "Author: Calin Mocanu")
 	)
-	(lib_symbols
-		(symbol "Library:0402WGF1002TCE Resistor 10kΩ"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "R"
-				(at 0 0 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "10kΩ"
-				(at 0 2.286 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(property "Footprint" "Library:R0402"
-				(at 0 -8.636 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "https://item.szlcsc.com/datasheet/0402WGF1002TCE/26487.html"
-				(at 0 8.128 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "Type:Thick Film Resistor Resistance:10kΩ Tolerance:±1% Tolerance:±1% Power(Watts):62.5mW Voltage-Supply(Max):50V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-				(at 0 5.842 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Manufacturer Part" "0402WGF1002TCE"
-				(at 0 -1.778 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 0.5 0.5)
-					)
-				)
-			)
-			(property "Manufacturer" "UNI-ROYAL(厚声)"
-				(at 0 12.954 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Supplier Part" "C25744"
-				(at 0 15.24 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Supplier" "LCSC"
-				(at 0 17.272 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part Name" "10kΩ ±1% 62.5mW 厚膜电阻"
-				(at 0 10.668 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part #" "C25744"
-				(at 0 -3.048 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(symbol "0402WGF1002TCE Resistor 10kΩ_1_0"
-				(rectangle
-					(start -2.54 1.016)
-					(end 2.54 -1.016)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin input line
-					(at -5.08 0 0)
-					(length 2.54)
-					(name "1"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 5.08 0 180)
-					(length 2.54)
-					(name "2"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "Library:AS5600-ASOT Magnetic rotary encoder"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "U"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" ""
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Footprint" "Library:SOIC-8_L5.0-W4.0-P1.27-LS6.0-BL"
-				(at 0 -14.224 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "https://item.szlcsc.com/datasheet/AS5600-ASOT/511984.html"
-				(at 0 12.954 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "Voltage - Supply:5V；3.3V Voltage - Supply:5V；3.3V Rotation Angle:0°~360° Rotation Angle:0°~360°"
-				(at 0 10.414 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Manufacturer Part" "AS5600-ASOT"
-				(at 0 -6.35 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(property "Manufacturer" "ams(艾迈斯半导体)"
-				(at 0 17.78 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Supplier Part" "C499458"
-				(at 0 20.32 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Supplier" "LCSC"
-				(at 0 22.352 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part Name" "AS5600-ASOT"
-				(at 0 15.494 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part #" "C499458"
-				(at 0 -8.128 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(symbol "AS5600-ASOT Magnetic rotary encoder_1_0"
-				(rectangle
-					(start -8.89 6.35)
-					(end 8.89 -9.144)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin unspecified line
-					(at -11.43 3.81 0)
-					(length 2.54)
-					(name "VDD5V"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -11.43 1.27 0)
-					(length 2.54)
-					(name "VDD3V3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -11.43 -1.27 0)
-					(length 2.54)
-					(name "OUT"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -11.43 -3.81 0)
-					(length 2.54)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "4"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 11.43 3.81 180)
-					(length 2.54)
-					(name "DIR"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "8"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 11.43 1.27 180)
-					(length 2.54)
-					(name "SCL"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "7"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 11.43 -1.27 180)
-					(length 2.54)
-					(name "SDA"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "6"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at 11.43 -3.81 180)
-					(length 2.54)
-					(name "PGO"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "5"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "Library:CC0402KRX7R7BB104 Capacitor 100nF"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "C"
-				(at 3.048 2.032 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "100nF"
-				(at -3.302 2.032 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(property "Footprint" "Library:C0402"
-				(at 0 -8.89 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "https://atta.szlcsc.com/upload/public/pdf/source/20211223/9278FD768280B81DDBEF48FA36411A03.pdf"
-				(at 0 8.636 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "Capacitance: Tolerance:±10% Tolerance:±10% Voltage Rated: Temperature Coefficient:"
-				(at 0 11.938 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Manufacturer Part" "CC0402KRX7R7BB104"
-				(at 0 -2.794 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 0.5 0.5)
-					)
-				)
-			)
-			(property "Manufacturer" "YAGEO(国巨)"
-				(at 0 14.732 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Supplier Part" "C60474"
-				(at 0 17.78 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Supplier" "LCSC"
-				(at 0 26.162 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part Name" "100nF ±10% 16V"
-				(at 0 20.574 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "LCSC Part #" "C60474"
-				(at 0 -4.064 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(symbol "CC0402KRX7R7BB104 Capacitor 100nF_1_0"
-				(polyline
-					(pts
-						(xy -0.508 0) (xy -2.54 0)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy -0.508 -2.032) (xy -0.508 2.032)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 0.508 2.032) (xy 0.508 -2.032)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 2.54 0) (xy 0.508 0)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin input line
-					(at -5.08 0 0)
-					(length 2.54)
-					(name "1"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 5.08 0 180)
-					(length 2.54)
-					(name "2"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 0.0254 0.0254)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "Library:FPC-05F-6PH20 Pattern 6P 0.5mm spacing"
-			(exclude_from_sim no)
-			(in_bom no)
-			(on_board yes)
-			(property "Reference" "FPC"
-				(at -7.62 0 0)
-				(do_not_autoplace)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" ""
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Footprint" "Library:FPC-6P-P0.50-Pattern"
-				(at 0 27.94 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-6PH20/3056894.html"
-				(at 0 31.242 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "Pattern for FPC connector"
-				(at 0 24.13 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "FPC-05F-6PH20 Pattern 6P 0.5mm spacing_1_0"
-				(circle
-					(center 2.54 7.62)
-					(radius 0.381)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(rectangle
-					(start 3.81 8.89)
-					(end -3.81 -8.89)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin input line
-					(at 6.35 6.35 180)
-					(length 2.54)
-					(name "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 6.35 3.81 180)
-					(length 2.54)
-					(name "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 6.35 1.27 180)
-					(length 2.54)
-					(name "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 6.35 -1.27 180)
-					(length 2.54)
-					(name "4"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "4"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 6.35 -3.81 180)
-					(length 2.54)
-					(name "5"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "5"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 6.35 -6.35 180)
-					(length 2.54)
-					(name "6"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "6"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "power:GND"
-			(power)
-			(pin_numbers
-				(hide yes)
-			)
-			(pin_names
-				(offset 0)
-				(hide yes)
-			)
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "#PWR"
-				(at 0 -6.35 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Value" "GND"
-				(at 0 -3.81 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" ""
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" ""
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_keywords" "global power"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "GND_0_1"
-				(polyline
-					(pts
-						(xy 0 0) (xy 0 -1.27) (xy 1.27 -1.27) (xy 0 -2.54) (xy -1.27 -1.27) (xy 0 -1.27)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-			)
-			(symbol "GND_1_1"
-				(pin power_in line
-					(at 0 0 270)
-					(length 0)
-					(name "~"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-	)
-	(junction
-		(at 132.08 74.93)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "0777e1a3-5058-4501-9fe8-92ec22a63800")
-	)
-	(junction
-		(at 138.43 74.93)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "0ebd6355-3562-45b8-98e0-00fbceaa28fa")
-	)
-	(junction
-		(at 147.32 88.9)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "27cd2c1a-9c03-49eb-9f80-c0ef05508234")
-	)
-	(junction
-		(at 138.43 86.36)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6afd412a-5864-472a-a2f6-d6c449ad3177")
-	)
-	(junction
-		(at 87.63 83.82)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "8e430d5c-9cf1-471e-a76e-f15d7198360d")
-	)
-	(junction
-		(at 87.63 86.36)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "9301f587-f06a-42c6-a356-23da85e8b1b1")
-	)
-	(junction
-		(at 87.63 100.33)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "98c90419-6d7a-488a-a9ce-48ad098c00cd")
-	)
-	(junction
-		(at 102.87 100.33)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "e729f9cf-6808-4edf-a0f7-bd7eead24488")
-	)
-	(junction
-		(at 87.63 74.93)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "f1a12308-1993-428f-9735-92749723d394")
-	)
-	(no_connect
-		(at 102.87 88.9)
-		(uuid "1f9208ec-59ca-4a1e-8bdc-ae306d291d6c")
-	)
-	(no_connect
-		(at 190.5 77.47)
-		(uuid "55b3dc5d-0e56-4491-a21e-cf0338c3b59f")
-	)
-	(no_connect
-		(at 190.5 80.01)
-		(uuid "5af66487-1850-486d-96e6-80e47aea2516")
-	)
-	(wire
-		(pts
-			(xy 190.5 90.17) (xy 185.42 90.17)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1b1f9152-d0a9-4c1b-b222-9304f97ee12a")
-	)
-	(wire
-		(pts
-			(xy 102.87 83.82) (xy 87.63 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2d5a93ed-f62a-4368-be61-2a82e82ec3b1")
-	)
-	(wire
-		(pts
-			(xy 87.63 83.82) (xy 87.63 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3828a089-c494-4d84-a23c-03b5d659c9b7")
-	)
-	(wire
-		(pts
-			(xy 190.5 87.63) (xy 185.42 87.63)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3fe2dbb5-af07-49b2-90ab-675e7cc0c218")
-	)
-	(wire
-		(pts
-			(xy 138.43 74.93) (xy 147.32 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "553f7324-c089-45fd-87fe-009f803b0f1a")
-	)
-	(wire
-		(pts
-			(xy 147.32 85.09) (xy 147.32 88.9)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "58153ac0-69ae-476b-9b61-e4516febbb9a")
-	)
-	(wire
-		(pts
-			(xy 190.5 85.09) (xy 185.42 85.09)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "60a075fc-3ed7-4629-ac12-04e6d4fcc6f3")
-	)
-	(wire
-		(pts
-			(xy 87.63 100.33) (xy 102.87 100.33)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "64732d70-de2b-4cec-a6c3-2bb9e4de84ea")
-	)
-	(wire
-		(pts
-			(xy 138.43 86.36) (xy 156.21 86.36)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "704fbd78-0ede-4343-8fd2-30f5f18e1c4a")
-	)
-	(wire
-		(pts
-			(xy 190.5 82.55) (xy 185.42 82.55)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "71130741-a3e2-4c3c-9a28-ba35e684ce91")
-	)
-	(wire
-		(pts
-			(xy 87.63 86.36) (xy 102.87 86.36)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "72530361-87f9-48b6-8ee9-f7211671a2e6")
-	)
-	(wire
-		(pts
-			(xy 87.63 83.82) (xy 87.63 86.36)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "763c3a74-8846-4360-ad7e-add180c34839")
-	)
-	(wire
-		(pts
-			(xy 125.73 88.9) (xy 147.32 88.9)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "79c51b09-a2c5-468f-b487-d666e03b028b")
-	)
-	(wire
-		(pts
-			(xy 83.82 74.93) (xy 87.63 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7e97e580-6df4-468d-ac6c-17d8abf7ad35")
-	)
-	(wire
-		(pts
-			(xy 132.08 74.93) (xy 132.08 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "90878fa9-0c79-4cc7-ba54-9d87383f09c7")
-	)
-	(wire
-		(pts
-			(xy 138.43 86.36) (xy 138.43 85.09)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "999d9f20-48a6-479e-b0a3-e56e4aaa0cbe")
-	)
-	(wire
-		(pts
-			(xy 132.08 91.44) (xy 125.73 91.44)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a0341180-0973-4513-9b53-eb26f97c634c")
-	)
-	(wire
-		(pts
-			(xy 190.5 77.47) (xy 185.42 77.47)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ac9d4c9a-4cdd-45b3-a034-a18960a98f63")
-	)
-	(wire
-		(pts
-			(xy 132.08 74.93) (xy 138.43 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "aca330fd-4a05-4c54-996c-164799d1a507")
-	)
-	(wire
-		(pts
-			(xy 147.32 88.9) (xy 156.21 88.9)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "b6a349f5-f2c5-4587-9300-52735736edbc")
-	)
-	(wire
-		(pts
-			(xy 132.08 91.44) (xy 132.08 100.33)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "cc24628b-9c85-4773-91c4-18cf1156d54b")
-	)
-	(wire
-		(pts
-			(xy 87.63 74.93) (xy 132.08 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d2adc1c4-fb02-43ae-a4ff-a5778d27e71d")
-	)
-	(wire
-		(pts
-			(xy 125.73 86.36) (xy 138.43 86.36)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "de10f97d-468a-406e-ae38-8750b926be95")
-	)
-	(wire
-		(pts
-			(xy 102.87 91.44) (xy 102.87 100.33)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "dfcca7b5-5a32-421f-9841-9321d87fd31e")
-	)
-	(wire
-		(pts
-			(xy 190.5 80.01) (xy 185.42 80.01)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "e2406d7a-4876-4419-8bab-80ce0fcc5fc4")
-	)
-	(wire
-		(pts
-			(xy 102.87 100.33) (xy 132.08 100.33)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "eb20bbf9-455e-4937-b2f4-591cb726ebc8")
-	)
-	(wire
-		(pts
-			(xy 125.73 83.82) (xy 132.08 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "f36350ad-e9f1-4f55-9da2-7b1c427c98e1")
-	)
-	(wire
-		(pts
-			(xy 87.63 100.33) (xy 87.63 96.52)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "fbc3872f-f97d-462e-a0eb-78fa02af0b05")
-	)
-	(global_label "SDA"
-		(shape input)
-		(at 190.5 85.09 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "4d1b1564-ae13-48f9-9192-a958e2344c8e")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 197.0533 85.09 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "SCL"
-		(shape input)
-		(at 190.5 82.55 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "8d57d779-9806-4b7c-b672-1e0989114b90")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 196.9928 82.55 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "SDA"
-		(shape input)
-		(at 156.21 88.9 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "a77e0535-b914-4dfe-b1d6-5cbf3d460798")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 162.7633 88.9 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "3V3"
-		(shape input)
-		(at 190.5 87.63 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "c7f06aab-3a8d-47b0-84be-0f07a0dd9e8b")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 196.9928 87.63 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "SCL"
-		(shape input)
-		(at 156.21 86.36 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "dc35c007-1a7c-44ee-b77d-ca00af40f862")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 162.7028 86.36 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "3V3"
-		(shape input)
-		(at 83.82 74.93 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "f8b6fa96-0759-4ffb-9b6f-1a7820006f3a")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 77.3272 74.93 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-				(hide yes)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:CC0402KRX7R7BB104 Capacitor 100nF")
-		(at 87.63 91.44 90)
-		(unit 1)
+	(lib_symbols)
+	(sheet
+		(at 35.56 102.87)
+		(size 50.8 15.24)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "210ffad7-7192-4dba-8994-11740aafe152")
-		(property "Reference" "C1"
-			(at 85.598 88.392 0)
-			(do_not_autoplace yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "1023188b-65ec-4882-ac03-ecf69e34db26")
+		(property "Sheetname" "sensor-circuit-singlet7"
+			(at 35.56 102.1584 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left bottom)
 			)
 		)
-		(property "Value" "100nF"
-			(at 85.598 94.742 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:C0402"
-			(at 96.52 91.44 0)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 35.56 118.6946 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
+				(justify left top)
 			)
-		)
-		(property "Datasheet" "https://atta.szlcsc.com/upload/public/pdf/source/20211223/9278FD768280B81DDBEF48FA36411A03.pdf"
-			(at 78.994 91.44 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Capacitance: Tolerance:±10% Tolerance:±10% Voltage Rated: Temperature Coefficient:"
-			(at 75.692 91.44 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Manufacturer Part" "CC0402KRX7R7BB104"
-			(at 90.424 91.44 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "YAGEO(国巨)"
-			(at 72.898 91.44 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier Part" "C60474"
-			(at 69.85 91.44 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 61.468 91.44 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part Name" "100nF ±10% 16V"
-			(at 67.056 91.44 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part #" "C60474"
-			(at 91.694 91.44 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "ccbd7796-956f-4b3c-91d6-9b84e62b2cb8")
-		)
-		(pin "2"
-			(uuid "1bc20911-b5bc-4a84-9b03-ffa72c114dca")
-		)
-		(instances
-			(project ""
-				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
-					(reference "C1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GND")
-		(at 190.5 90.17 0)
-		(mirror y)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "5f6324fa-fb3f-4df9-8d1d-c2f60895c452")
-		(property "Reference" "#PWR01"
-			(at 190.5 96.52 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "GND"
-			(at 190.5 95.25 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 190.5 90.17 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 190.5 90.17 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 190.5 90.17 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "cb86b166-155a-4317-ae76-ee9adf82a69e")
 		)
 		(instances
 			(project "sensor-circuit"
 				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
-					(reference "#PWR01")
-					(unit 1)
+					(page "9")
 				)
 			)
 		)
 	)
-	(symbol
-		(lib_id "Library:0402WGF1002TCE Resistor 10kΩ")
-		(at 138.43 80.01 90)
-		(unit 1)
+	(sheet
+		(at 110.49 90.17)
+		(size 50.8 15.24)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "7ceb5c7e-64ab-435a-bfb0-868ffe7bb02e")
-		(property "Reference" "R1"
-			(at 138.43 80.01 0)
-			(do_not_autoplace yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "589e3ee2-c15f-49c1-b22f-1714379b8481")
+		(property "Sheetname" "sensor-circuit-singlet2"
+			(at 110.49 89.4584 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left bottom)
 			)
 		)
-		(property "Value" "10kΩ"
-			(at 136.144 80.01 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:R0402"
-			(at 147.066 80.01 0)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 110.49 105.9946 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
+				(justify left top)
 			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/0402WGF1002TCE/26487.html"
-			(at 130.302 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Type:Thick Film Resistor Resistance:10kΩ Tolerance:±1% Tolerance:±1% Power(Watts):62.5mW Voltage-Supply(Max):50V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 132.588 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Manufacturer Part" "0402WGF1002TCE"
-			(at 140.208 80.01 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 125.476 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier Part" "C25744"
-			(at 123.19 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 121.158 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part Name" "10kΩ ±1% 62.5mW 厚膜电阻"
-			(at 127.762 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part #" "C25744"
-			(at 141.478 80.01 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "570cf0ec-eae4-4bae-9d51-d34e575c28f4")
-		)
-		(pin "1"
-			(uuid "25c49ab2-7b2b-4b55-a9d7-baeb5c2dfaaf")
-		)
-		(instances
-			(project ""
-				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
-					(reference "R1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GND")
-		(at 87.63 100.33 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "7e592acf-b199-4bfc-9455-286e03aa1f40")
-		(property "Reference" "#PWR029"
-			(at 87.63 106.68 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "GND"
-			(at 87.63 105.41 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 87.63 100.33 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 87.63 100.33 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 87.63 100.33 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "eca1367e-a7f4-446e-995d-621ca708d42b")
 		)
 		(instances
 			(project "sensor-circuit"
 				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
-					(reference "#PWR029")
-					(unit 1)
+					(page "4")
 				)
 			)
 		)
 	)
-	(symbol
-		(lib_id "Library:AS5600-ASOT Magnetic rotary encoder")
-		(at 114.3 87.63 0)
-		(unit 1)
+	(sheet
+		(at 110.49 119.38)
+		(size 50.8 15.24)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "ac63ad1f-09a9-445b-898c-b353142b2dd3")
-		(property "Reference" "U1"
-			(at 114.3 78.74 0)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "62ffd503-954e-4faf-a16d-953f5a371665")
+		(property "Sheetname" "sensor-circuit-singlet3"
+			(at 110.49 118.6684 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left bottom)
 			)
 		)
-		(property "Value" "~"
-			(at 114.3 87.63 0)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 110.49 135.2046 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
+				(justify left top)
 			)
-		)
-		(property "Footprint" "Library:SOIC-8_L5.0-W4.0-P1.27-LS6.0-BL"
-			(at 114.3 101.854 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/AS5600-ASOT/511984.html"
-			(at 114.3 74.676 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Voltage - Supply:5V；3.3V Voltage - Supply:5V；3.3V Rotation Angle:0°~360° Rotation Angle:0°~360°"
-			(at 114.3 77.216 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Manufacturer Part" "AS5600-ASOT"
-			(at 114.3 93.98 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Manufacturer" "ams(艾迈斯半导体)"
-			(at 114.3 69.85 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier Part" "C499458"
-			(at 114.3 67.31 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 114.3 65.278 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part Name" "AS5600-ASOT"
-			(at 114.3 72.136 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part #" "C499458"
-			(at 114.3 95.758 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "6"
-			(uuid "0cbbe3cd-fb14-4bcf-bcbe-a920f1800edd")
-		)
-		(pin "2"
-			(uuid "65e53e66-dad8-4e3b-8a43-967cd6e42b66")
-		)
-		(pin "3"
-			(uuid "26de9fff-922a-446c-8f7a-d76e9074bb9f")
-		)
-		(pin "4"
-			(uuid "aea57d78-07e8-482e-8f61-beaa1e7ca7ca")
-		)
-		(pin "1"
-			(uuid "52c02807-010d-4afa-b37f-303ea9d505d4")
-		)
-		(pin "8"
-			(uuid "37627772-768b-4f31-9b8b-6437e0053ab7")
-		)
-		(pin "7"
-			(uuid "2a3ed368-a0d7-4694-8c7b-73e7aca76b4d")
-		)
-		(pin "5"
-			(uuid "0e3f9e91-d987-4a54-878c-cad08d7e96fa")
 		)
 		(instances
-			(project ""
+			(project "sensor-circuit"
 				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
-					(reference "U1")
-					(unit 1)
+					(page "5")
 				)
 			)
 		)
 	)
-	(symbol
-		(lib_id "Library:FPC-05F-6PH20 Pattern 6P 0.5mm spacing")
-		(at 179.07 83.82 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "e8239886-718c-490a-a3f6-305da0feb037")
-		(property "Reference" "FPC1"
-			(at 171.45 83.82 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "~"
-			(at 179.07 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Footprint" "Library:FPC-6P-P0.50-Pattern"
-			(at 179.07 55.88 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-6PH20/3056894.html"
-			(at 179.07 52.578 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Pattern for FPC connector"
-			(at 179.07 59.69 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "4"
-			(uuid "689e15ff-0d25-4748-9ad4-87a016d8b2cc")
-		)
-		(pin "1"
-			(uuid "8bd83b61-2396-4c50-9ee8-9898030f9b07")
-		)
-		(pin "2"
-			(uuid "0d77973b-e5a3-437e-bcff-8d6b2b1e0301")
-		)
-		(pin "3"
-			(uuid "d7421619-af90-4e92-be68-50d6b198da08")
-		)
-		(pin "5"
-			(uuid "6a504e5f-61a7-45e4-9e40-5eb34c91cfc6")
-		)
-		(pin "6"
-			(uuid "f365ed25-eacc-4e57-9ea5-54be1d00e8eb")
-		)
-		(instances
-			(project ""
-				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
-					(reference "FPC1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:0402WGF1002TCE Resistor 10kΩ")
-		(at 147.32 80.01 90)
-		(unit 1)
+	(sheet
+		(at 110.49 146.05)
+		(size 50.8 15.24)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "ff94e238-b5f6-45c0-811d-252bfc2c487f")
-		(property "Reference" "R2"
-			(at 147.32 80.01 0)
-			(do_not_autoplace yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "798234c4-169b-4246-9907-dd35bd47517a")
+		(property "Sheetname" "sensor-circuit-singlet4"
+			(at 110.49 145.3384 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left bottom)
 			)
 		)
-		(property "Value" "10kΩ"
-			(at 145.034 80.01 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:R0402"
-			(at 155.956 80.01 0)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 110.49 161.8746 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
+				(justify left top)
 			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/0402WGF1002TCE/26487.html"
-			(at 139.192 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Type:Thick Film Resistor Resistance:10kΩ Tolerance:±1% Tolerance:±1% Power(Watts):62.5mW Voltage-Supply(Max):50V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 141.478 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Manufacturer Part" "0402WGF1002TCE"
-			(at 149.098 80.01 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 134.366 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier Part" "C25744"
-			(at 132.08 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 130.048 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part Name" "10kΩ ±1% 62.5mW 厚膜电阻"
-			(at 136.652 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "LCSC Part #" "C25744"
-			(at 150.368 80.01 0)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "61a344f3-542d-4d08-8d5c-df788160abd8")
-		)
-		(pin "1"
-			(uuid "38af2e70-2498-4af1-a316-19ac02d4f402")
 		)
 		(instances
-			(project ""
+			(project "sensor-circuit"
 				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
-					(reference "R2")
-					(unit 1)
+					(page "6")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 35.56 158.75)
+		(size 50.8 15.24)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "7e75018f-ea56-43e1-91c1-a22e4dd70442")
+		(property "Sheetname" "sensor-circuit-singlet9"
+			(at 35.56 158.0384 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 35.56 174.5746 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "sensor-circuit"
+				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
+					(page "11")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 35.56 132.08)
+		(size 50.8 15.24)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "834a1403-de39-4548-81e8-806a1f6ad779")
+		(property "Sheetname" "sensor-circuit-singlet8"
+			(at 35.56 131.3684 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 35.56 147.9046 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "sensor-circuit"
+				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
+					(page "10")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 110.49 36.83)
+		(size 50.8 15.24)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "c50847f0-19ed-4b92-9766-c3d16ed9f3c9")
+		(property "Sheetname" "sensor-circuit-singlet"
+			(at 110.49 36.1184 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 110.49 52.6546 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "sensor-circuit"
+				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 35.56 76.2)
+		(size 50.8 15.24)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "d20ab2a7-c44f-44cd-b781-bb4efa3e83f7")
+		(property "Sheetname" "sensor-circuit-singlet6"
+			(at 35.56 75.4884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 35.56 92.0246 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "sensor-circuit"
+				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
+					(page "8")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 110.49 63.5)
+		(size 50.8 15.24)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "d2a4c10c-959a-4e46-92c3-53a2f75944e0")
+		(property "Sheetname" "sensor-circuit-singlet1"
+			(at 110.49 62.7884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 110.49 79.3246 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "sensor-circuit"
+				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 35.56 49.53)
+		(size 50.8 15.24)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "efba67b4-e5d7-4569-bd5e-1daa2bd73f34")
+		(property "Sheetname" "sensor-circuit-singlet5"
+			(at 35.56 48.8184 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sensor-circuit-singlet.kicad_sch"
+			(at 35.56 65.3546 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "sensor-circuit"
+				(path "/25b47d73-fc7c-4ebb-8019-73e21cab9fec"
+					(page "7")
 				)
 			)
 		)
