@@ -40,6 +40,10 @@ Install `STM32 Cube IDE / STM32 Cube MX`
 
 Open `hex-mini-driver.ioc` and use the `Generate Code` tool from the STM32 Cube IDE.
 
+After generating the blank code we need to make the following changes:
+    1. Make sure it compiles... The CMakeFiles are generated once and then left to the user to edit, we must include all sources.
+
+
 TODO: install procedure
 TODO: compile procedure
 TODO: upload procedure
