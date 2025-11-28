@@ -62,7 +62,8 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 32K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 128K
+FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 120K
+DATA (xrw)      : ORIGIN = 0x801E000, LENGTH = 8K
 }
 
 /* Define output sections */
@@ -109,26 +110,33 @@ SECTIONS
     __exidx_end = .;
   } >FLASH
 
-  .preinit_array     :
+  .preinit_array (READONLY) :
   {
     PROVIDE_HIDDEN (__preinit_array_start = .);
     KEEP (*(.preinit_array*))
     PROVIDE_HIDDEN (__preinit_array_end = .);
   } >FLASH
-  .init_array :
+  .init_array (READONLY) :
   {
     PROVIDE_HIDDEN (__init_array_start = .);
     KEEP (*(SORT(.init_array.*)))
     KEEP (*(.init_array*))
     PROVIDE_HIDDEN (__init_array_end = .);
   } >FLASH
-  .fini_array :
+  .fini_array (READONLY) :
   {
     PROVIDE_HIDDEN (__fini_array_start = .);
     KEEP (*(SORT(.fini_array.*)))
     KEEP (*(.fini_array*))
     PROVIDE_HIDDEN (__fini_array_end = .);
   } >FLASH
+
+  /* Reserve the last pages of flash for user data (calibration). */
+  .user_data (NOLOAD) : {
+    . = ALIGN(4);
+    KEEP(*(.user_data))
+    . = ALIGN(4);
+  } > DATA
 
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
