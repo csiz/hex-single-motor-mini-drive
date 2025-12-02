@@ -36,7 +36,7 @@ if(CMAKE_BUILD_TYPE MATCHES Release)
 endif()
 
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} -x assembler-with-cpp -MMD -MP")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++23 -fno-rtti -fno-exceptions -fno-threadsafe-statics -Wno-register -Wno-narrowing -Werror=switch")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++23 -fno-rtti -fno-exceptions -fno-threadsafe-statics -Wno-register -Wno-narrowing -Werror=switch -Wno-missing-field-initializers")
 
 set(CMAKE_C_LINK_FLAGS "${TARGET_FLAGS}")
 set(CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS} -T \"${CMAKE_SOURCE_DIR}/stm32g431cbux_flash.ld\"")

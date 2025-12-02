@@ -30,7 +30,7 @@
 #include "usbd_cdc.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include <stdbool.h>
 /* USER CODE END INCLUDE */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -64,7 +64,14 @@
   */
 
 /* USER CODE BEGIN EXPORTED_TYPES */
-
+typedef struct USB_COM_FIFO_TYPE
+{
+  uint8_t* data;  // Will point to the Cube-generated Tx or Rx buffer
+  int head;
+  int tail;
+  int extra;
+  int size;
+} USB_COM_FIFO;
 /* USER CODE END EXPORTED_TYPES */
 
 /**
@@ -108,7 +115,12 @@ extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
-
+bool usb_com_queue_check(uint16_t len);
+bool usb_com_queue_send(uint8_t* buf, uint16_t len);
+int usb_com_recv (uint8_t* buf, uint16_t len);
+size_t usb_com_send();
+void usb_com_init();
+void usb_com_reset();
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**
