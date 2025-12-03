@@ -57,7 +57,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "Code/Src/error_handler.cpp"
     "Code/Src/interrupts.cpp"
     "Code/Src/interface.cpp"
-    "Code/Src/error_handler.cpp"
     "Code/Src/parameters_store.cpp"
     "Code/Src/integer_math.cpp"
 )

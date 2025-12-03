@@ -8,8 +8,7 @@ enable_language(C ASM)
 
 target_compile_definitions(stm32cubemx INTERFACE 
 	USE_HAL_DRIVER 
-	STM32G431xx 
-	STM32_THREAD_SAFE_STRATEGY=2
+	STM32G431xx
     $<$<CONFIG:Debug>:DEBUG>
 )
 
@@ -52,10 +51,6 @@ target_sources(stm32cubemx INTERFACE
     ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc.c
     ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc_ex.c
     ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_ll_adc.c
-    ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_cordic.c
-    ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_crc.c
-    ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_crc_ex.c
-    ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_fmac.c
     ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_i2c.c
     ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_i2c_ex.c
     ../../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_opamp.c

@@ -150,15 +150,15 @@ void enable_timers(){
     // 
     // The ADC sample time is 20cycles, so the total sampling period is 20/12MHz = 1.67us.
     // 
-    // Use the TIM1 channel 4 to generate an event a short time before the counter reaches
+    // Use the TIM1 channel 5 to generate an event a short time before the counter reaches
     // the auto reload value. This event triggers the ADC to read the motor phase currents.
     const uint16_t injected_conversion_start = pwm_base - sample_lead_time;
-    LL_TIM_OC_SetCompareCH4(TIM1, injected_conversion_start);
+    LL_TIM_OC_SetCompareCH5(TIM1, injected_conversion_start);
 
     // It appears that the countermode is being ignored for the external ADC triggering.
     if (LL_TIM_GetCounterMode(TIM1) != LL_TIM_COUNTERMODE_CENTER_DOWN) error();
-    // Invert the PWM mode of channel 4 instead so we emit a rising edge during up counting.
-    LL_TIM_OC_SetMode(TIM1, LL_TIM_CHANNEL_CH4, LL_TIM_OCMODE_PWM2);
+    // Invert the PWM mode of channel 5 instead so we emit a rising edge during up counting.
+    LL_TIM_OC_SetMode(TIM1, LL_TIM_CHANNEL_CH5, LL_TIM_OCMODE_PWM2);
 
     // Reinitialize the timers; reset the counters and update registers. Because the timers
     // are setup with preload registers the values we write to them are stored in shadow registers
@@ -166,21 +166,21 @@ void enable_timers(){
     // need to generate an update event to force the timers to load the new values.
     LL_TIM_GenerateEvent_UPDATE(TIM1);
     LL_TIM_GenerateEvent_UPDATE(TIM2);
-    LL_TIM_GenerateEvent_UPDATE(TIM3);
+    LL_TIM_GenerateEvent_UPDATE(TIM4);
 
     // Start the timers.
     LL_TIM_EnableCounter(TIM1);
     LL_TIM_EnableCounter(TIM2);
-    LL_TIM_EnableCounter(TIM3);
+    LL_TIM_EnableCounter(TIM4);
     
-    // Enable TIM1 channel 4 used to trigger the ADC.
-    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH4);
+    // Enable TIM1 channel 5 used to trigger the ADC.
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH5);
     
     // Enable the TIM1 outputs following a break or clock issue event.
     LL_TIM_EnableAllOutputs(TIM1);
     
     // Enable TIM2 channels 1 as the hall sensor timer between commutations.
-    LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
+    LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH1);
 }
 
 void app_init() {
@@ -196,11 +196,13 @@ void app_init() {
     adc_init();
     
     // Enable the timers: TIM1, TIM2, TIM3;
-    // and ouputs: TIM1_CH1, TIM1_CH1N, TIM1_CH2, TIM1_CH2N, TIM1_CH3, TIM1_CH3N, TIM1_CH4, TIM2_CH1.
+    // and outputs: TIM1_CH1, TIM1_CH1N, TIM1_CH2, TIM1_CH2N, TIM1_CH3, TIM1_CH3N, TIM1_CH4, TIM2_CH1.
     enable_timers();
 
     // Enable LED outputs: TIM2_CH4, TIM3_CH1, TIM3_CH2.
     enable_LED_channels();
+
+    set_GREEN_LED(0xFF);
 
     // Get initial hall sensor state and initialize poisition tracking.
     initialize_angle_tracking();
