@@ -110,7 +110,7 @@ static inline void set_motor_outputs(MotorOutputs const & outputs){
 // LED functions
 // -------------
 
-// Enable the LED channels: TIM2_CH4, TIM3_CH1, TIM3_CH2.
+// Enable the LED channels: TIM4_CH1 (RED), TIM4_CH2 (GREEN), TIM2_CH3 (BLUE).
 static inline void enable_LED_channels(){
 	// RED LED.
 	LL_TIM_CC_EnableChannel(TIM4, LL_TIM_CHANNEL_CH1);
