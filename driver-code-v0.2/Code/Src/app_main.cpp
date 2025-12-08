@@ -98,6 +98,9 @@ void adc_init(){
     LL_ADC_REG_StartConversion(ADC1);
     LL_ADC_REG_StartConversion(ADC2);
 
+    LL_ADC_INJ_StartConversion(ADC1);
+    LL_ADC_INJ_StartConversion(ADC2);
+
     // Gotta enable ext triggers for the second channel to work in dual mode.
     LL_ADC_REG_StartConversion(ADC2);
 }
@@ -191,7 +194,7 @@ void enable_timers(){
 void app_init() {
 
     // Setup PWM settings.
-    LL_TIM_SetAutoReload(TIM1, pwm_autoreload); // 72MHz / 1536 / 2 = 23.4KHz
+    LL_TIM_SetAutoReload(TIM1, pwm_autoreload);
 
     // Set which interrupts to handle.
     interrupts_init();

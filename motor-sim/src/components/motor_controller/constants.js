@@ -17,10 +17,10 @@ export const phase_time_constant = phase_inductance / phase_resistance;
 // Timing constants
 // ----------------
 
-export const ticks_per_millisecond = 72000;
+export const ticks_per_millisecond = 144000;
 
 // PWM motor cycles per millisecond.
-export const cycles_per_millisecond = 23437.5 / 1000.0; // 23437.5 cycles per second: 72MHz / (2*1536) / 1000.0
+export const cycles_per_millisecond = 28125 / 1000.0; // 28125 cycles per second: 144MHz / (2*2560) / 1000.0
 
 // Millisecond (fractions) per PWM motor cycle.
 export const millis_per_cycle = 1.0/cycles_per_millisecond;
@@ -104,7 +104,7 @@ export function parse_state_flags(state_flags){
 // Motor control constants
 // -----------------------
 
-export const pwm_base = 1536; // 0x0600
+export const pwm_base = 2560; // 0x0A00
 export const pwm_period = 2 * pwm_base;
 export const max_timeout = 0xFFFF;
 export const history_size = 336;
