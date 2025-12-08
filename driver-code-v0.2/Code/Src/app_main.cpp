@@ -76,18 +76,23 @@ void adc_init(){
     LL_ADC_EnableIT_JEOS(ADC1);
     // Disable the ADC interrupt for the end of the regular sequence; we are not using it.
     LL_ADC_DisableIT_EOS(ADC1);
+    
 
-    // Enable the ADCs and wait for them to settle.
-    LL_ADC_Enable(ADC1);
-    LL_ADC_Enable(ADC2);
-    HAL_Delay(100);
 
     // Calibrate the ADCs.
+
+    // Take a little break before.
+    HAL_Delay(100);
     LL_ADC_StartCalibration(ADC1, LL_ADC_SINGLE_ENDED);
     while (LL_ADC_IsCalibrationOnGoing(ADC1)) {}
     LL_ADC_StartCalibration(ADC2, LL_ADC_SINGLE_ENDED);
     while (LL_ADC_IsCalibrationOnGoing(ADC2)) {}
 
+    // Enable the ADCs and wait for them to settle.
+    LL_ADC_Enable(ADC1);
+    LL_ADC_Enable(ADC2);
+    HAL_Delay(100);
+    
     // Start ADC conversions from the external trigger in TIM1.
     // TODO: recheck timing of conversions; it was set on the rising trigger
     LL_ADC_REG_StartConversion(ADC1);

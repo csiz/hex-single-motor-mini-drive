@@ -158,9 +158,12 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 static int8_t CDC_Init_FS(void)
 {
   /* USER CODE BEGIN 3 */
-  /* Set Application Buffers */
-  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  // /* Set Application Buffers */
+  // USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
+  // USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  usb_com_reset();
+  usb_com_ready = true;
+  return (USBD_OK);
   return (USBD_OK);
   /* USER CODE END 3 */
 }
@@ -172,6 +175,8 @@ static int8_t CDC_Init_FS(void)
 static int8_t CDC_DeInit_FS(void)
 {
   /* USER CODE BEGIN 4 */
+  usb_com_ready = false;
+  usb_com_init();
   return (USBD_OK);
   /* USER CODE END 4 */
 }
@@ -267,7 +272,22 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+  // USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+  // USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  // return (USBD_OK);
+
+  // Update the write index for the next incoming packet
+  usb_com_rx_fifo.head += *Len;
+  usb_com_rx_fifo.size += *Len;
+  // Is the new value too close to the end of the FIFO ?
+  if (usb_com_rx_fifo.head >= RX_BUFFER_MAX_WRITE_INDEX) {
+    // Solution : wrap-around (and save the last head as extra)
+    usb_com_rx_fifo.extra = usb_com_rx_fifo.head;
+    usb_com_rx_fifo.head = 0;
+  }
+  // Tell the driver where to write the next incoming packet.
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &usb_com_rx_fifo.data[usb_com_rx_fifo.head]);
+  // Receive the next packet
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
   /* USER CODE END 6 */
