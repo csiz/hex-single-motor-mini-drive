@@ -134,6 +134,9 @@ ControlParameters control_parameters = get_control_parameters();
 // Guard the data access by disabling the ADC interrupt while we read/write the data.
 
 FullReadout get_readout(){
+    // TODO: this really needs to run without the interrupt disabling. When we do that the jitter for the update loop almost entirely
+    // goes away. We can use a double buffer for the readout data.
+    
     // Disable the ADC interrupt while we read the latest readout.
     NVIC_DisableIRQ(ADC1_2_IRQn);
     // We should read from the circular buffer without disabling interrupts 
@@ -262,9 +265,9 @@ void adc_interrupt_handler(){
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
     // Flip the sign of V because we accidentally wired it the other way (the correct way...). Oopsie doopsie.
     const ThreePhase readouts = {
-        +(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout),
-        +(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2) - ref_readout),
-        +(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout)
+        -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout),
+        -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2) - ref_readout),
+        -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout)
     };
 
     // Note that the reference voltage is only connected to the current sense amplifier, not the

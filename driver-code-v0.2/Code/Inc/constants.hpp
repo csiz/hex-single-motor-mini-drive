@@ -177,16 +177,15 @@ const int limiting_divisor_m1 = limiting_divisor - 1;
 // Timing and PWM constants
 // ------------------------
 
-// TODO: needs updating
-// Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 12MHz (72MHz / 6). A cycle is 6 ticks.
+// Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 144MHz, same as the systme clock.
 
-// Temperature ADC conversion time: 12.5 cycles + 71.5 cycles = 84 cycles = 7us.
-const int temperature_sample_time = (71.5 + 12.5)*6;
+// Temperature ADC conversion time: 12.5 cycles + 92.5 cycles = 105 cycles = 7.29us.
+const int temperature_sample_time = (92.5 + 12.5 + 1)*4;
 
-// Current ADC conversion time: 12.5 cycles + 1.5 cycles = 14 cycles = 1.16us.
-const int current_sample_time = (1.5 + 12.5)*6;
+// Current ADC conversion time: 12.5 cycles + 6.5 cycles = 19 cycles = 1.32us.
+const int current_sample_time = (6.5 + 12.5 + 1)*4;
 
-const int current_sample_lead_time = (1.5 + 12.5 + 1.5)*6 / 2;
+const int current_sample_lead_time = 1.5 * current_sample_time;
 
 // The ADC will read the temperature first then 2 phase currents; try to time the sampling 
 // time of the phase currents symmetrically around the peak of the PWM cycle.
@@ -207,7 +206,7 @@ const int pwm_cycles_per_second = ticks_per_second / pwm_period;
 
 // Maximum duty cycle for the high side MOSFETs needs to allow some off time for the
 // bootstrap capacitor to charge so it has enough voltage to turn high side MOSFET on.
-const int minimum_bootstrap_duty = 32; // 32/144MHz = 222ns
+const int minimum_bootstrap_duty = 30; // 30/144MHz = 208ns
 
 // Because of this version's electronic design (v0) the current measurement degrades if the
 // phase is set exactly to 0; we'll set it to the lowest on value. The phase voltage 

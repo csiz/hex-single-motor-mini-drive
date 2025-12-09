@@ -1,3 +1,8 @@
+Hex Mini Drive Circuit
+======================
+
+Version v0.2
+
 TODO for next circuit
 ---------------------
 
@@ -5,6 +10,7 @@ TODO for next circuit
 Rgen = 3ohm, I think this is their recommended gate resistance.
 
 [ ] Aaaargh, BOOT0 pin needs a pulldown resistor on the STM32G4!
+[ ] VREF+ should be tied to VDDA...
 
 
 [v] Think about connectors better. We should either drop or double down on USB-C. It would be very user friendly and the power delivery 

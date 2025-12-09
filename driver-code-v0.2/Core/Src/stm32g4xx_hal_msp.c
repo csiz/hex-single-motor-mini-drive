@@ -89,6 +89,14 @@ void HAL_MspInit(void)
   */
   HAL_PWR_EnablePVD();
 
+  /** Configure the internal voltage reference buffer high impedance mode
+  */
+  HAL_SYSCFG_VREFBUF_HighImpedanceConfig(SYSCFG_VREFBUF_HIGH_IMPEDANCE_ENABLE);
+
+  /** Disable the Internal Voltage Reference buffer
+  */
+  HAL_SYSCFG_DisableVREFBUF();
+
   /** Disable the internal Pull-Up in Dead Battery pins of UCPD peripheral
   */
   HAL_PWREx_DisableUCPDDeadBattery();
@@ -158,7 +166,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* ADC1 interrupt Init */
-    HAL_NVIC_SetPriority(ADC1_2_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(ADC1_2_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(ADC1_2_IRQn);
     /* USER CODE BEGIN ADC1_MspInit 1 */
 
@@ -204,7 +212,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* ADC2 interrupt Init */
-    HAL_NVIC_SetPriority(ADC1_2_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(ADC1_2_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(ADC1_2_IRQn);
     /* USER CODE BEGIN ADC2_MspInit 1 */
 
@@ -663,6 +671,7 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
   */
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   if(htim_base->Instance==TIM1)
   {
     /* USER CODE BEGIN TIM1_MspInit 0 */
@@ -685,30 +694,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 
     /* USER CODE END TIM2_MspInit 1 */
   }
-  else if(htim_base->Instance==TIM4)
-  {
-    /* USER CODE BEGIN TIM4_MspInit 0 */
-
-    /* USER CODE END TIM4_MspInit 0 */
-    /* Peripheral clock enable */
-    __HAL_RCC_TIM4_CLK_ENABLE();
-    /* USER CODE BEGIN TIM4_MspInit 1 */
-
-    /* USER CODE END TIM4_MspInit 1 */
-  }
-
-}
-
-/**
-  * @brief TIMEx_HallSensor MSP Initialization
-  * This function configures the hardware resources used in this example
-  * @param htimex_hallsensor: TIMEx_HallSensor handle pointer
-  * @retval None
-  */
-void HAL_TIMEx_HallSensor_MspInit(TIM_HandleTypeDef* htimex_hallsensor)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  if(htimex_hallsensor->Instance==TIM3)
+  else if(htim_base->Instance==TIM3)
   {
     /* USER CODE BEGIN TIM3_MspInit 0 */
 
@@ -724,15 +710,15 @@ void HAL_TIMEx_HallSensor_MspInit(TIM_HandleTypeDef* htimex_hallsensor)
     PC7     ------> TIM3_CH2
     */
     GPIO_InitStruct.Pin = GPIO_PIN_0;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -740,7 +726,17 @@ void HAL_TIMEx_HallSensor_MspInit(TIM_HandleTypeDef* htimex_hallsensor)
     /* USER CODE BEGIN TIM3_MspInit 1 */
 
     /* USER CODE END TIM3_MspInit 1 */
+  }
+  else if(htim_base->Instance==TIM4)
+  {
+    /* USER CODE BEGIN TIM4_MspInit 0 */
 
+    /* USER CODE END TIM4_MspInit 0 */
+    /* Peripheral clock enable */
+    __HAL_RCC_TIM4_CLK_ENABLE();
+    /* USER CODE BEGIN TIM4_MspInit 1 */
+
+    /* USER CODE END TIM4_MspInit 1 */
   }
 
 }
@@ -887,29 +883,7 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
 
     /* USER CODE END TIM2_MspDeInit 1 */
   }
-  else if(htim_base->Instance==TIM4)
-  {
-    /* USER CODE BEGIN TIM4_MspDeInit 0 */
-
-    /* USER CODE END TIM4_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_TIM4_CLK_DISABLE();
-    /* USER CODE BEGIN TIM4_MspDeInit 1 */
-
-    /* USER CODE END TIM4_MspDeInit 1 */
-  }
-
-}
-
-/**
-  * @brief TIMEx_HallSensor MSP De-Initialization
-  * This function freeze the hardware resources used in this example
-  * @param htimex_hallsensor: TIMEx_HallSensor handle pointer
-  * @retval None
-  */
-void HAL_TIMEx_HallSensor_MspDeInit(TIM_HandleTypeDef* htimex_hallsensor)
-{
-  if(htimex_hallsensor->Instance==TIM3)
+  else if(htim_base->Instance==TIM3)
   {
     /* USER CODE BEGIN TIM3_MspDeInit 0 */
 
@@ -929,6 +903,17 @@ void HAL_TIMEx_HallSensor_MspDeInit(TIM_HandleTypeDef* htimex_hallsensor)
     /* USER CODE BEGIN TIM3_MspDeInit 1 */
 
     /* USER CODE END TIM3_MspDeInit 1 */
+  }
+  else if(htim_base->Instance==TIM4)
+  {
+    /* USER CODE BEGIN TIM4_MspDeInit 0 */
+
+    /* USER CODE END TIM4_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM4_CLK_DISABLE();
+    /* USER CODE BEGIN TIM4_MspDeInit 1 */
+
+    /* USER CODE END TIM4_MspDeInit 1 */
   }
 
 }

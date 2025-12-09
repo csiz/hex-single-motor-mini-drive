@@ -268,7 +268,7 @@ static void MX_ADC1_Init(void)
   */
   sConfigInjected.InjectedChannel = ADC_CHANNEL_1;
   sConfigInjected.InjectedRank = ADC_INJECTED_RANK_2;
-  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_6CYCLES_5;
   if (HAL_ADCEx_InjectedConfigChannel(&hadc1, &sConfigInjected) != HAL_OK)
   {
     Error_Handler();
@@ -358,7 +358,7 @@ static void MX_ADC2_Init(void)
   */
   sConfigInjected.InjectedChannel = ADC_CHANNEL_3;
   sConfigInjected.InjectedRank = ADC_INJECTED_RANK_2;
-  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_6CYCLES_5;
   if (HAL_ADCEx_InjectedConfigChannel(&hadc2, &sConfigInjected) != HAL_OK)
   {
     Error_Handler();
@@ -795,6 +795,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 0 */
 
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_HallSensor_InitTypeDef sConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
 
@@ -807,6 +808,15 @@ static void MX_TIM3_Init(void)
   htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
   sConfig.IC1Filter = 0;
