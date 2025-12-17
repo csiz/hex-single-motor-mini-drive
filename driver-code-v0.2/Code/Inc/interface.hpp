@@ -3,6 +3,7 @@
 #include "type_definitions.hpp"
 #include "byte_handling.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 // Interface command codes
@@ -129,14 +130,7 @@ const size_t min_message_size = basic_command_size;
 struct MessageBuffer {
     uint8_t data[max_message_size] = {};
     size_t write_index = 0;
-    int bytes_expected = min_message_size;
 };
-
-// Quickly reset the message buffer by resetting the write index and expected bytes (does not clear the data).
-static inline void reset_message_buffer(MessageBuffer & buffer) {
-    buffer.write_index = 0;
-    buffer.bytes_expected = min_message_size;
-}
 
 // Receiving commands
 // ------------------
@@ -167,3 +161,74 @@ size_t write_position_calibration(uint8_t * data, PositionCalibration const & po
 size_t write_control_parameters(uint8_t * buffer, ControlParameters const& control_parameters);
 size_t write_unit_test(uint8_t * buffer, UnitTestFunction test_function);
 
+
+// Message size for each command code that we can receive.
+static inline size_t get_message_size(uint16_t code) {
+    switch (static_cast<MessageCode>(code)) {
+        case NULL_COMMAND: return 0;
+
+        case STREAM_FULL_READOUTS: return min_message_size;
+        case GET_READOUTS_SNAPSHOT: return min_message_size;
+
+        case SET_STATE_OFF: return min_message_size;
+        case SET_STATE_DRIVE_6_SECTOR: return min_message_size;
+        case SET_STATE_TEST_ALL_PERMUTATIONS: return min_message_size;
+        case SET_STATE_FREEWHEEL: return min_message_size;
+
+        case SET_STATE_TEST_GROUND_SHORT: return min_message_size;
+        case SET_STATE_TEST_POSITIVE_SHORT: return min_message_size;
+
+        case SET_STATE_TEST_U_DIRECTIONS: return min_message_size;
+        case SET_STATE_TEST_U_INCREASING: return min_message_size;
+        case SET_STATE_TEST_U_DECREASING: return min_message_size;
+        case SET_STATE_TEST_V_INCREASING: return min_message_size;
+        case SET_STATE_TEST_V_DECREASING: return min_message_size;
+        case SET_STATE_TEST_W_INCREASING: return min_message_size;
+        case SET_STATE_TEST_W_DECREASING: return min_message_size;
+
+        case SET_STATE_HOLD_U_POSITIVE: return min_message_size;
+        case SET_STATE_HOLD_V_POSITIVE: return min_message_size;
+        case SET_STATE_HOLD_W_POSITIVE: return min_message_size;
+        case SET_STATE_HOLD_U_NEGATIVE: return min_message_size;
+        case SET_STATE_HOLD_V_NEGATIVE: return min_message_size;
+        case SET_STATE_HOLD_W_NEGATIVE: return min_message_size;
+
+        case SET_STATE_DRIVE_PERIODIC: return min_message_size;
+        case SET_STATE_DRIVE_SMOOTH: return min_message_size;
+        case SET_STATE_DRIVE_TORQUE: return min_message_size;
+        case SET_STATE_DRIVE_BATTERY_POWER: return min_message_size;
+        case SET_STATE_DRIVE_SPEED: return min_message_size;
+        case SET_STATE_SEEK_ANGLE_WITH_POWER: return min_message_size;
+        case SET_STATE_SEEK_ANGLE_WITH_TORQUE: return min_message_size;
+        case SET_STATE_SEEK_ANGLE_WITH_SPEED: return min_message_size;
+
+        case GET_CURRENT_FACTORS: return min_message_size;
+        case RESET_CURRENT_FACTORS: return min_message_size;
+        case GET_HALL_POSITIONS: return min_message_size;
+        case RESET_HALL_POSITIONS: return min_message_size;
+        case GET_CONTROL_PARAMETERS: return min_message_size;
+        case RESET_CONTROL_PARAMETERS: return min_message_size;
+        case SET_ANGLE: return min_message_size;
+
+        case SAVE_SETTINGS_TO_FLASH: return min_message_size;
+
+        case RUN_UNIT_TEST_FUNKY_ATAN: return min_message_size;
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_2: return min_message_size;
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART_3: return min_message_size;
+        
+        case SET_CURRENT_FACTORS: return current_calibration_size;
+        case SET_HALL_POSITIONS: return position_calibration_size;
+        case SET_CONTROL_PARAMETERS: return control_parameters_size;
+
+        case READOUT: return readout_size;
+        case FULL_READOUT: return full_readout_size;
+        case CURRENT_FACTORS: return current_calibration_size;
+        case HALL_POSITIONS: return position_calibration_size;
+        case CONTROL_PARAMETERS: return control_parameters_size;
+
+        case UNIT_TEST_OUTPUT: return unit_test_size;
+    }
+
+    // Unknown message.
+    return 0;
+}

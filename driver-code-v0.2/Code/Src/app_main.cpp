@@ -12,9 +12,11 @@
 #include "error_handler.hpp"
 #include "constants.hpp"
 #include "io.hpp"
+#include "usb_com.hpp"
 
-#include "usbd_cdc_if.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <stm32g4xx_ll_adc.h>
 #include <stm32g4xx_ll_tim.h>
 #include <stm32g4xx_hal.h>
@@ -37,6 +39,9 @@ float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
 
 MessageBuffer usb_receive_buffer = {};
+uint32_t usb_chunk_receive_time = 0;
+
+const uint32_t usb_partial_message_timeout_ms = 500;
 
 MessageBuffer usb_response_buffer = {};
 
@@ -61,9 +66,6 @@ uint32_t usb_last_receive_time = 0;
 
 // Index of the last partial message received; used to detect timeouts.
 size_t usb_last_receive_index = 0;
-
-// Maximum time to wait for a USB packet to be sent.
-const uint32_t USB_TIMEOUT = 500;
 
 
 int32_t motor_constant_observer = 0;
@@ -572,33 +574,6 @@ bool handle_command(MessageBuffer const& buffer) {
     return true;
 }
 
-inline bool usb_check_queue(size_t len_to_send) {
-    if(not usb_com_queue_check(len_to_send)) {
-        // The USB buffer is full; stop sending until there's space.
-        if (HAL_GetTick() > usb_last_send + USB_TIMEOUT) {
-            // The USB controller is not reading data; stop sending and clear the USB buffer.
-            usb_readouts_to_send = 0;
-            usb_stream_state = 0;
-            usb_com_reset();
-        }
-        // Stop sending until the USB buffer is free again.
-        return false;
-    }
-
-    return true;
-}
-
-inline void usb_queue_send(MessageBuffer & buffer) {
-    // Send the data to the USB buffer.
-    if(not usb_com_queue_send(buffer.data, buffer.write_index)) {
-        // We should have checked whether we can send, so we should always succeed.
-        error();
-    }
-
-    reset_message_buffer(buffer);
-
-    usb_last_send = HAL_GetTick();
-}
 
 inline Readout adjust_direction(Readout && readout){
     readout.angle = normalize_angle(control_parameters.motor_direction * readout.angle);
@@ -607,17 +582,17 @@ inline Readout adjust_direction(Readout && readout){
     return readout;
 }
 
-void usb_queue_response(FullReadout const& readout) {
-    if(usb_stream_state){
-        if (not usb_check_queue(full_readout_size)) return;
-        
-        // We have already sent this readout; don't send it again.
-        if (usb_stream_last_sent == readout.readout_number) return;
+void usb_onreset(){
+    usb_response_buffer = {};
+    usb_receive_buffer = {};
+    usb_chunk_receive_time = 0;
+    usb_stream_state = 0;
+}
 
-        usb_response_buffer.write_index = write_full_readout(usb_response_buffer.data, readout);
-        usb_queue_send(usb_response_buffer);
-
-        usb_stream_last_sent = readout.readout_number;
+void usb_serialize_response(MessageBuffer & usb_response_buffer, FullReadout const& readout) {
+    if (usb_response_buffer.write_index != 0) {
+        // We have unsent data in the response buffer; don't send more data until that is done.
+        return;
     }
     
     // Check if we have to wait for the queue to fill before sending readouts.
@@ -632,102 +607,123 @@ void usb_queue_response(FullReadout const& readout) {
         }
     }
 
+    // Stream readouts but only once per readout number.
+    if(usb_stream_state and usb_stream_last_sent != readout.readout_number){
+        usb_response_buffer.write_index = write_full_readout(usb_response_buffer.data, readout);
+        usb_stream_last_sent = readout.readout_number;
+    }
+
     // Send unit test response if requested.
     if (usb_reply_unit_test) {
-        if (not usb_check_queue(unit_test_size)) return;
-
-        // Run and write the results of the unit test.
         usb_response_buffer.write_index = write_unit_test(usb_response_buffer.data, usb_unit_test_function);
-        usb_queue_send(usb_response_buffer);
-
         usb_reply_unit_test = false;
     }
 
     // Send control parameters if requested.
     if (usb_reply_control_parameters) {
-        if (not usb_check_queue(control_parameters_size)) return;
-
-        // Send the control parameters to the host.
         usb_response_buffer.write_index = write_control_parameters(usb_response_buffer.data, control_parameters);
-        usb_queue_send(usb_response_buffer);
-
         usb_reply_control_parameters = false;
     }
 
     // Send current factors if requested.
     if (usb_reply_current_factors) {
-        if(not usb_check_queue(current_calibration_size)) return;
-        
-        // Send the current factors to the host.
-
         usb_response_buffer.write_index = write_current_calibration(usb_response_buffer.data, current_calibration);
-        usb_queue_send(usb_response_buffer);
-
         usb_reply_current_factors = false;
     }
 
     // Send trigger angles if requested.
     if (usb_reply_hall_positions) {
-        if(not usb_check_queue(position_calibration_size)) return;
-        
-        // Send the trigger angles to the host.
         usb_response_buffer.write_index = write_position_calibration(usb_response_buffer.data, position_calibration);
-        usb_queue_send(usb_response_buffer);
-
         usb_reply_hall_positions = false;
     }
 
     // Queue the readout history to the send buffer.
-    while(usb_readouts_to_send > 0){
-        // Check if we can enqueue the readout to the USB buffer.
-        if(not usb_check_queue(readout_size)) return;
-        
+    if(usb_readouts_to_send > 0){
         // Stop if we have caught up to the readout history.
         if (not readout_history_available()) return readout_history_reset();
         
         // Send the readout to the host.
         usb_response_buffer.write_index = write_readout(usb_response_buffer.data, adjust_direction(readout_history_pop()));
-        usb_queue_send(usb_response_buffer);
 
         // Readout added to the USB buffer.
         usb_readouts_to_send -= 1;
-        
     }
-
-
 }
 
-void usb_receive_command(){
-    // Buffer the command from USB and handle it when it's complete.
-    if (buffer_command(usb_receive_buffer, usb_com_recv)){
-        // Invalid command; reset the USB buffers.
-        usb_com_reset();
+void usb_receive_data(uint8_t * rx_buffer, int rx_size) {
+    // We need to read at least the message header to determine the size.
+    const size_t total_data_received = usb_receive_buffer.write_index + rx_size;
+
+    // We have a partial message that has timed out; reset the buffer.
+    if (usb_receive_buffer.write_index > 0 and 
+        (HAL_GetTick() - usb_chunk_receive_time) > usb_partial_message_timeout_ms) {
+        usb_onreset();
+        return;
+    }
+    
+    // Copy the partial header if we don't have enough data yet.
+    if (total_data_received < header_size) {
+        // Not enough data to determine message size; just copy the data.
+        std::memcpy(
+            &usb_receive_buffer.data[usb_receive_buffer.write_index],
+            rx_buffer, 
+            rx_size
+        );
+        usb_chunk_receive_time = HAL_GetTick();
+        usb_receive_buffer.write_index += rx_size;
+        return;
     }
 
-    // Checck if we received any command data at all, skip if not.
-    if (usb_receive_buffer.write_index == 0) return;
+    // Copy until we have a full header.
+    const size_t header_bytes_needed = header_size - usb_receive_buffer.write_index;
+    std::memcpy(
+        &usb_receive_buffer.data[usb_receive_buffer.write_index], 
+        rx_buffer, 
+        header_bytes_needed
+    );
+    usb_chunk_receive_time = HAL_GetTick();
+    usb_receive_buffer.write_index = header_size;
 
-    // Check if we received a complete command in the buffer.
-    if (usb_receive_buffer.bytes_expected == 0) {
-        // Handle the complete command.
-        if(handle_command(usb_receive_buffer)){
-            // Invalid command; reset the USB buffers.
-            usb_com_reset();
-        }
+    // The first number is the command code, the remainder is the command data.
+    const uint16_t code = read_uint16(usb_receive_buffer.data);
 
-        // Reset the command buffer for the next command.
-        reset_message_buffer(usb_receive_buffer);
+    const size_t expected_size = get_message_size(code);
+    
+    if (total_data_received < expected_size) {
+        std::memcpy(
+            &usb_receive_buffer.data[usb_receive_buffer.write_index], 
+            &rx_buffer[header_bytes_needed], 
+            rx_size - header_bytes_needed
+        );
+        usb_chunk_receive_time = HAL_GetTick();
+        usb_receive_buffer.write_index += rx_size - header_bytes_needed;
+        return;
+    }
 
-        // Reset the receive index to 0 indicating we have no partial command.
-        usb_last_receive_index = 0;
+    // We have a complete message, copy the remaining data.
+    const size_t remaining_message_bytes = expected_size - usb_receive_buffer.write_index;
+    std::memcpy(
+        &usb_receive_buffer.data[usb_receive_buffer.write_index], 
+        &rx_buffer[header_bytes_needed], 
+        remaining_message_bytes
+    );
+    usb_receive_buffer.write_index += remaining_message_bytes;
 
-    } else if (usb_receive_buffer.write_index > usb_last_receive_index) {
-        // We have received new data for a partial command.
-        usb_last_receive_time = HAL_GetTick();
-        usb_last_receive_index = usb_receive_buffer.write_index;
-    } else if (HAL_GetTick() - usb_last_receive_time > USB_TIMEOUT) {
-        // We have not received new data for a while; reset the command buffer.
-        usb_com_reset();
+    // Handle the complete command.
+    if(handle_command(usb_receive_buffer)){
+        // Invalid command; reset the USB buffers.
+        usb_onreset();
+        return;
+    }
+    
+    // Clear the USB receive buffer for the next message.
+    usb_receive_buffer.write_index = 0;
+    usb_chunk_receive_time = 0;
+        
+    const size_t remaining_rx_bytes = rx_size - (header_bytes_needed + remaining_message_bytes);
+    if (remaining_rx_bytes > 0) {
+        // There is more data in the RX buffer; process it recursively.
+        usb_receive_data(&rx_buffer[header_bytes_needed + remaining_message_bytes], remaining_rx_bytes);
     }
 }
 
@@ -807,18 +803,17 @@ void app_tick() {
     // USB comms
     // ---------
 
-    // Send USB data from the buffer.
-    usb_com_send();
-
-    // Read and execute commands from USB.
-    usb_receive_command();
-    
     // Queue the state readouts on the USB buffer.
-    usb_queue_response(readout);
+    usb_serialize_response(usb_response_buffer, readout);
+
+    if(usb_update(
+        usb_response_buffer.data, usb_response_buffer.write_index, 
+        usb_receive_data, usb_onreset)
+    ){
+        // Data was sent; clear the response buffer.
+        usb_response_buffer.write_index = 0;
+    };
     
-    // Send USB data from the buffer, twice per loop, hopefully the 
-    // USB module sends 64 byte packets while we computed stuff.
-    usb_com_send();
 }
 
 
