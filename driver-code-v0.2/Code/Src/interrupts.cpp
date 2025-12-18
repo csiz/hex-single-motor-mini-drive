@@ -9,7 +9,6 @@
 #include "constants.hpp"
 #include "type_definitions.hpp"
 #include "integer_math.hpp"
-#include "circular_buffer.hpp"
 
 // The interrupts must not enter the error handler!
 // 
@@ -44,14 +43,10 @@ FullReadout readout = {
     .emf_angle_error_variance = max_16bit,
 };
 
-uint8_t readout_buffer_data[sizeof(FullReadout) * 1] = {0};
-
-CircularBuffer readout_buffer = {
-    .buffer = readout_buffer_data,
-    .max_size = sizeof(readout_buffer_data),
-};
-
 FullReadout latest_readout = readout;
+
+FullReadout shared_readout = readout;
+volatile bool shared_readout_lock = false;
 
 // History of light readouts so that we can record every cycle for a short snapshot.
 Readout readout_history[history_size] = {};
@@ -148,13 +143,10 @@ ControlParameters control_parameters = get_control_parameters();
 // Guard the data access by disabling the ADC interrupt while we read/write the data.
 
 FullReadout get_readout(){
-    if (buffer_available_to_read(&readout_buffer) >= sizeof(FullReadout)) {
-        // There is new data in the buffer; read it.
-        uint8_t * const read_head = buffer_get_read_head(&readout_buffer);
-        std::memcpy(&latest_readout, read_head, sizeof(FullReadout));
-        buffer_mark_read(&readout_buffer, sizeof(FullReadout));
+    if (shared_readout_lock) {
+        latest_readout = shared_readout;
+        shared_readout_lock = false;
     }
-
     return latest_readout;
 }
 
@@ -734,10 +726,9 @@ void adc_interrupt_handler(){
     readout.secondary_target = driver_state.secondary_target;
     readout.seek_integral = driver_state.seek_angle.error_integral / seek_integral_divisor;
     
-    uint8_t * const readout_write_head = buffer_reserve_write_head(&readout_buffer, sizeof(FullReadout));
-    if (readout_write_head != nullptr) {
-        std::memcpy(readout_write_head, &readout, sizeof(FullReadout));
-        buffer_mark_write(&readout_buffer, sizeof(FullReadout));
+    if (not shared_readout_lock) {
+        shared_readout = readout;
+        shared_readout_lock = true;
     }
 
     // Calculate motor outputs
