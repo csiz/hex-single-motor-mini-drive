@@ -31,7 +31,7 @@ static inline uint8_t * buffer_reserve_write_head(CircularBuffer * buffer, size_
       buffer->read_tail = buffer->write_head;
       buffer->read_head = 0;
 
-      return (buffer->write_head + size < buffer->max_size) ? &buffer->buffer[buffer->write_head] : nullptr;
+      return (buffer->write_head + size <= buffer->max_size) ? &buffer->buffer[buffer->write_head] : nullptr;
     } else {
     
       // We can only write if we have enough space before the read head.
@@ -42,7 +42,12 @@ static inline uint8_t * buffer_reserve_write_head(CircularBuffer * buffer, size_
   } else {
     // We are after the read area so there is space until the end of the buffer.
 
-    if (buffer->write_head + size < buffer->max_size) {
+    if (buffer->read_head == buffer->read_tail) {
+      // Reading was done, we can reset the whole buffer ahead of time.
+      buffer_reset(buffer);
+    }
+
+    if (buffer->write_head + size <= buffer->max_size) {
       // We have enough space at the end of the buffer.
       return &buffer->buffer[buffer->write_head];
 
@@ -67,7 +72,13 @@ static inline uint8_t buffer_mark_write(CircularBuffer * buffer, size_t size){
     // We are in the wrap around area.
 
     // Ensure we did not overwrite unread data.
-    if (write_tail >= buffer->read_head) return 1;
+    if (write_tail > buffer->read_head) return 1;
+
+    if (write_tail == buffer->read_tail) {
+      // We have finished reading already, reset the read head to the data written so far.
+      buffer->read_head = 0;
+      // The read tail is already correct.
+    }
 
     // Only advance the write head, leave the read tail to be reset by a complete read.
     buffer->write_head = write_tail;
@@ -76,13 +87,13 @@ static inline uint8_t buffer_mark_write(CircularBuffer * buffer, size_t size){
     // We are writing after the read area, no risk of overwriting unread data.
 
     // Ensure we do not exceed the buffer size.
-    if (write_tail >= buffer->max_size) return 1;
+    if (write_tail > buffer->max_size) return 1;
 
     // Mark the data for reading.
     buffer->read_tail = write_tail;
 
     // Wrap around the write head if we have reached the end of the buffer.
-    buffer->write_head = write_tail < buffer->max_size ? write_tail : 0;
+    buffer->write_head = (write_tail < buffer->max_size) ? write_tail : 0;
     return 0;
   }
 }

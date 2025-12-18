@@ -44,7 +44,7 @@ FullReadout readout = {
     .emf_angle_error_variance = max_16bit,
 };
 
-uint8_t readout_buffer_data[sizeof(FullReadout) * 3] = {0};
+uint8_t readout_buffer_data[sizeof(FullReadout) * 1] = {0};
 
 CircularBuffer readout_buffer = {
     .buffer = readout_buffer_data,
@@ -203,10 +203,7 @@ void set_motor_command(DriverState const& driver_state){
 }
 
 void set_angle(int16_t angle) {
-    // Disable the ADC interrupt while we modify the readout angle.
-    NVIC_DisableIRQ(ADC1_2_IRQn);
     readout.angle = normalize_angle(angle);
-    NVIC_EnableIRQ(ADC1_2_IRQn);
 }
 
 
