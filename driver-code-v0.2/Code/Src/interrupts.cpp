@@ -9,6 +9,7 @@
 #include "constants.hpp"
 #include "type_definitions.hpp"
 #include "integer_math.hpp"
+#include "circular_buffer.hpp"
 
 // The interrupts must not enter the error handler!
 // 
@@ -22,6 +23,10 @@
 #include <stm32g4xx_ll_adc.h>
 #include <stm32g4xx_ll_tim.h>
 #include <stm32g4xx_ll_gpio.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 // Interrupt loop
 // ==============
@@ -38,6 +43,15 @@ FullReadout readout = {
     .live_max_pwm = pwm_max,
     .emf_angle_error_variance = max_16bit,
 };
+
+uint8_t readout_buffer_data[sizeof(FullReadout) * 3] = {0};
+
+CircularBuffer readout_buffer = {
+    .buffer = readout_buffer_data,
+    .max_size = sizeof(readout_buffer_data),
+};
+
+FullReadout latest_readout = readout;
 
 // History of light readouts so that we can record every cycle for a short snapshot.
 Readout readout_history[history_size] = {};
@@ -134,16 +148,14 @@ ControlParameters control_parameters = get_control_parameters();
 // Guard the data access by disabling the ADC interrupt while we read/write the data.
 
 FullReadout get_readout(){
-    // TODO: this really needs to run without the interrupt disabling. When we do that the jitter for the update loop almost entirely
-    // goes away. We can use a double buffer for the readout data.
-    
-    // Disable the ADC interrupt while we read the latest readout.
-    NVIC_DisableIRQ(ADC1_2_IRQn);
-    // We should read from the circular buffer without disabling interrupts 
-    // when we use a chip with more memory...
-    FullReadout readout_copy = readout;
-    NVIC_EnableIRQ(ADC1_2_IRQn);
-    return readout_copy;
+    if (buffer_available_to_read(&readout_buffer) >= sizeof(FullReadout)) {
+        // There is new data in the buffer; read it.
+        uint8_t * const read_head = buffer_get_read_head(&readout_buffer);
+        std::memcpy(&latest_readout, read_head, sizeof(FullReadout));
+        buffer_mark_read(&readout_buffer, sizeof(FullReadout));
+    }
+
+    return latest_readout;
 }
 
 void readout_history_reset() {
@@ -725,6 +737,11 @@ void adc_interrupt_handler(){
     readout.secondary_target = driver_state.secondary_target;
     readout.seek_integral = driver_state.seek_angle.error_integral / seek_integral_divisor;
     
+    uint8_t * const readout_write_head = buffer_reserve_write_head(&readout_buffer, sizeof(FullReadout));
+    if (readout_write_head != nullptr) {
+        std::memcpy(readout_write_head, &readout, sizeof(FullReadout));
+        buffer_mark_write(&readout_buffer, sizeof(FullReadout));
+    }
 
     // Calculate motor outputs
     // -----------------------

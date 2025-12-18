@@ -8,8 +8,8 @@ struct CircularBuffer {
   uint8_t * buffer;
   size_t max_size;
   volatile size_t write_head = 0;
-  volatile size_t read_head = 0;
   volatile size_t read_tail = 0;
+  volatile size_t read_head = 0;
 };
 
 static inline void buffer_reset(CircularBuffer * buffer) {
@@ -19,10 +19,25 @@ static inline void buffer_reset(CircularBuffer * buffer) {
 }
 
 static inline uint8_t * buffer_reserve_write_head(CircularBuffer * buffer, size_t size) {
-  if (buffer->write_head < buffer->read_tail) {
+  if (size == 0) return nullptr;
 
-    // We are in the wrap around area, we can only write if we have enough space before the read head.
-    return (buffer->write_head + size < buffer->read_head) ? &buffer->buffer[buffer->write_head] : nullptr;
+
+  if (buffer->write_head < buffer->read_tail) {
+    // We are in wrap around mode.
+
+    // Check if there's anything reserved for reading.
+    if (buffer->read_head == buffer->read_tail) {
+      // Reading was done, reset the read pointers.
+      buffer->read_tail = buffer->write_head;
+      buffer->read_head = 0;
+
+      return (buffer->write_head + size < buffer->max_size) ? &buffer->buffer[buffer->write_head] : nullptr;
+    } else {
+    
+      // We can only write if we have enough space before the read head.
+      return (buffer->write_head + size < buffer->read_head) ? &buffer->buffer[buffer->write_head] : nullptr;
+    }
+
 
   } else {
     // We are after the read area so there is space until the end of the buffer.

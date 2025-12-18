@@ -113,7 +113,7 @@ bool usb_update(uint8_t * tx_buffer, int tx_size, BufferFunction process_receive
     usb_prepare_receive();
   }
 
-  uint8_t * const tx_head = tx_size == 0 ? nullptr : buffer_reserve_write_head(&usb_com_tx_buffer, tx_size);
+  uint8_t * const tx_head = buffer_reserve_write_head(&usb_com_tx_buffer, tx_size);
 
   const bool can_send = tx_head != nullptr;
 
