@@ -104,7 +104,7 @@ export function parse_state_flags(state_flags){
 // Motor control constants
 // -----------------------
 
-export const pwm_base = 2560; // 0x0A00
+export const pwm_base = 3072;
 export const pwm_period = 2 * pwm_base;
 export const max_timeout = 0xFFFF;
 export const history_size = 336;
