@@ -11,8 +11,8 @@
 // Motor PWM control
 // -----------------
 
-// We should always enable the trigger on channel 4 to trigger the ADC conversion.
-const uint32_t adc_trigger_enable_bits = LL_TIM_CHANNEL_CH4;
+// We should always enable the trigger on channel 5 to trigger the ADC conversion.
+const uint32_t adc_trigger_enable_bits = LL_TIM_CHANNEL_CH5;
 // Bit flags to enable the U phase outputs.
 const uint32_t pwm_u_enable_bits = LL_TIM_CHANNEL_CH1 | LL_TIM_CHANNEL_CH1N;
 // Bit flags to enable the V phase outputs.

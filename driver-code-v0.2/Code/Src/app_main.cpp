@@ -688,6 +688,12 @@ void usb_receive_data(uint8_t * rx_buffer, int rx_size) {
     const uint16_t code = read_uint16(usb_receive_buffer.data);
 
     const size_t expected_size = get_message_size(code);
+
+    if (not expected_size) {
+        // Invalid command code; reset the USB buffers.
+        usb_onreset();
+        return;
+    }
     
     if (total_data_received < expected_size) {
         std::memcpy(

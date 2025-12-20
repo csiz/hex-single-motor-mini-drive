@@ -582,12 +582,12 @@ const stop_buttons = Inputs.button(
     ["Stop / Brake", async function(){
       stop_command_loop();
 
-      await snapshot_if_checked(command_codes.SET_STATE_OFF);
+      await snapshot_if_checked({command: command_codes.SET_STATE_OFF});
     }],
     ["Freewheel", async function(){
       stop_command_loop();
 
-      await snapshot_if_checked(command_codes.SET_STATE_FREEWHEEL);
+      await snapshot_if_checked({command: command_codes.SET_STATE_FREEWHEEL});
     }],
     ["Stop all motors", async function(){
       stop_command_loop();
