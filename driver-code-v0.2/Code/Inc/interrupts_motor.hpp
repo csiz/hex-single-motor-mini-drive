@@ -9,6 +9,8 @@
 #include "math_utils.hpp"
 #include "integer_math.hpp"
 
+#include "io.hpp"
+
 // The interrupts must not enter the error handler!
 // 
 // The error handle will block forever, however we must safe the motor no matter what. The interrupt loop

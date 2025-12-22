@@ -1,6 +1,5 @@
 #include "interrupts.hpp"
 #include "interrupts_data.hpp"
-#include "interrupts_angle.hpp"
 #include "interrupts_motor.hpp"
 
 #include "parameters_store.hpp"
@@ -230,56 +229,10 @@ void adc_interrupt_handler(){
     // Start by reading the ADC conversion data
     // ----------------------------------------
 
-    // ADC1 IN7 = POT 1
-    // ADC1 IN8 = POT 2
-    // ADC2 IN17 = POT 3
-
-    // ADC1 IN3 = Half 3v3 Reference
-
-    // ADC1 IN1 = M1 current
-    // ADC2 IN3 = M2 current
-    // ADC1 IN12 = M3 current
-    // ADC2 IN14 = M4 current
-
-    // ADC2 IN15 = Voltage
-
-    // OPAMP1 VINP = M1 voltage
-    // OPAMP2 VINP = M2 voltage
-    // OPAMP3 VINP = M3 voltage
-    // ADC1 IN11 = M4 voltage
-
     // Double check the ADC end of conversion flag was set.
     if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) return set_motor_outputs(breaking_motor_outputs);
 
-    
-    // U and W phases are measured at the same time, followed by V and the reference voltage.
-    // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
-    // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
-    // 16ticks after the update event (PWM counter resets). This is a delay of 16/72MHz = 222ns.
-    
-    // For reference a PWM period is 1536 ticks, so the PWM frequency is 72MHz / 1536 / 2 = 23.4KHz.
-    // The PWM period lasts 1/23.4KHz = 42.7us.
-
-    // Read the reference voltage first; this is the voltage of the reference line for the current sense amplifier.
-    const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4);
-
-    // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
-    // Flip the sign of V because we accidentally wired it the other way (the correct way...). Oopsie doopsie.
-    const ThreePhase readouts = {
-        -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout),
-        -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2) - ref_readout),
-        -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout)
-    };
-
-    // Note that the reference voltage is only connected to the current sense amplifier, not the
-    // microcontroller. The ADC reference voltage is 3.3V.
-
-    // Also read the controller chip temperature.
-    const uint16_t instant_temperature = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
-
-    // And motor supply voltage.
-    const uint16_t instant_vcc_voltage = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
-
+    const ADCReadings adc_readings = read_adc_values();
 
     // Get hall sensor state
     // ---------------------
@@ -307,10 +260,10 @@ void adc_interrupt_handler(){
     // Average the temperature readings since we are sampling quicker than the manufacturer indicates.
     // We can't extend the sampling time longer than it is set at the moment (about half the recommendation),
     // so we have to massage the readings for noise. Temperature varies slowly anyway.
-    const int temperature = (instant_temperature + readout.temperature * 3) / 4;
+    const int temperature = (adc_readings.temp_readout + readout.temperature * 3) / 4;
 
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
-    const int vcc_voltage = (instant_vcc_voltage + readout.vcc_voltage * 3) / 4;
+    const int vcc_voltage = (adc_readings.vcc_readout + readout.vcc_voltage * 3) / 4;
 
     // Calculate our outputs on the motor phases. The outputs are delayed by one cycle and then
     // quickly averaged over time (half life of 1 cycle). The averaging is masking some effects
@@ -321,8 +274,9 @@ void adc_interrupt_handler(){
     // Store the active motor outputs for the next cycle. 
     previous_motor_outputs = get_duties(driver_state.motor_outputs);
 
+
     // Calculate calibrated currents.
-    const ThreePhase currents = readouts * get_calibration_factors(current_calibration) / current_calibration_fixed_point;
+    const ThreePhase currents = adc_readings.currents * get_calibration_factors(current_calibration) / current_calibration_fixed_point;
 
     // Get calibrated current divergence (the time unit is defined as 1 per cycle). We average out the
     // current diffs exactly as we do with the motor outputs; this seems to work best, can't explain why.
@@ -686,7 +640,7 @@ void adc_interrupt_handler(){
     readout.v_current = std::get<1>(currents);
     readout.w_current = std::get<2>(currents);
 
-    readout.ref_readout = ref_readout;
+    readout.ref_readout = adc_readings.ref_readout;
     
     readout.u_current_diff = std::get<0>(currents_diff);
     readout.v_current_diff = std::get<1>(currents_diff);

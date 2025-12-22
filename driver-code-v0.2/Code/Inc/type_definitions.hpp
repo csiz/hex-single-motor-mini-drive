@@ -11,6 +11,16 @@ using ThreePhase = std::tuple<int, int, int>;
 // Function signature for unit tests; the unit test prints text to the buffer.
 using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 
+// ADC Readings
+// ------------
+
+struct ADCReadings {
+    ThreePhase currents;
+    uint16_t ref_readout;
+    uint16_t temp_readout;
+    uint16_t vcc_readout;
+};
+
 
 // Driver State
 // ------------
