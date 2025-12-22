@@ -25,35 +25,10 @@ extern "C" USBD_HandleTypeDef hUsbDeviceFS;
 
 volatile bool usb_active = false;
 volatile bool receiving_active = false;
-
-volatile uint32_t usb_last_interact = 0;
-
-const uint32_t usb_interact_timeout = 500; // milliseconds
-
-volatile int usb_pending_send = 0;
+volatile size_t usb_pending_send = 0;
 
 
-void usb_init() {
-  usb_last_interact = HAL_GetTick();
-  usb_active = true;
-  usb_prepare_receive();
-}
-
-void usb_deinit() {
-  receiving_active = false;
-  usb_active = false;
-}
-
-void usb_received(int rx_size) {
-  // Ignore data we weren't prepared to receive.
-  if (not receiving_active) return;
-
-  if(usb_com_rx_buffer.mark_write(rx_size)) error();
-
-  usb_prepare_receive();
-}
-
-void usb_prepare_receive() {
+static inline void usb_prepare_receive() {
   // Prepare to receive more data.
   uint8_t * const rx_head = usb_com_rx_buffer.reserve_write_head(max_usb_packet);
 
@@ -67,34 +42,55 @@ void usb_prepare_receive() {
   }
 }
 
-void usb_sent(int len) {
-  usb_pending_send -= len;
-
-  usb_last_interact = HAL_GetTick();
-
-  if(usb_com_tx_buffer.mark_read(len)) error();
+void usb_init() {
+  usb_pending_send = 0;
+  usb_active = true;
+  usb_prepare_receive();
 }
 
-void usb_prepare_send() {
+void usb_deinit() {
+  usb_pending_send = 0;
+  receiving_active = false;
+  usb_active = false;
+}
+
+void usb_received(int rx_size) {
+  // Ignore data we weren't prepared to receive.
+  if (not receiving_active) return;
+
+  if(usb_com_rx_buffer.mark_write(rx_size)) error();
+
+  usb_prepare_receive();
+}
+
+
+static inline void usb_prepare_send() {
   // Check if the USB driver is ready to send.
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+
   if (hcdc->TxState != 0) return;
   
   // If it's ready to send, then the previous transmission is complete.
-  if (usb_pending_send) usb_sent(usb_pending_send);
+  if (usb_pending_send) {
+    if(usb_com_tx_buffer.mark_read(usb_pending_send)) error();
 
-  if (usb_pending_send != 0) error();
-  
+    usb_pending_send = 0;
+  }
+
   // Check if there is data to send.
   usb_pending_send = usb_com_tx_buffer.available_to_read();
+
   if (not usb_pending_send) return;
 
   uint8_t * const tx_head = usb_com_tx_buffer.get_read_head();
+
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, tx_head, usb_pending_send);
   USBD_CDC_TransmitPacket(&hUsbDeviceFS);
 }
 
-bool usb_update(uint8_t * tx_buffer, int tx_size, BufferFunction process_received_data, void (* onreset)()) {
+bool usb_update(uint8_t * tx_data, int tx_size, BufferFunction process_received_data) {
+  if (not usb_active) return false;
+
 
   // Read any data in the reading buffer.
   const int read_available = usb_com_rx_buffer.available_to_read();
@@ -114,26 +110,22 @@ bool usb_update(uint8_t * tx_buffer, int tx_size, BufferFunction process_receive
   // Queue data if we have space to send it.
   if (can_send) {
     // There is enough space to queue the data.
-    std::memcpy(tx_head, tx_buffer, tx_size);
+    std::memcpy(tx_head, tx_data, tx_size);
     if(usb_com_tx_buffer.mark_write(tx_size)) error();
   }
 
   usb_prepare_send();
 
-  // Check for timeout.
-  if (usb_active and (HAL_GetTick() - usb_last_interact > usb_interact_timeout)) {
-    // No interaction for a while; disable USB.
+  return can_send;
+}
+
+void usb_reset(){
     usb_deinit();
 
     // Reset the buffers.
     usb_com_rx_buffer.reset();
     usb_com_tx_buffer.reset();
 
-    onreset();
-
     // Re-initialize USB.
     usb_init();
-  }
-
-  return can_send;
 }

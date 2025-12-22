@@ -22,8 +22,6 @@ public:
   }
 
   uint8_t * reserve_write_head(size_t size) {
-    if (size == 0) return nullptr;
-
     if (write_head < read_tail) {
       // We are in wrap around mode.
 

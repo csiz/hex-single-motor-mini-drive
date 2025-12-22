@@ -40,8 +40,10 @@ float adc_update_rate = 0.0f;
 
 MessageBuffer usb_receive_buffer = {};
 uint32_t usb_chunk_receive_time = 0;
+uint32_t usb_last_sent_time = 0;
 
 const uint32_t usb_partial_message_timeout_ms = 500;
+const uint32_t usb_sending_timeout_ms = 500;
 
 MessageBuffer usb_response_buffer = {};
 
@@ -447,7 +449,7 @@ inline Readout adjust_direction(Readout && readout){
     return readout;
 }
 
-void usb_onreset(){
+void usb_reset_buffers(){
     usb_response_buffer = {};
     usb_receive_buffer = {};
     usb_chunk_receive_time = 0;
@@ -472,16 +474,32 @@ void usb_serialize_response(MessageBuffer & usb_response_buffer, FullReadout con
         }
     }
 
+    // Queue the readout history to the send buffer.
+    if(usb_readouts_to_send > 0){
+        // Stop if we have caught up to the readout history.
+        if (not readout_history_available()) return readout_history_reset();
+        
+        // Send the readout to the host.
+        usb_response_buffer.write_index = write_readout(usb_response_buffer.data, adjust_direction(readout_history_pop()));
+
+        // Readout added to the USB buffer.
+        usb_readouts_to_send -= 1;
+
+        return;
+    }
+
     // Stream readouts but only once per readout number.
     if(usb_stream_state and usb_stream_last_sent != readout.readout_number){
         usb_response_buffer.write_index = write_full_readout(usb_response_buffer.data, readout);
         usb_stream_last_sent = readout.readout_number;
+        return;
     }
 
     // Send unit test response if requested.
     if (usb_reply_unit_test) {
         usb_response_buffer.write_index = write_unit_test(usb_response_buffer.data, usb_unit_test_function);
         usb_reply_unit_test = false;
+        return;
     }
 
     // Send control parameters if requested.
@@ -494,24 +512,14 @@ void usb_serialize_response(MessageBuffer & usb_response_buffer, FullReadout con
     if (usb_reply_current_factors) {
         usb_response_buffer.write_index = write_current_calibration(usb_response_buffer.data, current_calibration);
         usb_reply_current_factors = false;
+        return;
     }
 
     // Send trigger angles if requested.
     if (usb_reply_hall_positions) {
         usb_response_buffer.write_index = write_position_calibration(usb_response_buffer.data, position_calibration);
         usb_reply_hall_positions = false;
-    }
-
-    // Queue the readout history to the send buffer.
-    if(usb_readouts_to_send > 0){
-        // Stop if we have caught up to the readout history.
-        if (not readout_history_available()) return readout_history_reset();
-        
-        // Send the readout to the host.
-        usb_response_buffer.write_index = write_readout(usb_response_buffer.data, adjust_direction(readout_history_pop()));
-
-        // Readout added to the USB buffer.
-        usb_readouts_to_send -= 1;
+        return;
     }
 }
 
@@ -522,7 +530,7 @@ void usb_receive_data(uint8_t * rx_buffer, int rx_size) {
     // We have a partial message that has timed out; reset the buffer.
     if (usb_receive_buffer.write_index > 0 and 
         (HAL_GetTick() - usb_chunk_receive_time) > usb_partial_message_timeout_ms) {
-        usb_onreset();
+        usb_reset_buffers();
         return;
     }
     
@@ -556,7 +564,7 @@ void usb_receive_data(uint8_t * rx_buffer, int rx_size) {
 
     if (not expected_size) {
         // Invalid command code; reset the USB buffers.
-        usb_onreset();
+        usb_reset_buffers();
         return;
     }
     
@@ -583,7 +591,7 @@ void usb_receive_data(uint8_t * rx_buffer, int rx_size) {
     // Handle the complete command.
     if(handle_command(usb_receive_buffer)){
         // Invalid command; reset the USB buffers.
-        usb_onreset();
+        usb_reset_buffers();
         return;
     }
     
@@ -679,11 +687,20 @@ void app_tick() {
 
     if(usb_update(
         usb_response_buffer.data, usb_response_buffer.write_index, 
-        usb_receive_data, usb_onreset)
+        usb_receive_data)
     ){
         // Data was sent; clear the response buffer.
         usb_response_buffer.write_index = 0;
-    };
+        usb_last_sent_time = HAL_GetTick();
+    } else if (usb_response_buffer.write_index > 0) {
+        // We have data to send but the USB queue is busy.
+        if(HAL_GetTick() - usb_last_sent_time > usb_sending_timeout_ms){
+            // Timeout waiting for USB to send; reset the USB buffers.
+            usb_reset_buffers();
+            // And the other USB buffers.
+            usb_reset();
+        }
+    }
     
 }
 
