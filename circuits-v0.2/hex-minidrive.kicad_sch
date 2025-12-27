@@ -9975,12 +9975,12 @@
 		)
 		(uuid "5a428642-ad0e-444d-a997-5cf228eeb802")
 	)
-	(text "Can this resistor be removed and the pin left unconnected?"
+	(text "We absolutely need this resistor \neven if we don't use the 5V LDO."
 		(exclude_from_sim no)
-		(at 187.706 303.022 0)
+		(at 189.738 304.8 0)
 		(effects
 			(font
-				(size 1.27 1.27)
+				(size 1 1)
 			)
 		)
 		(uuid "6062fec7-05c7-4123-b878-6313153b145f")
