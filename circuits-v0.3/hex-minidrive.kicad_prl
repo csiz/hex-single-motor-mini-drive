@@ -5,10 +5,11 @@
     "auto_track_width": true,
     "hidden_netclasses": [],
     "hidden_nets": [
+      "VCC",
       "GND"
     ],
-    "high_contrast_mode": 0,
-    "net_color_mode": 1,
+    "high_contrast_mode": 1,
+    "net_color_mode": 2,
     "opacity": {
       "images": 0.6,
       "pads": 1.0,
@@ -34,6 +35,7 @@
       "vias",
       "footprint_text",
       "footprint_anchors",
+      "ratsnest",
       "grid",
       "footprints_front",
       "footprints_back",
