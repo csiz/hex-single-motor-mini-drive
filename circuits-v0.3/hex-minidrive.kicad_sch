@@ -598,7 +598,7 @@
 				)
 			)
 			(property "Value" "10kΩ"
-				(at 0 2.032 0)
+				(at 0 2.286 0)
 				(do_not_autoplace)
 				(effects
 					(font
@@ -607,7 +607,7 @@
 				)
 			)
 			(property "Footprint" "Library:R0402"
-				(at 0 -8.89 0)
+				(at 0 -8.636 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -616,7 +616,7 @@
 				)
 			)
 			(property "Datasheet" "https://item.szlcsc.com/datasheet/0402WGF1002TCE/26487.html"
-				(at 0 9.906 0)
+				(at 0 8.128 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -625,7 +625,7 @@
 				)
 			)
 			(property "Description" "Type:Thick Film Resistor Resistance:10kΩ Tolerance:±1% Tolerance:±1% Power(Watts):62.5mW Voltage-Supply(Max):50V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-				(at 0 12.446 0)
+				(at 0 5.842 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -634,7 +634,7 @@
 				)
 			)
 			(property "Manufacturer Part" "0402WGF1002TCE"
-				(at 0 -1.524 0)
+				(at 0 -1.778 0)
 				(do_not_autoplace)
 				(effects
 					(font
@@ -643,7 +643,7 @@
 				)
 			)
 			(property "Manufacturer" "UNI-ROYAL(厚声)"
-				(at 0 14.986 0)
+				(at 0 12.954 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -652,7 +652,7 @@
 				)
 			)
 			(property "Supplier Part" "C25744"
-				(at 0 17.272 0)
+				(at 0 15.24 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -661,7 +661,7 @@
 				)
 			)
 			(property "Supplier" "LCSC"
-				(at 0 19.304 0)
+				(at 0 17.272 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -670,7 +670,7 @@
 				)
 			)
 			(property "LCSC Part Name" "10kΩ ±1% 62.5mW 厚膜电阻"
-				(at 0 6.604 0)
+				(at 0 10.668 0)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -679,7 +679,7 @@
 				)
 			)
 			(property "LCSC Part #" "C25744"
-				(at 0 -2.794 0)
+				(at 0 -3.048 0)
 				(do_not_autoplace)
 				(effects
 					(font
