@@ -3,14 +3,14 @@ Hex Mini Drive Circuit
 
 Version v0.2
 
-TODO for next circuit
----------------------
+TODO for v0.3
+-------------
 
-[ ] Maybe switch to a oscillation damping gate resistor of 3ohm. The AO4266E switching parameter uses 
-Rgen = 3ohm, I think this is their recommended gate resistance.
+[v] Maybe switch to a oscillation damping gate resistor of 3ohm. The AO4266E switching parameter uses 
+Rgen = 3ohm, I think this is their recommended gate resistance. Switched to 4.7ohm, closest basic resistor.
 
-[ ] Aaaargh, BOOT0 pin needs a pulldown resistor on the STM32G4!
-[ ] VREF+ should be tied to VDDA...
+[v] Aaaargh!!! BOOT0 pin needs a pulldown resistor on the STM32G4!
+[x] VREF+ should be tied to VDDA... VREF+ now has the capacitance required and drives the amplifier refrence too.
 
 
 [v] Think about connectors better. We should either drop or double down on USB-C. It would be very user friendly and the power delivery 
@@ -24,8 +24,8 @@ tight and in-house. Would we want a cheap single-sided board with USB-C and also
 [v] Via diameter was too small, should be at least 0.2/0.45
 
 
-Need to implement in the new circuit
-------------------------------------
+Need to implement in v0.2
+-------------------------
 
 Features of current version:
 [v] Measure power line voltage.

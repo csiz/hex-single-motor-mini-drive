@@ -1,17 +1,17 @@
 Hex Mini FOC driver
 ===================
 
-Brushless motor driver for mini gear motors. This driver focuses on fine force control
+Brushless motor driver for mini gear motors and servos. This driver focuses on fine force control
 using field oriented control (FOC). The motor can be commanded to move to track position, 
 velocity, and/or force. The driver will maintain the current wave exactly 90 degrees out
-of phase to the EMF wave for maximum efficieny. Position is tracked via hall sensors and
-EMF feedback.
+of phase to the EMF wave for maximum efficieny. Position is tracked via hall sensors, EMF
+feedback and I2C rotary sensors.
 
 Electrical ranges: 
-- Maximum motor voltage: 20V
-- Maximum current: 10A
-- Minimum motor voltage: 8.5V
-- Nominal circuit voltage: 3.3V
+- Maximum motor voltage: 28V
+- Maximum current: 5A
+- Minimum motor voltage: 6V
+- Nominal I2C voltage: 3.3V
 
 
 This project has 4 main components, for details look at the `readme.md` files in each directory:
