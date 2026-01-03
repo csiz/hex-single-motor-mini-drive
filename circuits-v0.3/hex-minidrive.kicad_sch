@@ -1529,7 +1529,7 @@
 					(hide yes)
 				)
 			)
-			(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET"
+			(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET_shifted"
 				(at 0 24.638 0)
 				(effects
 					(font
@@ -20488,7 +20488,7 @@
 				(hide yes)
 			)
 		)
-		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET"
+		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET_shifted"
 			(at 420.37 177.292 0)
 			(effects
 				(font
@@ -21111,7 +21111,7 @@
 				(hide yes)
 			)
 		)
-		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET"
+		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET_shifted"
 			(at 278.13 177.292 0)
 			(effects
 				(font
@@ -27532,7 +27532,7 @@
 				(hide yes)
 			)
 		)
-		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET"
+		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET_shifted"
 			(at 354.33 177.292 0)
 			(effects
 				(font
@@ -29674,7 +29674,7 @@
 				(hide yes)
 			)
 		)
-		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET"
+		(property "Footprint" "Library:DFN-8_L3.0-W3.0-P0.65-BL-MOSFET_shifted"
 			(at 212.09 177.292 0)
 			(effects
 				(font
