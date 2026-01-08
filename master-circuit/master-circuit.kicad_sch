@@ -11377,14 +11377,14 @@
 		)
 		(uuid "d47aa781-9fd9-40cb-a078-25db012a9aec")
 	)
-	(text "Touch screen: https://www.aliexpress.com/item/1005009132201384.html"
+	(text "Touch screen: https://www.aliexpress.com/item/1005009132201384.html\n\nDescription\nReport Item\nIPS 1.69 inch TFT LCD Round Screen\n\nSize: 1.69 inch\nLCD Type: TFT\nOutline Dimensions: 30.07*37.43*1.6mm\nActive Area: 27.97*32.63mm\nNumber of Dots: 240(RGB)*280\nController: ST7789T3\nTouch IC: CST816T\nPIN NO.: 18P\nDisplay Color: 262K\nBacklight: White LED\nPolarizer Mode: Transmissive\nData Interface: 4-Wire-SPI\nInput Voltage: 2.4V - 3.3V\nOperating Temp.: -20 ~ 70 degree\nViewing Direction: All"
 		(exclude_from_sim no)
-		(at 122.428 320.802 0)
+		(at 121.666 320.548 0)
 		(effects
 			(font
 				(size 1 1)
 			)
-			(justify left)
+			(justify left top)
 		)
 		(uuid "dc3c1500-2bac-45e3-8980-6a94e01c0624")
 	)
@@ -11452,7 +11452,7 @@
 		)
 		(uuid "07302b45-17f5-40a9-b307-7dc77713dc57")
 	)
-	(text_box "Hex Master\n\nThis circuit board has WiFi connectivity and controls 24 Hex Mini Servos \nvia the SPI bus.\n* ESP32-S3 as main control processor with WiFi and Bluetooth.\n* CAN bus for external motors, onwards connection.\n* 2 I2C connectors for sensor boards.\n* Touch Screen for setup and manual controls.\n* USB for programming/config.\n* Host USB for sensor suite."
+	(text_box "Hex Master\n\nThis circuit board has WiFi connectivity and controls 24 Hex Mini Servos \nvia the SPI bus.\n* ESP32-S3 as main control processor with WiFi and Bluetooth.\n* CAN bus for external motors, onwards connection.\n* 2 I2C connectors for sensor boards.\n* Touch Screen for setup and manual controls.\n* USB for programming/config.\n* Host USB for sensor suite.\n\nTODO:\n[ ] BOOT0 pull up is too weak, need our own."
 		(exclude_from_sim no)
 		(at 15.24 15.24 0)
 		(size 102.87 39.37)
