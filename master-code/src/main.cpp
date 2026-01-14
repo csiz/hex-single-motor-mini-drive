@@ -33,7 +33,7 @@ void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_
 
 const gpio_num_t status_pin = GPIO_NUM_35;
 const int display_width = 240;
-const int display_height = 280;
+const int display_height = 320;
 
 const gpio_num_t display_mosi = GPIO_NUM_11; // MOSI pin
 const gpio_num_t display_miso = GPIO_NUM_13; // MISO pin

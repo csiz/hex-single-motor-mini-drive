@@ -25,7 +25,7 @@
 
 /* Maximal horizontal and vertical resolution to support by the library.*/
 #define LV_HOR_RES_MAX          (240)
-#define LV_VER_RES_MAX          (280)
+#define LV_VER_RES_MAX          (320)
 
 /* Color depth: 1 (1 bpp), 8 (RGB332), 16 (RGB565), 32 (ARGB8888) */
 #define LV_COLOR_DEPTH          16
