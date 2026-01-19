@@ -1,3 +1,4 @@
 .pio
 .vscode
 compile_commands.json
+managed_components/
