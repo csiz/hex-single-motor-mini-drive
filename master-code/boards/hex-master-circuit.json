@@ -1,9 +1,5 @@
 {
   "build": {
-    "arduino":{
-      "ldscript": "esp32s3_out.ld",
-      "partitions": "default_2MB.csv"
-    },
     "core": "esp32",
     "extra_flags": [],
     "f_cpu": "240000000L",
@@ -30,14 +26,13 @@
     "openocd_target": "esp32s3.cfg"
   },
   "frameworks": [
-    "arduino",
     "espidf"
   ],
-  "name": "Hex master control circuit: ESP32-S3 (2 MB QD, No PSRAM)",
+  "name": "Hex master control circuit: ESP32-S3 (16 MB QD, 8 MB PSRAM)",
   "upload": {
-    "flash_size": "2MB",
-    "maximum_ram_size": 327680,
-    "maximum_size": 2097152,
+    "flash_size": "16MB",
+    "maximum_ram_size": 8388608,
+    "maximum_size": 1572864,
     "require_upload_port": true,
     "speed": 460800
   },
