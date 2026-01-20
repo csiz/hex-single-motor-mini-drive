@@ -1,3 +1,3 @@
 #pragma once
 
-void dpp_enrollee_init();
+void start_wifi_provisioning();

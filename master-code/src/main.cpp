@@ -22,11 +22,13 @@ void main_task(void *arg) {
   }
   ESP_ERROR_CHECK(ret);
 
-  dpp_enrollee_init();
-
+  
   // Setup everything
   setup_status_led();
   setup_display_and_lvgl();
+
+  start_wifi_provisioning();
+
   
   int64_t lastBlink = 0;
   bool statusState = false;
