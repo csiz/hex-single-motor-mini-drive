@@ -3,6 +3,7 @@
 #include <freertos/task.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
+#include <esp_task_wdt.h>
 
 #include "display.hpp"
 #include "io.hpp"
@@ -14,7 +15,10 @@ static const char* TAG = "main";
 int loop_number = 0;
 
 void main_task(void *arg) {
-  //Initialize NVS
+  // Register this task with the watchdog timer.
+  esp_task_wdt_add(NULL);
+
+  //Initialize NVS, used for WiFi provisioning and other settings.
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
       ESP_ERROR_CHECK(nvs_flash_erase());
@@ -34,11 +38,12 @@ void main_task(void *arg) {
   bool statusState = false;
   
   while (1) {
-    // Handle displaya and LVGL tasks.
-    update_display();
-    
     // Blink the built-in status LED to show the system is running
     int64_t currentTime = esp_timer_get_time() / 1000; // Convert to milliseconds
+
+    // Handle displaya and LVGL tasks.
+    update_display(currentTime);
+    
     
     if (currentTime - lastBlink > 1000) {
       statusState = !statusState;
@@ -46,8 +51,12 @@ void main_task(void *arg) {
       set_status_led_brightness(duty);
       lastBlink = currentTime;
     }
+
+    // We need to reset the watchdog timer regularly.
+    esp_task_wdt_reset();
     
-    vTaskDelay(pdMS_TO_TICKS(5)); // LVGL needs frequent updates
+    // Must sleep at last 1ms to let the idle task handle the watchdog and other housekeeping.
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 
   

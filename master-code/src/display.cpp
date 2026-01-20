@@ -8,6 +8,7 @@
 #include <lvgl.h>
 #include <esp_lcd_panel_st7789.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 
 static const char* TAG = "display";
 
@@ -120,7 +121,11 @@ void setup_display_and_lvgl() {
   ESP_LOGI(TAG, "Hello World label created!");
 }
 
-void update_display() {
-    // This function can be used to trigger LVGL tasks if needed
-    lv_timer_handler();
+static uint32_t next_lvgl_call = 0;
+
+void update_display(int64_t current_time_ms) {
+  if (current_time_ms >= next_lvgl_call) {
+    uint32_t delay_ms = lv_timer_handler();
+    next_lvgl_call = current_time_ms + delay_ms;
+  }
 }
