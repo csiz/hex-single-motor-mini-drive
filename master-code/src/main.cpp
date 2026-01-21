@@ -8,6 +8,7 @@
 #include "display.hpp"
 #include "io.hpp"
 #include "wifi.hpp"
+#include "https_server.hpp"
 
 static const char* TAG = "main";
 
@@ -32,6 +33,9 @@ void main_task(void *arg) {
   setup_display_and_lvgl();
 
   start_wifi_provisioning();
+  
+  setup_mdns();
+  setup_https_server();
 
   
   int64_t lastBlink = 0;

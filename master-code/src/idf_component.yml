@@ -1,2 +1,3 @@
 dependencies:
   qrcode: "^0.1.0"
+  mdns: "^1.9.1"
