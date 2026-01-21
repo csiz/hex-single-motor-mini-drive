@@ -35,6 +35,7 @@ void main_task(void *arg) {
   start_wifi_provisioning();
   
   setup_mdns();
+  setup_http_server();
   setup_https_server();
 
   

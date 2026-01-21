@@ -1,0 +1,1 @@
+These are example certificates to get the https running for local development, they'll show up as untrusted in the browser and also I'm uploading them to github.

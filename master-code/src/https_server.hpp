@@ -1,7 +1,7 @@
-#ifndef HTTPS_SERVER_HPP
-#define HTTPS_SERVER_HPP
+#pragma once
 
 void setup_https_server();
+void setup_http_server();
 void setup_mdns();
 
-#endif // HTTPS_SERVER_HPP
+
