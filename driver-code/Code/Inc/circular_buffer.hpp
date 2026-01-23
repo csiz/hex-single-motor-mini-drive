@@ -122,7 +122,7 @@ public:
     if (size > available_size) return 1;
   
     // Advance the read head.
-    read_head += size;
+    read_head = read_head + size;
   
     return 0;
   }
