@@ -14,6 +14,8 @@
 #include "io.hpp"
 #include "usb_com.hpp"
 
+#include "message_parsing.hpp"
+
 
 #include <cstddef>
 #include <cstdint>
@@ -38,7 +40,8 @@ uint32_t last_update_time_millis = 0;
 float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
 
-MessageBuffer usb_receive_buffer = {};
+COBS_Buffer usb_encoding_buffer = {};
+
 uint32_t usb_chunk_receive_time = 0;
 uint32_t usb_last_sent_time = 0;
 
@@ -116,27 +119,27 @@ inline bool run_unit_test(UnitTestFunction test_function) {
 }
 
 // Handle the command on the buffer; returns whether there was an error.
-bool handle_command(MessageBuffer const& buffer) {
+void handle_message(uint8_t const * data, size_t size) {
     // Check the message has a header and tail and passes the CRC check.
-    if (check_message_for_errors(buffer.data, buffer.write_index)) return true;
+    if (check_message_for_errors(data, size)) return;
 
     // Get the message code from the data header.
-    const uint16_t code = read_uint16(buffer.data);
+    const uint16_t code = read_uint16(data);
 
-    const BasicCommand command = parse_basic_command(buffer.data, buffer.write_index);
+    const BasicCommand command = parse_basic_command(data, size);
 
 
     switch (static_cast<MessageCode>(code)) {
         case NULL_COMMAND:
             // No command received; ignore it.
-            return true;
+            return;
 
         case STREAM_FULL_READOUTS: {
             // Cotinuously stream data if timeout > 0.
             usb_stream_state = command.timeout;
             // Also stop the motor if we stop the stream.
             if (not usb_stream_state) set_motor_command(DriverState{.mode = DriverMode::OFF});
-            return false;
+            return;
         }
         case GET_READOUTS_SNAPSHOT:
             // Cancel streaming; so we can take a data snapshot without interruptions.
@@ -146,47 +149,47 @@ bool handle_command(MessageBuffer const& buffer) {
             // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
             usb_wait_full_history = true;
             usb_readouts_to_send = history_size;
-            return false;
+            return;
 
         // Turn off the motor driver.
         case SET_STATE_OFF:
             // Repeat command, with the interrupt guards.
             set_motor_command(DriverState{.mode = DriverMode::OFF});
-            return false;
+            return;
             
         // Measure the motor phase currents.
         
         case SET_STATE_TEST_ALL_PERMUTATIONS:
             motor_start_test(test_all_permutations, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_GROUND_SHORT:
             motor_start_test(test_ground_short, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_POSITIVE_SHORT:
             motor_start_test(test_positive_short, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_U_DIRECTIONS:
             motor_start_test(test_u_directions, command.value, command.timeout > 0);
-            return false;
+            return;
 
         case SET_STATE_TEST_U_INCREASING:
             motor_start_test(test_u_increasing, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_U_DECREASING:
             motor_start_test(test_u_decreasing, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_V_INCREASING:
             motor_start_test(test_v_increasing, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_V_DECREASING:
             motor_start_test(test_v_decreasing, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_W_INCREASING:
             motor_start_test(test_w_increasing, command.value, command.timeout > 0);
-            return false;
+            return;
         case SET_STATE_TEST_W_DECREASING:
             motor_start_test(test_w_decreasing, command.value, command.timeout > 0);
-            return false;
+            return;
 
         // Drive the motor.
         case SET_STATE_DRIVE_6_SECTOR: {
@@ -195,7 +198,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .duration = command.timeout, 
                 .active_pwm = clip_to_short(-pwm_max, +pwm_max, command.value * control_parameters.motor_direction),
             });
-            return false;
+            return;
         }
 
         case SET_STATE_DRIVE_PERIODIC: {
@@ -206,7 +209,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .active_pwm = clip_to_short(0, +pwm_max, command.value),
                 .angular_speed = clip_to_short(-max_angular_speed, +max_angular_speed, command.second * control_parameters.motor_direction),
             });
-            return false;
+            return;
         }
 
         case SET_STATE_DRIVE_SMOOTH: {
@@ -215,7 +218,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .duration = command.timeout, 
                 .target_pwm = clip_to_short(-pwm_max, +pwm_max, command.value * control_parameters.motor_direction),
             });
-            return false;
+            return;
         }
 
         case SET_STATE_DRIVE_TORQUE: {
@@ -224,7 +227,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .duration = command.timeout,
                 .secondary_target = clip_to_short(-max_drive_current, +max_drive_current, command.value * control_parameters.motor_direction),
             });
-            return false;
+            return;
         }
 
         case SET_STATE_DRIVE_BATTERY_POWER: {
@@ -233,7 +236,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .duration = command.timeout,
                 .secondary_target = clip_to_short(-max_drive_power, +max_drive_power, command.value * control_parameters.motor_direction),
             });
-            return false;
+            return;
         }
 
         case SET_STATE_DRIVE_SPEED: {
@@ -242,7 +245,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .duration = command.timeout,
                 .secondary_target = clip_to_short(-max_angular_speed, +max_angular_speed, command.value * control_parameters.motor_direction),
             });
-            return false;
+            return;
         }
 
         case SET_STATE_SEEK_ANGLE_WITH_POWER: {
@@ -255,7 +258,7 @@ bool handle_command(MessageBuffer const& buffer) {
                     .max_secondary_target = clip_to_short(0, max_drive_power, command.third),
                 }
             });
-            return false;
+            return;
         }
 
         case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
@@ -268,7 +271,7 @@ bool handle_command(MessageBuffer const& buffer) {
                     .max_secondary_target = clip_to_short(0, max_drive_current, command.third),
                 }
             });
-            return false;
+            return;
         }
 
         case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
@@ -281,13 +284,13 @@ bool handle_command(MessageBuffer const& buffer) {
                     .max_secondary_target = clip_to_short(0, max_angular_speed, command.third),
                 }
             });
-            return false;
+            return;
         }
 
         // Freewheel the motor.
         case SET_STATE_FREEWHEEL:
             set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
-            return false;
+            return;
 
         case SET_STATE_HOLD_U_POSITIVE: {
             set_motor_command(DriverState{ 
@@ -298,7 +301,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
             });
-            return false;
+            return;
         }
         case SET_STATE_HOLD_V_POSITIVE: {
             set_motor_command(DriverState{ 
@@ -309,7 +312,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
             });
-            return false;
+            return;
         }
         case SET_STATE_HOLD_W_POSITIVE: {
             set_motor_command(DriverState{ 
@@ -320,7 +323,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
             });
-            return false;
+            return;
         }
         case SET_STATE_HOLD_U_NEGATIVE: {
             set_motor_command(DriverState{ 
@@ -332,7 +335,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
             });
-            return false;
+            return;
         }
         case SET_STATE_HOLD_V_NEGATIVE: {
             set_motor_command(DriverState{ 
@@ -344,7 +347,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
             });
-            return false;
+            return;
         }
         case SET_STATE_HOLD_W_NEGATIVE: {
 
@@ -357,54 +360,54 @@ bool handle_command(MessageBuffer const& buffer) {
                 .mode = DriverMode::HOLD,
                 .duration = command.timeout, 
             });
-            return false;
+            return;
         }
         case SET_CURRENT_FACTORS:
-            current_calibration = parse_current_calibration(buffer.data, buffer.write_index);
+            current_calibration = parse_current_calibration(data, size);
             usb_reply_current_factors = true;
-            return false;
+            return;
             
         case RESET_CURRENT_FACTORS:
             // Reset the current factors to the default values.
             current_calibration = default_current_calibration;
             usb_reply_current_factors = true;
-            return false;
+            return;
 
         case SET_HALL_POSITIONS:
-            position_calibration = parse_position_calibration(buffer.data, buffer.write_index);
+            position_calibration = parse_position_calibration(data, size);
             usb_reply_hall_positions = true;
-            return false;
+            return;
 
         case RESET_HALL_POSITIONS:
             // Reset the hall positions to the default values.
             position_calibration = default_position_calibration;
             usb_reply_hall_positions = true;
-            return false;
+            return;
 
         case SET_CONTROL_PARAMETERS:
-            control_parameters = parse_control_parameters(buffer.data, buffer.write_index);
+            control_parameters = parse_control_parameters(data, size);
             usb_reply_control_parameters = true;
-            return false;
+            return;
 
         case RESET_CONTROL_PARAMETERS:
             control_parameters = default_control_parameters;
             usb_reply_control_parameters = true;
-            return false;
+            return;
 
         case GET_CURRENT_FACTORS:
             usb_reply_current_factors = true;
-            return false;
+            return;
         case GET_HALL_POSITIONS:
             usb_reply_hall_positions = true;
-            return false;
+            return;
 
         case GET_CONTROL_PARAMETERS:
             usb_reply_control_parameters = true;
-            return false;
+            return;
 
         case SET_ANGLE: {
             set_angle(command.value);
-            return false;
+            return;
         }
 
         case SAVE_SETTINGS_TO_FLASH:
@@ -415,9 +418,7 @@ bool handle_command(MessageBuffer const& buffer) {
                 position_calibration = get_position_calibration();
                 control_parameters = get_control_parameters();
                 
-                return false;
-            } else {
-                return true;
+                return;
             }
 
         // We shouldn't receive these messages; the driver only sends them.
@@ -427,18 +428,18 @@ bool handle_command(MessageBuffer const& buffer) {
         case READOUT:
         case FULL_READOUT:
         case UNIT_TEST_OUTPUT:
-            return true;
+            return;
 
         case RUN_UNIT_TEST_FUNKY_ATAN:
-            return run_unit_test(unit_test_funky_atan);
+            run_unit_test(unit_test_funky_atan);
+            return;
         case RUN_UNIT_TEST_FUNKY_ATAN_PART_2:
-            return run_unit_test(unit_test_funky_atan_part_2);
+            run_unit_test(unit_test_funky_atan_part_2);
+            return;
         case RUN_UNIT_TEST_FUNKY_ATAN_PART_3:
-            return run_unit_test(unit_test_funky_atan_part_3);
+            run_unit_test(unit_test_funky_atan_part_3);
+            return;
     }
-
-    // If we get here, we have an unknown command code.
-    return true;
 }
 
 
@@ -451,7 +452,7 @@ inline Readout adjust_direction(Readout && readout){
 
 void usb_reset_buffers(){
     usb_response_buffer = {};
-    usb_receive_buffer = {};
+    usb_encoding_buffer.decode_reset();
     usb_chunk_receive_time = 0;
     usb_stream_state = 0;
 }
@@ -524,86 +525,15 @@ void usb_serialize_response(MessageBuffer & usb_response_buffer, FullReadout con
 }
 
 void usb_receive_data(uint8_t * rx_buffer, int rx_size) {
-    // We need to read at least the message header to determine the size.
-    const size_t total_data_received = usb_receive_buffer.write_index + rx_size;
-
-    // We have a partial message that has timed out; reset the buffer.
-    if (usb_receive_buffer.write_index > 0 and 
+    // We have a partial message that has timed out; reset the buffer and continue 
+    // reading as a fresh message.
+    if (usb_encoding_buffer.decode_ongoing() and 
         (HAL_GetTick() - usb_chunk_receive_time) > usb_partial_message_timeout_ms) {
         usb_reset_buffers();
-        return;
-    }
-    
-    // Copy the partial header if we don't have enough data yet.
-    if (total_data_received < header_size) {
-        // Not enough data to determine message size; just copy the data.
-        std::memcpy(
-            &usb_receive_buffer.data[usb_receive_buffer.write_index],
-            rx_buffer, 
-            rx_size
-        );
-        usb_chunk_receive_time = HAL_GetTick();
-        usb_receive_buffer.write_index += rx_size;
-        return;
     }
 
-    // Copy until we have a full header.
-    const size_t header_bytes_needed = header_size - usb_receive_buffer.write_index;
-    std::memcpy(
-        &usb_receive_buffer.data[usb_receive_buffer.write_index], 
-        rx_buffer, 
-        header_bytes_needed
-    );
+    usb_encoding_buffer.decode_chunk(rx_buffer, rx_size, handle_message);
     usb_chunk_receive_time = HAL_GetTick();
-    usb_receive_buffer.write_index = header_size;
-
-    // The first number is the command code, the remainder is the command data.
-    const uint16_t code = read_uint16(usb_receive_buffer.data);
-
-    const size_t expected_size = get_message_size(code);
-
-    if (not expected_size) {
-        // Invalid command code; reset the USB buffers.
-        usb_reset_buffers();
-        return;
-    }
-    
-    if (total_data_received < expected_size) {
-        std::memcpy(
-            &usb_receive_buffer.data[usb_receive_buffer.write_index], 
-            &rx_buffer[header_bytes_needed], 
-            rx_size - header_bytes_needed
-        );
-        usb_chunk_receive_time = HAL_GetTick();
-        usb_receive_buffer.write_index += rx_size - header_bytes_needed;
-        return;
-    }
-
-    // We have a complete message, copy the remaining data.
-    const size_t remaining_message_bytes = expected_size - usb_receive_buffer.write_index;
-    std::memcpy(
-        &usb_receive_buffer.data[usb_receive_buffer.write_index], 
-        &rx_buffer[header_bytes_needed], 
-        remaining_message_bytes
-    );
-    usb_receive_buffer.write_index += remaining_message_bytes;
-
-    // Handle the complete command.
-    if(handle_command(usb_receive_buffer)){
-        // Invalid command; reset the USB buffers.
-        usb_reset_buffers();
-        return;
-    }
-    
-    // Clear the USB receive buffer for the next message.
-    usb_receive_buffer.write_index = 0;
-    usb_chunk_receive_time = 0;
-        
-    const size_t remaining_rx_bytes = rx_size - (header_bytes_needed + remaining_message_bytes);
-    if (remaining_rx_bytes > 0) {
-        // There is more data in the RX buffer; process it recursively.
-        usb_receive_data(&rx_buffer[header_bytes_needed + remaining_message_bytes], remaining_rx_bytes);
-    }
 }
 
 
@@ -684,15 +614,23 @@ void app_tick() {
 
     // Queue the state readouts on the USB buffer.
     usb_serialize_response(usb_response_buffer, readout);
+    
+    if (not usb_encoding_buffer.is_message_encoded()) {
+        usb_encoding_buffer.encode_message(
+            usb_response_buffer.data, 
+            usb_response_buffer.write_index
+        );
+    }
 
     if(usb_update(
-        usb_response_buffer.data, usb_response_buffer.write_index, 
+        usb_encoding_buffer.encoded_data, usb_encoding_buffer.encoded_length, 
         usb_receive_data)
     ){
         // Data was sent; clear the response buffer.
-        usb_response_buffer.write_index = 0;
+        usb_response_buffer = {};
+        usb_encoding_buffer.encode_reset();
         usb_last_sent_time = HAL_GetTick();
-    } else if (usb_response_buffer.write_index > 0) {
+    } else if (usb_encoding_buffer.is_message_encoded()) {
         // We have data to send but the USB queue is busy.
         if(HAL_GetTick() - usb_last_sent_time > usb_sending_timeout_ms){
             // Timeout waiting for USB to send; reset the USB buffers.

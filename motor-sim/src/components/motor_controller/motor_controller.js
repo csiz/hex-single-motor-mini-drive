@@ -3,8 +3,12 @@ import {serial as serial_polyfill} from "web-serial-polyfill";
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, command_codes, serialise_command, header_size, default_command_options} from "./interface.js";
 
+import {COBS_Buffer} from "hex-mini-drive-interface";
+
+
 // Re-export the codes from the interface.
 export { command_codes };
+
 
 // USB serial port commands
 // ------------------------
@@ -46,7 +50,7 @@ export async function open_usb_com_port(port){
       // I don't know what florControl does! Unfortunately open doesn't have a `highWaterMark` option
       // to would slow the internal USB reader when the webcode is slow. Thus data appears to keep 
       // coming after the driver stops sending it. SerialPort is just reading from the internal buffer.
-      await port.open({baudRate: 115200, bufferSize: 4096, flowControl: "hardware"});
+      await port.open({baudRate: 115200, bufferSize: 1024*16, flowControl: "none"});
       break;
     } catch (error) {
       if (error.name === "InvalidStateError") {
@@ -65,6 +69,7 @@ export async function open_usb_com_port(port){
 
 // Motor driver control
 // --------------------
+
 
 export async function start_motor_controller_loop(options){
   const controller = new MotorController(options);
@@ -100,6 +105,8 @@ export class MotorController {
     this.port = opened_port;
     this.writer = opened_port.writable.getWriter();
     this.reader = opened_port.readable.getReader();
+
+    this.encoding_buffer = new COBS_Buffer();
 
     this.onmessage = onmessage;
     this.onerror = onerror;
@@ -177,17 +184,64 @@ export class MotorController {
     * The generator yields the number of bytes received.
   */
   async reading_loop() {
+    
     let bytes_received = 0;
-
+    
     let bytes_discarded = 0;
-
+    
     let last_bytes_received = 0;
     let last_received_time = Date.now();
-
+    
     let receive_rate = 0.0;
+    
+    let receive_message = (message_data) => {
 
-    let byte_array = new Uint8Array();
+      // The message code indicates the type of message and the expected size.
+      const message_code = new DataView(message_data.buffer, 0, header_size).getUint16(0);
 
+      // Get the parser and expected size for the message; if we can't find it, we must've received a spurious code.
+      const {parse_function} = parser_mapping[message_code] ?? {parse_function: null};
+
+      // Check if we have a parsing function for the message code.
+      if (parse_function === null) {
+        // Unrecognised message code; we must have read the middle of a message. Iterate over each
+        // byte until we find the expected code indicating the start of a valid message.
+        bytes_discarded += message_data.length;
+        return;
+      }
+
+      // We have enough data to parse the message; parse it.
+      const message = parse_function(
+        new DataView(message_data.buffer, 0, message_data.length), 
+        // We compute running averages and current index relative to previous messages of the same type.
+        this.last_message.get(message_code), 
+        // Pass the controller instance for so we can read the calibration parameters.
+        this,
+      );
+
+      // If we have a valid message, report it to the user.
+      if(message) {
+        // Remember for the next message so we can increment the message index.
+        this.last_message.set(message_code, message);
+
+        // Intercept awaited messages and resolve the reply promise.
+        if (this.awaiting_reply.has(message_code)) {
+          const {resolve, data, expected_messages} = this.awaiting_reply.get(message_code);
+          data.push(message);
+          if (data.length === expected_messages) {
+            resolve(data);
+          }
+        } else {
+          // Otherwise stream all replies through the `onmessage` callback.
+          this.onmessage(message);
+        }
+      } else {
+        // Something was wrong parsing the message; discard it.
+        bytes_discarded += message_data.length;
+        console.warn("Message was discarded due to invalid data:", message_code, message_data);
+      }
+    };
+    
     while (true) {
       // Grab all buffered data from the driver serial line.
       const {value: byte_chunk, done} = await this.reader.read();
@@ -220,74 +274,7 @@ export class MotorController {
       // Feedback for connection status on every chunk of data received.
       this.onstatus({bytes_received, bytes_discarded, receive_rate});
 
-
-      // Concatenate the new byte chunk to our message buffer array.
-      byte_array = byte_array.length == 0 ? byte_chunk : new Uint8Array([...byte_array, ...byte_chunk]);
-
-      // We start from the beginning at every chunk. We might receive multiple messages per chunk.
-      let offset = 0;
-
-      // Process all messages in the buffer as long as we received enough data for the header code.
-      while (byte_array.length >= offset + header_size) {
-
-        // The message code indicates the type of message and the expected size.
-        const message_code = new DataView(byte_array.buffer, offset, header_size).getUint16(0);
-
-        // Get the parser and expected size for the message; if we can't find it, we must've received a spurious code.
-        const {parse_function, message_size} = parser_mapping[message_code] ?? {parse_function: null, message_size: null};
-
-        // Check if we have a parsing function for the message code.
-        if (parse_function === null) {
-          // Unrecognised message code; we must have read the middle of a message. Iterate over each
-          // byte until we find the expected code indicating the start of a valid message.
-
-          offset += 1;
-          bytes_discarded += 1;
-
-          // Continue parsing from the next byte.
-          continue;
-        }
-
-        // Wait for enough data to parse the message; break inner loop and await another read.
-        if (byte_array.length < offset + message_size) break;
-
-        // We have enough data to parse the message; parse it.
-        const message = parse_function(
-          new DataView(byte_array.buffer, offset, message_size), 
-          // We compute running averages and current index relative to previous messages of the same type.
-          this.last_message.get(message_code), 
-          // Pass the controller instance for so we can read the calibration parameters.
-          this,
-        );
-
-        // Advance the offset once we parsed the message.
-        offset += message_size;
-
-        // If we have a valid message, report it to the user.
-        if(message) {
-          // Remember for the next message so we can increment the message index.
-          this.last_message.set(message_code, message);
-
-          // Intercept awaited messages and resolve the reply promise.
-          if (this.awaiting_reply.has(message_code)) {
-            const {resolve, data, expected_messages} = this.awaiting_reply.get(message_code);
-            data.push(message);
-            if (data.length === expected_messages) {
-              resolve(data);
-            }
-          } else {
-            // Otherwise stream all replies through the `onmessage` callback.
-            this.onmessage(message);
-          }
-        } else {
-          // Something was wrong parsing the message; discard it.
-          bytes_discarded += message_size;
-          console.warn("Message was discarded due to invalid data:", message_code, byte_array.slice(offset, offset + message_size));
-        }
-      }
-      
-      // Slice our buffer once we have processed all the messages; we can have leftover data.
-      if (offset) byte_array = byte_array.slice(offset);
+      this.encoding_buffer.decode_chunk(byte_chunk, receive_message);
     }
   }
 
@@ -299,7 +286,7 @@ export class MotorController {
   async send_command({command, ...command_options}) {
     if (!this.writer) return;
 
-    const buffer = serialise_command({...default_command_options, command, ...command_options});
+    const buffer = this.encoding_buffer.encode_message(serialise_command({...default_command_options, command, ...command_options}));
 
     await this.writer.write(buffer);
   }
