@@ -3,16 +3,23 @@
 
 #ifdef __cplusplus
 #include <cstdint>
+#include <cstddef>
 extern "C" {
 #else
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #endif
 
 void usb_init();
 
 void usb_deinit();
 
-void usb_received(int len);
+void usb_received(size_t len);
+
+void usb_confirmed_send(size_t len);
+
+void usb_set_control_state(uint16_t control_state);
 
 #ifdef __cplusplus
 }
