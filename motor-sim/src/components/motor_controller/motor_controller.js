@@ -1,5 +1,3 @@
-import {serial as serial_polyfill} from "web-serial-polyfill";
-
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, command_codes, serialise_command, header_size, default_command_options} from "./interface.js";
 
@@ -10,71 +8,27 @@ import {COBS_Buffer} from "hex-mini-drive-interface";
 export { command_codes };
 
 
-// USB serial port commands
-// ------------------------
-
-export const USBD_VID = 56987;
-export const USBD_PID_FS = 56988;
 
 
 // Serial Port Management
 // ----------------------
 
-const serial = navigator.serial ?? serial_polyfill;
-
-/* Get all ports that report as our motor driver. */
-async function grab_ports(){
-  const ports = await serial.getPorts();
-  return ports.filter((port) => {
-    const info = port.getInfo();
-    return info.usbVendorId === USBD_VID && info.usbProductId === USBD_PID_FS;
-  });
-}
-
-/* Prompt for a motor driver port if we can't get it automatically. */
 export async function maybe_prompt_port(){
-  const ports = await grab_ports();
-  if (ports.length == 1) return ports[0];
-  return await serial.requestPort({filters: [{usbVendorId: USBD_VID, usbProductId: USBD_PID_FS}]});
-
+  const ports = await navigator.serial.getPorts();
+  if (ports.length == 1) return ports[0 ];
+  return await navigator.serial.requestPort();
 }
 
-/* Request a COM port and try to connect to the motor driver. */
-export async function open_usb_com_port(port){
-  if (!port) return;
-
-  let tries = 10;
-
-  while(tries-- > 0){
-    try {
-      // I don't know what florControl does! Unfortunately open doesn't have a `highWaterMark` option
-      // to would slow the internal USB reader when the webcode is slow. Thus data appears to keep 
-      // coming after the driver stops sending it. SerialPort is just reading from the internal buffer.
-      await port.open({baudRate: 115200, bufferSize: 1024*16, flowControl: "none"});
-      break;
-    } catch (error) {
-      if (error.name === "InvalidStateError") {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  if (tries <= 0) throw new Error("Port open failed; InvalidStateError after all retries.");
-
-  return port;
+export async function get_port_index(port){
+  const ports = await navigator.serial.getPorts();
+  return ports.findIndex((p) => p === port);
 }
+
 
 
 // Motor driver control
 // --------------------
 
-
-export async function start_motor_controller_loop(options){
-  const controller = new MotorController(options);
-  await controller.start_reading_loop();
-}
 
 /* Motor driver controller using a javascript webapp. 
 
@@ -90,21 +44,14 @@ Parameters:
 */
 export class MotorController {
   constructor({
-    opened_port,
+    port_index,
     onstatus = () => {},
     onmessage = () => {},
     onerror = () => {},
     onready = () => {},
     onclose = () => {},
   }){
-    if (!opened_port) throw new Error("Invalid port provided");
-    if (!opened_port.readable) throw new Error("Port unreadable");
-    if (!opened_port.writable) throw new Error("Port unwritable");
-
-
-    this.port = opened_port;
-    this.writer = opened_port.writable.getWriter();
-    this.reader = opened_port.readable.getReader();
+    this.connection_worker = new Worker(new URL("./usb_connection_worker.js", import.meta.url), {type: "module"});
 
     this.encoding_buffer = new COBS_Buffer();
 
@@ -125,66 +72,7 @@ export class MotorController {
 
     this.awaiting_reply = new Map();
     this.last_message = new Map();
-  }
 
-
-  /* Stop receiving messages close the USB line. */
-  async forget(){
-    try {
-      if (this.reader) {
-        await this.reader.cancel();
-        this.reader = null;
-      }
-      if (this.writer) {
-        await this.writer.abort();
-        this.writer = null;
-      }
-      
-      await this.port.readable.cancel();
-
-      await this.port.close();
-
-      await this.onclose();
-
-    } catch (error) {
-      // Ignore network errors when forgetting, likely due to previous disconnect.
-      if (error.name != "NetworkError" && error.name != "InvalidStateError") {
-        this.onerror(error);
-        throw error;
-      }
-    }
-  }
-
-  /* Start the reading loop after loading configuration parameters from the driver. */
-  async start_reading_loop(){
-    try {
-      // Start the reading loop and then the parameter requests in parallel.
-      return await Promise.all([
-        this.reading_loop(),
-        (async () => {
-          await this.load_current_calibration();
-          await this.load_position_calibration();
-          await this.load_control_parameters();
-          console.info("Motor controller is ready.");
-          this.onready(this);
-        })(),
-      ]);
-
-    } catch (error) {
-      this.onerror(error);
-      // If we have an error, we need to forget the port and report the error.
-      await this.forget();
-    }
-  }
-
-
-  /* Start reading messages from the motor driver.
-    * Only one reading loop should be active per controller instance.
-    * Keep the generator running so it polls the USB line to receive messages.
-    * The generator yields the number of bytes received.
-  */
-  async reading_loop() {
-    
     let bytes_received = 0;
     
     let bytes_discarded = 0;
@@ -241,41 +129,63 @@ export class MotorController {
         console.warn("Message was discarded due to invalid data:", message_code, message_data);
       }
     };
-    
-    while (true) {
-      // Grab all buffered data from the driver serial line.
-      const {value: byte_chunk, done} = await this.reader.read();
 
-      // Release the locks when done.
-      if (done) return await this.forget();
-      
-      // Count connection statistics.
 
-      bytes_received += byte_chunk.length;
-      last_bytes_received += byte_chunk.length;
 
-      // Get the current time in milliseconds.
-      const now = Date.now();
+    this.connection_worker.addEventListener("message", async (event) => {
+      const {type} = event.data;
 
-      // Cap the minimum time since last message to avoid division by zero.
-      const time_since_last = (now - last_received_time) / 1000.0;
-
-      // Compute connection speed in byte_chunks of a minimum time period.
-      if(time_since_last > this.receive_rate_min_period) {
-
-        // Update the rate only if we have received data since the last update.
-        receive_rate = last_bytes_received == 0 ? receive_rate :
-          exponential_average(last_bytes_received / time_since_last, receive_rate, time_since_last, this.receive_rate_timescale);
-
-        last_bytes_received = 0;
-        last_received_time = now;
+      if (type === "opened") {
+        await this.load_current_calibration();
+        await this.load_position_calibration();
+        await this.load_control_parameters();
+        console.info("Motor controller is ready.");
+        this.onready(this);
       }
+      else if (type === "closed") this.onclose();
+      else if (type === "received") {
 
-      // Feedback for connection status on every chunk of data received.
-      this.onstatus({bytes_received, bytes_discarded, receive_rate});
+        const {byte_chunk} = event.data;
+        
+        // Count connection statistics.
 
-      this.encoding_buffer.decode_chunk(byte_chunk, receive_message);
-    }
+        bytes_received += byte_chunk.length;
+        last_bytes_received += byte_chunk.length;
+
+        // Get the current time in milliseconds.
+        const now = Date.now();
+
+        // Cap the minimum time since last message to avoid division by zero.
+        const time_since_last = (now - last_received_time) / 1000.0;
+
+        // Compute connection speed in byte_chunks of a minimum time period.
+        if(time_since_last > this.receive_rate_min_period) {
+
+          // Update the rate only if we have received data since the last update.
+          receive_rate = last_bytes_received == 0 ? receive_rate :
+            exponential_average(last_bytes_received / time_since_last, receive_rate, time_since_last, this.receive_rate_timescale);
+
+          last_bytes_received = 0;
+          last_received_time = now;
+        }
+
+        // Feedback for connection status on every chunk of data received.
+        this.onstatus({bytes_received, bytes_discarded, receive_rate});
+
+        this.encoding_buffer.decode_chunk(byte_chunk, receive_message);
+      }
+    });
+
+    this.connection_worker.addEventListener("error", (event) => {
+      this.onerror(event.error);
+    });
+
+    this.connection_worker.postMessage({type: "open", port_index});
+
+  }
+
+  forget(){
+    this.connection_worker.postMessage({type: "close"});
   }
 
   reset_history(){
@@ -284,11 +194,9 @@ export class MotorController {
 
   /* Send a command to the motor driver. */
   async send_command({command, ...command_options}) {
-    if (!this.writer) return;
-
     const buffer = this.encoding_buffer.encode_message(serialise_command({...default_command_options, command, ...command_options}));
 
-    await this.writer.write(buffer);
+    this.connection_worker.postMessage({type: "send", buffer}, {transfer: [buffer.buffer]});
   }
 
   /* Send a command and capture the reply messages. */

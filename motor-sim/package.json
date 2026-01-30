@@ -21,8 +21,7 @@
     "format-si-prefix": "^0.3.2",
     "hex-mini-drive-interface": "file:../interface",
     "lodash": "^4.17.21",
-    "three": "^0.168.0",
-    "web-serial-polyfill": "^1.0.15"
+    "three": "^0.168.0"
   },
   "devDependencies": {
     "rimraf": "^5.0.5"

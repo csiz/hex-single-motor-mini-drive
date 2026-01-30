@@ -207,6 +207,9 @@ let data = Mutable([]);
 // Active motor controller (can be null or selected from multiple motor connections).
 let motor_controller = Mutable(null);
 
+// Currently active USB port.
+let active_port = Mutable(null);
+
 // Opened USB ports, and respectively the motor controllers and data associated with each.
 let opened_ports = Mutable(new Map());
 
@@ -231,34 +234,39 @@ function update_readout_series(readout, port){
 
   const new_data = first_readout ? [readout] : capped_push(previous_data, readout);
 
-  if (port === motor_controller.value?.port) data.value = new_data;
+  if (port === active_port.value) data.value = new_data;
 
   opened_ports.value.get(port).data = new_data;
 };
 
 
 function set_status(status, port){
-  if (!motor_controller.value || port === motor_controller.value.port) connection_status.value = status;
+  if (!motor_controller.value || port === active_port.value) connection_status.value = status;
 
   opened_ports.value.get(port).status = status;
 }
 
 function set_error(error, port){
-  if (!motor_controller.value || port === motor_controller.value.port) {
+  if (!motor_controller.value || port === active_port.value) {
     connection_status.value = displayable_connection_error(error);
   }
 
   opened_ports.value.get(port).error = error;
 }
 
-function set_controller(controller, port){
+function set_motor_controller(controller, port){
   opened_ports.value.get(port).motor_controller = controller;
+
+  // Self assign to update the `Mutable`.
+  opened_ports.value = opened_ports.value;
 }
 
 function switch_to_port(port){
   const port_state = opened_ports.value.get(port);
 
   if (!port_state) return false;
+
+  active_port.value = port;
 
   motor_controller.value = port_state.motor_controller;
   connection_status.value = port_state.error ? displayable_connection_error(port_state.error) : port_state.status;
@@ -277,38 +285,31 @@ async function connect_motor_controller(){
 
     if (!port) return;
 
+    const port_index = await get_port_index(port);
+
     // Switch to the existing motor controller if this port is already opened and initialized.
     if (switch_to_port(port)) return;
 
     // Append this port to the opened ports list so we can capture it's errors too.
     opened_ports.value = opened_ports.value.set(port, {
+      port_index,
       motor_controller: null,
       data: [],
       status: html`<pre>Opening USB com port.</pre>`,
       error: undefined,
     });
 
-    // Switch the display to the newly opening port.
-    switch_to_port(port);
-
-    const opened_port = await open_usb_com_port(port);
-
-    set_status(html`<pre>Connected, waiting for configuration data.</pre>`, port);
-
-    await start_motor_controller_loop({
-      opened_port,
+    const motor_controller = new MotorController({
+      port_index,
       onstatus: (status) => {
         set_status(html`<pre>Connected; ${format_data_rate(status)}.</pre>`, port);
       },
       onmessage: (readout) => {
         update_readout_series(readout, port);
       },
-      onready: (controller) => {
-        set_controller(controller, port);
-
+      onready: (motor_controller) => {
         set_status(html`<pre>Connected, waiting for your commands.</pre>`, port);
-
-        // Set this controller as the active motor controller.
+        set_motor_controller(motor_controller, port);
         switch_to_port(port);
       },
       onerror: (error) => {
@@ -320,6 +321,11 @@ async function connect_motor_controller(){
         opened_ports.value = opened_ports.value;
       },
     });
+
+
+    // Switch the display to the newly opening port.
+    switch_to_port(port);
+
   } catch (error) {
     connection_status.value = displayable_connection_error(error);
   }
@@ -411,7 +417,7 @@ const opened_ports_radio = Inputs.radio(
   opened_ports.keys(),
   {
     label: "Opened ports", 
-    value: motor_controller?.port,
+    value: active_port,
     format: (port, i) => {
       return html`<pre>Motor ${i}</pre>`;
     },
@@ -2126,7 +2132,7 @@ import {
 
 import {interpolate_degrees, normalize_degrees} from "./components/motor_controller/angular_math.js";
 
-import {command_codes, open_usb_com_port, maybe_prompt_port, start_motor_controller_loop} from "./components/motor_controller/motor_controller.js";
+import {command_codes, maybe_prompt_port, get_port_index, MotorController} from "./components/motor_controller/motor_controller.js";
 
 import {run_current_calibration, compute_current_calibration} from "./components/motor_controller/current_calibration.js";
 
