@@ -10,6 +10,10 @@
   },
   "main": "./index.js",
   "scripts": {
+    "generate": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.1"
   }
 }
