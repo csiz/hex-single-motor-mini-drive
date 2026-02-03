@@ -130,6 +130,31 @@ const to_cpp_type = (type_spec) => {
   }
 };
 
+// Helper function to calculate the size of a type in bytes.
+const get_type_size = (type_spec) => {
+  // The type can be a plain string.
+  if (typeof type_spec === 'string') {
+    if (plain_types[type_spec] === undefined) throw new Error(`Unknown type: ${type_spec}`);
+    return plain_types[type_spec].size;
+  // Or it's a dictionary with the type field; in this case we include collection types.
+  } else if (type_spec.type === 'array') {
+    const item_size = get_type_size(type_spec.item);
+    return item_size * type_spec.len;
+  // Finally check if it's a plain type again.
+  } else if (plain_types[type_spec.type] !== undefined) {
+    return plain_types[type_spec.type].size;
+  } else {
+    throw new Error(`Unknown type spec: ${JSON.stringify(type_spec)}`);
+  }
+};
+
+// Helper function to convert PascalCase to snake_case.
+const to_snake_case = (str) => {
+  return str.replace(/[A-Z]/g, (letter, index) => {
+    return index === 0 ? letter.toLowerCase() : '_' + letter.toLowerCase();
+  });
+};
+
 
 function generate_cpp_interface(spec) {
   let code = new CodeWriter();
@@ -142,6 +167,8 @@ function generate_cpp_interface(spec) {
   code.write`#include <cstddef>`;
   code.write`#include <cstdint>`;
   code.write`#include <array>`;
+  code.write``;
+  code.write`#include "byte_handling.hpp"`;
   code.write``;
   
   // Generate constants
@@ -174,6 +201,30 @@ function generate_cpp_interface(spec) {
   code.write``;
   
   
+  // Calculate message sizes (including all inherited fields)
+  const calculate_message_size = (name, msg) => {
+    let size = 2; // 2 bytes for message code
+    
+    // Add size from extended message
+    if (msg.extends) {
+      const base_msg = spec.MessageCodes[msg.extends];
+      if (base_msg && base_msg.struct) {
+        for (const field of Object.values(base_msg.struct)) {
+          size += get_type_size(field);
+        }
+      }
+    }
+    
+    // Add size from this message's fields
+    if (msg.struct) {
+      for (const field of Object.values(msg.struct)) {
+        size += get_type_size(field);
+      }
+    }
+    
+    return size;
+  };
+
   // Generate structs for messages with struct field
   code.write`// Message Structures`;
   code.write`// ------------------`;
@@ -191,6 +242,10 @@ function generate_cpp_interface(spec) {
       
       // Add message code field
       code.write`static constexpr uint16_t message_code = ${msg.code};`;
+      
+      // Add message size field
+      const message_size = calculate_message_size(name, msg);
+      code.write`static constexpr size_t message_size = ${message_size};`;
       code.write``;
       
       // Add fields from this struct
@@ -207,6 +262,25 @@ function generate_cpp_interface(spec) {
     }
   }
   
+  // Generate serialize and deserialize functions
+  code.write`// Serialization Functions`;
+  code.write`// -----------------------`;
+  code.write``;
+  
+  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
+    if (msg.struct) {
+      const snake_name = to_snake_case(name);
+      
+      // Serialize function
+      code.write`void serialise_${snake_name}(${name} const& ${snake_name}, uint8_t* buffer);`;
+      code.write``;
+      
+      // Deserialize function
+      code.write`${name} deserialise_${snake_name}(uint8_t const* message_data, size_t length);`;
+      code.write``;
+    }
+  }
+  
   return code.get();
 }
 
@@ -215,15 +289,19 @@ function generate_cpp_interface(spec) {
 if (import.meta.main) {
   const interface_spec = yaml.load(readFileSync("./interface.yaml", "utf8"));
 
-
   console.log("Loaded interface specification:");
+
+  const output_dir = "./dist/hex_mini_drive/";
+  mkdirSync(output_dir, { recursive: true });
   
   const cpp_interface = generate_cpp_interface(interface_spec)
   
   // Write the generated C++ interface.
-  const cpp_output_path = "./dist/hex_mini_drive/interface.hpp";
-  mkdirSync(dirname(cpp_output_path), { recursive: true });
+  const cpp_output_path = `${output_dir}/interface.hpp`;
   writeFileSync(cpp_output_path, cpp_interface);
+
+  // Also copy the helping header files:
+  writeFileSync(`${output_dir}/byte_handling.hpp`, readFileSync("./byte_handling.hpp"));
 
   console.log("Generated C++ interface:", cpp_output_path);
 }

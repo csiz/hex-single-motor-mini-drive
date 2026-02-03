@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <array>
 
+#include "byte_handling.hpp"
+
 // Constants
 // ---------
 
@@ -77,6 +79,7 @@ enum MessageCode : uint16_t {
 struct Readout {
 
   static constexpr uint16_t message_code = 8224;
+  static constexpr size_t message_size = 34;
   
   // The PWM commands for the motor outputs; concatenated into a single value.
   uint32_t pwm_commands;
@@ -134,6 +137,7 @@ struct Readout {
 struct FullReadout : Readout {
 
   static constexpr uint16_t message_code = 8227;
+  static constexpr size_t message_size = 82;
   
   // Tick rate; the number of main loop (communication and commands) updates per second.
   uint16_t main_loop_rate;
@@ -228,6 +232,7 @@ struct FullReadout : Readout {
 struct CurrentCalibration {
 
   static constexpr uint16_t message_code = 16448;
+  static constexpr size_t message_size = 10;
   
   // Adjustment factor for the U phase current readout.
   int16_t u_factor;
@@ -255,6 +260,7 @@ struct CurrentCalibration {
 struct HallPositions {
 
   static constexpr uint16_t message_code = 16452;
+  static constexpr size_t message_size = 74;
   
   // The angle at the transition to the current sector from the left and from the 
   // right. By "left" I mean the hall sector has transitioned from a lower to a higher 
@@ -283,6 +289,7 @@ struct HallPositions {
 struct ControlParameters {
 
   static constexpr uint16_t message_code = 16457;
+  static constexpr size_t message_size = 78;
   
   // Magnet position integral gain.
   int16_t rotor_angle_ki;
@@ -404,9 +411,37 @@ struct ControlParameters {
 struct UnitTestOutput {
 
   static constexpr uint16_t message_code = 20544;
+  static constexpr size_t message_size = 258;
   
   std::array<uint8_t, 256> data;
   
 };
 
+
+// Serialization Functions
+// -----------------------
+
+void serialise_readout(Readout const& readout, uint8_t* buffer);
+
+Readout deserialise_readout(uint8_t const* message_data, size_t length);
+
+void serialise_full_readout(FullReadout const& full_readout, uint8_t* buffer);
+
+FullReadout deserialise_full_readout(uint8_t const* message_data, size_t length);
+
+void serialise_current_calibration(CurrentCalibration const& current_calibration, uint8_t* buffer);
+
+CurrentCalibration deserialise_current_calibration(uint8_t const* message_data, size_t length);
+
+void serialise_hall_positions(HallPositions const& hall_positions, uint8_t* buffer);
+
+HallPositions deserialise_hall_positions(uint8_t const* message_data, size_t length);
+
+void serialise_control_parameters(ControlParameters const& control_parameters, uint8_t* buffer);
+
+ControlParameters deserialise_control_parameters(uint8_t const* message_data, size_t length);
+
+void serialise_unit_test_output(UnitTestOutput const& unit_test_output, uint8_t* buffer);
+
+UnitTestOutput deserialise_unit_test_output(uint8_t const* message_data, size_t length);
 
