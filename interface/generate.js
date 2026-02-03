@@ -523,6 +523,7 @@ if (import.meta.main) {
 
   // Also copy the helping header files:
   writeFileSync(`${output_dir}/byte_handling.hpp`, readFileSync("./byte_handling.hpp"));
+  writeFileSync(`${output_dir}/cobs_encoding.hpp`, readFileSync("./cobs_encoding.hpp"));
 
   console.log("Generated C++ interface:", cpp_output_path);
 }
