@@ -421,27 +421,601 @@ struct UnitTestOutput {
 // Serialization Functions
 // -----------------------
 
-void serialise_readout(Readout const& readout, uint8_t* buffer);
+static inline bool serialise(Readout const& value, uint8_t * buffer) {
+  size_t offset = 0;
+  
+  // Write message code
+  write_uint16(buffer + offset, Readout::message_code);
+  offset += 2;
+  
+  write_uint32(buffer + offset, value.pwm_commands);
+  offset += 4;
+  write_uint16(buffer + offset, value.readout_number);
+  offset += 2;
+  write_uint16(buffer + offset, value.state_flags);
+  offset += 2;
+  write_int16(buffer + offset, value.u_current);
+  offset += 2;
+  write_int16(buffer + offset, value.v_current);
+  offset += 2;
+  write_int16(buffer + offset, value.w_current);
+  offset += 2;
+  write_int16(buffer + offset, value.ref_readout);
+  offset += 2;
+  write_int16(buffer + offset, value.u_current_diff);
+  offset += 2;
+  write_int16(buffer + offset, value.v_current_diff);
+  offset += 2;
+  write_int16(buffer + offset, value.w_current_diff);
+  offset += 2;
+  write_int16(buffer + offset, value.angle);
+  offset += 2;
+  write_int16(buffer + offset, value.angle_adjustment);
+  offset += 2;
+  write_int16(buffer + offset, value.angular_speed);
+  offset += 2;
+  write_int16(buffer + offset, value.vcc_voltage);
+  offset += 2;
+  write_int16(buffer + offset, value.emf_voltage_magnitude);
+  offset += 2;
+  return true;
+}
 
-Readout deserialise_readout(uint8_t const* message_data, size_t length);
+static inline bool deserialise(Readout & result, uint8_t const* buffer, size_t length) {
+  // Validate length
+  if (length != Readout::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != Readout::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.pwm_commands = read_uint32(buffer + offset);
+  offset += 4;
+  result.readout_number = read_uint16(buffer + offset);
+  offset += 2;
+  result.state_flags = read_uint16(buffer + offset);
+  offset += 2;
+  result.u_current = read_int16(buffer + offset);
+  offset += 2;
+  result.v_current = read_int16(buffer + offset);
+  offset += 2;
+  result.w_current = read_int16(buffer + offset);
+  offset += 2;
+  result.ref_readout = read_int16(buffer + offset);
+  offset += 2;
+  result.u_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.v_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.w_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.angle = read_int16(buffer + offset);
+  offset += 2;
+  result.angle_adjustment = read_int16(buffer + offset);
+  offset += 2;
+  result.angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.vcc_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_voltage_magnitude = read_int16(buffer + offset);
+  offset += 2;
+  return true;
+}
 
-void serialise_full_readout(FullReadout const& full_readout, uint8_t* buffer);
+static inline bool serialise(FullReadout const& value, uint8_t * buffer) {
+  size_t offset = 0;
+  
+  // Write message code
+  write_uint16(buffer + offset, FullReadout::message_code);
+  offset += 2;
+  
+  // Fields from Readout
+  write_uint32(buffer + offset, value.pwm_commands);
+  offset += 4;
+  write_uint16(buffer + offset, value.readout_number);
+  offset += 2;
+  write_uint16(buffer + offset, value.state_flags);
+  offset += 2;
+  write_int16(buffer + offset, value.u_current);
+  offset += 2;
+  write_int16(buffer + offset, value.v_current);
+  offset += 2;
+  write_int16(buffer + offset, value.w_current);
+  offset += 2;
+  write_int16(buffer + offset, value.ref_readout);
+  offset += 2;
+  write_int16(buffer + offset, value.u_current_diff);
+  offset += 2;
+  write_int16(buffer + offset, value.v_current_diff);
+  offset += 2;
+  write_int16(buffer + offset, value.w_current_diff);
+  offset += 2;
+  write_int16(buffer + offset, value.angle);
+  offset += 2;
+  write_int16(buffer + offset, value.angle_adjustment);
+  offset += 2;
+  write_int16(buffer + offset, value.angular_speed);
+  offset += 2;
+  write_int16(buffer + offset, value.vcc_voltage);
+  offset += 2;
+  write_int16(buffer + offset, value.emf_voltage_magnitude);
+  offset += 2;
+  
+  write_uint16(buffer + offset, value.main_loop_rate);
+  offset += 2;
+  write_uint16(buffer + offset, value.adc_update_rate);
+  offset += 2;
+  write_uint16(buffer + offset, value.temperature);
+  offset += 2;
+  write_uint16(buffer + offset, value.live_max_pwm);
+  offset += 2;
+  write_int16(buffer + offset, value.cycle_start_tick);
+  offset += 2;
+  write_int16(buffer + offset, value.cycle_end_tick);
+  offset += 2;
+  write_int16(buffer + offset, value.direct_current);
+  offset += 2;
+  write_int16(buffer + offset, value.quadrature_current);
+  offset += 2;
+  write_int16(buffer + offset, value.direct_emf_voltage);
+  offset += 2;
+  write_int16(buffer + offset, value.quadrature_emf_voltage);
+  offset += 2;
+  write_int16(buffer + offset, value.total_power);
+  offset += 2;
+  write_int16(buffer + offset, value.resistive_power);
+  offset += 2;
+  write_int16(buffer + offset, value.emf_power);
+  offset += 2;
+  write_int16(buffer + offset, value.inductive_power);
+  offset += 2;
+  write_int16(buffer + offset, value.motor_constant);
+  offset += 2;
+  write_int16(buffer + offset, value.inductor_angle);
+  offset += 2;
+  write_int16(buffer + offset, value.rotor_acceleration);
+  offset += 2;
+  write_int16(buffer + offset, value.rotations);
+  offset += 2;
+  write_int16(buffer + offset, value.current_magnitude);
+  offset += 2;
+  write_int16(buffer + offset, value.emf_angle_error_variance);
+  offset += 2;
+  write_int16(buffer + offset, value.lead_angle);
+  offset += 2;
+  write_int16(buffer + offset, value.target_pwm);
+  offset += 2;
+  write_int16(buffer + offset, value.secondary_target);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_integral);
+  offset += 2;
+  return true;
+}
 
-FullReadout deserialise_full_readout(uint8_t const* message_data, size_t length);
+static inline bool deserialise(FullReadout & result, uint8_t const* buffer, size_t length) {
+  // Validate length
+  if (length != FullReadout::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != FullReadout::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from Readout
+  result.pwm_commands = read_uint32(buffer + offset);
+  offset += 4;
+  result.readout_number = read_uint16(buffer + offset);
+  offset += 2;
+  result.state_flags = read_uint16(buffer + offset);
+  offset += 2;
+  result.u_current = read_int16(buffer + offset);
+  offset += 2;
+  result.v_current = read_int16(buffer + offset);
+  offset += 2;
+  result.w_current = read_int16(buffer + offset);
+  offset += 2;
+  result.ref_readout = read_int16(buffer + offset);
+  offset += 2;
+  result.u_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.v_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.w_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.angle = read_int16(buffer + offset);
+  offset += 2;
+  result.angle_adjustment = read_int16(buffer + offset);
+  offset += 2;
+  result.angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.vcc_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_voltage_magnitude = read_int16(buffer + offset);
+  offset += 2;
+  
+  result.main_loop_rate = read_uint16(buffer + offset);
+  offset += 2;
+  result.adc_update_rate = read_uint16(buffer + offset);
+  offset += 2;
+  result.temperature = read_uint16(buffer + offset);
+  offset += 2;
+  result.live_max_pwm = read_uint16(buffer + offset);
+  offset += 2;
+  result.cycle_start_tick = read_int16(buffer + offset);
+  offset += 2;
+  result.cycle_end_tick = read_int16(buffer + offset);
+  offset += 2;
+  result.direct_current = read_int16(buffer + offset);
+  offset += 2;
+  result.quadrature_current = read_int16(buffer + offset);
+  offset += 2;
+  result.direct_emf_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.quadrature_emf_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.total_power = read_int16(buffer + offset);
+  offset += 2;
+  result.resistive_power = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_power = read_int16(buffer + offset);
+  offset += 2;
+  result.inductive_power = read_int16(buffer + offset);
+  offset += 2;
+  result.motor_constant = read_int16(buffer + offset);
+  offset += 2;
+  result.inductor_angle = read_int16(buffer + offset);
+  offset += 2;
+  result.rotor_acceleration = read_int16(buffer + offset);
+  offset += 2;
+  result.rotations = read_int16(buffer + offset);
+  offset += 2;
+  result.current_magnitude = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_angle_error_variance = read_int16(buffer + offset);
+  offset += 2;
+  result.lead_angle = read_int16(buffer + offset);
+  offset += 2;
+  result.target_pwm = read_int16(buffer + offset);
+  offset += 2;
+  result.secondary_target = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_integral = read_int16(buffer + offset);
+  offset += 2;
+  return true;
+}
 
-void serialise_current_calibration(CurrentCalibration const& current_calibration, uint8_t* buffer);
+static inline bool serialise(CurrentCalibration const& value, uint8_t * buffer) {
+  size_t offset = 0;
+  
+  // Write message code
+  write_uint16(buffer + offset, CurrentCalibration::message_code);
+  offset += 2;
+  
+  write_int16(buffer + offset, value.u_factor);
+  offset += 2;
+  write_int16(buffer + offset, value.v_factor);
+  offset += 2;
+  write_int16(buffer + offset, value.w_factor);
+  offset += 2;
+  write_int16(buffer + offset, value.inductance_factor);
+  offset += 2;
+  return true;
+}
 
-CurrentCalibration deserialise_current_calibration(uint8_t const* message_data, size_t length);
+static inline bool deserialise(CurrentCalibration & result, uint8_t const* buffer, size_t length) {
+  // Validate length
+  if (length != CurrentCalibration::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != CurrentCalibration::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.u_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.v_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.w_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.inductance_factor = read_int16(buffer + offset);
+  offset += 2;
+  return true;
+}
 
-void serialise_hall_positions(HallPositions const& hall_positions, uint8_t* buffer);
+static inline bool serialise(HallPositions const& value, uint8_t * buffer) {
+  size_t offset = 0;
+  
+  // Write message code
+  write_uint16(buffer + offset, HallPositions::message_code);
+  offset += 2;
+  
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      write_uint16(buffer + offset, value.sector_transition_angles[i][j]);
+      offset += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      write_uint16(buffer + offset, value.sector_transition_variances[i][j]);
+      offset += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    write_uint16(buffer + offset, value.sector_center_angles[i]);
+    offset += 2;
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    write_uint16(buffer + offset, value.sector_center_variances[i]);
+    offset += 2;
+  }
+  return true;
+}
 
-HallPositions deserialise_hall_positions(uint8_t const* message_data, size_t length);
+static inline bool deserialise(HallPositions & result, uint8_t const* buffer, size_t length) {
+  // Validate length
+  if (length != HallPositions::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != HallPositions::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      result.sector_transition_angles[i][j] = read_uint16(buffer + offset);
+      offset += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      result.sector_transition_variances[i][j] = read_uint16(buffer + offset);
+      offset += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    result.sector_center_angles[i] = read_uint16(buffer + offset);
+    offset += 2;
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    result.sector_center_variances[i] = read_uint16(buffer + offset);
+    offset += 2;
+  }
+  return true;
+}
 
-void serialise_control_parameters(ControlParameters const& control_parameters, uint8_t* buffer);
+static inline bool serialise(ControlParameters const& value, uint8_t * buffer) {
+  size_t offset = 0;
+  
+  // Write message code
+  write_uint16(buffer + offset, ControlParameters::message_code);
+  offset += 2;
+  
+  write_int16(buffer + offset, value.rotor_angle_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.rotor_angular_speed_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.rotor_acceleration_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.motor_constant_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.motor_direction);
+  offset += 2;
+  write_int16(buffer + offset, value.incorrect_direction_threshold);
+  offset += 2;
+  write_int16(buffer + offset, value.max_pwm_change);
+  offset += 2;
+  write_int16(buffer + offset, value.max_angle_change);
+  offset += 2;
+  write_int16(buffer + offset, value.min_emf_voltage);
+  offset += 2;
+  write_int16(buffer + offset, value.hall_angle_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.lead_angle_control_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.torque_control_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.battery_power_control_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.speed_control_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.probing_angular_speed);
+  offset += 2;
+  write_int16(buffer + offset, value.max_pwm_difference);
+  offset += 2;
+  write_int16(buffer + offset, value.emf_angle_error_variance_threshold);
+  offset += 2;
+  write_int16(buffer + offset, value.min_emf_for_motor_constant);
+  offset += 2;
+  write_int16(buffer + offset, value.max_resistive_power);
+  offset += 2;
+  write_int16(buffer + offset, value.resistive_power_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.max_angular_speed);
+  offset += 2;
+  write_int16(buffer + offset, value.max_power_draw);
+  offset += 2;
+  write_int16(buffer + offset, value.power_draw_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.max_pwm);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_torque_k_prediction);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_torque_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_torque_kp);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_torque_kd);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_power_k_prediction);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_power_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_power_kp);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_power_kd);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_speed_k_prediction);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_speed_ki);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_speed_kp);
+  offset += 2;
+  write_int16(buffer + offset, value.seek_via_speed_kd);
+  offset += 2;
+  write_int16(buffer + offset, value.phase_resistance);
+  offset += 2;
+  write_int16(buffer + offset, value.phase_inductance);
+  offset += 2;
+  return true;
+}
 
-ControlParameters deserialise_control_parameters(uint8_t const* message_data, size_t length);
+static inline bool deserialise(ControlParameters & result, uint8_t const* buffer, size_t length) {
+  // Validate length
+  if (length != ControlParameters::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != ControlParameters::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.rotor_angle_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.rotor_angular_speed_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.rotor_acceleration_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.motor_constant_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.motor_direction = read_int16(buffer + offset);
+  offset += 2;
+  result.incorrect_direction_threshold = read_int16(buffer + offset);
+  offset += 2;
+  result.max_pwm_change = read_int16(buffer + offset);
+  offset += 2;
+  result.max_angle_change = read_int16(buffer + offset);
+  offset += 2;
+  result.min_emf_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.hall_angle_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.lead_angle_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.torque_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.battery_power_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.speed_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.probing_angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.max_pwm_difference = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_angle_error_variance_threshold = read_int16(buffer + offset);
+  offset += 2;
+  result.min_emf_for_motor_constant = read_int16(buffer + offset);
+  offset += 2;
+  result.max_resistive_power = read_int16(buffer + offset);
+  offset += 2;
+  result.resistive_power_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.max_angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.max_power_draw = read_int16(buffer + offset);
+  offset += 2;
+  result.power_draw_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.max_pwm = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_k_prediction = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_kp = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_kd = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_k_prediction = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_kp = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_kd = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_k_prediction = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_kp = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_kd = read_int16(buffer + offset);
+  offset += 2;
+  result.phase_resistance = read_int16(buffer + offset);
+  offset += 2;
+  result.phase_inductance = read_int16(buffer + offset);
+  offset += 2;
+  return true;
+}
 
-void serialise_unit_test_output(UnitTestOutput const& unit_test_output, uint8_t* buffer);
+static inline bool serialise(UnitTestOutput const& value, uint8_t * buffer) {
+  size_t offset = 0;
+  
+  // Write message code
+  write_uint16(buffer + offset, UnitTestOutput::message_code);
+  offset += 2;
+  
+  for (size_t i = 0; i < 256; ++i) {
+    write_uint8(buffer + offset, value.data[i]);
+    offset += 1;
+  }
+  return true;
+}
 
-UnitTestOutput deserialise_unit_test_output(uint8_t const* message_data, size_t length);
+static inline bool deserialise(UnitTestOutput & result, uint8_t const* buffer, size_t length) {
+  // Validate length
+  if (length != UnitTestOutput::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != UnitTestOutput::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  for (size_t i = 0; i < 256; ++i) {
+    result.data[i] = read_uint8(buffer + offset);
+    offset += 1;
+  }
+  return true;
+}
 

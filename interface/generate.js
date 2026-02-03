@@ -262,6 +262,74 @@ function generate_cpp_interface(spec) {
     }
   }
   
+  // Helper to generate field serialization code
+  const generate_field_serialization = (code, field_name, field, offset_var) => {
+    if (typeof field === 'string' || (field.type && plain_types[field.type])) {
+      // Plain type
+      const type_name = typeof field === 'string' ? field : field.type;
+      code.write`write_${type_name}(buffer + ${offset_var}, ${field_name});`;
+      code.write`${offset_var} += ${get_type_size(field)};`;
+    } else if (field.type === 'array') {
+      // Array type
+      const item_type = typeof field.item === 'string' ? field.item : field.item.type;
+      const item_size = get_type_size(field.item);
+      code.write`for (size_t i = 0; i < ${field.len}; ++i) {`;
+      code.indent();
+      
+      if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
+        // Array of plain types
+        code.write`write_${item_type}(buffer + ${offset_var}, ${field_name}[i]);`;
+        code.write`${offset_var} += ${item_size};`;
+      } else if (field.item.type === 'array') {
+        // Nested array
+        const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
+        const nested_item_size = get_type_size(field.item.item);
+        code.write`for (size_t j = 0; j < ${field.item.len}; ++j) {`;
+        code.indent();
+        code.write`write_${nested_item_type}(buffer + ${offset_var}, ${field_name}[i][j]);`;
+        code.write`${offset_var} += ${nested_item_size};`;
+        code.dedent();
+        code.write`}`;
+      }
+      code.dedent();
+      code.write`}`;
+    }
+  };
+  
+  // Helper to generate field deserialization code
+  const generate_field_deserialization = (code, field_name, field, offset_var, struct_var) => {
+    if (typeof field === 'string' || (field.type && plain_types[field.type])) {
+      // Plain type
+      const type_name = typeof field === 'string' ? field : field.type;
+      code.write`${struct_var}.${field_name} = read_${type_name}(buffer + ${offset_var});`;
+      code.write`${offset_var} += ${get_type_size(field)};`;
+    } else if (field.type === 'array') {
+      // Array type
+      const item_type = typeof field.item === 'string' ? field.item : field.item.type;
+      const item_size = get_type_size(field.item);
+      code.write`for (size_t i = 0; i < ${field.len}; ++i) {`;
+      code.indent();
+      
+      if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
+        // Array of plain types
+        code.write`${struct_var}.${field_name}[i] = read_${item_type}(buffer + ${offset_var});`;
+        code.write`${offset_var} += ${item_size};`;
+      } else if (field.item.type === 'array') {
+        // Nested array
+        const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
+        const nested_item_size = get_type_size(field.item.item);
+        code.write`for (size_t j = 0; j < ${field.item.len}; ++j) {`;
+        code.indent();
+        code.write`${struct_var}.${field_name}[i][j] = read_${nested_item_type}(buffer + ${offset_var});`;
+        code.write`${offset_var} += ${nested_item_size};`;
+        code.dedent();
+        code.write`}`;
+      }
+      code.dedent();
+      code.write`}`;
+    }
+  };
+  
   // Generate serialize and deserialize functions
   code.write`// Serialization Functions`;
   code.write`// -----------------------`;
@@ -269,14 +337,77 @@ function generate_cpp_interface(spec) {
   
   for (const [name, msg] of Object.entries(spec.MessageCodes)) {
     if (msg.struct) {
-      const snake_name = to_snake_case(name);
-      
       // Serialize function
-      code.write`void serialise_${snake_name}(${name} const& ${snake_name}, uint8_t* buffer);`;
+      code.write`static inline bool serialise(${name} const& value, uint8_t * buffer) {`;
+      code.indent();
+      code.write`size_t offset = 0;`;
+      code.write``;
+      code.comment`Write message code`;
+      code.write`write_uint16(buffer + offset, ${name}::message_code);`;
+      code.write`offset += 2;`;
+      code.write``;
+      
+      // Serialize fields from base message if extends
+      if (msg.extends) {
+        const base_msg = spec.MessageCodes[msg.extends];
+        if (base_msg && base_msg.struct) {
+          code.comment`Fields from ${msg.extends}`;
+          for (const [field_name, field] of Object.entries(base_msg.struct)) {
+            generate_field_serialization(code, 'value.' + field_name, field, 'offset');
+          }
+          code.write``;
+        }
+      }
+      
+      // Serialize fields from this message
+      for (const [field_name, field] of Object.entries(msg.struct)) {
+        generate_field_serialization(code, 'value.' + field_name, field, 'offset');
+      }
+      code.write`return true;`;
+      code.dedent();
+      code.write`}`;
       code.write``;
       
       // Deserialize function
-      code.write`${name} deserialise_${snake_name}(uint8_t const* message_data, size_t length);`;
+      code.write`static inline bool deserialise(${name} & result, uint8_t const* buffer, size_t length) {`;
+      code.indent();
+      code.comment`Validate length`;
+      code.write`if (length != ${name}::message_size) {`;
+      code.indent();
+      code.write`return false;`;
+      code.dedent();
+      code.write`}`;
+      code.write``;
+      code.comment`Validate message code`;
+      code.write`uint16_t code = read_uint16(buffer);`;
+      code.write`if (code != ${name}::message_code) {`;
+      code.indent();
+      code.write`return false;`;
+      code.dedent();
+      code.write`}`;
+      code.write``;
+      code.write`size_t offset = 2;`;
+      code.write``;
+      
+      // Deserialize fields from base message if extends
+      if (msg.extends) {
+        const base_msg = spec.MessageCodes[msg.extends];
+        if (base_msg && base_msg.struct) {
+          code.comment`Fields from ${msg.extends}`;
+          for (const [field_name, field] of Object.entries(base_msg.struct)) {
+            generate_field_deserialization(code, field_name, field, 'offset', 'result');
+          }
+          code.write``;
+        }
+      }
+      
+      // Deserialize fields from this message
+      for (const [field_name, field] of Object.entries(msg.struct)) {
+        generate_field_deserialization(code, field_name, field, 'offset', 'result');
+      }
+      code.write`return true;`;
+      code.dedent();
+      code.write`}`;
       code.write``;
     }
   }
