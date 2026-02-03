@@ -41,8 +41,6 @@
 import { readFileSync } from "fs";
 import yaml from "js-yaml";
 import { writeFileSync, mkdirSync } from "fs";
-import { dirname } from "path";
-
 
 function assemble_literal(strings, ...values) {
   // Reassemble or process the template; or just use the string if
@@ -168,8 +166,12 @@ function generate_cpp_interface(spec) {
   code.write`#include <cstdint>`;
   code.write`#include <array>`;
   code.write``;
-  code.write`#include "byte_handling.hpp"`;
+  code.write`#include "hex_mini_drive/byte_handling.hpp"`;
   code.write``;
+
+  code.write`namespace hex_mini_drive {`;
+  code.write``;
+  
   
   // Generate constants
   code.write`// Constants`;
@@ -261,6 +263,27 @@ function generate_cpp_interface(spec) {
       code.write``;
     }
   }
+
+  // Need a struct of the MessageCode and the union of all message structs.
+  code.write`// Generic Message Structure`;
+  code.write`// -------------------------`;
+  code.write``;
+  code.write`struct Message {`;
+  code.indent();
+  code.write`MessageCode message_code;`;
+  code.write``;
+  code.write`union {`;
+  code.indent();
+  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
+    if (msg.struct) {
+      code.write`${name} ${to_snake_case(name)};`;
+    }
+  }
+  code.dedent();
+  code.write`};`;
+  code.dedent();
+  code.write`};`;
+  code.write``;
   
   // Helper to generate field serialization code
   const generate_field_serialization = (code, field_name, field, offset_var) => {
@@ -340,6 +363,8 @@ function generate_cpp_interface(spec) {
       // Serialize function
       code.write`static inline bool serialise(${name} const& value, uint8_t * buffer) {`;
       code.indent();
+      code.write`if (buffer == nullptr) return false;`;
+      code.write``;
       code.write`size_t offset = 0;`;
       code.write``;
       code.comment`Write message code`;
@@ -411,6 +436,71 @@ function generate_cpp_interface(spec) {
       code.write``;
     }
   }
+
+  // And now the generic serialize/deserialize functions for Message.
+  code.write`// Generic Serialization Functions`;
+  code.write`// -------------------------------`;
+  code.write``;
+
+  // Need a helper function to write a bare message code.
+  code.write`static inline bool write_code(uint8_t * (*reserve_buffer)(size_t length), MessageCode code) {`;
+  code.indent();
+  code.write`uint8_t * buffer = reserve_buffer(2);`;
+  code.write`if (buffer == nullptr) return false;`;
+  code.write`write_uint16(buffer, static_cast<uint16_t>(code));`;
+  code.write`return true;`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+
+  code.write`static inline bool serialise(Message const& message, uint8_t * (*reserve_buffer)(size_t length)) {`;
+  code.indent();
+  code.write`switch (message.message_code) {`;
+  code.indent();
+  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
+    if (msg.struct) {
+      code.write`case MessageCode::${name}: {`;
+      code.indent();
+      code.write`return serialise(message.${to_snake_case(name)}, reserve_buffer(${name}::message_size));`;
+      code.dedent();
+      code.write`}`;
+    } else {
+      code.write`case MessageCode::${name}: return write_code(reserve_buffer, MessageCode::${name});`;
+    }
+  }
+  code.dedent();
+  code.write`}`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+
+  code.write`static inline bool deserialise(uint8_t const* buffer, size_t length, bool (*handle_message)(Message const& message)) {`;
+  code.indent();
+  code.write`if (length < 2) return false; // Need at least message code`;
+  code.write`Message message;`;
+  code.write`message.message_code = static_cast<MessageCode>(read_uint16(buffer));`;
+  code.write``;
+  code.write`switch (message.message_code) {`;
+  code.indent();
+  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
+    if (msg.struct) {
+      code.write`case MessageCode::${name}: {`;
+      code.indent();
+      code.write`if (not deserialise(message.${to_snake_case(name)}, buffer, length)) return false;`;
+      code.write`return handle_message(message);`;
+      code.dedent();
+      code.write`}`;
+    } else {
+      code.write`case MessageCode::${name}: return handle_message(message);`;
+    }
+  }
+  code.dedent();
+  code.write`}`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+
+  code.write`} // end namespace hex_mini_drive`;
   
   return code.get();
 }

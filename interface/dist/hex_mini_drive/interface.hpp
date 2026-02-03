@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <array>
 
-#include "byte_handling.hpp"
+#include "hex_mini_drive/byte_handling.hpp"
+
+namespace hex_mini_drive {
 
 // Constants
 // ---------
@@ -418,10 +420,28 @@ struct UnitTestOutput {
 };
 
 
+// Generic Message Structure
+// -------------------------
+
+struct Message {
+  MessageCode message_code;
+  
+  union {
+    Readout readout;
+    FullReadout full_readout;
+    CurrentCalibration current_calibration;
+    HallPositions hall_positions;
+    ControlParameters control_parameters;
+    UnitTestOutput unit_test_output;
+  };
+};
+
 // Serialization Functions
 // -----------------------
 
 static inline bool serialise(Readout const& value, uint8_t * buffer) {
+  if (buffer == nullptr) return false;
+  
   size_t offset = 0;
   
   // Write message code
@@ -509,6 +529,8 @@ static inline bool deserialise(Readout & result, uint8_t const* buffer, size_t l
 }
 
 static inline bool serialise(FullReadout const& value, uint8_t * buffer) {
+  if (buffer == nullptr) return false;
+  
   size_t offset = 0;
   
   // Write message code
@@ -696,6 +718,8 @@ static inline bool deserialise(FullReadout & result, uint8_t const* buffer, size
 }
 
 static inline bool serialise(CurrentCalibration const& value, uint8_t * buffer) {
+  if (buffer == nullptr) return false;
+  
   size_t offset = 0;
   
   // Write message code
@@ -739,6 +763,8 @@ static inline bool deserialise(CurrentCalibration & result, uint8_t const* buffe
 }
 
 static inline bool serialise(HallPositions const& value, uint8_t * buffer) {
+  if (buffer == nullptr) return false;
+  
   size_t offset = 0;
   
   // Write message code
@@ -806,6 +832,8 @@ static inline bool deserialise(HallPositions & result, uint8_t const* buffer, si
 }
 
 static inline bool serialise(ControlParameters const& value, uint8_t * buffer) {
+  if (buffer == nullptr) return false;
+  
   size_t offset = 0;
   
   // Write message code
@@ -985,6 +1013,8 @@ static inline bool deserialise(ControlParameters & result, uint8_t const* buffer
 }
 
 static inline bool serialise(UnitTestOutput const& value, uint8_t * buffer) {
+  if (buffer == nullptr) return false;
+  
   size_t offset = 0;
   
   // Write message code
@@ -1019,3 +1049,158 @@ static inline bool deserialise(UnitTestOutput & result, uint8_t const* buffer, s
   return true;
 }
 
+// Generic Serialization Functions
+// -------------------------------
+
+static inline bool write_code(uint8_t * (*reserve_buffer)(size_t length), MessageCode code) {
+  uint8_t * buffer = reserve_buffer(2);
+  if (buffer == nullptr) return false;
+  write_uint16(buffer, static_cast<uint16_t>(code));
+  return true;
+}
+
+static inline bool serialise(Message const& message, uint8_t * (*reserve_buffer)(size_t length)) {
+  switch (message.message_code) {
+    case MessageCode::NullCommand: return write_code(reserve_buffer, MessageCode::NullCommand);
+    case MessageCode::Readout: {
+      return serialise(message.readout, reserve_buffer(Readout::message_size));
+    }
+    case MessageCode::StreamFullReadouts: return write_code(reserve_buffer, MessageCode::StreamFullReadouts);
+    case MessageCode::GetReadoutsSnapshot: return write_code(reserve_buffer, MessageCode::GetReadoutsSnapshot);
+    case MessageCode::FullReadout: {
+      return serialise(message.full_readout, reserve_buffer(FullReadout::message_size));
+    }
+    case MessageCode::SetStateOff: return write_code(reserve_buffer, MessageCode::SetStateOff);
+    case MessageCode::SetStateDrive6Sector: return write_code(reserve_buffer, MessageCode::SetStateDrive6Sector);
+    case MessageCode::SetStateTestAllPermutations: return write_code(reserve_buffer, MessageCode::SetStateTestAllPermutations);
+    case MessageCode::SetStateFreewheel: return write_code(reserve_buffer, MessageCode::SetStateFreewheel);
+    case MessageCode::SetStateTestGroundShort: return write_code(reserve_buffer, MessageCode::SetStateTestGroundShort);
+    case MessageCode::SetStateTestPositiveShort: return write_code(reserve_buffer, MessageCode::SetStateTestPositiveShort);
+    case MessageCode::SetStateTestUDirections: return write_code(reserve_buffer, MessageCode::SetStateTestUDirections);
+    case MessageCode::SetStateTestUIncreasing: return write_code(reserve_buffer, MessageCode::SetStateTestUIncreasing);
+    case MessageCode::SetStateTestUDecreasing: return write_code(reserve_buffer, MessageCode::SetStateTestUDecreasing);
+    case MessageCode::SetStateTestVIncreasing: return write_code(reserve_buffer, MessageCode::SetStateTestVIncreasing);
+    case MessageCode::SetStateTestVDecreasing: return write_code(reserve_buffer, MessageCode::SetStateTestVDecreasing);
+    case MessageCode::SetStateTestWIncreasing: return write_code(reserve_buffer, MessageCode::SetStateTestWIncreasing);
+    case MessageCode::SetStateTestWDecreasing: return write_code(reserve_buffer, MessageCode::SetStateTestWDecreasing);
+    case MessageCode::SetStateHoldUPositive: return write_code(reserve_buffer, MessageCode::SetStateHoldUPositive);
+    case MessageCode::SetStateHoldVPositive: return write_code(reserve_buffer, MessageCode::SetStateHoldVPositive);
+    case MessageCode::SetStateHoldWPositive: return write_code(reserve_buffer, MessageCode::SetStateHoldWPositive);
+    case MessageCode::SetStateHoldUNegative: return write_code(reserve_buffer, MessageCode::SetStateHoldUNegative);
+    case MessageCode::SetStateHoldVNegative: return write_code(reserve_buffer, MessageCode::SetStateHoldVNegative);
+    case MessageCode::SetStateHoldWNegative: return write_code(reserve_buffer, MessageCode::SetStateHoldWNegative);
+    case MessageCode::SetStateDrivePeriodic: return write_code(reserve_buffer, MessageCode::SetStateDrivePeriodic);
+    case MessageCode::SetStateDriveSmooth: return write_code(reserve_buffer, MessageCode::SetStateDriveSmooth);
+    case MessageCode::SetStateDriveTorque: return write_code(reserve_buffer, MessageCode::SetStateDriveTorque);
+    case MessageCode::SetStateDriveBatteryPower: return write_code(reserve_buffer, MessageCode::SetStateDriveBatteryPower);
+    case MessageCode::SetStateDriveSpeed: return write_code(reserve_buffer, MessageCode::SetStateDriveSpeed);
+    case MessageCode::SetStateSeekAngleWithPower: return write_code(reserve_buffer, MessageCode::SetStateSeekAngleWithPower);
+    case MessageCode::SetStateSeekAngleWithTorque: return write_code(reserve_buffer, MessageCode::SetStateSeekAngleWithTorque);
+    case MessageCode::SetStateSeekAngleWithSpeed: return write_code(reserve_buffer, MessageCode::SetStateSeekAngleWithSpeed);
+    case MessageCode::CurrentCalibration: {
+      return serialise(message.current_calibration, reserve_buffer(CurrentCalibration::message_size));
+    }
+    case MessageCode::GetCurrentCalibration: return write_code(reserve_buffer, MessageCode::GetCurrentCalibration);
+    case MessageCode::SetCurrentCalibration: return write_code(reserve_buffer, MessageCode::SetCurrentCalibration);
+    case MessageCode::ResetCurrentCalibration: return write_code(reserve_buffer, MessageCode::ResetCurrentCalibration);
+    case MessageCode::HallPositions: {
+      return serialise(message.hall_positions, reserve_buffer(HallPositions::message_size));
+    }
+    case MessageCode::GetHallPositions: return write_code(reserve_buffer, MessageCode::GetHallPositions);
+    case MessageCode::SetHallPositions: return write_code(reserve_buffer, MessageCode::SetHallPositions);
+    case MessageCode::ResetHallPositions: return write_code(reserve_buffer, MessageCode::ResetHallPositions);
+    case MessageCode::ControlParameters: {
+      return serialise(message.control_parameters, reserve_buffer(ControlParameters::message_size));
+    }
+    case MessageCode::SetControlParameters: return write_code(reserve_buffer, MessageCode::SetControlParameters);
+    case MessageCode::GetControlParameters: return write_code(reserve_buffer, MessageCode::GetControlParameters);
+    case MessageCode::ResetControlParameters: return write_code(reserve_buffer, MessageCode::ResetControlParameters);
+    case MessageCode::SetAngle: return write_code(reserve_buffer, MessageCode::SetAngle);
+    case MessageCode::SaveSettingsToFlash: return write_code(reserve_buffer, MessageCode::SaveSettingsToFlash);
+    case MessageCode::UnitTestOutput: {
+      return serialise(message.unit_test_output, reserve_buffer(UnitTestOutput::message_size));
+    }
+    case MessageCode::RunUnitTestFunkyAtan: return write_code(reserve_buffer, MessageCode::RunUnitTestFunkyAtan);
+    case MessageCode::RunUnitTestFunkyAtanPart2: return write_code(reserve_buffer, MessageCode::RunUnitTestFunkyAtanPart2);
+    case MessageCode::RunUnitTestFunkyAtanPart3: return write_code(reserve_buffer, MessageCode::RunUnitTestFunkyAtanPart3);
+  }
+}
+
+static inline bool deserialise(uint8_t const* buffer, size_t length, bool (*handle_message)(Message const& message)) {
+  if (length < 2) return false; // Need at least message code
+  Message message;
+  message.message_code = static_cast<MessageCode>(read_uint16(buffer));
+  
+  switch (message.message_code) {
+    case MessageCode::NullCommand: return handle_message(message);
+    case MessageCode::Readout: {
+      if (not deserialise(message.readout, buffer, length)) return false;
+      return handle_message(message);
+    }
+    case MessageCode::StreamFullReadouts: return handle_message(message);
+    case MessageCode::GetReadoutsSnapshot: return handle_message(message);
+    case MessageCode::FullReadout: {
+      if (not deserialise(message.full_readout, buffer, length)) return false;
+      return handle_message(message);
+    }
+    case MessageCode::SetStateOff: return handle_message(message);
+    case MessageCode::SetStateDrive6Sector: return handle_message(message);
+    case MessageCode::SetStateTestAllPermutations: return handle_message(message);
+    case MessageCode::SetStateFreewheel: return handle_message(message);
+    case MessageCode::SetStateTestGroundShort: return handle_message(message);
+    case MessageCode::SetStateTestPositiveShort: return handle_message(message);
+    case MessageCode::SetStateTestUDirections: return handle_message(message);
+    case MessageCode::SetStateTestUIncreasing: return handle_message(message);
+    case MessageCode::SetStateTestUDecreasing: return handle_message(message);
+    case MessageCode::SetStateTestVIncreasing: return handle_message(message);
+    case MessageCode::SetStateTestVDecreasing: return handle_message(message);
+    case MessageCode::SetStateTestWIncreasing: return handle_message(message);
+    case MessageCode::SetStateTestWDecreasing: return handle_message(message);
+    case MessageCode::SetStateHoldUPositive: return handle_message(message);
+    case MessageCode::SetStateHoldVPositive: return handle_message(message);
+    case MessageCode::SetStateHoldWPositive: return handle_message(message);
+    case MessageCode::SetStateHoldUNegative: return handle_message(message);
+    case MessageCode::SetStateHoldVNegative: return handle_message(message);
+    case MessageCode::SetStateHoldWNegative: return handle_message(message);
+    case MessageCode::SetStateDrivePeriodic: return handle_message(message);
+    case MessageCode::SetStateDriveSmooth: return handle_message(message);
+    case MessageCode::SetStateDriveTorque: return handle_message(message);
+    case MessageCode::SetStateDriveBatteryPower: return handle_message(message);
+    case MessageCode::SetStateDriveSpeed: return handle_message(message);
+    case MessageCode::SetStateSeekAngleWithPower: return handle_message(message);
+    case MessageCode::SetStateSeekAngleWithTorque: return handle_message(message);
+    case MessageCode::SetStateSeekAngleWithSpeed: return handle_message(message);
+    case MessageCode::CurrentCalibration: {
+      if (not deserialise(message.current_calibration, buffer, length)) return false;
+      return handle_message(message);
+    }
+    case MessageCode::GetCurrentCalibration: return handle_message(message);
+    case MessageCode::SetCurrentCalibration: return handle_message(message);
+    case MessageCode::ResetCurrentCalibration: return handle_message(message);
+    case MessageCode::HallPositions: {
+      if (not deserialise(message.hall_positions, buffer, length)) return false;
+      return handle_message(message);
+    }
+    case MessageCode::GetHallPositions: return handle_message(message);
+    case MessageCode::SetHallPositions: return handle_message(message);
+    case MessageCode::ResetHallPositions: return handle_message(message);
+    case MessageCode::ControlParameters: {
+      if (not deserialise(message.control_parameters, buffer, length)) return false;
+      return handle_message(message);
+    }
+    case MessageCode::SetControlParameters: return handle_message(message);
+    case MessageCode::GetControlParameters: return handle_message(message);
+    case MessageCode::ResetControlParameters: return handle_message(message);
+    case MessageCode::SetAngle: return handle_message(message);
+    case MessageCode::SaveSettingsToFlash: return handle_message(message);
+    case MessageCode::UnitTestOutput: {
+      if (not deserialise(message.unit_test_output, buffer, length)) return false;
+      return handle_message(message);
+    }
+    case MessageCode::RunUnitTestFunkyAtan: return handle_message(message);
+    case MessageCode::RunUnitTestFunkyAtanPart2: return handle_message(message);
+    case MessageCode::RunUnitTestFunkyAtanPart3: return handle_message(message);
+  }
+}
+
+} // end namespace hex_mini_drive

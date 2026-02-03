@@ -3,6 +3,9 @@
 #include <cstdint>
 
 
+namespace hex_mini_drive {
+
+
 static inline void write_uint8(uint8_t * buf, uint8_t value) {
     buf[0] = value;
 }
@@ -61,3 +64,4 @@ static inline float read_float32(uint8_t const * buf) {
     return *reinterpret_cast<float*>(&as_int);
 }
 
+} // end namespace hex_mini_drive
