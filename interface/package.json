@@ -10,7 +10,7 @@
   },
   "main": "./index.js",
   "scripts": {
-    "generate": "node index.js",
+    "generate": "node generate.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

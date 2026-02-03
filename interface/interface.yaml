@@ -4,546 +4,550 @@
 # of the message contains data as defined below, writting the fields in order.
 # as their bit representation, little-endian.
 
-NullCommand:
-  code: 0x0000
-
-Readout:
-  code: 0x2020
-  struct:
-    pwm_commands: 
-      type: uint32
-      doc: The PWM commands for the motor outputs; concatenated into a single value.
-
-    readout_number:
-      type: uint16
-      doc: Readout number; used to identify the readout in the history.
-
-    state_flags:
-      type: uint16
-      doc: Driver state flags; packed into a single 16-bit value.
-
-    u_current:
-      type: int16
-      doc: Raw phase U current readout (ADC value).
-
-    v_current:
-      type: int16
-      doc: Raw phase V current readout (ADC value).
-
-    w_current:
-      type: int16
-      doc: Raw phase W current readout (ADC value).
-
-    ref_readout:
-      type: int16
-      doc: |
-        Raw reference readout (ADC value); this is the reference voltage for the current 
-        readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
-
-    u_current_diff:
-      type: int16
-      doc: Phase U current readout difference to previous readout.
-
-    v_current_diff:
-      type: int16
-      doc: Phase V current readout difference to previous readout.
-
-    w_current_diff:
-      type: int16
-      doc: Phase W current readout difference to previous readout.
-
-    angle:
-      type: int16
-      doc: Best estimate for the rotor magnetic angle.
-
-    angle_adjustment:
-      type: int16
-      doc: Error of the angle measured from EMF to the rotor angle prediction.
-
-    angular_speed:
-      type: int16
-      doc: Best estimate for the rotor magnetic angular speed.
-
-    vcc_voltage:
-      type: int16
-      doc: Instantaneous VCC voltage readout (ADC value); from resistance divider.
-    
-    emf_voltage_magnitude: 
-      type: int16
-      doc: |
-        EMF voltage magnitude. The EMF is always along the beta direction, but we can have 
-        errors in the measurements and the rotor position and thus we see alpha component 
-        as well. We can rotate the EMF voltage vector fully to the beta direction and get 
-        closer to the actual EMF voltage magnitude.
-
-StreamFullReadouts:
-  code: 0x2021
-  returns: {type: stream, item: FullReadout}
-
-GetReadoutsSnapshot:
-  code: 0x2022
-  returns: {type: stream, item: Readout}
-
-FullReadout:
-  code: 0x2023
-  extends: Readout
-  struct:
-    main_loop_rate:
-      type: uint16
-      doc: Tick rate; the number of main loop (communication and commands) updates per second.
-
-    adc_update_rate:
-      type: uint16
-      doc: |
-        ADC update rate; the number of ADC readouts per second. This is usually higher 
-        than the main loop rate because we read the ADCs multiple times per main loop.
-
-    temperature:
-      type: uint16
-      doc: Instantaneous temperature readout (ADC value); from the temperature sensor.
-
-    live_max_pwm:
-      type: uint16
-      doc: Current maximum PWM allowed by the driver.
-
-    cycle_start_tick:
-      type: int16
-      doc: |
-        PWM counter value at the start of the control update. Should occur immediately 
-        after the halfway point.
-
-    cycle_end_tick:
-      type: int16
-      doc: |
-        PWM counter value at the end of the control update. Should occur immediately 
-        before the halfway point.
-
-    direct_current:
-      type: int16
-      doc: Current in DQ0 coordinates; aligned with the rotor angle.
-
-    quadrature_current:
-      type: int16
-      doc: Current in DQ0 coordinates; crossed with the rotor angle.
-
-    direct_emf_voltage:
-      type: int16
-      doc: EMF voltage in DQ0 coordinates; aligned with the rotor angle.
+Constants:
+  HISTORY_SIZE: 336
+
+MessageCodes:
+  NullCommand:
+    code: 0x0000
+
+  Readout:
+    code: 0x2020
+    struct:
+      pwm_commands: 
+        type: uint32
+        doc: The PWM commands for the motor outputs; concatenated into a single value.
+
+      readout_number:
+        type: uint16
+        doc: Readout number; used to identify the readout in the history.
+
+      state_flags:
+        type: uint16
+        doc: Driver state flags; packed into a single 16-bit value.
+
+      u_current:
+        type: int16
+        doc: Raw phase U current readout (ADC value).
+
+      v_current:
+        type: int16
+        doc: Raw phase V current readout (ADC value).
+
+      w_current:
+        type: int16
+        doc: Raw phase W current readout (ADC value).
+
+      ref_readout:
+        type: int16
+        doc: |
+          Raw reference readout (ADC value); this is the reference voltage for the current 
+          readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
+
+      u_current_diff:
+        type: int16
+        doc: Phase U current readout difference to previous readout.
+
+      v_current_diff:
+        type: int16
+        doc: Phase V current readout difference to previous readout.
+
+      w_current_diff:
+        type: int16
+        doc: Phase W current readout difference to previous readout.
+
+      angle:
+        type: int16
+        doc: Best estimate for the rotor magnetic angle.
+
+      angle_adjustment:
+        type: int16
+        doc: Error of the angle measured from EMF to the rotor angle prediction.
+
+      angular_speed:
+        type: int16
+        doc: Best estimate for the rotor magnetic angular speed.
+
+      vcc_voltage:
+        type: int16
+        doc: Instantaneous VCC voltage readout (ADC value); from resistance divider.
+      
+      emf_voltage_magnitude: 
+        type: int16
+        doc: |
+          EMF voltage magnitude. The EMF is always along the beta direction, but we can have 
+          errors in the measurements and the rotor position and thus we see alpha component 
+          as well. We can rotate the EMF voltage vector fully to the beta direction and get 
+          closer to the actual EMF voltage magnitude.
+
+  StreamFullReadouts:
+    code: 0x2021
+    returns: {type: stream, item: FullReadout}
+
+  GetReadoutsSnapshot:
+    code: 0x2022
+    returns: {type: array, len: HISTORY_SIZE, item: Readout}
+
+  FullReadout:
+    code: 0x2023
+    extends: Readout
+    struct:
+      main_loop_rate:
+        type: uint16
+        doc: Tick rate; the number of main loop (communication and commands) updates per second.
+
+      adc_update_rate:
+        type: uint16
+        doc: |
+          ADC update rate; the number of ADC readouts per second. This is usually higher 
+          than the main loop rate because we read the ADCs multiple times per main loop.
+
+      temperature:
+        type: uint16
+        doc: Instantaneous temperature readout (ADC value); from the temperature sensor.
+
+      live_max_pwm:
+        type: uint16
+        doc: Current maximum PWM allowed by the driver.
+
+      cycle_start_tick:
+        type: int16
+        doc: |
+          PWM counter value at the start of the control update. Should occur immediately 
+          after the halfway point.
+
+      cycle_end_tick:
+        type: int16
+        doc: |
+          PWM counter value at the end of the control update. Should occur immediately 
+          before the halfway point.
+
+      direct_current:
+        type: int16
+        doc: Current in DQ0 coordinates; aligned with the rotor angle.
+
+      quadrature_current:
+        type: int16
+        doc: Current in DQ0 coordinates; crossed with the rotor angle.
+
+      direct_emf_voltage:
+        type: int16
+        doc: EMF voltage in DQ0 coordinates; aligned with the rotor angle.
 
-    quadrature_emf_voltage:
-      type: int16
-      doc: EMF voltage in DQ0 coordinates; crossed with the rotor angle.
+      quadrature_emf_voltage:
+        type: int16
+        doc: EMF voltage in DQ0 coordinates; crossed with the rotor angle.
 
-    total_power:
-      type: int16
-      doc: Total power used/given to VCC line (the battery usually).
+      total_power:
+        type: int16
+        doc: Total power used/given to VCC line (the battery usually).
 
-    resistive_power:
-      type: int16
-      doc: Resistive power; the power dissipated in the phase resistances.
+      resistive_power:
+        type: int16
+        doc: Resistive power; the power dissipated in the phase resistances.
 
-    emf_power:
-      type: int16
-      doc: |
-        EMF power; the power used to drive the motor (which is reflected to the 
-        inductors as back EMF).
+      emf_power:
+        type: int16
+        doc: |
+          EMF power; the power used to drive the motor (which is reflected to the 
+          inductors as back EMF).
 
-    inductive_power:
-      type: int16
-      doc: Inductive power; the power pushed into the inductor magnetic fields.
+      inductive_power:
+        type: int16
+        doc: Inductive power; the power pushed into the inductor magnetic fields.
 
-    motor_constant:
-      type: int16
-      doc: |
-        Motor constant; a measure of how strong the motor is. It is computed as the 
-        ratio between the quadrature EMF voltage and the angular speed.
+      motor_constant:
+        type: int16
+        doc: |
+          Motor constant; a measure of how strong the motor is. It is computed as the 
+          ratio between the quadrature EMF voltage and the angular speed.
 
-    inductor_angle:
-      type: int16
-      doc: The current angle.
+      inductor_angle:
+        type: int16
+        doc: The current angle.
 
-    rotor_acceleration:
-      type: int16
-      doc: The measured acceleration of the rotor.
+      rotor_acceleration:
+        type: int16
+        doc: The measured acceleration of the rotor.
 
-    rotations:
-      type: int16
-      doc: Integrated number of EMF deduced rotor angle rotations since startup.
+      rotations:
+        type: int16
+        doc: Integrated number of EMF deduced rotor angle rotations since startup.
 
-    current_magnitude:
-      type: int16
-      doc: Magnitude of the phase current in the DQ0 coordinate frame.
+      current_magnitude:
+        type: int16
+        doc: Magnitude of the phase current in the DQ0 coordinate frame.
 
-    emf_angle_error_variance:
-      type: int16
-      doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
+      emf_angle_error_variance:
+        type: int16
+        doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
 
-    lead_angle:
-      type: int16
-      doc: | 
-        Lead angle for the motor driving; used to adjust the phase voltages to drive the 
-        motor efficiently.
+      lead_angle:
+        type: int16
+        doc: | 
+          Lead angle for the motor driving; used to adjust the phase voltages to drive the 
+          motor efficiently.
 
-    target_pwm:
-      type: int16
-      doc: Target PWM value for the motor outputs, value set by the advanced control algorithms.
+      target_pwm:
+        type: int16
+        doc: Target PWM value for the motor outputs, value set by the advanced control algorithms.
 
-    secondary_target:
-      type: int16
-      doc: Target for the advanced control algorithms.
+      secondary_target:
+        type: int16
+        doc: Target for the advanced control algorithms.
 
-    seek_integral:
-      type: int16
-      doc: Spare debug output.
+      seek_integral:
+        type: int16
+        doc: Spare debug output.
 
-SetStateOff:
-  code: 0x2030
+  SetStateOff:
+    code: 0x2030
 
-SetStateDrive6Sector:
-  code: 0x2031
+  SetStateDrive6Sector:
+    code: 0x2031
 
-SetStateTestAllPermutations:
-  code: 0x2032
+  SetStateTestAllPermutations:
+    code: 0x2032
 
-SetStateFreewheel:
-  code: 0x2034
+  SetStateFreewheel:
+    code: 0x2034
 
-SetStateTestGroundShort:
-  code: 0x2036
+  SetStateTestGroundShort:
+    code: 0x2036
 
-SetStateTestPositiveShort:
-  code: 0x2037
+  SetStateTestPositiveShort:
+    code: 0x2037
 
-SetStateTestUDirections:
-  code: 0x2039
+  SetStateTestUDirections:
+    code: 0x2039
 
-SetStateTestUIncreasing:
-  code: 0x203a
+  SetStateTestUIncreasing:
+    code: 0x203a
 
-SetStateTestUDecreasing:
-  code: 0x203b
+  SetStateTestUDecreasing:
+    code: 0x203b
 
-SetStateTestVIncreasing:
-  code: 0x203c
+  SetStateTestVIncreasing:
+    code: 0x203c
 
-SetStateTestVDecreasing:
-  code: 0x203d
+  SetStateTestVDecreasing:
+    code: 0x203d
 
-SetStateTestWIncreasing:
-  code: 0x203e
-
-SetStateTestWDecreasing:
-  code: 0x203f
-
-SetStateHoldUPositive:
-  code: 0x3020
-
-SetStateHoldVPositive:
-  code: 0x3021
-
-SetStateHoldWPositive:
-  code: 0x3022
-
-SetStateHoldUNegative:
-  code: 0x3023
-
-SetStateHoldVNegative:
-  code: 0x3024
-
-SetStateHoldWNegative:
-  code: 0x3025
-
-SetStateDrivePeriodic:
-  code: 0x3040
-
-SetStateDriveSmooth:
-  code: 0x4030
-
-SetStateDriveTorque:
-  code: 0x4031
-
-SetStateDriveBatteryPower:
-  code: 0x4032
-
-SetStateDriveSpeed:
-  code: 0x4033
-
-SetStateSeekAngleWithPower:
-  code: 0x4034
-
-SetStateSeekAngleWithTorque:
-  code: 0x4035
-
-SetStateSeekAngleWithSpeed:
-  code: 0x4036
-
-CurrentCalibration:
-  code: 0x4040
-  struct:
-    u_factor:
-      type: int16
-      doc: Adjustment factor for the U phase current readout.
-
-    v_factor:
-      type: int16
-      doc: Adjustment factor for the V phase current readout.
-
-    w_factor:
-      type: int16
-      doc: Adjustment factor for the W phase current readout.
-
-    inductance_factor:
-      type: int16
-      doc: Adjustment factor for the motor inductance; used to calibrate the coil inductance.
-    
-
-GetCurrentCalibration:
-  code: 0x4041
-  returns: CurrentCalibration
-
-SetCurrentCalibration:
-  code: 0x4042
-  returns: CurrentCalibration
-
-ResetCurrentCalibration:
-  code: 0x4043
-  returns: CurrentCalibration
-
-HallPositions:
-  code: 0x4044
-  struct:
-    sector_transition_angles:
-      type: array
-      len: 6
-      item: {type: array, len: 2, item: uint16}
-      doc: | 
-        The angle at the transition to the current sector from the left and from the 
-        right. By "left" I mean the hall sector has transitioned from a lower to a higher 
-        number, the rotor has a positive speed and is rotating counter-clockwise (trigonometric 
-        direction). The left angle is lower than the right angle. Note that the left angle 
-        of a sector and the right angle of the previous sector do not coincide because the 
-        hall sensors have a designed hysteresis that latches the output.
-
-    sector_transition_variances:
-      type: array
-      len: 6
-      item: {type: array, len: 2, item: uint16}
-      doc: |
-        The variance of the angles (it is expensive to compute the standard deviation with 
-        a square root but we only need the variance, so we only store the variance).
-
-    sector_center_angles:
-      type: array
-      len: 6
-      item: uint16
-      doc: The center angle of each sector; the average of the left and right angles.
-
-    sector_center_variances:
-      type: array
-      len: 6
-      item: uint16
-      doc: The variance of the center angles; at the moment it represents the span of the hall sector.
-
-GetHallPositions:
-  code: 0x4045
-  returns: HallPositions
-
-SetHallPositions:
-  code: 0x4046
-  returns: HallPositions
-
-ResetHallPositions:
-  code: 0x4047
-  returns: HallPositions
-
-ControlParameters:
-  code: 0x4049
-  struct:
-    rotor_angle_ki:
-      type: int16
-      doc: Magnet position integral gain.
-
-    rotor_angular_speed_ki:
-      type: int16
-      doc: Magnet angular speed integral gain.
-
-    rotor_acceleration_ki:
-      type: int16
-      doc: Averaging gain for the acceleration of the rotor.
-
-    motor_constant_ki:
-      type: int16
-      doc: Motor constant integral gain.
-
-    motor_direction:
-      type: int16
-      doc: Sign of the motor direction (positive by default, negative to reverse turning direction).
-
-    incorrect_direction_threshold:
-      type: int16
-      doc: Number of incorrect direction detections before we flip our motor angle.
-
-    max_pwm_change:
-      type: int16
-      doc: Maximum PWM adjustment per cycle.
-
-    max_angle_change:
-      type: int16
-      doc: Maximum target angle change per cycle.
-
-    min_emf_voltage:
-      type: int16
-      doc: Minimum EMF voltage to consider EMF detected (above the noise level)
-
-    hall_angle_ki:
-      type: int16
-      doc: Integral gain for the hall angle adjustment (0 to ignore).
-
-    lead_angle_control_ki:
-      type: int16
-      doc: Lead angle integral gain for efficient driving.
-
-    torque_control_ki:
-      type: int16
-      doc: Torque control gain.
-
-    battery_power_control_ki:
-      type: int16
-      doc: Battery power control gain.
-
-    speed_control_ki:
-      type: int16
-      doc: Speed control gain.
-
-    probing_angular_speed:
-      type: int16
-      doc: Probing angular speed for initial EMF detection.
-
-    max_pwm_difference:
-      type: int16
-      doc: Maximum PWM difference from motor PWM required to compensate back EMF.
-
-    emf_angle_error_variance_threshold:
-      type: int16
-      doc: Maximum EMF angle correction variance when it's too noisy to update the angle.
-
-    min_emf_for_motor_constant:
-      type: int16
-      doc: Minium EMF voltage to compute the motor constant.
-
-    max_resistive_power:
-      type: int16
-      doc: Maximum resistive power that can be dissipated in the motor coils.
-
-    resistive_power_ki:
-      type: int16
-      doc: Resistive power long duration average observer gain.
-
-    max_angular_speed:
-      type: int16
-      doc: Maximum angular speed of the motor.
-
-    max_power_draw:
-      type: int16
-      doc: Maximum power draw from the battery (proxy for maximum current).
-
-    power_draw_ki:
-      type: int16
-      doc: Power draw long duration average observer gain.
-
-    max_pwm:
-      type: int16
-      doc: Maximum PWM value for the motor outputs.
-    
-    seek_via_torque_k_prediction:
-      type: int16
-      doc: Seek via torque, prediction duration factor for integral error.
-
-    seek_via_torque_ki:
-      type: int16
-      doc: Seek via torque, integral gain for the PID control.
-
-    seek_via_torque_kp:
-      type: int16
-      doc: Seek via torque, proportional gain for the PID control.
-
-    seek_via_torque_kd:
-      type: int16
-      doc: Seek via torque, derivative gain for the PID control.
-
-    seek_via_power_k_prediction:
-      type: int16
-      doc: Seek via power, prediction duration factor for integral error.
-
-    seek_via_power_ki:
-      type: int16
-      doc: Seek via power, integral gain for the PID control.
-
-    seek_via_power_kp:
-      type: int16
-      doc: Seek via power, proportional gain for the PID control.
-
-    seek_via_power_kd:
-      type: int16
-      doc: Seek via power, derivative gain for the PID control.
-
-    seek_via_speed_k_prediction:
-      type: int16
-      doc: Seek via speed, prediction duration factor for integral error.
-
-    seek_via_speed_ki:
-      type: int16
-      doc: Seek via speed, integral gain for the PID control.
-
-    seek_via_speed_kp:
-      type: int16
-      doc: Seek via speed, proportional gain for the PID control.
-
-    seek_via_speed_kd:
-      type: int16
-      doc: Seek via speed, derivative gain for the PID control.
-
-    phase_resistance:
-      type: int16
-      doc: Resistance of motor coils per phase (star configuration).
-
-    phase_inductance:
-      type: int16
-      doc: Inductance of motor coils per phase (star configuration).
-
-
-SetControlParameters:
-  code: 0x404a
-  returns: ControlParameters
-
-GetControlParameters:
-  code: 0x404b
-  returns: ControlParameters
-
-ResetControlParameters:
-  code: 0x404c
-  returns: ControlParameters
-
-SetAngle:
-  code: 0x4050
-
-SaveSettingsToFlash:
-  code: 0x4080
-
-UnitTestOutput:
-  code: 0x5040
-  struct:
-    data: {type: array, len: 256, item: uint8}
-
-RunUnitTestFunkyAtan:
-  code: 0x5042
-  returns: UnitTestOutput
-
-RunUnitTestFunkyAtanPart2:
-  code: 0x5043
-  returns: UnitTestOutput
-
-RunUnitTestFunkyAtanPart3:
-  code: 0x5044
-  returns: UnitTestOutput
+  SetStateTestWIncreasing:
+    code: 0x203e
+
+  SetStateTestWDecreasing:
+    code: 0x203f
+
+  SetStateHoldUPositive:
+    code: 0x3020
+
+  SetStateHoldVPositive:
+    code: 0x3021
+
+  SetStateHoldWPositive:
+    code: 0x3022
+
+  SetStateHoldUNegative:
+    code: 0x3023
+
+  SetStateHoldVNegative:
+    code: 0x3024
+
+  SetStateHoldWNegative:
+    code: 0x3025
+
+  SetStateDrivePeriodic:
+    code: 0x3040
+
+  SetStateDriveSmooth:
+    code: 0x4030
+
+  SetStateDriveTorque:
+    code: 0x4031
+
+  SetStateDriveBatteryPower:
+    code: 0x4032
+
+  SetStateDriveSpeed:
+    code: 0x4033
+
+  SetStateSeekAngleWithPower:
+    code: 0x4034
+
+  SetStateSeekAngleWithTorque:
+    code: 0x4035
+
+  SetStateSeekAngleWithSpeed:
+    code: 0x4036
+
+  CurrentCalibration:
+    code: 0x4040
+    struct:
+      u_factor:
+        type: int16
+        doc: Adjustment factor for the U phase current readout.
+
+      v_factor:
+        type: int16
+        doc: Adjustment factor for the V phase current readout.
+
+      w_factor:
+        type: int16
+        doc: Adjustment factor for the W phase current readout.
+
+      inductance_factor:
+        type: int16
+        doc: Adjustment factor for the motor inductance; used to calibrate the coil inductance.
+      
+
+  GetCurrentCalibration:
+    code: 0x4041
+    returns: CurrentCalibration
+
+  SetCurrentCalibration:
+    code: 0x4042
+    returns: CurrentCalibration
+
+  ResetCurrentCalibration:
+    code: 0x4043
+    returns: CurrentCalibration
+
+  HallPositions:
+    code: 0x4044
+    struct:
+      sector_transition_angles:
+        type: array
+        len: 6
+        item: {type: array, len: 2, item: uint16}
+        doc: | 
+          The angle at the transition to the current sector from the left and from the 
+          right. By "left" I mean the hall sector has transitioned from a lower to a higher 
+          number, the rotor has a positive speed and is rotating counter-clockwise (trigonometric 
+          direction). The left angle is lower than the right angle. Note that the left angle 
+          of a sector and the right angle of the previous sector do not coincide because the 
+          hall sensors have a designed hysteresis that latches the output.
+
+      sector_transition_variances:
+        type: array
+        len: 6
+        item: {type: array, len: 2, item: uint16}
+        doc: |
+          The variance of the angles (it is expensive to compute the standard deviation with 
+          a square root but we only need the variance, so we only store the variance).
+
+      sector_center_angles:
+        type: array
+        len: 6
+        item: uint16
+        doc: The center angle of each sector; the average of the left and right angles.
+
+      sector_center_variances:
+        type: array
+        len: 6
+        item: uint16
+        doc: The variance of the center angles; at the moment it represents the span of the hall sector.
+
+  GetHallPositions:
+    code: 0x4045
+    returns: HallPositions
+
+  SetHallPositions:
+    code: 0x4046
+    returns: HallPositions
+
+  ResetHallPositions:
+    code: 0x4047
+    returns: HallPositions
+
+  ControlParameters:
+    code: 0x4049
+    struct:
+      rotor_angle_ki:
+        type: int16
+        doc: Magnet position integral gain.
+
+      rotor_angular_speed_ki:
+        type: int16
+        doc: Magnet angular speed integral gain.
+
+      rotor_acceleration_ki:
+        type: int16
+        doc: Averaging gain for the acceleration of the rotor.
+
+      motor_constant_ki:
+        type: int16
+        doc: Motor constant integral gain.
+
+      motor_direction:
+        type: int16
+        doc: Sign of the motor direction (positive by default, negative to reverse turning direction).
+
+      incorrect_direction_threshold:
+        type: int16
+        doc: Number of incorrect direction detections before we flip our motor angle.
+
+      max_pwm_change:
+        type: int16
+        doc: Maximum PWM adjustment per cycle.
+
+      max_angle_change:
+        type: int16
+        doc: Maximum target angle change per cycle.
+
+      min_emf_voltage:
+        type: int16
+        doc: Minimum EMF voltage to consider EMF detected (above the noise level)
+
+      hall_angle_ki:
+        type: int16
+        doc: Integral gain for the hall angle adjustment (0 to ignore).
+
+      lead_angle_control_ki:
+        type: int16
+        doc: Lead angle integral gain for efficient driving.
+
+      torque_control_ki:
+        type: int16
+        doc: Torque control gain.
+
+      battery_power_control_ki:
+        type: int16
+        doc: Battery power control gain.
+
+      speed_control_ki:
+        type: int16
+        doc: Speed control gain.
+
+      probing_angular_speed:
+        type: int16
+        doc: Probing angular speed for initial EMF detection.
+
+      max_pwm_difference:
+        type: int16
+        doc: Maximum PWM difference from motor PWM required to compensate back EMF.
+
+      emf_angle_error_variance_threshold:
+        type: int16
+        doc: Maximum EMF angle correction variance when it's too noisy to update the angle.
+
+      min_emf_for_motor_constant:
+        type: int16
+        doc: Minium EMF voltage to compute the motor constant.
+
+      max_resistive_power:
+        type: int16
+        doc: Maximum resistive power that can be dissipated in the motor coils.
+
+      resistive_power_ki:
+        type: int16
+        doc: Resistive power long duration average observer gain.
+
+      max_angular_speed:
+        type: int16
+        doc: Maximum angular speed of the motor.
+
+      max_power_draw:
+        type: int16
+        doc: Maximum power draw from the battery (proxy for maximum current).
+
+      power_draw_ki:
+        type: int16
+        doc: Power draw long duration average observer gain.
+
+      max_pwm:
+        type: int16
+        doc: Maximum PWM value for the motor outputs.
+      
+      seek_via_torque_k_prediction:
+        type: int16
+        doc: Seek via torque, prediction duration factor for integral error.
+
+      seek_via_torque_ki:
+        type: int16
+        doc: Seek via torque, integral gain for the PID control.
+
+      seek_via_torque_kp:
+        type: int16
+        doc: Seek via torque, proportional gain for the PID control.
+
+      seek_via_torque_kd:
+        type: int16
+        doc: Seek via torque, derivative gain for the PID control.
+
+      seek_via_power_k_prediction:
+        type: int16
+        doc: Seek via power, prediction duration factor for integral error.
+
+      seek_via_power_ki:
+        type: int16
+        doc: Seek via power, integral gain for the PID control.
+
+      seek_via_power_kp:
+        type: int16
+        doc: Seek via power, proportional gain for the PID control.
+
+      seek_via_power_kd:
+        type: int16
+        doc: Seek via power, derivative gain for the PID control.
+
+      seek_via_speed_k_prediction:
+        type: int16
+        doc: Seek via speed, prediction duration factor for integral error.
+
+      seek_via_speed_ki:
+        type: int16
+        doc: Seek via speed, integral gain for the PID control.
+
+      seek_via_speed_kp:
+        type: int16
+        doc: Seek via speed, proportional gain for the PID control.
+
+      seek_via_speed_kd:
+        type: int16
+        doc: Seek via speed, derivative gain for the PID control.
+
+      phase_resistance:
+        type: int16
+        doc: Resistance of motor coils per phase (star configuration).
+
+      phase_inductance:
+        type: int16
+        doc: Inductance of motor coils per phase (star configuration).
+
+
+  SetControlParameters:
+    code: 0x404a
+    returns: ControlParameters
+
+  GetControlParameters:
+    code: 0x404b
+    returns: ControlParameters
+
+  ResetControlParameters:
+    code: 0x404c
+    returns: ControlParameters
+
+  SetAngle:
+    code: 0x4050
+
+  SaveSettingsToFlash:
+    code: 0x4080
+
+  UnitTestOutput:
+    code: 0x5040
+    struct:
+      data: {type: array, len: 256, item: uint8}
+
+  RunUnitTestFunkyAtan:
+    code: 0x5042
+    returns: UnitTestOutput
+
+  RunUnitTestFunkyAtanPart2:
+    code: 0x5043
+    returns: UnitTestOutput
+
+  RunUnitTestFunkyAtanPart3:
+    code: 0x5044
+    returns: UnitTestOutput
 
