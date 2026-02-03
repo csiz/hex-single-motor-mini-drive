@@ -1,11 +1,9 @@
-# API interface definition for the Hex Single Motor Mini Drive.
-# 
-# The first 2 bytes of each message contain the message code. The remainder 
-# of the message contains data as defined below, writting the fields in order.
-# as their bit representation, little-endian.
+doc: |
+  API interface definition for the Hex Single Motor Mini Drive.
 
-Constants:
-  HISTORY_SIZE: 336
+  The first 2 bytes of each message contain the message code. The remainder 
+  of the message contains data as defined below, writting the fields in order.
+  as their bit representation, little-endian.
 
 MessageCodes:
   NullCommand:
@@ -13,6 +11,10 @@ MessageCodes:
 
   Readout:
     code: 0x2020
+    doc: |
+      Basic readout of the motor driver internal state; can be recorded contiguously
+      into a history buffer after a commanded event.
+
     struct:
       pwm_commands: 
         type: uint32
@@ -91,6 +93,9 @@ MessageCodes:
   FullReadout:
     code: 0x2023
     extends: Readout
+    doc: |
+      Complete readout of the motor driver internal state for exploration and data stream.
+    
     struct:
       main_loop_rate:
         type: uint16
@@ -283,6 +288,17 @@ MessageCodes:
 
   CurrentCalibration:
     code: 0x4040
+    doc: |
+      Calibration factors for the current sensors.
+
+      The soldering joints vary during manufacturing and therefore they affect the total
+      resistance of the shunt resistors. We can calibrate for this effect by multiplying
+      the readout by a factor for each phase.
+      
+      For the v1 design, we shall improve the shunt resistors and soldering pad design to
+      to improve the accuracy. We can then switch to automatically calibrating the phase
+      resistance and motor inductance. For now we calibrate using the motor monitor app.
+
     struct:
       u_factor:
         type: int16
@@ -315,6 +331,16 @@ MessageCodes:
 
   HallPositions:
     code: 0x4044
+    doc: |
+      Hall sensor position calibration data.
+      
+      Apparently, millimiter precision in the placement of the hall sensor chips means an error up to 
+      30 degrees in the electrical angle of the magnetic rotor. Note that for each physical rotation
+      of the magnet there are N magnet poles times P coil pairs rotations of the electrical angle.
+      
+      With this big of an error, we need to calibrate the hall sensor positions using the angle
+      inferred from the back EMF voltage induced in the coils.
+      
     struct:
       sector_transition_angles:
         type: array
@@ -362,6 +388,11 @@ MessageCodes:
 
   ControlParameters:
     code: 0x4049
+    doc: |
+      Parameters used in the motor control loop; for detailed descriptions check the
+      motor monitor page. It's useful to modify the values and inspect the changes to
+      the respective variables in the readout while driving a physical motor.
+
     struct:
       rotor_angle_ki:
         type: int16
@@ -551,3 +582,6 @@ MessageCodes:
     code: 0x5044
     returns: UnitTestOutput
 
+
+Constants:
+  HISTORY_SIZE: {type: uint16, value: 336}
