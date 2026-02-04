@@ -14,7 +14,7 @@
 #include "io.hpp"
 #include "usb_com.hpp"
 
-#include "message_parsing.hpp"
+#include "hex_mini_drive/cobs_encoding.hpp"
 
 
 #include <cstddef>
@@ -40,7 +40,7 @@ uint32_t last_update_time_millis = 0;
 float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
 
-COBS_Buffer usb_encoding_buffer = {};
+hex_mini_drive::COBS_Buffer usb_encoding_buffer = {};
 
 uint32_t usb_chunk_receive_time = 0;
 uint32_t usb_last_sent_time = 0;
