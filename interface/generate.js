@@ -775,6 +775,9 @@ if (import.meta.main) {
   const js_interface = generate_js_interface(interface_spec);
   const js_output_path = `${output_dir}/interface.js`;
   writeFileSync(js_output_path, js_interface);
+
+  // Also copy the helping JS files:
+  writeFileSync(`${output_dir}/cobs_encoding.js`, readFileSync("./cobs_encoding.js"));
   
   console.log("Generated JavaScript interface:", js_output_path);
 }
