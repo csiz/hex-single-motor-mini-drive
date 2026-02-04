@@ -81,30 +81,37 @@ class CodeWriter {
 const plain_types = {
   'uint8': {
     cpp: 'uint8_t',
+    js: 'Uint8',
     size: 1,
   },
   'uint16': {
     cpp: 'uint16_t',
+    js: 'Uint16',
     size: 2,
   },
   'uint32': {
     cpp: 'uint32_t',
+    js: 'Uint32',
     size: 4,
   },
   'int8': {
     cpp: 'int8_t',
+    js: 'Int8',
     size: 1,
   },
   'int16': {
     cpp: 'int16_t',
+    js: 'Int16',
     size: 2,
   },
   'int32': {
     cpp: 'int32_t',
+    js: 'Int32',
     size: 4,
   },
   'float32': {
     cpp: 'float',
+    js: 'Float32',
     size: 4,
   }
 }
@@ -146,12 +153,37 @@ const get_type_size = (type_spec) => {
   }
 };
 
+// Calculate message sizes (including all inherited fields)
+const calculate_message_size = (spec, msg) => {
+  let size = 2; // 2 bytes for message code
+  
+  // Add size from extended message
+  if (msg.extends) {
+    const base_msg = spec.MessageCodes[msg.extends];
+    if (base_msg && base_msg.struct) {
+      for (const field of Object.values(base_msg.struct)) {
+        size += get_type_size(field);
+      }
+    }
+  }
+  
+  // Add size from this message's fields
+  if (msg.struct) {
+    for (const field of Object.values(msg.struct)) {
+      size += get_type_size(field);
+    }
+  }
+  
+  return size;
+};
+
 // Helper function to convert PascalCase to snake_case.
 const to_snake_case = (str) => {
   return str.replace(/[A-Z]/g, (letter, index) => {
     return index === 0 ? letter.toLowerCase() : '_' + letter.toLowerCase();
   });
 };
+
 
 
 function generate_cpp_interface(spec) {
@@ -202,30 +234,6 @@ function generate_cpp_interface(spec) {
   code.write`};`;
   code.write``;
   
-  
-  // Calculate message sizes (including all inherited fields)
-  const calculate_message_size = (name, msg) => {
-    let size = 2; // 2 bytes for message code
-    
-    // Add size from extended message
-    if (msg.extends) {
-      const base_msg = spec.MessageCodes[msg.extends];
-      if (base_msg && base_msg.struct) {
-        for (const field of Object.values(base_msg.struct)) {
-          size += get_type_size(field);
-        }
-      }
-    }
-    
-    // Add size from this message's fields
-    if (msg.struct) {
-      for (const field of Object.values(msg.struct)) {
-        size += get_type_size(field);
-      }
-    }
-    
-    return size;
-  };
 
   // Generate structs for messages with struct field
   code.write`// Message Structures`;
@@ -246,7 +254,7 @@ function generate_cpp_interface(spec) {
       code.write`static constexpr uint16_t message_code = ${msg.code};`;
       
       // Add message size field
-      const message_size = calculate_message_size(name, msg);
+      const message_size = calculate_message_size(spec, msg);
       code.write`static constexpr size_t message_size = ${message_size};`;
       code.write``;
       
@@ -505,6 +513,242 @@ function generate_cpp_interface(spec) {
   return code.get();
 }
 
+function generate_js_interface(spec) {
+  let code = new CodeWriter();
+  
+  // Header comment
+  code.comment(spec.doc);
+  code.write``;
+
+  // Constants
+  code.write`// Constants`;
+  for (const [name, value] of Object.entries(spec.Constants)) {
+    if (typeof value === 'object' && value.type && value.value) {
+      code.write`export const ${name} = ${value.value};`;
+    } else {
+      code.write`export const ${name} = ${value};`;
+    }
+  }
+  code.write``;
+
+  // Message codes
+  code.write`// Message Codes`;
+  code.write`export const MessageCode = {`;
+  code.indent();
+  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
+    code.write`${name}: ${msg.code},`;
+  }
+  code.dedent();
+  code.write`};`;
+  code.write``;
+  
+  // Function to write just the code for simple messages.
+  code.write`// Helper function to write just the message code`;
+  code.write`function write_code(message_code) {`;
+  code.indent();
+  code.write`const buffer = new Uint8Array(2);`;
+  code.write`const view = new DataView(buffer.buffer);`;
+  code.write`view.setUint16(0, message_code);`;
+  code.write`return buffer;`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+  
+  // Map type names to DataView methods
+  const get_dataview_method = (type_name) => {
+    return plain_types[type_name].js;
+  };
+
+  // Helper to generate field serialization for JS
+  const generate_js_field_serialization = (code, field_name, field, offset_var, value_var) => {
+    if (typeof field === 'string' || (field.type && plain_types[field.type])) {
+      const type_name = typeof field === 'string' ? field : field.type;
+      const method = get_dataview_method(type_name);
+      code.write`view.set${method}(${offset_var}, ${value_var}.${field_name});`;
+      code.write`${offset_var} += ${get_type_size(field)};`;
+    } else if (field.type === 'array') {
+      const item_type = typeof field.item === 'string' ? field.item : field.item.type;
+      const item_size = get_type_size(field.item);
+      code.write`for (let i = 0; i < ${field.len}; i++) {`;
+      code.indent();
+      
+      if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
+        const method = get_dataview_method(item_type);
+        code.write`view.set${method}(${offset_var}, ${value_var}.${field_name}[i]);`;
+        code.write`${offset_var} += ${item_size};`;
+      } else if (field.item.type === 'array') {
+        const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
+        const nested_item_size = get_type_size(field.item.item);
+        const method = get_dataview_method(nested_item_type);
+        code.write`for (let j = 0; j < ${field.item.len}; j++) {`;
+        code.indent();
+        code.write`view.set${method}(${offset_var}, ${value_var}.${field_name}[i][j]);`;
+        code.write`${offset_var} += ${nested_item_size};`;
+        code.dedent();
+        code.write`}`;
+      }
+      code.dedent();
+      code.write`}`;
+    }
+  };
+
+  // Helper to generate field deserialization for JS
+  const generate_js_field_deserialization = (code, field_name, field, offset_var, result_var) => {
+    if (typeof field === 'string' || (field.type && plain_types[field.type])) {
+      const type_name = typeof field === 'string' ? field : field.type;
+      const method = get_dataview_method(type_name);
+      code.write`${result_var}.${field_name} = view.get${method}(${offset_var});`;
+      code.write`${offset_var} += ${get_type_size(field)};`;
+    } else if (field.type === 'array') {
+      const item_type = typeof field.item === 'string' ? field.item : field.item.type;
+      const item_size = get_type_size(field.item);
+      code.write`${result_var}.${field_name} = [];`;
+      code.write`for (let i = 0; i < ${field.len}; i++) {`;
+      code.indent();
+      
+      if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
+        const method = get_dataview_method(item_type);
+        code.write`${result_var}.${field_name}[i] = view.get${method}(${offset_var});`;
+        code.write`${offset_var} += ${item_size};`;
+      } else if (field.item.type === 'array') {
+        const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
+        const nested_item_size = get_type_size(field.item.item);
+        const method = get_dataview_method(nested_item_type);
+        code.write`${result_var}.${field_name}[i] = [];`;
+        code.write`for (let j = 0; j < ${field.item.len}; j++) {`;
+        code.indent();
+        code.write`${result_var}.${field_name}[i][j] = view.get${method}(${offset_var});`;
+        code.write`${offset_var} += ${nested_item_size};`;
+        code.dedent();
+        code.write`}`;
+      }
+      code.dedent();
+      code.write`}`;
+    }
+  };
+
+  // Serialize function
+  code.write`// Serialize a message object to a Uint8Array`;
+  code.write`export function serialise(message) {`;
+  code.indent();
+  code.write`if (!message || typeof message.message_code !== 'number') {`;
+  code.indent();
+  code.write`return null;`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+  code.write`switch (message.message_code) {`;
+  code.indent();
+  
+  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
+    if (msg.struct) {
+      const message_size = calculate_message_size(spec, msg);
+      code.write`case MessageCode.${name}: {`;
+      code.indent();
+      code.write`const buffer = new Uint8Array(${message_size});`;
+      code.write`const view = new DataView(buffer.buffer);`;
+      code.write`let offset = 0;`;
+      code.write`view.setUint16(offset, message.message_code);`;
+      code.write`offset += 2;`;
+      
+      // Serialize base fields if extends
+      if (msg.extends) {
+        const base_msg = spec.MessageCodes[msg.extends];
+        if (base_msg && base_msg.struct) {
+          for (const [field_name, field] of Object.entries(base_msg.struct)) {
+            generate_js_field_serialization(code, field_name, field, 'offset', 'message');
+          }
+        }
+      }
+      
+      // Serialize this message's fields
+      for (const [field_name, field] of Object.entries(msg.struct)) {
+        generate_js_field_serialization(code, field_name, field, 'offset', 'message');
+      }
+      
+      code.write`return buffer;`;
+      code.dedent();
+      code.write`}`;
+    } else {
+      // Message with no struct, just code
+      code.write`case MessageCode.${name}: return write_code(MessageCode.${name});`;
+    }
+  }
+  
+  code.write`default:`;
+  code.indent();
+  code.write`return null;`;
+  code.dedent();
+  code.dedent();
+  code.write`}`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+
+  // Deserialize function
+  code.write`// Deserialize a Uint8Array to a message object`;
+  code.write`export function deserialise(buffer) {`;
+  code.indent();
+  code.write`if (!buffer || buffer.length < 2) {`;
+  code.indent();
+  code.write`return null;`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+  code.write`view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);`;
+  code.write`const message_code = view.getUint16(0);`;
+  code.write``;
+  code.write`switch (message_code) {`;
+  code.indent();
+  
+  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
+    if (msg.struct) {
+      const message_size = calculate_message_size(spec, msg);
+      code.write`case MessageCode.${name}: {`;
+      code.indent();
+      code.write`if (buffer.length !== ${message_size}) return null;`;
+      code.write`const result = { message_code };`;
+      code.write`let offset = 2;`;
+      
+      // Deserialize base fields if extends
+      if (msg.extends) {
+        const base_msg = spec.MessageCodes[msg.extends];
+        if (base_msg && base_msg.struct) {
+          for (const [field_name, field] of Object.entries(base_msg.struct)) {
+            generate_js_field_deserialization(code, field_name, field, 'offset', 'result');
+          }
+        }
+      }
+      
+      // Deserialize this message's fields
+      for (const [field_name, field] of Object.entries(msg.struct)) {
+        generate_js_field_deserialization(code, field_name, field, 'offset', 'result');
+      }
+      
+      code.write`return result;`;
+      code.dedent();
+      code.write`}`;
+    } else {
+      // Message with no struct
+      code.write`case MessageCode.${name}:`;
+      code.indent();
+      code.write`return buffer.length === 2 ? { message_code } : null;`;
+      code.dedent();
+    }
+  }
+  
+  code.write`default:`;
+  code.indent();
+  code.write`return null;`;
+  code.dedent();
+  code.dedent();
+  code.write`}`;
+  code.dedent();
+  code.write`}`;
+
+  return code.get();
+}
+
 
 // Run this script if executed directly, to generate interface files.
 if (import.meta.main) {
@@ -526,4 +770,11 @@ if (import.meta.main) {
   writeFileSync(`${output_dir}/cobs_encoding.hpp`, readFileSync("./cobs_encoding.hpp"));
 
   console.log("Generated C++ interface:", cpp_output_path);
+  
+  // Generate JavaScript interface
+  const js_interface = generate_js_interface(interface_spec);
+  const js_output_path = `${output_dir}/interface.js`;
+  writeFileSync(js_output_path, js_interface);
+  
+  console.log("Generated JavaScript interface:", js_output_path);
 }
