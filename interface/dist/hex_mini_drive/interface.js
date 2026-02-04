@@ -4,6 +4,8 @@
 // of the message contains data as defined below, writting the fields in order.
 // as their bit representation, little-endian.
 
+export { COBS_Buffer } from './cobs_encoding.js';
+
 // Constants
 export const HISTORY_SIZE = 336;
 

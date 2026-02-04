@@ -520,6 +520,9 @@ function generate_js_interface(spec) {
   code.comment(spec.doc);
   code.write``;
 
+  code.write`export { COBS_Buffer } from './cobs_encoding.js';`;
+  code.write``;
+
   // Constants
   code.write`// Constants`;
   for (const [name, value] of Object.entries(spec.Constants)) {

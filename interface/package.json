@@ -1,12 +1,12 @@
 {
   "name": "hex-mini-drive-interface",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Over the wire serialization and interface for the hex mini motor drive system.",
   "license": "MIT",
   "author": "Calin Mocanu",
   "type": "module",
   "exports": {
-    ".": "./dist/interface.js"
+    ".": "./dist/hex_mini_drive/interface.js"
   },
   "main": "./generate.js",
   "scripts": {
