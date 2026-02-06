@@ -7,11 +7,13 @@
 
 #include "type_definitions.hpp"
 
+#include "hex_mini_drive/interface.hpp"
+
 // Latest Data
 // -----------
 
 // Get a copy of the latest readout data.
-FullReadout get_readout();
+hex_mini_drive::FullReadout get_readout();
 
 
 // Data queue
@@ -24,7 +26,7 @@ bool readout_history_full();
 // Check if there's data to read.
 bool readout_history_available();
 // Read the oldest data in the history buffer.
-Readout readout_history_pop();
+hex_mini_drive::Readout readout_history_pop();
 
 
 // Motor control
@@ -44,10 +46,10 @@ void set_angle(int16_t angle);
 // -----------------
 
 // Position calibration data. These are the trigger angles for each hall sensor output.
-extern PositionCalibration position_calibration;
+extern hex_mini_drive::HallPositions position_calibration;
 
 // Current calibration factors.
-extern CurrentCalibration current_calibration;
+extern hex_mini_drive::CurrentCalibration current_calibration;
 
 // Interrupt loop control parameters.
-extern ControlParameters control_parameters;
+extern hex_mini_drive::ControlParameters control_parameters;

@@ -6,6 +6,8 @@
 #include "type_definitions.hpp"
 #include "math_utils.hpp"
 
+#include "hex_mini_drive/interface.hpp"
+
 // Data storage available.
 const size_t history_size = 336;
 
@@ -352,7 +354,7 @@ const int acceleration_fixed_point = 512;
 // ----------------------------------
 
 // By default assume the hall sensors are perfectly placed 120 degrees apart.
-const PositionCalibration default_position_calibration = {
+const hex_mini_drive::HallPositions default_position_calibration = {
     // The angle at which we transition to this sector. The first is when rotating in the
     // positive direction; second for the negative direction.
     .sector_transition_angles = {{
@@ -396,7 +398,7 @@ const PositionCalibration default_position_calibration = {
 const int16_t current_calibration_fixed_point = 1024;
 
 // By default assume the current calibration is 1.0 for all phases and inductance.
-const CurrentCalibration default_current_calibration = {
+const hex_mini_drive::CurrentCalibration default_current_calibration = {
     .u_factor = current_calibration_fixed_point,
     .v_factor = current_calibration_fixed_point,
     .w_factor = current_calibration_fixed_point,
@@ -412,7 +414,7 @@ const int16_t seek_pid_fixed_point = 1024;
 // The default control parameters should be set to reasonable values for any motor.
 // 
 // The reset button will reload these values.
-const ControlParameters default_control_parameters = {
+const hex_mini_drive::ControlParameters default_control_parameters = {
 
     .rotor_angle_ki = 1024,
     .rotor_angular_speed_ki = 64,

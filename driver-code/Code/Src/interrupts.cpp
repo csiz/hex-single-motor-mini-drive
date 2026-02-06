@@ -26,6 +26,8 @@
 #include <cstdint>
 #include <cstring>
 
+#include "hex_mini_drive/interface.hpp"
+
 // Interrupt loop
 // ==============
 
@@ -37,18 +39,18 @@
 // --------------------
 
 // Electrical and position state
-FullReadout readout = {
+hex_mini_drive::FullReadout readout = {
     .live_max_pwm = pwm_max,
     .emf_angle_error_variance = max_16bit,
 };
 
-FullReadout latest_readout = readout;
+hex_mini_drive::FullReadout latest_readout = readout;
 
-FullReadout shared_readout = readout;
+hex_mini_drive::FullReadout shared_readout = readout;
 volatile bool shared_readout_lock = false;
 
 // History of light readouts so that we can record every cycle for a short snapshot.
-Readout readout_history[history_size] = {};
+hex_mini_drive::Readout readout_history[history_size] = {};
 
 // Current write index.
 size_t readout_history_write_index = 0;
@@ -135,13 +137,13 @@ DriverState pending_state = breaking_driver_state;
 // Initialize the loop control parameters and the calibration data. Either load 
 // them from the flash or use the defaults.
 
-PositionCalibration position_calibration = get_position_calibration();
-CurrentCalibration current_calibration = get_current_calibration();
-ControlParameters control_parameters = get_control_parameters();
+hex_mini_drive::HallPositions position_calibration = get_position_calibration();
+hex_mini_drive::CurrentCalibration current_calibration = get_current_calibration();
+hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 
 // Guard the data access by disabling the ADC interrupt while we read/write the data.
 
-FullReadout get_readout(){
+hex_mini_drive::FullReadout get_readout(){
     if (shared_readout_lock) {
         latest_readout = shared_readout;
         shared_readout_lock = false;
@@ -161,8 +163,8 @@ bool readout_history_available(){
     return readout_history_read_index < readout_history_write_index;
 }
 
-Readout readout_history_pop(){
-    Readout readout = readout_history[readout_history_read_index];
+hex_mini_drive::Readout readout_history_pop(){
+    hex_mini_drive::Readout readout = readout_history[readout_history_read_index];
     readout_history_read_index += 1;
     // Reset both indexes if we have sent the whole history.
     if (readout_history_read_index >= history_size) readout_history_reset();
@@ -170,7 +172,7 @@ Readout readout_history_pop(){
 }
 
 // (Private func) Push a readout to the history buffer.
-static inline bool readout_history_push(Readout const& readout){
+static inline bool readout_history_push(hex_mini_drive::Readout const& readout){
     if (readout_history_write_index >= history_size) return false;
     readout_history[readout_history_write_index] = readout;
     readout_history_write_index += 1;

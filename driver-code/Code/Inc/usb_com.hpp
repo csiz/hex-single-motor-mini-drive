@@ -24,14 +24,14 @@ void usb_set_control_state(uint16_t control_state);
 #ifdef __cplusplus
 }
 
-// Alias for a generic function that reads a buffer of some size.
-using BufferFunction = void (*)(uint8_t * buffer, int size);
+// Reserve space in a buffer to which we write data to send.
+uint8_t * usb_reserve_send_buffer(size_t size);
+
+// Mark the reserved buffer as ready to send.
+void usb_mark_send_buffer(size_t size);
 
 // Run a tick of the USB comms.
-// 
-// Send data in the tx_buffer of size tx_size returning whether data was queued successfully.
-// And call the process_received_data function to handle any received data. 
-bool usb_update(uint8_t * tx_data, int tx_size, BufferFunction process_received_data);
+bool usb_update(uint8_t * tx_data, size_t tx_size, void (*process_received_data)(uint8_t * buffer, size_t size));
 
 void usb_reset();
 

@@ -2,6 +2,7 @@
 
 #include <cstdint> // For int16_t, int32_t
 #include <array>
+#include <sys/types.h>
 #include <utility> // For std::pair
 
 #include "constants.hpp"

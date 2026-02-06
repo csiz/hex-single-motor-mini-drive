@@ -5,10 +5,12 @@
 #include "math_utils.hpp"
 #include "type_definitions.hpp"
 
+#include "hex_mini_drive/interface.hpp"
+
 // Calculate the PID control for seeking a target position.
 static inline int16_t compute_seek_pid_control(
     SeekAngle & seek_angle,
-    FullReadout const& readout,
+    hex_mini_drive::FullReadout const& readout,
     const int16_t k_prediction,
     const int16_t ki,
     const int16_t kp,

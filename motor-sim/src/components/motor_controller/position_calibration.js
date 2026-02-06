@@ -1,5 +1,5 @@
 import {pwm_base, cycles_per_millisecond, history_size} from "./constants.js";
-import {command_codes} from "./interface.js";
+import {MessageCode} from "./motor_controller.js";
 import {wait} from "./async_utils.js";
 import {circular_stats_degrees, interpolate_degrees, positive_degrees} from "./angular_math.js";
 import * as d3 from "d3";
@@ -14,25 +14,34 @@ export async function run_position_calibration(motor_controller) {
 
   const drive_strength = Math.floor(pwm_base * 2 / 10);
 
-  const test_options = {
-    command_timeout: 1, 
-    command_value: 0,
+  const test_options = {pwm_value: 0, take_snapshot: 1};
+  const reply = {
     expected_messages: history_size,
-    expected_code: command_codes.READOUT,
+    expected_code: MessageCode.Readout,
   };
 
-  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_value: +drive_strength, command_timeout: drive_timeout});  
+  await motor_controller.send_command({
+    message_code: MessageCode.SetStateDrive6Sector, 
+    pwm_value: +drive_strength, 
+    timeout: drive_timeout,
+  });  
   await wait(drive_time);
   const drive_positive = await motor_controller.send_command_and_await_reply({
-    command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options
+    message: {message_code: MessageCode.SetStateTestGroundShort, ...test_options},
+    ...reply
   });
 
   console.info("Drive positive done");
 
-  await motor_controller.send_command({command: command_codes.SET_STATE_DRIVE_6_SECTOR, command_value: -drive_strength, command_timeout: drive_timeout});
+  await motor_controller.send_command({
+    message_code: MessageCode.SetStateDrive6Sector,
+    pwm_value: -drive_strength,
+    timeout: drive_timeout,
+  });
   await wait(drive_time);
   const drive_negative = await motor_controller.send_command_and_await_reply({
-    command: command_codes.SET_STATE_TEST_GROUND_SHORT, ...test_options
+    message: {message_code: MessageCode.SetStateTestGroundShort, ...test_options},
+    ...reply
   });
 
 

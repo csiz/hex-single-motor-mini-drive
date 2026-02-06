@@ -1,13 +1,10 @@
 import {exponential_average} from "./math_utils.js";
-import {parser_mapping, command_codes, serialise_command, header_size, default_command_options} from "./interface.js";
+import {parser_mapping, make_position_calibration, make_current_calibration} from "./interface.js";
 
-import {COBS_Buffer} from "hex-mini-drive-interface";
-
+import {COBS_Buffer, MessageCode, serialise, deserialise} from "hex-mini-drive-interface";
 
 // Re-export the codes from the interface.
-export { command_codes };
-
-
+export { MessageCode };
 
 
 // Serial Port Management
@@ -84,49 +81,37 @@ export class MotorController {
     
     let receive_message = (message_data) => {
 
-      // The message code indicates the type of message and the expected size.
-      const message_code = new DataView(message_data.buffer, 0, header_size).getUint16(0);
-
-      // Get the parser and expected size for the message; if we can't find it, we must've received a spurious code.
-      const {parse_function} = parser_mapping[message_code] ?? {parse_function: null};
-
-      // Check if we have a parsing function for the message code.
-      if (parse_function === null) {
-        // Unrecognised message code; we must have read the middle of a message. Iterate over each
-        // byte until we find the expected code indicating the start of a valid message.
-        bytes_discarded += message_data.length;
-        return;
-      }
-
-      // We have enough data to parse the message; parse it.
-      const message = parse_function(
-        new DataView(message_data.buffer, 0, message_data.length), 
-        // We compute running averages and current index relative to previous messages of the same type.
-        this.last_message.get(message_code), 
-        // Pass the controller instance for so we can read the calibration parameters.
-        this,
-      );
-
+      let bare_message = deserialise(message_data);
+      
       // If we have a valid message, report it to the user.
-      if(message) {
-        // Remember for the next message so we can increment the message index.
-        this.last_message.set(message_code, message);
-
-        // Intercept awaited messages and resolve the reply promise.
-        if (this.awaiting_reply.has(message_code)) {
-          const {resolve, data, expected_messages} = this.awaiting_reply.get(message_code);
-          data.push(message);
-          if (data.length === expected_messages) {
-            resolve(data);
-          }
-        } else {
-          // Otherwise stream all replies through the `onmessage` callback.
-          this.onmessage(message);
-        }
-      } else {
+      if(!bare_message) {
         // Something was wrong parsing the message; discard it.
         bytes_discarded += message_data.length;
-        console.warn("Message was discarded due to invalid data:", message_code, message_data);
+        console.warn("Message was discarded due to invalid data:", message_data);
+        return;
+      }
+      
+      const message_code = bare_message.message_code;
+      
+      // We compute running averages and current index relative to previous messages of the same type.
+      const last_message = this.last_message.get(message_code);
+
+      // Add additional data to readout messages.
+      const message = parser_mapping[message_code] ? parser_mapping[message_code](bare_message, last_message, this) : bare_message;
+
+      // Remember for the next message so we can increment the message index.
+      this.last_message.set(message_code, message);
+
+      // Intercept awaited messages and resolve the reply promise.
+      if (this.awaiting_reply.has(message_code)) {
+        const {resolve, data, expected_messages} = this.awaiting_reply.get(message_code);
+        data.push(message);
+        if (data.length === expected_messages) {
+          resolve(data);
+        }
+      } else {
+        // Otherwise stream all replies through the `onmessage` callback.
+        this.onmessage(message);
       }
     };
 
@@ -193,19 +178,30 @@ export class MotorController {
   }
 
   /* Send a command to the motor driver. */
-  async send_command({command, ...command_options}) {
-    const buffer = this.encoding_buffer.encode_message(serialise_command({...default_command_options, command, ...command_options}));
+  async send_command(message) {
+    console.log("Sending message:", message);
+    // Send messages or message codes.
+    if (typeof message === "number") {
+      message = {message_code: message};
+    } else if (typeof message !== "object") {
+      throw new Error("Message must be an object or a message code number.");
+    } else if (!("message_code" in message)) {
+      throw new Error("Message object must contain a message_code property.");
+    }
+    
+    const message_data = serialise(message);
+
+    const buffer = this.encoding_buffer.encode_message(message_data);
 
     this.connection_worker.postMessage({type: "send", buffer}, {transfer: [buffer.buffer]});
   }
 
   /* Send a command and capture the reply messages. */
   async send_command_and_await_reply({
-    command, 
-    expected_code = command_codes.READOUT, 
+    message,
+    expected_code = MessageCode.Readout, 
     expected_messages = 1, 
     response_timeout = 500,
-    ...command_options
   }) {
     if (expected_messages <= 0) {
       throw new Error("Must expect positive number of messages.");
@@ -213,7 +209,8 @@ export class MotorController {
 
     // Setup the reply promise and message code indexed reply queue.
 
-    // It's a singleton queue, only process one reply at a time.
+    // Don't allow repeated messages with the same reply. User needs to await the first result or 
+    // timeout before sending another command with the same expected reply code to avoid confusion.
     if (this.awaiting_reply.has(expected_code)) {
       throw new Error(`Already awaiting reply for message code: ${expected_code}`);
     }
@@ -233,7 +230,7 @@ export class MotorController {
     // Send the command, return the data and do any cleanup necessary.
     try {
       // Wait for the command to be sent before waiting for the response.
-      await this.send_command({command, ...command_options});
+      await this.send_command(message);
       
       // Wait for the reading loop to resolve the promise with the expected data.
       const data = await promise;
@@ -252,8 +249,8 @@ export class MotorController {
   async load_current_calibration(){
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        command: command_codes.GET_CURRENT_FACTORS, 
-        expected_code: command_codes.CURRENT_FACTORS, 
+        message: MessageCode.GetCurrentCalibration,
+        expected_code: MessageCode.CurrentCalibration, 
         expected_messages: 1,
       });
     } catch (error) {
@@ -267,9 +264,8 @@ export class MotorController {
 
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        command: command_codes.SET_CURRENT_FACTORS, 
-        additional_data: current_calibration,
-        expected_code: command_codes.CURRENT_FACTORS, 
+        message: {message_code: MessageCode.SetCurrentCalibration, current_calibration: make_current_calibration(current_calibration)},
+        expected_code: MessageCode.CurrentCalibration,
         expected_messages: 1,
       });
     } catch (error) {
@@ -281,8 +277,8 @@ export class MotorController {
   async reset_current_calibration(){
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        command: command_codes.RESET_CURRENT_FACTORS,
-        expected_code: command_codes.CURRENT_FACTORS,
+        message: MessageCode.ResetCurrentCalibration,
+        expected_code: MessageCode.CurrentCalibration,
         expected_messages: 1,
       });
     } catch (error) {
@@ -295,8 +291,8 @@ export class MotorController {
   async load_position_calibration(){
     try {
       this.position_calibration = await this.send_command_and_await_reply({
-        command: command_codes.GET_HALL_POSITIONS,
-        expected_code: command_codes.HALL_POSITIONS,
+        message: MessageCode.GetHallPositions,
+        expected_code: MessageCode.HallPositions,
         expected_messages: 1,
       });
     } catch (error) {
@@ -309,9 +305,8 @@ export class MotorController {
 
     try {
       this.position_calibration = await this.send_command_and_await_reply({
-        command: command_codes.SET_HALL_POSITIONS,
-        additional_data: position_calibration,
-        expected_code: command_codes.HALL_POSITIONS,
+        message: {message_code: MessageCode.SetHallPositions, ...make_position_calibration(position_calibration)},
+        expected_code: MessageCode.HallPositions,
         expected_messages: 1
       });
     } catch (error) {
@@ -323,8 +318,8 @@ export class MotorController {
   async reset_position_calibration(){
     try {
       this.position_calibration = await this.send_command_and_await_reply({
-        command: command_codes.RESET_HALL_POSITIONS,
-        expected_code: command_codes.HALL_POSITIONS,
+        message: MessageCode.ResetHallPositions,
+        expected_code: MessageCode.HallPositions,
         expected_messages: 1
       });
     } catch (error) {
@@ -336,8 +331,8 @@ export class MotorController {
   async load_control_parameters(){
     try {
       this.control_parameters = await this.send_command_and_await_reply({
-        command: command_codes.GET_CONTROL_PARAMETERS,
-        expected_code: command_codes.CONTROL_PARAMETERS,
+        message: MessageCode.GetControlParameters,
+        expected_code: MessageCode.ControlParameters,
         expected_messages: 1
       });
     } catch (error) {
@@ -350,9 +345,8 @@ export class MotorController {
 
     try {
       this.control_parameters = await this.send_command_and_await_reply({
-        command: command_codes.SET_CONTROL_PARAMETERS,
-        additional_data: control_parameters,
-        expected_code: command_codes.CONTROL_PARAMETERS,
+        message: {message_code: MessageCode.SetControlParameters, ...control_parameters},
+        expected_code: MessageCode.ControlParameters,
         expected_messages: 1
       });
     } catch (error) {
@@ -364,8 +358,8 @@ export class MotorController {
   async reset_control_parameters(){
     try {
       this.control_parameters = await this.send_command_and_await_reply({
-        command: command_codes.RESET_CONTROL_PARAMETERS,
-        expected_code: command_codes.CONTROL_PARAMETERS,
+        message: MessageCode.ResetControlParameters,
+        expected_code: MessageCode.ControlParameters,
         expected_messages: 1
       });
     } catch (error) {

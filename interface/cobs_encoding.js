@@ -19,6 +19,12 @@ class COBS_Buffer {
     this.decoded_length = 0;
     this.decoded_length_until_zero = 0;
 
+    // Whether we need to insert a 0 byte in the decoded output or not. COBS encoding
+    // uses 255=0xFF as a special value to indicate that the next 255 bytes are all non-zero.
+    // The next byte afterwards will be another length byte, but for the special case of 0xFF
+    // we must not insert a zero byte in the decoded output.
+    this.decoding_insert_zero_byte = false;
+
     // Buffer for encoding; we can reuse the same buffer for each message.
     this.encoded_data = new Uint8Array(MAX_MESSAGE_SIZE);
   }
@@ -29,6 +35,7 @@ class COBS_Buffer {
   decode_reset() {
     this.decoded_length = 0;
     this.decoded_length_until_zero = 0;
+    this.decoding_insert_zero_byte = false;
   }
 
   /**
@@ -59,11 +66,18 @@ class COBS_Buffer {
       }
       // Otherwise we expect to read the length till the next 0
       else if (this.decoded_length_until_zero === 0) {
+        // The current byte represents the length until we need to insert a zero byte in the
+        // decoded output. We then count this step, hence the -1.
         this.decoded_length_until_zero = byte - 1;
-        // If this isn't the start, we need to add a zero when we expected a zero
-        if (this.decoded_length !== 0) {
+
+        // If this isn't the start, or 0xFF continuation, we need to add a zero to the
+        // decoded output according to this segment's zero length byte.
+        if (this.decoding_insert_zero_byte) {
           this.decoded_data[this.decoded_length++] = 0; // Insert zero byte for COBS decoding
         }
+
+        // If this is a 0xFF continuation, we don't insert a zero byte for the next segment.
+        this.decoding_insert_zero_byte = (byte !== 0xFF);
       }
       // Finally we read ordinary non-zero data
       else {

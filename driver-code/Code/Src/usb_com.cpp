@@ -98,7 +98,7 @@ static inline void usb_prepare_send() {
   USBD_CDC_TransmitPacket(&hUsbDeviceFS);
 }
 
-bool usb_update(uint8_t * tx_data, int tx_size, BufferFunction process_received_data) {
+bool usb_update(uint8_t * tx_data, size_t tx_size, void (*process_received_data)(uint8_t * buffer, size_t size)) {
   if (not usb_active) return false;
 
 
@@ -118,7 +118,7 @@ bool usb_update(uint8_t * tx_data, int tx_size, BufferFunction process_received_
   const bool can_queue_send = tx_head != nullptr;
 
   // Queue data if we have space to send it.
-  if (can_queue_send) {
+  if (tx_size and can_queue_send) {
     // There is enough space to queue the data.
     std::memcpy(tx_head, tx_data, tx_size);
     if(usb_com_tx_buffer.mark_write(tx_size)) error();

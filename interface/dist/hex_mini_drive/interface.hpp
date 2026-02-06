@@ -22,7 +22,7 @@ namespace hex_mini_drive {
 constexpr uint16_t HISTORY_SIZE = 336;
 
 // Message Codes
-enum MessageCode : uint16_t {
+enum struct MessageCode : uint16_t {
   NullCommand = 0,
   Readout = 8224,
   StreamFullReadouts = 8225,
@@ -137,6 +137,18 @@ struct Readout {
 };
 
 
+// Continuously send full readouts of the motor driver internal state.
+struct StreamFullReadouts {
+
+  static constexpr uint16_t message_code = 8225;
+  static constexpr size_t message_size = 4;
+  
+  // Number of messages to send; the stream command should be repeated to keep sending messages.
+  uint16_t stream_state;
+  
+};
+
+
 // Complete readout of the motor driver internal state for exploration and data stream.
 struct FullReadout : Readout {
 
@@ -224,6 +236,304 @@ struct FullReadout : Readout {
 };
 
 
+struct SetStateDrive6Sector {
+
+  static constexpr uint16_t message_code = 8241;
+  static constexpr size_t message_size = 6;
+  
+  // PWM value to use for driving the motor in 6 sector commutation mode.
+  int16_t pwm_value;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+};
+
+
+struct SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8242;
+  static constexpr size_t message_size = 6;
+  
+  // PWM value to use for the test.
+  uint16_t pwm_value;
+  
+  // Whether to take a snapshot while running the test.
+  uint16_t take_snapshot;
+  
+};
+
+
+struct SetStateFreewheel : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8244;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestGroundShort : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8246;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestPositiveShort : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8247;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestUDirections : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8249;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestUIncreasing : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8250;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestUDecreasing : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8251;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestVIncreasing : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8252;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestVDecreasing : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8253;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestWIncreasing : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8254;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateTestWDecreasing : SetStateTestAllPermutations {
+
+  static constexpr uint16_t message_code = 8255;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateHoldUPositive {
+
+  static constexpr uint16_t message_code = 12320;
+  static constexpr size_t message_size = 6;
+  
+  // PWM value to use for holding the position.
+  uint16_t pwm_value;
+  
+  // Time in pwm periods to hold the position before stopping.
+  uint16_t timeout;
+  
+};
+
+
+struct SetStateHoldVPositive : SetStateHoldUPositive {
+
+  static constexpr uint16_t message_code = 12321;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateHoldWPositive : SetStateHoldUPositive {
+
+  static constexpr uint16_t message_code = 12322;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateHoldUNegative : SetStateHoldUPositive {
+
+  static constexpr uint16_t message_code = 12323;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateHoldVNegative : SetStateHoldUPositive {
+
+  static constexpr uint16_t message_code = 12324;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateHoldWNegative : SetStateHoldUPositive {
+
+  static constexpr uint16_t message_code = 12325;
+  static constexpr size_t message_size = 6;
+  
+};
+
+
+struct SetStateDrivePeriodic {
+
+  static constexpr uint16_t message_code = 12352;
+  static constexpr size_t message_size = 10;
+  
+  // PWM value to use for driving the motor.
+  uint16_t pwm_value;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+  // Starting angle.
+  uint16_t angle;
+  
+  // Angular speed to drive the motor at.
+  int16_t angular_speed;
+  
+};
+
+
+struct SetStateDriveSmooth {
+
+  static constexpr uint16_t message_code = 16432;
+  static constexpr size_t message_size = 6;
+  
+  // PWM value to use for driving the motor.
+  uint16_t pwm_value;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+};
+
+
+struct SetStateDriveTorque {
+
+  static constexpr uint16_t message_code = 16433;
+  static constexpr size_t message_size = 6;
+  
+  // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+  int16_t target_current;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+};
+
+
+struct SetStateDriveBatteryPower {
+
+  static constexpr uint16_t message_code = 16434;
+  static constexpr size_t message_size = 6;
+  
+  // Target power draw from the battery; the driver will try to achieve this power by adjusting the PWM commands.
+  int16_t target_power;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+};
+
+
+struct SetStateDriveSpeed {
+
+  static constexpr uint16_t message_code = 16435;
+  static constexpr size_t message_size = 6;
+  
+  // Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
+  int16_t target_speed;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+};
+
+
+struct SetStateSeekAngleWithPower {
+
+  static constexpr uint16_t message_code = 16436;
+  static constexpr size_t message_size = 10;
+  
+  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
+  int16_t target_rotation;
+  
+  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+  uint16_t target_angle;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+  // Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
+  uint16_t max_drive_power;
+  
+};
+
+
+struct SetStateSeekAngleWithTorque {
+
+  static constexpr uint16_t message_code = 16437;
+  static constexpr size_t message_size = 10;
+  
+  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
+  int16_t target_rotation;
+  
+  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+  uint16_t target_angle;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+  // Maximum current to use for driving the motor; used to prevent overheating and overcurrent.
+  uint16_t max_drive_current;
+  
+};
+
+
+struct SetStateSeekAngleWithSpeed {
+
+  static constexpr uint16_t message_code = 16438;
+  static constexpr size_t message_size = 10;
+  
+  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
+  int16_t target_rotation;
+  
+  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+  uint16_t target_angle;
+  
+  // Time in pwm periods to drive the motor before stopping.
+  uint16_t timeout;
+  
+  // Maximum speed to use for driving the motor; used to prevent overheating and overcurrent.
+  uint16_t max_drive_speed;
+  
+};
+
+
 // Calibration factors for the current sensors.
 // 
 // The soldering joints vary during manufacturing and therefore they affect the total
@@ -249,6 +559,14 @@ struct CurrentCalibration {
   
   // Adjustment factor for the motor inductance; used to calibrate the coil inductance.
   int16_t inductance_factor;
+  
+};
+
+
+struct SetCurrentCalibration : CurrentCalibration {
+
+  static constexpr uint16_t message_code = 16450;
+  static constexpr size_t message_size = 10;
   
 };
 
@@ -283,6 +601,14 @@ struct HallPositions {
   
   // The variance of the center angles; at the moment it represents the span of the hall sector.
   std::array<uint16_t, 6> sector_center_variances;
+  
+};
+
+
+struct SetHallPositions : HallPositions {
+
+  static constexpr uint16_t message_code = 16454;
+  static constexpr size_t message_size = 74;
   
 };
 
@@ -412,12 +738,31 @@ struct ControlParameters {
 };
 
 
+struct SetControlParameters : ControlParameters {
+
+  static constexpr uint16_t message_code = 16458;
+  static constexpr size_t message_size = 78;
+  
+};
+
+
+struct SetAngle {
+
+  static constexpr uint16_t message_code = 16464;
+  static constexpr size_t message_size = 4;
+  
+  // Set the current angle of the motor; used for initial angle calibration.
+  uint16_t angle;
+  
+};
+
+
 struct UnitTestOutput {
 
   static constexpr uint16_t message_code = 20544;
-  static constexpr size_t message_size = 258;
+  static constexpr size_t message_size = 250;
   
-  std::array<uint8_t, 256> data;
+  std::array<uint8_t, 248> data;
   
 };
 
@@ -430,10 +775,41 @@ struct Message {
   
   union {
     Readout readout;
+    StreamFullReadouts stream_full_readouts;
     FullReadout full_readout;
+    SetStateDrive6Sector set_state_drive_6_sector;
+    SetStateTestAllPermutations set_state_test_all_permutations;
+    SetStateFreewheel set_state_freewheel;
+    SetStateTestGroundShort set_state_test_ground_short;
+    SetStateTestPositiveShort set_state_test_positive_short;
+    SetStateTestUDirections set_state_test_u_directions;
+    SetStateTestUIncreasing set_state_test_u_increasing;
+    SetStateTestUDecreasing set_state_test_u_decreasing;
+    SetStateTestVIncreasing set_state_test_v_increasing;
+    SetStateTestVDecreasing set_state_test_v_decreasing;
+    SetStateTestWIncreasing set_state_test_w_increasing;
+    SetStateTestWDecreasing set_state_test_w_decreasing;
+    SetStateHoldUPositive set_state_hold_u_positive;
+    SetStateHoldVPositive set_state_hold_v_positive;
+    SetStateHoldWPositive set_state_hold_w_positive;
+    SetStateHoldUNegative set_state_hold_u_negative;
+    SetStateHoldVNegative set_state_hold_v_negative;
+    SetStateHoldWNegative set_state_hold_w_negative;
+    SetStateDrivePeriodic set_state_drive_periodic;
+    SetStateDriveSmooth set_state_drive_smooth;
+    SetStateDriveTorque set_state_drive_torque;
+    SetStateDriveBatteryPower set_state_drive_battery_power;
+    SetStateDriveSpeed set_state_drive_speed;
+    SetStateSeekAngleWithPower set_state_seek_angle_with_power;
+    SetStateSeekAngleWithTorque set_state_seek_angle_with_torque;
+    SetStateSeekAngleWithSpeed set_state_seek_angle_with_speed;
     CurrentCalibration current_calibration;
+    SetCurrentCalibration set_current_calibration;
     HallPositions hall_positions;
+    SetHallPositions set_hall_positions;
     ControlParameters control_parameters;
+    SetControlParameters set_control_parameters;
+    SetAngle set_angle;
     UnitTestOutput unit_test_output;
   };
 };
@@ -441,51 +817,50 @@ struct Message {
 // Serialization Functions
 // -----------------------
 
-static inline bool serialise(Readout const& value, uint8_t * buffer) {
-  if (buffer == nullptr) return false;
-  
-  size_t offset = 0;
+static inline MessageBuffer serialise(Readout const& value) {
+  MessageBuffer buffer;
   
   // Write message code
-  write_uint16(buffer + offset, Readout::message_code);
-  offset += 2;
+  write_uint16(buffer.data + buffer.size, Readout::message_code);
+  buffer.size += 2;
   
-  write_uint32(buffer + offset, value.pwm_commands);
-  offset += 4;
-  write_uint16(buffer + offset, value.readout_number);
-  offset += 2;
-  write_uint16(buffer + offset, value.state_flags);
-  offset += 2;
-  write_int16(buffer + offset, value.u_current);
-  offset += 2;
-  write_int16(buffer + offset, value.v_current);
-  offset += 2;
-  write_int16(buffer + offset, value.w_current);
-  offset += 2;
-  write_int16(buffer + offset, value.ref_readout);
-  offset += 2;
-  write_int16(buffer + offset, value.u_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.v_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.w_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.angle);
-  offset += 2;
-  write_int16(buffer + offset, value.angle_adjustment);
-  offset += 2;
-  write_int16(buffer + offset, value.angular_speed);
-  offset += 2;
-  write_int16(buffer + offset, value.vcc_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_voltage_magnitude);
-  offset += 2;
-  return true;
+  write_uint32(buffer.data + buffer.size, value.pwm_commands);
+  buffer.size += 4;
+  write_uint16(buffer.data + buffer.size, value.readout_number);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.state_flags);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.u_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.v_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.w_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.ref_readout);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.u_current_diff);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.v_current_diff);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.w_current_diff);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.angle);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.angle_adjustment);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.angular_speed);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.vcc_voltage);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.emf_voltage_magnitude);
+  buffer.size += 2;
+  
+  return buffer;
 }
 
-static inline bool deserialise(Readout & result, uint8_t const* buffer, size_t length) {
+static inline bool deserialise(Readout & result, uint8_t const* buffer, size_t size) {
   // Validate length
-  if (length != Readout::message_size) {
+  if (size != Readout::message_size) {
     return false;
   }
   
@@ -530,101 +905,132 @@ static inline bool deserialise(Readout & result, uint8_t const* buffer, size_t l
   return true;
 }
 
-static inline bool serialise(FullReadout const& value, uint8_t * buffer) {
-  if (buffer == nullptr) return false;
-  
-  size_t offset = 0;
+static inline MessageBuffer serialise(StreamFullReadouts const& value) {
+  MessageBuffer buffer;
   
   // Write message code
-  write_uint16(buffer + offset, FullReadout::message_code);
-  offset += 2;
+  write_uint16(buffer.data + buffer.size, StreamFullReadouts::message_code);
+  buffer.size += 2;
   
-  // Fields from Readout
-  write_uint32(buffer + offset, value.pwm_commands);
-  offset += 4;
-  write_uint16(buffer + offset, value.readout_number);
-  offset += 2;
-  write_uint16(buffer + offset, value.state_flags);
-  offset += 2;
-  write_int16(buffer + offset, value.u_current);
-  offset += 2;
-  write_int16(buffer + offset, value.v_current);
-  offset += 2;
-  write_int16(buffer + offset, value.w_current);
-  offset += 2;
-  write_int16(buffer + offset, value.ref_readout);
-  offset += 2;
-  write_int16(buffer + offset, value.u_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.v_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.w_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.angle);
-  offset += 2;
-  write_int16(buffer + offset, value.angle_adjustment);
-  offset += 2;
-  write_int16(buffer + offset, value.angular_speed);
-  offset += 2;
-  write_int16(buffer + offset, value.vcc_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_voltage_magnitude);
-  offset += 2;
+  write_uint16(buffer.data + buffer.size, value.stream_state);
+  buffer.size += 2;
   
-  write_uint16(buffer + offset, value.main_loop_rate);
-  offset += 2;
-  write_uint16(buffer + offset, value.adc_update_rate);
-  offset += 2;
-  write_uint16(buffer + offset, value.temperature);
-  offset += 2;
-  write_uint16(buffer + offset, value.live_max_pwm);
-  offset += 2;
-  write_int16(buffer + offset, value.cycle_start_tick);
-  offset += 2;
-  write_int16(buffer + offset, value.cycle_end_tick);
-  offset += 2;
-  write_int16(buffer + offset, value.direct_current);
-  offset += 2;
-  write_int16(buffer + offset, value.quadrature_current);
-  offset += 2;
-  write_int16(buffer + offset, value.direct_emf_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.quadrature_emf_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.total_power);
-  offset += 2;
-  write_int16(buffer + offset, value.resistive_power);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_power);
-  offset += 2;
-  write_int16(buffer + offset, value.inductive_power);
-  offset += 2;
-  write_int16(buffer + offset, value.motor_constant);
-  offset += 2;
-  write_int16(buffer + offset, value.inductor_angle);
-  offset += 2;
-  write_int16(buffer + offset, value.rotor_acceleration);
-  offset += 2;
-  write_int16(buffer + offset, value.rotations);
-  offset += 2;
-  write_int16(buffer + offset, value.current_magnitude);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_angle_error_variance);
-  offset += 2;
-  write_int16(buffer + offset, value.lead_angle);
-  offset += 2;
-  write_int16(buffer + offset, value.target_pwm);
-  offset += 2;
-  write_int16(buffer + offset, value.secondary_target);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_integral);
+  return buffer;
+}
+
+static inline bool deserialise(StreamFullReadouts & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != StreamFullReadouts::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != StreamFullReadouts::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.stream_state = read_uint16(buffer + offset);
   offset += 2;
   return true;
 }
 
-static inline bool deserialise(FullReadout & result, uint8_t const* buffer, size_t length) {
+static inline MessageBuffer serialise(FullReadout const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, FullReadout::message_code);
+  buffer.size += 2;
+  
+  // Fields from Readout
+  write_uint32(buffer.data + buffer.size, value.pwm_commands);
+  buffer.size += 4;
+  write_uint16(buffer.data + buffer.size, value.readout_number);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.state_flags);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.u_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.v_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.w_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.ref_readout);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.u_current_diff);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.v_current_diff);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.w_current_diff);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.angle);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.angle_adjustment);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.angular_speed);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.vcc_voltage);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.emf_voltage_magnitude);
+  buffer.size += 2;
+  
+  write_uint16(buffer.data + buffer.size, value.main_loop_rate);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.adc_update_rate);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.temperature);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.live_max_pwm);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.cycle_start_tick);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.cycle_end_tick);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.direct_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.quadrature_current);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.direct_emf_voltage);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.quadrature_emf_voltage);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.total_power);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.resistive_power);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.emf_power);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.inductive_power);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.motor_constant);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.inductor_angle);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.rotor_acceleration);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.rotations);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.current_magnitude);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.emf_angle_error_variance);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.lead_angle);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.target_pwm);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.secondary_target);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_integral);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(FullReadout & result, uint8_t const* buffer, size_t size) {
   // Validate length
-  if (length != FullReadout::message_size) {
+  if (size != FullReadout::message_size) {
     return false;
   }
   
@@ -719,29 +1125,1056 @@ static inline bool deserialise(FullReadout & result, uint8_t const* buffer, size
   return true;
 }
 
-static inline bool serialise(CurrentCalibration const& value, uint8_t * buffer) {
-  if (buffer == nullptr) return false;
-  
-  size_t offset = 0;
+static inline MessageBuffer serialise(SetStateDrive6Sector const& value) {
+  MessageBuffer buffer;
   
   // Write message code
-  write_uint16(buffer + offset, CurrentCalibration::message_code);
-  offset += 2;
+  write_uint16(buffer.data + buffer.size, SetStateDrive6Sector::message_code);
+  buffer.size += 2;
   
-  write_int16(buffer + offset, value.u_factor);
+  write_int16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateDrive6Sector & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateDrive6Sector::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateDrive6Sector::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.pwm_value = read_int16(buffer + offset);
   offset += 2;
-  write_int16(buffer + offset, value.v_factor);
-  offset += 2;
-  write_int16(buffer + offset, value.w_factor);
-  offset += 2;
-  write_int16(buffer + offset, value.inductance_factor);
+  result.timeout = read_uint16(buffer + offset);
   offset += 2;
   return true;
 }
 
-static inline bool deserialise(CurrentCalibration & result, uint8_t const* buffer, size_t length) {
+static inline MessageBuffer serialise(SetStateTestAllPermutations const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestAllPermutations::message_code);
+  buffer.size += 2;
+  
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestAllPermutations & result, uint8_t const* buffer, size_t size) {
   // Validate length
-  if (length != CurrentCalibration::message_size) {
+  if (size != SetStateTestAllPermutations::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestAllPermutations::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateFreewheel const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateFreewheel::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateFreewheel & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateFreewheel::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateFreewheel::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestGroundShort const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestGroundShort::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestGroundShort & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestGroundShort::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestGroundShort::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestPositiveShort const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestPositiveShort::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestPositiveShort & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestPositiveShort::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestPositiveShort::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestUDirections const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestUDirections::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestUDirections & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestUDirections::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestUDirections::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestUIncreasing const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestUIncreasing::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestUIncreasing & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestUIncreasing::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestUIncreasing::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestUDecreasing const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestUDecreasing::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestUDecreasing & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestUDecreasing::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestUDecreasing::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestVIncreasing const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestVIncreasing::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestVIncreasing & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestVIncreasing::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestVIncreasing::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestVDecreasing const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestVDecreasing::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestVDecreasing & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestVDecreasing::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestVDecreasing::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestWIncreasing const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestWIncreasing::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestWIncreasing & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestWIncreasing::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestWIncreasing::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateTestWDecreasing const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateTestWDecreasing::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateTestAllPermutations
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.take_snapshot);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateTestWDecreasing & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateTestWDecreasing::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateTestWDecreasing::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateTestAllPermutations
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateHoldUPositive const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateHoldUPositive::message_code);
+  buffer.size += 2;
+  
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateHoldUPositive & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateHoldUPositive::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateHoldUPositive::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateHoldVPositive const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateHoldVPositive::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateHoldUPositive
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateHoldVPositive & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateHoldVPositive::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateHoldVPositive::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateHoldUPositive
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateHoldWPositive const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateHoldWPositive::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateHoldUPositive
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateHoldWPositive & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateHoldWPositive::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateHoldWPositive::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateHoldUPositive
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateHoldUNegative const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateHoldUNegative::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateHoldUPositive
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateHoldUNegative & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateHoldUNegative::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateHoldUNegative::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateHoldUPositive
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateHoldVNegative const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateHoldVNegative::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateHoldUPositive
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateHoldVNegative & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateHoldVNegative::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateHoldVNegative::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateHoldUPositive
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateHoldWNegative const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateHoldWNegative::message_code);
+  buffer.size += 2;
+  
+  // Fields from SetStateHoldUPositive
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateHoldWNegative & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateHoldWNegative::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateHoldWNegative::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from SetStateHoldUPositive
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateDrivePeriodic const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateDrivePeriodic::message_code);
+  buffer.size += 2;
+  
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.angle);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.angular_speed);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateDrivePeriodic & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateDrivePeriodic::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateDrivePeriodic::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateDriveSmooth const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateDriveSmooth::message_code);
+  buffer.size += 2;
+  
+  write_uint16(buffer.data + buffer.size, value.pwm_value);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateDriveSmooth & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateDriveSmooth::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateDriveSmooth::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateDriveTorque const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateDriveTorque::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.target_current);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateDriveTorque & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateDriveTorque::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateDriveTorque::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.target_current = read_int16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateDriveBatteryPower const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateDriveBatteryPower::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.target_power);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateDriveBatteryPower & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateDriveBatteryPower::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateDriveBatteryPower::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.target_power = read_int16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateDriveSpeed const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateDriveSpeed::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.target_speed);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateDriveSpeed & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateDriveSpeed::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateDriveSpeed::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.target_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateSeekAngleWithPower const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateSeekAngleWithPower::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.target_rotation);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.target_angle);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.max_drive_power);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateSeekAngleWithPower & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateSeekAngleWithPower::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateSeekAngleWithPower::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.target_rotation = read_int16(buffer + offset);
+  offset += 2;
+  result.target_angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.max_drive_power = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateSeekAngleWithTorque const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateSeekAngleWithTorque::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.target_rotation);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.target_angle);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.max_drive_current);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateSeekAngleWithTorque & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateSeekAngleWithTorque::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateSeekAngleWithTorque::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.target_rotation = read_int16(buffer + offset);
+  offset += 2;
+  result.target_angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.max_drive_current = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(SetStateSeekAngleWithSpeed const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetStateSeekAngleWithSpeed::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.target_rotation);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.target_angle);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.timeout);
+  buffer.size += 2;
+  write_uint16(buffer.data + buffer.size, value.max_drive_speed);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetStateSeekAngleWithSpeed & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetStateSeekAngleWithSpeed::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetStateSeekAngleWithSpeed::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.target_rotation = read_int16(buffer + offset);
+  offset += 2;
+  result.target_angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.max_drive_speed = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(CurrentCalibration const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, CurrentCalibration::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.u_factor);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.v_factor);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.w_factor);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.inductance_factor);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(CurrentCalibration & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != CurrentCalibration::message_size) {
     return false;
   }
   
@@ -764,41 +2197,88 @@ static inline bool deserialise(CurrentCalibration & result, uint8_t const* buffe
   return true;
 }
 
-static inline bool serialise(HallPositions const& value, uint8_t * buffer) {
-  if (buffer == nullptr) return false;
-  
-  size_t offset = 0;
+static inline MessageBuffer serialise(SetCurrentCalibration const& value) {
+  MessageBuffer buffer;
   
   // Write message code
-  write_uint16(buffer + offset, HallPositions::message_code);
+  write_uint16(buffer.data + buffer.size, SetCurrentCalibration::message_code);
+  buffer.size += 2;
+  
+  // Fields from CurrentCalibration
+  write_int16(buffer.data + buffer.size, value.u_factor);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.v_factor);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.w_factor);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.inductance_factor);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetCurrentCalibration & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetCurrentCalibration::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetCurrentCalibration::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from CurrentCalibration
+  result.u_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.v_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.w_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.inductance_factor = read_int16(buffer + offset);
   offset += 2;
   
-  for (size_t i = 0; i < 6; ++i) {
-    for (size_t j = 0; j < 2; ++j) {
-      write_uint16(buffer + offset, value.sector_transition_angles[i][j]);
-      offset += 2;
-    }
-  }
-  for (size_t i = 0; i < 6; ++i) {
-    for (size_t j = 0; j < 2; ++j) {
-      write_uint16(buffer + offset, value.sector_transition_variances[i][j]);
-      offset += 2;
-    }
-  }
-  for (size_t i = 0; i < 6; ++i) {
-    write_uint16(buffer + offset, value.sector_center_angles[i]);
-    offset += 2;
-  }
-  for (size_t i = 0; i < 6; ++i) {
-    write_uint16(buffer + offset, value.sector_center_variances[i]);
-    offset += 2;
-  }
   return true;
 }
 
-static inline bool deserialise(HallPositions & result, uint8_t const* buffer, size_t length) {
+static inline MessageBuffer serialise(HallPositions const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, HallPositions::message_code);
+  buffer.size += 2;
+  
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      write_uint16(buffer.data + buffer.size, value.sector_transition_angles[i][j]);
+      buffer.size += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      write_uint16(buffer.data + buffer.size, value.sector_transition_variances[i][j]);
+      buffer.size += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    write_uint16(buffer.data + buffer.size, value.sector_center_angles[i]);
+    buffer.size += 2;
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    write_uint16(buffer.data + buffer.size, value.sector_center_variances[i]);
+    buffer.size += 2;
+  }
+  
+  return buffer;
+}
+
+static inline bool deserialise(HallPositions & result, uint8_t const* buffer, size_t size) {
   // Validate length
-  if (length != HallPositions::message_size) {
+  if (size != HallPositions::message_size) {
     return false;
   }
   
@@ -833,97 +2313,168 @@ static inline bool deserialise(HallPositions & result, uint8_t const* buffer, si
   return true;
 }
 
-static inline bool serialise(ControlParameters const& value, uint8_t * buffer) {
-  if (buffer == nullptr) return false;
-  
-  size_t offset = 0;
+static inline MessageBuffer serialise(SetHallPositions const& value) {
+  MessageBuffer buffer;
   
   // Write message code
-  write_uint16(buffer + offset, ControlParameters::message_code);
-  offset += 2;
+  write_uint16(buffer.data + buffer.size, SetHallPositions::message_code);
+  buffer.size += 2;
   
-  write_int16(buffer + offset, value.rotor_angle_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.rotor_angular_speed_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.rotor_acceleration_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.motor_constant_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.motor_direction);
-  offset += 2;
-  write_int16(buffer + offset, value.incorrect_direction_threshold);
-  offset += 2;
-  write_int16(buffer + offset, value.max_pwm_change);
-  offset += 2;
-  write_int16(buffer + offset, value.max_angle_change);
-  offset += 2;
-  write_int16(buffer + offset, value.min_emf_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.hall_angle_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.lead_angle_control_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.torque_control_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.battery_power_control_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.speed_control_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.probing_angular_speed);
-  offset += 2;
-  write_int16(buffer + offset, value.max_pwm_difference);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_angle_error_variance_threshold);
-  offset += 2;
-  write_int16(buffer + offset, value.min_emf_for_motor_constant);
-  offset += 2;
-  write_int16(buffer + offset, value.max_resistive_power);
-  offset += 2;
-  write_int16(buffer + offset, value.resistive_power_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.max_angular_speed);
-  offset += 2;
-  write_int16(buffer + offset, value.max_power_draw);
-  offset += 2;
-  write_int16(buffer + offset, value.power_draw_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.max_pwm);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_k_prediction);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_kp);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_kd);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_k_prediction);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_kp);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_kd);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_k_prediction);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_ki);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_kp);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_kd);
-  offset += 2;
-  write_int16(buffer + offset, value.phase_resistance);
-  offset += 2;
-  write_int16(buffer + offset, value.phase_inductance);
-  offset += 2;
+  // Fields from HallPositions
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      write_uint16(buffer.data + buffer.size, value.sector_transition_angles[i][j]);
+      buffer.size += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      write_uint16(buffer.data + buffer.size, value.sector_transition_variances[i][j]);
+      buffer.size += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    write_uint16(buffer.data + buffer.size, value.sector_center_angles[i]);
+    buffer.size += 2;
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    write_uint16(buffer.data + buffer.size, value.sector_center_variances[i]);
+    buffer.size += 2;
+  }
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetHallPositions & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetHallPositions::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetHallPositions::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from HallPositions
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      result.sector_transition_angles[i][j] = read_uint16(buffer + offset);
+      offset += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      result.sector_transition_variances[i][j] = read_uint16(buffer + offset);
+      offset += 2;
+    }
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    result.sector_center_angles[i] = read_uint16(buffer + offset);
+    offset += 2;
+  }
+  for (size_t i = 0; i < 6; ++i) {
+    result.sector_center_variances[i] = read_uint16(buffer + offset);
+    offset += 2;
+  }
+  
   return true;
 }
 
-static inline bool deserialise(ControlParameters & result, uint8_t const* buffer, size_t length) {
+static inline MessageBuffer serialise(ControlParameters const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, ControlParameters::message_code);
+  buffer.size += 2;
+  
+  write_int16(buffer.data + buffer.size, value.rotor_angle_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.rotor_angular_speed_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.rotor_acceleration_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.motor_constant_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.motor_direction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.incorrect_direction_threshold);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_pwm_change);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_angle_change);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.min_emf_voltage);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.hall_angle_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.lead_angle_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.torque_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.battery_power_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.speed_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.probing_angular_speed);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_pwm_difference);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.emf_angle_error_variance_threshold);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.min_emf_for_motor_constant);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_resistive_power);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.resistive_power_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_angular_speed);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_power_draw);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.power_draw_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_pwm);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_k_prediction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_kp);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_kd);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_k_prediction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_kp);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_kd);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_k_prediction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_kp);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_kd);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.phase_resistance);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.phase_inductance);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(ControlParameters & result, uint8_t const* buffer, size_t size) {
   // Validate length
-  if (length != ControlParameters::message_size) {
+  if (size != ControlParameters::message_size) {
     return false;
   }
   
@@ -1014,25 +2565,240 @@ static inline bool deserialise(ControlParameters & result, uint8_t const* buffer
   return true;
 }
 
-static inline bool serialise(UnitTestOutput const& value, uint8_t * buffer) {
-  if (buffer == nullptr) return false;
-  
-  size_t offset = 0;
+static inline MessageBuffer serialise(SetControlParameters const& value) {
+  MessageBuffer buffer;
   
   // Write message code
-  write_uint16(buffer + offset, UnitTestOutput::message_code);
+  write_uint16(buffer.data + buffer.size, SetControlParameters::message_code);
+  buffer.size += 2;
+  
+  // Fields from ControlParameters
+  write_int16(buffer.data + buffer.size, value.rotor_angle_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.rotor_angular_speed_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.rotor_acceleration_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.motor_constant_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.motor_direction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.incorrect_direction_threshold);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_pwm_change);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_angle_change);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.min_emf_voltage);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.hall_angle_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.lead_angle_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.torque_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.battery_power_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.speed_control_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.probing_angular_speed);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_pwm_difference);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.emf_angle_error_variance_threshold);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.min_emf_for_motor_constant);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_resistive_power);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.resistive_power_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_angular_speed);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_power_draw);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.power_draw_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.max_pwm);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_k_prediction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_kp);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_torque_kd);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_k_prediction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_kp);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_power_kd);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_k_prediction);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_ki);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_kp);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.seek_via_speed_kd);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.phase_resistance);
+  buffer.size += 2;
+  write_int16(buffer.data + buffer.size, value.phase_inductance);
+  buffer.size += 2;
+  
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetControlParameters & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != SetControlParameters::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetControlParameters::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  // Fields from ControlParameters
+  result.rotor_angle_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.rotor_angular_speed_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.rotor_acceleration_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.motor_constant_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.motor_direction = read_int16(buffer + offset);
+  offset += 2;
+  result.incorrect_direction_threshold = read_int16(buffer + offset);
+  offset += 2;
+  result.max_pwm_change = read_int16(buffer + offset);
+  offset += 2;
+  result.max_angle_change = read_int16(buffer + offset);
+  offset += 2;
+  result.min_emf_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.hall_angle_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.lead_angle_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.torque_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.battery_power_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.speed_control_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.probing_angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.max_pwm_difference = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_angle_error_variance_threshold = read_int16(buffer + offset);
+  offset += 2;
+  result.min_emf_for_motor_constant = read_int16(buffer + offset);
+  offset += 2;
+  result.max_resistive_power = read_int16(buffer + offset);
+  offset += 2;
+  result.resistive_power_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.max_angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.max_power_draw = read_int16(buffer + offset);
+  offset += 2;
+  result.power_draw_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.max_pwm = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_k_prediction = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_kp = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_torque_kd = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_k_prediction = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_kp = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_power_kd = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_k_prediction = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_ki = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_kp = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_via_speed_kd = read_int16(buffer + offset);
+  offset += 2;
+  result.phase_resistance = read_int16(buffer + offset);
+  offset += 2;
+  result.phase_inductance = read_int16(buffer + offset);
   offset += 2;
   
-  for (size_t i = 0; i < 256; ++i) {
-    write_uint8(buffer + offset, value.data[i]);
-    offset += 1;
-  }
   return true;
 }
 
-static inline bool deserialise(UnitTestOutput & result, uint8_t const* buffer, size_t length) {
+static inline MessageBuffer serialise(SetAngle const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, SetAngle::message_code);
+  buffer.size += 2;
+  
+  write_uint16(buffer.data + buffer.size, value.angle);
+  buffer.size += 2;
+  
+  return buffer;
+}
+
+static inline bool deserialise(SetAngle & result, uint8_t const* buffer, size_t size) {
   // Validate length
-  if (length != UnitTestOutput::message_size) {
+  if (size != SetAngle::message_size) {
+    return false;
+  }
+  
+  // Validate message code
+  uint16_t code = read_uint16(buffer);
+  if (code != SetAngle::message_code) {
+    return false;
+  }
+  
+  size_t offset = 2;
+  
+  result.angle = read_uint16(buffer + offset);
+  offset += 2;
+  return true;
+}
+
+static inline MessageBuffer serialise(UnitTestOutput const& value) {
+  MessageBuffer buffer;
+  
+  // Write message code
+  write_uint16(buffer.data + buffer.size, UnitTestOutput::message_code);
+  buffer.size += 2;
+  
+  for (size_t i = 0; i < 248; ++i) {
+    write_uint8(buffer.data + buffer.size, value.data[i]);
+    buffer.size += 1;
+  }
+  
+  return buffer;
+}
+
+static inline bool deserialise(UnitTestOutput & result, uint8_t const* buffer, size_t size) {
+  // Validate length
+  if (size != UnitTestOutput::message_size) {
     return false;
   }
   
@@ -1044,7 +2810,7 @@ static inline bool deserialise(UnitTestOutput & result, uint8_t const* buffer, s
   
   size_t offset = 2;
   
-  for (size_t i = 0; i < 256; ++i) {
+  for (size_t i = 0; i < 248; ++i) {
     result.data[i] = read_uint8(buffer + offset);
     offset += 1;
   }
@@ -1054,155 +2820,129 @@ static inline bool deserialise(UnitTestOutput & result, uint8_t const* buffer, s
 // Generic Serialization Functions
 // -------------------------------
 
-static inline bool write_code(uint8_t * (*reserve_buffer)(size_t length), MessageCode code) {
-  uint8_t * buffer = reserve_buffer(2);
-  if (buffer == nullptr) return false;
-  write_uint16(buffer, static_cast<uint16_t>(code));
-  return true;
+static inline MessageBuffer serialise_plain_code(MessageCode code) {
+  MessageBuffer result;
+  write_uint16(result.data, static_cast<uint16_t>(code));
+  result.size = 2;
+  return result;
 }
 
-static inline bool serialise(Message const& message, uint8_t * (*reserve_buffer)(size_t length)) {
+static inline MessageBuffer serialise(Message const& message) {
   switch (message.message_code) {
-    case MessageCode::NullCommand: return write_code(reserve_buffer, MessageCode::NullCommand);
-    case MessageCode::Readout: {
-      return serialise(message.readout, reserve_buffer(Readout::message_size));
-    }
-    case MessageCode::StreamFullReadouts: return write_code(reserve_buffer, MessageCode::StreamFullReadouts);
-    case MessageCode::GetReadoutsSnapshot: return write_code(reserve_buffer, MessageCode::GetReadoutsSnapshot);
-    case MessageCode::FullReadout: {
-      return serialise(message.full_readout, reserve_buffer(FullReadout::message_size));
-    }
-    case MessageCode::SetStateOff: return write_code(reserve_buffer, MessageCode::SetStateOff);
-    case MessageCode::SetStateDrive6Sector: return write_code(reserve_buffer, MessageCode::SetStateDrive6Sector);
-    case MessageCode::SetStateTestAllPermutations: return write_code(reserve_buffer, MessageCode::SetStateTestAllPermutations);
-    case MessageCode::SetStateFreewheel: return write_code(reserve_buffer, MessageCode::SetStateFreewheel);
-    case MessageCode::SetStateTestGroundShort: return write_code(reserve_buffer, MessageCode::SetStateTestGroundShort);
-    case MessageCode::SetStateTestPositiveShort: return write_code(reserve_buffer, MessageCode::SetStateTestPositiveShort);
-    case MessageCode::SetStateTestUDirections: return write_code(reserve_buffer, MessageCode::SetStateTestUDirections);
-    case MessageCode::SetStateTestUIncreasing: return write_code(reserve_buffer, MessageCode::SetStateTestUIncreasing);
-    case MessageCode::SetStateTestUDecreasing: return write_code(reserve_buffer, MessageCode::SetStateTestUDecreasing);
-    case MessageCode::SetStateTestVIncreasing: return write_code(reserve_buffer, MessageCode::SetStateTestVIncreasing);
-    case MessageCode::SetStateTestVDecreasing: return write_code(reserve_buffer, MessageCode::SetStateTestVDecreasing);
-    case MessageCode::SetStateTestWIncreasing: return write_code(reserve_buffer, MessageCode::SetStateTestWIncreasing);
-    case MessageCode::SetStateTestWDecreasing: return write_code(reserve_buffer, MessageCode::SetStateTestWDecreasing);
-    case MessageCode::SetStateHoldUPositive: return write_code(reserve_buffer, MessageCode::SetStateHoldUPositive);
-    case MessageCode::SetStateHoldVPositive: return write_code(reserve_buffer, MessageCode::SetStateHoldVPositive);
-    case MessageCode::SetStateHoldWPositive: return write_code(reserve_buffer, MessageCode::SetStateHoldWPositive);
-    case MessageCode::SetStateHoldUNegative: return write_code(reserve_buffer, MessageCode::SetStateHoldUNegative);
-    case MessageCode::SetStateHoldVNegative: return write_code(reserve_buffer, MessageCode::SetStateHoldVNegative);
-    case MessageCode::SetStateHoldWNegative: return write_code(reserve_buffer, MessageCode::SetStateHoldWNegative);
-    case MessageCode::SetStateDrivePeriodic: return write_code(reserve_buffer, MessageCode::SetStateDrivePeriodic);
-    case MessageCode::SetStateDriveSmooth: return write_code(reserve_buffer, MessageCode::SetStateDriveSmooth);
-    case MessageCode::SetStateDriveTorque: return write_code(reserve_buffer, MessageCode::SetStateDriveTorque);
-    case MessageCode::SetStateDriveBatteryPower: return write_code(reserve_buffer, MessageCode::SetStateDriveBatteryPower);
-    case MessageCode::SetStateDriveSpeed: return write_code(reserve_buffer, MessageCode::SetStateDriveSpeed);
-    case MessageCode::SetStateSeekAngleWithPower: return write_code(reserve_buffer, MessageCode::SetStateSeekAngleWithPower);
-    case MessageCode::SetStateSeekAngleWithTorque: return write_code(reserve_buffer, MessageCode::SetStateSeekAngleWithTorque);
-    case MessageCode::SetStateSeekAngleWithSpeed: return write_code(reserve_buffer, MessageCode::SetStateSeekAngleWithSpeed);
-    case MessageCode::CurrentCalibration: {
-      return serialise(message.current_calibration, reserve_buffer(CurrentCalibration::message_size));
-    }
-    case MessageCode::GetCurrentCalibration: return write_code(reserve_buffer, MessageCode::GetCurrentCalibration);
-    case MessageCode::SetCurrentCalibration: return write_code(reserve_buffer, MessageCode::SetCurrentCalibration);
-    case MessageCode::ResetCurrentCalibration: return write_code(reserve_buffer, MessageCode::ResetCurrentCalibration);
-    case MessageCode::HallPositions: {
-      return serialise(message.hall_positions, reserve_buffer(HallPositions::message_size));
-    }
-    case MessageCode::GetHallPositions: return write_code(reserve_buffer, MessageCode::GetHallPositions);
-    case MessageCode::SetHallPositions: return write_code(reserve_buffer, MessageCode::SetHallPositions);
-    case MessageCode::ResetHallPositions: return write_code(reserve_buffer, MessageCode::ResetHallPositions);
-    case MessageCode::ControlParameters: {
-      return serialise(message.control_parameters, reserve_buffer(ControlParameters::message_size));
-    }
-    case MessageCode::SetControlParameters: return write_code(reserve_buffer, MessageCode::SetControlParameters);
-    case MessageCode::GetControlParameters: return write_code(reserve_buffer, MessageCode::GetControlParameters);
-    case MessageCode::ResetControlParameters: return write_code(reserve_buffer, MessageCode::ResetControlParameters);
-    case MessageCode::SetAngle: return write_code(reserve_buffer, MessageCode::SetAngle);
-    case MessageCode::SaveSettingsToFlash: return write_code(reserve_buffer, MessageCode::SaveSettingsToFlash);
-    case MessageCode::UnitTestOutput: {
-      return serialise(message.unit_test_output, reserve_buffer(UnitTestOutput::message_size));
-    }
-    case MessageCode::RunUnitTestFunkyAtan: return write_code(reserve_buffer, MessageCode::RunUnitTestFunkyAtan);
-    case MessageCode::RunUnitTestFunkyAtanPart2: return write_code(reserve_buffer, MessageCode::RunUnitTestFunkyAtanPart2);
-    case MessageCode::RunUnitTestFunkyAtanPart3: return write_code(reserve_buffer, MessageCode::RunUnitTestFunkyAtanPart3);
+    case MessageCode::NullCommand: return serialise_plain_code(MessageCode::NullCommand);
+    case MessageCode::Readout: return serialise(message.readout);
+    case MessageCode::StreamFullReadouts: return serialise(message.stream_full_readouts);
+    case MessageCode::GetReadoutsSnapshot: return serialise_plain_code(MessageCode::GetReadoutsSnapshot);
+    case MessageCode::FullReadout: return serialise(message.full_readout);
+    case MessageCode::SetStateOff: return serialise_plain_code(MessageCode::SetStateOff);
+    case MessageCode::SetStateDrive6Sector: return serialise(message.set_state_drive_6_sector);
+    case MessageCode::SetStateTestAllPermutations: return serialise(message.set_state_test_all_permutations);
+    case MessageCode::SetStateFreewheel: return serialise(message.set_state_freewheel);
+    case MessageCode::SetStateTestGroundShort: return serialise(message.set_state_test_ground_short);
+    case MessageCode::SetStateTestPositiveShort: return serialise(message.set_state_test_positive_short);
+    case MessageCode::SetStateTestUDirections: return serialise(message.set_state_test_u_directions);
+    case MessageCode::SetStateTestUIncreasing: return serialise(message.set_state_test_u_increasing);
+    case MessageCode::SetStateTestUDecreasing: return serialise(message.set_state_test_u_decreasing);
+    case MessageCode::SetStateTestVIncreasing: return serialise(message.set_state_test_v_increasing);
+    case MessageCode::SetStateTestVDecreasing: return serialise(message.set_state_test_v_decreasing);
+    case MessageCode::SetStateTestWIncreasing: return serialise(message.set_state_test_w_increasing);
+    case MessageCode::SetStateTestWDecreasing: return serialise(message.set_state_test_w_decreasing);
+    case MessageCode::SetStateHoldUPositive: return serialise(message.set_state_hold_u_positive);
+    case MessageCode::SetStateHoldVPositive: return serialise(message.set_state_hold_v_positive);
+    case MessageCode::SetStateHoldWPositive: return serialise(message.set_state_hold_w_positive);
+    case MessageCode::SetStateHoldUNegative: return serialise(message.set_state_hold_u_negative);
+    case MessageCode::SetStateHoldVNegative: return serialise(message.set_state_hold_v_negative);
+    case MessageCode::SetStateHoldWNegative: return serialise(message.set_state_hold_w_negative);
+    case MessageCode::SetStateDrivePeriodic: return serialise(message.set_state_drive_periodic);
+    case MessageCode::SetStateDriveSmooth: return serialise(message.set_state_drive_smooth);
+    case MessageCode::SetStateDriveTorque: return serialise(message.set_state_drive_torque);
+    case MessageCode::SetStateDriveBatteryPower: return serialise(message.set_state_drive_battery_power);
+    case MessageCode::SetStateDriveSpeed: return serialise(message.set_state_drive_speed);
+    case MessageCode::SetStateSeekAngleWithPower: return serialise(message.set_state_seek_angle_with_power);
+    case MessageCode::SetStateSeekAngleWithTorque: return serialise(message.set_state_seek_angle_with_torque);
+    case MessageCode::SetStateSeekAngleWithSpeed: return serialise(message.set_state_seek_angle_with_speed);
+    case MessageCode::CurrentCalibration: return serialise(message.current_calibration);
+    case MessageCode::GetCurrentCalibration: return serialise_plain_code(MessageCode::GetCurrentCalibration);
+    case MessageCode::SetCurrentCalibration: return serialise(message.set_current_calibration);
+    case MessageCode::ResetCurrentCalibration: return serialise_plain_code(MessageCode::ResetCurrentCalibration);
+    case MessageCode::HallPositions: return serialise(message.hall_positions);
+    case MessageCode::GetHallPositions: return serialise_plain_code(MessageCode::GetHallPositions);
+    case MessageCode::SetHallPositions: return serialise(message.set_hall_positions);
+    case MessageCode::ResetHallPositions: return serialise_plain_code(MessageCode::ResetHallPositions);
+    case MessageCode::ControlParameters: return serialise(message.control_parameters);
+    case MessageCode::SetControlParameters: return serialise(message.set_control_parameters);
+    case MessageCode::GetControlParameters: return serialise_plain_code(MessageCode::GetControlParameters);
+    case MessageCode::ResetControlParameters: return serialise_plain_code(MessageCode::ResetControlParameters);
+    case MessageCode::SetAngle: return serialise(message.set_angle);
+    case MessageCode::SaveSettingsToFlash: return serialise_plain_code(MessageCode::SaveSettingsToFlash);
+    case MessageCode::UnitTestOutput: return serialise(message.unit_test_output);
+    case MessageCode::RunUnitTestFunkyAtan: return serialise_plain_code(MessageCode::RunUnitTestFunkyAtan);
+    case MessageCode::RunUnitTestFunkyAtanPart2: return serialise_plain_code(MessageCode::RunUnitTestFunkyAtanPart2);
+    case MessageCode::RunUnitTestFunkyAtanPart3: return serialise_plain_code(MessageCode::RunUnitTestFunkyAtanPart3);
   }
+
+return MessageBuffer{}; // Should not reach here, but we have to return something.
 }
 
-static inline bool deserialise(uint8_t const* buffer, size_t length, bool (*handle_message)(Message const& message)) {
-  if (length < 2) return false; // Need at least message code
-  Message message;
+static inline bool deserialise(Message & message, uint8_t const* buffer, size_t size) {
+  if (size < 2) return false; // Need at least message code
+  
   message.message_code = static_cast<MessageCode>(read_uint16(buffer));
   
   switch (message.message_code) {
-    case MessageCode::NullCommand: return handle_message(message);
-    case MessageCode::Readout: {
-      if (not deserialise(message.readout, buffer, length)) return false;
-      return handle_message(message);
-    }
-    case MessageCode::StreamFullReadouts: return handle_message(message);
-    case MessageCode::GetReadoutsSnapshot: return handle_message(message);
-    case MessageCode::FullReadout: {
-      if (not deserialise(message.full_readout, buffer, length)) return false;
-      return handle_message(message);
-    }
-    case MessageCode::SetStateOff: return handle_message(message);
-    case MessageCode::SetStateDrive6Sector: return handle_message(message);
-    case MessageCode::SetStateTestAllPermutations: return handle_message(message);
-    case MessageCode::SetStateFreewheel: return handle_message(message);
-    case MessageCode::SetStateTestGroundShort: return handle_message(message);
-    case MessageCode::SetStateTestPositiveShort: return handle_message(message);
-    case MessageCode::SetStateTestUDirections: return handle_message(message);
-    case MessageCode::SetStateTestUIncreasing: return handle_message(message);
-    case MessageCode::SetStateTestUDecreasing: return handle_message(message);
-    case MessageCode::SetStateTestVIncreasing: return handle_message(message);
-    case MessageCode::SetStateTestVDecreasing: return handle_message(message);
-    case MessageCode::SetStateTestWIncreasing: return handle_message(message);
-    case MessageCode::SetStateTestWDecreasing: return handle_message(message);
-    case MessageCode::SetStateHoldUPositive: return handle_message(message);
-    case MessageCode::SetStateHoldVPositive: return handle_message(message);
-    case MessageCode::SetStateHoldWPositive: return handle_message(message);
-    case MessageCode::SetStateHoldUNegative: return handle_message(message);
-    case MessageCode::SetStateHoldVNegative: return handle_message(message);
-    case MessageCode::SetStateHoldWNegative: return handle_message(message);
-    case MessageCode::SetStateDrivePeriodic: return handle_message(message);
-    case MessageCode::SetStateDriveSmooth: return handle_message(message);
-    case MessageCode::SetStateDriveTorque: return handle_message(message);
-    case MessageCode::SetStateDriveBatteryPower: return handle_message(message);
-    case MessageCode::SetStateDriveSpeed: return handle_message(message);
-    case MessageCode::SetStateSeekAngleWithPower: return handle_message(message);
-    case MessageCode::SetStateSeekAngleWithTorque: return handle_message(message);
-    case MessageCode::SetStateSeekAngleWithSpeed: return handle_message(message);
-    case MessageCode::CurrentCalibration: {
-      if (not deserialise(message.current_calibration, buffer, length)) return false;
-      return handle_message(message);
-    }
-    case MessageCode::GetCurrentCalibration: return handle_message(message);
-    case MessageCode::SetCurrentCalibration: return handle_message(message);
-    case MessageCode::ResetCurrentCalibration: return handle_message(message);
-    case MessageCode::HallPositions: {
-      if (not deserialise(message.hall_positions, buffer, length)) return false;
-      return handle_message(message);
-    }
-    case MessageCode::GetHallPositions: return handle_message(message);
-    case MessageCode::SetHallPositions: return handle_message(message);
-    case MessageCode::ResetHallPositions: return handle_message(message);
-    case MessageCode::ControlParameters: {
-      if (not deserialise(message.control_parameters, buffer, length)) return false;
-      return handle_message(message);
-    }
-    case MessageCode::SetControlParameters: return handle_message(message);
-    case MessageCode::GetControlParameters: return handle_message(message);
-    case MessageCode::ResetControlParameters: return handle_message(message);
-    case MessageCode::SetAngle: return handle_message(message);
-    case MessageCode::SaveSettingsToFlash: return handle_message(message);
-    case MessageCode::UnitTestOutput: {
-      if (not deserialise(message.unit_test_output, buffer, length)) return false;
-      return handle_message(message);
-    }
-    case MessageCode::RunUnitTestFunkyAtan: return handle_message(message);
-    case MessageCode::RunUnitTestFunkyAtanPart2: return handle_message(message);
-    case MessageCode::RunUnitTestFunkyAtanPart3: return handle_message(message);
+    case MessageCode::NullCommand: return true;
+    case MessageCode::Readout: return deserialise(message.readout, buffer, size);
+    case MessageCode::StreamFullReadouts: return deserialise(message.stream_full_readouts, buffer, size);
+    case MessageCode::GetReadoutsSnapshot: return true;
+    case MessageCode::FullReadout: return deserialise(message.full_readout, buffer, size);
+    case MessageCode::SetStateOff: return true;
+    case MessageCode::SetStateDrive6Sector: return deserialise(message.set_state_drive_6_sector, buffer, size);
+    case MessageCode::SetStateTestAllPermutations: return deserialise(message.set_state_test_all_permutations, buffer, size);
+    case MessageCode::SetStateFreewheel: return deserialise(message.set_state_freewheel, buffer, size);
+    case MessageCode::SetStateTestGroundShort: return deserialise(message.set_state_test_ground_short, buffer, size);
+    case MessageCode::SetStateTestPositiveShort: return deserialise(message.set_state_test_positive_short, buffer, size);
+    case MessageCode::SetStateTestUDirections: return deserialise(message.set_state_test_u_directions, buffer, size);
+    case MessageCode::SetStateTestUIncreasing: return deserialise(message.set_state_test_u_increasing, buffer, size);
+    case MessageCode::SetStateTestUDecreasing: return deserialise(message.set_state_test_u_decreasing, buffer, size);
+    case MessageCode::SetStateTestVIncreasing: return deserialise(message.set_state_test_v_increasing, buffer, size);
+    case MessageCode::SetStateTestVDecreasing: return deserialise(message.set_state_test_v_decreasing, buffer, size);
+    case MessageCode::SetStateTestWIncreasing: return deserialise(message.set_state_test_w_increasing, buffer, size);
+    case MessageCode::SetStateTestWDecreasing: return deserialise(message.set_state_test_w_decreasing, buffer, size);
+    case MessageCode::SetStateHoldUPositive: return deserialise(message.set_state_hold_u_positive, buffer, size);
+    case MessageCode::SetStateHoldVPositive: return deserialise(message.set_state_hold_v_positive, buffer, size);
+    case MessageCode::SetStateHoldWPositive: return deserialise(message.set_state_hold_w_positive, buffer, size);
+    case MessageCode::SetStateHoldUNegative: return deserialise(message.set_state_hold_u_negative, buffer, size);
+    case MessageCode::SetStateHoldVNegative: return deserialise(message.set_state_hold_v_negative, buffer, size);
+    case MessageCode::SetStateHoldWNegative: return deserialise(message.set_state_hold_w_negative, buffer, size);
+    case MessageCode::SetStateDrivePeriodic: return deserialise(message.set_state_drive_periodic, buffer, size);
+    case MessageCode::SetStateDriveSmooth: return deserialise(message.set_state_drive_smooth, buffer, size);
+    case MessageCode::SetStateDriveTorque: return deserialise(message.set_state_drive_torque, buffer, size);
+    case MessageCode::SetStateDriveBatteryPower: return deserialise(message.set_state_drive_battery_power, buffer, size);
+    case MessageCode::SetStateDriveSpeed: return deserialise(message.set_state_drive_speed, buffer, size);
+    case MessageCode::SetStateSeekAngleWithPower: return deserialise(message.set_state_seek_angle_with_power, buffer, size);
+    case MessageCode::SetStateSeekAngleWithTorque: return deserialise(message.set_state_seek_angle_with_torque, buffer, size);
+    case MessageCode::SetStateSeekAngleWithSpeed: return deserialise(message.set_state_seek_angle_with_speed, buffer, size);
+    case MessageCode::CurrentCalibration: return deserialise(message.current_calibration, buffer, size);
+    case MessageCode::GetCurrentCalibration: return true;
+    case MessageCode::SetCurrentCalibration: return deserialise(message.set_current_calibration, buffer, size);
+    case MessageCode::ResetCurrentCalibration: return true;
+    case MessageCode::HallPositions: return deserialise(message.hall_positions, buffer, size);
+    case MessageCode::GetHallPositions: return true;
+    case MessageCode::SetHallPositions: return deserialise(message.set_hall_positions, buffer, size);
+    case MessageCode::ResetHallPositions: return true;
+    case MessageCode::ControlParameters: return deserialise(message.control_parameters, buffer, size);
+    case MessageCode::SetControlParameters: return deserialise(message.set_control_parameters, buffer, size);
+    case MessageCode::GetControlParameters: return true;
+    case MessageCode::ResetControlParameters: return true;
+    case MessageCode::SetAngle: return deserialise(message.set_angle, buffer, size);
+    case MessageCode::SaveSettingsToFlash: return true;
+    case MessageCode::UnitTestOutput: return deserialise(message.unit_test_output, buffer, size);
+    case MessageCode::RunUnitTestFunkyAtan: return true;
+    case MessageCode::RunUnitTestFunkyAtanPart2: return true;
+    case MessageCode::RunUnitTestFunkyAtanPart3: return true;
   }
+
+return false; // Unknown message code
 }
 
 } // end namespace hex_mini_drive

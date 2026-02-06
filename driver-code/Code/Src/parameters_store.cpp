@@ -1,13 +1,18 @@
 #include "parameters_store.hpp"
 
-#include "interface.hpp"
-#include "byte_handling.hpp"
+#include "hex_mini_drive/interface.hpp"
+
 #include "constants.hpp"
 #include "error_handler.hpp"
 
 #include "stm32g4xx_hal.h"
 #include "stm32g4xx_hal_flash.h"
 #include "stm32g4xx_hal_flash_ex.h"
+#include "type_definitions.hpp"
+
+#include <cstring>
+
+using namespace hex_mini_drive;
 
 // Leave uninitialized! It references the user_data section in flash memory. The STM32
 // automatically retrieves data from flash when these memory locations are accessed.
@@ -20,27 +25,34 @@ const size_t position_calibration_offset = 0x20;
 const size_t control_parameters_offset = 0xF0;
 
 const uint8_t * const current_calibration_address = user_data + current_calibration_offset;
+const uint8_t * const position_calibration_address = user_data + position_calibration_offset;
 const uint8_t * const control_parameters_address = user_data + control_parameters_offset;
 
 
 CurrentCalibration get_current_calibration(){
-    const bool missing_calibration = (CURRENT_FACTORS != read_uint16(current_calibration_address));
-    return missing_calibration ? 
-        default_current_calibration :
-        parse_current_calibration(current_calibration_address, current_calibration_size);
+    CurrentCalibration result;
+    if (deserialise(result, current_calibration_address, CurrentCalibration::message_size)) {
+        return result;
+    } else {
+        return default_current_calibration;
+    }
 }
-PositionCalibration get_position_calibration(){
-    const bool missing_calibration = (HALL_POSITIONS != read_uint16(user_data + position_calibration_offset));
-    return missing_calibration ? 
-        default_position_calibration :
-        parse_position_calibration(user_data + position_calibration_offset, position_calibration_size);
+HallPositions get_position_calibration(){
+    HallPositions result;
+    if (deserialise(result, position_calibration_address, HallPositions::message_size)) {
+        return result;
+    } else {
+        return default_position_calibration;
+    }
 }
 
 ControlParameters get_control_parameters() {
-    const bool missing_parameters = (CONTROL_PARAMETERS != read_uint16(control_parameters_address));
-    return missing_parameters ? 
-        default_control_parameters :
-        parse_control_parameters(control_parameters_address, control_parameters_size);
+    ControlParameters result;
+    if (deserialise(result, control_parameters_address, ControlParameters::message_size)) {
+        return result;
+    } else {
+        return default_control_parameters;
+    }
 }
 
 /**
@@ -108,18 +120,21 @@ uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
 
 void save_settings_to_flash(
     CurrentCalibration const& current_calibration, 
-    PositionCalibration const& position_calibration,
+    HallPositions const& position_calibration,
     ControlParameters const& control_parameters
 ) {
     // Write the current calibration to the buffer.
-    write_current_calibration(page_buffer + current_calibration_offset, current_calibration);
+    const auto current_calibration_buffer = serialise(current_calibration);
+    std::memcpy(page_buffer + current_calibration_offset, current_calibration_buffer.data, current_calibration_buffer.size);
 
     // Write the position calibration to the buffer.
-    write_position_calibration(page_buffer + position_calibration_offset, position_calibration);
+    const auto position_calibration_buffer = serialise(position_calibration);
+    std::memcpy(page_buffer + position_calibration_offset, position_calibration_buffer.data, position_calibration_buffer.size);
 
     // Write the observer parameters to the buffer.
-    write_control_parameters(page_buffer + control_parameters_offset, control_parameters);
-
+    const auto control_parameters_buffer = serialise(control_parameters);
+    std::memcpy(page_buffer + control_parameters_offset, control_parameters_buffer.data, control_parameters_buffer.size);
+    
     // Write the buffer to flash memory.
     if(write_to_flash(reinterpret_cast<uint32_t *>(user_data), page_buffer, FLASH_PAGE_SIZE) != HAL_OK) {
         error();

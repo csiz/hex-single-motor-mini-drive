@@ -5,11 +5,12 @@
 
 #include "type_definitions.hpp"
 #include "constants.hpp"
-#include "byte_handling.hpp"
 #include "math_utils.hpp"
 #include "integer_math.hpp"
 
 #include "io.hpp"
+
+#include "hex_mini_drive/interface.hpp"
 
 // The interrupts must not enter the error handler!
 // 
@@ -26,7 +27,7 @@
 // Update the motor outputs using simple 6 sector driving based on the hall sensors.
 static inline MotorOutputs update_motor_6_sector(
     DriverState const& driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
 
     // Update the sector variable.
@@ -63,7 +64,7 @@ static inline MotorOutputs update_motor_6_sector(
 // Set the motor outputs to the specified active_pwm and active_angle.
 static inline MotorOutputs update_motor_at_angle(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ) {
     // The PWM counter value must be positive, we use the sign to determine the direction.
     const int abs_pwm = min(readout.live_max_pwm, faster_abs(driver_state.active_pwm));
@@ -90,7 +91,7 @@ static inline MotorOutputs update_motor_at_angle(
 // Drive the inductors around a circle at the specified PWM and speed (open loop control).
 static inline MotorOutputs update_motor_periodic(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     const int active_angle_hires_diff = driver_state.angular_speed + driver_state.active_angle_residual;
 
@@ -106,7 +107,7 @@ static inline MotorOutputs update_motor_periodic(
 // The PWM is varried smoothly and is bounded by the back EMF from the rotating magnet.
 static inline MotorOutputs update_motor_smooth(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     // Check if we have an accurate readout angle.
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
@@ -202,7 +203,7 @@ static inline MotorOutputs update_motor_smooth(
 // control of the torque produced by the motor which will be proportional to the current target.
 static inline MotorOutputs update_motor_torque(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     // Alias the current target.
     const int current_target = driver_state.secondary_target;
@@ -235,7 +236,7 @@ static inline MotorOutputs update_motor_torque(
 // try to absorb the target power instead and use it to charge the battery.
 static inline MotorOutputs update_motor_battery_power(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     // Note that total power will be 0 when not driving; in that case we want to
     // counter the EMF voltage to minimize phase resistance heating, but we don't
@@ -269,7 +270,7 @@ static inline MotorOutputs update_motor_battery_power(
 
 static inline MotorOutputs update_motor_speed(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     // Alias the speed target.
     const int speed_target = driver_state.secondary_target;
@@ -293,7 +294,7 @@ static inline MotorOutputs update_motor_speed(
 
 static inline MotorOutputs update_motor_seek_angle_power(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     const int pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
@@ -313,7 +314,7 @@ static inline MotorOutputs update_motor_seek_angle_power(
 
 static inline MotorOutputs update_motor_seek_angle_torque(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     const int pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
@@ -333,7 +334,7 @@ static inline MotorOutputs update_motor_seek_angle_torque(
 
 static inline MotorOutputs update_motor_seek_angle_speed(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     const int pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
@@ -354,7 +355,7 @@ static inline MotorOutputs update_motor_seek_angle_speed(
 // Drive the motor using a fixed schedule for the PWM outputs.
 static inline MotorOutputs update_motor_schedule(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     PWMSchedule const& schedule = *driver_state.schedule.pointer;
     PWMStage const& schedule_stage = schedule[driver_state.schedule.current_stage];
@@ -388,7 +389,7 @@ static inline void set_breaking_control(DriverState & driver_state){
 static inline DriverState setup_driver_state(
     DriverState const& driver_state,
     DriverState const& pending_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     switch(pending_state.mode){
         case DriverMode::OFF:
@@ -565,7 +566,7 @@ static inline DriverState setup_driver_state(
 // Update the motor outputs based on the active driver state and measured phase currents and other derived values.
 static inline void update_motor_control(
     DriverState & driver_state,
-    FullReadout const& readout
+    hex_mini_drive::FullReadout const& readout
 ){
     // Update based on the active mode.
     switch (driver_state.mode) {
