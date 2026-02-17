@@ -14,6 +14,7 @@
 #include "error_handler.hpp"
 #include "constants.hpp"
 #include "io.hpp"
+#include "type_definitions.hpp"
 #include "usb_com.hpp"
 
 
@@ -124,18 +125,18 @@ void handle_message(hex_mini_drive::Message const& message) {
     using namespace hex_mini_drive;
 
     switch (message.message_code) {
-        case MessageCode::NullCommand:
+        case NULL_MESSAGE_CODE:
             // No command received; ignore it.
             return;
 
-        case MessageCode::StreamFullReadouts: {
-            // Cotinuously stream data if timeout > 0.
-            usb_stream_state = message.stream_full_readouts.stream_state;
+        case STREAM_FULL_READOUTS: {
+            // Continuously stream data if timeout > 0.
+            usb_stream_state = std::get<StreamFullReadouts>(message.message_data).stream_state;
             // Also stop the motor if we stop the stream.
             if (not usb_stream_state) set_motor_command(DriverState{.mode = DriverMode::OFF});
             return;
         }
-        case MessageCode::GetReadoutsSnapshot:
+        case GET_READOUTS_SNAPSHOT:
             // Cancel streaming; so we can take a data snapshot without interruptions.
             usb_stream_state = 0;
             
@@ -146,305 +147,305 @@ void handle_message(hex_mini_drive::Message const& message) {
             return;
 
         // Turn off the motor driver.
-        case MessageCode::SetStateOff:
+        case SET_STATE_OFF:
             // Repeat command, with the interrupt guards.
             set_motor_command(DriverState{.mode = DriverMode::OFF});
             return;
             
         // Measure the motor phase currents.
         
-        case MessageCode::SetStateTestAllPermutations:
+        case SET_STATE_TEST_ALL_PERMUTATIONS:
             motor_start_test(
                 test_all_permutations, 
-                message.set_state_test_all_permutations.pwm_value, 
-                message.set_state_test_all_permutations.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestGroundShort:
+        case SET_STATE_TEST_GROUND_SHORT:
             motor_start_test(
                 test_ground_short, 
-                message.set_state_test_ground_short.pwm_value, 
-                message.set_state_test_ground_short.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestPositiveShort:
+        case SET_STATE_TEST_POSITIVE_SHORT:
             motor_start_test(
                 test_positive_short, 
-                message.set_state_test_positive_short.pwm_value, 
-                message.set_state_test_positive_short.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestUDirections:
+        case SET_STATE_TEST_U_DIRECTIONS:
             motor_start_test(
                 test_u_directions,
-                message.set_state_test_u_directions.pwm_value,
-                message.set_state_test_u_directions.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value,
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
 
-        case MessageCode::SetStateTestUIncreasing:
+        case SET_STATE_TEST_U_INCREASING:
             motor_start_test(
                 test_u_increasing, 
-                message.set_state_test_u_increasing.pwm_value, 
-                message.set_state_test_u_increasing.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestUDecreasing:
+        case SET_STATE_TEST_U_DECREASING:
             motor_start_test(
                 test_u_decreasing, 
-                message.set_state_test_u_decreasing.pwm_value, 
-                message.set_state_test_u_decreasing.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestVIncreasing:
+        case SET_STATE_TEST_V_INCREASING:
             motor_start_test(
                 test_v_increasing, 
-                message.set_state_test_v_increasing.pwm_value, 
-                message.set_state_test_v_increasing.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestVDecreasing:
+        case SET_STATE_TEST_V_DECREASING:
             motor_start_test(
                 test_v_decreasing, 
-                message.set_state_test_v_decreasing.pwm_value, 
-                message.set_state_test_v_decreasing.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestWIncreasing:
+        case SET_STATE_TEST_W_INCREASING:
             motor_start_test(
                 test_w_increasing, 
-                message.set_state_test_w_increasing.pwm_value, 
-                message.set_state_test_w_increasing.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
-        case MessageCode::SetStateTestWDecreasing:
+        case SET_STATE_TEST_W_DECREASING:
             motor_start_test(
                 test_w_decreasing, 
-                message.set_state_test_w_decreasing.pwm_value, 
-                message.set_state_test_w_decreasing.take_snapshot > 0
+                std::get<TestCommand>(message.message_data).pwm_value, 
+                std::get<TestCommand>(message.message_data).take_snapshot > 0
             );
             return;
 
         // Drive the motor.
-        case MessageCode::SetStateDrive6Sector: {
+        case SET_STATE_DRIVE_6_SECTOR: {
             set_motor_command(DriverState{ 
                 .mode = DriverMode::DRIVE_6_SECTOR, 
-                .duration = message.set_state_drive_6_sector.timeout, 
-                .active_pwm = clip_to_short(-pwm_max, +pwm_max, message.set_state_drive_6_sector.pwm_value * control_parameters.motor_direction),
+                .duration = std::get<BasicDriveCommand>(message.message_data).timeout, 
+                .active_pwm = clip_to_short(-pwm_max, +pwm_max, std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction),
             });
             return;
         }
 
-        case MessageCode::SetStateDrivePeriodic: {
+        case SET_STATE_DRIVE_PERIODIC: {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_PERIODIC, 
-                .duration = message.set_state_drive_periodic.timeout,
-                .active_angle = message.set_state_drive_periodic.angle,
-                .active_pwm = clip_to_short(0, +pwm_max, message.set_state_drive_periodic.pwm_value),
-                .angular_speed = clip_to_short(-max_angular_speed, +max_angular_speed, message.set_state_drive_periodic.angular_speed * control_parameters.motor_direction),
+                .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
+                .active_angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
+                .active_pwm = clip_to_short(0, +pwm_max, std::get<SetStateDrivePeriodic>(message.message_data).pwm_value),
+                .angular_speed = clip_to_short(-max_angular_speed, +max_angular_speed, std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction),
             });
             return;
         }
 
-        case MessageCode::SetStateDriveSmooth: {
+        case SET_STATE_DRIVE_SMOOTH: {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_SMOOTH, 
-                .duration = message.set_state_drive_smooth.timeout, 
-                .target_pwm = clip_to_short(-pwm_max, +pwm_max, message.set_state_drive_smooth.pwm_value * control_parameters.motor_direction),
+                .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout, 
+                .target_pwm = clip_to_short(-pwm_max, +pwm_max, std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction),
             });
             return;
         }
 
-        case MessageCode::SetStateDriveTorque: {
+        case SET_STATE_DRIVE_TORQUE: {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_TORQUE, 
-                .duration = message.set_state_drive_torque.timeout,
-                .secondary_target = clip_to_short(-max_drive_current, +max_drive_current, message.set_state_drive_torque.target_current * control_parameters.motor_direction),
+                .duration = std::get<SetStateDriveTorque>(message.message_data).timeout,
+                .secondary_target = clip_to_short(-max_drive_current, +max_drive_current, std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction),
             });
             return;
         }
 
-        case MessageCode::SetStateDriveBatteryPower: {
+        case SET_STATE_DRIVE_BATTERY_POWER: {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_BATTERY_POWER, 
-                .duration = message.set_state_drive_battery_power.timeout,
-                .secondary_target = clip_to_short(-max_drive_power, +max_drive_power, message.set_state_drive_battery_power.target_power * control_parameters.motor_direction),
+                .duration = std::get<SetStateDriveBatteryPower>(message.message_data).timeout,
+                .secondary_target = clip_to_short(-max_drive_power, +max_drive_power, std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction),
             });
             return;
         }
 
-        case MessageCode::SetStateDriveSpeed: {
+        case SET_STATE_DRIVE_SPEED: {
             set_motor_command(DriverState{
                 .mode = DriverMode::DRIVE_SPEED, 
-                .duration = message.set_state_drive_speed.timeout,
-                .secondary_target = clip_to_short(-max_angular_speed, +max_angular_speed, message.set_state_drive_speed.target_speed * control_parameters.motor_direction),
+                .duration = std::get<SetStateDriveSpeed>(message.message_data).timeout,
+                .secondary_target = clip_to_short(-max_angular_speed, +max_angular_speed, std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction),
             });
             return;
         }
 
-        case MessageCode::SetStateSeekAngleWithPower: {
+        case SET_STATE_SEEK_ANGLE_WITH_POWER: {
             set_motor_command(DriverState{
                 .mode = DriverMode::SEEK_ANGLE_POWER, 
-                .duration = message.set_state_seek_angle_with_power.timeout,
+                .duration = std::get<SetStateSeekAngleWithPower>(message.message_data).timeout,
                 .seek_angle = SeekAngle{
-                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, message.set_state_seek_angle_with_power.target_rotation * control_parameters.motor_direction),
-                    .target_angle = static_cast<int16_t>(normalize_angle(message.set_state_seek_angle_with_power.target_angle * control_parameters.motor_direction)),
-                    .max_secondary_target = clip_to_short(0, max_drive_power, message.set_state_seek_angle_with_power.max_drive_power),
+                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction),
+                    .target_angle = static_cast<int16_t>(normalize_angle(std::get<SetStateSeekAngleWithPower>(message.message_data).target_angle * control_parameters.motor_direction)),
+                    .max_secondary_target = clip_to_short(0, max_drive_power, std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power),
                 }
             });
             return;
         }
 
-        case MessageCode::SetStateSeekAngleWithTorque: {
+        case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
             set_motor_command(DriverState{
                 .mode = DriverMode::SEEK_ANGLE_TORQUE, 
-                .duration = message.set_state_seek_angle_with_torque.timeout,
+                .duration = std::get<SetStateSeekAngleWithTorque>(message.message_data).timeout,
                 .seek_angle = SeekAngle{
-                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, message.set_state_seek_angle_with_torque.target_rotation * control_parameters.motor_direction),
-                    .target_angle = static_cast<int16_t>(normalize_angle(message.set_state_seek_angle_with_torque.target_angle * control_parameters.motor_direction)),
-                    .max_secondary_target = clip_to_short(0, max_drive_current, message.set_state_seek_angle_with_torque.max_drive_current),
+                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction),
+                    .target_angle = static_cast<int16_t>(normalize_angle(std::get<SetStateSeekAngleWithTorque>(message.message_data).target_angle * control_parameters.motor_direction)),
+                    .max_secondary_target = clip_to_short(0, max_drive_current, std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current),
                 }
             });
             return;
         }
 
-        case MessageCode::SetStateSeekAngleWithSpeed: {
+        case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
             set_motor_command(DriverState{
                 .mode = DriverMode::SEEK_ANGLE_SPEED, 
-                .duration = message.set_state_seek_angle_with_speed.timeout,
+                .duration = std::get<SetStateSeekAngleWithSpeed>(message.message_data).timeout,
                 .seek_angle = SeekAngle{
-                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, message.set_state_seek_angle_with_speed.target_rotation * control_parameters.motor_direction),
-                    .target_angle = static_cast<int16_t>(normalize_angle(message.set_state_seek_angle_with_speed.target_angle * control_parameters.motor_direction)),
-                    .max_secondary_target = clip_to_short(0, max_angular_speed, message.set_state_seek_angle_with_speed.max_drive_speed),
+                    .target_rotation = clip_to_short(-max_16bit, +max_16bit, std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction),
+                    .target_angle = static_cast<int16_t>(normalize_angle(std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_angle * control_parameters.motor_direction)),
+                    .max_secondary_target = clip_to_short(0, max_angular_speed, std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed),
                 }
             });
             return;
         }
 
         // Freewheel the motor.
-        case MessageCode::SetStateFreewheel:
+        case SET_STATE_FREEWHEEL:
             set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
             return;
 
-        case MessageCode::SetStateHoldUPositive: {
+        case SET_STATE_HOLD_U_POSITIVE: {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .u_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_u_positive.pwm_value))
+                    .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
                 },
                 .mode = DriverMode::HOLD,
-                .duration = message.set_state_hold_u_positive.timeout, 
+                .duration = std::get<HoldCommand>(message.message_data).timeout, 
             });
             return;
         }
-        case MessageCode::SetStateHoldVPositive: {
+        case SET_STATE_HOLD_V_POSITIVE: {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .v_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_v_positive.pwm_value))
+                    .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
                 },
                 .mode = DriverMode::HOLD,
-                .duration = message.set_state_hold_v_positive.timeout, 
+                .duration = std::get<HoldCommand>(message.message_data).timeout, 
             });
             return;
         }
-        case MessageCode::SetStateHoldWPositive: {
+        case SET_STATE_HOLD_W_POSITIVE: {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .w_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_w_positive.pwm_value))
+                    .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
                 },
                 .mode = DriverMode::HOLD,
-                .duration = message.set_state_hold_w_positive.timeout, 
+                .duration = std::get<HoldCommand>(message.message_data).timeout, 
             });
             return;
         }
-        case MessageCode::SetStateHoldUNegative: {
+        case SET_STATE_HOLD_U_NEGATIVE: {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .v_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_u_negative.pwm_value)),
-                    .w_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_u_negative.pwm_value))
+                    .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
+                    .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
                 },
                 .mode = DriverMode::HOLD,
-                .duration = message.set_state_hold_u_negative.timeout, 
+                .duration = std::get<HoldCommand>(message.message_data).timeout, 
             });
             return;
         }
-        case MessageCode::SetStateHoldVNegative: {
+        case SET_STATE_HOLD_V_NEGATIVE: {
             set_motor_command(DriverState{ 
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .u_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_v_negative.pwm_value)),
-                    .w_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_v_negative.pwm_value))
+                    .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
+                    .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
                 },
                 .mode = DriverMode::HOLD,
-                .duration = message.set_state_hold_v_negative.timeout, 
+                .duration = std::get<HoldCommand>(message.message_data).timeout, 
             });
             return;
         }
-        case MessageCode::SetStateHoldWNegative: {
+        case SET_STATE_HOLD_W_NEGATIVE: {
 
             set_motor_command(DriverState{
                 .motor_outputs = MotorOutputs{ 
                     .enable_flags = enable_flags_all, 
-                    .u_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_w_negative.pwm_value)),
-                    .v_duty = static_cast<uint16_t>(faster_abs(message.set_state_hold_w_negative.pwm_value))
+                    .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
+                    .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
                 },
                 .mode = DriverMode::HOLD,
-                .duration = message.set_state_hold_w_negative.timeout, 
+                .duration = std::get<HoldCommand>(message.message_data).timeout, 
             });
             return;
         }
-        case MessageCode::SetCurrentCalibration:
-            current_calibration = message.current_calibration;
+        case SET_CURRENT_CALIBRATION:
+            current_calibration = std::get<CurrentCalibration>(message.message_data);
             usb_reply_current_factors = true;
             return;
             
-        case MessageCode::ResetCurrentCalibration:
+        case RESET_CURRENT_CALIBRATION:
             // Reset the current factors to the default values.
             current_calibration = default_current_calibration;
             usb_reply_current_factors = true;
             return;
 
-        case MessageCode::SetHallPositions:
-            position_calibration = message.hall_positions;
+        case SET_HALL_POSITIONS:
+            position_calibration = std::get<HallPositions>(message.message_data);
             usb_reply_hall_positions = true;
             return;
 
-        case MessageCode::ResetHallPositions:
+        case RESET_HALL_POSITIONS:
             // Reset the hall positions to the default values.
             position_calibration = default_position_calibration;
             usb_reply_hall_positions = true;
             return;
 
-        case MessageCode::SetControlParameters:
-            control_parameters = message.control_parameters;
+        case SET_CONTROL_PARAMETERS:
+            control_parameters = std::get<ControlParameters>(message.message_data);
             usb_reply_control_parameters = true;
             return;
 
-        case MessageCode::ResetControlParameters:
+        case RESET_CONTROL_PARAMETERS:
             control_parameters = default_control_parameters;
             usb_reply_control_parameters = true;
             return;
 
-        case MessageCode::GetCurrentCalibration:
+        case GET_CURRENT_CALIBRATION:
             usb_reply_current_factors = true;
             return;
-        case MessageCode::GetHallPositions:
+        case GET_HALL_POSITIONS:
             usb_reply_hall_positions = true;
             return;
 
-        case MessageCode::GetControlParameters:
+        case GET_CONTROL_PARAMETERS:
             usb_reply_control_parameters = true;
             return;
 
-        case MessageCode::SetAngle: {
-            set_angle(message.set_angle.angle);
+        case SET_ANGLE: {
+            set_angle(std::get<SetAngle>(message.message_data).angle);
             return;
         }
 
-        case MessageCode::SaveSettingsToFlash:
+        case SAVE_SETTINGS_TO_FLASH:
             if(is_motor_safed()){
                 save_settings_to_flash(current_calibration, position_calibration, control_parameters);
 
@@ -456,21 +457,21 @@ void handle_message(hex_mini_drive::Message const& message) {
             }
 
         // We shouldn't receive these messages; the driver only sends them.
-        case MessageCode::CurrentCalibration:
-        case MessageCode::ControlParameters:
-        case MessageCode::HallPositions:
-        case MessageCode::Readout:
-        case MessageCode::FullReadout:
-        case MessageCode::UnitTestOutput:
+        case CURRENT_CALIBRATION:
+        case CONTROL_PARAMETERS:
+        case HALL_POSITIONS:
+        case READOUT:
+        case FULL_READOUT:
+        case UNIT_TEST_OUTPUT:
             return;
 
-        case MessageCode::RunUnitTestFunkyAtan:
+        case RUN_UNIT_TEST_FUNKY_ATAN:
             run_unit_test(unit_test_funky_atan);
             return;
-        case MessageCode::RunUnitTestFunkyAtanPart2:
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART2:
             run_unit_test(unit_test_funky_atan_part_2);
             return;
-        case MessageCode::RunUnitTestFunkyAtanPart3:
+        case RUN_UNIT_TEST_FUNKY_ATAN_PART3:
             run_unit_test(unit_test_funky_atan_part_3);
             return;
 
@@ -494,9 +495,10 @@ void usb_reset_buffers(){
 
 
 void usb_queue_message(hex_mini_drive::Message const& message) {
-    usb_encoding_buffer.encode_message(
-        hex_mini_drive::serialise(message)
-    );
+    hex_mini_drive::MessageBuffer buffer;
+    buffer.size = hex_mini_drive::write_message(buffer.data, hex_mini_drive::max_message_size, message);
+
+    if (buffer.size) usb_encoding_buffer.encode_message(buffer);
 }
 
 void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, hex_mini_drive::FullReadout const& readout) {
@@ -522,8 +524,8 @@ void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, h
 
 
         usb_queue_message(hex_mini_drive::Message{
-            .message_code = hex_mini_drive::MessageCode::Readout,
-            .readout = adjust_direction(readout_history_pop())
+            .message_code = hex_mini_drive::MessageCode::READOUT,
+            .message_data = adjust_direction(readout_history_pop())
         });
         
         // Readout added to the USB buffer.
@@ -535,8 +537,8 @@ void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, h
     // Stream readouts but only once per readout number.
     if(usb_stream_state and usb_stream_last_sent != readout.readout_number){
         usb_queue_message(hex_mini_drive::Message{
-            .message_code = hex_mini_drive::MessageCode::FullReadout,
-            .full_readout = readout
+            .message_code = hex_mini_drive::MessageCode::FULL_READOUT,
+            .message_data = readout
         });
 
         usb_stream_last_sent = readout.readout_number;
@@ -546,12 +548,12 @@ void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, h
     // Send unit test response if requested.
     if (usb_reply_unit_test) {
         hex_mini_drive::Message message = {
-            .message_code = hex_mini_drive::MessageCode::UnitTestOutput,
-            .unit_test_output = {}
+            .message_code = hex_mini_drive::MessageCode::UNIT_TEST_OUTPUT,
+            .message_data = hex_mini_drive::UnitTestOutput{}
         };
         usb_unit_test_function(
-            reinterpret_cast<char*>(message.unit_test_output.data.data()), 
-            message.unit_test_output.data.max_size()
+            reinterpret_cast<char*>(std::get<hex_mini_drive::UnitTestOutput>(message.message_data).data()), 
+            hex_mini_drive::UNIT_TEST_OUTPUT_SIZE
         );
         usb_queue_message(message);
         usb_reply_unit_test = false;
@@ -561,8 +563,8 @@ void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, h
     // Send control parameters if requested.
     if (usb_reply_control_parameters) {
         usb_queue_message(hex_mini_drive::Message{
-            .message_code = hex_mini_drive::MessageCode::ControlParameters,
-            .control_parameters = control_parameters
+            .message_code = hex_mini_drive::MessageCode::CONTROL_PARAMETERS,
+            .message_data = control_parameters
         });
         usb_reply_control_parameters = false;
         return;
@@ -571,8 +573,8 @@ void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, h
     // Send current factors if requested.
     if (usb_reply_current_factors) {
         usb_queue_message(hex_mini_drive::Message{
-            .message_code = hex_mini_drive::MessageCode::CurrentCalibration,
-            .current_calibration = current_calibration
+            .message_code = hex_mini_drive::MessageCode::CURRENT_CALIBRATION,
+            .message_data = current_calibration
         });
         usb_reply_current_factors = false;
         return;
@@ -581,8 +583,8 @@ void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, h
     // Send trigger angles if requested.
     if (usb_reply_hall_positions) {
         usb_queue_message(hex_mini_drive::Message{
-            .message_code = hex_mini_drive::MessageCode::HallPositions,
-            .hall_positions = position_calibration
+            .message_code = hex_mini_drive::MessageCode::HALL_POSITIONS,
+            .message_data = position_calibration
         });
         usb_reply_hall_positions = false;
         return;
@@ -591,7 +593,7 @@ void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, h
 
 void usb_receive_serialised_message(uint8_t * buffer, size_t size){
     hex_mini_drive::Message message;
-    if(hex_mini_drive::deserialise(message, buffer, size)){
+    if(hex_mini_drive::read_message(message, buffer, size)){
         // We have a valid message; handle it.
         handle_message(message);
     } else {

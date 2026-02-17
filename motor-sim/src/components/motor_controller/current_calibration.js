@@ -49,62 +49,62 @@ export async function run_current_calibration(motor_controller, max_pwm_value){
   const test_options = {pwm_value: max_pwm_value, take_snapshot: 1};
   const reply = {
     expected_messages: history_size,
-    expected_code: MessageCode.Readout,
+    expected_code: MessageCode.READOUT,
   }
 
   console.info("Current calibration starting");
 
   // Note: hold pwm is clamped by the motor driver
 
-  await motor_controller.send_command({message_code: MessageCode.SetStateHoldUPositive, ...drive_options});
+  await motor_controller.send_command({message_code: MessageCode.SET_STATE_HOLD_U_POSITIVE, ...drive_options});
   await wait(settle_time);
   const u_positive_readout = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestUIncreasing, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_U_INCREASING, ...test_options},
     ...reply
   });
 
   console.info("U positive done:", u_positive_readout);
 
-  await motor_controller.send_command({message_code: MessageCode.SetStateHoldWNegative, ...drive_options});
+  await motor_controller.send_command({message_code: MessageCode.SET_STATE_HOLD_W_NEGATIVE, ...drive_options});
   await wait(settle_time);
   const w_negative_readout = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestWDecreasing, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_W_DECREASING, ...test_options},
     ...reply
   });
 
   console.info("W negative done:", w_negative_readout);
 
-  await motor_controller.send_command({message_code: MessageCode.SetStateHoldVPositive, ...drive_options});
+  await motor_controller.send_command({message_code: MessageCode.SET_STATE_HOLD_V_POSITIVE, ...drive_options});
   await wait(settle_time);
   const v_positive_readout = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestVIncreasing, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_V_INCREASING, ...test_options},
     ...reply
   });
 
   console.info("V positive done:", v_positive_readout);
 
-  await motor_controller.send_command({message_code: MessageCode.SetStateHoldUNegative, ...drive_options});
+  await motor_controller.send_command({message_code: MessageCode.SET_STATE_HOLD_U_NEGATIVE, ...drive_options});
   await wait(settle_time);
   const u_negative_readout = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestUDecreasing, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_U_DECREASING, ...test_options},
     ...reply
   });
 
   console.info("U negative done:", u_negative_readout);
 
-  await motor_controller.send_command({message_code: MessageCode.SetStateHoldWPositive, ...drive_options});
+  await motor_controller.send_command({message_code: MessageCode.SET_STATE_HOLD_W_POSITIVE, ...drive_options});
   await wait(settle_time);
   const w_positive_readout = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestWIncreasing, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_W_INCREASING, ...test_options},
     ...reply
   });
 
   console.info("W positive done:", w_positive_readout);
 
-  await motor_controller.send_command({message_code: MessageCode.SetStateHoldVNegative, ...drive_options});
+  await motor_controller.send_command({message_code: MessageCode.SET_STATE_HOLD_V_NEGATIVE, ...drive_options});
   await wait(settle_time);
   const v_negative_readout = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestVDecreasing, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_V_DECREASING, ...test_options},
     ...reply
   });
 

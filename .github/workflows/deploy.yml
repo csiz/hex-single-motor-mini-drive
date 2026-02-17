@@ -28,7 +28,7 @@ jobs:
           cache-dependency-path: ./motor-sim/package-lock.json
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --install-links
       - run: npm run build
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3

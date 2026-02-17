@@ -1,6 +1,6 @@
 // API interface definition for the Hex Single Motor Mini Drive.
 // 
-// The first 2 bytes of each message contain the message code. The remainder 
+// The first 2 bytes of each message contain the message message_code. The remainder 
 // of the message contains data as defined below, writting the fields in order.
 // as their bit representation, little-endian.
 
@@ -8,1552 +8,1977 @@
 
 export { COBS_Buffer } from './cobs_encoding.js';
 
-// Constants
+// Number of contiguous readouts to store in the history buffer for a snapshot.
 export const HISTORY_SIZE = 336;
 
-// Message Codes
-export const MessageCode = {
-  NullCommand: 0,
-  Readout: 8224,
-  StreamFullReadouts: 8225,
-  GetReadoutsSnapshot: 8226,
-  FullReadout: 8227,
-  SetStateOff: 8240,
-  SetStateDrive6Sector: 8241,
-  SetStateTestAllPermutations: 8242,
-  SetStateFreewheel: 8244,
-  SetStateTestGroundShort: 8246,
-  SetStateTestPositiveShort: 8247,
-  SetStateTestUDirections: 8249,
-  SetStateTestUIncreasing: 8250,
-  SetStateTestUDecreasing: 8251,
-  SetStateTestVIncreasing: 8252,
-  SetStateTestVDecreasing: 8253,
-  SetStateTestWIncreasing: 8254,
-  SetStateTestWDecreasing: 8255,
-  SetStateHoldUPositive: 12320,
-  SetStateHoldVPositive: 12321,
-  SetStateHoldWPositive: 12322,
-  SetStateHoldUNegative: 12323,
-  SetStateHoldVNegative: 12324,
-  SetStateHoldWNegative: 12325,
-  SetStateDrivePeriodic: 12352,
-  SetStateDriveSmooth: 16432,
-  SetStateDriveTorque: 16433,
-  SetStateDriveBatteryPower: 16434,
-  SetStateDriveSpeed: 16435,
-  SetStateSeekAngleWithPower: 16436,
-  SetStateSeekAngleWithTorque: 16437,
-  SetStateSeekAngleWithSpeed: 16438,
-  CurrentCalibration: 16448,
-  GetCurrentCalibration: 16449,
-  SetCurrentCalibration: 16450,
-  ResetCurrentCalibration: 16451,
-  HallPositions: 16452,
-  GetHallPositions: 16453,
-  SetHallPositions: 16454,
-  ResetHallPositions: 16455,
-  ControlParameters: 16457,
-  SetControlParameters: 16458,
-  GetControlParameters: 16459,
-  ResetControlParameters: 16460,
-  SetAngle: 16464,
-  SaveSettingsToFlash: 16512,
-  UnitTestOutput: 20544,
-  RunUnitTestFunkyAtan: 20546,
-  RunUnitTestFunkyAtanPart2: 20547,
-  RunUnitTestFunkyAtanPart3: 20548,
-};
+// Number of bytes in the unit test output; should be enough to store the output of the funky atan unit test.
+export const UNIT_TEST_OUTPUT_SIZE = 248;
 
-// Helper function to write just the message code
-function write_code(message_code) {
-  const buffer = new Uint8Array(2);
+export class PositiveNegativeTransition extends Array {
+  constructor(init) {
+    if (Array.isArray(init)) {
+      super(...init);
+    } else {
+      super(2);
+    }
+  }
+}
+
+
+export class SectorTransitions extends Array {
+  constructor(init) {
+    if (Array.isArray(init)) {
+      super(...init);
+    } else {
+      super(6);
+    }
+  }
+}
+
+
+export class SectorCenters extends Array {
+  constructor(init) {
+    if (Array.isArray(init)) {
+      super(...init);
+    } else {
+      super(6);
+    }
+  }
+}
+
+
+// Output data from unit test.
+export class UnitTestOutput extends Array {
+  constructor(init) {
+    if (Array.isArray(init)) {
+      super(...init);
+    } else {
+      super(248);
+    }
+  }
+}
+
+
+// Basic readout of the motor driver internal state; can be recorded contiguously
+// into a history buffer after a commanded event.
+export class Readout {
+  // The PWM commands for the motor outputs; concatenated into a single value.
+  pwm_commands;
+  // Readout number; used to identify the readout in the history.
+  readout_number;
+  // Driver state flags; packed into a single 16-bit value.
+  state_flags;
+  // Raw phase U current readout (ADC value).
+  u_current;
+  // Raw phase V current readout (ADC value).
+  v_current;
+  // Raw phase W current readout (ADC value).
+  w_current;
+  // Raw reference readout (ADC value); this is the reference voltage for the current 
+  // readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
+  ref_readout;
+  // Phase U current readout difference to previous readout.
+  u_current_diff;
+  // Phase V current readout difference to previous readout.
+  v_current_diff;
+  // Phase W current readout difference to previous readout.
+  w_current_diff;
+  // Best estimate for the rotor magnetic angle.
+  angle;
+  // Error of the angle measured from EMF to the rotor angle prediction.
+  angle_adjustment;
+  // Best estimate for the rotor magnetic angular speed.
+  angular_speed;
+  // Instantaneous VCC voltage readout (ADC value); from resistance divider.
+  vcc_voltage;
+  // EMF voltage magnitude. The EMF is always along the beta direction, but we can have 
+  // errors in the measurements and the rotor position and thus we see alpha component 
+  // as well. We can rotate the EMF voltage vector fully to the beta direction and get 
+  // closer to the actual EMF voltage magnitude.
+  emf_voltage_magnitude;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+// Continuously send full readouts of the motor driver internal state.
+export class StreamFullReadouts {
+  // Number of messages to send; the stream command should be repeated to keep sending messages.
+  stream_state;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+// Complete readout of the motor driver internal state for exploration and data stream.
+export class FullReadout extends Readout {
+  // Tick rate; the number of main loop (communication and commands) updates per second.
+  main_loop_rate;
+  // ADC update rate; the number of ADC readouts per second. This is usually higher 
+  // than the main loop rate because we read the ADCs multiple times per main loop.
+  adc_update_rate;
+  // Instantaneous temperature readout (ADC value); from the temperature sensor.
+  temperature;
+  // Current maximum PWM allowed by the driver.
+  live_max_pwm;
+  // PWM counter value at the start of the control update. Should occur immediately 
+  // after the halfway point.
+  cycle_start_tick;
+  // PWM counter value at the end of the control update. Should occur immediately 
+  // before the halfway point.
+  cycle_end_tick;
+  // Current in DQ0 coordinates; aligned with the rotor angle.
+  direct_current;
+  // Current in DQ0 coordinates; crossed with the rotor angle.
+  quadrature_current;
+  // EMF voltage in DQ0 coordinates; aligned with the rotor angle.
+  direct_emf_voltage;
+  // EMF voltage in DQ0 coordinates; crossed with the rotor angle.
+  quadrature_emf_voltage;
+  // Total power used/given to VCC line (the battery usually).
+  total_power;
+  // Resistive power; the power dissipated in the phase resistances.
+  resistive_power;
+  // EMF power; the power used to drive the motor (which is reflected to the 
+  // inductors as back EMF).
+  emf_power;
+  // Inductive power; the power pushed into the inductor magnetic fields.
+  inductive_power;
+  // Motor constant; a measure of how strong the motor is. It is computed as the 
+  // ratio between the quadrature EMF voltage and the angular speed.
+  motor_constant;
+  // The current angle.
+  inductor_angle;
+  // The measured acceleration of the rotor.
+  rotor_acceleration;
+  // Integrated number of EMF deduced rotor angle rotations since startup.
+  rotations;
+  // Magnitude of the phase current in the DQ0 coordinate frame.
+  current_magnitude;
+  // Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
+  emf_angle_error_variance;
+  // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
+  // motor efficiently.
+  lead_angle;
+  // Target PWM value for the motor outputs, value set by the advanced control algorithms.
+  target_pwm;
+  // Target for the advanced control algorithms.
+  secondary_target;
+  // Spare debug output.
+  seek_integral;
+  
+  constructor(init) {super(init);Object.assign(this, init);}
+}
+
+export class BasicDriveCommand {
+  // PWM value to use for driving the motor in 6 sector commutation mode.
+  pwm_value;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class TestCommand {
+  // PWM value to use for the test.
+  pwm_value;
+  // Whether to take a snapshot while running the test.
+  take_snapshot;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class HoldCommand {
+  // PWM value to use for holding the position.
+  pwm_value;
+  // Time in pwm periods to hold the position before stopping.
+  timeout;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateDrivePeriodic {
+  // PWM value to use for driving the motor.
+  pwm_value;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  // Starting angle.
+  angle;
+  // Angular speed to drive the motor at.
+  angular_speed;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateDriveSmooth {
+  // PWM value to use for driving the motor.
+  pwm_value;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateDriveTorque {
+  // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+  target_current;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateDriveBatteryPower {
+  // Target power draw from the battery; the driver will try to achieve this power by adjusting the PWM commands.
+  target_power;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateDriveSpeed {
+  // Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
+  target_speed;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateSeekAngleWithPower {
+  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
+  target_rotation;
+  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+  target_angle;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  // Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
+  max_drive_power;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateSeekAngleWithTorque {
+  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
+  target_rotation;
+  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+  target_angle;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  // Maximum current to use for driving the motor; used to prevent overheating and overcurrent.
+  max_drive_current;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetStateSeekAngleWithSpeed {
+  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
+  target_rotation;
+  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+  target_angle;
+  // Time in pwm periods to drive the motor before stopping.
+  timeout;
+  // Maximum speed to use for driving the motor; used to prevent overheating and overcurrent.
+  max_drive_speed;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+// Calibration factors for the current sensors.
+// 
+// The soldering joints vary during manufacturing and therefore they affect the total
+// resistance of the shunt resistors. We can calibrate for this effect by multiplying
+// the readout by a factor for each phase.
+// 
+// For the v1 design, we shall improve the shunt resistors and soldering pad design to
+// to improve the accuracy. We can then switch to automatically calibrating the phase
+// resistance and motor inductance. For now we calibrate using the motor monitor app.
+export class CurrentCalibration {
+  // Adjustment factor for the U phase current readout.
+  u_factor;
+  // Adjustment factor for the V phase current readout.
+  v_factor;
+  // Adjustment factor for the W phase current readout.
+  w_factor;
+  // Adjustment factor for the motor inductance; used to calibrate the coil inductance.
+  inductance_factor;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+// Hall sensor position calibration data.
+// 
+// Apparently, millimiter precision in the placement of the hall sensor chips means an error up to 
+// 30 degrees in the electrical angle of the magnetic rotor. Note that for each physical rotation
+// of the magnet there are N magnet poles times P coil pairs rotations of the electrical angle.
+// 
+// With this big of an error, we need to calibrate the hall sensor positions using the angle
+// inferred from the back EMF voltage induced in the coils.
+export class HallPositions {
+  // The angle at the transition to the current sector from the left and from the 
+  // right. By "left" I mean the hall sector has transitioned from a lower to a higher 
+  // number, the rotor has a positive speed and is rotating counter-clockwise (trigonometric 
+  // direction). The left angle is lower than the right angle. Note that the left angle 
+  // of a sector and the right angle of the previous sector do not coincide because the 
+  // hall sensors have a designed hysteresis that latches the output.
+  sector_transition_angles;
+  // The variance of the angles (it is expensive to compute the standard deviation with 
+  // a square root but we only need the variance, so we only store the variance).
+  sector_transition_variances;
+  // The center angle of each sector; the average of the left and right angles.
+  sector_center_angles;
+  // The variance of the center angles; at the moment it represents the span of the hall sector.
+  sector_center_variances;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+// Parameters used in the motor control loop; for detailed descriptions check the
+// motor monitor page. It's useful to modify the values and inspect the changes to
+// the respective variables in the readout while driving a physical motor.
+export class ControlParameters {
+  // Magnet position integral gain.
+  rotor_angle_ki;
+  // Magnet angular speed integral gain.
+  rotor_angular_speed_ki;
+  // Averaging gain for the acceleration of the rotor.
+  rotor_acceleration_ki;
+  // Motor constant integral gain.
+  motor_constant_ki;
+  // Sign of the motor direction (positive by default, negative to reverse turning direction).
+  motor_direction;
+  // Number of incorrect direction detections before we flip our motor angle.
+  incorrect_direction_threshold;
+  // Maximum PWM adjustment per cycle.
+  max_pwm_change;
+  // Maximum target angle change per cycle.
+  max_angle_change;
+  // Minimum EMF voltage to consider EMF detected (above the noise level)
+  min_emf_voltage;
+  // Integral gain for the hall angle adjustment (0 to ignore).
+  hall_angle_ki;
+  // Lead angle integral gain for efficient driving.
+  lead_angle_control_ki;
+  // Torque control gain.
+  torque_control_ki;
+  // Battery power control gain.
+  battery_power_control_ki;
+  // Speed control gain.
+  speed_control_ki;
+  // Probing angular speed for initial EMF detection.
+  probing_angular_speed;
+  // Maximum PWM difference from motor PWM required to compensate back EMF.
+  max_pwm_difference;
+  // Maximum EMF angle correction variance when it's too noisy to update the angle.
+  emf_angle_error_variance_threshold;
+  // Minium EMF voltage to compute the motor constant.
+  min_emf_for_motor_constant;
+  // Maximum resistive power that can be dissipated in the motor coils.
+  max_resistive_power;
+  // Resistive power long duration average observer gain.
+  resistive_power_ki;
+  // Maximum angular speed of the motor.
+  max_angular_speed;
+  // Maximum power draw from the battery (proxy for maximum current).
+  max_power_draw;
+  // Power draw long duration average observer gain.
+  power_draw_ki;
+  // Maximum PWM value for the motor outputs.
+  max_pwm;
+  // Seek via torque, prediction duration factor for integral error.
+  seek_via_torque_k_prediction;
+  // Seek via torque, integral gain for the PID control.
+  seek_via_torque_ki;
+  // Seek via torque, proportional gain for the PID control.
+  seek_via_torque_kp;
+  // Seek via torque, derivative gain for the PID control.
+  seek_via_torque_kd;
+  // Seek via power, prediction duration factor for integral error.
+  seek_via_power_k_prediction;
+  // Seek via power, integral gain for the PID control.
+  seek_via_power_ki;
+  // Seek via power, proportional gain for the PID control.
+  seek_via_power_kp;
+  // Seek via power, derivative gain for the PID control.
+  seek_via_power_kd;
+  // Seek via speed, prediction duration factor for integral error.
+  seek_via_speed_k_prediction;
+  // Seek via speed, integral gain for the PID control.
+  seek_via_speed_ki;
+  // Seek via speed, proportional gain for the PID control.
+  seek_via_speed_kp;
+  // Seek via speed, derivative gain for the PID control.
+  seek_via_speed_kd;
+  // Resistance of motor coils per phase (star configuration).
+  phase_resistance;
+  // Inductance of motor coils per phase (star configuration).
+  phase_inductance;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+export class SetAngle {
+  // Set the current angle of the motor; used for initial angle calibration.
+  angle;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+
+
+
+
+function write_PositiveNegativeTransition(value) {
+  const buffer = new Uint8Array(4);
   const view = new DataView(buffer.buffer);
-  view.setUint16(0, message_code);
+  let offset = 0;
+  for (let i = 0; i < 2; i++) {
+    view.setUint16(offset, value[i])
+    offset += 2;
+  }
   return buffer;
 }
 
-// Serialize a message object to a Uint8Array
-export function serialise(message) {
-  if (!message || typeof message.message_code !== 'number') {
-    return null;
+function read_PositiveNegativeTransition(view, offset = 0) {
+  let result = new PositiveNegativeTransition();
+  for (let i = 0; i < 2; i++) {
+    result[i] = view.getUint16(offset);
+    offset += 2;
   }
+  return result;
+}
+
+function write_SectorTransitions(value) {
+  const buffer = new Uint8Array(24);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  for (let i = 0; i < 6; i++) {
+    write_PositiveNegativeTransition(value[i])
+    offset += 4;
+  }
+  return buffer;
+}
+
+function read_SectorTransitions(view, offset = 0) {
+  let result = new SectorTransitions();
+  for (let i = 0; i < 6; i++) {
+    result[i] = read_PositiveNegativeTransition(view, offset);
+    offset += 4;
+  }
+  return result;
+}
+
+function write_SectorCenters(value) {
+  const buffer = new Uint8Array(12);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  for (let i = 0; i < 6; i++) {
+    view.setUint16(offset, value[i])
+    offset += 2;
+  }
+  return buffer;
+}
+
+function read_SectorCenters(view, offset = 0) {
+  let result = new SectorCenters();
+  for (let i = 0; i < 6; i++) {
+    result[i] = view.getUint16(offset);
+    offset += 2;
+  }
+  return result;
+}
+
+function write_UnitTestOutput(value) {
+  const buffer = new Uint8Array(248);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  for (let i = 0; i < 248; i++) {
+    view.setUint8(offset, value[i])
+    offset += 1;
+  }
+  return buffer;
+}
+
+function read_UnitTestOutput(view, offset = 0) {
+  let result = new UnitTestOutput();
+  for (let i = 0; i < 248; i++) {
+    result[i] = view.getUint8(offset);
+    offset += 1;
+  }
+  return result;
+}
+
+function write_Readout(value) {
+  const buffer = new Uint8Array(32);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setUint32(offset, value.pwm_commands)
+  offset += 4;
+  view.setUint16(offset, value.readout_number)
+  offset += 2;
+  view.setUint16(offset, value.state_flags)
+  offset += 2;
+  view.setInt16(offset, value.u_current)
+  offset += 2;
+  view.setInt16(offset, value.v_current)
+  offset += 2;
+  view.setInt16(offset, value.w_current)
+  offset += 2;
+  view.setInt16(offset, value.ref_readout)
+  offset += 2;
+  view.setInt16(offset, value.u_current_diff)
+  offset += 2;
+  view.setInt16(offset, value.v_current_diff)
+  offset += 2;
+  view.setInt16(offset, value.w_current_diff)
+  offset += 2;
+  view.setInt16(offset, value.angle)
+  offset += 2;
+  view.setInt16(offset, value.angle_adjustment)
+  offset += 2;
+  view.setInt16(offset, value.angular_speed)
+  offset += 2;
+  view.setInt16(offset, value.vcc_voltage)
+  offset += 2;
+  view.setInt16(offset, value.emf_voltage_magnitude)
+  offset += 2;
+  return buffer;
+}
+
+function read_Readout(view, offset = 0) {
+  let result = new Readout();
   
+  result.pwm_commands = view.getUint32(offset);
+  offset += 4;
+  result.readout_number = view.getUint16(offset);
+  offset += 2;
+  result.state_flags = view.getUint16(offset);
+  offset += 2;
+  result.u_current = view.getInt16(offset);
+  offset += 2;
+  result.v_current = view.getInt16(offset);
+  offset += 2;
+  result.w_current = view.getInt16(offset);
+  offset += 2;
+  result.ref_readout = view.getInt16(offset);
+  offset += 2;
+  result.u_current_diff = view.getInt16(offset);
+  offset += 2;
+  result.v_current_diff = view.getInt16(offset);
+  offset += 2;
+  result.w_current_diff = view.getInt16(offset);
+  offset += 2;
+  result.angle = view.getInt16(offset);
+  offset += 2;
+  result.angle_adjustment = view.getInt16(offset);
+  offset += 2;
+  result.angular_speed = view.getInt16(offset);
+  offset += 2;
+  result.vcc_voltage = view.getInt16(offset);
+  offset += 2;
+  result.emf_voltage_magnitude = view.getInt16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_StreamFullReadouts(value) {
+  const buffer = new Uint8Array(2);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setUint16(offset, value.stream_state)
+  offset += 2;
+  return buffer;
+}
+
+function read_StreamFullReadouts(view, offset = 0) {
+  let result = new StreamFullReadouts();
+  
+  result.stream_state = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_FullReadout(value) {
+  const buffer = new Uint8Array(80);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  const base_buffer = write_Readout(value)
+  buffer.set(base_buffer, offset);
+  offset += 32;
+  view.setUint16(offset, value.main_loop_rate)
+  offset += 2;
+  view.setUint16(offset, value.adc_update_rate)
+  offset += 2;
+  view.setUint16(offset, value.temperature)
+  offset += 2;
+  view.setUint16(offset, value.live_max_pwm)
+  offset += 2;
+  view.setInt16(offset, value.cycle_start_tick)
+  offset += 2;
+  view.setInt16(offset, value.cycle_end_tick)
+  offset += 2;
+  view.setInt16(offset, value.direct_current)
+  offset += 2;
+  view.setInt16(offset, value.quadrature_current)
+  offset += 2;
+  view.setInt16(offset, value.direct_emf_voltage)
+  offset += 2;
+  view.setInt16(offset, value.quadrature_emf_voltage)
+  offset += 2;
+  view.setInt16(offset, value.total_power)
+  offset += 2;
+  view.setInt16(offset, value.resistive_power)
+  offset += 2;
+  view.setInt16(offset, value.emf_power)
+  offset += 2;
+  view.setInt16(offset, value.inductive_power)
+  offset += 2;
+  view.setInt16(offset, value.motor_constant)
+  offset += 2;
+  view.setInt16(offset, value.inductor_angle)
+  offset += 2;
+  view.setInt16(offset, value.rotor_acceleration)
+  offset += 2;
+  view.setInt16(offset, value.rotations)
+  offset += 2;
+  view.setInt16(offset, value.current_magnitude)
+  offset += 2;
+  view.setInt16(offset, value.emf_angle_error_variance)
+  offset += 2;
+  view.setInt16(offset, value.lead_angle)
+  offset += 2;
+  view.setInt16(offset, value.target_pwm)
+  offset += 2;
+  view.setInt16(offset, value.secondary_target)
+  offset += 2;
+  view.setInt16(offset, value.seek_integral)
+  offset += 2;
+  return buffer;
+}
+
+function read_FullReadout(view, offset = 0) {
+  let result = new FullReadout();
+  
+  Object.assign(result, read_Readout(view, offset));
+  offset += 32;
+  
+  result.main_loop_rate = view.getUint16(offset);
+  offset += 2;
+  result.adc_update_rate = view.getUint16(offset);
+  offset += 2;
+  result.temperature = view.getUint16(offset);
+  offset += 2;
+  result.live_max_pwm = view.getUint16(offset);
+  offset += 2;
+  result.cycle_start_tick = view.getInt16(offset);
+  offset += 2;
+  result.cycle_end_tick = view.getInt16(offset);
+  offset += 2;
+  result.direct_current = view.getInt16(offset);
+  offset += 2;
+  result.quadrature_current = view.getInt16(offset);
+  offset += 2;
+  result.direct_emf_voltage = view.getInt16(offset);
+  offset += 2;
+  result.quadrature_emf_voltage = view.getInt16(offset);
+  offset += 2;
+  result.total_power = view.getInt16(offset);
+  offset += 2;
+  result.resistive_power = view.getInt16(offset);
+  offset += 2;
+  result.emf_power = view.getInt16(offset);
+  offset += 2;
+  result.inductive_power = view.getInt16(offset);
+  offset += 2;
+  result.motor_constant = view.getInt16(offset);
+  offset += 2;
+  result.inductor_angle = view.getInt16(offset);
+  offset += 2;
+  result.rotor_acceleration = view.getInt16(offset);
+  offset += 2;
+  result.rotations = view.getInt16(offset);
+  offset += 2;
+  result.current_magnitude = view.getInt16(offset);
+  offset += 2;
+  result.emf_angle_error_variance = view.getInt16(offset);
+  offset += 2;
+  result.lead_angle = view.getInt16(offset);
+  offset += 2;
+  result.target_pwm = view.getInt16(offset);
+  offset += 2;
+  result.secondary_target = view.getInt16(offset);
+  offset += 2;
+  result.seek_integral = view.getInt16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_BasicDriveCommand(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.pwm_value)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  return buffer;
+}
+
+function read_BasicDriveCommand(view, offset = 0) {
+  let result = new BasicDriveCommand();
+  
+  result.pwm_value = view.getInt16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_TestCommand(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setUint16(offset, value.pwm_value)
+  offset += 2;
+  view.setUint16(offset, value.take_snapshot)
+  offset += 2;
+  return buffer;
+}
+
+function read_TestCommand(view, offset = 0) {
+  let result = new TestCommand();
+  
+  result.pwm_value = view.getUint16(offset);
+  offset += 2;
+  result.take_snapshot = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_HoldCommand(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setUint16(offset, value.pwm_value)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  return buffer;
+}
+
+function read_HoldCommand(view, offset = 0) {
+  let result = new HoldCommand();
+  
+  result.pwm_value = view.getUint16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateDrivePeriodic(value) {
+  const buffer = new Uint8Array(8);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setUint16(offset, value.pwm_value)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  view.setUint16(offset, value.angle)
+  offset += 2;
+  view.setInt16(offset, value.angular_speed)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateDrivePeriodic(view, offset = 0) {
+  let result = new SetStateDrivePeriodic();
+  
+  result.pwm_value = view.getUint16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  result.angle = view.getUint16(offset);
+  offset += 2;
+  result.angular_speed = view.getInt16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateDriveSmooth(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setUint16(offset, value.pwm_value)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateDriveSmooth(view, offset = 0) {
+  let result = new SetStateDriveSmooth();
+  
+  result.pwm_value = view.getUint16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateDriveTorque(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.target_current)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateDriveTorque(view, offset = 0) {
+  let result = new SetStateDriveTorque();
+  
+  result.target_current = view.getInt16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateDriveBatteryPower(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.target_power)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateDriveBatteryPower(view, offset = 0) {
+  let result = new SetStateDriveBatteryPower();
+  
+  result.target_power = view.getInt16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateDriveSpeed(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.target_speed)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateDriveSpeed(view, offset = 0) {
+  let result = new SetStateDriveSpeed();
+  
+  result.target_speed = view.getInt16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateSeekAngleWithPower(value) {
+  const buffer = new Uint8Array(8);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.target_rotation)
+  offset += 2;
+  view.setUint16(offset, value.target_angle)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  view.setUint16(offset, value.max_drive_power)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateSeekAngleWithPower(view, offset = 0) {
+  let result = new SetStateSeekAngleWithPower();
+  
+  result.target_rotation = view.getInt16(offset);
+  offset += 2;
+  result.target_angle = view.getUint16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  result.max_drive_power = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateSeekAngleWithTorque(value) {
+  const buffer = new Uint8Array(8);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.target_rotation)
+  offset += 2;
+  view.setUint16(offset, value.target_angle)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  view.setUint16(offset, value.max_drive_current)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateSeekAngleWithTorque(view, offset = 0) {
+  let result = new SetStateSeekAngleWithTorque();
+  
+  result.target_rotation = view.getInt16(offset);
+  offset += 2;
+  result.target_angle = view.getUint16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  result.max_drive_current = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetStateSeekAngleWithSpeed(value) {
+  const buffer = new Uint8Array(8);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.target_rotation)
+  offset += 2;
+  view.setUint16(offset, value.target_angle)
+  offset += 2;
+  view.setUint16(offset, value.timeout)
+  offset += 2;
+  view.setUint16(offset, value.max_drive_speed)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetStateSeekAngleWithSpeed(view, offset = 0) {
+  let result = new SetStateSeekAngleWithSpeed();
+  
+  result.target_rotation = view.getInt16(offset);
+  offset += 2;
+  result.target_angle = view.getUint16(offset);
+  offset += 2;
+  result.timeout = view.getUint16(offset);
+  offset += 2;
+  result.max_drive_speed = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_CurrentCalibration(value) {
+  const buffer = new Uint8Array(8);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.u_factor)
+  offset += 2;
+  view.setInt16(offset, value.v_factor)
+  offset += 2;
+  view.setInt16(offset, value.w_factor)
+  offset += 2;
+  view.setInt16(offset, value.inductance_factor)
+  offset += 2;
+  return buffer;
+}
+
+function read_CurrentCalibration(view, offset = 0) {
+  let result = new CurrentCalibration();
+  
+  result.u_factor = view.getInt16(offset);
+  offset += 2;
+  result.v_factor = view.getInt16(offset);
+  offset += 2;
+  result.w_factor = view.getInt16(offset);
+  offset += 2;
+  result.inductance_factor = view.getInt16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_HallPositions(value) {
+  const buffer = new Uint8Array(72);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  write_SectorTransitions(value.sector_transition_angles)
+  offset += 24;
+  write_SectorTransitions(value.sector_transition_variances)
+  offset += 24;
+  write_SectorCenters(value.sector_center_angles)
+  offset += 12;
+  write_SectorCenters(value.sector_center_variances)
+  offset += 12;
+  return buffer;
+}
+
+function read_HallPositions(view, offset = 0) {
+  let result = new HallPositions();
+  
+  result.sector_transition_angles = read_SectorTransitions(view, offset);
+  offset += 24;
+  result.sector_transition_variances = read_SectorTransitions(view, offset);
+  offset += 24;
+  result.sector_center_angles = read_SectorCenters(view, offset);
+  offset += 12;
+  result.sector_center_variances = read_SectorCenters(view, offset);
+  offset += 12;
+  return result;
+}
+
+function write_ControlParameters(value) {
+  const buffer = new Uint8Array(76);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt16(offset, value.rotor_angle_ki)
+  offset += 2;
+  view.setInt16(offset, value.rotor_angular_speed_ki)
+  offset += 2;
+  view.setInt16(offset, value.rotor_acceleration_ki)
+  offset += 2;
+  view.setInt16(offset, value.motor_constant_ki)
+  offset += 2;
+  view.setInt16(offset, value.motor_direction)
+  offset += 2;
+  view.setInt16(offset, value.incorrect_direction_threshold)
+  offset += 2;
+  view.setInt16(offset, value.max_pwm_change)
+  offset += 2;
+  view.setInt16(offset, value.max_angle_change)
+  offset += 2;
+  view.setInt16(offset, value.min_emf_voltage)
+  offset += 2;
+  view.setInt16(offset, value.hall_angle_ki)
+  offset += 2;
+  view.setInt16(offset, value.lead_angle_control_ki)
+  offset += 2;
+  view.setInt16(offset, value.torque_control_ki)
+  offset += 2;
+  view.setInt16(offset, value.battery_power_control_ki)
+  offset += 2;
+  view.setInt16(offset, value.speed_control_ki)
+  offset += 2;
+  view.setInt16(offset, value.probing_angular_speed)
+  offset += 2;
+  view.setInt16(offset, value.max_pwm_difference)
+  offset += 2;
+  view.setInt16(offset, value.emf_angle_error_variance_threshold)
+  offset += 2;
+  view.setInt16(offset, value.min_emf_for_motor_constant)
+  offset += 2;
+  view.setInt16(offset, value.max_resistive_power)
+  offset += 2;
+  view.setInt16(offset, value.resistive_power_ki)
+  offset += 2;
+  view.setInt16(offset, value.max_angular_speed)
+  offset += 2;
+  view.setInt16(offset, value.max_power_draw)
+  offset += 2;
+  view.setInt16(offset, value.power_draw_ki)
+  offset += 2;
+  view.setInt16(offset, value.max_pwm)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_torque_k_prediction)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_torque_ki)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_torque_kp)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_torque_kd)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_power_k_prediction)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_power_ki)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_power_kp)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_power_kd)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_speed_k_prediction)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_speed_ki)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_speed_kp)
+  offset += 2;
+  view.setInt16(offset, value.seek_via_speed_kd)
+  offset += 2;
+  view.setInt16(offset, value.phase_resistance)
+  offset += 2;
+  view.setInt16(offset, value.phase_inductance)
+  offset += 2;
+  return buffer;
+}
+
+function read_ControlParameters(view, offset = 0) {
+  let result = new ControlParameters();
+  
+  result.rotor_angle_ki = view.getInt16(offset);
+  offset += 2;
+  result.rotor_angular_speed_ki = view.getInt16(offset);
+  offset += 2;
+  result.rotor_acceleration_ki = view.getInt16(offset);
+  offset += 2;
+  result.motor_constant_ki = view.getInt16(offset);
+  offset += 2;
+  result.motor_direction = view.getInt16(offset);
+  offset += 2;
+  result.incorrect_direction_threshold = view.getInt16(offset);
+  offset += 2;
+  result.max_pwm_change = view.getInt16(offset);
+  offset += 2;
+  result.max_angle_change = view.getInt16(offset);
+  offset += 2;
+  result.min_emf_voltage = view.getInt16(offset);
+  offset += 2;
+  result.hall_angle_ki = view.getInt16(offset);
+  offset += 2;
+  result.lead_angle_control_ki = view.getInt16(offset);
+  offset += 2;
+  result.torque_control_ki = view.getInt16(offset);
+  offset += 2;
+  result.battery_power_control_ki = view.getInt16(offset);
+  offset += 2;
+  result.speed_control_ki = view.getInt16(offset);
+  offset += 2;
+  result.probing_angular_speed = view.getInt16(offset);
+  offset += 2;
+  result.max_pwm_difference = view.getInt16(offset);
+  offset += 2;
+  result.emf_angle_error_variance_threshold = view.getInt16(offset);
+  offset += 2;
+  result.min_emf_for_motor_constant = view.getInt16(offset);
+  offset += 2;
+  result.max_resistive_power = view.getInt16(offset);
+  offset += 2;
+  result.resistive_power_ki = view.getInt16(offset);
+  offset += 2;
+  result.max_angular_speed = view.getInt16(offset);
+  offset += 2;
+  result.max_power_draw = view.getInt16(offset);
+  offset += 2;
+  result.power_draw_ki = view.getInt16(offset);
+  offset += 2;
+  result.max_pwm = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_torque_k_prediction = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_torque_ki = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_torque_kp = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_torque_kd = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_power_k_prediction = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_power_ki = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_power_kp = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_power_kd = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_speed_k_prediction = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_speed_ki = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_speed_kp = view.getInt16(offset);
+  offset += 2;
+  result.seek_via_speed_kd = view.getInt16(offset);
+  offset += 2;
+  result.phase_resistance = view.getInt16(offset);
+  offset += 2;
+  result.phase_inductance = view.getInt16(offset);
+  offset += 2;
+  return result;
+}
+
+function write_SetAngle(value) {
+  const buffer = new Uint8Array(2);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setUint16(offset, value.angle)
+  offset += 2;
+  return buffer;
+}
+
+function read_SetAngle(view, offset = 0) {
+  let result = new SetAngle();
+  
+  result.angle = view.getUint16(offset);
+  offset += 2;
+  return result;
+}
+
+// Message Codes
+const NULL_MESSAGE_CODE = 0;
+const READOUT = 8224;
+const STREAM_FULL_READOUTS = 8225;
+const GET_READOUTS_SNAPSHOT = 8226;
+const FULL_READOUT = 8227;
+const SET_STATE_OFF = 8240;
+const SET_STATE_DRIVE_6_SECTOR = 8241;
+const SET_STATE_TEST_ALL_PERMUTATIONS = 8242;
+const SET_STATE_FREEWHEEL = 8244;
+const SET_STATE_TEST_GROUND_SHORT = 8246;
+const SET_STATE_TEST_POSITIVE_SHORT = 8247;
+const SET_STATE_TEST_U_DIRECTIONS = 8249;
+const SET_STATE_TEST_U_INCREASING = 8250;
+const SET_STATE_TEST_U_DECREASING = 8251;
+const SET_STATE_TEST_V_INCREASING = 8252;
+const SET_STATE_TEST_V_DECREASING = 8253;
+const SET_STATE_TEST_W_INCREASING = 8254;
+const SET_STATE_TEST_W_DECREASING = 8255;
+const SET_STATE_HOLD_U_POSITIVE = 12320;
+const SET_STATE_HOLD_V_POSITIVE = 12321;
+const SET_STATE_HOLD_W_POSITIVE = 12322;
+const SET_STATE_HOLD_U_NEGATIVE = 12323;
+const SET_STATE_HOLD_V_NEGATIVE = 12324;
+const SET_STATE_HOLD_W_NEGATIVE = 12325;
+const SET_STATE_DRIVE_PERIODIC = 12352;
+const SET_STATE_DRIVE_SMOOTH = 16432;
+const SET_STATE_DRIVE_TORQUE = 16433;
+const SET_STATE_DRIVE_BATTERY_POWER = 16434;
+const SET_STATE_DRIVE_SPEED = 16435;
+const SET_STATE_SEEK_ANGLE_WITH_POWER = 16436;
+const SET_STATE_SEEK_ANGLE_WITH_TORQUE = 16437;
+const SET_STATE_SEEK_ANGLE_WITH_SPEED = 16438;
+const CURRENT_CALIBRATION = 16448;
+const GET_CURRENT_CALIBRATION = 16449;
+const SET_CURRENT_CALIBRATION = 16450;
+const RESET_CURRENT_CALIBRATION = 16451;
+const HALL_POSITIONS = 16452;
+const GET_HALL_POSITIONS = 16453;
+const SET_HALL_POSITIONS = 16454;
+const RESET_HALL_POSITIONS = 16455;
+const CONTROL_PARAMETERS = 16457;
+const SET_CONTROL_PARAMETERS = 16458;
+const GET_CONTROL_PARAMETERS = 16459;
+const RESET_CONTROL_PARAMETERS = 16460;
+const SET_ANGLE = 16464;
+const SAVE_SETTINGS_TO_FLASH = 16512;
+const UNIT_TEST_OUTPUT = 20544;
+const RUN_UNIT_TEST_FUNKY_ATAN = 20546;
+const RUN_UNIT_TEST_FUNKY_ATAN_PART2 = 20547;
+const RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548;
+
+export const MessageCode = {
+  NULL_MESSAGE_CODE,
+  READOUT,
+  STREAM_FULL_READOUTS,
+  GET_READOUTS_SNAPSHOT,
+  FULL_READOUT,
+  SET_STATE_OFF,
+  SET_STATE_DRIVE_6_SECTOR,
+  SET_STATE_TEST_ALL_PERMUTATIONS,
+  SET_STATE_FREEWHEEL,
+  SET_STATE_TEST_GROUND_SHORT,
+  SET_STATE_TEST_POSITIVE_SHORT,
+  SET_STATE_TEST_U_DIRECTIONS,
+  SET_STATE_TEST_U_INCREASING,
+  SET_STATE_TEST_U_DECREASING,
+  SET_STATE_TEST_V_INCREASING,
+  SET_STATE_TEST_V_DECREASING,
+  SET_STATE_TEST_W_INCREASING,
+  SET_STATE_TEST_W_DECREASING,
+  SET_STATE_HOLD_U_POSITIVE,
+  SET_STATE_HOLD_V_POSITIVE,
+  SET_STATE_HOLD_W_POSITIVE,
+  SET_STATE_HOLD_U_NEGATIVE,
+  SET_STATE_HOLD_V_NEGATIVE,
+  SET_STATE_HOLD_W_NEGATIVE,
+  SET_STATE_DRIVE_PERIODIC,
+  SET_STATE_DRIVE_SMOOTH,
+  SET_STATE_DRIVE_TORQUE,
+  SET_STATE_DRIVE_BATTERY_POWER,
+  SET_STATE_DRIVE_SPEED,
+  SET_STATE_SEEK_ANGLE_WITH_POWER,
+  SET_STATE_SEEK_ANGLE_WITH_TORQUE,
+  SET_STATE_SEEK_ANGLE_WITH_SPEED,
+  CURRENT_CALIBRATION,
+  GET_CURRENT_CALIBRATION,
+  SET_CURRENT_CALIBRATION,
+  RESET_CURRENT_CALIBRATION,
+  HALL_POSITIONS,
+  GET_HALL_POSITIONS,
+  SET_HALL_POSITIONS,
+  RESET_HALL_POSITIONS,
+  CONTROL_PARAMETERS,
+  SET_CONTROL_PARAMETERS,
+  GET_CONTROL_PARAMETERS,
+  RESET_CONTROL_PARAMETERS,
+  SET_ANGLE,
+  SAVE_SETTINGS_TO_FLASH,
+  UNIT_TEST_OUTPUT,
+  RUN_UNIT_TEST_FUNKY_ATAN,
+  RUN_UNIT_TEST_FUNKY_ATAN_PART2,
+  RUN_UNIT_TEST_FUNKY_ATAN_PART3,
+};
+
+// Generic Serialize Function
+export function write_message(message) {
   switch (message.message_code) {
-    case MessageCode.NullCommand: return write_code(MessageCode.NullCommand);
-    case MessageCode.Readout: {
-      const buffer = new Uint8Array(34);
+    case NULL_MESSAGE_CODE: {
+      const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint32(offset, message.pwm_commands);
-      offset += 4;
-      view.setUint16(offset, message.readout_number);
-      offset += 2;
-      view.setUint16(offset, message.state_flags);
-      offset += 2;
-      view.setInt16(offset, message.u_current);
-      offset += 2;
-      view.setInt16(offset, message.v_current);
-      offset += 2;
-      view.setInt16(offset, message.w_current);
-      offset += 2;
-      view.setInt16(offset, message.ref_readout);
-      offset += 2;
-      view.setInt16(offset, message.u_current_diff);
-      offset += 2;
-      view.setInt16(offset, message.v_current_diff);
-      offset += 2;
-      view.setInt16(offset, message.w_current_diff);
-      offset += 2;
-      view.setInt16(offset, message.angle);
-      offset += 2;
-      view.setInt16(offset, message.angle_adjustment);
-      offset += 2;
-      view.setInt16(offset, message.angular_speed);
-      offset += 2;
-      view.setInt16(offset, message.vcc_voltage);
-      offset += 2;
-      view.setInt16(offset, message.emf_voltage_magnitude);
-      offset += 2;
+      view.setUint16(0, message.message_code);
       return buffer;
     }
-    case MessageCode.StreamFullReadouts: {
-      const buffer = new Uint8Array(4);
+    case READOUT: {
+      const message_buffer = write_Readout(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.stream_state);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.GetReadoutsSnapshot: return write_code(MessageCode.GetReadoutsSnapshot);
-    case MessageCode.FullReadout: {
-      const buffer = new Uint8Array(82);
+    case STREAM_FULL_READOUTS: {
+      const message_buffer = write_StreamFullReadouts(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint32(offset, message.pwm_commands);
-      offset += 4;
-      view.setUint16(offset, message.readout_number);
-      offset += 2;
-      view.setUint16(offset, message.state_flags);
-      offset += 2;
-      view.setInt16(offset, message.u_current);
-      offset += 2;
-      view.setInt16(offset, message.v_current);
-      offset += 2;
-      view.setInt16(offset, message.w_current);
-      offset += 2;
-      view.setInt16(offset, message.ref_readout);
-      offset += 2;
-      view.setInt16(offset, message.u_current_diff);
-      offset += 2;
-      view.setInt16(offset, message.v_current_diff);
-      offset += 2;
-      view.setInt16(offset, message.w_current_diff);
-      offset += 2;
-      view.setInt16(offset, message.angle);
-      offset += 2;
-      view.setInt16(offset, message.angle_adjustment);
-      offset += 2;
-      view.setInt16(offset, message.angular_speed);
-      offset += 2;
-      view.setInt16(offset, message.vcc_voltage);
-      offset += 2;
-      view.setInt16(offset, message.emf_voltage_magnitude);
-      offset += 2;
-      view.setUint16(offset, message.main_loop_rate);
-      offset += 2;
-      view.setUint16(offset, message.adc_update_rate);
-      offset += 2;
-      view.setUint16(offset, message.temperature);
-      offset += 2;
-      view.setUint16(offset, message.live_max_pwm);
-      offset += 2;
-      view.setInt16(offset, message.cycle_start_tick);
-      offset += 2;
-      view.setInt16(offset, message.cycle_end_tick);
-      offset += 2;
-      view.setInt16(offset, message.direct_current);
-      offset += 2;
-      view.setInt16(offset, message.quadrature_current);
-      offset += 2;
-      view.setInt16(offset, message.direct_emf_voltage);
-      offset += 2;
-      view.setInt16(offset, message.quadrature_emf_voltage);
-      offset += 2;
-      view.setInt16(offset, message.total_power);
-      offset += 2;
-      view.setInt16(offset, message.resistive_power);
-      offset += 2;
-      view.setInt16(offset, message.emf_power);
-      offset += 2;
-      view.setInt16(offset, message.inductive_power);
-      offset += 2;
-      view.setInt16(offset, message.motor_constant);
-      offset += 2;
-      view.setInt16(offset, message.inductor_angle);
-      offset += 2;
-      view.setInt16(offset, message.rotor_acceleration);
-      offset += 2;
-      view.setInt16(offset, message.rotations);
-      offset += 2;
-      view.setInt16(offset, message.current_magnitude);
-      offset += 2;
-      view.setInt16(offset, message.emf_angle_error_variance);
-      offset += 2;
-      view.setInt16(offset, message.lead_angle);
-      offset += 2;
-      view.setInt16(offset, message.target_pwm);
-      offset += 2;
-      view.setInt16(offset, message.secondary_target);
-      offset += 2;
-      view.setInt16(offset, message.seek_integral);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateOff: return write_code(MessageCode.SetStateOff);
-    case MessageCode.SetStateDrive6Sector: {
-      const buffer = new Uint8Array(6);
+    case GET_READOUTS_SNAPSHOT: {
+      const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
       return buffer;
     }
-    case MessageCode.SetStateTestAllPermutations: {
-      const buffer = new Uint8Array(6);
+    case FULL_READOUT: {
+      const message_buffer = write_FullReadout(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateFreewheel: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_OFF: {
+      const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
       return buffer;
     }
-    case MessageCode.SetStateTestGroundShort: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_DRIVE_6_SECTOR: {
+      const message_buffer = write_BasicDriveCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateTestPositiveShort: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_ALL_PERMUTATIONS: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateTestUDirections: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_FREEWHEEL: {
+      const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
       return buffer;
     }
-    case MessageCode.SetStateTestUIncreasing: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_GROUND_SHORT: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateTestUDecreasing: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_POSITIVE_SHORT: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateTestVIncreasing: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_U_DIRECTIONS: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateTestVDecreasing: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_U_INCREASING: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateTestWIncreasing: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_U_DECREASING: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateTestWDecreasing: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_V_INCREASING: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.take_snapshot);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateHoldUPositive: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_V_DECREASING: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateHoldVPositive: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_W_INCREASING: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateHoldWPositive: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_TEST_W_DECREASING: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateHoldUNegative: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_HOLD_U_POSITIVE: {
+      const message_buffer = write_HoldCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateHoldVNegative: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_HOLD_V_POSITIVE: {
+      const message_buffer = write_HoldCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateHoldWNegative: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_HOLD_W_POSITIVE: {
+      const message_buffer = write_HoldCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateDrivePeriodic: {
-      const buffer = new Uint8Array(10);
+    case SET_STATE_HOLD_U_NEGATIVE: {
+      const message_buffer = write_HoldCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
-      view.setUint16(offset, message.angle);
-      offset += 2;
-      view.setInt16(offset, message.angular_speed);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateDriveSmooth: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_HOLD_V_NEGATIVE: {
+      const message_buffer = write_HoldCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.pwm_value);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateDriveTorque: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_HOLD_W_NEGATIVE: {
+      const message_buffer = write_HoldCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.target_current);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateDriveBatteryPower: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_DRIVE_PERIODIC: {
+      const message_buffer = write_SetStateDrivePeriodic(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.target_power);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateDriveSpeed: {
-      const buffer = new Uint8Array(6);
+    case SET_STATE_DRIVE_SMOOTH: {
+      const message_buffer = write_SetStateDriveSmooth(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.target_speed);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateSeekAngleWithPower: {
-      const buffer = new Uint8Array(10);
+    case SET_STATE_DRIVE_TORQUE: {
+      const message_buffer = write_SetStateDriveTorque(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.target_rotation);
-      offset += 2;
-      view.setUint16(offset, message.target_angle);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
-      view.setUint16(offset, message.max_drive_power);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateSeekAngleWithTorque: {
-      const buffer = new Uint8Array(10);
+    case SET_STATE_DRIVE_BATTERY_POWER: {
+      const message_buffer = write_SetStateDriveBatteryPower(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.target_rotation);
-      offset += 2;
-      view.setUint16(offset, message.target_angle);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
-      view.setUint16(offset, message.max_drive_current);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.SetStateSeekAngleWithSpeed: {
-      const buffer = new Uint8Array(10);
+    case SET_STATE_DRIVE_SPEED: {
+      const message_buffer = write_SetStateDriveSpeed(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.target_rotation);
-      offset += 2;
-      view.setUint16(offset, message.target_angle);
-      offset += 2;
-      view.setUint16(offset, message.timeout);
-      offset += 2;
-      view.setUint16(offset, message.max_drive_speed);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.CurrentCalibration: {
-      const buffer = new Uint8Array(10);
+    case SET_STATE_SEEK_ANGLE_WITH_POWER: {
+      const message_buffer = write_SetStateSeekAngleWithPower(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.u_factor);
-      offset += 2;
-      view.setInt16(offset, message.v_factor);
-      offset += 2;
-      view.setInt16(offset, message.w_factor);
-      offset += 2;
-      view.setInt16(offset, message.inductance_factor);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.GetCurrentCalibration: return write_code(MessageCode.GetCurrentCalibration);
-    case MessageCode.SetCurrentCalibration: {
-      const buffer = new Uint8Array(10);
+    case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
+      const message_buffer = write_SetStateSeekAngleWithTorque(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.u_factor);
-      offset += 2;
-      view.setInt16(offset, message.v_factor);
-      offset += 2;
-      view.setInt16(offset, message.w_factor);
-      offset += 2;
-      view.setInt16(offset, message.inductance_factor);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.ResetCurrentCalibration: return write_code(MessageCode.ResetCurrentCalibration);
-    case MessageCode.HallPositions: {
-      const buffer = new Uint8Array(74);
+    case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
+      const message_buffer = write_SetStateSeekAngleWithSpeed(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      for (let i = 0; i < 6; i++) {
-        for (let j = 0; j < 2; j++) {
-          view.setUint16(offset, message.sector_transition_angles[i][j]);
-          offset += 2;
-        }
-      }
-      for (let i = 0; i < 6; i++) {
-        for (let j = 0; j < 2; j++) {
-          view.setUint16(offset, message.sector_transition_variances[i][j]);
-          offset += 2;
-        }
-      }
-      for (let i = 0; i < 6; i++) {
-        view.setUint16(offset, message.sector_center_angles[i]);
-        offset += 2;
-      }
-      for (let i = 0; i < 6; i++) {
-        view.setUint16(offset, message.sector_center_variances[i]);
-        offset += 2;
-      }
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.GetHallPositions: return write_code(MessageCode.GetHallPositions);
-    case MessageCode.SetHallPositions: {
-      const buffer = new Uint8Array(74);
+    case CURRENT_CALIBRATION: {
+      const message_buffer = write_CurrentCalibration(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      for (let i = 0; i < 6; i++) {
-        for (let j = 0; j < 2; j++) {
-          view.setUint16(offset, message.sector_transition_angles[i][j]);
-          offset += 2;
-        }
-      }
-      for (let i = 0; i < 6; i++) {
-        for (let j = 0; j < 2; j++) {
-          view.setUint16(offset, message.sector_transition_variances[i][j]);
-          offset += 2;
-        }
-      }
-      for (let i = 0; i < 6; i++) {
-        view.setUint16(offset, message.sector_center_angles[i]);
-        offset += 2;
-      }
-      for (let i = 0; i < 6; i++) {
-        view.setUint16(offset, message.sector_center_variances[i]);
-        offset += 2;
-      }
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.ResetHallPositions: return write_code(MessageCode.ResetHallPositions);
-    case MessageCode.ControlParameters: {
-      const buffer = new Uint8Array(78);
+    case GET_CURRENT_CALIBRATION: {
+      const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.rotor_angle_ki);
-      offset += 2;
-      view.setInt16(offset, message.rotor_angular_speed_ki);
-      offset += 2;
-      view.setInt16(offset, message.rotor_acceleration_ki);
-      offset += 2;
-      view.setInt16(offset, message.motor_constant_ki);
-      offset += 2;
-      view.setInt16(offset, message.motor_direction);
-      offset += 2;
-      view.setInt16(offset, message.incorrect_direction_threshold);
-      offset += 2;
-      view.setInt16(offset, message.max_pwm_change);
-      offset += 2;
-      view.setInt16(offset, message.max_angle_change);
-      offset += 2;
-      view.setInt16(offset, message.min_emf_voltage);
-      offset += 2;
-      view.setInt16(offset, message.hall_angle_ki);
-      offset += 2;
-      view.setInt16(offset, message.lead_angle_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.torque_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.battery_power_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.speed_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.probing_angular_speed);
-      offset += 2;
-      view.setInt16(offset, message.max_pwm_difference);
-      offset += 2;
-      view.setInt16(offset, message.emf_angle_error_variance_threshold);
-      offset += 2;
-      view.setInt16(offset, message.min_emf_for_motor_constant);
-      offset += 2;
-      view.setInt16(offset, message.max_resistive_power);
-      offset += 2;
-      view.setInt16(offset, message.resistive_power_ki);
-      offset += 2;
-      view.setInt16(offset, message.max_angular_speed);
-      offset += 2;
-      view.setInt16(offset, message.max_power_draw);
-      offset += 2;
-      view.setInt16(offset, message.power_draw_ki);
-      offset += 2;
-      view.setInt16(offset, message.max_pwm);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_k_prediction);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_ki);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_kp);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_kd);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_k_prediction);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_ki);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_kp);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_kd);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_k_prediction);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_ki);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_kp);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_kd);
-      offset += 2;
-      view.setInt16(offset, message.phase_resistance);
-      offset += 2;
-      view.setInt16(offset, message.phase_inductance);
-      offset += 2;
+      view.setUint16(0, message.message_code);
       return buffer;
     }
-    case MessageCode.SetControlParameters: {
-      const buffer = new Uint8Array(78);
+    case SET_CURRENT_CALIBRATION: {
+      const message_buffer = write_CurrentCalibration(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setInt16(offset, message.rotor_angle_ki);
-      offset += 2;
-      view.setInt16(offset, message.rotor_angular_speed_ki);
-      offset += 2;
-      view.setInt16(offset, message.rotor_acceleration_ki);
-      offset += 2;
-      view.setInt16(offset, message.motor_constant_ki);
-      offset += 2;
-      view.setInt16(offset, message.motor_direction);
-      offset += 2;
-      view.setInt16(offset, message.incorrect_direction_threshold);
-      offset += 2;
-      view.setInt16(offset, message.max_pwm_change);
-      offset += 2;
-      view.setInt16(offset, message.max_angle_change);
-      offset += 2;
-      view.setInt16(offset, message.min_emf_voltage);
-      offset += 2;
-      view.setInt16(offset, message.hall_angle_ki);
-      offset += 2;
-      view.setInt16(offset, message.lead_angle_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.torque_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.battery_power_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.speed_control_ki);
-      offset += 2;
-      view.setInt16(offset, message.probing_angular_speed);
-      offset += 2;
-      view.setInt16(offset, message.max_pwm_difference);
-      offset += 2;
-      view.setInt16(offset, message.emf_angle_error_variance_threshold);
-      offset += 2;
-      view.setInt16(offset, message.min_emf_for_motor_constant);
-      offset += 2;
-      view.setInt16(offset, message.max_resistive_power);
-      offset += 2;
-      view.setInt16(offset, message.resistive_power_ki);
-      offset += 2;
-      view.setInt16(offset, message.max_angular_speed);
-      offset += 2;
-      view.setInt16(offset, message.max_power_draw);
-      offset += 2;
-      view.setInt16(offset, message.power_draw_ki);
-      offset += 2;
-      view.setInt16(offset, message.max_pwm);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_k_prediction);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_ki);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_kp);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_torque_kd);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_k_prediction);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_ki);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_kp);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_power_kd);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_k_prediction);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_ki);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_kp);
-      offset += 2;
-      view.setInt16(offset, message.seek_via_speed_kd);
-      offset += 2;
-      view.setInt16(offset, message.phase_resistance);
-      offset += 2;
-      view.setInt16(offset, message.phase_inductance);
-      offset += 2;
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.GetControlParameters: return write_code(MessageCode.GetControlParameters);
-    case MessageCode.ResetControlParameters: return write_code(MessageCode.ResetControlParameters);
-    case MessageCode.SetAngle: {
-      const buffer = new Uint8Array(4);
+    case RESET_CURRENT_CALIBRATION: {
+      const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      view.setUint16(offset, message.angle);
-      offset += 2;
+      view.setUint16(0, message.message_code);
       return buffer;
     }
-    case MessageCode.SaveSettingsToFlash: return write_code(MessageCode.SaveSettingsToFlash);
-    case MessageCode.UnitTestOutput: {
-      const buffer = new Uint8Array(250);
+    case HALL_POSITIONS: {
+      const message_buffer = write_HallPositions(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
-      let offset = 0;
-      view.setUint16(offset, message.message_code);
-      offset += 2;
-      for (let i = 0; i < 248; i++) {
-        view.setUint8(offset, message.data[i]);
-        offset += 1;
-      }
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
       return buffer;
     }
-    case MessageCode.RunUnitTestFunkyAtan: return write_code(MessageCode.RunUnitTestFunkyAtan);
-    case MessageCode.RunUnitTestFunkyAtanPart2: return write_code(MessageCode.RunUnitTestFunkyAtanPart2);
-    case MessageCode.RunUnitTestFunkyAtanPart3: return write_code(MessageCode.RunUnitTestFunkyAtanPart3);
-    default:
-      return null;
+    case GET_HALL_POSITIONS: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
+    case SET_HALL_POSITIONS: {
+      const message_buffer = write_HallPositions(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
+    case RESET_HALL_POSITIONS: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
+    case CONTROL_PARAMETERS: {
+      const message_buffer = write_ControlParameters(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
+    case SET_CONTROL_PARAMETERS: {
+      const message_buffer = write_ControlParameters(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
+    case GET_CONTROL_PARAMETERS: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
+    case RESET_CONTROL_PARAMETERS: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
+    case SET_ANGLE: {
+      const message_buffer = write_SetAngle(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
+    case SAVE_SETTINGS_TO_FLASH: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
+    case UNIT_TEST_OUTPUT: {
+      const message_buffer = write_UnitTestOutput(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
+    case RUN_UNIT_TEST_FUNKY_ATAN: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
+    case RUN_UNIT_TEST_FUNKY_ATAN_PART2: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
+    case RUN_UNIT_TEST_FUNKY_ATAN_PART3: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
   }
 }
 
-// Deserialize a Uint8Array to a message object
-export function deserialise(buffer) {
-  if (!buffer || buffer.length < 2) {
-    return null;
-  }
-  
-  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+// Generic Deserialize Function
+export function read_message(buffer) {
+  if (buffer.length < 2) return null;
+  const view = new DataView(buffer.buffer);
   const message_code = view.getUint16(0);
-  
   switch (message_code) {
-    case MessageCode.NullCommand:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.Readout: {
-      if (buffer.length !== 34) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_commands = view.getUint32(offset);
-      offset += 4;
-      result.readout_number = view.getUint16(offset);
-      offset += 2;
-      result.state_flags = view.getUint16(offset);
-      offset += 2;
-      result.u_current = view.getInt16(offset);
-      offset += 2;
-      result.v_current = view.getInt16(offset);
-      offset += 2;
-      result.w_current = view.getInt16(offset);
-      offset += 2;
-      result.ref_readout = view.getInt16(offset);
-      offset += 2;
-      result.u_current_diff = view.getInt16(offset);
-      offset += 2;
-      result.v_current_diff = view.getInt16(offset);
-      offset += 2;
-      result.w_current_diff = view.getInt16(offset);
-      offset += 2;
-      result.angle = view.getInt16(offset);
-      offset += 2;
-      result.angle_adjustment = view.getInt16(offset);
-      offset += 2;
-      result.angular_speed = view.getInt16(offset);
-      offset += 2;
-      result.vcc_voltage = view.getInt16(offset);
-      offset += 2;
-      result.emf_voltage_magnitude = view.getInt16(offset);
-      offset += 2;
-      return result;
+    case NULL_MESSAGE_CODE: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
     }
-    case MessageCode.StreamFullReadouts: {
-      if (buffer.length !== 4) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.stream_state = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case READOUT: {
+      if (buffer.length !== 2 + 32) return null;
+      let message = read_Readout(view, 2);
+      message.message_code = READOUT;
+      return message;
     }
-    case MessageCode.GetReadoutsSnapshot:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.FullReadout: {
-      if (buffer.length !== 82) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_commands = view.getUint32(offset);
-      offset += 4;
-      result.readout_number = view.getUint16(offset);
-      offset += 2;
-      result.state_flags = view.getUint16(offset);
-      offset += 2;
-      result.u_current = view.getInt16(offset);
-      offset += 2;
-      result.v_current = view.getInt16(offset);
-      offset += 2;
-      result.w_current = view.getInt16(offset);
-      offset += 2;
-      result.ref_readout = view.getInt16(offset);
-      offset += 2;
-      result.u_current_diff = view.getInt16(offset);
-      offset += 2;
-      result.v_current_diff = view.getInt16(offset);
-      offset += 2;
-      result.w_current_diff = view.getInt16(offset);
-      offset += 2;
-      result.angle = view.getInt16(offset);
-      offset += 2;
-      result.angle_adjustment = view.getInt16(offset);
-      offset += 2;
-      result.angular_speed = view.getInt16(offset);
-      offset += 2;
-      result.vcc_voltage = view.getInt16(offset);
-      offset += 2;
-      result.emf_voltage_magnitude = view.getInt16(offset);
-      offset += 2;
-      result.main_loop_rate = view.getUint16(offset);
-      offset += 2;
-      result.adc_update_rate = view.getUint16(offset);
-      offset += 2;
-      result.temperature = view.getUint16(offset);
-      offset += 2;
-      result.live_max_pwm = view.getUint16(offset);
-      offset += 2;
-      result.cycle_start_tick = view.getInt16(offset);
-      offset += 2;
-      result.cycle_end_tick = view.getInt16(offset);
-      offset += 2;
-      result.direct_current = view.getInt16(offset);
-      offset += 2;
-      result.quadrature_current = view.getInt16(offset);
-      offset += 2;
-      result.direct_emf_voltage = view.getInt16(offset);
-      offset += 2;
-      result.quadrature_emf_voltage = view.getInt16(offset);
-      offset += 2;
-      result.total_power = view.getInt16(offset);
-      offset += 2;
-      result.resistive_power = view.getInt16(offset);
-      offset += 2;
-      result.emf_power = view.getInt16(offset);
-      offset += 2;
-      result.inductive_power = view.getInt16(offset);
-      offset += 2;
-      result.motor_constant = view.getInt16(offset);
-      offset += 2;
-      result.inductor_angle = view.getInt16(offset);
-      offset += 2;
-      result.rotor_acceleration = view.getInt16(offset);
-      offset += 2;
-      result.rotations = view.getInt16(offset);
-      offset += 2;
-      result.current_magnitude = view.getInt16(offset);
-      offset += 2;
-      result.emf_angle_error_variance = view.getInt16(offset);
-      offset += 2;
-      result.lead_angle = view.getInt16(offset);
-      offset += 2;
-      result.target_pwm = view.getInt16(offset);
-      offset += 2;
-      result.secondary_target = view.getInt16(offset);
-      offset += 2;
-      result.seek_integral = view.getInt16(offset);
-      offset += 2;
-      return result;
+    case STREAM_FULL_READOUTS: {
+      if (buffer.length !== 2 + 2) return null;
+      let message = read_StreamFullReadouts(view, 2);
+      message.message_code = STREAM_FULL_READOUTS;
+      return message;
     }
-    case MessageCode.SetStateOff:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.SetStateDrive6Sector: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getInt16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case GET_READOUTS_SNAPSHOT: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
     }
-    case MessageCode.SetStateTestAllPermutations: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case FULL_READOUT: {
+      if (buffer.length !== 2 + 80) return null;
+      let message = read_FullReadout(view, 2);
+      message.message_code = FULL_READOUT;
+      return message;
     }
-    case MessageCode.SetStateFreewheel: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_OFF: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
     }
-    case MessageCode.SetStateTestGroundShort: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_DRIVE_6_SECTOR: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_BasicDriveCommand(view, 2);
+      message.message_code = SET_STATE_DRIVE_6_SECTOR;
+      return message;
     }
-    case MessageCode.SetStateTestPositiveShort: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_ALL_PERMUTATIONS: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_ALL_PERMUTATIONS;
+      return message;
     }
-    case MessageCode.SetStateTestUDirections: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_FREEWHEEL: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
     }
-    case MessageCode.SetStateTestUIncreasing: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_GROUND_SHORT: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_GROUND_SHORT;
+      return message;
     }
-    case MessageCode.SetStateTestUDecreasing: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_POSITIVE_SHORT: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_POSITIVE_SHORT;
+      return message;
     }
-    case MessageCode.SetStateTestVIncreasing: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_U_DIRECTIONS: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_U_DIRECTIONS;
+      return message;
     }
-    case MessageCode.SetStateTestVDecreasing: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_U_INCREASING: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_U_INCREASING;
+      return message;
     }
-    case MessageCode.SetStateTestWIncreasing: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_U_DECREASING: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_U_DECREASING;
+      return message;
     }
-    case MessageCode.SetStateTestWDecreasing: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.take_snapshot = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_V_INCREASING: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_V_INCREASING;
+      return message;
     }
-    case MessageCode.SetStateHoldUPositive: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_V_DECREASING: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_V_DECREASING;
+      return message;
     }
-    case MessageCode.SetStateHoldVPositive: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_W_INCREASING: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_W_INCREASING;
+      return message;
     }
-    case MessageCode.SetStateHoldWPositive: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_TEST_W_DECREASING: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_TEST_W_DECREASING;
+      return message;
     }
-    case MessageCode.SetStateHoldUNegative: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_HOLD_U_POSITIVE: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_HoldCommand(view, 2);
+      message.message_code = SET_STATE_HOLD_U_POSITIVE;
+      return message;
     }
-    case MessageCode.SetStateHoldVNegative: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_HOLD_V_POSITIVE: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_HoldCommand(view, 2);
+      message.message_code = SET_STATE_HOLD_V_POSITIVE;
+      return message;
     }
-    case MessageCode.SetStateHoldWNegative: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_HOLD_W_POSITIVE: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_HoldCommand(view, 2);
+      message.message_code = SET_STATE_HOLD_W_POSITIVE;
+      return message;
     }
-    case MessageCode.SetStateDrivePeriodic: {
-      if (buffer.length !== 10) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      result.angle = view.getUint16(offset);
-      offset += 2;
-      result.angular_speed = view.getInt16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_HOLD_U_NEGATIVE: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_HoldCommand(view, 2);
+      message.message_code = SET_STATE_HOLD_U_NEGATIVE;
+      return message;
     }
-    case MessageCode.SetStateDriveSmooth: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.pwm_value = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_HOLD_V_NEGATIVE: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_HoldCommand(view, 2);
+      message.message_code = SET_STATE_HOLD_V_NEGATIVE;
+      return message;
     }
-    case MessageCode.SetStateDriveTorque: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.target_current = view.getInt16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_HOLD_W_NEGATIVE: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_HoldCommand(view, 2);
+      message.message_code = SET_STATE_HOLD_W_NEGATIVE;
+      return message;
     }
-    case MessageCode.SetStateDriveBatteryPower: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.target_power = view.getInt16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_DRIVE_PERIODIC: {
+      if (buffer.length !== 2 + 8) return null;
+      let message = read_SetStateDrivePeriodic(view, 2);
+      message.message_code = SET_STATE_DRIVE_PERIODIC;
+      return message;
     }
-    case MessageCode.SetStateDriveSpeed: {
-      if (buffer.length !== 6) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.target_speed = view.getInt16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_DRIVE_SMOOTH: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_SetStateDriveSmooth(view, 2);
+      message.message_code = SET_STATE_DRIVE_SMOOTH;
+      return message;
     }
-    case MessageCode.SetStateSeekAngleWithPower: {
-      if (buffer.length !== 10) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.target_rotation = view.getInt16(offset);
-      offset += 2;
-      result.target_angle = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      result.max_drive_power = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_DRIVE_TORQUE: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_SetStateDriveTorque(view, 2);
+      message.message_code = SET_STATE_DRIVE_TORQUE;
+      return message;
     }
-    case MessageCode.SetStateSeekAngleWithTorque: {
-      if (buffer.length !== 10) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.target_rotation = view.getInt16(offset);
-      offset += 2;
-      result.target_angle = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      result.max_drive_current = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_DRIVE_BATTERY_POWER: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_SetStateDriveBatteryPower(view, 2);
+      message.message_code = SET_STATE_DRIVE_BATTERY_POWER;
+      return message;
     }
-    case MessageCode.SetStateSeekAngleWithSpeed: {
-      if (buffer.length !== 10) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.target_rotation = view.getInt16(offset);
-      offset += 2;
-      result.target_angle = view.getUint16(offset);
-      offset += 2;
-      result.timeout = view.getUint16(offset);
-      offset += 2;
-      result.max_drive_speed = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_DRIVE_SPEED: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_SetStateDriveSpeed(view, 2);
+      message.message_code = SET_STATE_DRIVE_SPEED;
+      return message;
     }
-    case MessageCode.CurrentCalibration: {
-      if (buffer.length !== 10) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.u_factor = view.getInt16(offset);
-      offset += 2;
-      result.v_factor = view.getInt16(offset);
-      offset += 2;
-      result.w_factor = view.getInt16(offset);
-      offset += 2;
-      result.inductance_factor = view.getInt16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_SEEK_ANGLE_WITH_POWER: {
+      if (buffer.length !== 2 + 8) return null;
+      let message = read_SetStateSeekAngleWithPower(view, 2);
+      message.message_code = SET_STATE_SEEK_ANGLE_WITH_POWER;
+      return message;
     }
-    case MessageCode.GetCurrentCalibration:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.SetCurrentCalibration: {
-      if (buffer.length !== 10) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.u_factor = view.getInt16(offset);
-      offset += 2;
-      result.v_factor = view.getInt16(offset);
-      offset += 2;
-      result.w_factor = view.getInt16(offset);
-      offset += 2;
-      result.inductance_factor = view.getInt16(offset);
-      offset += 2;
-      return result;
+    case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
+      if (buffer.length !== 2 + 8) return null;
+      let message = read_SetStateSeekAngleWithTorque(view, 2);
+      message.message_code = SET_STATE_SEEK_ANGLE_WITH_TORQUE;
+      return message;
     }
-    case MessageCode.ResetCurrentCalibration:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.HallPositions: {
-      if (buffer.length !== 74) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.sector_transition_angles = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_transition_angles[i] = [];
-        for (let j = 0; j < 2; j++) {
-          result.sector_transition_angles[i][j] = view.getUint16(offset);
-          offset += 2;
-        }
-      }
-      result.sector_transition_variances = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_transition_variances[i] = [];
-        for (let j = 0; j < 2; j++) {
-          result.sector_transition_variances[i][j] = view.getUint16(offset);
-          offset += 2;
-        }
-      }
-      result.sector_center_angles = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_center_angles[i] = view.getUint16(offset);
-        offset += 2;
-      }
-      result.sector_center_variances = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_center_variances[i] = view.getUint16(offset);
-        offset += 2;
-      }
-      return result;
+    case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
+      if (buffer.length !== 2 + 8) return null;
+      let message = read_SetStateSeekAngleWithSpeed(view, 2);
+      message.message_code = SET_STATE_SEEK_ANGLE_WITH_SPEED;
+      return message;
     }
-    case MessageCode.GetHallPositions:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.SetHallPositions: {
-      if (buffer.length !== 74) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.sector_transition_angles = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_transition_angles[i] = [];
-        for (let j = 0; j < 2; j++) {
-          result.sector_transition_angles[i][j] = view.getUint16(offset);
-          offset += 2;
-        }
-      }
-      result.sector_transition_variances = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_transition_variances[i] = [];
-        for (let j = 0; j < 2; j++) {
-          result.sector_transition_variances[i][j] = view.getUint16(offset);
-          offset += 2;
-        }
-      }
-      result.sector_center_angles = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_center_angles[i] = view.getUint16(offset);
-        offset += 2;
-      }
-      result.sector_center_variances = [];
-      for (let i = 0; i < 6; i++) {
-        result.sector_center_variances[i] = view.getUint16(offset);
-        offset += 2;
-      }
-      return result;
+    case CURRENT_CALIBRATION: {
+      if (buffer.length !== 2 + 8) return null;
+      let message = read_CurrentCalibration(view, 2);
+      message.message_code = CURRENT_CALIBRATION;
+      return message;
     }
-    case MessageCode.ResetHallPositions:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.ControlParameters: {
-      if (buffer.length !== 78) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.rotor_angle_ki = view.getInt16(offset);
-      offset += 2;
-      result.rotor_angular_speed_ki = view.getInt16(offset);
-      offset += 2;
-      result.rotor_acceleration_ki = view.getInt16(offset);
-      offset += 2;
-      result.motor_constant_ki = view.getInt16(offset);
-      offset += 2;
-      result.motor_direction = view.getInt16(offset);
-      offset += 2;
-      result.incorrect_direction_threshold = view.getInt16(offset);
-      offset += 2;
-      result.max_pwm_change = view.getInt16(offset);
-      offset += 2;
-      result.max_angle_change = view.getInt16(offset);
-      offset += 2;
-      result.min_emf_voltage = view.getInt16(offset);
-      offset += 2;
-      result.hall_angle_ki = view.getInt16(offset);
-      offset += 2;
-      result.lead_angle_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.torque_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.battery_power_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.speed_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.probing_angular_speed = view.getInt16(offset);
-      offset += 2;
-      result.max_pwm_difference = view.getInt16(offset);
-      offset += 2;
-      result.emf_angle_error_variance_threshold = view.getInt16(offset);
-      offset += 2;
-      result.min_emf_for_motor_constant = view.getInt16(offset);
-      offset += 2;
-      result.max_resistive_power = view.getInt16(offset);
-      offset += 2;
-      result.resistive_power_ki = view.getInt16(offset);
-      offset += 2;
-      result.max_angular_speed = view.getInt16(offset);
-      offset += 2;
-      result.max_power_draw = view.getInt16(offset);
-      offset += 2;
-      result.power_draw_ki = view.getInt16(offset);
-      offset += 2;
-      result.max_pwm = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_k_prediction = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_ki = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_kp = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_kd = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_k_prediction = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_ki = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_kp = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_kd = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_k_prediction = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_ki = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_kp = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_kd = view.getInt16(offset);
-      offset += 2;
-      result.phase_resistance = view.getInt16(offset);
-      offset += 2;
-      result.phase_inductance = view.getInt16(offset);
-      offset += 2;
-      return result;
+    case GET_CURRENT_CALIBRATION: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
     }
-    case MessageCode.SetControlParameters: {
-      if (buffer.length !== 78) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.rotor_angle_ki = view.getInt16(offset);
-      offset += 2;
-      result.rotor_angular_speed_ki = view.getInt16(offset);
-      offset += 2;
-      result.rotor_acceleration_ki = view.getInt16(offset);
-      offset += 2;
-      result.motor_constant_ki = view.getInt16(offset);
-      offset += 2;
-      result.motor_direction = view.getInt16(offset);
-      offset += 2;
-      result.incorrect_direction_threshold = view.getInt16(offset);
-      offset += 2;
-      result.max_pwm_change = view.getInt16(offset);
-      offset += 2;
-      result.max_angle_change = view.getInt16(offset);
-      offset += 2;
-      result.min_emf_voltage = view.getInt16(offset);
-      offset += 2;
-      result.hall_angle_ki = view.getInt16(offset);
-      offset += 2;
-      result.lead_angle_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.torque_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.battery_power_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.speed_control_ki = view.getInt16(offset);
-      offset += 2;
-      result.probing_angular_speed = view.getInt16(offset);
-      offset += 2;
-      result.max_pwm_difference = view.getInt16(offset);
-      offset += 2;
-      result.emf_angle_error_variance_threshold = view.getInt16(offset);
-      offset += 2;
-      result.min_emf_for_motor_constant = view.getInt16(offset);
-      offset += 2;
-      result.max_resistive_power = view.getInt16(offset);
-      offset += 2;
-      result.resistive_power_ki = view.getInt16(offset);
-      offset += 2;
-      result.max_angular_speed = view.getInt16(offset);
-      offset += 2;
-      result.max_power_draw = view.getInt16(offset);
-      offset += 2;
-      result.power_draw_ki = view.getInt16(offset);
-      offset += 2;
-      result.max_pwm = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_k_prediction = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_ki = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_kp = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_torque_kd = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_k_prediction = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_ki = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_kp = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_power_kd = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_k_prediction = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_ki = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_kp = view.getInt16(offset);
-      offset += 2;
-      result.seek_via_speed_kd = view.getInt16(offset);
-      offset += 2;
-      result.phase_resistance = view.getInt16(offset);
-      offset += 2;
-      result.phase_inductance = view.getInt16(offset);
-      offset += 2;
-      return result;
+    case SET_CURRENT_CALIBRATION: {
+      if (buffer.length !== 2 + 8) return null;
+      let message = read_CurrentCalibration(view, 2);
+      message.message_code = SET_CURRENT_CALIBRATION;
+      return message;
     }
-    case MessageCode.GetControlParameters:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.ResetControlParameters:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.SetAngle: {
-      if (buffer.length !== 4) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.angle = view.getUint16(offset);
-      offset += 2;
-      return result;
+    case RESET_CURRENT_CALIBRATION: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
     }
-    case MessageCode.SaveSettingsToFlash:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.UnitTestOutput: {
-      if (buffer.length !== 250) return null;
-      const result = { message_code };
-      let offset = 2;
-      result.data = [];
-      for (let i = 0; i < 248; i++) {
-        result.data[i] = view.getUint8(offset);
-        offset += 1;
-      }
-      return result;
+    case HALL_POSITIONS: {
+      if (buffer.length !== 2 + 72) return null;
+      let message = read_HallPositions(view, 2);
+      message.message_code = HALL_POSITIONS;
+      return message;
     }
-    case MessageCode.RunUnitTestFunkyAtan:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.RunUnitTestFunkyAtanPart2:
-      return buffer.length === 2 ? { message_code } : null;
-    case MessageCode.RunUnitTestFunkyAtanPart3:
-      return buffer.length === 2 ? { message_code } : null;
-    default:
-      return null;
+    case GET_HALL_POSITIONS: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case SET_HALL_POSITIONS: {
+      if (buffer.length !== 2 + 72) return null;
+      let message = read_HallPositions(view, 2);
+      message.message_code = SET_HALL_POSITIONS;
+      return message;
+    }
+    case RESET_HALL_POSITIONS: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case CONTROL_PARAMETERS: {
+      if (buffer.length !== 2 + 76) return null;
+      let message = read_ControlParameters(view, 2);
+      message.message_code = CONTROL_PARAMETERS;
+      return message;
+    }
+    case SET_CONTROL_PARAMETERS: {
+      if (buffer.length !== 2 + 76) return null;
+      let message = read_ControlParameters(view, 2);
+      message.message_code = SET_CONTROL_PARAMETERS;
+      return message;
+    }
+    case GET_CONTROL_PARAMETERS: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case RESET_CONTROL_PARAMETERS: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case SET_ANGLE: {
+      if (buffer.length !== 2 + 2) return null;
+      let message = read_SetAngle(view, 2);
+      message.message_code = SET_ANGLE;
+      return message;
+    }
+    case SAVE_SETTINGS_TO_FLASH: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case UNIT_TEST_OUTPUT: {
+      if (buffer.length !== 2 + 248) return null;
+      let message = read_UnitTestOutput(view, 2);
+      message.message_code = UNIT_TEST_OUTPUT;
+      return message;
+    }
+    case RUN_UNIT_TEST_FUNKY_ATAN: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case RUN_UNIT_TEST_FUNKY_ATAN_PART2: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case RUN_UNIT_TEST_FUNKY_ATAN_PART3: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
   }
+  
+  // Unknown message code
+  return null;
 }
+

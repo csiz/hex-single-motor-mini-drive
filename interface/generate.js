@@ -5,20 +5,30 @@
 // in `interface.yaml`.
 // 
 // At the top level of the spec config are:
-//   - Constants: A dictionary of named constant values.
-//   - MessageCodes: A dictionary of named message codes.
+//   - doc: Documentation overview of the interface.
+//   - definitions: A dictionary of constants and named type definitions that can be used in messages.
+//   - message_codes: A dictionary of named message codes.
 // 
 // 
-// MessageCodes is a dictionary of messages that can be sent or received 
+// `message_codes` is a dictionary of messages that can be sent or received 
 // over a generic serial wire. Messages start with a uint16 to indentify 
-// the message `code`. The message spec also contains the following fields:
-// - code: The uint16 code identifying the message type.
-// - struct: An optional dictionary defining other data fields in the message.
-// - extends: This message appends more data to the end of another message type, extending it.
+// the `message_code` followed by the message data. Each message contains the following fields:
+// - message_code: The uint16 code identifying the message type.
+// - type: The name of the type definition for this message; this determined how the data is 
+// serialized and deserialized. When type is missing then it's a bare message containing just the
+// 2 byte identifier, and no other data.
 // - returns: Some commands expect a response from the device, the spec encodes
-// the expected response message type; or a dictionary with `stream` or `array` typed follow ups.
-// - doc: Documentation for the message type.
+// the expected response message type; or a dictionary with `array` typed follow ups.
 //
+// `definitions` is an ordered dictionary of named types and constants. Type definitions 
+// contain a `struct` and/or `struct_base` to extend a previous type. Constants on are defined as
+// a `const` with a `type`. The definition spec also contains the following fields:
+// - doc: Documentation for the message type.
+// - struct: An optional dictionary defining other data fields in the message.
+// - struct_base: This message appends more data to the end of another message type, extending it.
+// - type: The type of the constant.
+// - const: The value of the constant.
+// - array_len: For array types, the length of the array; can be a number or a reference to a defined constant.
 // 
 // The struct field is itself a dictionary of fields, the keys are the named
 // fields of the message data structure. On the wire each message will have its
@@ -27,25 +37,20 @@
 // - type: The data type of the field.
 // - doc: Documentation for the field.
 // 
-// 
 // The field types are:
 // - uint8, uint16, uint32: Unsigned integers of 8, 16 or 32 bits.
 // - int8, int16, int32: Signed integers of 8, 16 or 32 bits.
 // - float32: 32 bit floating point values.
-// - array: An array of items of the same type. The field must also specify
-//   `len` (the number of items) and `item` (the type of each item).
 // 
-// Constants contains a dictionary of named constant values and their value
-// or if a dictionary, the typed valued. With the fields `type` and `value`.
-// 
-// TODO: need to add a generic type_def field so we can do a type hierarchy.
+
 // TODO: set max_message_size in the config so we can populate both js and cpp interfaces with it.
-// TODO: make it work with transitive extends
 
 
 import { readFileSync } from "fs";
 import yaml from "js-yaml";
 import { writeFileSync, mkdirSync } from "fs";
+import { parse } from "path";
+import { assert } from "console";
 
 function assemble_literal(strings, ...values) {
   // Reassemble or process the template; or just use the string if
@@ -54,6 +59,11 @@ function assemble_literal(strings, ...values) {
     ? strings.reduce((acc, str, i) => acc + str + (values[i] ?? ""), "")
     : strings;
 }
+
+// Helper function to convert PascalCase to snake_case. Also treat numbers as separate words, Set6Sector->set_6_sector.
+const to_snake_case = (str) => {
+  return str.replace(/([a-zA-Z])([0-9A-Z])/g, '$1_$2').replace(/([0-9])([a-zA-Z])/g, '$1_$2').replace(/([A-Z])([A-Z])/g, '$1_$2').toLowerCase();
+};
 
 class CodeWriter {
   constructor() {
@@ -83,178 +93,531 @@ class CodeWriter {
   }
 }
 
-const plain_types = {
-  'uint8': {
-    cpp: 'uint8_t',
-    js: 'Uint8',
-    size: 1,
-  },
-  'uint16': {
-    cpp: 'uint16_t',
-    js: 'Uint16',
-    size: 2,
-  },
-  'uint32': {
-    cpp: 'uint32_t',
-    js: 'Uint32',
-    size: 4,
-  },
-  'int8': {
-    cpp: 'int8_t',
-    js: 'Int8',
-    size: 1,
-  },
-  'int16': {
-    cpp: 'int16_t',
-    js: 'Int16',
-    size: 2,
-  },
-  'int32': {
-    cpp: 'int32_t',
-    js: 'Int32',
-    size: 4,
-  },
-  'float32': {
-    cpp: 'float',
-    js: 'Float32',
-    size: 4,
+
+class ConstantSpec {
+  doc;
+  name;
+  type;
+  const;
+
+  constructor(options){Object.assign(this, options)};
+}
+
+class TypeSpec {
+  doc;
+  name;
+  size;
+
+  constructor(options){Object.assign(this, options)};
+}
+
+class BasicType {
+  name;
+  size;
+  cpp_type;
+  js_type;
+  cpp_serialization;
+  cpp_deserialization;
+  js_serialization;
+  js_deserialization;
+
+  constructor(options){Object.assign(this, options)};
+}
+
+const basic_types = {
+  uint8: new BasicType({
+    size: 1, 
+    name: 'uint8', 
+    cpp_type: 'uint8_t', 
+    js_type: 'Uint8',
+    cpp_serialization: (buf, offset, val) => `write_uint8(${buf} + ${offset}, ${val})`,
+    cpp_deserialization: (buf, offset) => `read_uint8(${buf} + ${offset})`,
+    js_serialization: (view, offset, val) => `${view}.setUint8(${offset}, ${val})`,
+    js_deserialization: (view, offset) => `${view}.getUint8(${offset})`,
+  }),
+  uint16: new BasicType({
+    size: 2, 
+    name: 'uint16', 
+    cpp_type: 'uint16_t', 
+    js_type: 'Uint16',
+    cpp_serialization: (buf, offset, val) => `write_uint16(${buf} + ${offset}, ${val})`,
+    cpp_deserialization: (buf, offset) => `read_uint16(${buf} + ${offset})`,
+    js_serialization: (view, offset, val) => `${view}.setUint16(${offset}, ${val})`,
+    js_deserialization: (view, offset) => `${view}.getUint16(${offset})`,
+  }),
+  uint32: new BasicType({
+    size: 4, 
+    name: 'uint32', 
+    cpp_type: 'uint32_t', 
+    js_type: 'Uint32',
+    cpp_serialization: (buf, offset, val) => `write_uint32(${buf} + ${offset}, ${val})`,
+    cpp_deserialization: (buf, offset) => `read_uint32(${buf} + ${offset})`,
+    js_serialization: (view, offset, val) => `${view}.setUint32(${offset}, ${val})`,
+    js_deserialization: (view, offset) => `${view}.getUint32(${offset})`,
+  }),
+  int8: new BasicType({
+    size: 1, 
+    name: 'int8', 
+    cpp_type: 'int8_t', 
+    js_type: 'Int8',
+    cpp_serialization: (buf, offset, val) => `write_int8(${buf} + ${offset}, ${val})`,
+    cpp_deserialization: (buf, offset) => `read_int8(${buf} + ${offset})`,
+    js_serialization: (view, offset, val) => `${view}.setInt8(${offset}, ${val})`,
+    js_deserialization: (view, offset) => `${view}.getInt8(${offset})`,
+  }),
+  int16: new BasicType({
+    size: 2, 
+    name: 'int16', 
+    cpp_type: 'int16_t', 
+    js_type: 'Int16',
+    cpp_serialization: (buf, offset, val) => `write_int16(${buf} + ${offset}, ${val})`,
+    cpp_deserialization: (buf, offset) => `read_int16(${buf} + ${offset})`,
+    js_serialization: (view, offset, val) => `${view}.setInt16(${offset}, ${val})`,
+    js_deserialization: (view, offset) => `${view}.getInt16(${offset})`,
+  }),
+  int32: new BasicType({
+    size: 4, 
+    name: 'int32', 
+    cpp_type: 'int32_t', 
+    js_type: 'Int32',
+    cpp_serialization: (buf, offset, val) => `write_int32(${buf} + ${offset}, ${val})`,
+    cpp_deserialization: (buf, offset) => `read_int32(${buf} + ${offset})`,
+    js_serialization: (view, offset, val) => `${view}.setInt32(${offset}, ${val})`,
+    js_deserialization: (view, offset) => `${view}.getInt32(${offset})`,
+  }),
+  float32: new BasicType({
+    size: 4, 
+    name: 'float32', 
+    cpp_type: 'float', 
+    js_type: 'Float32',
+    cpp_serialization: (buf, offset, val) => `write_float32(${buf} + ${offset}, ${val})`,
+    cpp_deserialization: (buf, offset) => `read_float32(${buf} + ${offset})`,
+    js_serialization: (view, offset, val) => `${view}.setFloat32(${offset}, ${val})`,
+    js_deserialization: (view, offset) => `${view}.getFloat32(${offset})`,
+  }),
+};
+
+class ArraySpec extends TypeSpec {
+  type;
+  array_len;
+
+  constructor(options){super(options);Object.assign(this, options)};
+}
+
+class StructSpec extends TypeSpec {
+  struct;
+  struct_base;
+
+  constructor(options){super(options);Object.assign(this, options)};
+}
+
+class FieldSpec {
+  doc;
+  name;
+  type;
+
+  constructor(options){Object.assign(this, options)};
+}
+
+class MessageSpec {
+  doc;
+  name;
+  message_code;
+  type;
+  size;
+
+  constructor(options){Object.assign(this, options)};
+};
+
+class Spec {
+  doc;
+  definitions;
+  message_codes;
+
+  constructor(options){Object.assign(this, options)};
+};
+
+function parse_type(type_spec, definitions) {
+  if (typeof type_spec !== 'string') throw new Error(`Invalid type spec: ${JSON.stringify(type_spec)}: must be a string referring to a basic type or a defined type.`);
+
+  if (basic_types[type_spec]) {
+    return basic_types[type_spec];
+  } else if (definitions[type_spec]) {
+    const definition = definitions[type_spec];
+    if (!(definition instanceof TypeSpec)) {
+      throw new Error(`Invalid type definition for ${type_spec}: must have either struct, struct_base, or array_len.`);
+    }
+    return definition;
+  } else {
+    throw new Error(`Unknown type: ${type_spec}`);
   }
 }
 
-// Helper function to convert type to C++ type.
-const to_cpp_type = (type_spec) => {
-  // The type can be a plain string;
-  if (typeof type_spec === 'string') {
-    // Check if it's a valid plain type.
-    if (plain_types[type_spec] === undefined) throw new Error(`Unknown type: ${type_spec}`);
-    return plain_types[type_spec].cpp;
-  // Or it's dictionary with the type field; in this case we include collection types.
-  } else if (type_spec.type === 'array') {
-    const item_type = to_cpp_type(type_spec.item);
-    return `std::array<${item_type}, ${type_spec.len}>`;
-  // Finally check if it's a plain type again.
-  } else if (plain_types[type_spec.type] !== undefined) {
-    return plain_types[type_spec.type].cpp;
-  } else {
-    throw new Error(`Unknown type spec: ${JSON.stringify(type_spec)}`);
-  }
-};
+// Parse definitions in order, all referenced definitions must have been defined earlier in the file.
+// 
+// Also pre-calculate the size of each type.
+function parse_definitions(definitions_spec, definitions = {}) {
+  // Copy the definitions object.
+  definitions = {...definitions};
 
-// Helper function to calculate the size of a type in bytes.
-const get_type_size = (type_spec) => {
-  // The type can be a plain string.
-  if (typeof type_spec === 'string') {
-    if (plain_types[type_spec] === undefined) throw new Error(`Unknown type: ${type_spec}`);
-    return plain_types[type_spec].size;
-  // Or it's a dictionary with the type field; in this case we include collection types.
-  } else if (type_spec.type === 'array') {
-    const item_size = get_type_size(type_spec.item);
-    return item_size * type_spec.len;
-  // Finally check if it's a plain type again.
-  } else if (plain_types[type_spec.type] !== undefined) {
-    return plain_types[type_spec.type].size;
-  } else {
-    throw new Error(`Unknown type spec: ${JSON.stringify(type_spec)}`);
-  }
-};
+  for (const [name, def] of Object.entries(definitions_spec)) {
 
-// Calculate message sizes (including all inherited fields)
-const calculate_message_size = (spec, msg) => {
-  let size = 2; // 2 bytes for message code
-  
-  // Add size from extended message
-  if (msg.extends) {
-    const base_msg = spec.MessageCodes[msg.extends];
-    if (base_msg && base_msg.struct) {
-      for (const field of Object.values(base_msg.struct)) {
-        size += get_type_size(field);
-      }
+
+    // Or we define a type using a struct and/or struct_base field.
+    if (def.struct || def.struct_base) {
+      const struct = Object.fromEntries(Object.entries(def.struct || {}).map(([field_name, field_def]) => {
+        const type = parse_type(field_def.type, definitions);
+        return [field_name, new FieldSpec({
+          name: field_name,
+          type,
+          doc: field_def.doc || '',
+          size: type.size,
+        })];
+      }));
+
+      const struct_base = def.struct_base ? parse_type(def.struct_base, definitions) : undefined;
+      
+      const size = Object.values(struct || {}).reduce((acc, field) => acc + field.size, 0) + (struct_base ? struct_base.size : 0);
+
+      definitions[name] = new StructSpec({
+        name,
+        doc: def.doc || '',
+        struct,
+        struct_base,
+        size,
+      }); 
+
+    // Define an array type.
+    } else if (def.array_len && def.type) {
+      let array_len = def.array_len;
+      if (typeof array_len === 'string') {
+        if (definitions[array_len] && Number.isFinite(definitions[array_len].const)) {
+          array_len = definitions[array_len].const;
+        } else {
+          throw new Error(`Invalid array_len for ${name}: ${def.array_len} is not a defined constant.`);
+        }
+      } else if (typeof array_len !== 'number') throw new Error(`Invalid array_len for ${name}: must be a number or a defined constant.`);
+
+      const type = parse_type(def.type, definitions);
+      const size = type.size * array_len;
+      definitions[name] = new ArraySpec({
+        name,
+        doc: def.doc || '',
+        array_len,
+        type,
+        size,
+      });
+
+    // Finally it must be a const.
+    } else if (def.const !== undefined && def.type) {
+      const type = parse_type(def.type, definitions);
+      definitions[name] = new ConstantSpec({
+        name,
+        doc: def.doc || '',
+        const: def.const,
+        type,
+        size: type.size,
+      });
+    } else {
+      throw new Error(`Invalid definition for ${name}: must have either const (for constants), struct/struct_base (for types), or array_type/array_len (for arrays).`);
     }
   }
-  
-  // Add size from this message's fields
-  if (msg.struct) {
-    for (const field of Object.values(msg.struct)) {
-      size += get_type_size(field);
+
+  return definitions;
+}
+
+
+function parse_message_codes(message_codes_spec, definitions) {
+  return Object.fromEntries(Object.entries(message_codes_spec).map(([name, msg]) => {
+    const message_code = msg.message_code;
+
+    if (message_code === undefined || typeof message_code !== 'number') {
+      throw new Error(`Message ${name} is missing required field 'message_code'.`);
     }
+
+    const type = msg.type ? parse_type(msg.type, definitions) : undefined;
+
+    const size = 2 + (type !== undefined ? type.size : 0);
+
+    return [name, new MessageSpec({
+      name,
+      message_code,
+      type,
+      size,
+      doc: msg.doc || '',
+    })];
+  }));
+}
+
+// Load spec file, verify dependency correctness, calculate message sizes, and return a typified Spec object.
+function load_spec(file_path){
+  const loaded_spec = yaml.load(readFileSync(file_path, "utf8"));
+
+  const doc = loaded_spec.doc || '';
+  const definitions = parse_definitions(loaded_spec.definitions || {}, {});
+  const message_codes = parse_message_codes(loaded_spec.message_codes || {}, definitions);
+
+  return new Spec({
+    doc,
+    definitions,
+    message_codes,
+  });
+}
+
+function cpp_typename(type){
+  if (type instanceof BasicType) {
+    return type.cpp_type;
+  } else if (type instanceof StructSpec || type instanceof ArraySpec) {
+    return type.name;
+  } else {
+    throw new Error(`Unknown type: ${type}`);
   }
-  
-  return size;
-};
+}
 
-// Helper function to convert PascalCase to snake_case. Also treat numbers as separate words, Set6Sector->set_6_sector.
-const to_snake_case = (str) => {
-  return str.replace(/([a-zA-Z])([0-9A-Z])/g, '$1_$2').replace(/([0-9])([a-zA-Z])/g, '$1_$2').replace(/([A-Z])([A-Z])/g, '$1_$2').toLowerCase();
-  
-};
-
-// Helper to generate field serialization code
-const generate_cpp_field_serialization = (code, field_name, field, offset_var) => {
-  if (typeof field === 'string' || (field.type && plain_types[field.type])) {
-    // Plain type
-    const type_name = typeof field === 'string' ? field : field.type;
-    code.write`write_${type_name}(buffer.data + ${offset_var}, ${field_name});`;
-    code.write`${offset_var} += ${get_type_size(field)};`;
-  } else if (field.type === 'array') {
-    // Array type
-    const item_type = typeof field.item === 'string' ? field.item : field.item.type;
-    const item_size = get_type_size(field.item);
-    code.write`for (size_t i = 0; i < ${field.len}; ++i) {`;
+function write_cpp_definition(code, def) {
+  if (def instanceof ConstantSpec) {
+    code.write`constexpr ${cpp_typename(def.type)} ${def.name} = ${def.const};`;
+  } else if (def instanceof StructSpec) {
+    if (def.doc) code.comment(def.doc);
+    code.write`struct ${def.name}${def.struct_base ? ` : ${cpp_typename(def.struct_base)}` : ''} {`;
     code.indent();
-    
-    if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
-      // Array of plain types
-      code.write`write_${item_type}(buffer.data + ${offset_var}, ${field_name}[i]);`;
-      code.write`${offset_var} += ${item_size};`;
-    } else if (field.item.type === 'array') {
-      // Nested array
-      const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
-      const nested_item_size = get_type_size(field.item.item);
-      code.write`for (size_t j = 0; j < ${field.item.len}; ++j) {`;
-      code.indent();
-      code.write`write_${nested_item_type}(buffer.data + ${offset_var}, ${field_name}[i][j]);`;
-      code.write`${offset_var} += ${nested_item_size};`;
-      code.dedent();
-      code.write`}`;
+    for (const [field_name, field] of Object.entries(def.struct || {})) {
+      if (field.doc) code.comment(field.doc);
+      code.write`${cpp_typename(field.type)} ${field_name};`;
+    }
+    code.dedent();
+    code.write`};`;
+  } else if (def instanceof ArraySpec) {
+    if (def.doc) code.comment(def.doc);
+    code.write`using ${def.name} = std::array<${cpp_typename(def.type)}, ${def.array_len}>;`;
+  }
+  code.write``;
+}
+
+function serialize_cpp_field(buf, offset, name, type) {
+  if (type instanceof BasicType) {
+    return `${type.cpp_serialization(buf, offset, name)}`;
+  } else if (type instanceof StructSpec || type instanceof ArraySpec) {
+    return `write_${type.name}(${buf} + ${offset}, ${name});`;
+  } else {
+    throw new Error(`Unknown type for serialization: ${type}`);
+  }
+}
+
+function deserialize_cpp_field(buf, offset, type) {
+  if (type instanceof BasicType) {
+    return `${type.cpp_deserialization(buf, offset)}`;
+  } else if (type instanceof StructSpec || type instanceof ArraySpec) {
+    return `read_${type.name}(${buf} + ${offset})`;
+  } else {
+    throw new Error(`Unknown type for deserialization: ${type}`);
+  }
+}
+
+function write_cpp_serialization(code, def) {
+  if (def instanceof StructSpec) {
+    code.write`static inline void write_${def.name}(uint8_t * buffer, ${def.name} const& value) {`;
+    code.indent();
+
+    code.write`size_t offset = 0;`;
+
+    // Serialize base fields if struct_base
+    if (def.struct_base) {
+      code.write`${serialize_cpp_field(`buffer`, `offset`, `value`, def.struct_base)};`;
+      code.write`offset += ${def.struct_base.size};`;
+    }
+
+    // Now serialize own fields.
+    for (const field of Object.values(def.struct || {})) {
+      code.write`${serialize_cpp_field(`buffer`, `offset`, `value.${field.name}`, field.type)};`;
+      code.write`offset += ${field.type.size};`;
     }
     code.dedent();
     code.write`}`;
-  }
-};
 
-// Helper to generate field deserialization code
-const generate_cpp_field_deserialization = (code, field_name, field, offset_var, struct_var) => {
-  if (typeof field === 'string' || (field.type && plain_types[field.type])) {
-    // Plain type
-    const type_name = typeof field === 'string' ? field : field.type;
-    code.write`${struct_var}.${field_name} = read_${type_name}(buffer + ${offset_var});`;
-    code.write`${offset_var} += ${get_type_size(field)};`;
-  } else if (field.type === 'array') {
-    // Array type
-    const item_type = typeof field.item === 'string' ? field.item : field.item.type;
-    const item_size = get_type_size(field.item);
-    code.write`for (size_t i = 0; i < ${field.len}; ++i) {`;
+  } else if (def instanceof ArraySpec) {
+    code.write`static inline void write_${def.name}(uint8_t * buffer, ${def.name} const& value) {`;
     code.indent();
-    
-    if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
-      // Array of plain types
-      code.write`${struct_var}.${field_name}[i] = read_${item_type}(buffer + ${offset_var});`;
-      code.write`${offset_var} += ${item_size};`;
-    } else if (field.item.type === 'array') {
-      // Nested array
-      const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
-      const nested_item_size = get_type_size(field.item.item);
-      code.write`for (size_t j = 0; j < ${field.item.len}; ++j) {`;
-      code.indent();
-      code.write`${struct_var}.${field_name}[i][j] = read_${nested_item_type}(buffer + ${offset_var});`;
-      code.write`${offset_var} += ${nested_item_size};`;
-      code.dedent();
-      code.write`}`;
+    code.write`size_t offset = 0;`;
+    code.write`for (size_t i = 0; i < ${def.array_len}; ++i) {`;
+    code.indent();
+    code.write`${serialize_cpp_field(`buffer`, `offset`, `value[i]`, def.type)};`;
+    code.write`offset += ${def.type.size};`;
+    code.dedent();
+    code.write`}`;
+    code.dedent();
+    code.write`}`;
+  } else if (def instanceof ConstantSpec) {
+    // Nothing to serialize for constants.
+  } else {
+    throw new Error(`Unknown definition type: ${def}`);
+  }
+
+  code.write``;
+}
+
+function write_cpp_deserialization(code, def) {
+  if (def instanceof StructSpec) {
+    code.write`static inline ${def.name} read_${def.name}(uint8_t const* buffer) {`;
+    code.indent();
+    code.write`size_t offset = 0;`;
+    code.write``;
+    // Deserialize base fields if struct_base
+    if (def.struct_base) {
+      code.write`${def.name} result {${deserialize_cpp_field(`buffer`, `offset`, def.struct_base)}};`;
+      code.write`offset += ${def.struct_base.size};`;
+    } else {
+      code.write`${def.name} result;`;
     }
+
+    code.write``;
+    // Now deserialize own fields.
+    for (const field of Object.values(def.struct || {})) {
+      code.write`result.${field.name} = ${deserialize_cpp_field(`buffer`, `offset`, field.type)};`;
+      code.write`offset += ${field.type.size};`;
+    }
+    code.write`return result;`;
+    code.dedent();
+    code.write`}`;
+  } else if (def instanceof ArraySpec) {
+    code.write`static inline ${def.name} read_${def.name}(uint8_t const* buffer) {`;
+    code.indent();
+    code.write`${def.name} result;`;
+    code.write`size_t offset = 0;`;
+    code.write`for (size_t i = 0; i < ${def.array_len}; ++i) {`;
+    code.indent();
+    code.write`result[i] = ${deserialize_cpp_field(`buffer`, `offset`, def.type)};`;
+    code.write`offset += ${def.type.size};`;
+    code.dedent();
+    code.write`}`;
+    code.write`return result;`;
+    code.dedent();
+    code.write`}`;
+  } else if (def instanceof ConstantSpec) {
+    // Nothing to deserialize for constants.
+  } else {
+    throw new Error(`Unknown definition type: ${def}`);
+  }
+
+  code.write``;
+}
+
+// Create the generic message and serialization functions for the messaging protocol.
+function write_cpp_message_protocol(code, message_codes) {
+
+  code.comment`Message Codes`;
+  code.write`enum MessageCode : uint16_t {`;
+  code.indent();
+
+  for (const message of Object.values(message_codes)) {
+    code.write`${message.name} = ${message.message_code},`;
+  }
+  code.dedent();
+  code.write`};`;
+  code.write``;
+
+
+  // Get all unique types referenced by messages.
+  let message_types = new Set();
+  for (const message of Object.values(message_codes)) {
+    if (message.type) message_types.add(message.type);
+  }
+  message_types = [...message_types];
+
+
+  code.comment`Generic Message Structure`;
+  code.write`struct Message {`;
+  code.indent();
+  code.write`MessageCode message_code = static_cast<MessageCode>(0);`;
+  code.write``;
+  code.write`std::variant<`;
+  code.indent();
+  for (const message_type of message_types) {
+    code.write`${message_type.name},`;
+  }
+  code.write`std::monostate`;
+  code.dedent();
+  code.write`> message_data;`;
+  code.dedent();
+  code.write`};`;
+  code.write``;
+
+  // Helper for message sizes.
+  code.write`constexpr size_t message_size(MessageCode code) {`;
+  code.indent();
+  code.write`switch (code) {`;
+  code.indent();
+  for (const message of Object.values(message_codes)) {
+    code.write`case MessageCode::${message.name}: return ${message.size};`;
+  }
+  code.dedent();
+  code.write`}`;
+  code.write`return 0; // Unknown message code`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+  
+
+  // Lastly we need to write the generic serialize and deserialize functions for Message.
+  code.comment`Generic Serialization Functions`;
+  code.write`static inline size_t write_message(uint8_t * buffer, const size_t max_size, Message const& message) {`;
+  code.indent();
+  code.write`if (max_size < 2) return 0;`;
+  code.write`switch (message.message_code) {`;
+  code.indent();
+  for (const message of Object.values(message_codes)) {
+    code.write`case MessageCode::${message.name}: {`;
+    code.indent();
+    code.write`write_uint16(buffer, static_cast<uint16_t>(MessageCode::${message.name}));`;
+    if (message.type) {
+      code.write`if (max_size < 2 + ${message.type.size}) return 0;`;
+      code.write`write_${message.type.name}(buffer + 2, std::get<${message.type.name}>(message.message_data));`;
+    }
+    code.write`return ${message.type ? 2 + message.type.size : 2};`;
     code.dedent();
     code.write`}`;
   }
-};
+  code.dedent();
+  code.write`}`;
+  code.write`return 0;`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+
+  code.comment`Generic Deserialization Function`;
+  code.write`static inline bool read_message(Message & message, uint8_t const* buffer, size_t size) {`;
+  code.indent();
+  code.comment`Need at least 2 bytes for the message code.`;
+  code.write`if (size < 2) return false;`;
+  code.write``;
+  code.write`message.message_code = static_cast<MessageCode>(read_uint16(buffer));`;
+  code.write``;
+  code.write`switch (message.message_code) {`;
+  code.indent();
+  for (const message of Object.values(message_codes)) {
+    code.write`case MessageCode::${message.name}: {`;
+    code.indent();
+    if (message.type) {
+      code.write`if (size != 2 + ${message.type.size}) return false;`;
+      code.write`message.message_data = read_${message.type.name}(buffer + 2);`;
+    } else {
+      code.write`if (size != 2) return false;`;
+      code.write`message.message_data = std::monostate{};`;
+    }
+    code.write`return true;`;
+    code.dedent();
+    code.write`}`;
+  }
+  code.dedent();
+  code.write`}`;
+  code.write``;
+  code.comment`Unknown message code`;
+  code.write`return false;`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+}
+
 
 function generate_cpp_interface(spec) {
   let code = new CodeWriter();
@@ -272,253 +635,284 @@ function generate_cpp_interface(spec) {
   code.write`#include <cstddef>`;
   code.write`#include <cstdint>`;
   code.write`#include <array>`;
+  code.write`#include <variant>`;
   code.write``;
   code.write`#include "hex_mini_drive/byte_handling.hpp"`;
   code.write``;
 
   code.write`namespace hex_mini_drive {`;
   code.write``;
-  
-  
-  // Generate constants
-  code.write`// Constants`;
-  code.write`// ---------`;
-  code.write``;
 
-  for (const [name, value] of Object.entries(spec.Constants)) {
-    if (typeof value === 'object' && value.type && value.value) {
-      code.write`constexpr ${value.type}_t ${name} = ${value.value};`;
-    } else {
-      code.write`constexpr auto ${name} = ${value};`;
-    }
-  }
-  code.write``;
-  
-  // Generate message codes enum
-  code.write`// Message Codes`;
-  code.write`enum struct MessageCode : uint16_t {`;
-  code.indent();
-
-  const message_codes = Object.entries(spec.MessageCodes);
-  for (let i = 0; i < message_codes.length; i++) {
-    const [name, msg] = message_codes[i];
-    const comma = i < message_codes.length - 1 ? ',' : '';
-    code.write`${name} = ${msg.code}${comma}`;
-  }
-  code.dedent();
-  code.write`};`;
-  code.write``;
-  
-
-  // Generate structs for messages with struct field
-  code.write`// Message Structures`;
-  code.write`// ------------------`;
-  code.write``;
-
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    if (msg.struct || msg.extends) {
-      // Add message doc if exists
-      if (msg.doc) code.comment(msg.doc);
-      
-      // Define the struct, including a single extends as the parent class.
-      code.write`struct ${name}${msg.extends ? ` : ${msg.extends}` : ''} {`;
-      code.write``;
-      code.indent();
-      
-      // Add message code field
-      code.write`static constexpr uint16_t message_code = ${msg.code};`;
-      
-      // Add message size field
-      const message_size = calculate_message_size(spec, msg);
-      code.write`static constexpr size_t message_size = ${message_size};`;
-      code.write``;
-      
-      // Add fields from this struct
-      for (const [field_name, field] of Object.entries(msg.struct || {})) {
-        if (field.doc) code.comment(field.doc);
-        code.write`${to_cpp_type(field)} ${field_name};`;
-        code.write``;
-      }
-      
-      code.dedent();
-      code.write`};`;
-      code.write``;
-      code.write``;
-    }
+  // Write out the definitions as C++ constants, structs and array defs.
+  for (const def of Object.values(spec.definitions)) {
+    write_cpp_definition(code, def);
   }
 
-  // Need a struct of the MessageCode and the union of all message structs.
-  code.write`// Generic Message Structure`;
-  code.write`// -------------------------`;
-  code.write``;
-  code.write`struct Message {`;
-  code.indent();
-  code.write`MessageCode message_code;`;
-  code.write``;
-  code.write`union {`;
-  code.indent();
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    if (msg.struct || msg.extends) {
-      code.write`${name} ${to_snake_case(name)};`;
-    }
-  }
-  code.dedent();
-  code.write`};`;
-  code.dedent();
-  code.write`};`;
-  code.write``;
-  
-
-  
-  // Generate serialize and deserialize functions
-  code.write`// Serialization Functions`;
-  code.write`// -----------------------`;
-  code.write``;
-  
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    if (msg.struct || msg.extends) {
-      // Serialize function
-      code.write`static inline MessageBuffer serialise(${name} const& value) {`;
-      code.indent();
-      code.write`MessageBuffer buffer;`;
-      code.write``;
-      code.comment`Write message code`;
-      code.write`write_uint16(buffer.data + buffer.size, ${name}::message_code);`;
-      code.write`buffer.size += 2;`;
-      code.write``;
-      
-      // Serialize fields from base message if extends
-      if (msg.extends) {
-        const base_msg = spec.MessageCodes[msg.extends];
-        if (base_msg && base_msg.struct) {
-          code.comment`Fields from ${msg.extends}`;
-          for (const [field_name, field] of Object.entries(base_msg.struct)) {
-            generate_cpp_field_serialization(code, 'value.' + field_name, field, 'buffer.size');
-          }
-          code.write``;
-        }
-      }
-      
-      // Serialize fields from this message
-      for (const [field_name, field] of Object.entries(msg.struct || {})) {
-        generate_cpp_field_serialization(code, 'value.' + field_name, field, 'buffer.size');
-      }
-      code.write``;
-      code.write`return buffer;`;
-      code.dedent();
-      code.write`}`;
-      code.write``;
-      
-      // Deserialize function
-      code.write`static inline bool deserialise(${name} & result, uint8_t const* buffer, size_t size) {`;
-      code.indent();
-      code.comment`Validate length`;
-      code.write`if (size != ${name}::message_size) {`;
-      code.indent();
-      code.write`return false;`;
-      code.dedent();
-      code.write`}`;
-      code.write``;
-      code.comment`Validate message code`;
-      code.write`uint16_t code = read_uint16(buffer);`;
-      code.write`if (code != ${name}::message_code) {`;
-      code.indent();
-      code.write`return false;`;
-      code.dedent();
-      code.write`}`;
-      code.write``;
-      code.write`size_t offset = 2;`;
-      code.write``;
-      
-      // Deserialize fields from base message if extends
-      if (msg.extends) {
-        const base_msg = spec.MessageCodes[msg.extends];
-        if (base_msg && base_msg.struct) {
-          code.comment`Fields from ${msg.extends}`;
-          for (const [field_name, field] of Object.entries(base_msg.struct)) {
-            generate_cpp_field_deserialization(code, field_name, field, 'offset', 'result');
-          }
-          code.write``;
-        }
-      }
-      
-      // Deserialize fields from this message
-      for (const [field_name, field] of Object.entries(msg.struct || {})) {
-        generate_cpp_field_deserialization(code, field_name, field, 'offset', 'result');
-      }
-      code.write`return true;`;
-      code.dedent();
-      code.write`}`;
-      code.write``;
-    }
+  // Now we have to generate serialization for each type definition.
+  for (const def of Object.values(spec.definitions)) {
+    write_cpp_serialization(code, def);
+    write_cpp_deserialization(code, def);
   }
 
-  // And now the generic serialize/deserialize functions for Message.
-  code.write`// Generic Serialization Functions`;
-  code.write`// -------------------------------`;
+  write_cpp_message_protocol(code, spec.message_codes);
+
+  code.write`} // namespace hex_mini_drive`;
   code.write``;
 
-  // Need a helper function to write a bare message code.
-  code.write`static inline MessageBuffer serialise_plain_code(MessageCode code) {`;
-  code.indent();
-  code.write`MessageBuffer result;`;
-  code.write`write_uint16(result.data, static_cast<uint16_t>(code));`;
-  code.write`result.size = 2;`;
-  code.write`return result;`;
-  code.dedent();
-  code.write`}`;
-  code.write``;
-
-  code.write`static inline MessageBuffer serialise(Message const& message) {`;
-  code.indent();
-  code.write`switch (message.message_code) {`;
-  code.indent();
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    if (msg.struct || msg.extends) {
-      code.write`case MessageCode::${name}: return serialise(message.${to_snake_case(name)});`;
-    } else {
-      code.write`case MessageCode::${name}: return serialise_plain_code(MessageCode::${name});`;
-    }
-  }
-  code.dedent();
-  code.write`}`;
-  code.dedent();
-  code.write``;
-  code.write`return MessageBuffer{}; // Should not reach here, but we have to return something.`;
-  code.write`}`;
-  code.write``;
-
-  code.write`static inline bool deserialise(Message & message, uint8_t const* buffer, size_t size) {`;
-  code.indent();
-  code.write`if (size < 2) return false; // Need at least message code`;
-  code.write``;
-  code.write`message.message_code = static_cast<MessageCode>(read_uint16(buffer));`;
-  code.write``;
-  code.write`switch (message.message_code) {`;
-  code.indent();
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    if (msg.struct || msg.extends) {
-      code.write`case MessageCode::${name}: return deserialise(message.${to_snake_case(name)}, buffer, size);`;
-    } else {
-      code.write`case MessageCode::${name}: return true;`;
-    }
-  }
-  code.dedent();
-  code.write`}`;
-  code.dedent();
-  code.write``;
-  code.write`return false; // Unknown message code`;
-  code.write`}`;
-  code.write``;
-
-  code.write`} // end namespace hex_mini_drive`;
-  
   return code.get();
 }
 
+function write_js_definition(code, def) {
+  if (def instanceof ConstantSpec) {
+    if (def.doc) code.comment(def.doc);
+    code.write`export const ${def.name} = ${def.const};`;
+
+  } else if (def instanceof StructSpec) {
+    if (def.doc) code.comment(def.doc);
+    code.write`export class ${def.name}${def.struct_base ? ` extends ${def.struct_base.name}` : ''} {`;
+    code.indent();
+    for (const field of Object.values(def.struct || {})) {
+      if (field.doc) code.comment(field.doc);
+      code.write`${field.name};`;
+    }
+
+    code.write``;
+    code.write`constructor(init) {${def.struct_base ? `super(init);` : ''}Object.assign(this, init);}`;
+    code.dedent();
+    code.write`}`;
+
+  } else if (def instanceof ArraySpec) {
+    if (def.doc) code.comment(def.doc);
+    code.write`export class ${def.name} extends Array {`;
+    code.indent();
+    code.write`constructor(init) {`;
+    code.indent();
+    code.write`if (Array.isArray(init)) {`;
+    code.indent();
+    code.write`super(...init);`;
+    code.dedent();
+    code.write`} else {`;
+    code.indent();
+    code.write`super(${def.array_len});`;
+    code.dedent();
+    code.write`}`;
+    code.dedent();
+    code.write`}`;
+    code.dedent();
+    code.write`}`;
+    code.write``;
+
+  } else {
+    throw new Error(`Unknown definition type: ${def}`);
+  }
+  code.write``;
+}
+
+function serialize_js_field(view, offset, name, type) {
+  if (type instanceof BasicType) {
+    return `${type.js_serialization(view, offset, name)}`;
+  } else if (type instanceof StructSpec || type instanceof ArraySpec) {
+    return `write_${type.name}(${name})`;
+  } else {
+    throw new Error(`Unknown type for serialization: ${type}`);
+  }
+}
+
+function deserialize_js_field(view, offset, type) {
+  if (type instanceof BasicType) {
+    return `${type.js_deserialization(view, offset)}`;
+  } else if (type instanceof StructSpec || type instanceof ArraySpec) {
+    return `read_${type.name}(${view}, ${offset})`;
+  } else {
+    throw new Error(`Unknown type for deserialization: ${type}`);
+  }
+}
+
+// We will generate separate serialization functions for each type, and then a generic serialize function for messages that uses those.
+function generate_js_serialization(code, def) {
+  if (def instanceof StructSpec) {
+    code.write`function write_${def.name}(value) {`;
+    code.indent();
+    code.write`const buffer = new Uint8Array(${def.size});`;
+    code.write`const view = new DataView(buffer.buffer);`;
+    code.write`let offset = 0;`;
+
+    // Serialize base fields if struct_base
+    if (def.struct_base) {
+      code.write`const base_buffer = ${serialize_js_field(`view`, `offset`, `value`, def.struct_base)}`;
+      code.write`buffer.set(base_buffer, offset);`;
+      code.write`offset += ${def.struct_base.size};`;
+    }
+
+    // Now serialize own fields.
+    for (const field of Object.values(def.struct || {})) {
+      code.write`${serialize_js_field(`view`, `offset`, `value.${field.name}`, field.type)}`;
+      code.write`offset += ${field.type.size};`;
+    }
+    code.write`return buffer;`;
+    code.dedent();
+    code.write`}`;
+
+  } else if (def instanceof ArraySpec) {
+    code.write`function write_${def.name}(value) {`;
+    code.indent();
+    code.write`const buffer = new Uint8Array(${def.size});`;
+    code.write`const view = new DataView(buffer.buffer);`;
+    code.write`let offset = 0;`;
+    code.write`for (let i = 0; i < ${def.array_len}; i++) {`;
+    code.indent();
+    code.write`${serialize_js_field(`view`, `offset`, `value[i]`, def.type)}`;
+    code.write`offset += ${def.type.size};`;
+    code.dedent();
+    code.write`}`;
+    code.write`return buffer;`;
+    code.dedent();
+    code.write`}`;
+
+  } else if (def instanceof ConstantSpec) {
+    // Nothing to serialize for constants.
+  } else {
+    throw new Error(`Unknown definition type: ${def}`);
+  }
+  code.write``;
+}
+
+function generate_js_deserialization(code, def) {
+  if (def instanceof StructSpec) {
+    code.write`function read_${def.name}(view, offset = 0) {`;
+    code.indent();
+
+    code.write`let result = new ${def.name}();`;
+    code.write``;
+
+    if (def.struct_base) {
+      code.write`Object.assign(result, ${deserialize_js_field(`view`, `offset`, def.struct_base)});`;
+      code.write`offset += ${def.struct_base.size};`;
+      code.write``;
+    }
+    
+    // Deserialize own fields.
+    for (const field of Object.values(def.struct || {})) {
+      code.write`result.${field.name} = ${deserialize_js_field(`view`, `offset`, field.type)};`;
+      code.write`offset += ${field.type.size};`;
+    }
+    code.write`return result;`;
+    code.dedent();
+    code.write`}`;
+  } else if (def instanceof ArraySpec) {
+    code.write`function read_${def.name}(view, offset = 0) {`;
+    code.indent();
+
+    code.write`let result = new ${def.name}();`;
+    code.write`for (let i = 0; i < ${def.array_len}; i++) {`;
+    code.indent();
+    code.write`result[i] = ${deserialize_js_field(`view`, `offset`, def.type)};`;
+    code.write`offset += ${def.type.size};`;
+    code.dedent();
+    code.write`}`;
+    code.write`return result;`;
+    code.dedent();
+    code.write`}`;
+  } else if (def instanceof ConstantSpec) {
+    // Nothing to deserialize for constants.
+  } else {
+    throw new Error(`Unknown definition type: ${def}`);
+  }
+  code.write``;
+}
+
+function write_js_message_protocol(code, message_codes) {
+  code.comment`Message Codes`;
+  for (const message of Object.values(message_codes)) {
+    if (message.doc) code.comment(message.doc);
+    code.write`const ${message.name} = ${message.message_code};`;
+  }
+  code.write``;
+
+  code.write`export const MessageCode = {`;
+  code.indent();
+  for (const message of Object.values(message_codes)) {
+    code.write`${message.name},`;
+  }
+  code.dedent();
+  code.write`};`;
+  code.write``;
+
+  // Get all unique types referenced by messages.
+  let message_types = new Set();
+  for (const message of Object.values(message_codes)) {
+    if (message.type) message_types.add(message.type);
+  }
+
+  // Generic serialize function.
+  code.comment`Generic Serialize Function`;
+  code.write`export function write_message(message) {`;
+  code.indent();
+  code.write`switch (message.message_code) {`;
+  code.indent();
+  for (const message of Object.values(message_codes)) {
+    code.write`case ${message.name}: {`;
+    code.indent();
+    if (message.type) {
+      code.write`const message_buffer = write_${message.type.name}(message);`;
+      code.write`const buffer = new Uint8Array(2 + message_buffer.length);`;
+      code.write`const view = new DataView(buffer.buffer);`;
+      code.write`view.setUint16(0, message.message_code);`;
+      code.write`buffer.set(message_buffer, 2);`;
+      code.write`return buffer;`;
+    } else {
+      code.write`const buffer = new Uint8Array(2);`;
+      code.write`const view = new DataView(buffer.buffer);`;
+      
+      code.write`view.setUint16(0, message.message_code);`;
+      code.write`return buffer;`;
+    }
+    code.dedent();
+    code.write`}`;
+  }
+  code.dedent();
+  code.write`}`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+
+  // Generic deserialize function.
+  code.comment`Generic Deserialize Function`;
+  code.write`export function read_message(buffer) {`;
+  code.indent();
+  code.write`if (buffer.length < 2) return null;`;
+  code.write`const view = new DataView(buffer.buffer);`;
+  code.write`const message_code = view.getUint16(0);`;
+  code.write`switch (message_code) {`;
+  code.indent();
+  for (const message of Object.values(message_codes)) {
+    code.write`case ${message.name}: {`;
+    code.indent();
+    if (message.type) {
+      code.write`if (buffer.length !== 2 + ${message.type.size}) return null;`;
+      code.write`let message = read_${message.type.name}(view, 2);`;
+      code.write`message.message_code = ${message.name};`;
+      code.write`return message;`;
+    } else {
+      code.write`if (buffer.length !== 2) return null;`;
+      code.write`return {message_code};`;
+    }
+    code.dedent();
+    code.write`}`;
+  }
+  code.dedent();
+  code.write`}`;
+  code.write``;
+  code.comment`Unknown message code`;
+  code.write`return null;`;
+  code.dedent();
+  code.write`}`;
+  code.write``;
+}
+  
 function generate_js_interface(spec) {
   let code = new CodeWriter();
-  
+
   // Header comment
   code.comment(spec.doc);
   code.write``;
@@ -529,232 +923,17 @@ function generate_js_interface(spec) {
 
   code.write`export { COBS_Buffer } from './cobs_encoding.js';`;
   code.write``;
-
-  // Constants
-  code.write`// Constants`;
-  for (const [name, value] of Object.entries(spec.Constants)) {
-    if (typeof value === 'object' && value.type && value.value) {
-      code.write`export const ${name} = ${value.value};`;
-    } else {
-      code.write`export const ${name} = ${value};`;
-    }
+  
+  for (const def of Object.values(spec.definitions)) {
+    write_js_definition(code, def);
   }
-  code.write``;
 
-  // Message codes
-  code.write`// Message Codes`;
-  code.write`export const MessageCode = {`;
-  code.indent();
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    code.write`${name}: ${msg.code},`;
+  for (const def of Object.values(spec.definitions)) {
+    generate_js_serialization(code, def);
+    generate_js_deserialization(code, def);
   }
-  code.dedent();
-  code.write`};`;
-  code.write``;
-  
-  // Function to write just the code for simple messages.
-  code.write`// Helper function to write just the message code`;
-  code.write`function write_code(message_code) {`;
-  code.indent();
-  code.write`const buffer = new Uint8Array(2);`;
-  code.write`const view = new DataView(buffer.buffer);`;
-  code.write`view.setUint16(0, message_code);`;
-  code.write`return buffer;`;
-  code.dedent();
-  code.write`}`;
-  code.write``;
-  
-  // Map type names to DataView methods
-  const get_dataview_method = (type_name) => {
-    return plain_types[type_name].js;
-  };
 
-  // Helper to generate field serialization for JS
-  const generate_js_field_serialization = (code, field_name, field, offset_var, value_var) => {
-    if (typeof field === 'string' || (field.type && plain_types[field.type])) {
-      const type_name = typeof field === 'string' ? field : field.type;
-      const method = get_dataview_method(type_name);
-      code.write`view.set${method}(${offset_var}, ${value_var}.${field_name});`;
-      code.write`${offset_var} += ${get_type_size(field)};`;
-    } else if (field.type === 'array') {
-      const item_type = typeof field.item === 'string' ? field.item : field.item.type;
-      const item_size = get_type_size(field.item);
-      code.write`for (let i = 0; i < ${field.len}; i++) {`;
-      code.indent();
-      
-      if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
-        const method = get_dataview_method(item_type);
-        code.write`view.set${method}(${offset_var}, ${value_var}.${field_name}[i]);`;
-        code.write`${offset_var} += ${item_size};`;
-      } else if (field.item.type === 'array') {
-        const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
-        const nested_item_size = get_type_size(field.item.item);
-        const method = get_dataview_method(nested_item_type);
-        code.write`for (let j = 0; j < ${field.item.len}; j++) {`;
-        code.indent();
-        code.write`view.set${method}(${offset_var}, ${value_var}.${field_name}[i][j]);`;
-        code.write`${offset_var} += ${nested_item_size};`;
-        code.dedent();
-        code.write`}`;
-      }
-      code.dedent();
-      code.write`}`;
-    }
-  };
-
-  // Helper to generate field deserialization for JS
-  const generate_js_field_deserialization = (code, field_name, field, offset_var, result_var) => {
-    if (typeof field === 'string' || (field.type && plain_types[field.type])) {
-      const type_name = typeof field === 'string' ? field : field.type;
-      const method = get_dataview_method(type_name);
-      code.write`${result_var}.${field_name} = view.get${method}(${offset_var});`;
-      code.write`${offset_var} += ${get_type_size(field)};`;
-    } else if (field.type === 'array') {
-      const item_type = typeof field.item === 'string' ? field.item : field.item.type;
-      const item_size = get_type_size(field.item);
-      code.write`${result_var}.${field_name} = [];`;
-      code.write`for (let i = 0; i < ${field.len}; i++) {`;
-      code.indent();
-      
-      if (typeof field.item === 'string' || (field.item.type && plain_types[field.item.type])) {
-        const method = get_dataview_method(item_type);
-        code.write`${result_var}.${field_name}[i] = view.get${method}(${offset_var});`;
-        code.write`${offset_var} += ${item_size};`;
-      } else if (field.item.type === 'array') {
-        const nested_item_type = typeof field.item.item === 'string' ? field.item.item : field.item.item.type;
-        const nested_item_size = get_type_size(field.item.item);
-        const method = get_dataview_method(nested_item_type);
-        code.write`${result_var}.${field_name}[i] = [];`;
-        code.write`for (let j = 0; j < ${field.item.len}; j++) {`;
-        code.indent();
-        code.write`${result_var}.${field_name}[i][j] = view.get${method}(${offset_var});`;
-        code.write`${offset_var} += ${nested_item_size};`;
-        code.dedent();
-        code.write`}`;
-      }
-      code.dedent();
-      code.write`}`;
-    }
-  };
-
-  // Serialize function
-  code.write`// Serialize a message object to a Uint8Array`;
-  code.write`export function serialise(message) {`;
-  code.indent();
-  code.write`if (!message || typeof message.message_code !== 'number') {`;
-  code.indent();
-  code.write`return null;`;
-  code.dedent();
-  code.write`}`;
-  code.write``;
-  code.write`switch (message.message_code) {`;
-  code.indent();
-  
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    if (msg.struct || msg.extends) {
-      const message_size = calculate_message_size(spec, msg);
-      code.write`case MessageCode.${name}: {`;
-      code.indent();
-      code.write`const buffer = new Uint8Array(${message_size});`;
-      code.write`const view = new DataView(buffer.buffer);`;
-      code.write`let offset = 0;`;
-      code.write`view.setUint16(offset, message.message_code);`;
-      code.write`offset += 2;`;
-      
-      // Serialize base fields if extends
-      if (msg.extends) {
-        const base_msg = spec.MessageCodes[msg.extends];
-        if (base_msg && base_msg.struct) {
-          for (const [field_name, field] of Object.entries(base_msg.struct)) {
-            generate_js_field_serialization(code, field_name, field, 'offset', 'message');
-          }
-        }
-      }
-      
-      // Serialize this message's fields
-      for (const [field_name, field] of Object.entries(msg.struct || {})) {
-        generate_js_field_serialization(code, field_name, field, 'offset', 'message');
-      }
-      
-      code.write`return buffer;`;
-      code.dedent();
-      code.write`}`;
-    } else {
-      // Message with no struct, just code
-      code.write`case MessageCode.${name}: return write_code(MessageCode.${name});`;
-    }
-  }
-  
-  code.write`default:`;
-  code.indent();
-  code.write`return null;`;
-  code.dedent();
-  code.dedent();
-  code.write`}`;
-  code.dedent();
-  code.write`}`;
-  code.write``;
-
-  // Deserialize function
-  code.write`// Deserialize a Uint8Array to a message object`;
-  code.write`export function deserialise(buffer) {`;
-  code.indent();
-  code.write`if (!buffer || buffer.length < 2) {`;
-  code.indent();
-  code.write`return null;`;
-  code.dedent();
-  code.write`}`;
-  code.write``;
-  code.write`const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);`;
-  code.write`const message_code = view.getUint16(0);`;
-  code.write``;
-  code.write`switch (message_code) {`;
-  code.indent();
-  
-  for (const [name, msg] of Object.entries(spec.MessageCodes)) {
-    if (msg.struct || msg.extends) {
-      const message_size = calculate_message_size(spec, msg);
-      code.write`case MessageCode.${name}: {`;
-      code.indent();
-      code.write`if (buffer.length !== ${message_size}) return null;`;
-      code.write`const result = { message_code };`;
-      code.write`let offset = 2;`;
-      
-      // Deserialize base fields if extends
-      if (msg.extends) {
-        const base_msg = spec.MessageCodes[msg.extends];
-        if (base_msg && base_msg.struct) {
-          for (const [field_name, field] of Object.entries(base_msg.struct)) {
-            generate_js_field_deserialization(code, field_name, field, 'offset', 'result');
-          }
-        }
-      }
-      
-      // Deserialize this message's fields
-      for (const [field_name, field] of Object.entries(msg.struct || {})) {
-        generate_js_field_deserialization(code, field_name, field, 'offset', 'result');
-      }
-      
-      code.write`return result;`;
-      code.dedent();
-      code.write`}`;
-    } else {
-      // Message with no struct
-      code.write`case MessageCode.${name}:`;
-      code.indent();
-      code.write`return buffer.length === 2 ? { message_code } : null;`;
-      code.dedent();
-    }
-  }
-  
-  code.write`default:`;
-  code.indent();
-  code.write`return null;`;
-  code.dedent();
-  code.dedent();
-  code.write`}`;
-  code.dedent();
-  code.write`}`;
+  write_js_message_protocol(code, spec.message_codes);
 
   return code.get();
 }
@@ -762,14 +941,14 @@ function generate_js_interface(spec) {
 
 // Run this script if executed directly, to generate interface files.
 if (import.meta.main) {
-  const interface_spec = yaml.load(readFileSync("./interface.yaml", "utf8"));
+  const spec = load_spec("./interface.yaml");
 
   console.log("Loaded interface specification:");
 
   const output_dir = "./dist/hex_mini_drive/";
   mkdirSync(output_dir, { recursive: true });
   
-  const cpp_interface = generate_cpp_interface(interface_spec)
+  const cpp_interface = generate_cpp_interface(spec)
   
   // Write the generated C++ interface.
   const cpp_output_path = `${output_dir}/interface.hpp`;
@@ -782,7 +961,7 @@ if (import.meta.main) {
   console.log("Generated C++ interface:", cpp_output_path);
   
   // Generate JavaScript interface
-  const js_interface = generate_js_interface(interface_spec);
+  const js_interface = generate_js_interface(spec);
   const js_output_path = `${output_dir}/interface.js`;
   writeFileSync(js_output_path, js_interface);
 

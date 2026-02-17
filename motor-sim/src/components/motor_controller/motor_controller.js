@@ -1,7 +1,7 @@
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, make_position_calibration, make_current_calibration} from "./interface.js";
 
-import {COBS_Buffer, MessageCode, serialise, deserialise} from "hex-mini-drive-interface";
+import {COBS_Buffer, MessageCode, write_message, read_message} from "hex-mini-drive-interface";
 
 // Re-export the codes from the interface.
 export { MessageCode };
@@ -81,7 +81,7 @@ export class MotorController {
     
     let receive_message = (message_data) => {
 
-      let bare_message = deserialise(message_data);
+      let bare_message = read_message(message_data);
       
       // If we have a valid message, report it to the user.
       if(!bare_message) {
@@ -189,7 +189,7 @@ export class MotorController {
       throw new Error("Message object must contain a message_code property.");
     }
     
-    const message_data = serialise(message);
+    const message_data = write_message(message);
 
     const buffer = this.encoding_buffer.encode_message(message_data);
 
@@ -199,7 +199,7 @@ export class MotorController {
   /* Send a command and capture the reply messages. */
   async send_command_and_await_reply({
     message,
-    expected_code = MessageCode.Readout, 
+    expected_code = MessageCode.READOUT, 
     expected_messages = 1, 
     response_timeout = 500,
   }) {
@@ -249,8 +249,8 @@ export class MotorController {
   async load_current_calibration(){
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.GetCurrentCalibration,
-        expected_code: MessageCode.CurrentCalibration, 
+        message: MessageCode.GET_CURRENT_CALIBRATION,
+        expected_code: MessageCode.CURRENT_CALIBRATION, 
         expected_messages: 1,
       });
     } catch (error) {
@@ -264,8 +264,8 @@ export class MotorController {
 
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        message: {message_code: MessageCode.SetCurrentCalibration, current_calibration: make_current_calibration(current_calibration)},
-        expected_code: MessageCode.CurrentCalibration,
+        message: {message_code: MessageCode.SET_CURRENT_CALIBRATION, current_calibration: make_current_calibration(current_calibration)},
+        expected_code: MessageCode.CURRENT_CALIBRATION,
         expected_messages: 1,
       });
     } catch (error) {
@@ -277,8 +277,8 @@ export class MotorController {
   async reset_current_calibration(){
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.ResetCurrentCalibration,
-        expected_code: MessageCode.CurrentCalibration,
+        message: MessageCode.RESET_CURRENT_CALIBRATION,
+        expected_code: MessageCode.CURRENT_CALIBRATION,
         expected_messages: 1,
       });
     } catch (error) {
@@ -291,8 +291,8 @@ export class MotorController {
   async load_position_calibration(){
     try {
       this.position_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.GetHallPositions,
-        expected_code: MessageCode.HallPositions,
+        message: MessageCode.GET_HALL_POSITIONS,
+        expected_code: MessageCode.HALL_POSITIONS,
         expected_messages: 1,
       });
     } catch (error) {
@@ -305,8 +305,8 @@ export class MotorController {
 
     try {
       this.position_calibration = await this.send_command_and_await_reply({
-        message: {message_code: MessageCode.SetHallPositions, ...make_position_calibration(position_calibration)},
-        expected_code: MessageCode.HallPositions,
+        message: {message_code: MessageCode.SET_HALL_POSITIONS, ...make_position_calibration(position_calibration)},
+        expected_code: MessageCode.HALL_POSITIONS,
         expected_messages: 1
       });
     } catch (error) {
@@ -318,8 +318,8 @@ export class MotorController {
   async reset_position_calibration(){
     try {
       this.position_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.ResetHallPositions,
-        expected_code: MessageCode.HallPositions,
+        message: MessageCode.RESET_HALL_POSITIONS,
+        expected_code: MessageCode.HALL_POSITIONS,
         expected_messages: 1
       });
     } catch (error) {
@@ -331,8 +331,8 @@ export class MotorController {
   async load_control_parameters(){
     try {
       this.control_parameters = await this.send_command_and_await_reply({
-        message: MessageCode.GetControlParameters,
-        expected_code: MessageCode.ControlParameters,
+        message: MessageCode.GET_CONTROL_PARAMETERS,
+        expected_code: MessageCode.CONTROL_PARAMETERS,
         expected_messages: 1
       });
     } catch (error) {
@@ -345,8 +345,8 @@ export class MotorController {
 
     try {
       this.control_parameters = await this.send_command_and_await_reply({
-        message: {message_code: MessageCode.SetControlParameters, ...control_parameters},
-        expected_code: MessageCode.ControlParameters,
+        message: {message_code: MessageCode.SET_CONTROL_PARAMETERS, ...control_parameters},
+        expected_code: MessageCode.CONTROL_PARAMETERS,
         expected_messages: 1
       });
     } catch (error) {
@@ -358,8 +358,8 @@ export class MotorController {
   async reset_control_parameters(){
     try {
       this.control_parameters = await this.send_command_and_await_reply({
-        message: MessageCode.ResetControlParameters,
-        expected_code: MessageCode.ControlParameters,
+        message: MessageCode.RESET_CONTROL_PARAMETERS,
+        expected_code: MessageCode.CONTROL_PARAMETERS,
         expected_messages: 1
       });
     } catch (error) {

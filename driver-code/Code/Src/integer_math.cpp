@@ -2,7 +2,6 @@
 
 #include <cstdio>
 
-
 void unit_test_funky_atan(char * buffer, size_t max_size) {
     const int angle_1 = funky_atan2(100, 0); // 90 degrees
     const int angle_2 = funky_atan2(0, 100); // 0 degrees

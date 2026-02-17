@@ -454,8 +454,8 @@ async function take_readout_snapshot(command_options = {}){
   const port = active_port;
 
   const reply_data = await controller.send_command_and_await_reply({
-    message: MessageCode.GetReadoutsSnapshot,
-    expected_code: MessageCode.Readout,
+    message: MessageCode.GET_READOUTS_SNAPSHOT,
+    expected_code: MessageCode.READOUT,
     expected_messages: history_size,
     ...command_options,
   });
@@ -471,7 +471,7 @@ async function test_command(message_code){
   if (command_snapshot){
     await take_readout_snapshot({
       message,
-      expected_code: MessageCode.Readout,
+      expected_code: MessageCode.READOUT,
       expected_messages: history_size,
     });
   } else {
@@ -494,7 +494,7 @@ async function stream_all_motors(){
   for (const {motor_controller} of opened_ports.values()) {
     if (!motor_controller) continue;
     motor_controller.reset_history();
-    await motor_controller.send_command({message_code: MessageCode.StreamFullReadouts, stream_state: 1});
+    await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 1});
   }
 }
 
@@ -526,12 +526,12 @@ const data_request_buttons = Inputs.button(
     }],
     ["Stream motor data", async function(){
       motor_controller.reset_history();
-      await send_command({message_code: MessageCode.StreamFullReadouts, stream_state: 1});
+      await send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 1});
     }],
     ["STOP stream", async function(){
       stop_command_loop();
 
-      await send_command({message_code: MessageCode.StreamFullReadouts, stream_state: 0});
+      await send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 0});
     }],
     ["Stream all motors", stream_all_motors],
     ["Stop all motors", async function(){
@@ -539,7 +539,7 @@ const data_request_buttons = Inputs.button(
 
       for (const {motor_controller} of opened_ports.values()) {
         if (!motor_controller) continue;
-        await motor_controller.send_command({message_code: MessageCode.StreamFullReadouts, stream_state: 0});
+        await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 0});
       }
     }],
   ],
@@ -550,34 +550,34 @@ d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 const test_buttons = Inputs.button(
   [
     ["Test all permutations", function(){
-      test_command(MessageCode.SetStateTestAllPermutations);
+      test_command(MessageCode.SET_STATE_TEST_ALL_PERMUTATIONS);
     }],
     ["Test ground short", function(){
-      test_command(MessageCode.SetStateTestGroundShort);
+      test_command(MessageCode.SET_STATE_TEST_GROUND_SHORT);
     }],
     ["Test positive short", function(){
-      test_command(MessageCode.SetStateTestPositiveShort);
+      test_command(MessageCode.SET_STATE_TEST_POSITIVE_SHORT);
     }],
     ["Test U directions", function(){
-      test_command(MessageCode.SetStateTestUDirections);
+      test_command(MessageCode.SET_STATE_TEST_U_DIRECTIONS);
     }],
     ["Test U increasing", function(){
-      test_command(MessageCode.SetStateTestUIncreasing);
+      test_command(MessageCode.SET_STATE_TEST_U_INCREASING);
     }],
     ["Test U decreasing", function(){
-      test_command(MessageCode.SetStateTestUDecreasing);
+      test_command(MessageCode.SET_STATE_TEST_U_DECREASING);
     }],
     ["Test V increasing", function(){
-      test_command(MessageCode.SetStateTestVIncreasing);
+      test_command(MessageCode.SET_STATE_TEST_V_INCREASING);
     }],
     ["Test V decreasing", function(){
-      test_command(MessageCode.SetStateTestVDecreasing);
+      test_command(MessageCode.SET_STATE_TEST_V_DECREASING);
     }],
     ["Test W increasing", function(){
-      test_command(MessageCode.SetStateTestWIncreasing);
+      test_command(MessageCode.SET_STATE_TEST_W_INCREASING);
     }],
     ["Test W decreasing", function(){
-      test_command(MessageCode.SetStateTestWDecreasing);
+      test_command(MessageCode.SET_STATE_TEST_W_DECREASING);
     }],
   ],
   {label: "Test sequence"},
@@ -590,19 +590,19 @@ const stop_buttons = Inputs.button(
     ["Stop / Brake", async function(){
       stop_command_loop();
 
-      await snapshot_if_checked({message_code: MessageCode.SetStateOff});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_OFF});
     }],
     ["Freewheel", async function(){
       stop_command_loop();
 
-      await snapshot_if_checked({message_code: MessageCode.SetStateFreewheel});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_FREEWHEEL});
     }],
     ["Stop all motors", async function(){
       stop_command_loop();
 
       for (const {motor_controller} of opened_ports.values()) {
         if (!motor_controller) continue;
-        await motor_controller.send_command({message_code: MessageCode.SetStateOff});
+        await motor_controller.send_command({message_code: MessageCode.SET_STATE_OFF});
       }
     }]
   ],
@@ -620,28 +620,28 @@ d3.select(stop_buttons)
 const simple_drive_buttons = Inputs.button(
   [
     ["Drive 6S +", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateDrive6Sector, pwm_value: +command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, pwm_value: +command_pwm});
     }],
     ["Drive 6S -", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateDrive6Sector, pwm_value: -command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, pwm_value: -command_pwm});
     }],
     ["Hold U positive", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateHoldUPositive, pwm_value: command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_POSITIVE, pwm_value: command_pwm});
     }],
     ["Hold V positive", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateHoldVPositive, pwm_value: command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_POSITIVE, pwm_value: command_pwm});
     }],
     ["Hold W positive", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateHoldWPositive, pwm_value: command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_POSITIVE, pwm_value: command_pwm});
     }],
     ["Hold U negative", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateHoldUNegative, pwm_value: command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_NEGATIVE, pwm_value: command_pwm});
     }],
     ["Hold V negative", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateHoldVNegative, pwm_value: command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_NEGATIVE, pwm_value: command_pwm});
     }],
     ["Hold W negative", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SetStateHoldWNegative, pwm_value: command_pwm});
+      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_NEGATIVE, pwm_value: command_pwm});
     }],
   ],
   {label: "Simple drive commands"},
@@ -653,13 +653,13 @@ const advanced_drive_buttons = Inputs.button(
   [
     ["Set Angle", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetAngle, 
+        message_code: MessageCode.SET_ANGLE, 
         angle: command_angle,
       });
     }],
     ["Drive periodic +", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDrivePeriodic,
+        message_code: MessageCode.SET_STATE_DRIVE_PERIODIC,
         pwm_value: command_pwm, 
         angular_speed: +command_angular_speed, 
         angle: command_angle,
@@ -667,7 +667,7 @@ const advanced_drive_buttons = Inputs.button(
     }],
     ["Drive periodic -", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDrivePeriodic,
+        message_code: MessageCode.SET_STATE_DRIVE_PERIODIC,
         pwm_value: command_pwm, 
         angular_speed: -command_angular_speed, 
         angle: command_angle,
@@ -675,49 +675,49 @@ const advanced_drive_buttons = Inputs.button(
     }],
     ["Drive smooth +", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveSmooth,
+        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
         pwm_value: +command_pwm
       });
     }],
     ["Drive smooth -", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveSmooth,
+        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
         pwm_value: -command_pwm
       });
     }],
     ["Drive torque +", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveTorque,
+        message_code: MessageCode.SET_STATE_DRIVE_TORQUE,
         target_current: +command_torque_current
       });
     }],
     ["Drive torque -", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveTorque,
+        message_code: MessageCode.SET_STATE_DRIVE_TORQUE,
         target_current: -command_torque_current
       });
     }],
     ["Drive power +", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveBatteryPower,
+        message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
         target_power: +command_power
       });
     }],
     ["Drive power -", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveBatteryPower,
+        message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
         target_power: -command_power
       });
     }],
     ["Drive speed +", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveSpeed,
+        message_code: MessageCode.SET_STATE_DRIVE_SPEED,
         target_speed: +command_angular_speed
       });
     }],
     ["Drive speed -", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateDriveSpeed,
+        message_code: MessageCode.SET_STATE_DRIVE_SPEED,
         target_speed: -command_angular_speed
       });
     }],
@@ -731,7 +731,7 @@ const seek_drive_buttons = Inputs.button(
   [
     ["Seek angle (power)", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateSeekAngleWithPower,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
         target_rotation: command_seek_rotation, 
         target_angle: command_angle,
         max_drive_power: command_power,
@@ -739,7 +739,7 @@ const seek_drive_buttons = Inputs.button(
     }],
     ["Go to zero (power)", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateSeekAngleWithPower,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
         target_rotation: 0, 
         target_angle: command_angle,
         max_drive_power: command_power,
@@ -747,7 +747,7 @@ const seek_drive_buttons = Inputs.button(
     }],
     ["Seek angle (torque)", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateSeekAngleWithTorque,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
         target_rotation: command_seek_rotation, 
         target_angle: command_angle,
         max_drive_current: command_torque_current,
@@ -755,7 +755,7 @@ const seek_drive_buttons = Inputs.button(
     }],
     ["Go to zero (torque)", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateSeekAngleWithTorque,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
         target_rotation: 0, 
         target_angle: command_angle,
         max_drive_current: command_torque_current,
@@ -763,7 +763,7 @@ const seek_drive_buttons = Inputs.button(
     }],
     ["Seek angle (speed)", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateSeekAngleWithSpeed,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_SPEED,
         target_rotation: command_seek_rotation, 
         target_angle: command_angle,
         max_drive_speed: command_angular_speed,
@@ -771,7 +771,7 @@ const seek_drive_buttons = Inputs.button(
     }],
     ["Go to zero (speed)", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SetStateSeekAngleWithSpeed,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_SPEED,
         target_rotation: 0, 
         target_angle: command_angle,
         max_drive_speed: command_angular_speed,
@@ -814,7 +814,7 @@ const shared_seek_buttons = Inputs.button(
           if (!controller) continue;
 
           controller.send_command({
-            message_code: MessageCode.SetStateSeekAngleWithTorque,
+            message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
             timeout: command_timeout,
             target_angle: command_angle,
             max_drive_current: command_torque_current,
@@ -841,7 +841,7 @@ const shared_seek_buttons = Inputs.button(
           if (!controller) continue;
 
           controller.send_command({
-            message_code: MessageCode.SetStateSeekAngleWithPower,
+            message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
             timeout: command_timeout,
             target_angle: command_angle,
             max_drive_power: controller === motor_controller ? 0 : command_power,
@@ -864,7 +864,7 @@ const shared_seek_buttons = Inputs.button(
           if (!controller) continue;
 
           controller.send_command({
-            message_code: MessageCode.SetStateSeekAngleWithPower,
+            message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
             timeout: command_timeout,
             target_angle: command_angle,
             max_drive_power: command_power,
@@ -2041,7 +2041,7 @@ autosave_inputs({
 const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
     ["Commit to Flash", async function(){
-      await motor_controller.send_command({message_code: MessageCode.SaveSettingsToFlash});
+      await motor_controller.send_command({message_code: MessageCode.SAVE_SETTINGS_TO_FLASH});
     }],
   ],
   {
@@ -2060,7 +2060,7 @@ async function command_unit_test(test_code, subtitle){
   const output = await motor_controller.send_command_and_await_reply({
     message: test_code,
     expected_messages: 1,
-    expected_code: MessageCode.UnitTestOutput,
+    expected_code: MessageCode.UNIT_TEST_OUTPUT,
   });
 
   const passed = output == expected;
@@ -2095,9 +2095,9 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
       unit_test_results.value = [];
 
       const all_passed = [
-        await command_unit_test(MessageCode.RunUnitTestFunkyAtan, "Funky atan2"),
-        await command_unit_test(MessageCode.RunUnitTestFunkyAtanPart2, "Funky atan2 part 2"),
-        await command_unit_test(MessageCode.RunUnitTestFunkyAtanPart3, "Funky atan2 part 3"),
+        await command_unit_test(MessageCode.RUN_UNIT_TEST_FUNKY_ATAN, "Funky atan2"),
+        await command_unit_test(MessageCode.RUN_UNIT_TEST_FUNKY_ATAN_PART2, "Funky atan2 part 2"),
+        await command_unit_test(MessageCode.RUN_UNIT_TEST_FUNKY_ATAN_PART3, "Funky atan2 part 3"),
       ].reduce((acc, passed) => acc && passed, true);
 
       unit_test_results.value = [

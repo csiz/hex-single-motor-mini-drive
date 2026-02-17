@@ -30,26 +30,29 @@ const uint8_t * const control_parameters_address = user_data + control_parameter
 
 
 CurrentCalibration get_current_calibration(){
-    CurrentCalibration result;
-    if (deserialise(result, current_calibration_address, CurrentCalibration::message_size)) {
-        return result;
+    Message stored_data;
+    read_message(stored_data, current_calibration_address, message_size(CURRENT_CALIBRATION));
+    if (stored_data.message_code == MessageCode::CURRENT_CALIBRATION) {
+        return std::get<CurrentCalibration>(stored_data.message_data);
     } else {
         return default_current_calibration;
     }
 }
 HallPositions get_position_calibration(){
-    HallPositions result;
-    if (deserialise(result, position_calibration_address, HallPositions::message_size)) {
-        return result;
+    Message stored_data;
+    read_message(stored_data, position_calibration_address, message_size(HALL_POSITIONS));
+    if (stored_data.message_code == MessageCode::HALL_POSITIONS) {
+        return std::get<HallPositions>(stored_data.message_data);
     } else {
         return default_position_calibration;
     }
 }
 
 ControlParameters get_control_parameters() {
-    ControlParameters result;
-    if (deserialise(result, control_parameters_address, ControlParameters::message_size)) {
-        return result;
+    Message stored_data;
+    read_message(stored_data, control_parameters_address, message_size(CONTROL_PARAMETERS));
+    if (stored_data.message_code == MessageCode::CONTROL_PARAMETERS) {
+        return std::get<ControlParameters>(stored_data.message_data);
     } else {
         return default_control_parameters;
     }
@@ -123,18 +126,21 @@ void save_settings_to_flash(
     HallPositions const& position_calibration,
     ControlParameters const& control_parameters
 ) {
-    // Write the current calibration to the buffer.
-    const auto current_calibration_buffer = serialise(current_calibration);
-    std::memcpy(page_buffer + current_calibration_offset, current_calibration_buffer.data, current_calibration_buffer.size);
+    write_message(page_buffer + current_calibration_offset, message_size(CURRENT_CALIBRATION), Message{
+        .message_code = MessageCode::CURRENT_CALIBRATION,
+        .message_data = current_calibration
+    });
 
-    // Write the position calibration to the buffer.
-    const auto position_calibration_buffer = serialise(position_calibration);
-    std::memcpy(page_buffer + position_calibration_offset, position_calibration_buffer.data, position_calibration_buffer.size);
+    write_message(page_buffer + position_calibration_offset, message_size(HALL_POSITIONS), Message{
+        .message_code = MessageCode::HALL_POSITIONS,
+        .message_data = position_calibration
+    });
 
-    // Write the observer parameters to the buffer.
-    const auto control_parameters_buffer = serialise(control_parameters);
-    std::memcpy(page_buffer + control_parameters_offset, control_parameters_buffer.data, control_parameters_buffer.size);
-    
+    write_message(page_buffer + control_parameters_offset, message_size(CONTROL_PARAMETERS), Message{
+        .message_code = MessageCode::CONTROL_PARAMETERS,
+        .message_data = control_parameters
+    });
+
     // Write the buffer to flash memory.
     if(write_to_flash(reinterpret_cast<uint32_t *>(user_data), page_buffer, FLASH_PAGE_SIZE) != HAL_OK) {
         error();

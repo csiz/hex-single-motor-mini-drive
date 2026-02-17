@@ -1,16 +1,209 @@
 doc: |
   API interface definition for the Hex Single Motor Mini Drive.
 
-  The first 2 bytes of each message contain the message code. The remainder 
+  The first 2 bytes of each message contain the message message_code. The remainder 
   of the message contains data as defined below, writting the fields in order.
   as their bit representation, little-endian.
 
-MessageCodes:
-  NullCommand:
-    code: 0x0000
+message_codes:
+
+  NULL_MESSAGE_CODE: 
+    message_code: 0x0000
+
+  READOUT:
+    message_code: 0x2020
+    type: Readout
+
+  STREAM_FULL_READOUTS:
+    message_code: 0x2021
+    type: StreamFullReadouts
+    returns: FULL_READOUT
+    returns_len: 'stream'
+
+  GET_READOUTS_SNAPSHOT:
+    message_code: 0x2022
+    returns: READOUT
+    returns_len: HISTORY_SIZE
+
+  FULL_READOUT:
+    message_code: 0x2023
+    type: FullReadout
+
+  SET_STATE_OFF:
+    message_code: 0x2030
+    
+  SET_STATE_DRIVE_6_SECTOR:
+    message_code: 0x2031
+    type: BasicDriveCommand
+
+  SET_STATE_TEST_ALL_PERMUTATIONS:
+    message_code: 0x2032
+    type: TestCommand
+    
+  SET_STATE_FREEWHEEL:
+    message_code: 0x2034
+
+  SET_STATE_TEST_GROUND_SHORT:
+    message_code: 0x2036
+    type: TestCommand
+  SET_STATE_TEST_POSITIVE_SHORT:
+    message_code: 0x2037
+    type: TestCommand
+  SET_STATE_TEST_U_DIRECTIONS:
+    message_code: 0x2039
+    type: TestCommand
+  SET_STATE_TEST_U_INCREASING:
+    message_code: 0x203a
+    type: TestCommand
+  SET_STATE_TEST_U_DECREASING:
+    message_code: 0x203b
+    type: TestCommand
+  SET_STATE_TEST_V_INCREASING:
+    message_code: 0x203c
+    type: TestCommand
+  SET_STATE_TEST_V_DECREASING:
+    message_code: 0x203d
+    type: TestCommand
+  SET_STATE_TEST_W_INCREASING:
+    message_code: 0x203e
+    type: TestCommand
+  SET_STATE_TEST_W_DECREASING:
+    message_code: 0x203f
+    type: TestCommand
+  SET_STATE_HOLD_U_POSITIVE:
+    message_code: 0x3020
+    type: HoldCommand
+  SET_STATE_HOLD_V_POSITIVE:
+    message_code: 0x3021
+    type: HoldCommand
+  SET_STATE_HOLD_W_POSITIVE:
+    message_code: 0x3022
+    type: HoldCommand
+  SET_STATE_HOLD_U_NEGATIVE:
+    message_code: 0x3023
+    type: HoldCommand
+  SET_STATE_HOLD_V_NEGATIVE:
+    message_code: 0x3024
+    type: HoldCommand
+  SET_STATE_HOLD_W_NEGATIVE:
+    message_code: 0x3025
+    type: HoldCommand
+    
+  SET_STATE_DRIVE_PERIODIC:
+    message_code: 0x3040
+    type: SetStateDrivePeriodic
+  SET_STATE_DRIVE_SMOOTH:
+    message_code: 0x4030
+    type: SetStateDriveSmooth
+  SET_STATE_DRIVE_TORQUE:
+    message_code: 0x4031
+    type: SetStateDriveTorque
+  SET_STATE_DRIVE_BATTERY_POWER:
+    message_code: 0x4032
+    type: SetStateDriveBatteryPower
+  SET_STATE_DRIVE_SPEED:
+    message_code: 0x4033
+    type: SetStateDriveSpeed
+  SET_STATE_SEEK_ANGLE_WITH_POWER:
+    message_code: 0x4034
+    type: SetStateSeekAngleWithPower
+  SET_STATE_SEEK_ANGLE_WITH_TORQUE:
+    message_code: 0x4035
+    type: SetStateSeekAngleWithTorque
+  SET_STATE_SEEK_ANGLE_WITH_SPEED:
+    message_code: 0x4036
+    type: SetStateSeekAngleWithSpeed
+
+  CURRENT_CALIBRATION:
+    message_code: 0x4040
+    type: CurrentCalibration
+  GET_CURRENT_CALIBRATION:
+    message_code: 0x4041
+    returns: CURRENT_CALIBRATION
+  SET_CURRENT_CALIBRATION:
+    message_code: 0x4042
+    type: CurrentCalibration
+    returns: CURRENT_CALIBRATION
+  RESET_CURRENT_CALIBRATION:
+    message_code: 0x4043
+    returns: CURRENT_CALIBRATION
+
+  HALL_POSITIONS:
+    message_code: 0x4044
+    type: HallPositions
+  GET_HALL_POSITIONS:
+    message_code: 0x4045
+    returns: HALL_POSITIONS
+  SET_HALL_POSITIONS:
+    message_code: 0x4046
+    type: HallPositions
+    returns: HALL_POSITIONS
+  RESET_HALL_POSITIONS:
+    message_code: 0x4047
+    returns: HALL_POSITIONS
+
+  CONTROL_PARAMETERS:
+    message_code: 0x4049
+    type: ControlParameters
+  SET_CONTROL_PARAMETERS:
+    message_code: 0x404a
+    type: ControlParameters
+    returns: CONTROL_PARAMETERS
+  GET_CONTROL_PARAMETERS:
+    message_code: 0x404b
+    returns: CONTROL_PARAMETERS
+  RESET_CONTROL_PARAMETERS:
+    message_code: 0x404c
+    returns: CONTROL_PARAMETERS
+
+  SET_ANGLE:
+    message_code: 0x4050
+    type: SetAngle
+  SAVE_SETTINGS_TO_FLASH:
+    message_code: 0x4080  
+  UNIT_TEST_OUTPUT:
+    message_code: 0x5040
+    type: UnitTestOutput
+  RUN_UNIT_TEST_FUNKY_ATAN:
+    message_code: 0x5042
+    returns: UNIT_TEST_OUTPUT
+  RUN_UNIT_TEST_FUNKY_ATAN_PART2:
+    message_code: 0x5043
+    returns: UNIT_TEST_OUTPUT
+  RUN_UNIT_TEST_FUNKY_ATAN_PART3:
+    message_code: 0x5044
+    returns: UNIT_TEST_OUTPUT
+
+
+definitions:
+  HISTORY_SIZE:
+    doc: Number of contiguous readouts to store in the history buffer for a snapshot.
+    type: uint32
+    const: 336
+
+  UNIT_TEST_OUTPUT_SIZE:
+    doc: Number of bytes in the unit test output; should be enough to store the output of the funky atan unit test.
+    type: uint32
+    const: 248
+
+  PositiveNegativeTransition:
+    type: uint16
+    array_len: 2
+
+  SectorTransitions:
+    type: PositiveNegativeTransition
+    array_len: 6
+
+  SectorCenters:
+    type: uint16
+    array_len: 6
+
+  UnitTestOutput:
+    doc: Output data from unit test.
+    type: uint8
+    array_len: UNIT_TEST_OUTPUT_SIZE
 
   Readout:
-    code: 0x2020
     doc: |
       Basic readout of the motor driver internal state; can be recorded contiguously
       into a history buffer after a commanded event.
@@ -83,8 +276,6 @@ MessageCodes:
           closer to the actual EMF voltage magnitude.
 
   StreamFullReadouts:
-    code: 0x2021
-    returns: {type: stream, item: FullReadout}
     doc: |
       Continuously send full readouts of the motor driver internal state.
 
@@ -94,15 +285,12 @@ MessageCodes:
         doc: |
           Number of messages to send; the stream command should be repeated to keep sending messages.
 
-  GetReadoutsSnapshot:
-    code: 0x2022
-    returns: {type: array, len: HISTORY_SIZE, item: Readout}
 
   FullReadout:
-    code: 0x2023
-    extends: Readout
     doc: |
       Complete readout of the motor driver internal state for exploration and data stream.
+    
+    struct_base: Readout
     
     struct:
       main_loop_rate:
@@ -213,11 +401,8 @@ MessageCodes:
         type: int16
         doc: Spare debug output.
 
-  SetStateOff:
-    code: 0x2030
 
-  SetStateDrive6Sector:
-    code: 0x2031
+  BasicDriveCommand:
     struct:
       pwm_value:
         type: int16
@@ -226,8 +411,7 @@ MessageCodes:
         type: uint16
         doc: Time in pwm periods to drive the motor before stopping.
 
-  SetStateTestAllPermutations:
-    code: 0x2032
+  TestCommand:
     struct:
       pwm_value:
         type: uint16
@@ -236,48 +420,7 @@ MessageCodes:
         type: uint16
         doc: Whether to take a snapshot while running the test.
 
-  SetStateFreewheel:
-    code: 0x2034
-    extends: SetStateTestAllPermutations
-
-  SetStateTestGroundShort:
-    code: 0x2036
-    extends: SetStateTestAllPermutations
-
-  SetStateTestPositiveShort:
-    code: 0x2037
-    extends: SetStateTestAllPermutations
-
-  SetStateTestUDirections:
-    code: 0x2039
-    extends: SetStateTestAllPermutations
-
-  SetStateTestUIncreasing:
-    code: 0x203a
-    extends: SetStateTestAllPermutations
-
-  SetStateTestUDecreasing:
-    code: 0x203b
-    extends: SetStateTestAllPermutations
-
-  SetStateTestVIncreasing:
-    code: 0x203c
-    extends: SetStateTestAllPermutations
-
-  SetStateTestVDecreasing:
-    code: 0x203d
-    extends: SetStateTestAllPermutations
-
-  SetStateTestWIncreasing:
-    code: 0x203e
-    extends: SetStateTestAllPermutations
-
-  SetStateTestWDecreasing:
-    code: 0x203f
-    extends: SetStateTestAllPermutations
-
-  SetStateHoldUPositive:
-    code: 0x3020
+  HoldCommand:
     struct:
       pwm_value:
         type: uint16
@@ -286,28 +429,7 @@ MessageCodes:
         type: uint16
         doc: Time in pwm periods to hold the position before stopping.
 
-  SetStateHoldVPositive:
-    code: 0x3021
-    extends: SetStateHoldUPositive
-
-  SetStateHoldWPositive:
-    code: 0x3022
-    extends: SetStateHoldUPositive
-
-  SetStateHoldUNegative:
-    code: 0x3023
-    extends: SetStateHoldUPositive
-
-  SetStateHoldVNegative:
-    code: 0x3024
-    extends: SetStateHoldUPositive
-
-  SetStateHoldWNegative:
-    code: 0x3025
-    extends: SetStateHoldUPositive
-
   SetStateDrivePeriodic:
-    code: 0x3040
     struct:
       pwm_value:
         type: uint16
@@ -324,7 +446,6 @@ MessageCodes:
       
 
   SetStateDriveSmooth:
-    code: 0x4030
     struct:
       pwm_value:
         type: uint16
@@ -334,7 +455,6 @@ MessageCodes:
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateDriveTorque:
-    code: 0x4031
     struct:
       target_current:
         type: int16
@@ -344,7 +464,6 @@ MessageCodes:
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateDriveBatteryPower:
-    code: 0x4032
     struct:
       target_power:
         type: int16
@@ -354,7 +473,6 @@ MessageCodes:
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateDriveSpeed:
-    code: 0x4033
     struct:
       target_speed:
         type: int16
@@ -364,7 +482,6 @@ MessageCodes:
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateSeekAngleWithPower:
-    code: 0x4034
     struct:
       target_rotation:
         type: int16
@@ -380,7 +497,6 @@ MessageCodes:
         doc: Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
 
   SetStateSeekAngleWithTorque:
-    code: 0x4035
     struct:
       target_rotation:
         type: int16
@@ -396,7 +512,6 @@ MessageCodes:
         doc: Maximum current to use for driving the motor; used to prevent overheating and overcurrent.
 
   SetStateSeekAngleWithSpeed:
-    code: 0x4036
     struct:
       target_rotation:
         type: int16
@@ -412,7 +527,6 @@ MessageCodes:
         doc: Maximum speed to use for driving the motor; used to prevent overheating and overcurrent.
 
   CurrentCalibration:
-    code: 0x4040
     doc: |
       Calibration factors for the current sensors.
 
@@ -442,21 +556,7 @@ MessageCodes:
         doc: Adjustment factor for the motor inductance; used to calibrate the coil inductance.
       
 
-  GetCurrentCalibration:
-    code: 0x4041
-    returns: CurrentCalibration
-
-  SetCurrentCalibration:
-    code: 0x4042
-    extends: CurrentCalibration
-    returns: CurrentCalibration
-
-  ResetCurrentCalibration:
-    code: 0x4043
-    returns: CurrentCalibration
-
   HallPositions:
-    code: 0x4044
     doc: |
       Hall sensor position calibration data.
       
@@ -469,9 +569,7 @@ MessageCodes:
       
     struct:
       sector_transition_angles:
-        type: array
-        len: 6
-        item: {type: array, len: 2, item: uint16}
+        type: SectorTransitions
         doc: | 
           The angle at the transition to the current sector from the left and from the 
           right. By "left" I mean the hall sector has transitioned from a lower to a higher 
@@ -481,40 +579,20 @@ MessageCodes:
           hall sensors have a designed hysteresis that latches the output.
 
       sector_transition_variances:
-        type: array
-        len: 6
-        item: {type: array, len: 2, item: uint16}
+        type: SectorTransitions
         doc: |
           The variance of the angles (it is expensive to compute the standard deviation with 
           a square root but we only need the variance, so we only store the variance).
 
       sector_center_angles:
-        type: array
-        len: 6
-        item: uint16
+        type: SectorCenters
         doc: The center angle of each sector; the average of the left and right angles.
 
       sector_center_variances:
-        type: array
-        len: 6
-        item: uint16
+        type: SectorCenters
         doc: The variance of the center angles; at the moment it represents the span of the hall sector.
 
-  GetHallPositions:
-    code: 0x4045
-    returns: HallPositions
-
-  SetHallPositions:
-    code: 0x4046
-    extends: HallPositions
-    returns: HallPositions
-
-  ResetHallPositions:
-    code: 0x4047
-    returns: HallPositions
-
   ControlParameters:
-    code: 0x4049
     doc: |
       Parameters used in the motor control loop; for detailed descriptions check the
       motor monitor page. It's useful to modify the values and inspect the changes to
@@ -673,47 +751,8 @@ MessageCodes:
         type: int16
         doc: Inductance of motor coils per phase (star configuration).
 
-
-  SetControlParameters:
-    code: 0x404a
-    extends: ControlParameters
-    returns: ControlParameters
-
-  GetControlParameters:
-    code: 0x404b
-    returns: ControlParameters
-
-  ResetControlParameters:
-    code: 0x404c
-    returns: ControlParameters
-
   SetAngle:
-    code: 0x4050
     struct:
       angle:
         type: uint16
         doc: Set the current angle of the motor; used for initial angle calibration.
-
-  SaveSettingsToFlash:
-    code: 0x4080
-
-  UnitTestOutput:
-    code: 0x5040
-    struct:
-      data: {type: array, len: 248, item: uint8}
-
-  RunUnitTestFunkyAtan:
-    code: 0x5042
-    returns: UnitTestOutput
-
-  RunUnitTestFunkyAtanPart2:
-    code: 0x5043
-    returns: UnitTestOutput
-
-  RunUnitTestFunkyAtanPart3:
-    code: 0x5044
-    returns: UnitTestOutput
-
-
-Constants:
-  HISTORY_SIZE: {type: uint16, value: 336}

@@ -20,7 +20,7 @@ import {
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
 import {square, dq0_transform, exponential_stats} from './math_utils.js';
 import {accumulate_position_from_hall} from './position_kalman_filter.js';
-import { MessageCode } from 'hex-mini-drive-interface';
+import { MessageCode, UNIT_TEST_OUTPUT_SIZE } from 'hex-mini-drive-interface';
 
 
 // Maximum time between readouts to consider them part of the same series.
@@ -461,14 +461,14 @@ export function make_position_calibration(position_calibration) {
 
 function parse_unit_test_output(bare_unit_test) {
   // Convert number array to Uint8Array.
-  const uint8_array = new Uint8Array(bare_unit_test.data);
+  const uint8_array = new Uint8Array(bare_unit_test);
 
   // Get dataview from test data buffer.
   const data_view = new DataView(uint8_array.buffer);
 
   // Get the length of the null terminated string.
   let len = 0;
-  while (data_view.getUint8(len) !== 0 && len < 256) len++;
+  while (data_view.getUint8(len) !== 0 && len < UNIT_TEST_OUTPUT_SIZE) len++;
 
   // Return the output as an utf-8 string.
   return new TextDecoder().decode(data_view.buffer.slice(0, len));
@@ -476,10 +476,10 @@ function parse_unit_test_output(bare_unit_test) {
 
 
 export const parser_mapping = {
-  [MessageCode.Readout]: parse_readout,
-  [MessageCode.FullReadout]: parse_full_readout,
-  [MessageCode.HallPositions]: parse_position_calibration,
-  [MessageCode.UnitTestOutput]: parse_unit_test_output,
-  [MessageCode.CurrentCalibration]: parse_current_calibration,
+  [MessageCode.READOUT]: parse_readout,
+  [MessageCode.FULL_READOUT]: parse_full_readout,
+  [MessageCode.HALL_POSITIONS]: parse_position_calibration,
+  [MessageCode.UNIT_TEST_OUTPUT]: parse_unit_test_output,
+  [MessageCode.CURRENT_CALIBRATION]: parse_current_calibration,
 };
 

@@ -17,30 +17,30 @@ export async function run_position_calibration(motor_controller) {
   const test_options = {pwm_value: 0, take_snapshot: 1};
   const reply = {
     expected_messages: history_size,
-    expected_code: MessageCode.Readout,
+    expected_code: MessageCode.READOUT,
   };
 
   await motor_controller.send_command({
-    message_code: MessageCode.SetStateDrive6Sector, 
+    message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
     pwm_value: +drive_strength, 
     timeout: drive_timeout,
   });  
   await wait(drive_time);
   const drive_positive = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestGroundShort, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_GROUND_SHORT, ...test_options},
     ...reply
   });
 
   console.info("Drive positive done");
 
   await motor_controller.send_command({
-    message_code: MessageCode.SetStateDrive6Sector,
+    message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR,
     pwm_value: -drive_strength,
     timeout: drive_timeout,
   });
   await wait(drive_time);
   const drive_negative = await motor_controller.send_command_and_await_reply({
-    message: {message_code: MessageCode.SetStateTestGroundShort, ...test_options},
+    message: {message_code: MessageCode.SET_STATE_TEST_GROUND_SHORT, ...test_options},
     ...reply
   });
 
