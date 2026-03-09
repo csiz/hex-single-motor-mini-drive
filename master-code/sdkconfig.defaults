@@ -9,6 +9,9 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_ESP_WIFI_DPP_SUPPORT=y
 CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM=y
 
+# Enable WebSocket support for HTTP server
+CONFIG_HTTPD_WS_SUPPORT=y
+
 # Override some defaults so BT stack is enabled and
 CONFIG_BT_ENABLED=y
 CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y

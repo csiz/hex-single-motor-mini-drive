@@ -4,6 +4,7 @@
 #include <esp_timer.h>
 #include <nvs_flash.h>
 #include <esp_task_wdt.h>
+#include "esp_log.h"
 
 #include "display.hpp"
 #include "io.hpp"
@@ -36,10 +37,11 @@ void main_task(void *arg) {
 
   start_wifi_provisioning();
   
-  setup_mdns();
-  setup_http_server();
-  setup_https_server();
-
+  setup_server([](uint8_t* buffer, size_t size) {
+    ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
+    
+    ws_send_binary(buffer, size);
+  });
   
   int64_t lastBlink = 0;
   bool statusState = false;

@@ -196,6 +196,27 @@ Unit Tests
 </main>
 
 
+```js
+// Setup a websocket connection to `ws://hex-mini-drive.local/ws` and send a message, log any replies.
+
+const ws = new WebSocket('ws://hex-mini-drive.local/ws');
+
+ws.addEventListener('open', function (event) {
+  console.log('WebSocket connection opened');
+  ws.send(JSON.stringify({message: 'Hello, server!'}));
+});
+
+ws.addEventListener('message', async function (event) {
+  console.log('Message from server:', await event.data.text());
+});
+
+ws.addEventListener('close', function (event) {
+  console.log('WebSocket connection closed');
+});
+
+
+
+```
 
 ```js
 // USB Connection and Data
