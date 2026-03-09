@@ -10,6 +10,8 @@
 #include "wifi.hpp"
 #include "https_server.hpp"
 
+#include "hex_mini_drive/interface.hpp"
+
 static const char* TAG = "main";
 
 
