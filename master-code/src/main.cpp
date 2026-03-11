@@ -43,22 +43,22 @@ void main_task(void *arg) {
     ws_send_binary(buffer, size);
   });
   
-  int64_t lastBlink = 0;
-  bool statusState = false;
+  int64_t last_blink = 0;
+  bool status_state = false;
   
   while (1) {
     // Blink the built-in status LED to show the system is running
-    int64_t currentTime = esp_timer_get_time() / 1000; // Convert to milliseconds
+    int64_t current_time = esp_timer_get_time() / 1000; // Convert to milliseconds
 
     // Handle displaya and LVGL tasks.
-    update_display(currentTime);
+    update_display(current_time);
     
     
-    if (currentTime - lastBlink > 1000) {
-      statusState = !statusState;
-      uint32_t duty = statusState ? 128 : 32;
+    if (current_time - last_blink > 1000) {
+      status_state = !status_state;
+      uint32_t duty = status_state ? 128 : 32;
       set_status_led_brightness(duty);
-      lastBlink = currentTime;
+      last_blink = current_time;
     }
 
     // We need to reset the watchdog timer regularly.
