@@ -17,7 +17,7 @@ void setup_status_led(){
   ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
   ledc_channel_config_t ledc_channel = {
-    .gpio_num = status_pin,
+    .gpio_num = status_led_pin,
     .speed_mode = LEDC_LOW_SPEED_MODE,
     .channel = LEDC_CHANNEL_0,
     .timer_sel = LEDC_TIMER_0,
