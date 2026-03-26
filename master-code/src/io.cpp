@@ -1,6 +1,8 @@
 #include "io.hpp"
 
-#include "esp_log.h"
+#include <esp_log.h>
+
+#include <driver/spi_master.h>
 
 static const char* TAG = "io";
 
@@ -25,6 +27,24 @@ void setup_status_led(){
     .hpoint = 0
   };
   ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+}
+
+void setup_spi_busses(){
+  ESP_LOGI(TAG, "Initializing SPI2...");
+
+  // Configure SPI bus
+  spi_bus_config_t buscfg = {
+    .mosi_io_num = spi2_mosi_pin,
+    .miso_io_num = spi2_miso_pin,
+    .sclk_io_num = spi2_sclk_pin,
+    .quadwp_io_num = GPIO_NUM_NC,
+    .quadhd_io_num = GPIO_NUM_NC,
+    .max_transfer_sz = display_width * display_height * sizeof(uint16_t),
+  };
+  
+  ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
+
+  // ESP_LOGI(TAG, "Initializing SPI3...");
 }
 
 void set_status_led_brightness(uint8_t brightness){

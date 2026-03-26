@@ -2,13 +2,14 @@
 #include "io.hpp"
 
 #include <driver/spi_master.h>
+
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_vendor.h>
 #include <esp_lcd_panel_ops.h>
 #include <lvgl.h>
 #include <esp_lcd_panel_st7789.h>
-#include "esp_log.h"
-#include "esp_timer.h"
+#include <esp_log.h>
+#include <esp_timer.h>
 
 static const char* TAG = "display";
 
@@ -41,18 +42,6 @@ void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_
 void setup_display_and_lvgl() {
   
   ESP_LOGI(TAG, "Initializing ST7789 Display with LVGL...");
-
-  // Configure SPI bus
-  spi_bus_config_t buscfg = {
-    .mosi_io_num = display_mosi,
-    .miso_io_num = display_miso,
-    .sclk_io_num = display_sclk,
-    .quadwp_io_num = GPIO_NUM_NC,
-    .quadhd_io_num = GPIO_NUM_NC,
-    .max_transfer_sz = display_width * display_height * sizeof(uint16_t),
-  };
-  
-  ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
   // Configure panel I/O
   esp_lcd_panel_io_spi_config_t io_config = {

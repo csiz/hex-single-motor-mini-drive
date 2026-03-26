@@ -33,6 +33,7 @@ void main_task(void *arg) {
   
   // Setup everything
   setup_status_led();
+  setup_spi_busses();
   setup_display_and_lvgl();
 
   start_wifi_provisioning();
