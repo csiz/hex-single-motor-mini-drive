@@ -34,8 +34,7 @@ int salt_len = 16; // Standard salt length
 
 
 /* Signal Wi-Fi events on this event-group */
-const int WIFI_CONNECTED_EVENT = BIT0;
-static EventGroupHandle_t wifi_event_group;
+void (*on_connected)() = nullptr;
 
 #define PROV_QR_VERSION         "v1"
 #define PROV_TRANSPORT_SOFTAP   "softap"
@@ -107,7 +106,7 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
-        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_EVENT);
+        if (on_connected) on_connected();
     }
 }
 
@@ -183,14 +182,14 @@ static void wifi_prov_print_qr(const char *name, const char *username, const cha
 }
 
 
-void start_wifi_provisioning(void)
-{
+void start_wifi_provisioning(void (*on_connected_callback)()) {
+    on_connected = on_connected_callback;
+
     // Initialize TCP/IP
     ESP_ERROR_CHECK(esp_netif_init());
 
     // Initialize the event loop
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    wifi_event_group = xEventGroupCreate();
 
     // Register our event handler for Wi-Fi, IP and Provisioning related events
     ESP_ERROR_CHECK(esp_event_handler_register(
@@ -318,7 +317,5 @@ void start_wifi_provisioning(void)
         wifi_init_sta();
     }
 
-    /* Wait for Wi-Fi connection */
-    xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, true, true, portMAX_DELAY);
-
+    // Do not wait for connection so we do not block the watchdog.
 }

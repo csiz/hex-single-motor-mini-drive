@@ -39,6 +39,16 @@ void blink_status_led(int64_t current_time_ms) {
   }
 }
 
+void wifi_connected(){
+  ESP_LOGI(TAG, "Wi-Fi connected callback called");
+
+  setup_server([](uint8_t* buffer, size_t size) {
+    ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
+    
+    ws_send_binary(buffer, size);
+  });
+}
+
 void receive_message(uint8_t* buffer, size_t size) {
   ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
   
@@ -65,14 +75,7 @@ void main_task(void *arg) {
 
   update_display(get_ms_time());
 
-  start_wifi_provisioning();
-  
-  setup_server([](uint8_t* buffer, size_t size) {
-    ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
-    
-    ws_send_binary(buffer, size);
-  });
-  
+  start_wifi_provisioning(wifi_connected);
   
   while (1) {
     // Blink the built-in status LED to show the system is running
