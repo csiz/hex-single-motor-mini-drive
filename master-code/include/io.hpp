@@ -143,3 +143,13 @@ void set_status_led_brightness(uint8_t brightness);
 
 // Initialize the SPI busses for the display, SD card, and shift registers.
 void setup_spi_busses();
+
+void setup_output_pins();
+
+void connect_battery_to_vcc();
+
+void disconnect_battery_from_vcc();
+
+void connect_vbus_to_vcc();
+
+void disconnect_vbus_from_vcc();

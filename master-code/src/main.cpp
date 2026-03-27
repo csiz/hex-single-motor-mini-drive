@@ -75,6 +75,11 @@ void main_task(void *arg) {
 
   update_display(get_ms_time());
 
+  setup_output_pins();
+
+  // BIG oof, this burns the circuit.
+  // connect_vbus_to_vcc();
+
   start_wifi_provisioning(wifi_connected);
   
   while (1) {
