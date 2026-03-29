@@ -76,6 +76,19 @@ void main_task(void *arg) {
   update_display(get_ms_time());
 
   setup_output_pins();
+  setup_shift_register_bank2();
+
+  set_shift_register_bank2((uint8_t[7]){
+    0b0000'0000,
+    0, 
+    0, 
+    0, 
+    0, 
+    0, 
+    0,
+  });
+
+  enable_shift_register_outputs();
 
   // BIG oof, this burns the circuit.
   // connect_vbus_to_vcc();

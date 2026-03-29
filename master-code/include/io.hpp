@@ -146,6 +146,18 @@ void setup_spi_busses();
 
 void setup_output_pins();
 
+void enable_shift_register_outputs();
+
+void disable_shift_register_outputs();
+
+void setup_shift_register_bank1();
+
+void set_shift_register_bank1(uint8_t data[3]);
+
+void setup_shift_register_bank2();
+
+void set_shift_register_bank2(uint8_t data[7]);
+
 void connect_battery_to_vcc();
 
 void disconnect_battery_from_vcc();
@@ -153,3 +165,4 @@ void disconnect_battery_from_vcc();
 void connect_vbus_to_vcc();
 
 void disconnect_vbus_from_vcc();
+
