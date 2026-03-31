@@ -91,7 +91,7 @@ void main_task(void *arg) {
   enable_shift_register_outputs();
 
   // BIG oof, this burns the circuit.
-  // connect_vbus_to_vcc();
+  connect_vbus_to_vcc();
 
   start_wifi_provisioning(wifi_connected);
   
