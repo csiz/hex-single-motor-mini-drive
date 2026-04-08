@@ -3,6 +3,7 @@
 #include <esp_log.h>
 
 #include <driver/spi_master.h>
+#include <rom/ets_sys.h>
 
 static const char* TAG = "io";
 
@@ -128,6 +129,7 @@ void motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* rea
   uint8_t cs_data[3] = {0xFF, 0xFF, 0xFF};
   // Clear the bit corresponding to motor_index to assert CS.
   cs_data[2 - (motor_index / 8)] &= ~(1 << (motor_index % 8));
+  // Bank 1 is latched by shift_bank1_latch, and connected to SPI3.
   set_shift_register_bank1(cs_data);
 
   // Perform the SPI transaction on SPI3 (shared bus with shift registers).
@@ -136,14 +138,19 @@ void motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* rea
   t.tx_buffer = write_data;
   t.rx_buffer = read_data;
 
+  // Last 3 bytes must set the shift register outputs high to deassert the nss line, yeah there's circuit error here...
+  write_data[length - 1] = 0xFF;
+  write_data[length - 2] = 0xFF;
+  write_data[length - 3] = 0xFF;
+
   const esp_err_t transmit_result = spi_device_transmit(shift_register_bank1_device, &t);
   if(transmit_result != ESP_OK){
     ESP_LOGE(TAG, "SPI transaction failed for motor %d, err %d", motor_index, transmit_result);
   }
 
-  // Deassert all chip selects.
-  uint8_t cs_deassert[3] = {0xFF, 0xFF, 0xFF};
-  set_shift_register_bank1(cs_deassert);
+  // Latch the data into the output registers.
+  gpio_set_level(shift_bank1_latch, 1);
+  gpio_set_level(shift_bank1_latch, 0);
 }
 
 
