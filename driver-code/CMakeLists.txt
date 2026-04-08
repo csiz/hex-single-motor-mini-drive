@@ -57,6 +57,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "Code/Src/parameters_store.cpp"
     "Code/Src/integer_math.cpp"
     "Code/Src/usb_com.cpp"
+    "Code/Src/spi_com.cpp"
 )
 
 # Add include paths

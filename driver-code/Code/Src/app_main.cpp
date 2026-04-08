@@ -16,7 +16,7 @@
 #include "io.hpp"
 #include "type_definitions.hpp"
 #include "usb_com.hpp"
-
+#include "spi_com.hpp"
 
 
 #include <cstddef>
@@ -87,6 +87,8 @@ void app_init() {
 
     // Get initial hall sensor state and initialize poisition tracking.
     initialize_angle_tracking();
+
+    spi_init();
 }
 
 static inline void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {

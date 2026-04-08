@@ -55,7 +55,15 @@ void setup_spi_busses(){
   
   ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
-  // ESP_LOGI(TAG, "Initializing SPI3...");
+
+  ESP_LOGI(TAG, "Initializing SPI3...");
+
+  buscfg.mosi_io_num = spi3_mosi_pin;
+  buscfg.miso_io_num = spi3_miso_pin;
+  buscfg.sclk_io_num = spi3_sclk_pin;
+  buscfg.max_transfer_sz = 4096; // Shift registers only need small transfers.
+
+  ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
 }
 
 void setup_output_pins(){
@@ -92,6 +100,54 @@ void disable_shift_register_outputs(){
   ESP_LOGI(TAG, "Disabling shift register outputs...");
   gpio_set_level(shift_oe, 1);
 }
+
+void setup_shift_register_bank1(){
+  // Bank 1 is latched by shift_bank1_latch, and connected to SPI3.
+  spi_device_interface_config_t devcfg = {};
+  devcfg.clock_speed_hz = 1 * 1000 * 1000; // Clock at 1 MHz
+  devcfg.mode = 0;                          // SPI mode 0
+  devcfg.spics_io_num = GPIO_NUM_NC;
+  devcfg.queue_size = 1;
+  ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &shift_register_bank1_device));
+}
+
+void set_shift_register_bank1(uint8_t data[3]){
+  // Bank 1 is latched by shift_bank1_latch, and connected to SPI3.
+  spi_transaction_t t = {};
+  t.length = 3 * 8;
+  t.tx_buffer = data;
+  ESP_ERROR_CHECK(spi_device_transmit(shift_register_bank1_device, &t));
+  // Latch the data into the output registers.
+  gpio_set_level(shift_bank1_latch, 1);
+  gpio_set_level(shift_bank1_latch, 0);
+}
+
+void motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* read_data, size_t length){
+  // Assert chip select for the target motor (active low).
+  // Bank 1 has 24 bits (3 bytes), one per motor. All bits high = all deasserted.
+  uint8_t cs_data[3] = {0xFF, 0xFF, 0xFF};
+  // Clear the bit corresponding to motor_index to assert CS.
+  cs_data[2 - (motor_index / 8)] &= ~(1 << (motor_index % 8));
+  set_shift_register_bank1(cs_data);
+
+  // Perform the SPI transaction on SPI3 (shared bus with shift registers).
+  spi_transaction_t t = {};
+  t.length = length * 8;
+  t.tx_buffer = write_data;
+  t.rx_buffer = read_data;
+
+  const esp_err_t transmit_result = spi_device_transmit(shift_register_bank1_device, &t);
+  if(transmit_result != ESP_OK){
+    ESP_LOGE(TAG, "SPI transaction failed for motor %d, err %d", motor_index, transmit_result);
+  }
+
+  // Deassert all chip selects.
+  uint8_t cs_deassert[3] = {0xFF, 0xFF, 0xFF};
+  set_shift_register_bank1(cs_deassert);
+}
+
+
+
 
 void setup_shift_register_bank2(){
   // Bank 2 is latched by shift_bank2_latch, and connected to SPI3.

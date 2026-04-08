@@ -607,7 +607,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi3.Init.NSS = SPI_NSS_HARD_INPUT;
   hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
-  hspi3.Init.TIMode = SPI_TIMODE_ENABLE;
+  hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi3.Init.CRCPolynomial = 7;
   hspi3.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;

@@ -1,10 +1,13 @@
 #include <stdio.h>
+
+#include <functional>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
 #include <esp_task_wdt.h>
-#include "esp_log.h"
+#include <esp_log.h>
 
 #include "display.hpp"
 #include "io.hpp"
@@ -25,6 +28,16 @@ void initialise_nvs_flash() {
       ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
+}
+
+std::function<void(const int64_t current_time_ms)> interval(const int64_t interval_ms, void (*callback)()) {
+  int64_t last_time = 0;
+  return [interval_ms, callback, last_time](const int64_t current_time) mutable {
+    if (current_time - last_time >= interval_ms) {
+      callback();
+      last_time = current_time;
+    }
+  };
 }
 
 void blink_status_led(int64_t current_time_ms) {
@@ -59,6 +72,16 @@ static inline int64_t get_ms_time() {
   return esp_timer_get_time() / 1000; // Convert to milliseconds
 }
 
+const size_t spi_chunk_length = 128;
+uint8_t test_write_data[spi_chunk_length] = {0};
+uint8_t test_read_data[spi_chunk_length] = {0};
+
+void motor_update_unthrottled() {
+  motor_spi_transaction(0, test_write_data, test_read_data, spi_chunk_length);
+  ESP_LOGI(TAG, "SPI read data: %02X %02X %02X ...", test_read_data[0], test_read_data[1], test_read_data[2]);
+}
+
+const auto motor_update = interval(1000, motor_update_unthrottled); // Update motors every 1000ms
 
 void main_task(void *arg) {
   // Register this task with the watchdog timer.
@@ -76,6 +99,7 @@ void main_task(void *arg) {
   update_display(get_ms_time());
 
   setup_output_pins();
+  setup_shift_register_bank1();
   setup_shift_register_bank2();
 
   set_shift_register_bank2((uint8_t[7]){
@@ -85,17 +109,26 @@ void main_task(void *arg) {
     0, 
     0, 
     0, 
-    0,
+    0b0000'0010, // Enable first motor by setting the reset pin high.
+  });
+
+  set_shift_register_bank1((uint8_t[3]){
+    0xFF,
+    0xFF, 
+    0xFF, 
   });
 
   enable_shift_register_outputs();
 
-  // BIG oof, this burns the circuit.
+  // BIG oof, this burns the circuit, if the USB output flags are set wrong.
   connect_vbus_to_vcc();
 
   start_wifi_provisioning(wifi_connected);
   
   while (1) {
+    // We need to reset the watchdog timer regularly.
+    esp_task_wdt_reset();
+    
     // Blink the built-in status LED to show the system is running
     int64_t current_time_ms = get_ms_time();
 
@@ -104,9 +137,8 @@ void main_task(void *arg) {
     
     blink_status_led(current_time_ms);
 
-    // We need to reset the watchdog timer regularly.
-    esp_task_wdt_reset();
-    
+    motor_update(current_time_ms);
+
     // Must sleep at last 1ms to let the idle task handle the watchdog and other housekeeping.
     vTaskDelay(pdMS_TO_TICKS(1));
   }

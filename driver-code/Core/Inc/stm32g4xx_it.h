@@ -58,6 +58,7 @@ void SysTick_Handler(void);
 void ADC1_2_IRQHandler(void);
 void USB_LP_IRQHandler(void);
 void TIM8_UP_IRQHandler(void);
+void SPI3_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
