@@ -105,7 +105,7 @@ void disable_shift_register_outputs(){
 void setup_shift_register_bank1(){
   // Bank 1 is latched by shift_bank1_latch, and connected to SPI3.
   spi_device_interface_config_t devcfg = {};
-  devcfg.clock_speed_hz = 1 * 1000 * 1000; // Clock at 1 MHz
+  devcfg.clock_speed_hz = 10 * 1000 * 1000; // Clock at 10 MHz
   devcfg.mode = 0;                          // SPI mode 0
   devcfg.spics_io_num = GPIO_NUM_NC;
   devcfg.queue_size = 1;
@@ -159,7 +159,7 @@ void motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* rea
 void setup_shift_register_bank2(){
   // Bank 2 is latched by shift_bank2_latch, and connected to SPI3.
   spi_device_interface_config_t devcfg = {};
-  devcfg.clock_speed_hz = 1 * 1000 * 1000; // Clock at 1 MHz
+  devcfg.clock_speed_hz = 10 * 1000 * 1000; // Clock at 10 MHz
   devcfg.mode = 0;                          // SPI mode 0
   devcfg.spics_io_num = GPIO_NUM_NC;
   devcfg.queue_size = 1;

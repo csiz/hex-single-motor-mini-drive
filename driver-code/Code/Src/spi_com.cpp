@@ -20,7 +20,7 @@ static void spi_transmit_buffer_init() {
 }
 
 static void spi_start_transfer() {
-    if (HAL_SPI_TransmitReceive_IT(&hspi3, spi_transmit_buffer, spi_receive_buffer, spi_buffer_size) != HAL_OK) {
+    if (HAL_SPI_TransmitReceive_DMA(&hspi3, spi_transmit_buffer, spi_receive_buffer, spi_buffer_size) != HAL_OK) {
         Error_Handler();
     }
 }

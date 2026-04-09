@@ -81,7 +81,7 @@ void motor_update_unthrottled() {
   ESP_LOGI(TAG, "SPI read data: %02X %02X %02X ...", test_read_data[0], test_read_data[1], test_read_data[2]);
 }
 
-const auto motor_update = interval(1000, motor_update_unthrottled); // Update motors every 1000ms
+const auto motor_update = interval(10, motor_update_unthrottled); // Update motors every 10ms
 
 void main_task(void *arg) {
   // Register this task with the watchdog timer.
