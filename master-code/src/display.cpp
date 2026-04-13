@@ -20,7 +20,7 @@ esp_lcd_panel_io_handle_t io_handle = NULL;
 
 // LVGL display buffer
 static lv_disp_draw_buf_t draw_buf;
-static lv_color_t buf1[display_width * display_height];
+static lv_color_t buf1[display_width * 30];  // Buffer for 30 lines instead of full screen
 static lv_disp_drv_t disp_drv;
 
 // LVGL flush callback
@@ -83,7 +83,7 @@ void setup_display_and_lvgl() {
   lv_init();
   
   // Initialize the display buffer
-  lv_disp_draw_buf_init(&draw_buf, buf1, NULL, display_width * display_height);
+  lv_disp_draw_buf_init(&draw_buf, buf1, NULL, display_width * 30);
   
   // Initialize the display driver
   lv_disp_drv_init(&disp_drv);
@@ -100,7 +100,7 @@ void setup_display_and_lvgl() {
   lv_obj_t * label = lv_label_create(lv_scr_act());
   lv_label_set_text(label, "Hello World!");
   lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_text_font(label, &lv_font_montserrat_24, LV_PART_MAIN);
+  lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN);
   lv_obj_center(label);
   
   // Set background color to blue

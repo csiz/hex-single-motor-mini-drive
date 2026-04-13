@@ -3,3 +3,4 @@
 compile_commands.json
 managed_components/
 out/
+build/
