@@ -218,9 +218,6 @@ void start_wifi_provisioning(void (*on_connected_callback)()) {
         .scheme = wifi_prov_scheme_ble,
         .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM,
         .app_event_handler = WIFI_PROV_EVENT_HANDLER_NONE,
-        .wifi_prov_conn_cfg = {
-            .wifi_conn_attempts =  3,
-        },
     };
 
     // Initialize WiFi provisioning manager so we can log onto the local wifi network

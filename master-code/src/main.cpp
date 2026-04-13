@@ -102,7 +102,7 @@ void main_task(void *arg) {
   setup_shift_register_bank1();
   setup_shift_register_bank2();
 
-  set_shift_register_bank2((uint8_t[7]){
+  uint8_t bank2_defaults[7] = {
     0b0000'0000,
     0, 
     0, 
@@ -110,13 +110,17 @@ void main_task(void *arg) {
     0, 
     0, 
     0b0000'0010, // Enable first motor by setting the reset pin high.
-  });
+  };
 
-  set_shift_register_bank1((uint8_t[3]){
+  set_shift_register_bank2(bank2_defaults);
+
+  uint8_t bank1_defaults[3] = {
     0xFF,
     0xFF, 
     0xFF, 
-  });
+  };
+
+  set_shift_register_bank1(bank1_defaults);
 
   enable_shift_register_outputs();
 
