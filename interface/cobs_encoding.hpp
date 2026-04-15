@@ -3,9 +3,16 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "byte_handling.hpp"
-
 namespace hex_mini_drive {
+
+// Maximum message size (in bytes) for a message.
+const size_t max_message_size = 256;
+
+// A statically allocated buffer for messages.
+struct MessageBuffer {
+    uint8_t data[max_message_size];
+    size_t size = 0;
+};
 
 // Class to handle COBS decoding.
 // 
@@ -42,7 +49,7 @@ struct COBS_Buffer {
   }
 
   // Decode a chunk of data framed using COBS; return the number of dropped bytes due to errors.
-  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length, BufferFunction received_message) {
+  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length, void (*received_message)(uint8_t * buffer, size_t size)) {
     size_t dropped_bytes = 0;
     
     // Iterate over all bytes in the data chunk.
@@ -104,9 +111,9 @@ struct COBS_Buffer {
   }
 
   // Encode a message using COBS (Consistent Overhead Byte Stuffing); returns true for success, false for failure/invalid input.
-  bool encode_message(MessageBuffer const& input_buffer) {
+  bool encode_message(uint8_t const* input, size_t input_size) {
     // Nothing to encode.
-    if (input_buffer.size == 0) return false;
+    if (input_size == 0) return false;
 
     // Reset encode length to zero in case of errors.
     encoding_buffer.size = 0;
@@ -120,8 +127,8 @@ struct COBS_Buffer {
     // Current length byte value.
     uint8_t code = 1;
 
-    while (read_index < input_buffer.size) {
-      if (input_buffer.data[read_index] == 0) {
+    while (read_index < input_size) {
+      if (input[read_index] == 0) {
         // Write the length byte.
         encoding_buffer.data[code_index] = code;
         code_index = write_index++;
@@ -129,7 +136,7 @@ struct COBS_Buffer {
         read_index++;
       } else {
         // Copy non-zero byte to output.
-        encoding_buffer.data[write_index++] = input_buffer.data[read_index++];
+        encoding_buffer.data[write_index++] = input[read_index++];
         code++;
         // If code reaches 0xFF, we need to start a new segment.
         if (code == 0xFF) {

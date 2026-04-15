@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <cstring>
 
-#include "hex_mini_drive/interface.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 // Interrupt loop
 // ==============

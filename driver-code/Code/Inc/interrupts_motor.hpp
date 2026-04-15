@@ -10,7 +10,7 @@
 
 #include "io.hpp"
 
-#include "hex_mini_drive/interface.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 // The interrupts must not enter the error handler!
 // 

@@ -1,8 +1,6 @@
 #include "app_main.hpp"
 
-#include "hex_mini_drive/byte_handling.hpp"
-#include "hex_mini_drive/interface.hpp"
-#include "hex_mini_drive/cobs_encoding.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 #include "parameters_store.hpp"
 #include "test_schedules.hpp"
@@ -28,6 +26,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
+#include <sys/types.h>
 
 
 
@@ -41,6 +40,12 @@ uint32_t last_update_time_millis = 0;
 
 float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
+
+
+const size_t max_message_size = 256;
+
+uint8_t in_buffer[max_message_size] = {0};
+size_t in_buffer_size = 0;
 
 hex_mini_drive::COBS_Buffer usb_encoding_buffer = {};
 
@@ -497,10 +502,10 @@ void usb_reset_buffers(){
 
 
 void usb_queue_message(hex_mini_drive::Message const& message) {
-    hex_mini_drive::MessageBuffer buffer;
-    buffer.size = hex_mini_drive::write_message(buffer.data, hex_mini_drive::max_message_size, message);
+    uint8_t out_buffer[max_message_size] = {0};
+    size_t out_buffer_size = hex_mini_drive::write_message(out_buffer, max_message_size, message);
 
-    if (buffer.size) usb_encoding_buffer.encode_message(buffer);
+    if (out_buffer_size) usb_encoding_buffer.encode_message(out_buffer, out_buffer_size);
 }
 
 void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, hex_mini_drive::FullReadout const& readout) {

@@ -1,6 +1,6 @@
 #include "parameters_store.hpp"
 
-#include "hex_mini_drive/interface.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 #include "constants.hpp"
 #include "error_handler.hpp"

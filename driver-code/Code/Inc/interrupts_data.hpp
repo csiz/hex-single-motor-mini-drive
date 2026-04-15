@@ -7,7 +7,7 @@
 
 #include "type_definitions.hpp"
 
-#include "hex_mini_drive/interface.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 // Latest Data
 // -----------

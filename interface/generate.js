@@ -52,190 +52,25 @@ import { writeFileSync, mkdirSync } from "fs";
 import { parse } from "path";
 import { assert } from "console";
 
-function assemble_literal(strings, ...values) {
-  // Reassemble or process the template; or just use the string if
-  // strings is not an array (normal function call).
-  return Array.isArray(strings)
-    ? strings.reduce((acc, str, i) => acc + str + (values[i] ?? ""), "")
-    : strings;
-}
+import { 
+  CodeWriter, 
+  ConstantSpec,
+  TypeSpec,
+  BasicType,
+  ArraySpec,
+  StructSpec,
+  FieldSpec,
+  MessageSpec,
+  Spec, 
+} from "./spec_types.js";
+
+import { basic_types } from "./basic_types.js";
 
 // Helper function to convert PascalCase to snake_case. Also treat numbers as separate words, Set6Sector->set_6_sector.
 const to_snake_case = (str) => {
   return str.replace(/([a-zA-Z])([0-9A-Z])/g, '$1_$2').replace(/([0-9])([a-zA-Z])/g, '$1_$2').replace(/([A-Z])([A-Z])/g, '$1_$2').toLowerCase();
 };
 
-class CodeWriter {
-  constructor() {
-    this.code = '';
-    this.indent_level = 0;
-  }
-  write(strings, ...values) {
-    const string = assemble_literal(strings, ...values);
-
-    this.code += '  '.repeat(this.indent_level) + string + '\n';
-  }
-  comment(strings, ...values) {
-    const string = assemble_literal(strings, ...values);
-    const comment_lines = string.trim().split('\n');
-    for (const line of comment_lines) {
-      this.code += '  '.repeat(this.indent_level) + `// ${line}` + '\n';
-    }
-  }
-  indent() {
-    this.indent_level += 1;
-  }
-  dedent() {
-    this.indent_level = Math.max(0, this.indent_level - 1);
-  }
-  get() {
-    return this.code;
-  }
-}
-
-
-class ConstantSpec {
-  doc;
-  name;
-  type;
-  const;
-
-  constructor(options){Object.assign(this, options)};
-}
-
-class TypeSpec {
-  doc;
-  name;
-  size;
-
-  constructor(options){Object.assign(this, options)};
-}
-
-class BasicType {
-  name;
-  size;
-  cpp_type;
-  js_type;
-  cpp_serialization;
-  cpp_deserialization;
-  js_serialization;
-  js_deserialization;
-
-  constructor(options){Object.assign(this, options)};
-}
-
-const basic_types = {
-  uint8: new BasicType({
-    size: 1, 
-    name: 'uint8', 
-    cpp_type: 'uint8_t', 
-    js_type: 'Uint8',
-    cpp_serialization: (buf, offset, val) => `write_uint8(${buf} + ${offset}, ${val})`,
-    cpp_deserialization: (buf, offset) => `read_uint8(${buf} + ${offset})`,
-    js_serialization: (view, offset, val) => `${view}.setUint8(${offset}, ${val})`,
-    js_deserialization: (view, offset) => `${view}.getUint8(${offset})`,
-  }),
-  uint16: new BasicType({
-    size: 2, 
-    name: 'uint16', 
-    cpp_type: 'uint16_t', 
-    js_type: 'Uint16',
-    cpp_serialization: (buf, offset, val) => `write_uint16(${buf} + ${offset}, ${val})`,
-    cpp_deserialization: (buf, offset) => `read_uint16(${buf} + ${offset})`,
-    js_serialization: (view, offset, val) => `${view}.setUint16(${offset}, ${val})`,
-    js_deserialization: (view, offset) => `${view}.getUint16(${offset})`,
-  }),
-  uint32: new BasicType({
-    size: 4, 
-    name: 'uint32', 
-    cpp_type: 'uint32_t', 
-    js_type: 'Uint32',
-    cpp_serialization: (buf, offset, val) => `write_uint32(${buf} + ${offset}, ${val})`,
-    cpp_deserialization: (buf, offset) => `read_uint32(${buf} + ${offset})`,
-    js_serialization: (view, offset, val) => `${view}.setUint32(${offset}, ${val})`,
-    js_deserialization: (view, offset) => `${view}.getUint32(${offset})`,
-  }),
-  int8: new BasicType({
-    size: 1, 
-    name: 'int8', 
-    cpp_type: 'int8_t', 
-    js_type: 'Int8',
-    cpp_serialization: (buf, offset, val) => `write_int8(${buf} + ${offset}, ${val})`,
-    cpp_deserialization: (buf, offset) => `read_int8(${buf} + ${offset})`,
-    js_serialization: (view, offset, val) => `${view}.setInt8(${offset}, ${val})`,
-    js_deserialization: (view, offset) => `${view}.getInt8(${offset})`,
-  }),
-  int16: new BasicType({
-    size: 2, 
-    name: 'int16', 
-    cpp_type: 'int16_t', 
-    js_type: 'Int16',
-    cpp_serialization: (buf, offset, val) => `write_int16(${buf} + ${offset}, ${val})`,
-    cpp_deserialization: (buf, offset) => `read_int16(${buf} + ${offset})`,
-    js_serialization: (view, offset, val) => `${view}.setInt16(${offset}, ${val})`,
-    js_deserialization: (view, offset) => `${view}.getInt16(${offset})`,
-  }),
-  int32: new BasicType({
-    size: 4, 
-    name: 'int32', 
-    cpp_type: 'int32_t', 
-    js_type: 'Int32',
-    cpp_serialization: (buf, offset, val) => `write_int32(${buf} + ${offset}, ${val})`,
-    cpp_deserialization: (buf, offset) => `read_int32(${buf} + ${offset})`,
-    js_serialization: (view, offset, val) => `${view}.setInt32(${offset}, ${val})`,
-    js_deserialization: (view, offset) => `${view}.getInt32(${offset})`,
-  }),
-  float32: new BasicType({
-    size: 4, 
-    name: 'float32', 
-    cpp_type: 'float', 
-    js_type: 'Float32',
-    cpp_serialization: (buf, offset, val) => `write_float32(${buf} + ${offset}, ${val})`,
-    cpp_deserialization: (buf, offset) => `read_float32(${buf} + ${offset})`,
-    js_serialization: (view, offset, val) => `${view}.setFloat32(${offset}, ${val})`,
-    js_deserialization: (view, offset) => `${view}.getFloat32(${offset})`,
-  }),
-};
-
-class ArraySpec extends TypeSpec {
-  type;
-  array_len;
-
-  constructor(options){super(options);Object.assign(this, options)};
-}
-
-class StructSpec extends TypeSpec {
-  struct;
-  struct_base;
-
-  constructor(options){super(options);Object.assign(this, options)};
-}
-
-class FieldSpec {
-  doc;
-  name;
-  type;
-
-  constructor(options){Object.assign(this, options)};
-}
-
-class MessageSpec {
-  doc;
-  name;
-  message_code;
-  type;
-  size;
-
-  constructor(options){Object.assign(this, options)};
-};
-
-class Spec {
-  doc;
-  definitions;
-  message_codes;
-
-  constructor(options){Object.assign(this, options)};
-};
 
 function parse_type(type_spec, definitions) {
   if (typeof type_spec !== 'string') throw new Error(`Invalid type spec: ${JSON.stringify(type_spec)}: must be a string referring to a basic type or a defined type.`);
@@ -395,9 +230,7 @@ function write_cpp_definition(code, def) {
 }
 
 function serialize_cpp_field(buf, offset, name, type) {
-  if (type instanceof BasicType) {
-    return `${type.cpp_serialization(buf, offset, name)}`;
-  } else if (type instanceof StructSpec || type instanceof ArraySpec) {
+  if (type instanceof BasicType || type instanceof StructSpec || type instanceof ArraySpec) {
     return `write_${type.name}(${buf} + ${offset}, ${name});`;
   } else {
     throw new Error(`Unknown type for serialization: ${type}`);
@@ -405,9 +238,7 @@ function serialize_cpp_field(buf, offset, name, type) {
 }
 
 function deserialize_cpp_field(buf, offset, type) {
-  if (type instanceof BasicType) {
-    return `${type.cpp_deserialization(buf, offset)}`;
-  } else if (type instanceof StructSpec || type instanceof ArraySpec) {
+  if (type instanceof BasicType || type instanceof StructSpec || type instanceof ArraySpec) {
     return `read_${type.name}(${buf} + ${offset})`;
   } else {
     throw new Error(`Unknown type for deserialization: ${type}`);
@@ -447,13 +278,12 @@ function write_cpp_serialization(code, def) {
     code.write`}`;
     code.dedent();
     code.write`}`;
+    code.write``;
   } else if (def instanceof ConstantSpec) {
     // Nothing to serialize for constants.
   } else {
     throw new Error(`Unknown definition type: ${def}`);
   }
-
-  code.write``;
 }
 
 function write_cpp_deserialization(code, def) {
@@ -493,13 +323,12 @@ function write_cpp_deserialization(code, def) {
     code.write`return result;`;
     code.dedent();
     code.write`}`;
+    code.write``;
   } else if (def instanceof ConstantSpec) {
     // Nothing to deserialize for constants.
   } else {
     throw new Error(`Unknown definition type: ${def}`);
   }
-
-  code.write``;
 }
 
 // Create the generic message and serialization functions for the messaging protocol.
@@ -637,19 +466,26 @@ function generate_cpp_interface(spec) {
   code.write`#include <array>`;
   code.write`#include <variant>`;
   code.write``;
-  code.write`#include "hex_mini_drive/byte_handling.hpp"`;
-  code.write``;
-
   code.write`namespace hex_mini_drive {`;
   code.write``;
 
-  // Write out the definitions as C++ constants, structs and array defs.
-  for (const def of Object.values(spec.definitions)) {
-    write_cpp_definition(code, def);
+  // First write out the basic type serialization functions, since the generated code relies on them.
+  code.comment`Basic Type Serialization Functions`;
+  code.comment`----------------------------------`;
+  code.write``;
+  for (const basic_type of Object.values(basic_types)) {
+    basic_type.write_cpp_serialization(code);
+    code.write``;
+    basic_type.write_cpp_deserialization(code);
+    code.write``;
   }
 
-  // Now we have to generate serialization for each type definition.
+  // Write out the definitions as C++ constants, structs and array defs.
+  code.comment`Constants and Definitions`;
+  code.comment`-------------------------`;
+  code.write``;
   for (const def of Object.values(spec.definitions)) {
+    write_cpp_definition(code, def);
     write_cpp_serialization(code, def);
     write_cpp_deserialization(code, def);
   }
@@ -659,7 +495,11 @@ function generate_cpp_interface(spec) {
   code.write`} // namespace hex_mini_drive`;
   code.write``;
 
-  return code.get();
+  return (
+    code.get() + 
+    // Also copy the helping header files:
+    readFileSync("./cobs_encoding.hpp")
+  );
 }
 
 function write_js_definition(code, def) {
@@ -729,7 +569,7 @@ function deserialize_js_field(view, offset, type) {
 }
 
 // We will generate separate serialization functions for each type, and then a generic serialize function for messages that uses those.
-function generate_js_serialization(code, def) {
+function write_js_serialization(code, def) {
   if (def instanceof StructSpec) {
     code.write`function write_${def.name}(value) {`;
     code.indent();
@@ -768,16 +608,15 @@ function generate_js_serialization(code, def) {
     code.write`return buffer;`;
     code.dedent();
     code.write`}`;
-
+    code.write``;
   } else if (def instanceof ConstantSpec) {
     // Nothing to serialize for constants.
   } else {
     throw new Error(`Unknown definition type: ${def}`);
   }
-  code.write``;
 }
 
-function generate_js_deserialization(code, def) {
+function write_js_deserialization(code, def) {
   if (def instanceof StructSpec) {
     code.write`function read_${def.name}(view, offset = 0) {`;
     code.indent();
@@ -813,12 +652,12 @@ function generate_js_deserialization(code, def) {
     code.write`return result;`;
     code.dedent();
     code.write`}`;
+    code.write``;
   } else if (def instanceof ConstantSpec) {
     // Nothing to deserialize for constants.
   } else {
     throw new Error(`Unknown definition type: ${def}`);
   }
-  code.write``;
 }
 
 function write_js_message_protocol(code, message_codes) {
@@ -921,21 +760,19 @@ function generate_js_interface(spec) {
   code.comment`Note, this file is autogenerated. Use 'npm run build' to regenerate from the 'interface.yaml' spec.`;
   code.write``;
 
-  code.write`export { COBS_Buffer } from './cobs_encoding.js';`;
-  code.write``;
   
   for (const def of Object.values(spec.definitions)) {
     write_js_definition(code, def);
-  }
-
-  for (const def of Object.values(spec.definitions)) {
-    generate_js_serialization(code, def);
-    generate_js_deserialization(code, def);
+    write_js_serialization(code, def);
+    write_js_deserialization(code, def);
   }
 
   write_js_message_protocol(code, spec.message_codes);
 
-  return code.get();
+  return (
+    code.get() + 
+    readFileSync("./cobs_encoding.js")
+  );
 }
 
 
@@ -945,32 +782,25 @@ if (import.meta.main) {
 
   console.log("Loaded interface specification:");
 
-  const output_dir = "./dist/hex_mini_drive/";
+  const output_dir = "./dist/";
   mkdirSync(output_dir, { recursive: true });
   
-  const cpp_interface = generate_cpp_interface(spec)
+  const cpp_interface = generate_cpp_interface(spec);
   
   // Write the generated C++ interface.
-  const cpp_output_path = `${output_dir}/interface.hpp`;
+  const cpp_output_path = `${output_dir}/hex_mini_drive_interface.hpp`;
   writeFileSync(cpp_output_path, cpp_interface);
-
-  // Also copy the helping header files:
-  writeFileSync(`${output_dir}/byte_handling.hpp`, readFileSync("./byte_handling.hpp"));
-  writeFileSync(`${output_dir}/cobs_encoding.hpp`, readFileSync("./cobs_encoding.hpp"));
 
   console.log("Generated C++ interface:", cpp_output_path);
   
   // Generate JavaScript interface
   const js_interface = generate_js_interface(spec);
-  const js_output_path = `${output_dir}/interface.js`;
+  const js_output_path = `${output_dir}/hex_mini_drive_interface.js`;
   writeFileSync(js_output_path, js_interface);
 
-  // Also copy the helping JS files:
-  writeFileSync(`${output_dir}/cobs_encoding.js`, readFileSync("./cobs_encoding.js"));
-  
   console.log("Generated JavaScript interface:", js_output_path);
 
   // And don't forget to copy the interface spec itself.
-  writeFileSync(`${output_dir}/interface.yaml`, readFileSync("./interface.yaml"));
-  console.log("Copied interface specification:", `${output_dir}/interface.yaml`);
+  writeFileSync(`${output_dir}/hex_mini_drive_interface.yaml`, readFileSync("./interface.yaml"));
+  console.log("Copied interface specification:", `${output_dir}/hex_mini_drive_interface.yaml`);
 }

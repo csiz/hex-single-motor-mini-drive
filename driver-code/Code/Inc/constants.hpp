@@ -6,7 +6,7 @@
 #include "type_definitions.hpp"
 #include "math_utils.hpp"
 
-#include "hex_mini_drive/interface.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 // Data storage available.
 const size_t history_size = 336;

@@ -13,9 +13,103 @@
 #include <array>
 #include <variant>
 
-#include "hex_mini_drive/byte_handling.hpp"
-
 namespace hex_mini_drive {
+
+// Basic Type Serialization Functions
+// ----------------------------------
+
+static inline void write_uint8(uint8_t * buffer, uint8_t const& value) {
+  buffer[0] = value;
+}
+
+static inline uint8_t read_uint8(uint8_t const* buffer) {
+  return buffer[0];
+}
+
+static inline void write_uint16(uint8_t * buffer, uint16_t const& value) {
+  buffer[0] = (value >> 8) & 0xFF;
+  buffer[1] = value & 0xFF;
+}
+
+static inline uint16_t read_uint16(uint8_t const* buffer) {
+  uint16_t value = 0;
+  value |= buffer[0] << 8;
+  value |= buffer[1];
+  return value;
+}
+
+static inline void write_uint32(uint8_t * buffer, uint32_t const& value) {
+  buffer[0] = (value >> 24) & 0xFF;
+  buffer[1] = (value >> 16) & 0xFF;
+  buffer[2] = (value >> 8) & 0xFF;
+  buffer[3] = value & 0xFF;
+}
+
+static inline uint32_t read_uint32(uint8_t const* buffer) {
+  uint32_t value = 0;
+  value |= buffer[0] << 24;
+  value |= buffer[1] << 16;
+  value |= buffer[2] << 8;
+  value |= buffer[3];
+  return value;
+}
+
+static inline void write_int8(uint8_t * buffer, int8_t const& value) {
+  buffer[0] = value;
+}
+
+static inline int8_t read_int8(uint8_t const* buffer) {
+  return buffer[0];
+}
+
+static inline void write_int16(uint8_t * buffer, int16_t const& value) {
+  buffer[0] = (value >> 8) & 0xFF;
+  buffer[1] = value & 0xFF;
+}
+
+static inline int16_t read_int16(uint8_t const* buffer) {
+  int16_t value = 0;
+  value |= buffer[0] << 8;
+  value |= buffer[1];
+  return value;
+}
+
+static inline void write_int32(uint8_t * buffer, int32_t const& value) {
+  buffer[0] = (value >> 24) & 0xFF;
+  buffer[1] = (value >> 16) & 0xFF;
+  buffer[2] = (value >> 8) & 0xFF;
+  buffer[3] = value & 0xFF;
+}
+
+static inline int32_t read_int32(uint8_t const* buffer) {
+  int32_t value = 0;
+  value |= buffer[0] << 24;
+  value |= buffer[1] << 16;
+  value |= buffer[2] << 8;
+  value |= buffer[3];
+  return value;
+}
+
+static inline void write_float32(uint8_t * buffer, float const& value) {
+  uint8_t const* value_pointer = reinterpret_cast<uint8_t const*>(&value);
+  buffer[0] = value_pointer[0];
+  buffer[1] = value_pointer[1];
+  buffer[2] = value_pointer[2];
+  buffer[3] = value_pointer[3];
+}
+
+static inline float read_float32(uint8_t const* buffer) {
+  float value;
+  uint8_t * value_pointer = reinterpret_cast<uint8_t*>(&value);
+  value_pointer[0] = buffer[0];
+  value_pointer[1] = buffer[1];
+  value_pointer[2] = buffer[2];
+  value_pointer[3] = buffer[3];
+  return value;
+}
+
+// Constants and Definitions
+// -------------------------
 
 constexpr uint32_t HISTORY_SIZE = 336;
 
@@ -23,12 +117,84 @@ constexpr uint32_t UNIT_TEST_OUTPUT_SIZE = 248;
 
 using PositiveNegativeTransition = std::array<uint16_t, 2>;
 
+static inline void write_PositiveNegativeTransition(uint8_t * buffer, PositiveNegativeTransition const& value) {
+  size_t offset = 0;
+  for (size_t i = 0; i < 2; ++i) {
+    write_uint16(buffer + offset, value[i]);;
+    offset += 2;
+  }
+}
+
+static inline PositiveNegativeTransition read_PositiveNegativeTransition(uint8_t const* buffer) {
+  PositiveNegativeTransition result;
+  size_t offset = 0;
+  for (size_t i = 0; i < 2; ++i) {
+    result[i] = read_uint16(buffer + offset);
+    offset += 2;
+  }
+  return result;
+}
+
 using SectorTransitions = std::array<PositiveNegativeTransition, 6>;
+
+static inline void write_SectorTransitions(uint8_t * buffer, SectorTransitions const& value) {
+  size_t offset = 0;
+  for (size_t i = 0; i < 6; ++i) {
+    write_PositiveNegativeTransition(buffer + offset, value[i]);;
+    offset += 4;
+  }
+}
+
+static inline SectorTransitions read_SectorTransitions(uint8_t const* buffer) {
+  SectorTransitions result;
+  size_t offset = 0;
+  for (size_t i = 0; i < 6; ++i) {
+    result[i] = read_PositiveNegativeTransition(buffer + offset);
+    offset += 4;
+  }
+  return result;
+}
 
 using SectorCenters = std::array<uint16_t, 6>;
 
+static inline void write_SectorCenters(uint8_t * buffer, SectorCenters const& value) {
+  size_t offset = 0;
+  for (size_t i = 0; i < 6; ++i) {
+    write_uint16(buffer + offset, value[i]);;
+    offset += 2;
+  }
+}
+
+static inline SectorCenters read_SectorCenters(uint8_t const* buffer) {
+  SectorCenters result;
+  size_t offset = 0;
+  for (size_t i = 0; i < 6; ++i) {
+    result[i] = read_uint16(buffer + offset);
+    offset += 2;
+  }
+  return result;
+}
+
 // Output data from unit test.
 using UnitTestOutput = std::array<uint8_t, 248>;
+
+static inline void write_UnitTestOutput(uint8_t * buffer, UnitTestOutput const& value) {
+  size_t offset = 0;
+  for (size_t i = 0; i < 248; ++i) {
+    write_uint8(buffer + offset, value[i]);;
+    offset += 1;
+  }
+}
+
+static inline UnitTestOutput read_UnitTestOutput(uint8_t const* buffer) {
+  UnitTestOutput result;
+  size_t offset = 0;
+  for (size_t i = 0; i < 248; ++i) {
+    result[i] = read_uint8(buffer + offset);
+    offset += 1;
+  }
+  return result;
+}
 
 // Basic readout of the motor driver internal state; can be recorded contiguously
 // into a history buffer after a commanded event.
@@ -69,12 +235,96 @@ struct Readout {
   int16_t emf_voltage_magnitude;
 };
 
+static inline void write_Readout(uint8_t * buffer, Readout const& value) {
+  size_t offset = 0;
+  write_uint32(buffer + offset, value.pwm_commands);;
+  offset += 4;
+  write_uint16(buffer + offset, value.readout_number);;
+  offset += 2;
+  write_uint16(buffer + offset, value.state_flags);;
+  offset += 2;
+  write_int16(buffer + offset, value.u_current);;
+  offset += 2;
+  write_int16(buffer + offset, value.v_current);;
+  offset += 2;
+  write_int16(buffer + offset, value.w_current);;
+  offset += 2;
+  write_int16(buffer + offset, value.ref_readout);;
+  offset += 2;
+  write_int16(buffer + offset, value.u_current_diff);;
+  offset += 2;
+  write_int16(buffer + offset, value.v_current_diff);;
+  offset += 2;
+  write_int16(buffer + offset, value.w_current_diff);;
+  offset += 2;
+  write_int16(buffer + offset, value.angle);;
+  offset += 2;
+  write_int16(buffer + offset, value.angle_adjustment);;
+  offset += 2;
+  write_int16(buffer + offset, value.angular_speed);;
+  offset += 2;
+  write_int16(buffer + offset, value.vcc_voltage);;
+  offset += 2;
+  write_int16(buffer + offset, value.emf_voltage_magnitude);;
+  offset += 2;
+}
+static inline Readout read_Readout(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  Readout result;
+  
+  result.pwm_commands = read_uint32(buffer + offset);
+  offset += 4;
+  result.readout_number = read_uint16(buffer + offset);
+  offset += 2;
+  result.state_flags = read_uint16(buffer + offset);
+  offset += 2;
+  result.u_current = read_int16(buffer + offset);
+  offset += 2;
+  result.v_current = read_int16(buffer + offset);
+  offset += 2;
+  result.w_current = read_int16(buffer + offset);
+  offset += 2;
+  result.ref_readout = read_int16(buffer + offset);
+  offset += 2;
+  result.u_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.v_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.w_current_diff = read_int16(buffer + offset);
+  offset += 2;
+  result.angle = read_int16(buffer + offset);
+  offset += 2;
+  result.angle_adjustment = read_int16(buffer + offset);
+  offset += 2;
+  result.angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.vcc_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_voltage_magnitude = read_int16(buffer + offset);
+  offset += 2;
+  return result;
+}
 // Continuously send full readouts of the motor driver internal state.
 struct StreamFullReadouts {
   // Number of messages to send; the stream command should be repeated to keep sending messages.
   uint16_t stream_state;
 };
 
+static inline void write_StreamFullReadouts(uint8_t * buffer, StreamFullReadouts const& value) {
+  size_t offset = 0;
+  write_uint16(buffer + offset, value.stream_state);;
+  offset += 2;
+}
+static inline StreamFullReadouts read_StreamFullReadouts(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  StreamFullReadouts result;
+  
+  result.stream_state = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 // Complete readout of the motor driver internal state for exploration and data stream.
 struct FullReadout : Readout {
   // Tick rate; the number of main loop (communication and commands) updates per second.
@@ -133,6 +383,115 @@ struct FullReadout : Readout {
   int16_t seek_integral;
 };
 
+static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
+  size_t offset = 0;
+  write_Readout(buffer + offset, value);;
+  offset += 32;
+  write_uint16(buffer + offset, value.main_loop_rate);;
+  offset += 2;
+  write_uint16(buffer + offset, value.adc_update_rate);;
+  offset += 2;
+  write_uint16(buffer + offset, value.temperature);;
+  offset += 2;
+  write_uint16(buffer + offset, value.live_max_pwm);;
+  offset += 2;
+  write_int16(buffer + offset, value.cycle_start_tick);;
+  offset += 2;
+  write_int16(buffer + offset, value.cycle_end_tick);;
+  offset += 2;
+  write_int16(buffer + offset, value.direct_current);;
+  offset += 2;
+  write_int16(buffer + offset, value.quadrature_current);;
+  offset += 2;
+  write_int16(buffer + offset, value.direct_emf_voltage);;
+  offset += 2;
+  write_int16(buffer + offset, value.quadrature_emf_voltage);;
+  offset += 2;
+  write_int16(buffer + offset, value.total_power);;
+  offset += 2;
+  write_int16(buffer + offset, value.resistive_power);;
+  offset += 2;
+  write_int16(buffer + offset, value.emf_power);;
+  offset += 2;
+  write_int16(buffer + offset, value.inductive_power);;
+  offset += 2;
+  write_int16(buffer + offset, value.motor_constant);;
+  offset += 2;
+  write_int16(buffer + offset, value.inductor_angle);;
+  offset += 2;
+  write_int16(buffer + offset, value.rotor_acceleration);;
+  offset += 2;
+  write_int16(buffer + offset, value.rotations);;
+  offset += 2;
+  write_int16(buffer + offset, value.current_magnitude);;
+  offset += 2;
+  write_int16(buffer + offset, value.emf_angle_error_variance);;
+  offset += 2;
+  write_int16(buffer + offset, value.lead_angle);;
+  offset += 2;
+  write_int16(buffer + offset, value.target_pwm);;
+  offset += 2;
+  write_int16(buffer + offset, value.secondary_target);;
+  offset += 2;
+  write_int16(buffer + offset, value.seek_integral);;
+  offset += 2;
+}
+static inline FullReadout read_FullReadout(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  FullReadout result {read_Readout(buffer + offset)};
+  offset += 32;
+  
+  result.main_loop_rate = read_uint16(buffer + offset);
+  offset += 2;
+  result.adc_update_rate = read_uint16(buffer + offset);
+  offset += 2;
+  result.temperature = read_uint16(buffer + offset);
+  offset += 2;
+  result.live_max_pwm = read_uint16(buffer + offset);
+  offset += 2;
+  result.cycle_start_tick = read_int16(buffer + offset);
+  offset += 2;
+  result.cycle_end_tick = read_int16(buffer + offset);
+  offset += 2;
+  result.direct_current = read_int16(buffer + offset);
+  offset += 2;
+  result.quadrature_current = read_int16(buffer + offset);
+  offset += 2;
+  result.direct_emf_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.quadrature_emf_voltage = read_int16(buffer + offset);
+  offset += 2;
+  result.total_power = read_int16(buffer + offset);
+  offset += 2;
+  result.resistive_power = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_power = read_int16(buffer + offset);
+  offset += 2;
+  result.inductive_power = read_int16(buffer + offset);
+  offset += 2;
+  result.motor_constant = read_int16(buffer + offset);
+  offset += 2;
+  result.inductor_angle = read_int16(buffer + offset);
+  offset += 2;
+  result.rotor_acceleration = read_int16(buffer + offset);
+  offset += 2;
+  result.rotations = read_int16(buffer + offset);
+  offset += 2;
+  result.current_magnitude = read_int16(buffer + offset);
+  offset += 2;
+  result.emf_angle_error_variance = read_int16(buffer + offset);
+  offset += 2;
+  result.lead_angle = read_int16(buffer + offset);
+  offset += 2;
+  result.target_pwm = read_int16(buffer + offset);
+  offset += 2;
+  result.secondary_target = read_int16(buffer + offset);
+  offset += 2;
+  result.seek_integral = read_int16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct BasicDriveCommand {
   // PWM value to use for driving the motor in 6 sector commutation mode.
   int16_t pwm_value;
@@ -140,6 +499,24 @@ struct BasicDriveCommand {
   uint16_t timeout;
 };
 
+static inline void write_BasicDriveCommand(uint8_t * buffer, BasicDriveCommand const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.pwm_value);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+}
+static inline BasicDriveCommand read_BasicDriveCommand(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  BasicDriveCommand result;
+  
+  result.pwm_value = read_int16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct TestCommand {
   // PWM value to use for the test.
   uint16_t pwm_value;
@@ -147,6 +524,24 @@ struct TestCommand {
   uint16_t take_snapshot;
 };
 
+static inline void write_TestCommand(uint8_t * buffer, TestCommand const& value) {
+  size_t offset = 0;
+  write_uint16(buffer + offset, value.pwm_value);;
+  offset += 2;
+  write_uint16(buffer + offset, value.take_snapshot);;
+  offset += 2;
+}
+static inline TestCommand read_TestCommand(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  TestCommand result;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.take_snapshot = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct HoldCommand {
   // PWM value to use for holding the position.
   uint16_t pwm_value;
@@ -154,6 +549,24 @@ struct HoldCommand {
   uint16_t timeout;
 };
 
+static inline void write_HoldCommand(uint8_t * buffer, HoldCommand const& value) {
+  size_t offset = 0;
+  write_uint16(buffer + offset, value.pwm_value);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+}
+static inline HoldCommand read_HoldCommand(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  HoldCommand result;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateDrivePeriodic {
   // PWM value to use for driving the motor.
   uint16_t pwm_value;
@@ -165,6 +578,32 @@ struct SetStateDrivePeriodic {
   int16_t angular_speed;
 };
 
+static inline void write_SetStateDrivePeriodic(uint8_t * buffer, SetStateDrivePeriodic const& value) {
+  size_t offset = 0;
+  write_uint16(buffer + offset, value.pwm_value);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+  write_uint16(buffer + offset, value.angle);;
+  offset += 2;
+  write_int16(buffer + offset, value.angular_speed);;
+  offset += 2;
+}
+static inline SetStateDrivePeriodic read_SetStateDrivePeriodic(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateDrivePeriodic result;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.angular_speed = read_int16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateDriveSmooth {
   // PWM value to use for driving the motor.
   uint16_t pwm_value;
@@ -172,6 +611,24 @@ struct SetStateDriveSmooth {
   uint16_t timeout;
 };
 
+static inline void write_SetStateDriveSmooth(uint8_t * buffer, SetStateDriveSmooth const& value) {
+  size_t offset = 0;
+  write_uint16(buffer + offset, value.pwm_value);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+}
+static inline SetStateDriveSmooth read_SetStateDriveSmooth(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateDriveSmooth result;
+  
+  result.pwm_value = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateDriveTorque {
   // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
   int16_t target_current;
@@ -179,6 +636,24 @@ struct SetStateDriveTorque {
   uint16_t timeout;
 };
 
+static inline void write_SetStateDriveTorque(uint8_t * buffer, SetStateDriveTorque const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.target_current);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+}
+static inline SetStateDriveTorque read_SetStateDriveTorque(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateDriveTorque result;
+  
+  result.target_current = read_int16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateDriveBatteryPower {
   // Target power draw from the battery; the driver will try to achieve this power by adjusting the PWM commands.
   int16_t target_power;
@@ -186,6 +661,24 @@ struct SetStateDriveBatteryPower {
   uint16_t timeout;
 };
 
+static inline void write_SetStateDriveBatteryPower(uint8_t * buffer, SetStateDriveBatteryPower const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.target_power);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+}
+static inline SetStateDriveBatteryPower read_SetStateDriveBatteryPower(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateDriveBatteryPower result;
+  
+  result.target_power = read_int16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateDriveSpeed {
   // Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
   int16_t target_speed;
@@ -193,6 +686,24 @@ struct SetStateDriveSpeed {
   uint16_t timeout;
 };
 
+static inline void write_SetStateDriveSpeed(uint8_t * buffer, SetStateDriveSpeed const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.target_speed);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+}
+static inline SetStateDriveSpeed read_SetStateDriveSpeed(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateDriveSpeed result;
+  
+  result.target_speed = read_int16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateSeekAngleWithPower {
   // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
   int16_t target_rotation;
@@ -204,6 +715,32 @@ struct SetStateSeekAngleWithPower {
   uint16_t max_drive_power;
 };
 
+static inline void write_SetStateSeekAngleWithPower(uint8_t * buffer, SetStateSeekAngleWithPower const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.target_rotation);;
+  offset += 2;
+  write_uint16(buffer + offset, value.target_angle);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+  write_uint16(buffer + offset, value.max_drive_power);;
+  offset += 2;
+}
+static inline SetStateSeekAngleWithPower read_SetStateSeekAngleWithPower(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateSeekAngleWithPower result;
+  
+  result.target_rotation = read_int16(buffer + offset);
+  offset += 2;
+  result.target_angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.max_drive_power = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateSeekAngleWithTorque {
   // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
   int16_t target_rotation;
@@ -215,6 +752,32 @@ struct SetStateSeekAngleWithTorque {
   uint16_t max_drive_current;
 };
 
+static inline void write_SetStateSeekAngleWithTorque(uint8_t * buffer, SetStateSeekAngleWithTorque const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.target_rotation);;
+  offset += 2;
+  write_uint16(buffer + offset, value.target_angle);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+  write_uint16(buffer + offset, value.max_drive_current);;
+  offset += 2;
+}
+static inline SetStateSeekAngleWithTorque read_SetStateSeekAngleWithTorque(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateSeekAngleWithTorque result;
+  
+  result.target_rotation = read_int16(buffer + offset);
+  offset += 2;
+  result.target_angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.max_drive_current = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 struct SetStateSeekAngleWithSpeed {
   // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
   int16_t target_rotation;
@@ -226,6 +789,32 @@ struct SetStateSeekAngleWithSpeed {
   uint16_t max_drive_speed;
 };
 
+static inline void write_SetStateSeekAngleWithSpeed(uint8_t * buffer, SetStateSeekAngleWithSpeed const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.target_rotation);;
+  offset += 2;
+  write_uint16(buffer + offset, value.target_angle);;
+  offset += 2;
+  write_uint16(buffer + offset, value.timeout);;
+  offset += 2;
+  write_uint16(buffer + offset, value.max_drive_speed);;
+  offset += 2;
+}
+static inline SetStateSeekAngleWithSpeed read_SetStateSeekAngleWithSpeed(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetStateSeekAngleWithSpeed result;
+  
+  result.target_rotation = read_int16(buffer + offset);
+  offset += 2;
+  result.target_angle = read_uint16(buffer + offset);
+  offset += 2;
+  result.timeout = read_uint16(buffer + offset);
+  offset += 2;
+  result.max_drive_speed = read_uint16(buffer + offset);
+  offset += 2;
+  return result;
+}
 // Calibration factors for the current sensors.
 // 
 // The soldering joints vary during manufacturing and therefore they affect the total
@@ -246,6 +835,32 @@ struct CurrentCalibration {
   int16_t inductance_factor;
 };
 
+static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration const& value) {
+  size_t offset = 0;
+  write_int16(buffer + offset, value.u_factor);;
+  offset += 2;
+  write_int16(buffer + offset, value.v_factor);;
+  offset += 2;
+  write_int16(buffer + offset, value.w_factor);;
+  offset += 2;
+  write_int16(buffer + offset, value.inductance_factor);;
+  offset += 2;
+}
+static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  CurrentCalibration result;
+  
+  result.u_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.v_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.w_factor = read_int16(buffer + offset);
+  offset += 2;
+  result.inductance_factor = read_int16(buffer + offset);
+  offset += 2;
+  return result;
+}
 // Hall sensor position calibration data.
 // 
 // Apparently, millimiter precision in the placement of the hall sensor chips means an error up to 
@@ -271,6 +886,32 @@ struct HallPositions {
   SectorCenters sector_center_variances;
 };
 
+static inline void write_HallPositions(uint8_t * buffer, HallPositions const& value) {
+  size_t offset = 0;
+  write_SectorTransitions(buffer + offset, value.sector_transition_angles);;
+  offset += 24;
+  write_SectorTransitions(buffer + offset, value.sector_transition_variances);;
+  offset += 24;
+  write_SectorCenters(buffer + offset, value.sector_center_angles);;
+  offset += 12;
+  write_SectorCenters(buffer + offset, value.sector_center_variances);;
+  offset += 12;
+}
+static inline HallPositions read_HallPositions(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  HallPositions result;
+  
+  result.sector_transition_angles = read_SectorTransitions(buffer + offset);
+  offset += 24;
+  result.sector_transition_variances = read_SectorTransitions(buffer + offset);
+  offset += 24;
+  result.sector_center_angles = read_SectorCenters(buffer + offset);
+  offset += 12;
+  result.sector_center_variances = read_SectorCenters(buffer + offset);
+  offset += 12;
+  return result;
+}
 // Parameters used in the motor control loop; for detailed descriptions check the
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
@@ -353,674 +994,85 @@ struct ControlParameters {
   int16_t phase_inductance;
 };
 
-struct SetAngle {
-  // Set the current angle of the motor; used for initial angle calibration.
-  uint16_t angle;
-};
-
-
-
-
-
-static inline void write_PositiveNegativeTransition(uint8_t * buffer, PositiveNegativeTransition const& value) {
-  size_t offset = 0;
-  for (size_t i = 0; i < 2; ++i) {
-    write_uint16(buffer + offset, value[i]);
-    offset += 2;
-  }
-}
-
-static inline PositiveNegativeTransition read_PositiveNegativeTransition(uint8_t const* buffer) {
-  PositiveNegativeTransition result;
-  size_t offset = 0;
-  for (size_t i = 0; i < 2; ++i) {
-    result[i] = read_uint16(buffer + offset);
-    offset += 2;
-  }
-  return result;
-}
-
-static inline void write_SectorTransitions(uint8_t * buffer, SectorTransitions const& value) {
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    write_PositiveNegativeTransition(buffer + offset, value[i]);;
-    offset += 4;
-  }
-}
-
-static inline SectorTransitions read_SectorTransitions(uint8_t const* buffer) {
-  SectorTransitions result;
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    result[i] = read_PositiveNegativeTransition(buffer + offset);
-    offset += 4;
-  }
-  return result;
-}
-
-static inline void write_SectorCenters(uint8_t * buffer, SectorCenters const& value) {
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    write_uint16(buffer + offset, value[i]);
-    offset += 2;
-  }
-}
-
-static inline SectorCenters read_SectorCenters(uint8_t const* buffer) {
-  SectorCenters result;
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    result[i] = read_uint16(buffer + offset);
-    offset += 2;
-  }
-  return result;
-}
-
-static inline void write_UnitTestOutput(uint8_t * buffer, UnitTestOutput const& value) {
-  size_t offset = 0;
-  for (size_t i = 0; i < 248; ++i) {
-    write_uint8(buffer + offset, value[i]);
-    offset += 1;
-  }
-}
-
-static inline UnitTestOutput read_UnitTestOutput(uint8_t const* buffer) {
-  UnitTestOutput result;
-  size_t offset = 0;
-  for (size_t i = 0; i < 248; ++i) {
-    result[i] = read_uint8(buffer + offset);
-    offset += 1;
-  }
-  return result;
-}
-
-static inline void write_Readout(uint8_t * buffer, Readout const& value) {
-  size_t offset = 0;
-  write_uint32(buffer + offset, value.pwm_commands);
-  offset += 4;
-  write_uint16(buffer + offset, value.readout_number);
-  offset += 2;
-  write_uint16(buffer + offset, value.state_flags);
-  offset += 2;
-  write_int16(buffer + offset, value.u_current);
-  offset += 2;
-  write_int16(buffer + offset, value.v_current);
-  offset += 2;
-  write_int16(buffer + offset, value.w_current);
-  offset += 2;
-  write_int16(buffer + offset, value.ref_readout);
-  offset += 2;
-  write_int16(buffer + offset, value.u_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.v_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.w_current_diff);
-  offset += 2;
-  write_int16(buffer + offset, value.angle);
-  offset += 2;
-  write_int16(buffer + offset, value.angle_adjustment);
-  offset += 2;
-  write_int16(buffer + offset, value.angular_speed);
-  offset += 2;
-  write_int16(buffer + offset, value.vcc_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_voltage_magnitude);
-  offset += 2;
-}
-
-static inline Readout read_Readout(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  Readout result;
-  
-  result.pwm_commands = read_uint32(buffer + offset);
-  offset += 4;
-  result.readout_number = read_uint16(buffer + offset);
-  offset += 2;
-  result.state_flags = read_uint16(buffer + offset);
-  offset += 2;
-  result.u_current = read_int16(buffer + offset);
-  offset += 2;
-  result.v_current = read_int16(buffer + offset);
-  offset += 2;
-  result.w_current = read_int16(buffer + offset);
-  offset += 2;
-  result.ref_readout = read_int16(buffer + offset);
-  offset += 2;
-  result.u_current_diff = read_int16(buffer + offset);
-  offset += 2;
-  result.v_current_diff = read_int16(buffer + offset);
-  offset += 2;
-  result.w_current_diff = read_int16(buffer + offset);
-  offset += 2;
-  result.angle = read_int16(buffer + offset);
-  offset += 2;
-  result.angle_adjustment = read_int16(buffer + offset);
-  offset += 2;
-  result.angular_speed = read_int16(buffer + offset);
-  offset += 2;
-  result.vcc_voltage = read_int16(buffer + offset);
-  offset += 2;
-  result.emf_voltage_magnitude = read_int16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_StreamFullReadouts(uint8_t * buffer, StreamFullReadouts const& value) {
-  size_t offset = 0;
-  write_uint16(buffer + offset, value.stream_state);
-  offset += 2;
-}
-
-static inline StreamFullReadouts read_StreamFullReadouts(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  StreamFullReadouts result;
-  
-  result.stream_state = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
-  size_t offset = 0;
-  write_Readout(buffer + offset, value);;
-  offset += 32;
-  write_uint16(buffer + offset, value.main_loop_rate);
-  offset += 2;
-  write_uint16(buffer + offset, value.adc_update_rate);
-  offset += 2;
-  write_uint16(buffer + offset, value.temperature);
-  offset += 2;
-  write_uint16(buffer + offset, value.live_max_pwm);
-  offset += 2;
-  write_int16(buffer + offset, value.cycle_start_tick);
-  offset += 2;
-  write_int16(buffer + offset, value.cycle_end_tick);
-  offset += 2;
-  write_int16(buffer + offset, value.direct_current);
-  offset += 2;
-  write_int16(buffer + offset, value.quadrature_current);
-  offset += 2;
-  write_int16(buffer + offset, value.direct_emf_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.quadrature_emf_voltage);
-  offset += 2;
-  write_int16(buffer + offset, value.total_power);
-  offset += 2;
-  write_int16(buffer + offset, value.resistive_power);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_power);
-  offset += 2;
-  write_int16(buffer + offset, value.inductive_power);
-  offset += 2;
-  write_int16(buffer + offset, value.motor_constant);
-  offset += 2;
-  write_int16(buffer + offset, value.inductor_angle);
-  offset += 2;
-  write_int16(buffer + offset, value.rotor_acceleration);
-  offset += 2;
-  write_int16(buffer + offset, value.rotations);
-  offset += 2;
-  write_int16(buffer + offset, value.current_magnitude);
-  offset += 2;
-  write_int16(buffer + offset, value.emf_angle_error_variance);
-  offset += 2;
-  write_int16(buffer + offset, value.lead_angle);
-  offset += 2;
-  write_int16(buffer + offset, value.target_pwm);
-  offset += 2;
-  write_int16(buffer + offset, value.secondary_target);
-  offset += 2;
-  write_int16(buffer + offset, value.seek_integral);
-  offset += 2;
-}
-
-static inline FullReadout read_FullReadout(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  FullReadout result {read_Readout(buffer + offset)};
-  offset += 32;
-  
-  result.main_loop_rate = read_uint16(buffer + offset);
-  offset += 2;
-  result.adc_update_rate = read_uint16(buffer + offset);
-  offset += 2;
-  result.temperature = read_uint16(buffer + offset);
-  offset += 2;
-  result.live_max_pwm = read_uint16(buffer + offset);
-  offset += 2;
-  result.cycle_start_tick = read_int16(buffer + offset);
-  offset += 2;
-  result.cycle_end_tick = read_int16(buffer + offset);
-  offset += 2;
-  result.direct_current = read_int16(buffer + offset);
-  offset += 2;
-  result.quadrature_current = read_int16(buffer + offset);
-  offset += 2;
-  result.direct_emf_voltage = read_int16(buffer + offset);
-  offset += 2;
-  result.quadrature_emf_voltage = read_int16(buffer + offset);
-  offset += 2;
-  result.total_power = read_int16(buffer + offset);
-  offset += 2;
-  result.resistive_power = read_int16(buffer + offset);
-  offset += 2;
-  result.emf_power = read_int16(buffer + offset);
-  offset += 2;
-  result.inductive_power = read_int16(buffer + offset);
-  offset += 2;
-  result.motor_constant = read_int16(buffer + offset);
-  offset += 2;
-  result.inductor_angle = read_int16(buffer + offset);
-  offset += 2;
-  result.rotor_acceleration = read_int16(buffer + offset);
-  offset += 2;
-  result.rotations = read_int16(buffer + offset);
-  offset += 2;
-  result.current_magnitude = read_int16(buffer + offset);
-  offset += 2;
-  result.emf_angle_error_variance = read_int16(buffer + offset);
-  offset += 2;
-  result.lead_angle = read_int16(buffer + offset);
-  offset += 2;
-  result.target_pwm = read_int16(buffer + offset);
-  offset += 2;
-  result.secondary_target = read_int16(buffer + offset);
-  offset += 2;
-  result.seek_integral = read_int16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_BasicDriveCommand(uint8_t * buffer, BasicDriveCommand const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.pwm_value);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-}
-
-static inline BasicDriveCommand read_BasicDriveCommand(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  BasicDriveCommand result;
-  
-  result.pwm_value = read_int16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_TestCommand(uint8_t * buffer, TestCommand const& value) {
-  size_t offset = 0;
-  write_uint16(buffer + offset, value.pwm_value);
-  offset += 2;
-  write_uint16(buffer + offset, value.take_snapshot);
-  offset += 2;
-}
-
-static inline TestCommand read_TestCommand(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  TestCommand result;
-  
-  result.pwm_value = read_uint16(buffer + offset);
-  offset += 2;
-  result.take_snapshot = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_HoldCommand(uint8_t * buffer, HoldCommand const& value) {
-  size_t offset = 0;
-  write_uint16(buffer + offset, value.pwm_value);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-}
-
-static inline HoldCommand read_HoldCommand(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  HoldCommand result;
-  
-  result.pwm_value = read_uint16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateDrivePeriodic(uint8_t * buffer, SetStateDrivePeriodic const& value) {
-  size_t offset = 0;
-  write_uint16(buffer + offset, value.pwm_value);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-  write_uint16(buffer + offset, value.angle);
-  offset += 2;
-  write_int16(buffer + offset, value.angular_speed);
-  offset += 2;
-}
-
-static inline SetStateDrivePeriodic read_SetStateDrivePeriodic(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateDrivePeriodic result;
-  
-  result.pwm_value = read_uint16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  result.angle = read_uint16(buffer + offset);
-  offset += 2;
-  result.angular_speed = read_int16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateDriveSmooth(uint8_t * buffer, SetStateDriveSmooth const& value) {
-  size_t offset = 0;
-  write_uint16(buffer + offset, value.pwm_value);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-}
-
-static inline SetStateDriveSmooth read_SetStateDriveSmooth(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateDriveSmooth result;
-  
-  result.pwm_value = read_uint16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateDriveTorque(uint8_t * buffer, SetStateDriveTorque const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.target_current);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-}
-
-static inline SetStateDriveTorque read_SetStateDriveTorque(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateDriveTorque result;
-  
-  result.target_current = read_int16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateDriveBatteryPower(uint8_t * buffer, SetStateDriveBatteryPower const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.target_power);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-}
-
-static inline SetStateDriveBatteryPower read_SetStateDriveBatteryPower(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateDriveBatteryPower result;
-  
-  result.target_power = read_int16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateDriveSpeed(uint8_t * buffer, SetStateDriveSpeed const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.target_speed);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-}
-
-static inline SetStateDriveSpeed read_SetStateDriveSpeed(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateDriveSpeed result;
-  
-  result.target_speed = read_int16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateSeekAngleWithPower(uint8_t * buffer, SetStateSeekAngleWithPower const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.target_rotation);
-  offset += 2;
-  write_uint16(buffer + offset, value.target_angle);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-  write_uint16(buffer + offset, value.max_drive_power);
-  offset += 2;
-}
-
-static inline SetStateSeekAngleWithPower read_SetStateSeekAngleWithPower(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateSeekAngleWithPower result;
-  
-  result.target_rotation = read_int16(buffer + offset);
-  offset += 2;
-  result.target_angle = read_uint16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  result.max_drive_power = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateSeekAngleWithTorque(uint8_t * buffer, SetStateSeekAngleWithTorque const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.target_rotation);
-  offset += 2;
-  write_uint16(buffer + offset, value.target_angle);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-  write_uint16(buffer + offset, value.max_drive_current);
-  offset += 2;
-}
-
-static inline SetStateSeekAngleWithTorque read_SetStateSeekAngleWithTorque(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateSeekAngleWithTorque result;
-  
-  result.target_rotation = read_int16(buffer + offset);
-  offset += 2;
-  result.target_angle = read_uint16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  result.max_drive_current = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_SetStateSeekAngleWithSpeed(uint8_t * buffer, SetStateSeekAngleWithSpeed const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.target_rotation);
-  offset += 2;
-  write_uint16(buffer + offset, value.target_angle);
-  offset += 2;
-  write_uint16(buffer + offset, value.timeout);
-  offset += 2;
-  write_uint16(buffer + offset, value.max_drive_speed);
-  offset += 2;
-}
-
-static inline SetStateSeekAngleWithSpeed read_SetStateSeekAngleWithSpeed(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateSeekAngleWithSpeed result;
-  
-  result.target_rotation = read_int16(buffer + offset);
-  offset += 2;
-  result.target_angle = read_uint16(buffer + offset);
-  offset += 2;
-  result.timeout = read_uint16(buffer + offset);
-  offset += 2;
-  result.max_drive_speed = read_uint16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration const& value) {
-  size_t offset = 0;
-  write_int16(buffer + offset, value.u_factor);
-  offset += 2;
-  write_int16(buffer + offset, value.v_factor);
-  offset += 2;
-  write_int16(buffer + offset, value.w_factor);
-  offset += 2;
-  write_int16(buffer + offset, value.inductance_factor);
-  offset += 2;
-}
-
-static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  CurrentCalibration result;
-  
-  result.u_factor = read_int16(buffer + offset);
-  offset += 2;
-  result.v_factor = read_int16(buffer + offset);
-  offset += 2;
-  result.w_factor = read_int16(buffer + offset);
-  offset += 2;
-  result.inductance_factor = read_int16(buffer + offset);
-  offset += 2;
-  return result;
-}
-
-static inline void write_HallPositions(uint8_t * buffer, HallPositions const& value) {
-  size_t offset = 0;
-  write_SectorTransitions(buffer + offset, value.sector_transition_angles);;
-  offset += 24;
-  write_SectorTransitions(buffer + offset, value.sector_transition_variances);;
-  offset += 24;
-  write_SectorCenters(buffer + offset, value.sector_center_angles);;
-  offset += 12;
-  write_SectorCenters(buffer + offset, value.sector_center_variances);;
-  offset += 12;
-}
-
-static inline HallPositions read_HallPositions(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  HallPositions result;
-  
-  result.sector_transition_angles = read_SectorTransitions(buffer + offset);
-  offset += 24;
-  result.sector_transition_variances = read_SectorTransitions(buffer + offset);
-  offset += 24;
-  result.sector_center_angles = read_SectorCenters(buffer + offset);
-  offset += 12;
-  result.sector_center_variances = read_SectorCenters(buffer + offset);
-  offset += 12;
-  return result;
-}
-
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
   size_t offset = 0;
-  write_int16(buffer + offset, value.rotor_angle_ki);
+  write_int16(buffer + offset, value.rotor_angle_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.rotor_angular_speed_ki);
+  write_int16(buffer + offset, value.rotor_angular_speed_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.rotor_acceleration_ki);
+  write_int16(buffer + offset, value.rotor_acceleration_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.motor_constant_ki);
+  write_int16(buffer + offset, value.motor_constant_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.motor_direction);
+  write_int16(buffer + offset, value.motor_direction);;
   offset += 2;
-  write_int16(buffer + offset, value.incorrect_direction_threshold);
+  write_int16(buffer + offset, value.incorrect_direction_threshold);;
   offset += 2;
-  write_int16(buffer + offset, value.max_pwm_change);
+  write_int16(buffer + offset, value.max_pwm_change);;
   offset += 2;
-  write_int16(buffer + offset, value.max_angle_change);
+  write_int16(buffer + offset, value.max_angle_change);;
   offset += 2;
-  write_int16(buffer + offset, value.min_emf_voltage);
+  write_int16(buffer + offset, value.min_emf_voltage);;
   offset += 2;
-  write_int16(buffer + offset, value.hall_angle_ki);
+  write_int16(buffer + offset, value.hall_angle_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.lead_angle_control_ki);
+  write_int16(buffer + offset, value.lead_angle_control_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.torque_control_ki);
+  write_int16(buffer + offset, value.torque_control_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.battery_power_control_ki);
+  write_int16(buffer + offset, value.battery_power_control_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.speed_control_ki);
+  write_int16(buffer + offset, value.speed_control_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.probing_angular_speed);
+  write_int16(buffer + offset, value.probing_angular_speed);;
   offset += 2;
-  write_int16(buffer + offset, value.max_pwm_difference);
+  write_int16(buffer + offset, value.max_pwm_difference);;
   offset += 2;
-  write_int16(buffer + offset, value.emf_angle_error_variance_threshold);
+  write_int16(buffer + offset, value.emf_angle_error_variance_threshold);;
   offset += 2;
-  write_int16(buffer + offset, value.min_emf_for_motor_constant);
+  write_int16(buffer + offset, value.min_emf_for_motor_constant);;
   offset += 2;
-  write_int16(buffer + offset, value.max_resistive_power);
+  write_int16(buffer + offset, value.max_resistive_power);;
   offset += 2;
-  write_int16(buffer + offset, value.resistive_power_ki);
+  write_int16(buffer + offset, value.resistive_power_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.max_angular_speed);
+  write_int16(buffer + offset, value.max_angular_speed);;
   offset += 2;
-  write_int16(buffer + offset, value.max_power_draw);
+  write_int16(buffer + offset, value.max_power_draw);;
   offset += 2;
-  write_int16(buffer + offset, value.power_draw_ki);
+  write_int16(buffer + offset, value.power_draw_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.max_pwm);
+  write_int16(buffer + offset, value.max_pwm);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_k_prediction);
+  write_int16(buffer + offset, value.seek_via_torque_k_prediction);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_ki);
+  write_int16(buffer + offset, value.seek_via_torque_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_kp);
+  write_int16(buffer + offset, value.seek_via_torque_kp);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_torque_kd);
+  write_int16(buffer + offset, value.seek_via_torque_kd);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_k_prediction);
+  write_int16(buffer + offset, value.seek_via_power_k_prediction);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_ki);
+  write_int16(buffer + offset, value.seek_via_power_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_kp);
+  write_int16(buffer + offset, value.seek_via_power_kp);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_power_kd);
+  write_int16(buffer + offset, value.seek_via_power_kd);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_k_prediction);
+  write_int16(buffer + offset, value.seek_via_speed_k_prediction);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_ki);
+  write_int16(buffer + offset, value.seek_via_speed_ki);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_kp);
+  write_int16(buffer + offset, value.seek_via_speed_kp);;
   offset += 2;
-  write_int16(buffer + offset, value.seek_via_speed_kd);
+  write_int16(buffer + offset, value.seek_via_speed_kd);;
   offset += 2;
-  write_int16(buffer + offset, value.phase_resistance);
+  write_int16(buffer + offset, value.phase_resistance);;
   offset += 2;
-  write_int16(buffer + offset, value.phase_inductance);
+  write_int16(buffer + offset, value.phase_inductance);;
   offset += 2;
 }
-
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   size_t offset = 0;
   
@@ -1104,13 +1156,16 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 2;
   return result;
 }
+struct SetAngle {
+  // Set the current angle of the motor; used for initial angle calibration.
+  uint16_t angle;
+};
 
 static inline void write_SetAngle(uint8_t * buffer, SetAngle const& value) {
   size_t offset = 0;
-  write_uint16(buffer + offset, value.angle);
+  write_uint16(buffer + offset, value.angle);;
   offset += 2;
 }
-
 static inline SetAngle read_SetAngle(uint8_t const* buffer) {
   size_t offset = 0;
   
@@ -1120,7 +1175,6 @@ static inline SetAngle read_SetAngle(uint8_t const* buffer) {
   offset += 2;
   return result;
 }
-
 // Message Codes
 enum MessageCode : uint16_t {
   NULL_MESSAGE_CODE = 0,
@@ -1805,3 +1859,168 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
 
 } // namespace hex_mini_drive
 
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+namespace hex_mini_drive {
+
+// Maximum message size (in bytes) for a message.
+const size_t max_message_size = 256;
+
+// A statically allocated buffer for messages.
+struct MessageBuffer {
+    uint8_t data[max_message_size];
+    size_t size = 0;
+};
+
+// Class to handle COBS decoding.
+// 
+// COBS (Consistent Overhead Byte Stuffing) means use 0 as the message delimiter
+// and replace occurences of 0 with a counter inidicating the distance to the next 0.
+struct COBS_Buffer {
+  
+  // Buffer and state for decoding; because we may receive data in chunks
+  // so we have to maintain state between calls.
+  MessageBuffer decoding_buffer;
+
+  // Number of bytes remaining until we have to insert a zero byte for COBS decoding.
+  size_t decoding_length_until_zero = 0;
+
+  // Whether we need to insert a 0 byte in the decoded output or not. COBS encoding
+  // uses 255=0xFF as a special value to indicate that the next 255 bytes are all non-zero.
+  // The next byte afterwards will be another length byte, but for the special case of 0xFF
+  // we must not insert a zero byte in the decoded output.
+  bool decoding_insert_zero_byte = false;
+
+  // Buffer for encoding; we can reuse the same buffer for each message.
+  MessageBuffer encoding_buffer;
+
+  // Reset the decoder state.
+  void decode_reset() {
+    decoding_buffer.size = 0;
+    decoding_length_until_zero = 0;
+    decoding_insert_zero_byte = false;
+  }
+
+  // Check whether we are in the middle of decoding a message.
+  bool decode_ongoing(){
+    return decoding_buffer.size > 0;
+  }
+
+  // Decode a chunk of data framed using COBS; return the number of dropped bytes due to errors.
+  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length, void (*received_message)(uint8_t * buffer, size_t size)) {
+    size_t dropped_bytes = 0;
+    
+    // Iterate over all bytes in the data chunk.
+    for (size_t i = 0; i < chunk_length; ++i) {
+      const uint8_t byte = chunk[i];
+
+      // Check for zero byte which indicates end of message.
+      if (byte == 0) {
+
+        if (decoding_buffer.size != 0 and decoding_length_until_zero == 0) {
+          // Process the complete message.
+          received_message(decoding_buffer.data, decoding_buffer.size);
+        } else {
+          // We received a zero byte but we were still expecting more data for 
+          // the current message, so this is an error.
+          dropped_bytes += decoding_buffer.size;
+        }
+        // Reset for the next message.
+        decode_reset();
+        
+
+      // Otherwise we expect to read the length till the next 0.
+      } else if (decoding_length_until_zero == 0) {
+
+        // The current byte represents the length until we need to insert a zero byte in the
+        // decoded output. We then count this step, hence the -1.
+        decoding_length_until_zero = byte - 1;
+
+        // If this isn't the start, or 0xFF continuation, we need to add a zero to the
+        // decoded output according to this segment's zero length byte.
+        if (decoding_insert_zero_byte) {
+          decoding_buffer.data[decoding_buffer.size++] = 0;  // Insert zero byte for COBS decoding.
+        }
+
+        // If this is a 0xFF continuation, we don't insert a zero byte for the next segment. 
+        decoding_insert_zero_byte = (byte != 0xFF);
+        
+
+      // Finally we read ordinary non-zero data.
+      } else {
+
+        // Copy the current byte and count down the length until we need to insert a zero byte.
+        decoding_buffer.data[decoding_buffer.size++] = byte;
+        decoding_length_until_zero--;
+      }
+    }
+
+    return dropped_bytes;
+  }
+
+  // Reset the encoder state.
+  void encode_reset() {
+    encoding_buffer.size = 0;
+  }
+
+  // Check whether a message has been encoded.
+  bool is_message_encoded() {
+    return encoding_buffer.size > 0;
+  }
+
+  // Encode a message using COBS (Consistent Overhead Byte Stuffing); returns true for success, false for failure/invalid input.
+  bool encode_message(uint8_t const* input, size_t input_size) {
+    // Nothing to encode.
+    if (input_size == 0) return false;
+
+    // Reset encode length to zero in case of errors.
+    encoding_buffer.size = 0;
+    
+    // Current reading index from the input message.
+    size_t read_index = 0;
+    // Start writing after the first length byte.
+    size_t write_index = 1;
+    // Index where the current length byte will go.
+    size_t code_index = 0;
+    // Current length byte value.
+    uint8_t code = 1;
+
+    while (read_index < input_size) {
+      if (input[read_index] == 0) {
+        // Write the length byte.
+        encoding_buffer.data[code_index] = code;
+        code_index = write_index++;
+        code = 1;  // Reset code for the next segment.
+        read_index++;
+      } else {
+        // Copy non-zero byte to output.
+        encoding_buffer.data[write_index++] = input[read_index++];
+        code++;
+        // If code reaches 0xFF, we need to start a new segment.
+        if (code == 0xFF) {
+          encoding_buffer.data[code_index] = code;
+          code_index = write_index++;
+          code = 1;
+        }
+      }
+      // Check for output buffer overflow.
+      if (write_index >= max_message_size) {
+        return false;  // Indicate failure due to insufficient buffer size.
+      }
+    }
+    // Write the final length byte.
+    encoding_buffer.data[code_index] = code;
+    // Append the zero delimiter at the end.
+    encoding_buffer.data[write_index++] = 0;
+
+    encoding_buffer.size = write_index;
+
+    // Yay.
+    return true;
+  }
+};
+
+} // end namespace hex_mini_drive

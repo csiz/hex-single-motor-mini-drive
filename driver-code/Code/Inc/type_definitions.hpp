@@ -5,7 +5,7 @@
 #include <array>
 #include <tuple>
 
-#include "hex_mini_drive/interface.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 // Most useful datatype for this system, the 3 phase coordinates.
 using ThreePhase = std::tuple<int, int, int>;
