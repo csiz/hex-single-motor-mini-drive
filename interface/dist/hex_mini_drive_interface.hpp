@@ -1866,24 +1866,17 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
 
 namespace hex_mini_drive {
 
-// Maximum message size (in bytes) for a message.
-const size_t max_message_size = 256;
-
-// A statically allocated buffer for messages.
-struct MessageBuffer {
-    uint8_t data[max_message_size];
-    size_t size = 0;
-};
-
 // Class to handle COBS decoding.
 // 
 // COBS (Consistent Overhead Byte Stuffing) means use 0 as the message delimiter
 // and replace occurences of 0 with a counter inidicating the distance to the next 0.
-struct COBS_Buffer {
+template<size_t max_message_size>
+struct ConsistentOverheadByteStuffing {
   
-  // Buffer and state for decoding; because we may receive data in chunks
-  // so we have to maintain state between calls.
-  MessageBuffer decoding_buffer;
+  // Buffer used to write decoded data.
+  uint8_t decoding_buffer[max_message_size] = {0};
+  // Amount of data currently in the decoding buffer.
+  size_t decoding_buffer_size = 0;
 
   // Number of bytes remaining until we have to insert a zero byte for COBS decoding.
   size_t decoding_length_until_zero = 0;
@@ -1895,18 +1888,19 @@ struct COBS_Buffer {
   bool decoding_insert_zero_byte = false;
 
   // Buffer for encoding; we can reuse the same buffer for each message.
-  MessageBuffer encoding_buffer;
+  uint8_t encoding_buffer[max_message_size] = {0};
+  size_t encoding_buffer_size = 0;
 
   // Reset the decoder state.
   void decode_reset() {
-    decoding_buffer.size = 0;
+    decoding_buffer_size = 0;
     decoding_length_until_zero = 0;
     decoding_insert_zero_byte = false;
   }
 
   // Check whether we are in the middle of decoding a message.
   bool decode_ongoing(){
-    return decoding_buffer.size > 0;
+    return decoding_buffer_size > 0;
   }
 
   // Decode a chunk of data framed using COBS; return the number of dropped bytes due to errors.
@@ -1919,18 +1913,21 @@ struct COBS_Buffer {
 
       // Check for zero byte which indicates end of message.
       if (byte == 0) {
-
-        if (decoding_buffer.size != 0 and decoding_length_until_zero == 0) {
+        if (decoding_buffer_size == 0) {
+          // Do nothing for an empty message.
+        } else if (decoding_length_until_zero == 0) {
           // Process the complete message.
-          received_message(decoding_buffer.data, decoding_buffer.size);
+          received_message(decoding_buffer, decoding_buffer_size);
+          // Reset for the next message.
+          decode_reset();
         } else {
           // We received a zero byte but we were still expecting more data for 
           // the current message, so this is an error.
-          dropped_bytes += decoding_buffer.size;
+          dropped_bytes += decoding_buffer_size;
+          // Reset for the next message.
+          decode_reset();
         }
-        // Reset for the next message.
-        decode_reset();
-        
+
 
       // Otherwise we expect to read the length till the next 0.
       } else if (decoding_length_until_zero == 0) {
@@ -1942,7 +1939,7 @@ struct COBS_Buffer {
         // If this isn't the start, or 0xFF continuation, we need to add a zero to the
         // decoded output according to this segment's zero length byte.
         if (decoding_insert_zero_byte) {
-          decoding_buffer.data[decoding_buffer.size++] = 0;  // Insert zero byte for COBS decoding.
+          decoding_buffer[decoding_buffer_size++] = 0;  // Insert zero byte for COBS decoding.
         }
 
         // If this is a 0xFF continuation, we don't insert a zero byte for the next segment. 
@@ -1953,7 +1950,7 @@ struct COBS_Buffer {
       } else {
 
         // Copy the current byte and count down the length until we need to insert a zero byte.
-        decoding_buffer.data[decoding_buffer.size++] = byte;
+        decoding_buffer[decoding_buffer_size++] = byte;
         decoding_length_until_zero--;
       }
     }
@@ -1963,21 +1960,24 @@ struct COBS_Buffer {
 
   // Reset the encoder state.
   void encode_reset() {
-    encoding_buffer.size = 0;
+    encoding_buffer_size = 0;
   }
 
   // Check whether a message has been encoded.
   bool is_message_encoded() {
-    return encoding_buffer.size > 0;
+    return encoding_buffer_size > 0;
   }
 
   // Encode a message using COBS (Consistent Overhead Byte Stuffing); returns true for success, false for failure/invalid input.
   bool encode_message(uint8_t const* input, size_t input_size) {
+    // Check if the encoding buffer is clear.
+    if (encoding_buffer_size != 0) return false;
+
     // Nothing to encode.
-    if (input_size == 0) return false;
+    if (input_size == 0) return true;
 
     // Reset encode length to zero in case of errors.
-    encoding_buffer.size = 0;
+    encoding_buffer_size = 0;
     
     // Current reading index from the input message.
     size_t read_index = 0;
@@ -1991,17 +1991,17 @@ struct COBS_Buffer {
     while (read_index < input_size) {
       if (input[read_index] == 0) {
         // Write the length byte.
-        encoding_buffer.data[code_index] = code;
+        encoding_buffer[code_index] = code;
         code_index = write_index++;
         code = 1;  // Reset code for the next segment.
         read_index++;
       } else {
         // Copy non-zero byte to output.
-        encoding_buffer.data[write_index++] = input[read_index++];
+        encoding_buffer[write_index++] = input[read_index++];
         code++;
         // If code reaches 0xFF, we need to start a new segment.
         if (code == 0xFF) {
-          encoding_buffer.data[code_index] = code;
+          encoding_buffer[code_index] = code;
           code_index = write_index++;
           code = 1;
         }
@@ -2012,11 +2012,11 @@ struct COBS_Buffer {
       }
     }
     // Write the final length byte.
-    encoding_buffer.data[code_index] = code;
+    encoding_buffer[code_index] = code;
     // Append the zero delimiter at the end.
-    encoding_buffer.data[write_index++] = 0;
+    encoding_buffer[write_index++] = 0;
 
-    encoding_buffer.size = write_index;
+    encoding_buffer_size = write_index;
 
     // Yay.
     return true;

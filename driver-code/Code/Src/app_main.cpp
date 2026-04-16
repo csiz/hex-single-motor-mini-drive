@@ -47,7 +47,7 @@ const size_t max_message_size = 256;
 uint8_t in_buffer[max_message_size] = {0};
 size_t in_buffer_size = 0;
 
-hex_mini_drive::COBS_Buffer usb_encoding_buffer = {};
+hex_mini_drive::ConsistentOverheadByteStuffing<max_message_size> usb_encoding_buffer = {};
 
 uint32_t usb_chunk_receive_time = 0;
 uint32_t usb_bytes_discarded = 0;
@@ -508,7 +508,7 @@ void usb_queue_message(hex_mini_drive::Message const& message) {
     if (out_buffer_size) usb_encoding_buffer.encode_message(out_buffer, out_buffer_size);
 }
 
-void usb_serialize_response(hex_mini_drive::COBS_Buffer & usb_encoding_buffer, hex_mini_drive::FullReadout const& readout) {
+void usb_serialize_response(hex_mini_drive::FullReadout const& readout) {
     // Wait until the previous message has been sent or buffers reset before encoding a new message.
     if (usb_encoding_buffer.is_message_encoded()) return;
 
@@ -698,10 +698,10 @@ void app_tick() {
     // ---------
 
     // Queue the state readouts on the USB buffer.
-    usb_serialize_response(usb_encoding_buffer, readout);
+    usb_serialize_response(readout);
 
     if(usb_update(
-        usb_encoding_buffer.encoding_buffer.data, usb_encoding_buffer.encoding_buffer.size, 
+        usb_encoding_buffer.encoding_buffer, usb_encoding_buffer.encoding_buffer_size, 
         usb_receive_data)
     ){
         // Data was sent; clear the response buffer.
