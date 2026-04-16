@@ -32,6 +32,7 @@ struct ConsistentOverheadByteStuffing {
 
   // Reset the decoder state.
   void decode_reset() {
+    for (size_t i = 0; i < decoding_buffer_size; ++i) decoding_buffer[i] = 0;
     decoding_buffer_size = 0;
     decoding_length_until_zero = 0;
     decoding_insert_zero_byte = false;
@@ -99,6 +100,7 @@ struct ConsistentOverheadByteStuffing {
 
   // Reset the encoder state.
   void encode_reset() {
+    for (size_t i = 0; i < encoding_buffer_size; ++i) encoding_buffer[i] = 0;
     encoding_buffer_size = 0;
   }
 
