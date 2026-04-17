@@ -47,17 +47,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
+# All cpp sources under the "Code/Src" directory
+file(GLOB_RECURSE USER_SOURCES "Code/Src/*.c" "Code/Src/*.cpp")
+
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
-    "Code/Src/app_main.cpp"
-    "Code/Src/io.cpp"
-    "Code/Src/error_handler.cpp"
-    "Code/Src/interrupts.cpp"
-    "Code/Src/parameters_store.cpp"
-    "Code/Src/integer_math.cpp"
-    "Code/Src/usb_com.cpp"
-    "Code/Src/spi_com.cpp"
+    ${USER_SOURCES}
 )
 
 # Add include paths
