@@ -176,6 +176,11 @@ message_codes:
 
 
 definitions:
+  MAX_MESSAGE_SIZE:
+    doc: Maximum size of a message in bytes; used to allocate buffers for the messages.
+    type: uint32
+    const: 256
+    
   HISTORY_SIZE:
     doc: Number of contiguous readouts to store in the history buffer for a snapshot.
     type: uint32

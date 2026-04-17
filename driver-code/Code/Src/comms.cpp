@@ -16,16 +16,10 @@
 #include <stm32g4xx_hal.h>
 
 
-const size_t max_message_size = 256;
-
-uint8_t in_buffer[max_message_size] = {0};
-size_t in_buffer_size = 0;
-
-hex_mini_drive::ConsistentOverheadByteStuffing<max_message_size> usb_encoding_buffer = {};
-
-
 const uint32_t usb_partial_message_timeout_ms = 500;
 const uint32_t usb_sending_timeout_ms = 500;
+
+hex_mini_drive::ConsistentOverheadByteStuffing<hex_mini_drive::MAX_MESSAGE_SIZE> usb_encoding_buffer = {};
 
 // Time of last USB packet sent; used to detect timeouts.
 uint32_t usb_last_send = 0;
@@ -465,8 +459,8 @@ void usb_reset_buffers(){
 
 
 void usb_queue_message(hex_mini_drive::Message const& message) {
-    uint8_t out_buffer[max_message_size] = {0};
-    size_t out_buffer_size = hex_mini_drive::write_message(out_buffer, max_message_size, message);
+    uint8_t out_buffer[hex_mini_drive::MAX_MESSAGE_SIZE] = {0};
+    size_t out_buffer_size = hex_mini_drive::write_message(out_buffer, hex_mini_drive::MAX_MESSAGE_SIZE, message);
 
     if (out_buffer_size) usb_encoding_buffer.encode_message(out_buffer, out_buffer_size);
 }

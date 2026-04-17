@@ -111,6 +111,8 @@ static inline float read_float32(uint8_t const* buffer) {
 // Constants and Definitions
 // -------------------------
 
+constexpr uint32_t MAX_MESSAGE_SIZE = 256;
+
 constexpr uint32_t HISTORY_SIZE = 336;
 
 constexpr uint32_t UNIT_TEST_OUTPUT_SIZE = 248;
