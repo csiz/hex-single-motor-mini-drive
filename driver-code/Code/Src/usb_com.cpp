@@ -98,7 +98,7 @@ static inline void usb_prepare_send() {
   USBD_CDC_TransmitPacket(&hUsbDeviceFS);
 }
 
-bool usb_update(uint8_t * tx_data, size_t tx_size, void (*process_received_data)(uint8_t * buffer, size_t size)) {
+bool usb_update(uint8_t * tx_data, size_t tx_size, std::function<void(uint8_t * buffer, size_t size)> process_received_data) {
   if (not usb_active) return false;
 
 

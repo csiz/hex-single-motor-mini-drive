@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 namespace hex_mini_drive {
 
@@ -44,7 +45,7 @@ struct ConsistentOverheadByteStuffing {
   }
 
   // Decode a chunk of data framed using COBS; return the number of dropped bytes due to errors.
-  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length, void (*received_message)(uint8_t * buffer, size_t size)) {
+  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length, std::function<void(uint8_t * buffer, size_t size)> received_message) {
     size_t dropped_bytes = 0;
     
     // Iterate over all bytes in the data chunk.
