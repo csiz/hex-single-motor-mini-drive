@@ -50,6 +50,8 @@ struct WireInterface {
 
   UnitTestFunction usb_unit_test_function = nullptr;
 
+  std::function<bool(uint8_t * buffer, size_t size, std::function<void(uint8_t * buffer, size_t size)> process_received_data)> update_function = nullptr;
+
   // Start an active test of the motor.
   void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {
     // Clear the readouts buffer of old data.
@@ -572,6 +574,34 @@ struct WireInterface {
     last_receive_time = HAL_GetTick();
   }
 
+  bool update(hex_mini_drive::FullReadout const& readout) {
+    if (not update_function) return false;
+
+    // Queue the state readouts on the USB buffer.
+    queue_response(readout);
+
+    const bool update_success = update_function(
+      encoding_buffer.encoding_buffer, encoding_buffer.encoding_buffer_size, 
+      [&](uint8_t * buffer, size_t size){
+        receive_data(buffer, size);
+      }
+    );
+
+    if (update_success) {
+      // Data was queued; clear the response buffer.
+      encoding_buffer.encode_reset();
+      last_send_time = HAL_GetTick();
+    } else if (encoding_buffer.is_message_encoded()) {
+      // We have data to send but the queue is busy.
+      if(HAL_GetTick() - last_send_time > sending_timeout_ms){
+        // Timeout waiting for send; reset the buffers.
+        reset_buffers();
+
+        return false;
+      }
+    }
+    return true;
+  }
 };
 
 WireInterface usb_interface = {};
@@ -579,6 +609,7 @@ WireInterface spi_interface = {};
 
 void comms_init() {
   usb_init();
+  usb_interface.update_function = usb_update;
   spi_init();
 }
 
@@ -587,24 +618,5 @@ void comms_update(hex_mini_drive::FullReadout const& readout){
   // ---------
 
   // Queue the state readouts on the USB buffer.
-  usb_interface.queue_response(readout);
-
-  if(usb_update(
-    usb_interface.encoding_buffer.encoding_buffer, usb_interface.encoding_buffer.encoding_buffer_size, 
-    [](uint8_t * buffer, size_t size){
-      usb_interface.receive_data(buffer, size);
-    })
-  ){
-    // Data was queued; clear the response buffer.
-    usb_interface.encoding_buffer.encode_reset();
-    usb_interface.last_send_time = HAL_GetTick();
-  } else if (usb_interface.encoding_buffer.is_message_encoded()) {
-    // We have data to send but the USB queue is busy.
-    if(HAL_GetTick() - usb_interface.last_send_time > sending_timeout_ms){
-      // Timeout waiting for USB to send; reset the USB buffers.
-      usb_interface.reset_buffers();
-      // And the other USB buffers.
-      usb_reset();
-    }
-  }
+  usb_interface.update(readout);
 }
