@@ -288,7 +288,7 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
 
   if (!readout) return null;
 
-  const tick_rate = bare_full_readout.tick_rate;
+  const main_loop_rate = bare_full_readout.main_loop_rate;
   const adc_update_rate = bare_full_readout.adc_update_rate;
   const temperature = calculate_temperature(bare_full_readout.temperature);
   const live_max_pwm = bare_full_readout.live_max_pwm;
@@ -341,7 +341,7 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
 
   return {
     ...readout,
-    tick_rate,
+    main_loop_rate,
     adc_update_rate,
     temperature,
     live_max_pwm,

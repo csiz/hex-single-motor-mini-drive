@@ -1073,7 +1073,7 @@ const plot_runtime_stats = plot_lines({
   x_label: "Time (ms)",
   y_label: "Update frequency (Hz)",
   channels: [
-    {y: "tick_rate", label: "Tick rate", color: colors.sum},
+    {y: "main_loop_rate", label: "Main loop rate", color: colors.sum},
     {y: "adc_update_rate", label: "ADC & PWM rate", color: colors.u},
   ],
   curve,

@@ -70,8 +70,8 @@ void usb_confirmed_send(size_t len){
     if(usb_com_tx_buffer.mark_read(len)) error();
     usb_pending_send = 0;
   } else {
-    // If we read the library code correctly, we should always get the length that we asked to send.
-    error();
+    // We might get a different length if the connection is interrupted.
+    usb_reset();
   }
 }
 

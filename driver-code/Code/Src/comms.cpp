@@ -12,7 +12,9 @@
 
 #include "usb_com.hpp"
 #include "spi_com.hpp"
+#include "usbd_def.h"
 
+#include <cerrno>
 #include <stm32g4xx_hal.h>
 
 
@@ -575,7 +577,7 @@ struct WireInterface {
   }
 
   bool update(hex_mini_drive::FullReadout const& readout) {
-    if (not update_function) return false;
+    if (not update_function) error();
 
     // Queue the state readouts on the USB buffer.
     queue_response(readout);
@@ -611,6 +613,7 @@ void comms_init() {
   usb_init();
   usb_interface.update_function = usb_update;
   spi_init();
+  spi_interface.update_function = spi_update;
 }
 
 void comms_update(hex_mini_drive::FullReadout const& readout){
@@ -618,5 +621,8 @@ void comms_update(hex_mini_drive::FullReadout const& readout){
   // ---------
 
   // Queue the state readouts on the USB buffer.
-  usb_interface.update(readout);
+  if (not usb_interface.update(readout)) usb_reset();
+
+  // SPI comms
+  if (not spi_interface.update(readout)) spi_reset();
 }
