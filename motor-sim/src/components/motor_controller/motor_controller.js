@@ -10,17 +10,25 @@ export { MessageCode };
 // Serial Port Management
 // ----------------------
 
-export async function maybe_prompt_port(){
-  const ports = await navigator.serial.getPorts();
-  if (ports.length == 1) return ports[0 ];
-  return await navigator.serial.requestPort();
+export async function prompt_com_port_get_index(){
+  let ports = await navigator.serial.getPorts();
+  const port = (ports.length == 1) ? ports[0] : await navigator.serial.requestPort();
+  // Get ports again.
+  ports = await navigator.serial.getPorts();
+  
+  if (ports.length === 0) return null;
+
+  const port_index = ports.findIndex((p) => p === port);
+
+  if (port_index === -1) return null;
+  
+  return port_index;
 }
 
-export async function get_port_index(port){
-  const ports = await navigator.serial.getPorts();
-  return ports.findIndex((p) => p === port);
-}
+// Websocket
+// ---------
 
+export const default_ws_uri = "ws://hex-mini-drive.local/ws";
 
 
 // Motor driver control
@@ -33,24 +41,21 @@ SerialPort works on Chrome, however Firefox needs an addon. Unfortunately it doe
 mobile, need to check how to turn this page into an app to access the USB line on mobile.
 
 Parameters:
-- `writable`: A `WriteableStream` that sends data to the motor driver.
-- `readable`: A `ReadableStream` that receives data from the motor driver.
+- `motor_uri`: The URI of the motor to connect to.
 - `onstatus`: Callback function to handle status updates from the motor driver.
 - `onmessage`: Callback function to handle incoming messages from the motor driver.
 - `onerror`: Callback function to handle errors that occur during communication.
 */
 export class MotorController {
   constructor({
-    port_index,
+    motor_uri,
     onstatus = () => {},
     onmessage = () => {},
     onerror = () => {},
     onready = () => {},
     onclose = () => {},
   }){
-    this.connection_worker = new Worker(new URL("./usb_connection_worker.js", import.meta.url), {type: "module"});
-
-    this.encoding_buffer = new COBS_Buffer();
+    this.motor_uri = motor_uri;
 
     this.onmessage = onmessage;
     this.onerror = onerror;
@@ -70,94 +75,61 @@ export class MotorController {
     this.awaiting_reply = new Map();
     this.last_message = new Map();
 
-    let bytes_received = 0;
+    this.bytes_received = 0;
     
-    let bytes_discarded = 0;
+    this.bytes_discarded = 0;
     
-    let last_bytes_received = 0;
-    let last_received_time = Date.now();
+    this.last_bytes_received = 0;
+    this.last_received_time = Date.now();
     
-    let receive_rate = 0.0;
-    
-    let receive_message = (message_data) => {
+    this.receive_rate = 0.0;
 
-      let bare_message = read_message(message_data);
-      
-      // If we have a valid message, report it to the user.
-      if(!bare_message) {
-        // Something was wrong parsing the message; discard it.
-        bytes_discarded += message_data.length;
-        console.warn("Message was discarded due to invalid data:", message_data);
-        return;
-      }
-      
-      const message_code = bare_message.message_code;
-      
-      // We compute running averages and current index relative to previous messages of the same type.
-      const last_message = this.last_message.get(message_code);
+    // Start the motor connection
+    // --------------------------
 
-      // Add additional data to readout messages.
-      const message = parser_mapping[message_code] ? parser_mapping[message_code](bare_message, last_message, this) : bare_message;
+    this.connection_type = motor_uri.split(":")[0];
 
-      // Remember for the next message so we can increment the message index.
-      this.last_message.set(message_code, message);
+    if (this.connection_type === "usb") {
+      this.encoding_buffer = new COBS_Buffer();
 
-      // Intercept awaited messages and resolve the reply promise.
-      if (this.awaiting_reply.has(message_code)) {
-        const {resolve, data, expected_messages} = this.awaiting_reply.get(message_code);
-        data.push(message);
-        if (data.length === expected_messages) {
-          resolve(data);
-        }
-      } else {
-        // Otherwise stream all replies through the `onmessage` callback.
-        this.onmessage(message);
-      }
-    };
+      const port_index = parseInt(motor_uri.split(":")[1]);
 
+      this.start_usb_connection(port_index);
+    } else if (this.connection_type === "ws") {
+      this.start_websocket_connection(motor_uri);
+    } else {
+      throw new Error(`Unsupported connection type: ${this.connection_type}`);
+    }
+  }
 
+  async when_opened(){
+    await this.load_current_calibration();
+    await this.load_position_calibration();
+    await this.load_control_parameters();
+    this.onready(this);
+    console.info(`Motor controller is ready: ${this.motor_uri}`);
+  }
+
+  when_closed(){
+    this.onclose(this);
+    console.info(`Motor controller is closed: ${this.motor_uri}`);
+  }
+
+  start_usb_connection(port_index){
+    this.connection_worker = new Worker(new URL("./usb_connection_worker.js", import.meta.url), {type: "module"});
 
     this.connection_worker.addEventListener("message", async (event) => {
       const {type} = event.data;
 
-      if (type === "opened") {
-        await this.load_current_calibration();
-        await this.load_position_calibration();
-        await this.load_control_parameters();
-        console.info("Motor controller is ready.");
-        this.onready(this);
-      }
-      else if (type === "closed") this.onclose();
+      if (type === "opened") await this.when_opened();
+      else if (type === "closed") this.when_closed();
       else if (type === "received") {
 
         const {byte_chunk} = event.data;
         
-        // Count connection statistics.
+        this.count_data_received(byte_chunk.length);
 
-        bytes_received += byte_chunk.length;
-        last_bytes_received += byte_chunk.length;
-
-        // Get the current time in milliseconds.
-        const now = Date.now();
-
-        // Cap the minimum time since last message to avoid division by zero.
-        const time_since_last = (now - last_received_time) / 1000.0;
-
-        // Compute connection speed in byte_chunks of a minimum time period.
-        if(time_since_last > this.receive_rate_min_period) {
-
-          // Update the rate only if we have received data since the last update.
-          receive_rate = last_bytes_received == 0 ? receive_rate :
-            exponential_average(last_bytes_received / time_since_last, receive_rate, time_since_last, this.receive_rate_timescale);
-
-          last_bytes_received = 0;
-          last_received_time = now;
-        }
-
-        // Feedback for connection status on every chunk of data received.
-        this.onstatus({bytes_received, bytes_discarded, receive_rate});
-
-        this.encoding_buffer.decode_chunk(byte_chunk, receive_message);
+        this.encoding_buffer.decode_chunk(byte_chunk, this.receive_message.bind(this));
       }
     });
 
@@ -166,7 +138,88 @@ export class MotorController {
     });
 
     this.connection_worker.postMessage({type: "open", port_index});
+  }
 
+  start_websocket_connection(uri){
+    // Setup a websocket connection to `ws://hex-mini-drive.local/ws` and send a message, log any replies.
+
+    this.ws = new WebSocket(uri);
+    this.ws.binaryType = "arraybuffer";
+
+    this.ws.addEventListener('open', (event) => this.when_opened() );
+
+    this.ws.addEventListener('message', (event) => {
+      const message_data = new Uint8Array(event.data);
+      this.count_data_received(message_data.length);
+      this.receive_message(message_data);
+    });
+
+    this.ws.addEventListener('close', (event) => this.when_closed());
+
+    this.ws.addEventListener('error', (event) => this.onerror(event.error));
+  }
+
+
+  count_data_received(length){
+    // Count connection statistics.
+
+    this.bytes_received += length;
+    this.last_bytes_received += length;
+
+    // Get the current time in milliseconds.
+    const now = Date.now();
+
+    // Cap the minimum time since last message to avoid division by zero.
+    const time_since_last = (now - this.last_received_time) / 1000.0;
+
+    // Compute connection speed in byte_chunks of a minimum time period.
+    if(time_since_last > this.receive_rate_min_period) {
+
+      // Update the rate only if we have received data since the last update.
+      this.receive_rate = this.last_bytes_received == 0 ? this.receive_rate :
+        exponential_average(this.last_bytes_received / time_since_last, this.receive_rate, time_since_last, this.receive_rate_timescale);
+
+      this.last_bytes_received = 0;
+      this.last_received_time = now;
+    }
+
+    // Feedback for connection status on every chunk of data received.
+    this.onstatus({bytes_received: this.bytes_received, bytes_discarded: this.bytes_discarded, receive_rate: this.receive_rate});
+  }
+
+  receive_message(message_data) {
+    let bare_message = read_message(message_data);
+    
+    // If we have a valid message, report it to the user.
+    if(!bare_message) {
+      // Something was wrong parsing the message; discard it.
+      this.bytes_discarded += message_data.length;
+      console.warn("Message was discarded due to invalid data:", message_data);
+      return;
+    }
+    
+    const message_code = bare_message.message_code;
+    
+    // We compute running averages and current index relative to previous messages of the same type.
+    const last_message = this.last_message.get(message_code);
+
+    // Add additional data to readout messages.
+    const message = parser_mapping[message_code] ? parser_mapping[message_code](bare_message, last_message, this) : bare_message;
+
+    // Remember for the next message so we can increment the message index.
+    this.last_message.set(message_code, message);
+
+    // Intercept awaited messages and resolve the reply promise.
+    if (this.awaiting_reply.has(message_code)) {
+      const {resolve, data, expected_messages} = this.awaiting_reply.get(message_code);
+      data.push(message);
+      if (data.length === expected_messages) {
+        resolve(data);
+      }
+    } else {
+      // Otherwise stream all replies through the `onmessage` callback.
+      this.onmessage(message);
+    }
   }
 
   forget(){
@@ -191,9 +244,14 @@ export class MotorController {
     
     const message_data = write_message(message);
 
-    const buffer = this.encoding_buffer.encode_message(message_data);
+    if (this.connection_type === "ws") this.ws.send(message_data);
+    else if (this.connection_type === "usb") {
+      const buffer = this.encoding_buffer.encode_message(message_data);
 
-    this.connection_worker.postMessage({type: "send", buffer}, {transfer: [buffer.buffer]});
+      this.connection_worker.postMessage({type: "send", buffer}, {transfer: [buffer.buffer]});
+    } else {
+      throw new Error(`Unsupported connection type: ${this.connection_type}`);
+    }
   }
 
   /* Send a command and capture the reply messages. */

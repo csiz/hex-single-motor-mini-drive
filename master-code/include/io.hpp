@@ -152,13 +152,13 @@ void disable_shift_register_outputs();
 
 void setup_shift_register_bank1();
 
-void set_shift_register_bank1(uint8_t data[3]);
+bool set_shift_register_bank1(uint8_t data[3]);
 
-void motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* read_data, size_t length);
+bool motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* read_data, size_t length);
 
 void setup_shift_register_bank2();
 
-void set_shift_register_bank2(uint8_t data[7]);
+bool set_shift_register_bank2(uint8_t data[7]);
 
 void connect_battery_to_vcc();
 

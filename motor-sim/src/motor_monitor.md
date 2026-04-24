@@ -197,28 +197,6 @@ Unit Tests
 
 
 ```js
-// Setup a websocket connection to `ws://hex-mini-drive.local/ws` and send a message, log any replies.
-
-const ws = new WebSocket('ws://hex-mini-drive.local/ws');
-
-ws.addEventListener('open', function (event) {
-  console.log('WebSocket connection opened');
-  ws.send(JSON.stringify({message: 'Hello, server!'}));
-});
-
-ws.addEventListener('message', async function (event) {
-  console.log('Message from server:', await event.data.text());
-});
-
-ws.addEventListener('close', function (event) {
-  console.log('WebSocket connection closed');
-});
-
-
-
-```
-
-```js
 // USB Connection and Data
 // -----------------------
 
@@ -241,53 +219,53 @@ let connection_status = Mutable(html`<pre>Not connected.</pre>`);
 // Data management
 // ---------------
 
-function set_readout_series(new_data, port){
-  if (port === active_port.value) data.value = new_data;
+function set_readout_series(new_data, motor_uri){
+  if (motor_uri === active_port.value) data.value = new_data;
 
-  opened_ports.value.get(port).data = new_data;
+  opened_ports.value.get(motor_uri).data = new_data;
 }
 
-function update_readout_series(readout, port){
+function update_readout_series(readout, motor_uri){
   // Reset the data when the controller detects a new readout series and resets the index to 0.
   const first_readout = (readout.readout_index === 0);
 
-  const previous_data = opened_ports.value.get(port)?.data ?? [];
+  const previous_data = opened_ports.value.get(motor_uri)?.data ?? [];
 
   const new_data = first_readout ? [readout] : capped_push(previous_data, readout);
 
-  if (port === active_port.value) data.value = new_data;
+  if (motor_uri === active_port.value) data.value = new_data;
 
-  opened_ports.value.get(port).data = new_data;
+  opened_ports.value.get(motor_uri).data = new_data;
 };
 
 
-function set_status(status, port){
-  if (!motor_controller.value || port === active_port.value) connection_status.value = status;
+function set_status(status, motor_uri){
+  if (!motor_controller.value || motor_uri === active_port.value) connection_status.value = status;
 
-  opened_ports.value.get(port).status = status;
+  opened_ports.value.get(motor_uri).status = status;
 }
 
-function set_error(error, port){
-  if (!motor_controller.value || port === active_port.value) {
+function set_error(error, motor_uri){
+  if (!motor_controller.value || motor_uri === active_port.value) {
     connection_status.value = displayable_connection_error(error);
   }
 
-  opened_ports.value.get(port).error = error;
+  opened_ports.value.get(motor_uri).error = error;
 }
 
-function set_motor_controller(controller, port){
-  opened_ports.value.get(port).motor_controller = controller;
+function set_motor_controller(controller, motor_uri){
+  opened_ports.value.get(motor_uri).motor_controller = controller;
 
   // Self assign to update the `Mutable`.
   opened_ports.value = opened_ports.value;
 }
 
-function switch_to_port(port){
-  const port_state = opened_ports.value.get(port);
+function switch_to_port(motor_uri){
+  const port_state = opened_ports.value.get(motor_uri);
 
   if (!port_state) return false;
 
-  active_port.value = port;
+  active_port.value = motor_uri;
 
   motor_controller.value = port_state.motor_controller;
   connection_status.value = port_state.error ? displayable_connection_error(port_state.error) : port_state.status;
@@ -300,20 +278,18 @@ function switch_to_port(port){
 // -------------------------------
 
 
-async function connect_motor_controller(){
+async function connect_motor_controller({force_ws = false}) {
   try {
-    const port = await maybe_prompt_port();
+    const port_index = force_ws ? null : await prompt_com_port_get_index();
 
-    if (!port) return;
-
-    const port_index = await get_port_index(port);
+    const motor_uri = (port_index === null || force_ws) ? default_ws_uri : `usb:${port_index}`;
 
     // Switch to the existing motor controller if this port is already opened and initialized.
-    if (switch_to_port(port)) return;
+    if (switch_to_port(motor_uri)) return;
 
     // Append this port to the opened ports list so we can capture it's errors too.
-    opened_ports.value = opened_ports.value.set(port, {
-      port_index,
+    opened_ports.value = opened_ports.value.set(motor_uri, {
+      motor_uri,
       motor_controller: null,
       data: [],
       status: html`<pre>Opening USB com port.</pre>`,
@@ -321,23 +297,23 @@ async function connect_motor_controller(){
     });
 
     const motor_controller = new MotorController({
-      port_index,
+      motor_uri,
       onstatus: (status) => {
-        set_status(html`<pre>Connected; ${format_data_rate(status)}.</pre>`, port);
+        set_status(html`<pre>Connected; ${format_data_rate(status)}.</pre>`, motor_uri);
       },
       onmessage: (readout) => {
-        update_readout_series(readout, port);
+        update_readout_series(readout, motor_uri);
       },
       onready: (motor_controller) => {
-        set_status(html`<pre>Connected, waiting for your commands.</pre>`, port);
-        set_motor_controller(motor_controller, port);
-        switch_to_port(port);
+        set_status(html`<pre>Connected, waiting for your commands.</pre>`, motor_uri);
+        set_motor_controller(motor_controller, motor_uri);
+        switch_to_port(motor_uri);
       },
       onerror: (error) => {
-        set_error(error, port);
+        set_error(error, motor_uri);
       },
       onclose: () => {
-        opened_ports.value.delete(port);
+        opened_ports.value.delete(motor_uri);
         // Self assign to update the `Mutable`.
         opened_ports.value = opened_ports.value;
       },
@@ -345,7 +321,7 @@ async function connect_motor_controller(){
 
 
     // Switch the display to the newly opening port.
-    switch_to_port(port);
+    switch_to_port(motor_uri);
 
   } catch (error) {
     connection_status.value = displayable_connection_error(error);
@@ -363,12 +339,15 @@ async function disconnect_motor_controller(show_status = true){
   }
 }
 
+```
+
+```js
 
 // Setup Buttons and Inputs
 // ------------------------
 
 // Automatically connect the motor driver if we have permissions from previous session.
-connect_motor_controller();
+connect_motor_controller({force_ws: true});
 
 // Disconnect when the notebook is reloaded.
 invalidation.then(disconnect_motor_controller);
@@ -2155,7 +2134,7 @@ import {
 
 import {interpolate_degrees, normalize_degrees} from "./components/motor_controller/angular_math.js";
 
-import {MessageCode, maybe_prompt_port, get_port_index, MotorController} from "./components/motor_controller/motor_controller.js";
+import {MessageCode, prompt_com_port_get_index, default_ws_uri, MotorController} from "./components/motor_controller/motor_controller.js";
 
 import {run_current_calibration, compute_current_calibration} from "./components/motor_controller/current_calibration.js";
 
@@ -2227,7 +2206,7 @@ function displayable_connection_error(error){
   } else if (error.name === "NetworkError") {
     return html`<pre style="color: red">Transmission error to usb device.</pre>`;
   } else {
-    console.error("Motor connection error:", error);
+    console.log("Motor connection error:", error);
     return html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`;
   }
 }

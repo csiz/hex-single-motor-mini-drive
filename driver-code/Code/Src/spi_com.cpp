@@ -1,12 +1,11 @@
 #include "spi_com.hpp"
 #include "main.h"
 
-#include <cstring>
-
 #include "error_handler.hpp"
 
 #include "hex_mini_drive_interface.hpp"
 #include "stm32g4xx_hal_spi.h"
+#include <cstddef>
 
 extern SPI_HandleTypeDef hspi3;
 
@@ -20,11 +19,15 @@ volatile bool spi_done = false;
 volatile bool spi_error = false;
 
 static void spi_receive_buffer_reset() {
-	memset(spi_receive_buffer, 0, SPI_BUFFER_SIZE);
+  for (size_t i = 0; i < SPI_BUFFER_SIZE; i++) {
+    spi_receive_buffer[i] = 0;
+  }
 }
 
 static void spi_transmit_buffer_reset() {
-	memset(spi_transmit_buffer, 0, SPI_BUFFER_SIZE);
+  for (size_t i = 0; i < SPI_BUFFER_SIZE; i++) {
+    spi_transmit_buffer[i] = 0;
+  }
 }
 
 static void spi_start_transfer() {
@@ -74,8 +77,12 @@ bool spi_update(uint8_t * tx_data, size_t tx_size, std::function<void(uint8_t * 
 
     if (tx_size > hex_mini_drive::MAX_MESSAGE_SIZE) error();
 
-    std::memcpy(spi_transmit_buffer, tx_data, tx_size);
-    std::memset(spi_transmit_buffer + tx_size, 0, SPI_BUFFER_SIZE - tx_size);
+    for (size_t i = 0; i < tx_size; i++) {
+      spi_transmit_buffer[i] = tx_data[i];
+    }
+    for (size_t i = tx_size; i < SPI_BUFFER_SIZE; i++) {
+      spi_transmit_buffer[i] = 0;
+    }
 
     // Queue up a new transfer.
     spi_start_transfer();

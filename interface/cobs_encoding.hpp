@@ -80,7 +80,13 @@ struct ConsistentOverheadByteStuffing {
         // If this isn't the start, or 0xFF continuation, we need to add a zero to the
         // decoded output according to this segment's zero length byte.
         if (decoding_insert_zero_byte) {
-          decoding_buffer[decoding_buffer_size++] = 0;  // Insert zero byte for COBS decoding.
+          if (decoding_buffer_size >= max_message_size) {
+            // We don't have space to insert the zero byte, so we drop the current message.
+            dropped_bytes += decoding_buffer_size;
+            decode_reset();
+          } else {
+            decoding_buffer[decoding_buffer_size++] = 0;  // Insert zero byte for COBS decoding.
+          }
         }
 
         // If this is a 0xFF continuation, we don't insert a zero byte for the next segment. 
@@ -91,8 +97,14 @@ struct ConsistentOverheadByteStuffing {
       } else {
 
         // Copy the current byte and count down the length until we need to insert a zero byte.
-        decoding_buffer[decoding_buffer_size++] = byte;
-        decoding_length_until_zero--;
+        if (decoding_buffer_size >= max_message_size) {
+          // We don't have space to copy the byte, so we drop the current message.
+          dropped_bytes += decoding_buffer_size;
+          decode_reset();
+        } else {
+          decoding_buffer[decoding_buffer_size++] = byte;
+          decoding_length_until_zero--;
+        }
       }
     }
 

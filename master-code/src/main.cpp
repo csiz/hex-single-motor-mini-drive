@@ -1,9 +1,11 @@
 #include <stdio.h>
 
 #include <functional>
+#include <vector>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/message_buffer.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
 #include <esp_task_wdt.h>
@@ -18,6 +20,18 @@
 
 static const char* TAG = "main";
 
+constexpr size_t spi_chunk_length = hex_mini_drive::MAX_MESSAGE_SIZE+3;
+
+// FreeRTOS message buffer for motor messages
+MessageBufferHandle_t motor_outgoing_messages = nullptr;
+constexpr size_t motor_message_buffer_size = 4096;
+
+uint8_t motor_message_buffer_data[motor_message_buffer_size];
+StaticMessageBuffer_t motor_message_buffer_storage;
+
+hex_mini_drive::ConsistentOverheadByteStuffing<spi_chunk_length> cobs_encoder = {};
+
+uint8_t zero_buffer[spi_chunk_length] = {0}; 
 
 int loop_number = 0;
 
@@ -57,28 +71,66 @@ void wifi_connected(){
 
   setup_server([](uint8_t* buffer, size_t size) {
     ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
-    
-    ws_send_binary(buffer, size);
+    if (motor_outgoing_messages == nullptr) {
+      ESP_LOGE(TAG, "motor_outgoing_messages buffer not initialized!");
+      return;
+    }
+    if (size > hex_mini_drive::MAX_MESSAGE_SIZE) {
+      ESP_LOGW(TAG, "Received message size %d exceeds maximum of %d, dropping message", size, hex_mini_drive::MAX_MESSAGE_SIZE);
+      return;
+    }
+
+    size_t sent = xMessageBufferSend(motor_outgoing_messages, buffer, size, 0);
+
+    if (sent != size) {
+      ESP_LOGW(TAG, "Failed to send full message to buffer (sent %d/%d bytes)", sent, size);
+    }
   });
 }
 
-void receive_message(uint8_t* buffer, size_t size) {
-  ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
-  
-  ws_send_binary(buffer, size);
-}
+
 
 static inline int64_t get_ms_time() {
   return esp_timer_get_time() / 1000; // Convert to milliseconds
 }
 
-const size_t spi_chunk_length = 128;
-uint8_t test_write_data[spi_chunk_length] = {0};
-uint8_t test_read_data[spi_chunk_length] = {0};
-
 void motor_update_unthrottled() {
-  motor_spi_transaction(0, test_write_data, test_read_data, spi_chunk_length);
-  ESP_LOGI(TAG, "SPI read data: %02X %02X %02X ...", test_read_data[0], test_read_data[1], test_read_data[2]);
+  if (motor_outgoing_messages == nullptr) {
+    ESP_LOGE(TAG, "motor_outgoing_messages buffer not initialized!");
+    return;
+  }
+
+  uint8_t * write_buffer = zero_buffer;
+
+  // Check if there's a message in the buffer
+  if (xMessageBufferIsEmpty(motor_outgoing_messages) == pdFALSE) {
+    uint8_t message_buffer[hex_mini_drive::MAX_MESSAGE_SIZE];
+    size_t received = xMessageBufferReceive(motor_outgoing_messages, message_buffer, sizeof(message_buffer), 0);
+    
+    if (received > 0) {
+      cobs_encoder.encode_message(message_buffer, received);
+      write_buffer = cobs_encoder.encoding_buffer;
+
+      ESP_LOGI(TAG, "Sending motor message of size %d: %02X %02X", received, message_buffer[0], message_buffer[1]);
+    }
+  }
+
+  uint8_t read_buffer[spi_chunk_length] = {0};
+  motor_spi_transaction(0, write_buffer, read_buffer, spi_chunk_length);
+
+  cobs_encoder.encode_reset();
+
+
+  cobs_encoder.decode_chunk(read_buffer, spi_chunk_length, [](uint8_t* buffer, size_t size) {
+    ESP_LOGI(TAG, "Received SPI message of size %d", size);
+
+    // Print hex values for first 8 bytes:
+    ESP_LOGI(TAG, "Received non-empty SPI message of: %02X %02X %02X %02X %02X %02X %02X %02X",
+      buffer[0], buffer[1], buffer[2], buffer[3],
+      buffer[4], buffer[5], buffer[6], buffer[7]);
+
+    ws_send_binary(buffer, size);
+  });
 }
 
 const auto motor_update = interval(10, motor_update_unthrottled); // Update motors every 10ms
@@ -90,7 +142,16 @@ void main_task(void *arg) {
   //Initialize NVS, used for WiFi provisioning and other settings.
   initialise_nvs_flash();
 
-  
+  // Create message buffer for motor outgoing messages
+  motor_outgoing_messages = xMessageBufferCreateStatic(
+    motor_message_buffer_size,
+    motor_message_buffer_data,
+    &motor_message_buffer_storage);
+
+  if (motor_outgoing_messages == nullptr) {
+    ESP_LOGE(TAG, "Failed to create motor_outgoing_messages buffer!");
+  }
+
   // Setup everything
   setup_status_led();
   setup_spi_busses();
@@ -130,6 +191,8 @@ void main_task(void *arg) {
   start_wifi_provisioning(wifi_connected);
   
   while (1) {
+    loop_number += 1;
+
     // We need to reset the watchdog timer regularly.
     esp_task_wdt_reset();
     

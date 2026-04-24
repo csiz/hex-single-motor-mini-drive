@@ -18,7 +18,7 @@
 
 #include "qrcode.h"
 
-static const char *TAG = "app";
+static const char *TAG = "wifi.cpp";
 
 #include "esp_srp.h"
 
@@ -34,7 +34,7 @@ int salt_len = 16; // Standard salt length
 
 
 /* Signal Wi-Fi events on this event-group */
-void (*on_connected)() = nullptr;
+void (* volatile on_connected)() = nullptr;
 
 #define PROV_QR_VERSION         "v1"
 #define PROV_TRANSPORT_SOFTAP   "softap"
@@ -106,7 +106,13 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
-        if (on_connected) on_connected();
+        void (*on_connected)() = (void (*)())arg;
+        if (on_connected != nullptr) {
+            ESP_LOGI(TAG, "Calling on_connected callback");
+            on_connected();
+        } else {
+            ESP_LOGW(TAG, "on_connected callback is null!");
+        }
     }
 }
 
@@ -182,8 +188,8 @@ static void wifi_prov_print_qr(const char *name, const char *username, const cha
 }
 
 
-void start_wifi_provisioning(void (*on_connected_callback)()) {
-    on_connected = on_connected_callback;
+void start_wifi_provisioning(void (*on_connected)()) {
+    ESP_LOGI(TAG, "Starting Wi-Fi connection");
 
     // Initialize TCP/IP
     ESP_ERROR_CHECK(esp_netif_init());
@@ -201,8 +207,9 @@ void start_wifi_provisioning(void (*on_connected_callback)()) {
     ESP_ERROR_CHECK(esp_event_handler_register(
         PROTOCOMM_SECURITY_SESSION_EVENT, ESP_EVENT_ANY_ID, &protocomm_sec_event_handler, NULL));
 
+    // Pass callback as user data to event handler for thread-safe access
     ESP_ERROR_CHECK(esp_event_handler_register(
-        IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL));
+        IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, (void*)on_connected));
 
     // Initialize Wi-Fi including netif with default config
     esp_netif_create_default_wifi_sta();

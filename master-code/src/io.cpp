@@ -112,25 +112,28 @@ void setup_shift_register_bank1(){
   ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &shift_register_bank1_device));
 }
 
-void set_shift_register_bank1(uint8_t data[3]){
+bool set_shift_register_bank1(uint8_t data[3]){
   // Bank 1 is latched by shift_bank1_latch, and connected to SPI3.
   spi_transaction_t t = {};
   t.length = 3 * 8;
   t.tx_buffer = data;
-  ESP_ERROR_CHECK(spi_device_transmit(shift_register_bank1_device, &t));
+  if(spi_device_transmit(shift_register_bank1_device, &t) != ESP_OK) return false;
   // Latch the data into the output registers.
   gpio_set_level(shift_bank1_latch, 1);
   gpio_set_level(shift_bank1_latch, 0);
+  return true;
 }
 
-void motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* read_data, size_t length){
+bool motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* read_data, size_t length){
+  if (length < 3) return false;
+
   // Assert chip select for the target motor (active low).
   // Bank 1 has 24 bits (3 bytes), one per motor. All bits high = all deasserted.
   uint8_t cs_data[3] = {0xFF, 0xFF, 0xFF};
   // Clear the bit corresponding to motor_index to assert CS.
   cs_data[2 - (motor_index / 8)] &= ~(1 << (motor_index % 8));
   // Bank 1 is latched by shift_bank1_latch, and connected to SPI3.
-  set_shift_register_bank1(cs_data);
+  if(!set_shift_register_bank1(cs_data)) return false;
 
   // Perform the SPI transaction on SPI3 (shared bus with shift registers).
   spi_transaction_t t = {};
@@ -146,11 +149,13 @@ void motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* rea
   const esp_err_t transmit_result = spi_device_transmit(shift_register_bank1_device, &t);
   if(transmit_result != ESP_OK){
     ESP_LOGE(TAG, "SPI transaction failed for motor %d, err %d", motor_index, transmit_result);
+    return false;
   }
 
   // Latch the data into the output registers.
   gpio_set_level(shift_bank1_latch, 1);
   gpio_set_level(shift_bank1_latch, 0);
+  return true;
 }
 
 
@@ -166,15 +171,16 @@ void setup_shift_register_bank2(){
   ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, &shift_register_bank2_device));
 }
 
-void set_shift_register_bank2(uint8_t data[7]){
+bool set_shift_register_bank2(uint8_t data[7]){
   // Bank 2 is latched by shift_bank2_latch, and connected to SPI3.
   spi_transaction_t t = {};
   t.length = 7 * 8;
   t.tx_buffer = data;
-  ESP_ERROR_CHECK(spi_device_transmit(shift_register_bank2_device, &t));
+  if(spi_device_transmit(shift_register_bank2_device, &t) != ESP_OK) return false;
   // Latch the data into the output registers.
   gpio_set_level(shift_bank2_latch, 1);
   gpio_set_level(shift_bank2_latch, 0);
+  return true;
 }
 
 void connect_battery_to_vcc(){

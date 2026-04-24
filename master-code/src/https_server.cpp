@@ -158,10 +158,12 @@ int ws_send_binary(const uint8_t* buffer, size_t size) {
     ws_pkt.type = HTTPD_WS_TYPE_BINARY;
     
     int sent_count = 0;
+    // TODO: redo using a hashmap of socked fd.
     std::vector<WebSocketClient> disconnected_clients;
     
     for (const auto& client : active_ws_clients) {
-        esp_err_t ret = httpd_ws_send_frame_async(client.server, client.fd, &ws_pkt);
+        // TODO redo using async send, make sure the data is still in memory when the send happens.
+        esp_err_t ret = httpd_ws_send_data(client.server, client.fd, &ws_pkt);
         if (ret == ESP_OK) {
             sent_count++;
         } else {
