@@ -94,46 +94,37 @@ static inline int64_t get_ms_time() {
   return esp_timer_get_time() / 1000; // Convert to milliseconds
 }
 
-void motor_update_unthrottled() {
+void motor_update(int64_t current_time_ms) {
   if (motor_outgoing_messages == nullptr) {
     ESP_LOGE(TAG, "motor_outgoing_messages buffer not initialized!");
     return;
   }
 
-  uint8_t * write_buffer = zero_buffer;
+  uint8_t read_buffer[spi_chunk_length] = {0};
 
   // Check if there's a message in the buffer
   if (xMessageBufferIsEmpty(motor_outgoing_messages) == pdFALSE) {
     uint8_t message_buffer[hex_mini_drive::MAX_MESSAGE_SIZE];
     size_t received = xMessageBufferReceive(motor_outgoing_messages, message_buffer, sizeof(message_buffer), 0);
     
-    if (received > 0) {
-      cobs_encoder.encode_message(message_buffer, received);
-      write_buffer = cobs_encoder.encoding_buffer;
-
-      ESP_LOGI(TAG, "Sending motor message of size %d: %02X %02X", received, message_buffer[0], message_buffer[1]);
+    if (received == 0) {
+      ESP_LOGW(TAG, "Failed to receive message from buffer");
+      return;
     }
+
+    cobs_encoder.encode_message(message_buffer, received);
+
+    motor_spi_transaction(0, cobs_encoder.encoding_buffer, read_buffer, spi_chunk_length);
+
+    cobs_encoder.encode_reset();
+  } else {
+    motor_spi_transaction(0, zero_buffer, read_buffer, spi_chunk_length);
   }
 
-  uint8_t read_buffer[spi_chunk_length] = {0};
-  motor_spi_transaction(0, write_buffer, read_buffer, spi_chunk_length);
-
-  cobs_encoder.encode_reset();
-
-
   cobs_encoder.decode_chunk(read_buffer, spi_chunk_length, [](uint8_t* buffer, size_t size) {
-    ESP_LOGI(TAG, "Received SPI message of size %d", size);
-
-    // Print hex values for first 8 bytes:
-    ESP_LOGI(TAG, "Received non-empty SPI message of: %02X %02X %02X %02X %02X %02X %02X %02X",
-      buffer[0], buffer[1], buffer[2], buffer[3],
-      buffer[4], buffer[5], buffer[6], buffer[7]);
-
     ws_send_binary(buffer, size);
   });
 }
-
-const auto motor_update = interval(10, motor_update_unthrottled); // Update motors every 10ms
 
 void main_task(void *arg) {
   // Register this task with the watchdog timer.

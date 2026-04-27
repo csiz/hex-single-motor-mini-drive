@@ -142,6 +142,10 @@ struct ConsistentOverheadByteStuffing {
     // Current length byte value.
     uint8_t code = 1;
 
+    if (write_index >= max_message_size) {
+      return false;  // Indicate failure due to insufficient buffer size.
+    }
+
     while (read_index < input_size) {
       if (input[read_index] == 0) {
         // Write the length byte.

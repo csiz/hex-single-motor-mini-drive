@@ -1,7 +1,7 @@
 import {exponential_average} from "./math_utils.js";
 import {parser_mapping, make_position_calibration, make_current_calibration} from "./interface.js";
 
-import {COBS_Buffer, MessageCode, write_message, read_message} from "hex-mini-drive-interface";
+import {ConsistentOverheadByteStuffing, MessageCode, write_message, read_message, MAX_MESSAGE_SIZE} from "hex-mini-drive-interface";
 
 // Re-export the codes from the interface.
 export { MessageCode };
@@ -90,7 +90,7 @@ export class MotorController {
     this.connection_type = motor_uri.split(":")[0];
 
     if (this.connection_type === "usb") {
-      this.encoding_buffer = new COBS_Buffer();
+      this.encoding_buffer = new ConsistentOverheadByteStuffing({max_message_size: MAX_MESSAGE_SIZE});
 
       const port_index = parseInt(motor_uri.split(":")[1]);
 
