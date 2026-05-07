@@ -21,6 +21,29 @@ struct WebSocketClient {
 
 static std::vector<WebSocketClient> active_ws_clients;
 
+// Structure to hold data for async send
+struct AsyncSendContext {
+    uint8_t* buffer;
+    size_t size;
+    int fd;
+    httpd_handle_t server;
+};
+
+// Callback for async send completion
+static void ws_send_complete_callback(esp_err_t err, int socket, void *arg) {
+    AsyncSendContext* ctx = static_cast<AsyncSendContext*>(arg);
+    
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Async send failed for fd %d, error: %d", socket, err);
+    }
+    
+    // Free the copied buffer
+    if (ctx->buffer) {
+        free(ctx->buffer);
+    }
+    delete ctx;
+}
+
 // Self-signed certificate (you'll need to generate this)
 extern const uint8_t server_cert_start[] asm("_binary_cacert_pem_start");
 extern const uint8_t server_cert_end[] asm("_binary_cacert_pem_end");
@@ -152,22 +175,37 @@ int ws_send_binary(const uint8_t* buffer, size_t size) {
         return 0;
     }
     
-    httpd_ws_frame_t ws_pkt = {0};
-    ws_pkt.payload = (uint8_t*)buffer;
-    ws_pkt.len = size;
-    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-    
     int sent_count = 0;
-    // TODO: redo using a hashmap of socked fd.
     std::vector<WebSocketClient> disconnected_clients;
     
     for (const auto& client : active_ws_clients) {
-        // TODO redo using async send, make sure the data is still in memory when the send happens.
-        esp_err_t ret = httpd_ws_send_data(client.server, client.fd, &ws_pkt);
+        // Copy buffer for async send to ensure data remains valid
+        uint8_t* buffer_copy = (uint8_t*)malloc(size);
+        if (buffer_copy == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate memory for async send buffer");
+            continue;
+        }
+        memcpy(buffer_copy, buffer, size);
+        
+        // Create context for callback
+        AsyncSendContext* ctx = new AsyncSendContext();
+        ctx->buffer = buffer_copy;
+        ctx->size = size;
+        ctx->fd = client.fd;
+        ctx->server = client.server;
+        
+        httpd_ws_frame_t ws_pkt = {0};
+        ws_pkt.payload = buffer_copy;
+        ws_pkt.len = size;
+        ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+        
+        esp_err_t ret = httpd_ws_send_data_async(client.server, client.fd, &ws_pkt, ws_send_complete_callback, ctx);
         if (ret == ESP_OK) {
             sent_count++;
         } else {
-            ESP_LOGW(TAG, "Failed to send to fd %d, error: %d", client.fd, ret);
+            ESP_LOGW(TAG, "Failed to queue async send to fd %d, error: %d", client.fd, ret);
+            free(buffer_copy);
+            delete ctx;
             disconnected_clients.push_back(client);
         }
     }
