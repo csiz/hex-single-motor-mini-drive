@@ -34,6 +34,9 @@ hex_mini_drive::ConsistentOverheadByteStuffing<spi_chunk_length> cobs_encoder = 
 uint8_t zero_buffer[spi_chunk_length] = {0}; 
 
 int loop_number = 0;
+float main_loop_frequency = 0.0;
+int main_updates_this_ms = 0;
+int last_time_ms = 0;
 
 void initialise_nvs_flash() {
   esp_err_t ret = nvs_flash_init();
@@ -54,17 +57,17 @@ std::function<void(const int64_t current_time_ms)> interval(const int64_t interv
   };
 }
 
-void blink_status_led(int64_t current_time_ms) {
-  static int64_t last_blink = 0;
+const auto blink_status_led = interval(1000, []() {
   static bool status_state = false;
 
-  if (current_time_ms - last_blink > 1000) {
-    status_state = !status_state;
-    uint32_t duty = status_state ? 128 : 32;
-    set_status_led_brightness(duty);
-    last_blink = current_time_ms;
-  }
-}
+  status_state = !status_state;
+  uint32_t duty = status_state ? 128 : 32;
+  set_status_led_brightness(duty);
+});
+
+const auto log_loop_frequency = interval(5000, []() {
+  ESP_LOGI(TAG, "Main loop frequency: %.2f Hz", main_loop_frequency);
+});
 
 void wifi_connected(){
   ESP_LOGI(TAG, "Wi-Fi connected callback called");
@@ -181,6 +184,8 @@ void main_task(void *arg) {
 
   start_wifi_provisioning(wifi_connected);
   
+  last_time_ms = get_ms_time();
+
   while (1) {
     loop_number += 1;
 
@@ -188,22 +193,36 @@ void main_task(void *arg) {
     esp_task_wdt_reset();
     
     // Blink the built-in status LED to show the system is running
-    int64_t current_time_ms = get_ms_time();
+    const int64_t current_time_ms = get_ms_time();
+
+    const int64_t loop_duration = current_time_ms - last_time_ms;
+
+    last_time_ms = current_time_ms;
+
+    // Calculate main loop frequency
+    if (loop_duration == 0) {
+      main_updates_this_ms += 1;
+    } else {
+      main_loop_frequency = main_loop_frequency * 0.99 + 0.01 * (main_updates_this_ms + 1) / (loop_duration / 1000.0);
+      main_updates_this_ms = 0;
+    }
 
     // Handle displaya and LVGL tasks.
     update_display(current_time_ms);
     
     blink_status_led(current_time_ms);
 
+    log_loop_frequency(current_time_ms);
+
     motor_update(current_time_ms);
 
-    // Must sleep at last 1ms to let the idle task handle the watchdog and other housekeeping.
-    vTaskDelay(pdMS_TO_TICKS(1));
+    taskYIELD();
   }
 
   
 }
 
 extern "C" void app_main() {
-  xTaskCreate(main_task, "main_task", 16384 , NULL, 5, NULL);
+  // Start main task pinned to core 1 as core 0 is used by Wi-Fi and other system tasks.
+  xTaskCreatePinnedToCore(main_task, "main_task", 16384 , NULL, 5, NULL, 1);
 }
