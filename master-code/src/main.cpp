@@ -5,6 +5,7 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
 #include <freertos/message_buffer.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
@@ -222,6 +223,10 @@ void core_1_task(void *arg) {
 
   auto log_loop_frequency = interval(5000, [&stats]() {
     ESP_LOGI(TAG, "Core 1 loop frequency: %.2f Hz", stats.loop_frequency);
+    // Let's also print the task list:
+    char task_list_buffer[1024];
+    vTaskList(task_list_buffer);
+    ESP_LOGI(TAG, "Task List:\n%s", task_list_buffer);
   });
 
   while (1) {
