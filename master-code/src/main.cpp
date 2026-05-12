@@ -99,7 +99,7 @@ const auto blink_status_led = interval(1000, []() {
 void wifi_connected(){
   ESP_LOGI(TAG, "Wi-Fi connected callback called");
 
-  setup_server([](uint8_t* buffer, size_t size) {
+  setup_server(/* core_id = */ 0, [](uint8_t* buffer, size_t size) {
     ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
     if (motor_outgoing_messages == nullptr) {
       ESP_LOGE(TAG, "motor_outgoing_messages buffer not initialized!");

@@ -234,12 +234,13 @@ void setup_mdns() {
 }
 
 
-void setup_server(ws_receive_callback_t receive_callback) {
+void setup_server(int core_id, ws_receive_callback_t receive_callback) {
     ws_receive_callback = receive_callback;
 
     {
         httpd_config_t conf = HTTPD_DEFAULT_CONFIG();
         conf.server_port = 80;
+        conf.core_id = core_id;
         
         if (httpd_start(&http_server, &conf) == ESP_OK) {
             httpd_register_uri_handler(http_server, &root);
@@ -257,6 +258,7 @@ void setup_server(ws_receive_callback_t receive_callback) {
         conf.servercert_len = server_cert_end - server_cert_start;
         conf.prvtkey_pem = server_key_start;
         conf.prvtkey_len = server_key_end - server_key_start;
+        conf.httpd.core_id = core_id;
         
         if (httpd_ssl_start(&https_server, &conf) == ESP_OK) {
             httpd_register_uri_handler(https_server, &root);
