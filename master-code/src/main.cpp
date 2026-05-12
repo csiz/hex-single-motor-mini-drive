@@ -33,10 +33,38 @@ hex_mini_drive::ConsistentOverheadByteStuffing<spi_chunk_length> cobs_encoder = 
 
 uint8_t zero_buffer[spi_chunk_length] = {0}; 
 
-int loop_number = 0;
-float main_loop_frequency = 0.0;
-int main_updates_this_ms = 0;
-int last_time_ms = 0;
+static inline int64_t get_ms_time() {
+  return esp_timer_get_time() / 1000; // Convert to milliseconds
+}
+
+struct RunningStats {
+  int loop_number = 0;
+  float loop_frequency = 0.0;
+  int updates_this_ms = 0;
+  int64_t time_ms;
+
+  RunningStats() {
+    time_ms = get_ms_time();
+  }
+
+  void update(){
+    const int64_t current_time_ms = get_ms_time();
+
+    const int64_t loop_duration = current_time_ms - time_ms;
+
+    time_ms = current_time_ms;
+
+    // Calculate main loop frequency
+    if (loop_duration == 0) {
+      updates_this_ms += 1;
+    } else {
+      loop_frequency = loop_frequency * 0.99 + 0.01 * (updates_this_ms + 1) / (loop_duration / 1000.0);
+      updates_this_ms = 0;
+    }
+  }
+};
+
+
 
 void initialise_nvs_flash() {
   esp_err_t ret = nvs_flash_init();
@@ -47,7 +75,7 @@ void initialise_nvs_flash() {
   ESP_ERROR_CHECK(ret);
 }
 
-std::function<void(const int64_t current_time_ms)> interval(const int64_t interval_ms, void (*callback)()) {
+std::function<void(const int64_t current_time_ms)> interval(const int64_t interval_ms, std::function<void()> callback) {
   int64_t last_time = 0;
   return [interval_ms, callback, last_time](const int64_t current_time) mutable {
     if (current_time - last_time >= interval_ms) {
@@ -57,16 +85,14 @@ std::function<void(const int64_t current_time_ms)> interval(const int64_t interv
   };
 }
 
+
+
 const auto blink_status_led = interval(1000, []() {
   static bool status_state = false;
 
   status_state = !status_state;
   uint32_t duty = status_state ? 128 : 32;
   set_status_led_brightness(duty);
-});
-
-const auto log_loop_frequency = interval(5000, []() {
-  ESP_LOGI(TAG, "Main loop frequency: %.2f Hz", main_loop_frequency);
 });
 
 void wifi_connected(){
@@ -93,9 +119,6 @@ void wifi_connected(){
 
 
 
-static inline int64_t get_ms_time() {
-  return esp_timer_get_time() / 1000; // Convert to milliseconds
-}
 
 void motor_update(int64_t current_time_ms) {
   if (motor_outgoing_messages == nullptr) {
@@ -129,22 +152,35 @@ void motor_update(int64_t current_time_ms) {
   });
 }
 
-void main_task(void *arg) {
+void core_0_task(void *arg) {
+  // Register this task with the watchdog timer.
+  esp_task_wdt_add(NULL);
+  
+  start_wifi_provisioning(wifi_connected);
+  
+  auto stats = RunningStats();
+
+  auto log_loop_frequency = interval(5000, [&stats]() {
+    ESP_LOGI(TAG, "Core 0 loop frequency: %.2f Hz", stats.loop_frequency);
+  });
+
+  while (1) {
+    stats.update();
+
+    // We need to reset the watchdog timer regularly.
+    esp_task_wdt_reset();
+
+    log_loop_frequency(stats.time_ms);
+
+    // Sleep for 1 ms.
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+}
+
+void core_1_task(void *arg) {
   // Register this task with the watchdog timer.
   esp_task_wdt_add(NULL);
 
-  //Initialize NVS, used for WiFi provisioning and other settings.
-  initialise_nvs_flash();
-
-  // Create message buffer for motor outgoing messages
-  motor_outgoing_messages = xMessageBufferCreateStatic(
-    motor_message_buffer_size,
-    motor_message_buffer_data,
-    &motor_message_buffer_storage);
-
-  if (motor_outgoing_messages == nullptr) {
-    ESP_LOGE(TAG, "Failed to create motor_outgoing_messages buffer!");
-  }
 
   // Setup everything
   setup_status_led();
@@ -182,47 +218,50 @@ void main_task(void *arg) {
   // BIG oof, this burns the circuit, if the USB output flags are set wrong.
   connect_vbus_to_vcc();
 
-  start_wifi_provisioning(wifi_connected);
-  
-  last_time_ms = get_ms_time();
+  auto stats = RunningStats();
+
+  auto log_loop_frequency = interval(5000, [&stats]() {
+    ESP_LOGI(TAG, "Core 1 loop frequency: %.2f Hz", stats.loop_frequency);
+  });
 
   while (1) {
-    loop_number += 1;
+    stats.update();
 
     // We need to reset the watchdog timer regularly.
     esp_task_wdt_reset();
     
     // Blink the built-in status LED to show the system is running
-    const int64_t current_time_ms = get_ms_time();
-
-    const int64_t loop_duration = current_time_ms - last_time_ms;
-
-    last_time_ms = current_time_ms;
-
-    // Calculate main loop frequency
-    if (loop_duration == 0) {
-      main_updates_this_ms += 1;
-    } else {
-      main_loop_frequency = main_loop_frequency * 0.99 + 0.01 * (main_updates_this_ms + 1) / (loop_duration / 1000.0);
-      main_updates_this_ms = 0;
-    }
+    blink_status_led(stats.time_ms);
 
     // Handle displaya and LVGL tasks.
-    update_display(current_time_ms);
-    
-    blink_status_led(current_time_ms);
+    update_display(stats.time_ms);
 
-    log_loop_frequency(current_time_ms);
+    log_loop_frequency(stats.time_ms);
 
-    motor_update(current_time_ms);
+    motor_update(stats.time_ms);
 
-    taskYIELD();
+    // Sleep for 1ms.
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 
   
 }
 
 extern "C" void app_main() {
+  //Initialize NVS, used for WiFi provisioning and other settings.
+  initialise_nvs_flash();
+
+  // Create message buffer for motor outgoing messages
+  motor_outgoing_messages = xMessageBufferCreateStatic(
+    motor_message_buffer_size,
+    motor_message_buffer_data,
+    &motor_message_buffer_storage);
+
+  if (motor_outgoing_messages == nullptr) {
+    ESP_LOGE(TAG, "Failed to create motor_outgoing_messages buffer!");
+  }
+
   // Start main task pinned to core 1 as core 0 is used by Wi-Fi and other system tasks.
-  xTaskCreatePinnedToCore(main_task, "main_task", 16384 , NULL, 5, NULL, 1);
+  xTaskCreatePinnedToCore(core_1_task, "core_1_task", 16384 , NULL, 5, NULL, 1);
+  xTaskCreatePinnedToCore(core_0_task, "core_0_task", 16384 , NULL, 5, NULL, 0);
 }

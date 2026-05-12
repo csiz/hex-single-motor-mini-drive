@@ -128,12 +128,12 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         
         // Handle different frame types
         if (ws_pkt.type == HTTPD_WS_TYPE_BINARY) {
-            ESP_LOGI(TAG, "Received binary frame, len=%d", ws_pkt.len);
+            ESP_LOGD(TAG, "Received binary frame, len=%d", ws_pkt.len);
             if (ws_receive_callback != nullptr) {
                 ws_receive_callback(buf, ws_pkt.len);
             }
         } else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
-            ESP_LOGI(TAG, "Received text frame, len=%d", ws_pkt.len);
+            ESP_LOGD(TAG, "Received text frame, len=%d", ws_pkt.len);
             if (ws_receive_callback != nullptr) {
                 ws_receive_callback(buf, ws_pkt.len);
             }
