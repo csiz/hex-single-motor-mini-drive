@@ -11,81 +11,34 @@
 #include <nvs_flash.h>
 #include <esp_task_wdt.h>
 #include <esp_log.h>
+#include <esp_err.h>
 
 #include "display.hpp"
 #include "io.hpp"
 #include "wifi.hpp"
 #include "https_server.hpp"
+#include "utils.hpp"
 
 #include "hex_mini_drive_interface.hpp"
 
 static const char* TAG = "main";
 
+
 constexpr size_t spi_chunk_length = hex_mini_drive::MAX_MESSAGE_SIZE+3;
 
+constexpr size_t max_buffer_size = 4096;
+
+
+// Create an FreeRTOS byte stream buffer for data received from the motor to be sent via wifi.
+MessageBuffer<max_buffer_size> received_from_motor;
+
 // FreeRTOS message buffer for motor messages
-MessageBufferHandle_t motor_outgoing_messages = nullptr;
-constexpr size_t motor_message_buffer_size = 4096;
-
-uint8_t motor_message_buffer_data[motor_message_buffer_size];
-StaticMessageBuffer_t motor_message_buffer_storage;
-
-hex_mini_drive::ConsistentOverheadByteStuffing<spi_chunk_length> cobs_encoder = {};
-
-uint8_t zero_buffer[spi_chunk_length] = {0}; 
-
-static inline int64_t get_ms_time() {
-  return esp_timer_get_time() / 1000; // Convert to milliseconds
-}
-
-struct RunningStats {
-  int loop_number = 0;
-  float loop_frequency = 0.0;
-  int updates_this_ms = 0;
-  int64_t time_ms;
-
-  RunningStats() {
-    time_ms = get_ms_time();
-  }
-
-  void update(){
-    const int64_t current_time_ms = get_ms_time();
-
-    const int64_t loop_duration = current_time_ms - time_ms;
-
-    time_ms = current_time_ms;
-
-    // Calculate main loop frequency
-    if (loop_duration == 0) {
-      updates_this_ms += 1;
-    } else {
-      loop_frequency = loop_frequency * 0.99 + 0.01 * (updates_this_ms + 1) / (loop_duration / 1000.0);
-      updates_this_ms = 0;
-    }
-  }
-};
+MessageBuffer<max_buffer_size> sending_to_motor;
 
 
+uint8_t zero_buffer[spi_chunk_length] = {0};
 
-void initialise_nvs_flash() {
-  esp_err_t ret = nvs_flash_init();
-  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
-  }
-  ESP_ERROR_CHECK(ret);
-}
-
-std::function<void(const int64_t current_time_ms)> interval(const int64_t interval_ms, std::function<void()> callback) {
-  int64_t last_time = 0;
-  return [interval_ms, callback, last_time](const int64_t current_time) mutable {
-    if (current_time - last_time >= interval_ms) {
-      callback();
-      last_time = current_time;
-    }
-  };
-}
-
+volatile bool wifi_is_connected = false;
 
 
 const auto blink_status_led = interval(1000, []() {
@@ -96,61 +49,86 @@ const auto blink_status_led = interval(1000, []() {
   set_status_led_brightness(duty);
 });
 
+
 void wifi_connected(){
   ESP_LOGI(TAG, "Wi-Fi connected callback called");
 
   setup_server(/* core_id = */ 0, [](uint8_t* buffer, size_t size) {
-    ESP_LOGI(TAG, "Received WebSocket message of size %d", size);
-    if (motor_outgoing_messages == nullptr) {
-      ESP_LOGE(TAG, "motor_outgoing_messages buffer not initialized!");
-      return;
-    }
     if (size > hex_mini_drive::MAX_MESSAGE_SIZE) {
       ESP_LOGW(TAG, "Received message size %d exceeds maximum of %d, dropping message", size, hex_mini_drive::MAX_MESSAGE_SIZE);
       return;
     }
 
-    size_t sent = xMessageBufferSend(motor_outgoing_messages, buffer, size, 0);
+    size_t sent = sending_to_motor.send(buffer, size);
 
     if (sent != size) {
       ESP_LOGW(TAG, "Failed to send full message to buffer (sent %d/%d bytes)", sent, size);
     }
   });
+
+  wifi_is_connected = true;
 }
 
 
-
+// Our messages are 0 delimited, with extra 0s allowed. We want to compact them to a
+// series of messages delimited by a single 0. We'll count these bytes as data received.
+size_t compactify_data_buffer(uint8_t * buffer, size_t size) {
+  // The first byte is correct even as a 0. Start pruning from the second byte.
+  size_t write_index = 1;
+  
+  for (size_t read_index = 1; read_index < size; ++read_index) {
+    if (buffer[read_index] != 0 or buffer[read_index - 1] != 0) {
+      buffer[write_index++] = buffer[read_index];
+    }
+  }
+  return write_index;
+}
 
 void motor_update(int64_t current_time_ms) {
-  if (motor_outgoing_messages == nullptr) {
-    ESP_LOGE(TAG, "motor_outgoing_messages buffer not initialized!");
-    return;
-  }
-
+  uint8_t write_buffer[spi_chunk_length] = {0};
   uint8_t read_buffer[spi_chunk_length] = {0};
 
   // Check if there's a message in the buffer
-  if (xMessageBufferIsEmpty(motor_outgoing_messages) == pdFALSE) {
-    uint8_t message_buffer[hex_mini_drive::MAX_MESSAGE_SIZE];
-    size_t received = xMessageBufferReceive(motor_outgoing_messages, message_buffer, sizeof(message_buffer), 0);
-    
-    if (received == 0) {
-      ESP_LOGW(TAG, "Failed to receive message from buffer");
-      return;
+  if (not sending_to_motor.is_empty()) {
+    if (sending_to_motor.receive(write_buffer, hex_mini_drive::MAX_MESSAGE_SIZE) == 0) {
+      ESP_LOGE(TAG, "Failed to receive message from buffer");
+      abort();
     }
-
-    cobs_encoder.encode_message(message_buffer, received);
-
-    motor_spi_transaction(0, cobs_encoder.encoding_buffer, read_buffer, spi_chunk_length);
-
-    cobs_encoder.encode_reset();
-  } else {
-    motor_spi_transaction(0, zero_buffer, read_buffer, spi_chunk_length);
   }
 
-  cobs_encoder.decode_chunk(read_buffer, spi_chunk_length, [](uint8_t* buffer, size_t size) {
-    ws_send_binary(buffer, size);
-  });
+  // Run the spi transaction with motor data, or zeroes.
+  motor_spi_transaction(0, write_buffer, read_buffer, spi_chunk_length);
+
+  bool all_ff = true;
+  for (size_t i = 0; i < spi_chunk_length; ++i) {
+    if (read_buffer[i] != 0xFF) {
+      all_ff = false;
+      break;
+    }
+  }
+  if (all_ff) {
+    // Only bits of 1 is probably the line being held low at reset.
+    return;
+  }
+
+  size_t read_size = compactify_data_buffer(read_buffer, spi_chunk_length);
+
+  // Check if the message is bigger than a single 0.
+  if (read_size <= 1) {
+    return;
+  }
+
+  if (received_from_motor.available() < read_size) {
+    received_from_motor.discarded += read_size;
+    ESP_LOGW(TAG, "Discarded %d bytes from motor buffer due to insufficient space", read_size);
+    return;
+  }
+
+  const size_t queued_size = received_from_motor.send(read_buffer, read_size);
+  if (queued_size != read_size) {
+    ESP_LOGE(TAG, "Failed to send full message to received_from_motor (sent less than %d bytes)", read_size);
+    return abort();
+  }
 }
 
 void core_0_task(void *arg) {
@@ -172,6 +150,19 @@ void core_0_task(void *arg) {
     esp_task_wdt_reset();
 
     log_loop_frequency(stats.time_ms);
+
+    if (wifi_is_connected) {
+      update_server(stats.time_ms, [](uint8_t * buffer, size_t max_size) -> size_t {
+        size_t total_to_send = 0;
+        // This lambda is called by the server when it's ready to send data.
+        while(true) {
+          size_t received = received_from_motor.receive(buffer + total_to_send, max_size - total_to_send);
+          if (received == 0) break;
+          total_to_send += received;
+        }
+        return total_to_send;
+      });
+    }
 
     // Sleep for 1 ms.
     vTaskDelay(pdMS_TO_TICKS(1));
@@ -223,10 +214,6 @@ void core_1_task(void *arg) {
 
   auto log_loop_frequency = interval(5000, [&stats]() {
     ESP_LOGI(TAG, "Core 1 loop frequency: %.2f Hz", stats.loop_frequency);
-    // Let's also print the task list:
-    char task_list_buffer[1024];
-    vTaskList(task_list_buffer);
-    ESP_LOGI(TAG, "Task List:\n%s", task_list_buffer);
   });
 
   while (1) {
@@ -246,7 +233,8 @@ void core_1_task(void *arg) {
     motor_update(stats.time_ms);
 
     // Sleep for 1ms.
-    vTaskDelay(pdMS_TO_TICKS(1));
+    // vTaskDelay(pdMS_TO_TICKS(1));
+    taskYIELD();
   }
 
   
@@ -254,17 +242,12 @@ void core_1_task(void *arg) {
 
 extern "C" void app_main() {
   //Initialize NVS, used for WiFi provisioning and other settings.
-  initialise_nvs_flash();
-
-  // Create message buffer for motor outgoing messages
-  motor_outgoing_messages = xMessageBufferCreateStatic(
-    motor_message_buffer_size,
-    motor_message_buffer_data,
-    &motor_message_buffer_storage);
-
-  if (motor_outgoing_messages == nullptr) {
-    ESP_LOGE(TAG, "Failed to create motor_outgoing_messages buffer!");
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+      ESP_ERROR_CHECK(nvs_flash_erase());
+      ret = nvs_flash_init();
   }
+  ESP_ERROR_CHECK(ret);
 
   // Start main task pinned to core 1 as core 0 is used by Wi-Fi and other system tasks.
   xTaskCreatePinnedToCore(core_1_task, "core_1_task", 16384 , NULL, 5, NULL, 1);

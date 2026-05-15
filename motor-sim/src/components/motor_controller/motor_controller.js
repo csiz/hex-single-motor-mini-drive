@@ -84,16 +84,15 @@ export class MotorController {
     
     this.receive_rate = 0.0;
 
+    this.encoding_buffer = new ConsistentOverheadByteStuffing({max_message_size: MAX_MESSAGE_SIZE});
+
     // Start the motor connection
     // --------------------------
 
     this.connection_type = motor_uri.split(":")[0];
 
     if (this.connection_type === "usb") {
-      this.encoding_buffer = new ConsistentOverheadByteStuffing({max_message_size: MAX_MESSAGE_SIZE});
-
       const port_index = parseInt(motor_uri.split(":")[1]);
-
       this.start_usb_connection(port_index);
     } else if (this.connection_type === "ws") {
       this.start_websocket_connection(motor_uri);
@@ -151,7 +150,7 @@ export class MotorController {
     this.ws.addEventListener('message', (event) => {
       const message_data = new Uint8Array(event.data);
       this.count_data_received(message_data.length);
-      this.receive_message(message_data);
+      this.encoding_buffer.decode_chunk(message_data, this.receive_message.bind(this));
     });
 
     this.ws.addEventListener('close', (event) => this.when_closed());
@@ -243,11 +242,12 @@ export class MotorController {
     }
     
     const message_data = write_message(message);
+    this.encoding_buffer.encode_reset();
+    const buffer = this.encoding_buffer.encode_message(message_data);
 
-    if (this.connection_type === "ws") this.ws.send(message_data);
-    else if (this.connection_type === "usb") {
-      const buffer = this.encoding_buffer.encode_message(message_data);
-
+    if (this.connection_type === "ws") {
+      this.ws.send(buffer);
+    } else if (this.connection_type === "usb") {
       this.connection_worker.postMessage({type: "send", buffer}, {transfer: [buffer.buffer]});
     } else {
       throw new Error(`Unsupported connection type: ${this.connection_type}`);
