@@ -10,28 +10,29 @@
 extern SPI_HandleTypeDef hspi3;
 
 // We made a mistake in our circuit, so we need to read/write 3 extra bytes and discard them.
-static constexpr size_t SPI_BUFFER_SIZE = hex_mini_drive::MAX_MESSAGE_SIZE + 3;
+using hex_mini_drive::SPI_TRANSACTION_SIZE;
+using hex_mini_drive::MAX_MESSAGE_SIZE;
 
-uint8_t spi_receive_buffer[SPI_BUFFER_SIZE] = {0};
-uint8_t spi_transmit_buffer[SPI_BUFFER_SIZE] = {0};
+uint8_t spi_receive_buffer[SPI_TRANSACTION_SIZE] = {0};
+uint8_t spi_transmit_buffer[SPI_TRANSACTION_SIZE] = {0};
 
 volatile bool spi_done = false;
 volatile bool spi_error = false;
 
 static void spi_receive_buffer_reset() {
-  for (size_t i = 0; i < SPI_BUFFER_SIZE; i++) {
+  for (size_t i = 0; i < SPI_TRANSACTION_SIZE; i++) {
     spi_receive_buffer[i] = 0;
   }
 }
 
 static void spi_transmit_buffer_reset() {
-  for (size_t i = 0; i < SPI_BUFFER_SIZE; i++) {
+  for (size_t i = 0; i < SPI_TRANSACTION_SIZE; i++) {
     spi_transmit_buffer[i] = 0;
   }
 }
 
 static void spi_start_transfer() {
-	if (HAL_SPI_TransmitReceive_DMA(&hspi3, spi_transmit_buffer, spi_receive_buffer, SPI_BUFFER_SIZE) != HAL_OK) {
+	if (HAL_SPI_TransmitReceive_DMA(&hspi3, spi_transmit_buffer, spi_receive_buffer, SPI_TRANSACTION_SIZE) != HAL_OK) {
 		Error_Handler();
 	}
 }
@@ -73,14 +74,14 @@ bool spi_update(uint8_t * tx_data, size_t tx_size, std::function<void(uint8_t * 
     spi_done = false;
 
     // Process the received data.
-    process_received_data(spi_receive_buffer, hex_mini_drive::MAX_MESSAGE_SIZE);
+    process_received_data(spi_receive_buffer, MAX_MESSAGE_SIZE);
 
-    if (tx_size > hex_mini_drive::MAX_MESSAGE_SIZE) error();
+    if (tx_size > MAX_MESSAGE_SIZE) error();
 
     for (size_t i = 0; i < tx_size; i++) {
       spi_transmit_buffer[i] = tx_data[i];
     }
-    for (size_t i = tx_size; i < SPI_BUFFER_SIZE; i++) {
+    for (size_t i = tx_size; i < SPI_TRANSACTION_SIZE; i++) {
       spi_transmit_buffer[i] = 0;
     }
 

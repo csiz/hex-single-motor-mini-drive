@@ -117,7 +117,7 @@ bool set_shift_register_bank1(uint8_t data[3]){
   spi_transaction_t t = {};
   t.length = 3 * 8;
   t.tx_buffer = data;
-  if(spi_device_transmit(shift_register_bank1_device, &t) != ESP_OK) return false;
+  if(spi_device_polling_transmit(shift_register_bank1_device, &t) != ESP_OK) return false;
   // Latch the data into the output registers.
   gpio_set_level(shift_bank1_latch, 1);
   gpio_set_level(shift_bank1_latch, 0);
@@ -146,7 +146,7 @@ bool motor_spi_transaction(size_t motor_index, uint8_t* write_data, uint8_t* rea
   write_data[length - 2] = 0xFF;
   write_data[length - 3] = 0xFF;
 
-  const esp_err_t transmit_result = spi_device_transmit(shift_register_bank1_device, &t);
+  const esp_err_t transmit_result = spi_device_polling_transmit(shift_register_bank1_device, &t);
   if(transmit_result != ESP_OK){
     ESP_LOGE(TAG, "SPI transaction failed for motor %d, err %d", motor_index, transmit_result);
     return false;
@@ -176,7 +176,7 @@ bool set_shift_register_bank2(uint8_t data[7]){
   spi_transaction_t t = {};
   t.length = 7 * 8;
   t.tx_buffer = data;
-  if(spi_device_transmit(shift_register_bank2_device, &t) != ESP_OK) return false;
+  if(spi_device_polling_transmit(shift_register_bank2_device, &t) != ESP_OK) return false;
   // Latch the data into the output registers.
   gpio_set_level(shift_bank2_latch, 1);
   gpio_set_level(shift_bank2_latch, 0);

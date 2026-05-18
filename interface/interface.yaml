@@ -191,6 +191,14 @@ definitions:
     type: uint32
     const: 248
 
+  SPI_TRANSACTION_SIZE:
+    doc: |
+      Maximum size of a SPI transaction in bytes, we should preload the data into a send buffer at least this big.
+      At the moment there's a bug in the master control board circuit means we have to reserve last 3 bytes for next
+      address. Because the SPI and chip select lines are driven by the same pins...
+    type: uint32
+    const: 259
+
   PositiveNegativeTransition:
     type: uint16
     array_len: 2

@@ -24,7 +24,8 @@
 static const char* TAG = "main";
 
 
-constexpr size_t spi_chunk_length = hex_mini_drive::MAX_MESSAGE_SIZE+3;
+using hex_mini_drive::SPI_TRANSACTION_SIZE;
+using hex_mini_drive::MAX_MESSAGE_SIZE;
 
 constexpr size_t max_buffer_size = 4096;
 
@@ -36,7 +37,7 @@ MessageBuffer<max_buffer_size> received_from_motor;
 MessageBuffer<max_buffer_size> sending_to_motor;
 
 
-uint8_t zero_buffer[spi_chunk_length] = {0};
+uint8_t zero_buffer[SPI_TRANSACTION_SIZE] = {0};
 
 volatile bool wifi_is_connected = false;
 
@@ -54,8 +55,8 @@ void wifi_connected(){
   ESP_LOGI(TAG, "Wi-Fi connected callback called");
 
   setup_server(/* core_id = */ 0, [](uint8_t* buffer, size_t size) {
-    if (size > hex_mini_drive::MAX_MESSAGE_SIZE) {
-      ESP_LOGW(TAG, "Received message size %d exceeds maximum of %d, dropping message", size, hex_mini_drive::MAX_MESSAGE_SIZE);
+    if (size > MAX_MESSAGE_SIZE) {
+      ESP_LOGW(TAG, "Received message size %d exceeds maximum of %d, dropping message", size, MAX_MESSAGE_SIZE);
       return;
     }
 
@@ -85,22 +86,23 @@ size_t compactify_data_buffer(uint8_t * buffer, size_t size) {
 }
 
 void motor_update(int64_t current_time_ms) {
-  uint8_t write_buffer[spi_chunk_length] = {0};
-  uint8_t read_buffer[spi_chunk_length] = {0};
+  uint8_t write_buffer[SPI_TRANSACTION_SIZE] = {0};
+  uint8_t read_buffer[SPI_TRANSACTION_SIZE] = {0};
 
   // Check if there's a message in the buffer
   if (not sending_to_motor.is_empty()) {
-    if (sending_to_motor.receive(write_buffer, hex_mini_drive::MAX_MESSAGE_SIZE) == 0) {
+    const auto bytes_to_send = sending_to_motor.receive(write_buffer, MAX_MESSAGE_SIZE);
+    if (bytes_to_send == 0) {
       ESP_LOGE(TAG, "Failed to receive message from buffer");
-      abort();
+      return abort();
     }
   }
 
   // Run the spi transaction with motor data, or zeroes.
-  motor_spi_transaction(0, write_buffer, read_buffer, spi_chunk_length);
+  motor_spi_transaction(0, write_buffer, read_buffer, SPI_TRANSACTION_SIZE);
 
   bool all_ff = true;
-  for (size_t i = 0; i < spi_chunk_length; ++i) {
+  for (size_t i = 0; i < SPI_TRANSACTION_SIZE; ++i) {
     if (read_buffer[i] != 0xFF) {
       all_ff = false;
       break;
@@ -111,7 +113,7 @@ void motor_update(int64_t current_time_ms) {
     return;
   }
 
-  size_t read_size = compactify_data_buffer(read_buffer, spi_chunk_length);
+  size_t read_size = compactify_data_buffer(read_buffer, SPI_TRANSACTION_SIZE);
 
   // Check if the message is bigger than a single 0.
   if (read_size <= 1) {
@@ -155,10 +157,10 @@ void core_0_task(void *arg) {
       update_server(stats.time_ms, [](uint8_t * buffer, size_t max_size) -> size_t {
         size_t total_to_send = 0;
         // This lambda is called by the server when it's ready to send data.
-        while(true) {
-          size_t received = received_from_motor.receive(buffer + total_to_send, max_size - total_to_send);
-          if (received == 0) break;
-          total_to_send += received;
+        while(total_to_send < max_size) {
+          size_t bytes_received = received_from_motor.receive(buffer + total_to_send, max_size - total_to_send);
+          if (bytes_received == 0) break;
+          total_to_send += bytes_received;
         }
         return total_to_send;
       });
@@ -169,10 +171,10 @@ void core_0_task(void *arg) {
   }
 }
 
+
 void core_1_task(void *arg) {
   // Register this task with the watchdog timer.
   esp_task_wdt_add(NULL);
-
 
   // Setup everything
   setup_status_led();
@@ -212,14 +214,14 @@ void core_1_task(void *arg) {
 
   auto stats = RunningStats();
 
-  auto log_loop_frequency = interval(5000, [&stats]() {
+  auto log_loop_frequency = interval(10000, [&stats]() {
     ESP_LOGI(TAG, "Core 1 loop frequency: %.2f Hz", stats.loop_frequency);
   });
 
   while (1) {
     stats.update();
 
-    // We need to reset the watchdog timer regularly.
+    // // We need to reset the watchdog timer regularly.
     esp_task_wdt_reset();
     
     // Blink the built-in status LED to show the system is running
@@ -233,8 +235,7 @@ void core_1_task(void *arg) {
     motor_update(stats.time_ms);
 
     // Sleep for 1ms.
-    // vTaskDelay(pdMS_TO_TICKS(1));
-    taskYIELD();
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 
   
@@ -250,6 +251,6 @@ extern "C" void app_main() {
   ESP_ERROR_CHECK(ret);
 
   // Start main task pinned to core 1 as core 0 is used by Wi-Fi and other system tasks.
-  xTaskCreatePinnedToCore(core_1_task, "core_1_task", 16384 , NULL, 5, NULL, 1);
-  xTaskCreatePinnedToCore(core_0_task, "core_0_task", 16384 , NULL, 5, NULL, 0);
+  xTaskCreatePinnedToCore(core_1_task, "core_1_task", 16384 , NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(core_0_task, "core_0_task", 16384 , NULL, 1, NULL, 0);
 }

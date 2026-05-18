@@ -12,7 +12,7 @@ static const char* TAG = "https_server";
 
 static const int64_t ACQUIRED_TIMEOUT_MS = 5000;
 
-static const size_t MAX_BUFFER_SIZE = 8192;
+static const size_t MAX_BUFFER_SIZE = 16384;
 
 static uint8_t receive_buffer[MAX_BUFFER_SIZE] = {0};
 
