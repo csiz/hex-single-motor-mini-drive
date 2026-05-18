@@ -117,7 +117,7 @@ constexpr uint32_t HISTORY_SIZE = 336;
 
 constexpr uint32_t UNIT_TEST_OUTPUT_SIZE = 248;
 
-constexpr uint32_t SPI_TRANSACTION_SIZE = 259;
+constexpr uint32_t SPI_TRANSACTION_SIZE = 1024;
 
 using PositiveNegativeTransition = std::array<uint16_t, 2>;
 

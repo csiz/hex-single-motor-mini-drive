@@ -18,7 +18,7 @@ export const UNIT_TEST_OUTPUT_SIZE = 248;
 // Maximum size of a SPI transaction in bytes, we should preload the data into a send buffer at least this big.
 // At the moment there's a bug in the master control board circuit means we have to reserve last 3 bytes for next
 // address. Because the SPI and chip select lines are driven by the same pins...
-export const SPI_TRANSACTION_SIZE = 259;
+export const SPI_TRANSACTION_SIZE = 1024;
 
 export class PositiveNegativeTransition extends Array {
   constructor(init) {

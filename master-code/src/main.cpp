@@ -27,7 +27,7 @@ static const char* TAG = "main";
 using hex_mini_drive::SPI_TRANSACTION_SIZE;
 using hex_mini_drive::MAX_MESSAGE_SIZE;
 
-constexpr size_t max_buffer_size = 4096;
+constexpr size_t max_buffer_size = 8 * 1024; // 8 KB buffer size for motor messages, adjust as needed
 
 
 // Create an FreeRTOS byte stream buffer for data received from the motor to be sent via wifi.
