@@ -1,0 +1,145 @@
+// #include "usb_com.hpp"
+
+// #include "usbd_cdc_if.h"
+
+// #include "error_handler.hpp"
+
+// #include "circular_buffer.hpp"
+// #include <cstddef>
+// #include <cstdint>
+// #include <cstring>
+
+
+// extern "C" uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
+// extern "C" uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
+
+// const int max_usb_packet = 512;
+
+// CircularBuffer usb_com_rx_buffer = {UserRxBufferFS,APP_RX_DATA_SIZE};
+
+// CircularBuffer usb_com_tx_buffer = {UserTxBufferFS, APP_TX_DATA_SIZE};
+
+
+// static_assert(APP_RX_DATA_SIZE == 2 * max_usb_packet, "The USB sizes must be twice the max USB packet size.");
+
+// extern "C" USBD_HandleTypeDef hUsbDeviceFS;
+
+// volatile bool usb_active = false;
+// volatile bool receiving_active = false;
+// volatile size_t usb_pending_send = 0;
+// volatile uint16_t usb_host_is_ready = 0;
+
+
+// static inline void usb_prepare_receive() {
+//   // Prepare to receive more data.
+//   uint8_t * const rx_head = usb_com_rx_buffer.reserve_write_head(max_usb_packet);
+
+//   if (rx_head != nullptr) {
+//     // Tell the driver where to write the next incoming packet.
+//     USBD_CDC_SetRxBuffer(&hUsbDeviceFS, rx_head);
+//     // Receive the next packet
+//     receiving_active = USBD_CDC_ReceivePacket(&hUsbDeviceFS) == USBD_OK;
+//   } else {
+//     receiving_active = false;
+//   }
+// }
+
+// void usb_init() {
+//   usb_pending_send = 0;
+//   usb_active = true;
+//   usb_prepare_receive();
+// }
+
+// void usb_deinit() {
+//   usb_pending_send = 0;
+//   receiving_active = false;
+//   usb_active = false;
+// }
+
+// void usb_received(size_t rx_size) {
+//   // Ignore data we weren't prepared to receive.
+//   if (not receiving_active) return;
+
+//   if(usb_com_rx_buffer.mark_write(rx_size)) error();
+
+//   usb_prepare_receive();
+// }
+
+// void usb_confirmed_send(size_t len){
+//   if (usb_pending_send == len) {
+//     if(usb_com_tx_buffer.mark_read(len)) error();
+//     usb_pending_send = 0;
+//   } else {
+//     // We might get a different length if the connection is interrupted.
+//     usb_reset();
+//   }
+// }
+
+
+// static inline void usb_prepare_send() {
+//   // Wait until the previous transmission is complete.
+//   if (usb_pending_send) return;
+
+//   // Wait for the host to be ready.
+//   if (not usb_host_is_ready) return;
+
+//   // Check if there is data to send.
+//   usb_pending_send = usb_com_tx_buffer.available_to_read();
+
+//   if (not usb_pending_send) return;
+
+//   uint8_t * const tx_head = usb_com_tx_buffer.get_read_head();
+
+//   // Not ready yet.
+//   const USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
+//   if (hcdc->TxState != 0U) return;
+
+//   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, tx_head, usb_pending_send);
+//   USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+// }
+
+// bool usb_update(uint8_t * tx_data, size_t tx_size, std::function<void(uint8_t * buffer, size_t size)> process_received_data) {
+//   if (not usb_active) return false;
+
+
+//   // Read any data in the reading buffer.
+//   const int read_available = usb_com_rx_buffer.available_to_read();
+//   if (read_available > 0) {
+//     process_received_data(usb_com_rx_buffer.get_read_head(), read_available);
+//     if(usb_com_rx_buffer.mark_read(read_available)) error();
+//   }
+  
+//   if (not receiving_active) {
+//     usb_prepare_receive();
+//   }
+
+//   uint8_t * const tx_head = usb_com_tx_buffer.reserve_write_head(tx_size);
+
+//   const bool can_queue_send = tx_head != nullptr;
+
+//   // Queue data if we have space to send it.
+//   if (tx_size and can_queue_send) {
+//     // There is enough space to queue the data.
+//     std::memcpy(tx_head, tx_data, tx_size);
+//     if(usb_com_tx_buffer.mark_write(tx_size)) error();
+//   }
+
+//   usb_prepare_send();
+
+//   return can_queue_send;
+// }
+
+// void usb_reset(){
+//     usb_deinit();
+
+//     // Reset the buffers.
+//     usb_com_rx_buffer.reset();
+//     usb_com_tx_buffer.reset();
+
+//     // Re-initialize USB.
+//     usb_init();
+// }
+
+// void usb_set_control_state(uint16_t control_state) {
+//   usb_host_is_ready = control_state;
+// }

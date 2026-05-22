@@ -54,7 +54,7 @@ From the `Project Manager` tab select `Project` and switch `Toolchain / IDE` to 
     Set an extra channel as `PWM Generation No Output` for timing the analog reads.
     Enable `auto-reload preload`.
     Set `Trigger Event Selection TRGO2` to `Output Compare (OC5REF)` so we can use it to time the ADC reads.
-    + TIM2 & TIM4: Setup 3 PWM channels for the status LED; set `Channel Polarity` to `Low`.
+    + TIM2 & TIM4: Setup 3 PWM channels for the status LED; set `Channel Polarity` to `Low`. Set `Counter Period` to `256`.
     + TIM3: Set `Combined Channels` to `XOR ON / Hall Sensor Mode`, leave the rest default.
 * Connectivity:
     + I2C2 & I2C3: Enable on default settings.

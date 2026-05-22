@@ -1088,6 +1088,9 @@
         <file>
           <name>$PROJ_DIR$/../Core/Src/stm32g4xx_hal_msp.c</name>
         </file>
+        <file>
+          <name>$PROJ_DIR$/../Core/Src/stm32g4xx_hal_timebase_tim.c</name>
+        </file>
       </group>
     </group>
   </group>
@@ -1095,6 +1098,12 @@
     <name>Drivers</name>
     <group>
       <name>STM32G4xx_HAL_Driver</name>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_tim.c</name>
+      </file>
+      <file>
+        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_tim_ex.c</name>
+      </file>
       <file>
         <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc.c</name>
       </file>
@@ -1150,31 +1159,16 @@
         <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_i2c_ex.c</name>
       </file>
       <file>
-        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_opamp.c</name>
+        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_spi.c</name>
       </file>
       <file>
-        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_opamp_ex.c</name>
-      </file>
-      <file>
-        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_tim.c</name>
-      </file>
-      <file>
-        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_tim_ex.c</name>
+        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_spi_ex.c</name>
       </file>
       <file>
         <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart.c</name>
       </file>
       <file>
         <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart_ex.c</name>
-      </file>
-      <file>
-        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_pcd.c</name>
-      </file>
-      <file>
-        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_pcd_ex.c</name>
-      </file>
-      <file>
-        <name>$PROJ_DIR$/../Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_ll_usb.c</name>
       </file>
     </group>
     <group>
