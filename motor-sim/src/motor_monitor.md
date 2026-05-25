@@ -274,11 +274,14 @@ function switch_to_port(motor_uri){
   return true;
 }
 
-// Initialize Motor Driver via USB
-// -------------------------------
+// Initialize Motor Driver via USB or WiFi
+// ---------------------------------------
 
+const default_connect_options = {force_ws: false};
 
-async function connect_motor_controller({force_ws = false}) {
+async function connect_motor_controller(options = {}) {
+  const {force_ws} = {...default_connect_options, ...options};
+  
   try {
     const port_index = force_ws ? null : await prompt_com_port_get_index();
 
@@ -355,7 +358,8 @@ invalidation.then(disconnect_motor_controller);
 // Buttons to manually connect, disconnect and manage multiple motor connections.
 const connect_buttons = Inputs.button(
   [
-    ["Connect", connect_motor_controller],
+    ["Connect USB", () => connect_motor_controller({force_ws: false})],
+    ["Connect WiFi", () => connect_motor_controller({force_ws: true})],
     ["Disconnect", disconnect_motor_controller],
     // ["Reset data & inputs", () => (clear_stored_data(), location.reload())],
   ],
