@@ -110,7 +110,7 @@ export const max_timeout = 0xFFFF;
 export const history_size = 336;
 export const readout_base = 0x10000;
 
-export const voltage_reference = 3.3; // V
+export const voltage_reference = 2.9; // V
 export const adc_base = 4096; // 12 bits
 export const vcc_divider = 10.0/110.0; // 10k/110k divider
 
@@ -127,10 +127,9 @@ export function calculate_voltage(adc_reading){
   return adc_reading * voltage_reference / adc_base / vcc_divider;
 }
 
-export const adc_voltage_reference = 3.3;
 export const motor_shunt_resistance = 0.010;
 export const amplifier_gain = 20.0;
-export const current_conversion = adc_voltage_reference / (adc_base * motor_shunt_resistance * amplifier_gain);
+export const current_conversion = voltage_reference / (adc_base * motor_shunt_resistance * amplifier_gain);
 
 const power_fixed_point = 448; // Fixed point for power calculations.
 

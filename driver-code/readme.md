@@ -48,6 +48,7 @@ From the `Project Manager` tab select `Project` and switch `Toolchain / IDE` to 
     + NVIC: Ensure the `ADC1 and ADC2 global interrupt` is activated.
     + RCC: Switch High Speed Clock to `Crystal/Ceramic Resonator`.
     + SYS: Enable `Serial Wire` for debug and switch `Timebase Source` to any other time; we need to leave `SysTick` free in case we enable RTOS.
+    Enable the internal reference and set it to 2.9V.
 * Timers:
     + TIM1: Setup 4 channels with positive and negative PWM (8 pins). 
     Set `Counter Mode` to `Center Aligned mode1`. 
@@ -55,15 +56,18 @@ From the `Project Manager` tab select `Project` and switch `Toolchain / IDE` to 
     Enable `auto-reload preload`.
     Set `Trigger Event Selection TRGO2` to `Output Compare (OC5REF)` so we can use it to time the ADC reads.
     + TIM2 & TIM4: Setup 3 PWM channels for the status LED; set `Channel Polarity` to `Low`. Set `Counter Period` to `256`.
-    + TIM3: Set `Combined Channels` to `XOR ON / Hall Sensor Mode`, leave the rest default.
+    + TIM3: Set `Combined Channels` to `XOR ON / Hall Sensor Mode`. In `GPIO Settings` tab of the configuration, 
+    set all 3 channels to `Pull-up` to high level and `Alternate Function Open Drain` (ps scroll down to see the options).
 * Connectivity:
     + I2C2 & I2C3: Enable on default settings.
-    + SPI3: Enable as `Full-Duplex Slave` with `Hardware NSS Input Signal`. I set `Frame Format` to `TI` and `Data Size` to `8 Bits`, but not sure of right settings yet.
+    + SPI2: Enable as `Full-Duplex Slave` with `Hardware NSS Input Signal`. I set `Frame Format` to `Motorola` and `Data Size` to `8 Bits`, but not sure of right settings yet.
+    ! We need to also enable the DMA buffers.
     + USART3: Enable `Asynchornous` mode.
     + USB: Enable it on the `Internal Phy`.
 * Analog ADC1 & ADC2:
     + Set `ADCs_Common_Settings` to `Dual combined regular simultaneous + injected simultaneous`.
     + Set `External Trigger Source` to `Timer 1 Trigger Out event 2`.
+    + Disable call HAL handler for ADC 1 & 2.
     + Setup the adc channels according to `io.hpp` needs.
 
 
@@ -105,11 +109,23 @@ After generating the CubeMX configuration code we need to make the following cha
         #include "interrupts.hpp"
         /* USER CODE END Includes */
         `
+    and external variable for our sys timer source:
+        `
+        /* USER CODE BEGIN EV */
+        extern TIM_HandleTypeDef htim8;
+        /* USER CODE END EV */
+        `
     after the includes, we must invoke the adc interrupt:
         `  
         /* USER CODE BEGIN ADC1_2_IRQn 0 */
         adc_interrupt_handler();
         /* USER CODE END ADC1_2_IRQn 0 */
+        `
+    and we need to manually add the sys tick timer:
+        `
+          /* USER CODE END TIM8_UP_IRQn 0 */
+          HAL_TIM_IRQHandler(&htim8);
+          /* USER CODE BEGIN TIM8_UP_IRQn 1 */
         `
     5. In `Core/USB_Device/App/usbd_cdc_if.c` we must include our C++ USB handlers:
         `
@@ -208,4 +224,3 @@ TODO: links to control interface
 TODO: update the file descriptions above
 
 TODO: ... fix error handler, must stop motor disable IRQ and display LED.
-

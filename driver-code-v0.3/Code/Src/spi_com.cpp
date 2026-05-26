@@ -7,7 +7,7 @@
 #include "stm32g4xx_hal_spi.h"
 #include <cstddef>
 
-extern SPI_HandleTypeDef hspi3;
+extern SPI_HandleTypeDef hspi2;
 
 // We made a mistake in our circuit, so we need to read/write 3 extra bytes and discard them.
 using hex_mini_drive::SPI_TRANSACTION_SIZE;
@@ -36,7 +36,7 @@ static void spi_transmit_buffer_reset() {
 }
 
 static void spi_start_transfer() {
-	if (HAL_SPI_TransmitReceive_DMA(&hspi3, spi_transmit_buffer[spi_transmit_buffer_index], spi_receive_buffer, SPI_TRANSACTION_SIZE) != HAL_OK) {
+	if (HAL_SPI_TransmitReceive_DMA(&hspi2, spi_transmit_buffer[spi_transmit_buffer_index], spi_receive_buffer, SPI_TRANSACTION_SIZE) != HAL_OK) {
 		Error_Handler();
 	}
   // Switch to the other transmit buffer for the next transfer, so we can prepare data while the current transfer
@@ -50,19 +50,19 @@ static void spi_start_transfer() {
 
 
 extern "C" void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi) {
-	if (hspi->Instance == SPI3) {
+	if (hspi->Instance == SPI2) {
 		spi_done = true;
 	}
 }
 
 extern "C" void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
-	if (hspi->Instance == SPI3) {
+	if (hspi->Instance == SPI2) {
 		spi_error = true;
 	}
 }
 
 void spi_init() {
-	// Note: SPI3 is already initialized properly in main.c by CubeMX.
+	// Note: SPI2 is already initialized properly in main.c by CubeMX.
 	spi_receive_buffer_reset();
 
 	// Start the first SPI transfer (full-duplex: transmit reply while receiving data).
@@ -104,7 +104,7 @@ bool spi_update(uint8_t * tx_data, size_t tx_size, std::function<void(uint8_t * 
 }
 
 void spi_reset() {
-  HAL_SPI_Abort(&hspi3);
+  HAL_SPI_Abort(&hspi2);
   spi_receive_buffer_reset();
   spi_transmit_buffer_reset();
   spi_start_transfer();

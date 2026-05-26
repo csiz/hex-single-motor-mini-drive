@@ -721,6 +721,7 @@ void adc_interrupt_handler(){
 
     // Clear the ADC end of conversion flag so we're ready for the next conversion.
     LL_ADC_ClearFlag_JEOS(ADC1);
+    LL_ADC_ClearFlag_JEOS(ADC2);
 }
 
 // Initialization

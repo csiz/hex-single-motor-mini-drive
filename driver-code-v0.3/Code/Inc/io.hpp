@@ -233,7 +233,7 @@ static inline ADCReadings read_adc_values(){
     const uint16_t temp_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4);
 
     // And motor supply voltage.
-    const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+    const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
 
     return ADCReadings{
         ThreePhase{
