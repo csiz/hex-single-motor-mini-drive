@@ -552,7 +552,7 @@ function serialize_js_field(view, offset, name, type) {
   if (type instanceof BasicType) {
     return `${type.js_serialization(view, offset, name)}`;
   } else if (type instanceof StructSpec || type instanceof ArraySpec) {
-    return `write_${type.name}(${name})`;
+    return `new Uint8Array(${view}.buffer, ${offset}, ${type.size}).set(write_${type.name}(${name}), 0);`;
   } else {
     throw new Error(`Unknown type for serialization: ${type}`);
   }

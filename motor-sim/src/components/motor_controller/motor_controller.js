@@ -322,7 +322,7 @@ export class MotorController {
 
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        message: {message_code: MessageCode.SET_CURRENT_CALIBRATION, current_calibration: make_current_calibration(current_calibration)},
+        message: {message_code: MessageCode.SET_CURRENT_CALIBRATION, ...make_current_calibration(current_calibration)},
         expected_code: MessageCode.CURRENT_CALIBRATION,
         expected_messages: 1,
       });

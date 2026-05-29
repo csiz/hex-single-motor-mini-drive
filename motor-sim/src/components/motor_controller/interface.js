@@ -397,10 +397,17 @@ function parse_current_calibration(bare_current_calibration) {
 }
 
 export function make_current_calibration(current_calibration) {
-  const u_factor = current_calibration.u_factor * current_calibration_base;
-  const v_factor = current_calibration.v_factor * current_calibration_base;
-  const w_factor = current_calibration.w_factor * current_calibration_base;
-  const inductance_factor = current_calibration.inductance_factor * current_calibration_base;
+  const u_factor = Math.round(current_calibration.u_factor * current_calibration_base);
+  const v_factor = Math.round(current_calibration.v_factor * current_calibration_base);
+  const w_factor = Math.round(current_calibration.w_factor * current_calibration_base);
+  const inductance_factor = Math.round(current_calibration.inductance_factor * current_calibration_base);
+
+  return {
+    u_factor,
+    v_factor,
+    w_factor,
+    inductance_factor,
+  };
 }
 
 function parse_position_calibration(bare_position_calibration) {

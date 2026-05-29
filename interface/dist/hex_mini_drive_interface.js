@@ -67,7 +67,7 @@ function write_SectorTransitions(value) {
   const view = new DataView(buffer.buffer);
   let offset = 0;
   for (let i = 0; i < 6; i++) {
-    write_PositiveNegativeTransition(value[i])
+    new Uint8Array(view.buffer, offset, 4).set(write_PositiveNegativeTransition(value[i]), 0);
     offset += 4;
   }
   return buffer;
@@ -344,7 +344,7 @@ function write_FullReadout(value) {
   const buffer = new Uint8Array(80);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = write_Readout(value)
+  const base_buffer = new Uint8Array(view.buffer, offset, 32).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
   offset += 32;
   view.setUint16(offset, value.main_loop_rate)
@@ -889,13 +889,13 @@ function write_HallPositions(value) {
   const buffer = new Uint8Array(72);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  write_SectorTransitions(value.sector_transition_angles)
+  new Uint8Array(view.buffer, offset, 24).set(write_SectorTransitions(value.sector_transition_angles), 0);
   offset += 24;
-  write_SectorTransitions(value.sector_transition_variances)
+  new Uint8Array(view.buffer, offset, 24).set(write_SectorTransitions(value.sector_transition_variances), 0);
   offset += 24;
-  write_SectorCenters(value.sector_center_angles)
+  new Uint8Array(view.buffer, offset, 12).set(write_SectorCenters(value.sector_center_angles), 0);
   offset += 12;
-  write_SectorCenters(value.sector_center_variances)
+  new Uint8Array(view.buffer, offset, 12).set(write_SectorCenters(value.sector_center_variances), 0);
   offset += 12;
   return buffer;
 }
