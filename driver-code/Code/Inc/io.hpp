@@ -119,7 +119,7 @@ static inline void enable_LED_channels(){
 	// Green LED.
 	LL_TIM_CC_EnableChannel(TIM4, LL_TIM_CHANNEL_CH2);
 	// Blue LED.
-	LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH3);
+	LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH2);
 }
 
 // Set the intensity of the RED light.
@@ -134,7 +134,7 @@ static inline void set_GREEN_LED(uint8_t g){
 
 // Set the intensity of the BLUE light.
 static inline void set_BLUE_LED(uint8_t b){
-    LL_TIM_OC_SetCompareCH3(TIM2, LL_TIM_GetAutoReload(TIM2) * b / 0xFF);
+    LL_TIM_OC_SetCompareCH2(TIM2, LL_TIM_GetAutoReload(TIM2) * b / 0xFF);
 }
 
 // Set RGB colour for the indicator light.
@@ -195,26 +195,19 @@ static inline uint8_t read_hall_sensors_state(){
 // ADC Mappings
 // ------------
 
-// ADC1 IN7 = POT 1
-// ADC1 IN8 = POT 2
-// ADC2 IN17 = POT 3
-
 // ADC1 IN3 = Half 3v3 Reference
 
 // ADC1 IN1 = M1 current
 // ADC2 IN3 = M2 current
-// ADC1 IN12 = M3 current
-// ADC2 IN14 = M4 current
+// ADC1 IN4 = M3 current
+// ADC2 IN17 = M4 current
 
-// ADC2 IN15 = Voltage
-
-// OPAMP1 VINP = M1 voltage
-// OPAMP2 VINP = M2 voltage
-// OPAMP3 VINP = M3 voltage
-// ADC1 IN11 = M4 voltage
+// ADC2 IN14 = Voltage
+// ADC1 Temperature sensor
 
 static inline ADCReadings read_adc_values(){    
 
+    // TODO: recalculate
     // U and W phases are measured at the same time, followed by V and the reference voltage.
     // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
     // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
@@ -224,28 +217,31 @@ static inline ADCReadings read_adc_values(){
     // The PWM period lasts 1/23.4KHz = 42.7us.
 
     // Read the reference voltage first; this is the voltage of the reference line for the current sense amplifier.
-    const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4);
+    const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3);
 
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
     // Flip the sign of V because we accidentally wired it the other way (the correct way...). Oopsie doopsie.
-    const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout);
-    const int v_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2) - ref_readout);
-    const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout);
+    const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1) - ref_readout);
+    const int v_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1) - ref_readout);
+    const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout);
+    // const int x_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2) - ref_readout);
+
+    const int sum_div_3 = (u_readout + v_readout + w_readout) / 3;
 
     // Note that the reference voltage is only connected to the current sense amplifier, not the
     // microcontroller. The ADC reference voltage is 3.3V.
 
     // Also read the controller chip temperature.
-    const uint16_t temp_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
+    const uint16_t temp_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4);
 
     // And motor supply voltage.
-    const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
+    const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
 
     return ADCReadings{
         ThreePhase{
-            u_readout,
-            v_readout,
-            w_readout,
+            u_readout - sum_div_3,
+            v_readout - sum_div_3,
+            w_readout - sum_div_3,
         },
         ref_readout,
         temp_readout,
@@ -308,16 +304,16 @@ static void interrupts_init(){
 
     // Disable TIM2 update interrupt. Count updates of TIM2 to measure slow motor 
     // speed in case the timer overflows before a toggle in the hall sensor.
-    LL_TIM_DisableIT_UPDATE(TIM2);
+    LL_TIM_DisableIT_UPDATE(TIM3);
     // Disable TIM2 trigger interrupt. It is triggered every reset and hall sensor toggle.
-    LL_TIM_DisableIT_TRIG(TIM2);
+    LL_TIM_DisableIT_TRIG(TIM3);
     // Enable TIM2 channel 1 interrupt. It is triggered every hall sensor toggle; we can 
     // read the time from the last time the input changed.
-    LL_TIM_DisableIT_CC1(TIM2);
+    LL_TIM_DisableIT_CC1(TIM3);
     // Disable TIM2 channel 2 interrupt. We are ignoring the delayed trigger output from 
     // TIM2 as we will commutate faster than the hall sensor toggles. To use this effectively
     // we need to use the prescaler to slow the timer down; but then we lose resolution.
-    LL_TIM_DisableIT_CC2(TIM2);
+    LL_TIM_DisableIT_CC2(TIM3);
 
     // Disable TIM1 capture/compare update selection preload. This is used to update the
     // output modes of all channels at the same time when a commutation event is triggered.
@@ -369,7 +365,7 @@ static void enable_timers(){
     // Enable the TIM1 outputs following a break or clock issue event.
     LL_TIM_EnableAllOutputs(TIM1);
     
-    // Enable TIM2 channels 1 as the hall sensor timer between commutations.
+    // Enable TIM3 channels 1 as the hall sensor timer between commutations.
     LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH1);
 }
 

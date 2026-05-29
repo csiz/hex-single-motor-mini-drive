@@ -17,8 +17,12 @@
       "version": "19.1.2+st.3"
     },
     {
+      "name": "programmer",
+      "version": "2.22.0+st.1"
+    },
+    {
       "name": "stlink-gdbserver",
-      "version": "7.11.0+st.1"
+      "version": "7.13.0+st.3"
     }
   ]
 }

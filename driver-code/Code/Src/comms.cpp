@@ -10,9 +10,9 @@
 #include "error_handler.hpp"
 #include "type_definitions.hpp"
 
-#include "usb_com.hpp"
 #include "spi_com.hpp"
-#include "usbd_def.h"
+// #include "usb_com.hpp"
+// #include "usbd_def.h"
 
 #include <cerrno>
 #include <stm32g4xx_hal.h>
@@ -30,6 +30,8 @@ inline hex_mini_drive::Readout adjust_direction(hex_mini_drive::Readout && reado
 }
 
 struct WireInterface {
+  using update_function_t = std::function<bool(uint8_t * buffer, size_t size, std::function<void(uint8_t * buffer, size_t size)> process_received_data)>;
+
   hex_mini_drive::ConsistentOverheadByteStuffing<hex_mini_drive::MAX_MESSAGE_SIZE> encoding_buffer = {};
   
   // Time of last USB packet sent; used to detect timeouts.
@@ -40,6 +42,8 @@ struct WireInterface {
 
   // Number of bytes discarded due to invalid messages.
   uint32_t bytes_discarded = 0;
+
+  uint32_t bytes_sent = 0;
 
   uint16_t stream_state = 0;
   uint16_t stream_last_sent = 0;
@@ -52,7 +56,10 @@ struct WireInterface {
 
   UnitTestFunction usb_unit_test_function = nullptr;
 
-  std::function<bool(uint8_t * buffer, size_t size, std::function<void(uint8_t * buffer, size_t size)> process_received_data)> update_function = nullptr;
+  update_function_t update_function;
+
+  WireInterface(update_function_t update_function) : update_function(update_function) {}
+  
 
   // Start an active test of the motor.
   void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {
@@ -590,6 +597,8 @@ struct WireInterface {
     );
 
     if (update_success) {
+      bytes_sent += encoding_buffer.encoding_buffer_size;
+
       // Data was queued; clear the response buffer.
       encoding_buffer.encode_reset();
       last_send_time = HAL_GetTick();
@@ -606,22 +615,20 @@ struct WireInterface {
   }
 };
 
-WireInterface usb_interface = {};
-WireInterface spi_interface = {};
+// WireInterface usb_interface = {};
+WireInterface spi_interface = {spi_update};
 
 void comms_init() {
-  usb_init();
-  usb_interface.update_function = usb_update;
+  // usb_init();
   spi_init();
-  spi_interface.update_function = spi_update;
 }
 
 void comms_update(hex_mini_drive::FullReadout const& readout){
   // USB comms
   // ---------
 
-  // Queue the state readouts on the USB buffer.
-  if (not usb_interface.update(readout)) usb_reset();
+  // // Queue the state readouts on the USB buffer.
+  // if (not usb_interface.update(readout)) usb_reset();
 
   // SPI comms
   if (not spi_interface.update(readout)) spi_reset();

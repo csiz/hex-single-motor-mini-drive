@@ -52,8 +52,8 @@
 /*#define HAL_LPTIM_MODULE_ENABLED   */
 /*#define HAL_NAND_MODULE_ENABLED   */
 /*#define HAL_NOR_MODULE_ENABLED   */
-#define HAL_OPAMP_MODULE_ENABLED
-#define HAL_PCD_MODULE_ENABLED
+/*#define HAL_OPAMP_MODULE_ENABLED   */
+/*#define HAL_PCD_MODULE_ENABLED   */
 /*#define HAL_QSPI_MODULE_ENABLED   */
 /*#define HAL_RNG_MODULE_ENABLED   */
 /*#define HAL_RTC_MODULE_ENABLED   */
@@ -192,7 +192,7 @@ The real value may vary depending on the variations in voltage and temperature.*
   * @brief Uncomment the line below to expanse the "assert_param" macro in the
   *        HAL drivers code
   */
- #define USE_FULL_ASSERT    1U
+/* #define USE_FULL_ASSERT    1U */
 
 /* ################## SPI peripheral configuration ########################## */
 
