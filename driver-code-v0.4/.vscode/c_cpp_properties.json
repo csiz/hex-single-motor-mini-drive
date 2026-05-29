@@ -1,0 +1,8 @@
+{
+    "configurations": [
+        {
+            "name": "STM32",
+            "compileCommands": "${workspaceFolder}/build/RelWithDebInfo/compile_commands.json"
+        }
+    ]
+}
