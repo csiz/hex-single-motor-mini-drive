@@ -5,8 +5,8 @@
     "auto_track_width": false,
     "hidden_netclasses": [],
     "hidden_nets": [
-      "VCC",
-      "GND"
+      "GND",
+      "VCC"
     ],
     "high_contrast_mode": 1,
     "net_color_mode": 2,
