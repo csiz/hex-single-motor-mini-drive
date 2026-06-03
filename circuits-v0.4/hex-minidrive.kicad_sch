@@ -6,7 +6,8 @@
 	(paper "A2")
 	(title_block
 		(title "Hex mini servo driver")
-		(rev "version 0.3")
+		(date "2026-06-03")
+		(rev "version 0.4")
 		(company "Hex Robotics Limited")
 		(comment 1 "Author: Calin Mocanu")
 	)
@@ -1598,6 +1599,17 @@
 				(effects
 					(font
 						(size 1 1)
+					)
+				)
+			)
+			(property "FT Origin" "Anchor "
+				(at 0 -18.034 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
 					)
 				)
 			)
@@ -9806,7 +9818,7 @@
 		)
 		(uuid "09230b60-856a-4719-b581-ac4178417164")
 	)
-	(text "Hex Mini Driver\n\nThis is a quad output, motor driver for stepper, brushless or 2 DC motors.\nThe board comes provisioned with 2 I2C connectors for plug in rotation\nsensors AS5600 (preferably the Hex mini flex rotation sensor).\n\nTarget limits are 6-30V supply range and 5A of current.\n\nTODO for this version:\n[v] Remember to deal with the STM32 voltage reference, needs to be isolated from the amplifier.\n[v] Need pull down on BOOT0.\n[ ] Import the power FPC"
+	(text "Hex Mini Driver\n\nThis is a quad output, motor driver for stepper, brushless or 2 DC motors.\nThe board comes provisioned with 2 I2C connectors for plug in rotation\nsensors AS5600 (preferably the Hex mini flex rotation sensor).\n\nTarget limits are 6-30V supply range and 5A of current."
 		(exclude_from_sim no)
 		(at 20.32 35.814 0)
 		(effects
@@ -19920,8 +19932,8 @@
 		(exclude_from_sim no)
 		(in_bom no)
 		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
+		(in_pos_files no)
+		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "19a89c99-7cee-4f00-8292-8af7979d3112")
 		(property "Reference" "H2"
@@ -22540,6 +22552,17 @@
 				)
 			)
 		)
+		(property "FT Origin" "Anchor "
+			(at 420.37 219.964 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "be0b2390-1e8e-4f98-9666-35461725b130")
 		)
@@ -22829,6 +22852,17 @@
 			(effects
 				(font
 					(size 1 1)
+				)
+			)
+		)
+		(property "FT Origin" "Anchor "
+			(at 278.13 219.964 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
 				)
 			)
 		)
@@ -29924,6 +29958,17 @@
 				)
 			)
 		)
+		(property "FT Origin" "Anchor "
+			(at 354.33 219.964 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "feb93891-d1be-4bd6-8674-788dbd5cc8fd")
 		)
@@ -31411,8 +31456,8 @@
 		(exclude_from_sim no)
 		(in_bom no)
 		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
+		(in_pos_files no)
+		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "eecc9d2f-036e-42c6-a296-81a9d9e4aea1")
 		(property "Reference" "H3"
@@ -32340,6 +32385,17 @@
 			(effects
 				(font
 					(size 1 1)
+				)
+			)
+		)
+		(property "FT Origin" "Anchor "
+			(at 212.09 219.964 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
 				)
 			)
 		)

@@ -5285,6 +5285,17 @@
 				)
 			)
 		)
+		(property "FT Origin" "Anchor "
+			(at 0 -18.034 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(symbol "AON7544 N-Channel MOSFET_1_0"
 			(polyline
 				(pts
