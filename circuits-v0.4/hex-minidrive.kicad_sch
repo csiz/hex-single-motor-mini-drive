@@ -10136,12 +10136,6 @@
 		(uuid "0ec3da2a-18d5-42cf-8b96-045a5fb72136")
 	)
 	(junction
-		(at 64.77 336.55)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "132dd047-0d8f-4cef-be35-8e5a14a27a2a")
-	)
-	(junction
 		(at 287.02 261.62)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -10158,12 +10152,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "22635853-66ee-4d54-934c-31103c2a3162")
-	)
-	(junction
-		(at 74.93 336.55)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "236248f8-f123-4ece-90fc-afeb0ee483a6")
 	)
 	(junction
 		(at 405.13 43.18)
@@ -10212,6 +10200,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "41e93ee2-b2db-4f66-9b38-4e78a4d157aa")
+	)
+	(junction
+		(at 64.77 336.55)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "42a6c856-8c7c-4c4b-a62b-1d75042f8f09")
 	)
 	(junction
 		(at 212.09 193.04)
@@ -10346,6 +10340,12 @@
 		(uuid "79a92277-e86e-433e-bcb2-5e160738aa70")
 	)
 	(junction
+		(at 64.77 344.17)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "79b0708a-67e7-407e-a646-a057be970176")
+	)
+	(junction
 		(at 185.42 142.24)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -10406,12 +10406,6 @@
 		(uuid "8e4bbc33-0d3a-48ef-a84e-6ee7b6768357")
 	)
 	(junction
-		(at 74.93 344.17)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "911d1c88-92e5-4fb6-a826-eabc8e3c138e")
-	)
-	(junction
 		(at 265.43 137.16)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -10434,12 +10428,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "9f121f7e-03ce-4589-963a-ebc343947c33")
-	)
-	(junction
-		(at 64.77 344.17)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "a13c2c4b-1153-4e6f-89a1-a52f25c6bf49")
 	)
 	(junction
 		(at 529.59 100.33)
@@ -10532,12 +10520,6 @@
 		(uuid "bea3ae9f-9877-4e3a-a646-1b5b1e7aef44")
 	)
 	(junction
-		(at 85.09 336.55)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "bf24b201-3116-4cc6-8ed4-49d1672a339f")
-	)
-	(junction
 		(at 204.47 271.78)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -10560,12 +10542,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "cf20943d-6049-4cd2-9fe1-2c474b5c24ef")
-	)
-	(junction
-		(at 85.09 344.17)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "da7f9eff-ff37-4059-907a-6ad3a13c15a6")
 	)
 	(junction
 		(at 528.32 53.34)
@@ -11345,16 +11321,6 @@
 	)
 	(wire
 		(pts
-			(xy 85.09 344.17) (xy 95.25 344.17)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1aceeec7-6e4d-4fda-8c6a-02c810388b01")
-	)
-	(wire
-		(pts
 			(xy 30.48 304.8) (xy 38.1 304.8)
 		)
 		(stroke
@@ -11745,16 +11711,6 @@
 	)
 	(wire
 		(pts
-			(xy 64.77 344.17) (xy 74.93 344.17)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3338abb1-b0b6-4cd4-85b7-1b3c7364f0b6")
-	)
-	(wire
-		(pts
 			(xy 377.19 73.66) (xy 374.65 73.66)
 		)
 		(stroke
@@ -11905,7 +11861,7 @@
 	)
 	(wire
 		(pts
-			(xy 74.93 336.55) (xy 85.09 336.55)
+			(xy 64.77 336.55) (xy 77.47 336.55)
 		)
 		(stroke
 			(width 0)
@@ -12695,16 +12651,6 @@
 	)
 	(wire
 		(pts
-			(xy 85.09 336.55) (xy 95.25 336.55)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "75960fde-fe67-4c55-9e7d-d6776455f98f")
-	)
-	(wire
-		(pts
 			(xy 195.58 138.43) (xy 195.58 142.24)
 		)
 		(stroke
@@ -12905,7 +12851,7 @@
 	)
 	(wire
 		(pts
-			(xy 74.93 344.17) (xy 85.09 344.17)
+			(xy 64.77 344.17) (xy 77.47 344.17)
 		)
 		(stroke
 			(width 0)
@@ -13872,16 +13818,6 @@
 			(type default)
 		)
 		(uuid "c898ca0b-4823-48e0-870f-0957fa5e4327")
-	)
-	(wire
-		(pts
-			(xy 64.77 336.55) (xy 74.93 336.55)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c8f9542f-b9e4-4cd9-bffb-7af3067dccd6")
 	)
 	(wire
 		(pts
@@ -20123,7 +20059,7 @@
 	)
 	(symbol
 		(lib_id "Library:CL31A106KBHNNNE Capacitor 10uF")
-		(at 85.09 340.36 90)
+		(at 77.47 340.36 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -20133,8 +20069,8 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "1a989487-d6ee-457c-8453-7df3de1f268d")
-		(property "Reference" "C5"
-			(at 82.804 338.328 0)
+		(property "Reference" "C4"
+			(at 75.184 338.328 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -20144,7 +20080,7 @@
 			)
 		)
 		(property "Value" "10uF"
-			(at 82.804 342.9 0)
+			(at 75.184 342.9 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -20154,7 +20090,7 @@
 			)
 		)
 		(property "Footprint" "Library:C1206"
-			(at 91.948 340.36 0)
+			(at 84.328 340.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20165,7 +20101,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/CL31A106KBHNNNE/14236.html"
-			(at 76.708 340.36 0)
+			(at 69.088 340.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20176,7 +20112,7 @@
 			)
 		)
 		(property "Description" "Capacitance:10uF Tolerance:±10% Tolerance:±10% Voltage Rating:50V Temperature Coefficient:X5R"
-			(at 79.248 340.36 0)
+			(at 71.628 340.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20187,7 +20123,7 @@
 			)
 		)
 		(property "Manufacturer Part" "CL31A106KBHNNNE"
-			(at 88.138 340.36 0)
+			(at 80.518 340.36 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -20197,7 +20133,7 @@
 			)
 		)
 		(property "Manufacturer" "SAMSUNG(三星)"
-			(at 71.374 340.36 0)
+			(at 63.754 340.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20208,7 +20144,7 @@
 			)
 		)
 		(property "Supplier Part" "C13585"
-			(at 67.31 340.36 0)
+			(at 59.69 340.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20219,7 +20155,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 65.278 340.36 0)
+			(at 57.658 340.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20230,7 +20166,7 @@
 			)
 		)
 		(property "LCSC Part Name" "10uF ±10% 50V"
-			(at 73.406 340.36 0)
+			(at 65.786 340.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20241,7 +20177,7 @@
 			)
 		)
 		(property "LCSC Part #" "C13585"
-			(at 89.662 340.36 0)
+			(at 82.042 340.36 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -20259,7 +20195,7 @@
 		(instances
 			(project "hex-minidrive"
 				(path "/6bf5b9e4-6327-427a-bca2-98205d99bd27"
-					(reference "C5")
+					(reference "C4")
 					(unit 1)
 				)
 			)
@@ -27673,150 +27609,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Library:CL31A106KBHNNNE Capacitor 10uF")
-		(at 95.25 340.36 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "a7ed175f-0c38-433a-a2b6-fa55f6c02268")
-		(property "Reference" "C6"
-			(at 92.964 338.328 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "10uF"
-			(at 92.964 342.9 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:C1206"
-			(at 102.108 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/CL31A106KBHNNNE/14236.html"
-			(at 86.868 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Capacitance:10uF Tolerance:±10% Tolerance:±10% Voltage Rating:50V Temperature Coefficient:X5R"
-			(at 89.408 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "CL31A106KBHNNNE"
-			(at 98.298 340.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "SAMSUNG(三星)"
-			(at 81.534 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C13585"
-			(at 77.47 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 75.438 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "10uF ±10% 50V"
-			(at 83.566 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part #" "C13585"
-			(at 99.822 340.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "8b1ed4f6-1e78-45d0-a8e0-1a113ddcf034")
-		)
-		(pin "1"
-			(uuid "8d0bbb2c-f4ee-4485-a743-02deafa9035d")
-		)
-		(instances
-			(project "hex-minidrive"
-				(path "/6bf5b9e4-6327-427a-bca2-98205d99bd27"
-					(reference "C6")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:PWR_FLAG")
 		(at 55.88 360.68 180)
 		(unit 1)
@@ -31384,150 +31176,6 @@
 			(project "hex-minidrive"
 				(path "/6bf5b9e4-6327-427a-bca2-98205d99bd27"
 					(reference "C31")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:CL31A106KBHNNNE Capacitor 10uF")
-		(at 74.93 340.36 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "dd6e6869-4156-49a3-abbe-03b94cad5451")
-		(property "Reference" "C4"
-			(at 72.644 338.328 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "10uF"
-			(at 72.644 342.9 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:C1206"
-			(at 81.788 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/CL31A106KBHNNNE/14236.html"
-			(at 66.548 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Capacitance:10uF Tolerance:±10% Tolerance:±10% Voltage Rating:50V Temperature Coefficient:X5R"
-			(at 69.088 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "CL31A106KBHNNNE"
-			(at 77.978 340.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "SAMSUNG(三星)"
-			(at 61.214 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C13585"
-			(at 57.15 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 55.118 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "10uF ±10% 50V"
-			(at 63.246 340.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part #" "C13585"
-			(at 79.502 340.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "01bc4c6a-1d2f-4275-a657-740e11c9392f")
-		)
-		(pin "1"
-			(uuid "d901b062-1433-4478-8dbc-4b27e400cad0")
-		)
-		(instances
-			(project "hex-minidrive"
-				(path "/6bf5b9e4-6327-427a-bca2-98205d99bd27"
-					(reference "C4")
 					(unit 1)
 				)
 			)
