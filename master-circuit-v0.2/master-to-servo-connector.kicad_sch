@@ -1,7 +1,7 @@
 (kicad_sch
-	(version 20250114)
+	(version 20260306)
 	(generator "eeschema")
-	(generator_version "9.0")
+	(generator_version "10.0")
 	(uuid "164c4994-d98e-4d1e-83bc-9c2be2259e8f")
 	(paper "A4")
 	(lib_symbols
@@ -9,9 +9,12 @@
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
 			(property "Reference" "FPC"
 				(at 9.652 1.778 0)
-				(do_not_autoplace)
+				(show_name no)
+				(do_not_autoplace yes)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -20,43 +23,52 @@
 			)
 			(property "Value" ""
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Footprint" "Library:FPC-SMD_20P-P0.50_XUNPU_FPC-05F-20PH20"
 				(at 0.508 49.53 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-20PH20/3056901.html"
 				(at 0 43.18 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Description" "Locking Feature:Hinged Lid Contact Type:Surface Mount Number of Contacts:20P Pitch:0.5mm Mounting Type:Bottom Contact FFC, FCB Thickness:0.3mm FFC, FCB Thickness:0.3mm Height Above Board:2mm Contact Material:Phosphor Bronze Contact Plating:Tin Operating T"
 				(at 0 55.88 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Manufacturer Part" "FPC-05F-20PH20"
 				(at 9.652 0 0)
-				(do_not_autoplace)
+				(show_name no)
+				(do_not_autoplace yes)
 				(effects
 					(font
 						(size 0.5 0.5)
@@ -65,43 +77,52 @@
 			)
 			(property "Manufacturer" "XUNPU(讯普)"
 				(at 0 62.738 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Supplier Part" "C2856803"
 				(at 0 66.802 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Supplier" "LCSC"
 				(at 0 69.088 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "LCSC Part Name" "翻盖式 卧贴 P数:20P 间距:0.5mm"
 				(at 0 60.198 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "LCSC Part #" "C2856803"
 				(at 9.652 -1.524 0)
-				(do_not_autoplace)
+				(show_name no)
+				(do_not_autoplace yes)
 				(effects
 					(font
 						(size 1 1)
@@ -492,24 +513,6 @@
 					)
 				)
 				(pin input line
-					(at 2.54 30.48 270)
-					(length 2.54)
-					(name "22"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "22"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
 					(at 2.54 -27.94 90)
 					(length 2.54)
 					(name "21"
@@ -527,11 +530,29 @@
 						)
 					)
 				)
+				(pin input line
+					(at 2.54 30.48 270)
+					(length 2.54)
+					(name "22"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "22"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
 			)
 			(embedded_fonts no)
 		)
 		(symbol "power:GND"
-			(power)
+			(power global)
 			(pin_numbers
 				(hide yes)
 			)
@@ -542,17 +563,23 @@
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
 			(property "Reference" "#PWR"
 				(at 0 -6.35 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Value" "GND"
 				(at 0 -3.81 0)
+				(show_name no)
+				(do_not_autoplace no)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -561,38 +588,46 @@
 			)
 			(property "Footprint" ""
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Datasheet" ""
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "ki_keywords" "global power"
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(symbol "GND_0_1"
@@ -613,7 +648,7 @@
 				(pin power_in line
 					(at 0 0 270)
 					(length 0)
-					(name "~"
+					(name ""
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -1043,12 +1078,14 @@
 		(uuid "155c649a-315f-46bc-b990-11a3b448a327")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 96.9047 72.39 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
 			)
 		)
 	)
@@ -1065,12 +1102,14 @@
 		(uuid "32b3d35e-1a28-4820-9bc0-00519c5600ca")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 96.6023 69.85 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
 			)
 		)
 	)
@@ -1087,12 +1126,14 @@
 		(uuid "32b8e487-22e2-455b-bec0-d64e33c67d2c")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 114.5638 87.63 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
 			)
 		)
 	)
@@ -1109,12 +1150,14 @@
 		(uuid "95777920-7174-4cb0-8d78-137900d63a0d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 104.2828 74.93 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
 			)
 		)
 	)
@@ -1131,12 +1174,14 @@
 		(uuid "ac89fec5-6fcc-430b-861b-02eeb5d7f930")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 103.2547 80.01 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
 			)
 		)
 	)
@@ -1153,12 +1198,14 @@
 		(uuid "be39737e-a40b-425e-80c9-f106a348f9c9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 104.2828 77.47 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
 			)
 		)
 	)
@@ -1199,14 +1246,17 @@
 		(lib_id "Library:FPC-05F-20PH20 Connector 20P 0.5mm spacing FPC")
 		(at 82.55 87.63 180)
 		(unit 1)
+		(body_style 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
+		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "7c66b5d9-17e7-4528-b2d0-1c0d15d5e412")
 		(property "Reference" "FPC1"
 			(at 72.898 89.408 0)
+			(show_name no)
 			(do_not_autoplace yes)
 			(effects
 				(font
@@ -1214,44 +1264,53 @@
 				)
 			)
 		)
-		(property "Value" "~"
+		(property "Value" ""
 			(at 82.55 87.63 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Footprint" "Library:FPC-SMD_20P-P0.50_XUNPU_FPC-05F-20PH20"
 			(at 82.042 137.16 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-20PH20/3056901.html"
 			(at 82.55 130.81 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Description" "Locking Feature:Hinged Lid Contact Type:Surface Mount Number of Contacts:20P Pitch:0.5mm Mounting Type:Bottom Contact FFC, FCB Thickness:0.3mm FFC, FCB Thickness:0.3mm Height Above Board:2mm Contact Material:Phosphor Bronze Contact Plating:Tin Operating T"
 			(at 82.55 143.51 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Manufacturer Part" "FPC-05F-20PH20"
 			(at 72.898 87.63 0)
+			(show_name no)
 			(do_not_autoplace yes)
 			(effects
 				(font
@@ -1261,42 +1320,51 @@
 		)
 		(property "Manufacturer" "XUNPU(讯普)"
 			(at 82.55 150.368 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Supplier Part" "C2856803"
 			(at 82.55 154.432 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Supplier" "LCSC"
 			(at 82.55 156.718 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "LCSC Part Name" "翻盖式 卧贴 P数:20P 间距:0.5mm"
 			(at 82.55 147.828 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "LCSC Part #" "C2856803"
 			(at 72.898 86.106 0)
+			(show_name no)
 			(do_not_autoplace yes)
 			(effects
 				(font
@@ -1371,7 +1439,7 @@
 			(uuid "24f40d2a-9e50-43bb-a413-dfebe4ff3886")
 		)
 		(instances
-			(project ""
+			(project "master-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/07dd894a-a677-4867-9a80-03490d776b7d/105e1ec4-4722-47d9-8ecd-822053bd2e19"
 					(reference "FPC15")
 					(unit 1)
@@ -1476,22 +1544,28 @@
 		(at 97.79 119.38 0)
 		(mirror y)
 		(unit 1)
+		(body_style 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
+		(in_pos_files yes)
 		(dnp no)
 		(uuid "97e31b49-a254-4cf3-a584-4bda8e3595a4")
 		(property "Reference" "#PWR040"
 			(at 97.79 125.73 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Value" "GND"
 			(at 97.79 122.936 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1500,29 +1574,35 @@
 		)
 		(property "Footprint" ""
 			(at 97.79 119.38 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Datasheet" ""
 			(at 97.79 119.38 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
 			(at 97.79 119.38 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(pin "1"
