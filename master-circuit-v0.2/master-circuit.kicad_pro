@@ -272,7 +272,7 @@
       "internal_id": "",
       "mfg": "",
       "mpn": "",
-      "sch_revision": ""
+      "sch_revision": "version 0.2"
     },
     "layer_pairs": [],
     "layer_presets": [],
@@ -583,6 +583,10 @@
       {
         "netclass": "GroupSignals",
         "pattern": "/group*"
+      },
+      {
+        "netclass": "GroupSignals",
+        "pattern": "RESET-ESP32"
       }
     ]
   },
@@ -726,7 +730,7 @@
         "uuid": "240d81ac-e9d7-42ea-a748-33df14683b07"
       }
     ],
-    "used_designators": "",
+    "used_designators": "R29,R38,#PWR50,#PWR95-97,C46-47,C84-85,Q3-4,U8,U35",
     "variants": []
   },
   "sheets": [
@@ -739,124 +743,68 @@
       "back-to-back-mosfets1"
     ],
     [
-      "7f67bd6e-a7f9-48b1-aa8a-4a0845d6f6c9",
+      "5b93c4ff-af6b-4998-b4c3-3dbb9ff2db88",
       "back-to-back-mosfets2"
     ],
     [
-      "997e956e-2d3f-47a3-991e-478dabe4a82d",
+      "2354809a-451c-4f80-b53f-daac78aedf9f",
       "back-to-back-mosfets3"
     ],
     [
-      "e5556145-7a45-4d81-bcd4-6b93a85b8194",
-      "group-of-8-servo-connectors"
+      "3be7b3c1-0262-49c7-a4f6-ac91c068130a",
+      "servo-usb-connector"
     ],
     [
-      "9cfd329d-1e4b-4ddb-9a5b-c9ceb29b7167",
-      "master-to-servo-connector"
+      "9cbab574-5c5a-48fe-8b65-ca60995f0183",
+      "servo-usb-connector1"
     ],
     [
-      "1f4bd980-80e1-4712-808a-6efe72a14cf4",
-      "master-to-servo-connector1"
+      "2354809a-451c-4f80-b53f-daac78aedf9f",
+      "back-to-back-mosfets3"
     ],
     [
-      "c9713dd8-b2e2-4f54-93d1-473f98134227",
-      "master-to-servo-connector2"
+      "c713c99b-333c-4e3a-a177-aa20b97ab5d6",
+      "servo-usb-connector2"
     ],
     [
-      "5a3e51d4-00b7-42d2-85a3-3dbcf942a307",
-      "master-to-servo-connector3"
+      "2354809a-451c-4f80-b53f-daac78aedf9f",
+      "back-to-back-mosfets3"
     ],
     [
-      "c87713f8-3e5c-4935-b338-e1d45aca0d19",
-      "master-to-servo-connector4"
+      "45541b12-3178-4a35-ba98-195b0b7ec5c7",
+      "servo-usb-connector3"
     ],
     [
-      "1dff0df5-fc7d-48cd-bb5c-9001f7b61122",
-      "master-to-servo-connector5"
+      "2354809a-451c-4f80-b53f-daac78aedf9f",
+      "back-to-back-mosfets3"
     ],
     [
-      "105e1ec4-4722-47d9-8ecd-822053bd2e19",
-      "master-to-servo-connector6"
+      "855ba32d-cbe2-4fa8-81ea-b92e9f1eee99",
+      "servo-usb-connector4"
     ],
     [
-      "d4b211a5-c800-4e3a-8ec4-d082f25fa99d",
-      "master-to-servo-connector7"
+      "2354809a-451c-4f80-b53f-daac78aedf9f",
+      "back-to-back-mosfets3"
     ],
     [
-      "07dd894a-a677-4867-9a80-03490d776b7d",
-      "group-of-8-servo-connectors1"
+      "e9d0615a-b417-460d-a006-9061a6883b3e",
+      "servo-usb-connector5"
     ],
     [
-      "105e1ec4-4722-47d9-8ecd-822053bd2e19",
-      "master-to-servo-connector6"
+      "2354809a-451c-4f80-b53f-daac78aedf9f",
+      "back-to-back-mosfets3"
     ],
     [
-      "1dff0df5-fc7d-48cd-bb5c-9001f7b61122",
-      "master-to-servo-connector5"
+      "0e9db04d-03bc-47ea-840c-10fa3db91e46",
+      "servo-usb-connector6"
     ],
     [
-      "c87713f8-3e5c-4935-b338-e1d45aca0d19",
-      "master-to-servo-connector4"
-    ],
-    [
-      "5a3e51d4-00b7-42d2-85a3-3dbcf942a307",
-      "master-to-servo-connector3"
-    ],
-    [
-      "1f4bd980-80e1-4712-808a-6efe72a14cf4",
-      "master-to-servo-connector1"
-    ],
-    [
-      "9cfd329d-1e4b-4ddb-9a5b-c9ceb29b7167",
-      "master-to-servo-connector"
-    ],
-    [
-      "c9713dd8-b2e2-4f54-93d1-473f98134227",
-      "master-to-servo-connector2"
-    ],
-    [
-      "d4b211a5-c800-4e3a-8ec4-d082f25fa99d",
-      "master-to-servo-connector7"
-    ],
-    [
-      "1de2ebe0-3144-4ba5-879d-b7b7f508a713",
-      "group-of-8-servo-connectors2"
-    ],
-    [
-      "105e1ec4-4722-47d9-8ecd-822053bd2e19",
-      "master-to-servo-connector6"
+      "2354809a-451c-4f80-b53f-daac78aedf9f",
+      "back-to-back-mosfets3"
     ],
     [
       "c618d416-88fb-4eed-83fb-6afc0f3a88df",
       "back-to-back-mosfets"
-    ],
-    [
-      "1dff0df5-fc7d-48cd-bb5c-9001f7b61122",
-      "master-to-servo-connector5"
-    ],
-    [
-      "c87713f8-3e5c-4935-b338-e1d45aca0d19",
-      "master-to-servo-connector4"
-    ],
-    [
-      "5a3e51d4-00b7-42d2-85a3-3dbcf942a307",
-      "master-to-servo-connector3"
-    ],
-    [
-      "1f4bd980-80e1-4712-808a-6efe72a14cf4",
-      "master-to-servo-connector1"
-    ],
-    [
-      "9cfd329d-1e4b-4ddb-9a5b-c9ceb29b7167",
-      "master-to-servo-connector"
-    ],
-    [
-      "c9713dd8-b2e2-4f54-93d1-473f98134227",
-      "master-to-servo-connector2"
-    ],
-    [
-      "d4b211a5-c800-4e3a-8ec4-d082f25fa99d",
-      "master-to-servo-connector7"
     ]
   ],
   "text_variables": {},
