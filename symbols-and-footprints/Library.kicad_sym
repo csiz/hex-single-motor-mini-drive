@@ -10867,8 +10867,8 @@
 	(symbol "Display_2.8inch_ILI9341"
 		(exclude_from_sim no)
 		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
+		(on_board no)
+		(in_pos_files no)
 		(duplicate_pin_numbers_are_jumpers no)
 		(property "Reference" "U"
 			(at 0 0 0)
@@ -10890,8 +10890,8 @@
 				)
 			)
 		)
-		(property "Footprint" ""
-			(at 0 0 0)
+		(property "Footprint" "Library:MSP2807 OLED with touchescreen and SD card"
+			(at 0.254 22.098 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(hide yes)
@@ -32346,7 +32346,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Library:R2725"
+		(property "Footprint" "Library:R2725 Shunt with Kelvin connections"
 			(at 0 -15.748 0)
 			(show_name no)
 			(do_not_autoplace no)

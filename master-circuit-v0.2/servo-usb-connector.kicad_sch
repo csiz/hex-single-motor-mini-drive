@@ -5875,7 +5875,7 @@
 		(instances
 			(project "master-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/0e9db04d-03bc-47ea-840c-10fa3db91e46"
-					(reference "USB8")
+					(reference "USB2")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"

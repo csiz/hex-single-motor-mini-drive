@@ -711,6 +711,14 @@
       "version": 1
     },
     "net_format_name": "",
+    "ngspice": {
+      "fix_include_paths": true,
+      "meta": {
+        "version": 0
+      },
+      "model_mode": 4,
+      "workbook_filename": ""
+    },
     "page_layout_descr_file": "",
     "plot_directory": "",
     "reuse_designators": true,
@@ -730,7 +738,7 @@
         "uuid": "240d81ac-e9d7-42ea-a748-33df14683b07"
       }
     ],
-    "used_designators": "R29,R38,#PWR50,#PWR95-97,C46-47,C84-85,Q3-4,U8,U35",
+    "used_designators": "R34",
     "variants": []
   },
   "sheets": [
@@ -739,11 +747,11 @@
       "master-circuit"
     ],
     [
-      "a943ad6c-b248-4d64-9bf5-4ae591141dd6",
+      "0ccb8834-dc14-4d35-8825-f0674b38bfa8",
       "back-to-back-mosfets1"
     ],
     [
-      "5b93c4ff-af6b-4998-b4c3-3dbb9ff2db88",
+      "ee277489-ff18-4229-890c-930c7148df17",
       "back-to-back-mosfets2"
     ],
     [
