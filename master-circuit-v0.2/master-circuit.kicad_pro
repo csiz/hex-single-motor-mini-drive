@@ -738,7 +738,7 @@
         "uuid": "240d81ac-e9d7-42ea-a748-33df14683b07"
       }
     ],
-    "used_designators": "R34",
+    "used_designators": "#PWR95,R34,R37-38,R45,R47-48,R53,R56,R58,R60,R62,R64",
     "variants": []
   },
   "sheets": [
@@ -797,14 +797,6 @@
     [
       "e9d0615a-b417-460d-a006-9061a6883b3e",
       "servo-usb-connector5"
-    ],
-    [
-      "2354809a-451c-4f80-b53f-daac78aedf9f",
-      "back-to-back-mosfets3"
-    ],
-    [
-      "0e9db04d-03bc-47ea-840c-10fa3db91e46",
-      "servo-usb-connector6"
     ],
     [
       "2354809a-451c-4f80-b53f-daac78aedf9f",
