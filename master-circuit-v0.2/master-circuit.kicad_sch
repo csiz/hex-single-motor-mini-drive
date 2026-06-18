@@ -13440,9 +13440,9 @@
 		)
 		(uuid "2c983395-0fe3-4f7b-99ac-571dc0f1dc3d")
 	)
-	(text "Main power comes from the VCC bus, but we have diodes to \nwakeup the microcontroller, which turns on the VCC line."
+	(text "Main power comes from the VCC bus, but we have diodes to \nwakeup the microcontroller, which turns on the VCC line.\n\nThere's a single diode from VCC so we prefer VCC,\ndouble diodes on the input VBUS and VBATTERY."
 		(exclude_from_sim no)
-		(at 286.512 117.348 0)
+		(at 302.26 135.89 0)
 		(effects
 			(font
 				(size 0.8 0.8)
@@ -13915,6 +13915,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "127357aa-a911-4b94-85bd-44c7fac1a46d")
+	)
+	(junction
+		(at 300.99 119.38)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "15155063-9f98-4cbd-ab11-2031124e0cb6")
 	)
 	(junction
 		(at 143.51 66.04)
@@ -15418,16 +15424,6 @@
 	)
 	(wire
 		(pts
-			(xy 261.62 407.67) (xy 257.81 407.67)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "0cf47d6d-7a27-456b-998b-76bf01d4d8ca")
-	)
-	(wire
-		(pts
 			(xy 621.03 279.4) (xy 609.6 279.4)
 		)
 		(stroke
@@ -15545,16 +15541,6 @@
 			(type default)
 		)
 		(uuid "11938740-1065-464f-8ec4-bda0239e27b8")
-	)
-	(wire
-		(pts
-			(xy 285.75 113.03) (xy 285.75 119.38)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "11952527-d637-417c-a4de-3d3406d29e2a")
 	)
 	(wire
 		(pts
@@ -16118,7 +16104,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 407.67) (xy 257.81 412.75)
+			(xy 276.86 407.67) (xy 276.86 412.75)
 		)
 		(stroke
 			(width 0)
@@ -16565,16 +16551,6 @@
 			(type default)
 		)
 		(uuid "300b4a60-5d79-4f05-99af-0ffc3a597b00")
-	)
-	(wire
-		(pts
-			(xy 271.78 119.38) (xy 274.32 119.38)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "302db7b3-0e24-46d1-9a1b-cec7383e2326")
 	)
 	(wire
 		(pts
@@ -17248,7 +17224,7 @@
 	)
 	(wire
 		(pts
-			(xy 271.78 407.67) (xy 274.32 407.67)
+			(xy 287.02 407.67) (xy 289.56 407.67)
 		)
 		(stroke
 			(width 0)
@@ -17285,6 +17261,16 @@
 			(type default)
 		)
 		(uuid "4d069d97-ecea-47b5-9f22-3cd7ed545340")
+	)
+	(wire
+		(pts
+			(xy 276.86 412.75) (xy 257.81 412.75)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4d88e9e5-f1a0-41aa-8aeb-2405ee295cba")
 	)
 	(wire
 		(pts
@@ -18485,16 +18471,6 @@
 			(type default)
 		)
 		(uuid "72c2220c-b56e-4017-82f1-460b838db2c5")
-	)
-	(wire
-		(pts
-			(xy 271.78 132.08) (xy 274.32 132.08)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7326e9d4-fac8-443d-8489-c6433a64c1c0")
 	)
 	(wire
 		(pts
@@ -21758,6 +21734,16 @@
 	)
 	(wire
 		(pts
+			(xy 304.8 119.38) (xy 300.99 119.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "debf6c2c-2b74-45af-8955-762458b10d48")
+	)
+	(wire
+		(pts
 			(xy 119.38 425.45) (xy 123.19 425.45)
 		)
 		(stroke
@@ -22716,6 +22702,16 @@
 		)
 		(uuid "62ab28f5-ade1-4af3-89de-f3c6f378c032")
 	)
+	(label "VBUS_MID_DIODE"
+		(at 274.32 132.08 90)
+		(effects
+			(font
+				(size 0.5 0.5)
+			)
+			(justify left bottom)
+		)
+		(uuid "6a0b545c-4da9-491b-b6d0-77aab005d999")
+	)
 	(label "RBIAS"
 		(at 613.41 452.12 0)
 		(effects
@@ -22725,6 +22721,16 @@
 			(justify left bottom)
 		)
 		(uuid "755d41f4-0b7e-4673-84cc-a036057dfbfc")
+	)
+	(label "CAN-RS-SLOPE_CONTROL"
+		(at 259.08 412.75 0)
+		(effects
+			(font
+				(size 0.8 0.8)
+			)
+			(justify left bottom)
+		)
+		(uuid "99a3975f-b503-46b2-bf01-ee0e5d16baa6")
 	)
 	(label "VBUS_PROBE"
 		(at 311.15 27.94 0)
@@ -22736,6 +22742,16 @@
 		)
 		(uuid "9d7d8a89-4dcc-44c3-a6e9-a5a53e708a43")
 	)
+	(label "VBATTERY_MID_DIODE"
+		(at 274.32 119.38 90)
+		(effects
+			(font
+				(size 0.5 0.5)
+			)
+			(justify left bottom)
+		)
+		(uuid "bace10cc-29b0-4efd-9d0d-101f76c43089")
+	)
 	(label "Buck-Output-SW"
 		(at 284.48 147.32 0)
 		(effects
@@ -22745,6 +22761,16 @@
 			(justify left bottom)
 		)
 		(uuid "c012d4c0-d59f-48a1-960e-92aeccc44978")
+	)
+	(label "Buck-VIN"
+		(at 285.75 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "f86f6ed6-32ea-4fbd-bac6-42a986d9707e")
 	)
 	(global_label "USBDN4_D-"
 		(shape input)
@@ -24231,30 +24257,6 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
-			)
-		)
-	)
-	(global_label "VCC"
-		(shape input)
-		(at 285.75 113.03 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "2e7704a9-4b9f-4054-a0cc-96bd54814a8c")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 292.3638 113.03 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
 			)
 		)
 	)
@@ -27452,7 +27454,7 @@
 	)
 	(global_label "VBATTERY"
 		(shape input)
-		(at 271.78 119.38 180)
+		(at 264.16 119.38 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -27462,7 +27464,7 @@
 		)
 		(uuid "965c922c-9d12-44b7-ab6e-bb2c67499a9d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 259.9048 119.38 0)
+			(at 252.2848 119.38 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -27511,6 +27513,30 @@
 		(uuid "979c36f7-d8af-4c70-b792-97bef6967c4b")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 207.6366 146.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
+	(global_label "VCC"
+		(shape input)
+		(at 314.96 119.38 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "98b3984b-370e-497c-b47f-ae6c8975db4e")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 321.5738 119.38 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -29468,7 +29494,7 @@
 	)
 	(global_label "VBUS"
 		(shape input)
-		(at 271.78 132.08 180)
+		(at 264.16 132.08 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -29478,7 +29504,7 @@
 		)
 		(uuid "e1560092-1044-4a64-a096-8c7270359adc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 263.8962 132.08 0)
+			(at 256.2762 132.08 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33343,7 +33369,7 @@
 	)
 	(symbol
 		(lib_id "Library:0603WAF1002T5E Resistor 10kΩ")
-		(at 266.7 407.67 180)
+		(at 281.94 407.67 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -33354,7 +33380,7 @@
 		(fields_autoplaced yes)
 		(uuid "24198b36-e52a-4c3b-b22d-156cf4651513")
 		(property "Reference" "R31"
-			(at 266.7 407.67 0)
+			(at 281.94 407.67 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -33364,7 +33390,7 @@
 			)
 		)
 		(property "Value" "10kΩ"
-			(at 266.7 409.702 0)
+			(at 281.94 409.702 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -33374,7 +33400,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0603"
-			(at 266.7 401.32 0)
+			(at 281.94 401.32 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33385,7 +33411,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0603WAF1002T5E/26547.html"
-			(at 266.7 413.258 0)
+			(at 281.94 413.258 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33396,7 +33422,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:10kΩ Tolerance:±1% Tolerance:±1% Power(Watts):100mW Voltage-Supply(Max):75V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 266.7 411.226 0)
+			(at 281.94 411.226 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33407,7 +33433,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0603WAF1002T5E"
-			(at 266.7 405.892 0)
+			(at 281.94 405.892 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -33417,7 +33443,7 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 266.7 419.1 0)
+			(at 281.94 419.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33428,7 +33454,7 @@
 			)
 		)
 		(property "Supplier Part" "C25804"
-			(at 266.7 421.386 0)
+			(at 281.94 421.386 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33439,7 +33465,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 266.7 423.164 0)
+			(at 281.94 423.164 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33450,7 +33476,7 @@
 			)
 		)
 		(property "LCSC Part Name" "厚膜电阻 10kΩ ±1% 100mW"
-			(at 266.7 415.036 0)
+			(at 281.94 415.036 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -33461,7 +33487,7 @@
 			)
 		)
 		(property "LCSC Part #" "C25804"
-			(at 266.7 404.622 0)
+			(at 281.94 404.622 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -33852,6 +33878,150 @@
 			(project "master-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
 					(reference "R27")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Library:B5819W_C8598 Schottky diode")
+		(at 309.88 119.38 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "29e0b11a-1a9f-4bf1-9dde-15a9301dd478")
+		(property "Reference" "D15"
+			(at 309.88 115.316 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" ""
+			(at 309.88 119.38 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Library:SOD-123_L2.7-W1.6-LS3.7-RD-1"
+			(at 309.88 115.57 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://item.szlcsc.com/datasheet/B5819W%2520SL/9093.html"
+			(at 309.88 104.648 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Voltage - Forward(Vf@If):600mV@1A Voltage - DC Reverse(Vr):40V Current - Rectified:1A Non-Repetitive Peak Forward Surge Current:9A"
+			(at 309.88 100.584 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part" "B5819W SL"
+			(at 309.88 123.952 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 0.5 0.5)
+				)
+			)
+		)
+		(property "Manufacturer" "CJ(江苏长电/长晶)"
+			(at 309.88 107.95 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier Part" "C8598"
+			(at 309.88 95.504 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier" "LCSC"
+			(at 309.88 93.472 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part Name" "电压:40V 电流:1A"
+			(at 309.88 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part #" "C8598"
+			(at 309.88 122.682 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "1ede63f1-dd35-4149-9adf-8f7551dd0c9f")
+		)
+		(pin "2"
+			(uuid "53832591-3ed2-4ad9-bf72-cb659f5aac71")
+		)
+		(instances
+			(project "master-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
+					(reference "D15")
 					(unit 1)
 				)
 			)
@@ -40372,6 +40542,150 @@
 			(project "master-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
 					(reference "#PWR03")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Library:B5819W_C8598 Schottky diode")
+		(at 269.24 119.38 180)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "6c79e243-5ef7-406d-8bb5-354f2ec37a14")
+		(property "Reference" "D12"
+			(at 269.24 123.444 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" ""
+			(at 269.24 119.38 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Library:SOD-123_L2.7-W1.6-LS3.7-RD-1"
+			(at 269.24 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://item.szlcsc.com/datasheet/B5819W%2520SL/9093.html"
+			(at 269.24 134.112 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Voltage - Forward(Vf@If):600mV@1A Voltage - DC Reverse(Vr):40V Current - Rectified:1A Non-Repetitive Peak Forward Surge Current:9A"
+			(at 269.24 138.176 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part" "B5819W SL"
+			(at 269.24 114.808 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 0.5 0.5)
+				)
+			)
+		)
+		(property "Manufacturer" "CJ(江苏长电/长晶)"
+			(at 269.24 130.81 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier Part" "C8598"
+			(at 269.24 143.256 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier" "LCSC"
+			(at 269.24 145.288 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part Name" "电压:40V 电流:1A"
+			(at 269.24 125.73 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part #" "C8598"
+			(at 269.24 116.078 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "52855404-79d6-42d8-8bf7-64d3f6019503")
+		)
+		(pin "2"
+			(uuid "147b725e-01a9-4eaf-87f1-f93e474941c7")
+		)
+		(instances
+			(project "master-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
+					(reference "D12")
 					(unit 1)
 				)
 			)
@@ -48252,7 +48566,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 274.32 407.67 0)
+		(at 289.56 407.67 0)
 		(mirror y)
 		(unit 1)
 		(body_style 1)
@@ -48263,7 +48577,7 @@
 		(dnp no)
 		(uuid "b706d9c3-79b6-4e09-832c-9ff2bce94973")
 		(property "Reference" "#PWR025"
-			(at 274.32 414.02 0)
+			(at 289.56 414.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -48274,7 +48588,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 274.32 412.75 0)
+			(at 289.56 412.75 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -48284,7 +48598,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 274.32 407.67 0)
+			(at 289.56 407.67 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -48295,7 +48609,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 274.32 407.67 0)
+			(at 289.56 407.67 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -48306,7 +48620,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 274.32 407.67 0)
+			(at 289.56 407.67 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -53307,6 +53621,150 @@
 			(project "master-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
 					(reference "#PWR038")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Library:B5819W_C8598 Schottky diode")
+		(at 269.24 132.08 180)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "fe060ea1-0e04-4c72-bf08-1b6503a55d78")
+		(property "Reference" "D14"
+			(at 269.24 136.144 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" ""
+			(at 269.24 132.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Library:SOD-123_L2.7-W1.6-LS3.7-RD-1"
+			(at 269.24 135.89 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://item.szlcsc.com/datasheet/B5819W%2520SL/9093.html"
+			(at 269.24 146.812 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Voltage - Forward(Vf@If):600mV@1A Voltage - DC Reverse(Vr):40V Current - Rectified:1A Non-Repetitive Peak Forward Surge Current:9A"
+			(at 269.24 150.876 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part" "B5819W SL"
+			(at 269.24 127.508 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 0.5 0.5)
+				)
+			)
+		)
+		(property "Manufacturer" "CJ(江苏长电/长晶)"
+			(at 269.24 143.51 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier Part" "C8598"
+			(at 269.24 155.956 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier" "LCSC"
+			(at 269.24 157.988 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part Name" "电压:40V 电流:1A"
+			(at 269.24 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part #" "C8598"
+			(at 269.24 128.778 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "420557cd-73c6-4d0a-b43b-1e6980cf7f7b")
+		)
+		(pin "2"
+			(uuid "ddf74f63-3072-4503-8cd9-cc02213ec482")
+		)
+		(instances
+			(project "master-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
+					(reference "D14")
 					(unit 1)
 				)
 			)

@@ -1426,6 +1426,36 @@
 		)
 		(uuid "fc66790e-57dd-4325-8c47-15cbedefa04f")
 	)
+	(label "GATE2x"
+		(at 101.6 92.71 180)
+		(effects
+			(font
+				(size 0.8 0.8)
+			)
+			(justify right bottom)
+		)
+		(uuid "1a8b2227-aeb1-48d9-b376-d1f9448e8a56")
+	)
+	(label "Mid-MOSFETSx"
+		(at 93.98 77.47 270)
+		(effects
+			(font
+				(size 0.8 0.8)
+			)
+			(justify right bottom)
+		)
+		(uuid "94062682-32a1-4aab-96e0-2aaca4a52343")
+	)
+	(label "GATE1x"
+		(at 101.6 90.17 180)
+		(effects
+			(font
+				(size 0.8 0.8)
+			)
+			(justify right bottom)
+		)
+		(uuid "bbb71bf5-b8bb-4e38-9ddc-df4235a3124f")
+	)
 	(hierarchical_label "VOUT"
 		(shape input)
 		(at 81.28 69.85 180)
