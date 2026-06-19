@@ -15664,7 +15664,7 @@
 	)
 	(wire
 		(pts
-			(xy 151.13 382.27) (xy 162.56 382.27)
+			(xy 146.05 382.27) (xy 162.56 382.27)
 		)
 		(stroke
 			(width 0)
@@ -18784,7 +18784,7 @@
 	)
 	(wire
 		(pts
-			(xy 124.46 361.95) (xy 140.97 361.95)
+			(xy 124.46 361.95) (xy 135.89 361.95)
 		)
 		(stroke
 			(width 0)
@@ -19604,7 +19604,7 @@
 	)
 	(wire
 		(pts
-			(xy 151.13 361.95) (xy 157.48 361.95)
+			(xy 146.05 361.95) (xy 157.48 361.95)
 		)
 		(stroke
 			(width 0)
@@ -20714,7 +20714,7 @@
 	)
 	(wire
 		(pts
-			(xy 133.35 382.27) (xy 140.97 382.27)
+			(xy 133.35 382.27) (xy 135.89 382.27)
 		)
 		(stroke
 			(width 0)
@@ -22622,6 +22622,16 @@
 		)
 		(uuid "11ca0ce0-6356-4757-814e-1241a08ccead")
 	)
+	(label "USB-PD-VSET"
+		(at 147.32 431.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "17e7addd-7777-4968-965d-d209779eb307")
+	)
 	(label "VDD18PLL"
 		(at 638.81 454.66 0)
 		(effects
@@ -22661,6 +22671,16 @@
 			(justify left bottom)
 		)
 		(uuid "340c0016-106a-40da-ac6c-1d4b8f1f5bed")
+	)
+	(label "RTS-GATE"
+		(at 147.32 382.27 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "410e64da-bfab-4256-9c89-d855a5ae3f7d")
 	)
 	(label "VBATTERY_PROBE"
 		(at 312.42 48.26 0)
@@ -22731,6 +22751,16 @@
 			(justify left bottom)
 		)
 		(uuid "99a3975f-b503-46b2-bf01-ee0e5d16baa6")
+	)
+	(label "DTR-GATE"
+		(at 147.32 361.95 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "9b81f094-7589-430f-ac04-cf7036bbb33e")
 	)
 	(label "VBUS_PROBE"
 		(at 311.15 27.94 0)
@@ -47342,7 +47372,7 @@
 	)
 	(symbol
 		(lib_id "Library:0603WAF1002T5E Resistor 10kΩ")
-		(at 146.05 382.27 180)
+		(at 140.97 382.27 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -47353,7 +47383,7 @@
 		(fields_autoplaced yes)
 		(uuid "a6d1160e-cf80-42ce-bc05-aa6f65de6000")
 		(property "Reference" "R44"
-			(at 146.05 382.27 0)
+			(at 140.97 382.27 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -47363,7 +47393,7 @@
 			)
 		)
 		(property "Value" "10kΩ"
-			(at 146.05 384.302 0)
+			(at 140.97 384.302 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -47373,7 +47403,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0603"
-			(at 146.05 375.92 0)
+			(at 140.97 375.92 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -47384,7 +47414,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0603WAF1002T5E/26547.html"
-			(at 146.05 387.858 0)
+			(at 140.97 387.858 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -47395,7 +47425,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:10kΩ Tolerance:±1% Tolerance:±1% Power(Watts):100mW Voltage-Supply(Max):75V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 146.05 385.826 0)
+			(at 140.97 385.826 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -47406,7 +47436,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0603WAF1002T5E"
-			(at 146.05 380.492 0)
+			(at 140.97 380.492 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -47416,7 +47446,7 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 146.05 393.7 0)
+			(at 140.97 393.7 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -47427,7 +47457,7 @@
 			)
 		)
 		(property "Supplier Part" "C25804"
-			(at 146.05 395.986 0)
+			(at 140.97 395.986 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -47438,7 +47468,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 146.05 397.764 0)
+			(at 140.97 397.764 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -47449,7 +47479,7 @@
 			)
 		)
 		(property "LCSC Part Name" "厚膜电阻 10kΩ ±1% 100mW"
-			(at 146.05 389.636 0)
+			(at 140.97 389.636 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -47460,7 +47490,7 @@
 			)
 		)
 		(property "LCSC Part #" "C25804"
-			(at 146.05 379.222 0)
+			(at 140.97 379.222 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -52148,7 +52178,7 @@
 	)
 	(symbol
 		(lib_id "Library:0603WAF1002T5E Resistor 10kΩ")
-		(at 146.05 361.95 180)
+		(at 140.97 361.95 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -52159,7 +52189,7 @@
 		(fields_autoplaced yes)
 		(uuid "ee2eab0e-1d99-4db8-acd5-7dc9acb7df7e")
 		(property "Reference" "R43"
-			(at 146.05 361.95 0)
+			(at 140.97 361.95 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -52169,7 +52199,7 @@
 			)
 		)
 		(property "Value" "10kΩ"
-			(at 146.05 363.982 0)
+			(at 140.97 363.982 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -52179,7 +52209,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0603"
-			(at 146.05 355.6 0)
+			(at 140.97 355.6 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -52190,7 +52220,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0603WAF1002T5E/26547.html"
-			(at 146.05 367.538 0)
+			(at 140.97 367.538 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -52201,7 +52231,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:10kΩ Tolerance:±1% Tolerance:±1% Power(Watts):100mW Voltage-Supply(Max):75V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 146.05 365.506 0)
+			(at 140.97 365.506 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -52212,7 +52242,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0603WAF1002T5E"
-			(at 146.05 360.172 0)
+			(at 140.97 360.172 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -52222,7 +52252,7 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 146.05 373.38 0)
+			(at 140.97 373.38 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -52233,7 +52263,7 @@
 			)
 		)
 		(property "Supplier Part" "C25804"
-			(at 146.05 375.666 0)
+			(at 140.97 375.666 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -52244,7 +52274,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 146.05 377.444 0)
+			(at 140.97 377.444 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -52255,7 +52285,7 @@
 			)
 		)
 		(property "LCSC Part Name" "厚膜电阻 10kΩ ±1% 100mW"
-			(at 146.05 369.316 0)
+			(at 140.97 369.316 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -52266,7 +52296,7 @@
 			)
 		)
 		(property "LCSC Part #" "C25804"
-			(at 146.05 358.902 0)
+			(at 140.97 358.902 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
