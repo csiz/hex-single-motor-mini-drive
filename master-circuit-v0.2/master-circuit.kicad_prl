@@ -7,11 +7,7 @@
       "GroupSignals"
     ],
     "hidden_nets": [
-      "GND",
-      "3V3A",
-      "3V3",
-      "5V",
-      "VCC"
+      "GND"
     ],
     "high_contrast_mode": 1,
     "net_color_mode": 1,

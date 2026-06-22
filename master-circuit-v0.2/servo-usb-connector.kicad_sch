@@ -3994,30 +3994,6 @@
 		)
 		(uuid "d04043e8-aaca-403a-8b74-8119f30e78a9")
 	)
-	(global_label "CONNECTx"
-		(shape input)
-		(at 175.26 44.45 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "f2c2cb99-227a-4a2e-9cdd-d4c4de62b0f5")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 162.5986 44.45 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
 	(hierarchical_label "5V"
 		(shape input)
 		(at 63.5 118.11 180)
@@ -4050,6 +4026,17 @@
 			(justify left)
 		)
 		(uuid "15f6ed53-cb44-48bf-8adb-4ed535fee01f")
+	)
+	(hierarchical_label "PRTPWRx"
+		(shape input)
+		(at 175.26 44.45 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "273eb884-0ecc-4be4-b4c2-ef3b6012faba")
 	)
 	(hierarchical_label "VCC"
 		(shape input)

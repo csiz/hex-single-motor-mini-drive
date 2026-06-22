@@ -13792,6 +13792,26 @@
 		)
 		(uuid "1f2cd93c-8b7e-4e68-aa3b-015869c6a291")
 	)
+	(text_box "Note: probes 1, 2 and 4 are reversed! For easier wiring."
+		(exclude_from_sim no)
+		(at 636.27 286.6024 0)
+		(size 27.94 8.0376)
+		(margins 0.9525 0.9525 0.9525 0.9525)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(type none)
+		)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "4db439eb-41e1-4849-930d-23be57740be3")
+	)
 	(text_box "CAN Slope control. This 10k resistor slightly slows down the level transition."
 		(exclude_from_sim no)
 		(at 255.27 397.51 0)
@@ -13831,6 +13851,26 @@
 			(justify left top)
 		)
 		(uuid "64ee41d2-56b2-475c-bcd8-6734f041c47e")
+	)
+	(text_box "Note: probes 7 are reversed! For easier wiring."
+		(exclude_from_sim no)
+		(at 636.27 342.9 0)
+		(size 27.94 8.0376)
+		(margins 0.9525 0.9525 0.9525 0.9525)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(type none)
+		)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "dbd41f55-2fe8-4f86-b272-0583e67eab21")
 	)
 	(junction
 		(at 181.61 146.05)
@@ -22922,30 +22962,6 @@
 			)
 		)
 	)
-	(global_label "+Probe-2"
-		(shape input)
-		(at 607.06 307.34 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "03c4d557-fe38-425d-b6e2-e628dacd2339")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 594.2777 307.34 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
 	(global_label "USBDN5_D+"
 		(shape input)
 		(at 510.54 477.52 180)
@@ -23378,30 +23394,6 @@
 			)
 		)
 	)
-	(global_label "SERVO3_CURRENT"
-		(shape input)
-		(at 85.09 151.13 270)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "11b474b3-b329-476b-a762-56312155dd0e")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 85.09 170.9275 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
 	(global_label "USBDN2_D+"
 		(shape input)
 		(at 388.62 299.72 0)
@@ -23519,6 +23511,30 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "SERVO2_CURRENT"
+		(shape input)
+		(at 74.93 71.12 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "16f814d9-4d03-412d-b950-1b1aa7ca384e")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 55.1325 71.12 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 	)
@@ -23690,30 +23706,6 @@
 			)
 		)
 	)
-	(global_label "VCC_CURRENT"
-		(shape input)
-		(at 635 353.06 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "1acf9752-3d32-4656-93f3-a9e9985f6d8a")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 651.169 353.06 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
 	(global_label "SCREEN_RESET"
 		(shape input)
 		(at 74.93 68.58 180)
@@ -23799,6 +23791,30 @@
 		(uuid "1daa9f8a-ceac-4bae-aefd-9b4243ff5272")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 666.8928 495.3 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
+	(global_label "VBUS_CURRENT"
+		(shape input)
+		(at 635 368.3 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "1dba88a1-dd19-4bd2-8ebc-bd138c77f76a")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 652.439 368.3 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -24074,6 +24090,30 @@
 			)
 		)
 	)
+	(global_label "-Probe-4"
+		(shape input)
+		(at 635 302.26 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "26dae21f-a0eb-42fc-84e4-170545a37b05")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 647.7823 302.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
 	(global_label "SERVO3_CURRENT"
 		(shape input)
 		(at 635 312.42 0)
@@ -24143,30 +24183,6 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
-			)
-		)
-	)
-	(global_label "-Probe-7"
-		(shape input)
-		(at 635 365.76 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "29ce2925-926f-4e15-9fd8-58b86aa4d25d")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 647.7823 365.76 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
 			)
 		)
 	)
@@ -24338,30 +24354,6 @@
 			)
 		)
 	)
-	(global_label "-Probe-1"
-		(shape input)
-		(at 607.06 299.72 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "32536a0d-2182-4380-bbbc-b759dfb9acd8")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 594.2777 299.72 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
 	(global_label "SCREEN_LED"
 		(shape input)
 		(at 36.83 273.05 180)
@@ -24375,6 +24367,30 @@
 		(uuid "33c2dcfa-0496-4364-a498-7a9be2ce3c64")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 22.0521 273.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "SERVO1_CURRENT"
+		(shape input)
+		(at 85.09 151.13 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "352376b8-3461-4fdd-a87e-9ebf925ce0a8")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 85.09 170.9275 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -25178,30 +25194,6 @@
 			)
 		)
 	)
-	(global_label "SERVO7_CURRENT"
-		(shape input)
-		(at 635 368.3 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "518309ad-7d31-4e07-8895-f230aa09f225")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 654.7975 368.3 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
 	(global_label "VBATTERY"
 		(shape input)
 		(at 223.52 386.08 0)
@@ -25250,6 +25242,30 @@
 			)
 		)
 	)
+	(global_label "VBUS_VOLTAGE"
+		(shape input)
+		(at 121.92 48.26 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "53f98f1c-a523-4bf3-9c90-0459fe5447b7")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 138.6938 48.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
 	(global_label "USBDN2_D+"
 		(shape input)
 		(at 510.54 457.2 180)
@@ -25263,30 +25279,6 @@
 		(uuid "552ec165-741e-45ac-85a6-a1a8eda52eb5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 496.1248 457.2 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
-	(global_label "SERVO7_CURRENT"
-		(shape input)
-		(at 74.93 58.42 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "55e21102-ee2c-4fc5-8239-3d096e1092a9")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.1325 58.42 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -25586,6 +25578,54 @@
 			)
 		)
 	)
+	(global_label "-Probe-1"
+		(shape input)
+		(at 607.06 302.26 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "5b155862-a5ed-4d10-beba-30f2a14679d7")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 594.2777 302.26 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "+Probe-4"
+		(shape input)
+		(at 635 299.72 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "5b7896ac-5e5b-4bf7-b830-aa878d447534")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 647.7823 299.72 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
 	(global_label "SCREEN_LED"
 		(shape input)
 		(at 110.49 151.13 270)
@@ -25754,6 +25794,30 @@
 			)
 		)
 	)
+	(global_label "VBUS_CURRENT"
+		(shape input)
+		(at 74.93 55.88 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "6245bf30-e05e-4350-affd-8da7839b88b0")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 57.491 55.88 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
 	(global_label "TX"
 		(shape input)
 		(at 104.14 414.02 0)
@@ -25823,6 +25887,30 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "BATTERY_CURRENT"
+		(shape input)
+		(at 74.93 53.34 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "656f6c3e-15d5-48cf-adaa-ba0251706ebf")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 54.5882 53.34 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 	)
@@ -25967,6 +26055,54 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+			)
+		)
+	)
+	(global_label "-Probe-2"
+		(shape input)
+		(at 607.06 307.34 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "6d53e0ab-686e-4096-822f-b5f0c45b2414")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 594.2777 307.34 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "BATTERY_CURRENT"
+		(shape input)
+		(at 635 353.06 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "6eda432c-1f11-4edb-bd4d-f48da49fd309")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 655.3418 353.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
 			)
 		)
 	)
@@ -26255,6 +26391,30 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "SERVO6_CURRENT"
+		(shape input)
+		(at 74.93 58.42 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "796e3f4e-5604-41d3-9435-aecc70cbd198")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 55.1325 58.42 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 	)
@@ -26738,19 +26898,19 @@
 			)
 		)
 	)
-	(global_label "-Probe-4"
+	(global_label "SERVO3_CURRENT"
 		(shape input)
-		(at 635 299.72 0)
+		(at 74.93 63.5 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left)
+			(justify right)
 		)
-		(uuid "86c44a5e-0ce6-49f6-81c6-6f536dd75fc1")
+		(uuid "87ce3b1c-af2b-4866-b537-a22ae25caea3")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 647.7823 299.72 0)
+			(at 55.1325 63.5 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -26758,7 +26918,7 @@
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
+				(justify right)
 			)
 		)
 	)
@@ -27194,54 +27354,6 @@
 			)
 		)
 	)
-	(global_label "+Probe-7"
-		(shape input)
-		(at 635 363.22 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "90d2ce63-4f30-4018-8d8c-e3772d3c4a8d")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 647.7823 363.22 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
-	(global_label "BATTERY_VOLTAGE"
-		(shape input)
-		(at 74.93 63.5 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "91468b56-68bd-4e12-8bda-4c23c132cb29")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.2534 63.5 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
 	(global_label "SERVO1_BOOT0"
 		(shape input)
 		(at 455.93 250.19 180)
@@ -27362,9 +27474,9 @@
 			)
 		)
 	)
-	(global_label "-Probe-2"
+	(global_label "+Probe-1"
 		(shape input)
-		(at 607.06 309.88 180)
+		(at 607.06 299.72 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -27372,9 +27484,9 @@
 			)
 			(justify right)
 		)
-		(uuid "92ccdcc5-a80c-43d8-ace7-0175d870d5b1")
+		(uuid "9362675e-1449-4bae-a045-d53cc8d660d9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 594.2777 309.88 0)
+			(at 594.2777 299.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -27455,30 +27567,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-			)
-		)
-	)
-	(global_label "SERVO6_CURRENT"
-		(shape input)
-		(at 74.93 55.88 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "95e0c41e-1b86-4d5d-aa0a-cc164034376f")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.1325 55.88 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 			)
 		)
 	)
@@ -27724,30 +27812,6 @@
 	)
 	(global_label "SERVO2_CURRENT"
 		(shape input)
-		(at 121.92 48.26 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "9f9914eb-b0c6-4ddc-ad81-d1b4d71b1340")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 141.7175 48.26 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
-	(global_label "SERVO2_CURRENT"
-		(shape input)
 		(at 607.06 312.42 180)
 		(fields_autoplaced yes)
 		(effects
@@ -27783,6 +27847,30 @@
 		(uuid "a0909116-5661-4913-842f-8e901fa7de1f")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 501.3863 518.16 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "SERVO4_CURRENT"
+		(shape input)
+		(at 74.93 60.96 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "a1d76f2d-aad1-48da-a886-5bae81a93c9a")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 55.1325 60.96 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -27855,30 +27943,6 @@
 		(uuid "a39f5514-3531-4538-9caa-f0fa88e24d0c")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 335.0767 341.63 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
-	(global_label "SERVO5_CURRENT"
-		(shape input)
-		(at 74.93 53.34 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "a3ecb5ea-03e3-4e6c-aa4b-b33a39e6fbf1")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.1325 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -28167,30 +28231,6 @@
 		(uuid "ab4dcb3f-0803-409d-8478-a2bc4902e4b9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 33.6633 260.35 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
-	(global_label "VCC_CURRENT"
-		(shape input)
-		(at 74.93 71.12 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "ab5c732a-0109-4081-8465-b9ac99f21b37")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 58.761 71.12 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -28658,6 +28698,30 @@
 			)
 		)
 	)
+	(global_label "BATTERY_VOLTAGE"
+		(shape input)
+		(at 121.92 45.72 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "bb1af5c9-9607-43ef-acf4-e0e45b0f94fa")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 141.5966 45.72 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
 	(global_label "+Probe-8"
 		(shape input)
 		(at 635 358.14 0)
@@ -28671,6 +28735,30 @@
 		(uuid "bc0f3dd7-09d3-4fc4-92e2-b717c545b8fc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 647.7823 358.14 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
+	(global_label "-Probe-7"
+		(shape input)
+		(at 635 363.22 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "bc206253-57e1-4bbf-bea9-11eb9d6945d1")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 647.7823 363.22 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -28863,6 +28951,54 @@
 		(uuid "c2b1dac9-8bc2-4dff-8fc8-206413e417c6")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 441.9986 459.74 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "SERVO5_CURRENT"
+		(shape input)
+		(at 74.93 50.8 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c3bb66b1-cb36-4373-8bef-d9ee73408552")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 55.1325 50.8 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "+Probe-2"
+		(shape input)
+		(at 607.06 309.88 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c81e3451-f2ae-4239-8c48-0289ba6de606")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 594.2777 309.88 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -29186,30 +29322,6 @@
 			)
 		)
 	)
-	(global_label "SERVO1_CURRENT"
-		(shape input)
-		(at 121.92 45.72 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "d6b0290c-b9b2-48cd-8638-20bcacbb1e56")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 141.7175 45.72 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
 	(global_label "+Probe-5"
 		(shape input)
 		(at 340.36 429.26 180)
@@ -29279,30 +29391,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-			)
-		)
-	)
-	(global_label "VBUS_VOLTAGE"
-		(shape input)
-		(at 74.93 60.96 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "db13f95d-08cf-46d9-bff2-3750d6b3840d")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 58.1562 60.96 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 			)
 		)
 	)
@@ -29690,6 +29778,30 @@
 			)
 		)
 	)
+	(global_label "+Probe-7"
+		(shape input)
+		(at 635 365.76 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "eb2a33ff-0e14-47d8-b4ce-f0a7123e7ef7")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 647.7823 365.76 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
 	(global_label "TOUCH_CS"
 		(shape input)
 		(at 53.34 265.43 180)
@@ -30026,30 +30138,6 @@
 			)
 		)
 	)
-	(global_label "+Probe-4"
-		(shape input)
-		(at 635 302.26 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "f41b27fd-08c0-4bd0-8c75-b046a7a776bd")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 647.7823 302.26 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
 	(global_label "SERVO1_NRST"
 		(shape input)
 		(at 455.93 252.73 180)
@@ -30159,30 +30247,6 @@
 		(uuid "f6f525a7-56d3-4ae7-a877-6ac6b0de2232")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 333.7462 311.15 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
-	(global_label "+Probe-1"
-		(shape input)
-		(at 607.06 302.26 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "f7cf1884-3d68-46b2-a34e-3cb363b8971f")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 594.2777 302.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -30423,30 +30487,6 @@
 		(uuid "fe00f461-d169-4ccc-abff-0445e8fd7397")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 421.7391 398.78 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
-	(global_label "SERVO4_CURRENT"
-		(shape input)
-		(at 74.93 50.8 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "fe70c21e-ceac-4aee-9d13-1ed3e646f6a9")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 55.1325 50.8 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
