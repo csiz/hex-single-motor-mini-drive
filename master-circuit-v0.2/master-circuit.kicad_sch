@@ -13751,10 +13751,10 @@
 		)
 		(uuid "07302b45-17f5-40a9-b307-7dc77713dc57")
 	)
-	(text_box "I2C addresses used:\n\n0011000 - accelerometer\n0101100 - USB Hub\n1110xxx - GPIO expanders\n0011xxx - I2C multiplexers\n\nI2C topology:\n\nI2C1 -> I2C multiplexer @ 0011111 -> servos 1, 2, 3\n                                  -> GPIO expander @ 1110000\n                                  -> USB Hub @ 0101100\n\nI2C2 -> I2C multiplexer @ 0011111 -> servos 4, 5, 6\n                                  -> GPIO expander @ 1110000\n                                  -> accelerometer @ 0011000"
+	(text_box "I2C addresses used:\n\n0011000 - accelerometer\n0101100 - USB Hub\n1110xxx - GPIO expanders\n0011xxx - I2C multiplexers\n1010000 - other USB Hub (in the expander cable)\n\nI2C topology:\n\nI2C1 -> I2C multiplexer @ 0011111 -> servos 1, 2, 3\n                                  -> GPIO expander @ 1110000\n                                  -> USB Hub @ 0101100\n\nI2C2 -> I2C multiplexer @ 0011111 -> servos 4, 5, 6\n                                  -> GPIO expander @ 1110000\n                                  -> accelerometer @ 0011000"
 		(exclude_from_sim no)
 		(at 13.97 91.5445 0)
-		(size 69.85 35.9834)
+		(size 69.85 38.117)
 		(margins 0.9525 0.9525 0.9525 0.9525)
 		(stroke
 			(width 0)

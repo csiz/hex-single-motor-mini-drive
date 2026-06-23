@@ -701,14 +701,14 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Library:CL10A105KB8NNNC Capacitor 1uF"
+		(symbol "Library:CC0402KRX7R7BB104 Capacitor 100nF"
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
 			(property "Reference" "C"
-				(at 1.778 3.048 0)
+				(at 3.048 2.032 0)
 				(show_name no)
 				(do_not_autoplace yes)
 				(effects
@@ -717,8 +717,8 @@
 					)
 				)
 			)
-			(property "Value" "1uF"
-				(at -2.794 3.048 0)
+			(property "Value" "100nF"
+				(at -3.302 2.032 0)
 				(show_name no)
 				(do_not_autoplace yes)
 				(effects
@@ -727,8 +727,8 @@
 					)
 				)
 			)
-			(property "Footprint" "Library:C0603"
-				(at 0 -7.62 0)
+			(property "Footprint" "Library:C0402"
+				(at 0 -8.89 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -738,8 +738,8 @@
 					)
 				)
 			)
-			(property "Datasheet" "https://item.szlcsc.com/datasheet/CL10A105KB8NNNC/16531.html"
-				(at 0 6.096 0)
+			(property "Datasheet" "https://atta.szlcsc.com/upload/public/pdf/source/20211223/9278FD768280B81DDBEF48FA36411A03.pdf"
+				(at 0 8.636 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -749,8 +749,8 @@
 					)
 				)
 			)
-			(property "Description" "Capacitance:1uF Tolerance:±10% Tolerance:±10% Voltage Rating:50V Temperature Coefficient:X5R"
-				(at 0 8.128 0)
+			(property "Description" "Capacitance: Tolerance:±10% Tolerance:±10% Voltage Rated: Temperature Coefficient:"
+				(at 0 11.938 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -760,7 +760,7 @@
 					)
 				)
 			)
-			(property "Manufacturer Part" "CL10A105KB8NNNC"
+			(property "Manufacturer Part" "CC0402KRX7R7BB104"
 				(at 0 -2.794 0)
 				(show_name no)
 				(do_not_autoplace yes)
@@ -770,8 +770,8 @@
 					)
 				)
 			)
-			(property "Manufacturer" "SAMSUNG(三星)"
-				(at 0 15.24 0)
+			(property "Manufacturer" "YAGEO(国巨)"
+				(at 0 14.732 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -781,8 +781,8 @@
 					)
 				)
 			)
-			(property "Supplier Part" "C15849"
-				(at 0 17.526 0)
+			(property "Supplier Part" "C60474"
+				(at 0 17.78 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -793,7 +793,7 @@
 				)
 			)
 			(property "Supplier" "LCSC"
-				(at 0 19.304 0)
+				(at 0 26.162 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -803,8 +803,8 @@
 					)
 				)
 			)
-			(property "LCSC Part Name" "1uF ±10% 50V"
-				(at 0 10.414 0)
+			(property "LCSC Part Name" "100nF ±10% 16V"
+				(at 0 20.574 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -814,7 +814,7 @@
 					)
 				)
 			)
-			(property "LCSC Part #" "C15849"
+			(property "LCSC Part #" "C60474"
 				(at 0 -4.064 0)
 				(show_name no)
 				(do_not_autoplace yes)
@@ -824,10 +824,10 @@
 					)
 				)
 			)
-			(symbol "CL10A105KB8NNNC Capacitor 1uF_1_0"
+			(symbol "CC0402KRX7R7BB104 Capacitor 100nF_1_0"
 				(polyline
 					(pts
-						(xy -0.508 0) (xy -1.27 0)
+						(xy -0.508 0) (xy -1.524 0)
 					)
 					(stroke
 						(width 0)
@@ -873,7 +873,7 @@
 						(type none)
 					)
 				)
-				(pin unspecified line
+				(pin input line
 					(at -3.81 0 0)
 					(length 2.54)
 					(name "1"
@@ -891,7 +891,7 @@
 						)
 					)
 				)
-				(pin unspecified line
+				(pin input line
 					(at 3.81 0 180)
 					(length 2.54)
 					(name "2"
@@ -912,14 +912,14 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Library:FPC-05F-20PH20 Connector 20P 0.5mm spacing FPC"
+		(symbol "Library:FPC-05F-6PH20 Pattern 20P 0.5mm spacing"
 			(exclude_from_sim no)
-			(in_bom yes)
+			(in_bom no)
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
 			(property "Reference" "FPC"
-				(at 9.652 1.778 0)
+				(at -7.62 0 0)
 				(show_name no)
 				(do_not_autoplace yes)
 				(effects
@@ -939,8 +939,8 @@
 					)
 				)
 			)
-			(property "Footprint" "Library:FPC-SMD_20P-P0.50_XUNPU_FPC-05F-20PH20"
-				(at 0.508 49.53 0)
+			(property "Footprint" "Library:FPC-20P-P0.50-Pattern"
+				(at 0 -45.466 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -950,8 +950,8 @@
 					)
 				)
 			)
-			(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-20PH20/3056901.html"
-				(at 0 43.18 0)
+			(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-6PH20/3056894.html"
+				(at 0 -42.164 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -961,8 +961,8 @@
 					)
 				)
 			)
-			(property "Description" "Locking Feature:Hinged Lid Contact Type:Surface Mount Number of Contacts:20P Pitch:0.5mm Mounting Type:Bottom Contact FFC, FCB Thickness:0.3mm FFC, FCB Thickness:0.3mm Height Above Board:2mm Contact Material:Phosphor Bronze Contact Plating:Tin Operating T"
-				(at 0 55.88 0)
+			(property "Description" "Pattern for FPC connector"
+				(at 0 -49.276 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -972,74 +972,10 @@
 					)
 				)
 			)
-			(property "Manufacturer Part" "FPC-05F-20PH20"
-				(at 9.652 0 0)
-				(show_name no)
-				(do_not_autoplace yes)
-				(effects
-					(font
-						(size 0.5 0.5)
-					)
-				)
-			)
-			(property "Manufacturer" "XUNPU(讯普)"
-				(at 0 62.738 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Supplier Part" "C2856803"
-				(at 0 66.802 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Supplier" "LCSC"
-				(at 0 69.088 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "LCSC Part Name" "翻盖式 卧贴 P数:20P 间距:0.5mm"
-				(at 0 60.198 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "LCSC Part #" "C2856803"
-				(at 9.652 -1.524 0)
-				(show_name no)
-				(do_not_autoplace yes)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(symbol "FPC-05F-20PH20 Connector 20P 0.5mm spacing FPC_1_0"
+			(symbol "FPC-05F-6PH20 Pattern 20P 0.5mm spacing_1_0"
 				(rectangle
-					(start -3.81 -25.4)
-					(end 5.08 27.94)
+					(start -5.08 26.67)
+					(end 5.08 -26.67)
 					(stroke
 						(width 0)
 						(type default)
@@ -1049,7 +985,7 @@
 					)
 				)
 				(circle
-					(center -2.54 26.67)
+					(center 3.81 -25.4)
 					(radius 0.381)
 					(stroke
 						(width 0)
@@ -1060,7 +996,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 25.4 0)
+					(at 7.62 -24.13 180)
 					(length 2.54)
 					(name "1"
 						(effects
@@ -1078,7 +1014,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 22.86 0)
+					(at 7.62 -21.59 180)
 					(length 2.54)
 					(name "2"
 						(effects
@@ -1096,7 +1032,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 20.32 0)
+					(at 7.62 -19.05 180)
 					(length 2.54)
 					(name "3"
 						(effects
@@ -1114,7 +1050,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 17.78 0)
+					(at 7.62 -16.51 180)
 					(length 2.54)
 					(name "4"
 						(effects
@@ -1132,7 +1068,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 15.24 0)
+					(at 7.62 -13.97 180)
 					(length 2.54)
 					(name "5"
 						(effects
@@ -1150,7 +1086,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 12.7 0)
+					(at 7.62 -11.43 180)
 					(length 2.54)
 					(name "6"
 						(effects
@@ -1168,7 +1104,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 10.16 0)
+					(at 7.62 -8.89 180)
 					(length 2.54)
 					(name "7"
 						(effects
@@ -1186,7 +1122,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 7.62 0)
+					(at 7.62 -6.35 180)
 					(length 2.54)
 					(name "8"
 						(effects
@@ -1204,7 +1140,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 5.08 0)
+					(at 7.62 -3.81 180)
 					(length 2.54)
 					(name "9"
 						(effects
@@ -1222,7 +1158,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 2.54 0)
+					(at 7.62 -1.27 180)
 					(length 2.54)
 					(name "10"
 						(effects
@@ -1240,7 +1176,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 0 0)
+					(at 7.62 1.27 180)
 					(length 2.54)
 					(name "11"
 						(effects
@@ -1258,7 +1194,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -2.54 0)
+					(at 7.62 3.81 180)
 					(length 2.54)
 					(name "12"
 						(effects
@@ -1276,7 +1212,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -5.08 0)
+					(at 7.62 6.35 180)
 					(length 2.54)
 					(name "13"
 						(effects
@@ -1294,7 +1230,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -7.62 0)
+					(at 7.62 8.89 180)
 					(length 2.54)
 					(name "14"
 						(effects
@@ -1312,7 +1248,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -10.16 0)
+					(at 7.62 11.43 180)
 					(length 2.54)
 					(name "15"
 						(effects
@@ -1330,7 +1266,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -12.7 0)
+					(at 7.62 13.97 180)
 					(length 2.54)
 					(name "16"
 						(effects
@@ -1348,7 +1284,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -15.24 0)
+					(at 7.62 16.51 180)
 					(length 2.54)
 					(name "17"
 						(effects
@@ -1366,7 +1302,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -17.78 0)
+					(at 7.62 19.05 180)
 					(length 2.54)
 					(name "18"
 						(effects
@@ -1384,7 +1320,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -20.32 0)
+					(at 7.62 21.59 180)
 					(length 2.54)
 					(name "19"
 						(effects
@@ -1402,7 +1338,7 @@
 					)
 				)
 				(pin input line
-					(at -6.35 -22.86 0)
+					(at 7.62 24.13 180)
 					(length 2.54)
 					(name "20"
 						(effects
@@ -1412,42 +1348,6 @@
 						)
 					)
 					(number "20"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 2.54 -27.94 90)
-					(length 2.54)
-					(name "21"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "21"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin input line
-					(at 2.54 30.48 270)
-					(length 2.54)
-					(name "22"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "22"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -1772,14 +1672,14 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Library:RLP25FEGMR005 Shunt resistor 5mΩ 1%"
+		(symbol "Library:TC-005_C6332285 male USB-C plug"
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "R"
-				(at 0 5.08 0)
+			(property "Reference" "USB"
+				(at 0 2.032 0)
 				(show_name no)
 				(do_not_autoplace yes)
 				(effects
@@ -1788,8 +1688,52 @@
 					)
 				)
 			)
-			(property "Value" "5mΩ"
-				(at 0 2.794 0)
+			(property "Value" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" "Library:USB-C-SMD_TC-005"
+				(at 0 -28.956 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" "https://item.szlcsc.com/datasheet/TC-005/7280525.html"
+				(at 0 -31.496 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Manufacturer Part" "TC-005"
+				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace yes)
 				(effects
@@ -1798,8 +1742,8 @@
 					)
 				)
 			)
-			(property "Footprint" "Library:R2512 Shunt with Kelvin connections"
-				(at 0 -13.208 0)
+			(property "Manufacturer" "HANBO(汉博)"
+				(at 0 -37.846 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -1809,51 +1753,8 @@
 					)
 				)
 			)
-			(property "Datasheet" "https://item.szlcsc.com/datasheet/RLP25FEGMR005/370313.html"
-				(at 0 9.398 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Description" "Type:Current Sense Resistor Resistance:5mΩ Tolerance:±1% Tolerance:±1% Voltage Rating:- Power(Watts):3W Current Rating:- Temperature Coefficient:±50ppm/°C Temperature Coefficient:±50ppm/°C Mounting Type:Surface Mount"
-				(at 0 11.938 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Manufacturer Part" "RLP25FEGMR005"
-				(at 0 -2.794 0)
-				(show_name no)
-				(do_not_autoplace yes)
-				(effects
-					(font
-						(size 0.5 0.5)
-					)
-				)
-			)
-			(property "Manufacturer" "大毅科技"
-				(at 0 18.542 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Supplier Part" "C393074"
-				(at 0 22.098 0)
+			(property "Supplier Part" "C6332285"
+				(at 0 -35.052 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -1864,7 +1765,7 @@
 				)
 			)
 			(property "Supplier" "LCSC"
-				(at 0 24.892 0)
+				(at 0 -47.752 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -1874,8 +1775,8 @@
 					)
 				)
 			)
-			(property "LCSC Part Name" "5mΩ ±1% 3W"
-				(at 0 15.748 0)
+			(property "LCSC Part Name" "Type-C 公 立贴"
+				(at 0 -41.91 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(hide yes)
@@ -1885,8 +1786,8 @@
 					)
 				)
 			)
-			(property "LCSC Part #" "C393074"
-				(at 0 -4.064 0)
+			(property "LCSC Part #" "C6332285"
+				(at 0 -1.778 0)
 				(show_name no)
 				(do_not_autoplace yes)
 				(effects
@@ -1895,112 +1796,339 @@
 					)
 				)
 			)
-			(symbol "RLP25FEGMR005 Shunt resistor 5mΩ 1%_0_1"
-				(polyline
-					(pts
-						(xy -5.08 1.27) (xy -4.572 1.27) (xy -4.572 0) (xy -5.08 0)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 5.08 1.27) (xy 4.572 1.27) (xy 4.572 0) (xy 5.08 0)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-			)
-			(symbol "RLP25FEGMR005 Shunt resistor 5mΩ 1%_1_0"
+			(symbol "TC-005_C6332285 male USB-C plug_1_0"
 				(rectangle
-					(start -5.08 3.81)
-					(end 5.08 -4.826)
+					(start -10.16 11.43)
+					(end 10.16 -11.43)
 					(stroke
-						(width 0)
-						(type default)
+						(width 0.254)
+						(type solid)
+						(color 160 0 0 1)
 					)
 					(fill
 						(type none)
 					)
 				)
 				(pin unspecified line
-					(at -7.62 1.27 0)
+					(at 0 13.97 270)
 					(length 2.54)
-					(name "Shunt-1"
+					(name "EH"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
 							)
 						)
 					)
 					(number "1"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
 							)
 						)
 					)
 				)
 				(pin unspecified line
-					(at 7.62 1.27 180)
+					(at 0 -13.97 90)
 					(length 2.54)
-					(name "Shunt-2"
+					(name "EH"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
 							)
 						)
 					)
 					(number "2"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
 							)
 						)
 					)
 				)
 				(pin unspecified line
-					(at -7.62 0 0)
+					(at -12.7 8.89 0)
 					(length 2.54)
-					(name "Probe-1"
+					(name "GND"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
 							)
 						)
 					)
-					(number "3"
+					(number "A1"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
 							)
 						)
 					)
 				)
 				(pin unspecified line
-					(at 7.62 0 180)
+					(at -12.7 6.35 0)
 					(length 2.54)
-					(name "Probe-2"
+					(name "VBUS"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
 							)
 						)
 					)
-					(number "4"
+					(number "A4"
 						(effects
 							(font
-								(size 0.5 0.5)
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at -12.7 3.81 0)
+					(length 2.54)
+					(name "CC1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "A5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at -12.7 1.27 0)
+					(length 2.54)
+					(name "DP1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "A6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at -12.7 -1.27 0)
+					(length 2.54)
+					(name "DN1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "A7"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at -12.7 -3.81 0)
+					(length 2.54)
+					(name "SUB1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "A8"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at -12.7 -6.35 0)
+					(length 2.54)
+					(name "VBUS"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "A9"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at -12.7 -8.89 0)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "A12"
+						(effects
+							(font
+								(size 0.8466 0.8466)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 -8.89 180)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 -6.35 180)
+					(length 2.54)
+					(name "VBUS"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 -3.81 180)
+					(length 2.54)
+					(name "CC2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 -1.27 180)
+					(length 2.54)
+					(name "DP2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 1.27 180)
+					(length 2.54)
+					(name "DN2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B7"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 3.81 180)
+					(length 2.54)
+					(name "SUB2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B8"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 6.35 180)
+					(length 2.54)
+					(name "VBUS"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B9"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin unspecified line
+					(at 12.7 8.89 180)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "B12"
+						(effects
+							(font
+								(size 0.8466 0.8466)
 							)
 						)
 					)
@@ -2254,444 +2382,6 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Library:TYPE-C16PIN USB connector"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(in_pos_files yes)
-			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "USB"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" ""
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" "Library:USB-C-SMD_TYPE-C16PIN"
-				(at 0 27.94 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Datasheet" "https://item.szlcsc.com/datasheet/TYPE-C16PIN/372551.html"
-				(at 0 34.29 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Description" "Connector Type:Type-C Protocol Standard:USB 3.1 Gender:Female Mounting Type:Surface Mount, Right Angle Number of Contacts:16P Number of Ports:1 Current Rating-Power:3A Voltage Rating:30V Connect-Disconnect Life:10,000 Cycles Detection color:Black Operatin"
-				(at 0 24.384 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Manufacturer Part" "TYPE-C16PIN"
-				(at 0 -24.13 0)
-				(show_name no)
-				(do_not_autoplace yes)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(property "Manufacturer" "SHOU HAN(首韩)"
-				(at 0 45.466 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Supplier Part" "C393939"
-				(at 0 55.626 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Supplier" "LCSC"
-				(at 0 59.436 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "LCSC Part Name" "Type-C 母 卧贴"
-				(at 0 41.656 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "LCSC Part #" "C393939"
-				(at 0 -25.908 0)
-				(show_name no)
-				(do_not_autoplace yes)
-				(effects
-					(font
-						(size 1 1)
-					)
-				)
-			)
-			(symbol "TYPE-C16PIN USB connector_1_0"
-				(rectangle
-					(start -6.35 21.59)
-					(end 6.35 -27.178)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(circle
-					(center -5.08 20.32)
-					(radius 0.381)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -11.43 0)
-					(length 2.54)
-					(name "SHELL"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -13.97 0)
-					(length 2.54)
-					(name "SHELL"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -16.51 0)
-					(length 2.54)
-					(name "SHELL"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -19.05 0)
-					(length 2.54)
-					(name "SHELL"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "4"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 19.05 0)
-					(length 2.54)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "A1B12"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 16.51 0)
-					(length 2.54)
-					(name "VBUS"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "A4B9"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 13.97 0)
-					(length 2.54)
-					(name "CC1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "A5"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 11.43 0)
-					(length 2.54)
-					(name "DP1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "A6"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 8.89 0)
-					(length 2.54)
-					(name "DN1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "A7"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 6.35 0)
-					(length 2.54)
-					(name "SBU1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "A8"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -8.89 0)
-					(length 2.54)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "B1A12"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -6.35 0)
-					(length 2.54)
-					(name "VBUS"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "B4A9"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 3.81 0)
-					(length 2.54)
-					(name "CC2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "B5"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 1.27 0)
-					(length 2.54)
-					(name "DP2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "B6"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -1.27 0)
-					(length 2.54)
-					(name "DN2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "B7"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-				(pin unspecified line
-					(at -8.89 -3.81 0)
-					(length 2.54)
-					(name "SBU2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "B8"
-						(effects
-							(font
-								(size 0.5 0.5)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
 		(symbol "power:GND"
 			(power global)
 			(pin_numbers
@@ -2808,6 +2498,17 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "Ground the shell for an upstream device."
+		(exclude_from_sim no)
+		(at 114.3 57.404 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "272d1ada-de9c-4443-9698-c332ca813fec")
+	)
 	(text "Power FPC connector"
 		(exclude_from_sim no)
 		(at 210.82 122.428 0)
@@ -2818,39 +2519,29 @@
 		)
 		(uuid "3f211fbe-5ac6-4834-9497-8f4bd11f7627")
 	)
-	(text "Note: pullups and stuff included in USB hub."
+	(text "Elestrostatic discharge protection"
 		(exclude_from_sim no)
-		(at 136.652 77.216 0)
+		(at 133.604 111.76 0)
 		(effects
 			(font
 				(size 1 1)
 			)
 		)
-		(uuid "513a972d-7a93-4350-b5f5-b218a2581e0f")
+		(uuid "4a4ee9c3-d9d1-4c7e-a0e9-7e7c575432ac")
 	)
 	(text "SBU1 and SBU2 are coonected to Reset and Boot0 in either orientation."
 		(exclude_from_sim no)
-		(at 115.316 57.404 0)
+		(at 79.248 48.514 0)
 		(effects
 			(font
 				(size 1 1)
 			)
 		)
-		(uuid "af6bebb6-fb68-428c-bc1a-ff7c0e93e2d7")
-	)
-	(text "Elestrostatic discharge protection"
-		(exclude_from_sim no)
-		(at 136.398 96.774 0)
-		(effects
-			(font
-				(size 1 1)
-			)
-		)
-		(uuid "bd87aa13-31d5-4a64-a5f6-9255e8b73066")
+		(uuid "8a6d1172-ea79-4723-8d79-525d681fdc77")
 	)
 	(text "Limit to 1.2A ish."
 		(exclude_from_sim no)
-		(at 127.762 121.666 0)
+		(at 129.032 157.226 0)
 		(effects
 			(font
 				(size 0.8 0.8)
@@ -2858,18 +2549,7 @@
 		)
 		(uuid "bdffa219-907b-4640-b784-393e19c3c08b")
 	)
-	(text "Ground the shell for an upstream device."
-		(exclude_from_sim no)
-		(at 66.294 45.72 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "d0977665-6a92-48bf-8e57-8165d70f5ee0")
-	)
-	(text "Eusebiu - USB C - servo connector"
+	(text "USB C and power FPC - servo connector"
 		(exclude_from_sim no)
 		(at 46.228 28.702 0)
 		(effects
@@ -2881,232 +2561,242 @@
 		(uuid "eb66e75a-6f0f-4cf8-b684-4aa76f5101ab")
 	)
 	(junction
-		(at 80.01 137.16)
+		(at 215.9 107.95)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "03704090-751f-4e6b-a849-2d94ada4fbeb")
+	)
+	(junction
+		(at 81.28 172.72)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "0a193d6a-97d4-461f-932a-e8364c061459")
 	)
 	(junction
-		(at 154.94 66.04)
+		(at 114.3 73.66)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "0e20f47c-1911-4a04-ba46-454bdb0abb77")
+		(uuid "0c3317c3-d857-42d1-955f-463ad37f021a")
 	)
 	(junction
-		(at 73.66 63.5)
+		(at 119.38 113.03)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "11006620-aba5-4126-a16a-8334eca2f8d2")
-	)
-	(junction
-		(at 215.9 72.39)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "11de5502-c04a-4126-9205-f2f46a95073b")
-	)
-	(junction
-		(at 118.11 78.74)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "15168ba8-e0f2-4ba5-a8b1-62ac1ef5854c")
-	)
-	(junction
-		(at 105.41 60.96)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "18709959-37bc-46e4-b65b-4910cc84e554")
-	)
-	(junction
-		(at 215.9 105.41)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "1ae7ff6f-63f2-4191-987c-b755b61777b2")
-	)
-	(junction
-		(at 215.9 97.79)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "1e01409c-21a2-41ec-b1af-30ce1654f3e2")
-	)
-	(junction
-		(at 81.28 73.66)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "2ce6085a-2fc4-4abb-8f50-f0401f4eb228")
-	)
-	(junction
-		(at 215.9 67.31)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "2d3cd026-8787-486e-b491-78d645210dfc")
-	)
-	(junction
-		(at 215.9 102.87)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "32363f1a-9739-4102-a20d-924c56b8f021")
-	)
-	(junction
-		(at 215.9 100.33)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "33f623b2-26b6-43f7-97e8-66a922056093")
-	)
-	(junction
-		(at 215.9 92.71)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "3b91e7a9-8bee-4a4e-9bc3-244844ce9019")
-	)
-	(junction
-		(at 66.04 55.88)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "495f438d-4ff7-4efe-b427-69cb02c0b4fe")
-	)
-	(junction
-		(at 215.9 74.93)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "4b3fab43-4ac2-40fd-a5a9-f6c160e215d7")
-	)
-	(junction
-		(at 73.66 99.06)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "50dc0371-00bc-45e2-9886-ad063900bf76")
-	)
-	(junction
-		(at 66.04 53.34)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "52da9d80-f499-40c5-a71a-f07f3f590eed")
-	)
-	(junction
-		(at 71.12 137.16)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "57ad89ae-dd58-487b-9afc-826602931daf")
-	)
-	(junction
-		(at 215.9 95.25)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "67764889-ca22-4ed9-9b40-189153f12fe2")
-	)
-	(junction
-		(at 215.9 85.09)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "69cb640c-bbc4-4838-a9a1-eb605e698118")
-	)
-	(junction
-		(at 215.9 64.77)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6ba53ec8-2caf-4e7f-95fd-1c7c77b32b16")
-	)
-	(junction
-		(at 71.12 118.11)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6ed21994-e74c-4154-9526-b9fdcfcf5ebf")
-	)
-	(junction
-		(at 144.78 78.74)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "729c5195-9911-4c35-b63a-982dbe59184d")
-	)
-	(junction
-		(at 66.04 58.42)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "7cab0d60-cdc1-45ae-8284-6578f5e210a8")
-	)
-	(junction
-		(at 101.6 123.19)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "874977b0-9253-4353-8ac0-6a4d2f6e710d")
-	)
-	(junction
-		(at 215.9 69.85)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "94eb5c6d-9013-4050-9458-4181aff23e0f")
-	)
-	(junction
-		(at 215.9 82.55)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "95d978ba-623d-4d10-b67e-7eca6e397464")
+		(uuid "0c6accef-7cd7-4fd7-9240-ff6aade4291a")
 	)
 	(junction
 		(at 215.9 113.03)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "9d882391-2c09-43b5-b860-60096d2c517b")
+		(uuid "0fecd2c9-147e-48d5-8ce0-4a32f502e9da")
 	)
 	(junction
-		(at 215.9 110.49)
+		(at 105.41 68.58)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "b7e51a92-c2ce-4ed6-86ee-ff5b51fb5c9c")
+		(uuid "12bd9ddc-87c6-478d-82f3-5d4e8a764764")
 	)
 	(junction
-		(at 116.84 66.04)
+		(at 215.9 105.41)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "be38ba63-5bbe-414f-980f-22539e366481")
+		(uuid "1c215bb7-8d85-4c72-9f78-ad910c385bfc")
 	)
 	(junction
-		(at 215.9 107.95)
+		(at 215.9 74.93)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "bea30c2a-38eb-4214-8569-2e70eeee4907")
+		(uuid "20ed5f0d-aa5c-4f87-87b2-1aeb5de64251")
+	)
+	(junction
+		(at 215.9 95.25)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "3986775f-2b48-47d6-b4b4-e6bd8d13f9aa")
+	)
+	(junction
+		(at 215.9 67.31)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "3a9b8456-2b22-497d-ac0d-0f32cded1711")
+	)
+	(junction
+		(at 105.41 63.5)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "48426283-e74b-4f8e-8af8-a5bf7f0f2717")
+	)
+	(junction
+		(at 215.9 69.85)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "4d3af5f1-80ec-417a-9318-50200f03a218")
+	)
+	(junction
+		(at 124.46 71.12)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "4ed770b3-35d3-4246-adca-25d8a1bf6865")
+	)
+	(junction
+		(at 72.39 172.72)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "57ad89ae-dd58-487b-9afc-826602931daf")
+	)
+	(junction
+		(at 72.39 153.67)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "6ed21994-e74c-4154-9526-b9fdcfcf5ebf")
+	)
+	(junction
+		(at 57.15 49.53)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "7125f569-d05d-47b5-a437-e64c5000506b")
+	)
+	(junction
+		(at 114.3 92.71)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "7ce9d3b1-24a2-401a-b761-ef39553df0db")
 	)
 	(junction
 		(at 215.9 77.47)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "d1aa1604-1d2c-4618-964f-d0f02887033e")
+		(uuid "86cbcf4c-8e14-4420-9d14-2318ebfdcc5e")
 	)
 	(junction
-		(at 105.41 91.44)
+		(at 102.87 158.75)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "d2238af2-2f4c-42a6-b27f-9c4176287c38")
+		(uuid "874977b0-9253-4353-8ac0-6a4d2f6e710d")
 	)
 	(junction
-		(at 66.04 50.8)
+		(at 215.9 102.87)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "e65f9175-c64d-4edc-b248-38ad91bf1b57")
+		(uuid "8d6401f9-8996-4513-8bad-0891f373fd01")
 	)
 	(junction
-		(at 68.58 99.06)
+		(at 215.9 92.71)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "e9f562b3-7cc4-4966-b59a-0eee95f930f1")
+		(uuid "8dbd89d0-ea72-4362-9a6c-ccfe28b768f9")
+	)
+	(junction
+		(at 215.9 85.09)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "91a37caf-2971-463c-8e67-96813e98727a")
+	)
+	(junction
+		(at 215.9 82.55)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "94d7d7b8-4f57-409f-b8c5-8281a10630c6")
+	)
+	(junction
+		(at 215.9 97.79)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "94f33aac-5e11-4c6c-a379-1ac7c0261c7e")
+	)
+	(junction
+		(at 50.8 66.04)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "971b03dc-e7ac-4e30-a230-d10a0bcd3c2a")
+	)
+	(junction
+		(at 215.9 110.49)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "a0fa5357-dfe6-4b87-a815-642e6ac56225")
+	)
+	(junction
+		(at 142.24 66.04)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ae534ff0-0493-4931-8a57-e2a0fce79660")
+	)
+	(junction
+		(at 90.17 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "b7af58c4-e3e9-4c88-9514-cd7d47efa4d6")
+	)
+	(junction
+		(at 118.11 49.53)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "c5cff8b0-4492-4f9a-99db-1209308a30d5")
 	)
 	(junction
 		(at 215.9 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "fd6a4404-b662-4578-921a-96aece74e85c")
+		(uuid "c8c02968-554e-4342-a5cc-b8d69ee3dc14")
 	)
-	(no_connect
-		(at 207.01 59.69)
-		(uuid "4121fd4d-61c7-418f-89c4-19a43c57b970")
+	(junction
+		(at 102.87 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "d41523bf-721d-4131-b326-0a9c93ef6f7a")
 	)
-	(no_connect
-		(at 207.01 118.11)
-		(uuid "6b14c925-b1d8-4533-89af-b945f04218f4")
+	(junction
+		(at 105.41 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "d64f65f7-485f-46af-b137-21d31c64b7a4")
+	)
+	(junction
+		(at 77.47 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "d71d8800-216a-44ee-be8c-d7af929be033")
+	)
+	(junction
+		(at 215.9 72.39)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "dc8402f4-7a9a-4763-8bad-e2876b7c9be8")
+	)
+	(junction
+		(at 215.9 64.77)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ef4278df-9825-454a-babc-fc310be18249")
+	)
+	(junction
+		(at 64.77 76.2)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f2dd4af7-124d-4d86-a916-d31494829f57")
+	)
+	(junction
+		(at 64.77 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f4192bc5-4f01-4253-bb62-26eccad606e7")
+	)
+	(junction
+		(at 124.46 90.17)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f556aca7-7243-496c-a276-b6991f72e179")
+	)
+	(junction
+		(at 215.9 100.33)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "fddcfe74-840b-4895-bb92-529a234c1186")
 	)
 	(wire
 		(pts
-			(xy 59.69 123.19) (xy 73.66 123.19)
+			(xy 60.96 158.75) (xy 74.93 158.75)
 		)
 		(stroke
 			(width 0)
@@ -3116,37 +2806,37 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 80.01) (xy 215.9 77.47)
+			(xy 215.9 77.47) (xy 215.9 80.01)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "0319fc2a-c95f-448c-bb80-57848bd8587b")
+		(uuid "038b695d-3d41-475f-abb8-eec01c66fb61")
 	)
 	(wire
 		(pts
-			(xy 215.9 102.87) (xy 215.9 100.33)
+			(xy 77.47 81.28) (xy 77.47 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "039d4241-35a9-488d-ba8c-14852507ff0c")
+		(uuid "04203e78-5834-4380-bbc6-ba4e2c098da8")
 	)
 	(wire
 		(pts
-			(xy 215.9 82.55) (xy 215.9 80.01)
+			(xy 215.9 105.41) (xy 215.9 107.95)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "04eab4ca-56f4-440f-b601-3eb554746807")
+		(uuid "07f1bcd4-9547-49a2-a1f0-f6ecdac22baa")
 	)
 	(wire
 		(pts
-			(xy 99.06 120.65) (xy 121.92 120.65)
+			(xy 100.33 156.21) (xy 123.19 156.21)
 		)
 		(stroke
 			(width 0)
@@ -3156,37 +2846,47 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 41.91) (xy 245.11 41.91)
+			(xy 215.9 74.93) (xy 215.9 77.47)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "10f93b1f-1449-4c41-84f1-812ae9810302")
+		(uuid "0dd41043-0732-49fb-8b55-9d2d42617778")
 	)
 	(wire
 		(pts
-			(xy 81.28 73.66) (xy 82.55 73.66)
+			(xy 102.87 113.03) (xy 105.41 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "12459126-7aa3-400f-bfda-f95a20ac5fda")
+		(uuid "0df9c9d3-9cd6-4217-ae60-84f6db1950cf")
 	)
 	(wire
 		(pts
-			(xy 68.58 99.06) (xy 68.58 100.33)
+			(xy 57.15 68.58) (xy 77.47 68.58)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "130a7052-40e6-403a-85a9-a57b7e1c4f74")
+		(uuid "10a404f0-4c1e-4f61-a46e-4249fd7141e0")
 	)
 	(wire
 		(pts
-			(xy 99.06 118.11) (xy 105.41 118.11)
+			(xy 215.9 95.25) (xy 215.9 97.79)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "13c717a7-8fbc-4195-b315-924f91e6e57b")
+	)
+	(wire
+		(pts
+			(xy 100.33 153.67) (xy 106.68 153.67)
 		)
 		(stroke
 			(width 0)
@@ -3196,17 +2896,67 @@
 	)
 	(wire
 		(pts
-			(xy 154.94 66.04) (xy 154.94 80.01)
+			(xy 102.87 78.74) (xy 142.24 78.74)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "1b1ae49a-e9aa-470c-8eb6-93f3d8fef848")
+		(uuid "151f7b7c-0cb4-4442-addc-3376fe324e22")
 	)
 	(wire
 		(pts
-			(xy 73.66 120.65) (xy 66.04 120.65)
+			(xy 118.11 49.53) (xy 142.24 49.53)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "16366473-98d8-4a1e-a28f-e9783a3ae864")
+	)
+	(wire
+		(pts
+			(xy 102.87 81.28) (xy 102.87 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "17bba57c-7d4d-43f3-baca-dbbedc7cbf13")
+	)
+	(wire
+		(pts
+			(xy 124.46 90.17) (xy 124.46 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1904d8ca-0d5c-4119-af04-a649c646349c")
+	)
+	(wire
+		(pts
+			(xy 125.73 73.66) (xy 114.3 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1d808d5b-8e63-461a-9a46-ec5f393b91b9")
+	)
+	(wire
+		(pts
+			(xy 40.64 63.5) (xy 77.47 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1ff639a0-a597-4eab-adad-114292e15844")
+	)
+	(wire
+		(pts
+			(xy 74.93 156.21) (xy 67.31 156.21)
 		)
 		(stroke
 			(width 0)
@@ -3216,53 +2966,83 @@
 	)
 	(wire
 		(pts
-			(xy 73.66 63.5) (xy 73.66 88.9)
+			(xy 74.93 90.17) (xy 124.46 90.17)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "2619fe61-c692-48fd-9f65-447fb96108a3")
+		(uuid "2629e66c-ba60-4026-b0af-a920f2466501")
 	)
 	(wire
 		(pts
-			(xy 66.04 71.12) (xy 105.41 71.12)
+			(xy 125.73 71.12) (xy 124.46 71.12)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "2a599222-fbe4-45f5-b04d-0e4683a7b6cd")
+		(uuid "277241e8-041a-47bd-b64b-86251a209afc")
 	)
 	(wire
 		(pts
-			(xy 66.04 73.66) (xy 81.28 73.66)
+			(xy 105.41 113.03) (xy 119.38 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "304d425a-8bb3-475f-be38-444c232709ba")
+		(uuid "296b83c1-0ce7-48bb-9099-0dfb919a690d")
 	)
 	(wire
 		(pts
-			(xy 73.66 63.5) (xy 66.04 63.5)
+			(xy 90.17 113.03) (xy 102.87 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "35974630-549f-42b9-b6a0-9d5d826737f6")
+		(uuid "2d00a54a-f58a-4dba-9499-28eea3b72a54")
 	)
 	(wire
 		(pts
-			(xy 226.06 64.77) (xy 226.06 46.99)
+			(xy 105.41 68.58) (xy 128.27 68.58)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "3afa50fd-f5dd-4cb5-bb23-b14be404b8e7")
+		(uuid "315b25b7-0916-4913-a871-c34ead79ba73")
+	)
+	(wire
+		(pts
+			(xy 114.3 73.66) (xy 114.3 92.71)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3510b638-358a-427f-962b-31a7eebe143b")
+	)
+	(wire
+		(pts
+			(xy 102.87 68.58) (xy 105.41 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "356ab0e0-c7c7-4e72-8d6e-74a7554c780a")
+	)
+	(wire
+		(pts
+			(xy 119.38 113.03) (xy 152.4 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3613edba-8dac-4202-8732-bdfc91b83ad4")
 	)
 	(wire
 		(pts
@@ -3276,77 +3056,67 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 97.79) (xy 215.9 95.25)
+			(xy 50.8 78.74) (xy 77.47 78.74)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "3f293455-be15-4d50-9f55-ff9118fa43c2")
+		(uuid "453c1c71-3ee2-4583-8f4d-22db6477d59f")
 	)
 	(wire
 		(pts
-			(xy 154.94 66.04) (xy 156.21 66.04)
+			(xy 215.9 97.79) (xy 215.9 100.33)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "458a8c77-4833-4443-9f04-261cc137a58b")
+		(uuid "4bad9531-c7ee-4b3a-aff6-60020e7cb0ef")
 	)
 	(wire
 		(pts
-			(xy 116.84 66.04) (xy 154.94 66.04)
+			(xy 50.8 66.04) (xy 77.47 66.04)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "47034748-c4c3-4d15-85c9-fca5ef13d78f")
+		(uuid "4cc845a7-23b5-42aa-b4a2-07cbe3df7daa")
 	)
 	(wire
 		(pts
-			(xy 73.66 99.06) (xy 81.28 99.06)
+			(xy 215.9 110.49) (xy 215.9 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "4e6d9530-f75b-4b06-80e3-cce64969a43a")
+		(uuid "4d9a8f6c-7b42-4fee-8b61-e35364d20520")
 	)
 	(wire
 		(pts
-			(xy 215.9 92.71) (xy 215.9 90.17)
+			(xy 215.9 72.39) (xy 215.9 74.93)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "53d3fecf-0312-49df-a824-3ce5ab8a5369")
+		(uuid "568d1218-d668-4770-a4c0-b3a1fbab9211")
 	)
 	(wire
 		(pts
-			(xy 66.04 55.88) (xy 66.04 58.42)
+			(xy 124.46 71.12) (xy 124.46 90.17)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "552d4d96-ec05-45c5-9c4e-8d3616031e40")
+		(uuid "57216f17-cc6c-4ddc-a8b6-c73ae96e988d")
 	)
 	(wire
 		(pts
-			(xy 68.58 86.36) (xy 68.58 99.06)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "568edd10-d2d9-4711-a301-09f6b47140c2")
-	)
-	(wire
-		(pts
-			(xy 71.12 137.16) (xy 80.01 137.16)
+			(xy 72.39 172.72) (xy 81.28 172.72)
 		)
 		(stroke
 			(width 0)
@@ -3356,17 +3126,7 @@
 	)
 	(wire
 		(pts
-			(xy 105.41 60.96) (xy 115.57 60.96)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "63453014-f570-4bbe-b4ba-4f53d28bd32a")
-	)
-	(wire
-		(pts
-			(xy 101.6 133.35) (xy 104.14 133.35)
+			(xy 102.87 168.91) (xy 105.41 168.91)
 		)
 		(stroke
 			(width 0)
@@ -3376,123 +3136,43 @@
 	)
 	(wire
 		(pts
-			(xy 82.55 63.5) (xy 73.66 63.5)
+			(xy 142.24 49.53) (xy 142.24 66.04)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "6d446181-dc8d-431f-82b0-e620c9a30f92")
+		(uuid "6651cdad-3fdc-4330-b500-0b9c73ab3737")
 	)
 	(wire
 		(pts
-			(xy 215.9 85.09) (xy 215.9 82.55)
+			(xy 118.11 59.69) (xy 118.11 76.2)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "70bada13-4c4c-4b74-bc6e-56256fd60318")
+		(uuid "67f583d3-cb4f-4641-8cc5-8e35bffb0df1")
 	)
 	(wire
 		(pts
-			(xy 99.06 91.44) (xy 99.06 83.82)
+			(xy 102.87 66.04) (xy 142.24 66.04)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "7566e5d2-0f4a-4930-b17b-aa16d8961c8f")
+		(uuid "6e43e411-4932-4043-be93-258851359a97")
 	)
 	(wire
 		(pts
-			(xy 66.04 66.04) (xy 116.84 66.04)
+			(xy 142.24 78.74) (xy 142.24 66.04)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "7bc0fff7-90f4-4e5f-9e26-bafc6e5d9c8f")
-	)
-	(wire
-		(pts
-			(xy 66.04 50.8) (xy 66.04 53.34)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "802f4898-520b-4cd1-97dc-7f1070214853")
-	)
-	(wire
-		(pts
-			(xy 80.01 138.43) (xy 80.01 137.16)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "834edccd-9eb0-4212-82fc-6502657d81d8")
-	)
-	(wire
-		(pts
-			(xy 215.9 110.49) (xy 215.9 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8352a42d-7cbc-4f09-a48a-b72271ce3526")
-	)
-	(wire
-		(pts
-			(xy 99.06 123.19) (xy 101.6 123.19)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "83c53118-6aa1-4b5e-8995-9d5bd5552ffb")
-	)
-	(wire
-		(pts
-			(xy 215.9 107.95) (xy 215.9 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8700fe74-3c34-4e98-8aec-1b0ddb3b9cc3")
-	)
-	(wire
-		(pts
-			(xy 66.04 76.2) (xy 116.84 76.2)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8dd9007f-29ec-43fd-82f4-936d65d35316")
-	)
-	(wire
-		(pts
-			(xy 66.04 120.65) (xy 66.04 137.16)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8eef34a4-99f2-4761-92cd-cef30b8027d3")
-	)
-	(wire
-		(pts
-			(xy 215.9 72.39) (xy 215.9 69.85)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8f62e477-59f3-4aa1-8162-2db07d5ed74a")
+		(uuid "6e4dd8ea-e143-40eb-a085-407a5a4dd2d1")
 	)
 	(wire
 		(pts
@@ -3502,21 +3182,191 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "99f3ba01-3e32-4a17-a314-c79a7d346c73")
+		(uuid "70bada13-4c4c-4b74-bc6e-56256fd60318")
 	)
 	(wire
 		(pts
-			(xy 66.04 58.42) (xy 118.11 58.42)
+			(xy 215.9 92.71) (xy 215.9 95.25)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "9ac1132c-ac0f-4d93-acd4-868b32bf5cb4")
+		(uuid "71d2e7b2-82b4-4181-ab88-95bc8e52ab6d")
 	)
 	(wire
 		(pts
-			(xy 121.92 130.81) (xy 121.92 137.16)
+			(xy 74.93 73.66) (xy 74.93 90.17)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "722b39d8-70ee-4f3e-b5f1-c3779f49f04d")
+	)
+	(wire
+		(pts
+			(xy 105.41 105.41) (xy 105.41 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "77d98fdb-9016-40f9-8c8e-c0ac81522eb9")
+	)
+	(wire
+		(pts
+			(xy 50.8 66.04) (xy 50.8 49.53)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7ceed226-5456-45f2-84ae-bb622a801e62")
+	)
+	(wire
+		(pts
+			(xy 71.12 71.12) (xy 71.12 92.71)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7ea0ef2e-6368-4f19-9b77-580ebd4c90be")
+	)
+	(wire
+		(pts
+			(xy 152.4 63.5) (xy 152.4 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "821e98c6-6598-4ee4-8d18-1ad937747cc0")
+	)
+	(wire
+		(pts
+			(xy 81.28 173.99) (xy 81.28 172.72)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "834edccd-9eb0-4212-82fc-6502657d81d8")
+	)
+	(wire
+		(pts
+			(xy 100.33 158.75) (xy 102.87 158.75)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "83c53118-6aa1-4b5e-8995-9d5bd5552ffb")
+	)
+	(wire
+		(pts
+			(xy 102.87 73.66) (xy 114.3 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8429fd69-b2c3-4d5d-af0f-c05d6eebfb1e")
+	)
+	(wire
+		(pts
+			(xy 40.64 113.03) (xy 64.77 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "86ba73b0-aca6-420b-830e-ebb674399fb8")
+	)
+	(wire
+		(pts
+			(xy 50.8 66.04) (xy 50.8 78.74)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "86ddf157-62d4-4589-9224-f72e0c493deb")
+	)
+	(wire
+		(pts
+			(xy 77.47 73.66) (xy 74.93 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "87e72152-c68b-49ec-ad50-dfd44e0fe741")
+	)
+	(wire
+		(pts
+			(xy 118.11 76.2) (xy 102.87 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "87e9b90f-2cde-4471-b28c-5f369d8e9eaa")
+	)
+	(wire
+		(pts
+			(xy 215.9 102.87) (xy 215.9 105.41)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "88cebbe9-1639-4854-9b1d-f9f63f86f03a")
+	)
+	(wire
+		(pts
+			(xy 77.47 113.03) (xy 90.17 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8cb715cb-8b29-4987-a0e0-280776588198")
+	)
+	(wire
+		(pts
+			(xy 67.31 156.21) (xy 67.31 172.72)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8eef34a4-99f2-4761-92cd-cef30b8027d3")
+	)
+	(wire
+		(pts
+			(xy 215.9 80.01) (xy 215.9 82.55)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "91160ba6-810f-46b7-a556-35f42a534fa8")
+	)
+	(wire
+		(pts
+			(xy 64.77 105.41) (xy 64.77 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9506ad0d-2569-4aed-bee4-0b9d03f96e0a")
+	)
+	(wire
+		(pts
+			(xy 123.19 166.37) (xy 123.19 172.72)
 		)
 		(stroke
 			(width 0)
@@ -3526,37 +3376,27 @@
 	)
 	(wire
 		(pts
-			(xy 99.06 91.44) (xy 105.41 91.44)
+			(xy 114.3 92.71) (xy 114.3 95.25)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "9c280a8b-5836-4677-8ba1-d54f532f4772")
+		(uuid "9c68fdd0-e003-4943-b853-d02fff4169c2")
 	)
 	(wire
 		(pts
-			(xy 116.84 76.2) (xy 116.84 66.04)
+			(xy 102.87 71.12) (xy 124.46 71.12)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "a045e0e9-7272-4d5d-9366-8340f656e883")
+		(uuid "a082adfc-776e-4f3b-b544-975241a1f065")
 	)
 	(wire
 		(pts
-			(xy 118.11 68.58) (xy 118.11 78.74)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a07bafd1-844f-4694-9dff-28315f245c6b")
-	)
-	(wire
-		(pts
-			(xy 71.12 118.11) (xy 73.66 118.11)
+			(xy 72.39 153.67) (xy 74.93 153.67)
 		)
 		(stroke
 			(width 0)
@@ -3566,67 +3406,17 @@
 	)
 	(wire
 		(pts
-			(xy 260.35 41.91) (xy 269.24 41.91)
+			(xy 62.23 76.2) (xy 64.77 76.2)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "a19c24d2-fb85-4b89-bf46-77900dcdd06b")
+		(uuid "a8ff5cf5-d682-49c6-925f-596b2b7be256")
 	)
 	(wire
 		(pts
-			(xy 262.89 45.72) (xy 260.35 45.72)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a37e3abe-d97e-4e49-a5ba-0348efabfbcb")
-	)
-	(wire
-		(pts
-			(xy 105.41 91.44) (xy 115.57 91.44)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a3eccc50-3c81-4ccf-b565-cd578345a559")
-	)
-	(wire
-		(pts
-			(xy 215.9 74.93) (xy 215.9 72.39)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a7928c68-4ed5-46ff-b6c0-1a201f8ad203")
-	)
-	(wire
-		(pts
-			(xy 245.11 45.72) (xy 245.11 43.18)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a9b24290-9d77-4622-8292-c630ce43ce73")
-	)
-	(wire
-		(pts
-			(xy 215.9 100.33) (xy 215.9 97.79)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ab9a2f4f-d42b-41a6-8af7-fda482e8db1e")
-	)
-	(wire
-		(pts
-			(xy 63.5 118.11) (xy 71.12 118.11)
+			(xy 64.77 153.67) (xy 72.39 153.67)
 		)
 		(stroke
 			(width 0)
@@ -3636,37 +3426,37 @@
 	)
 	(wire
 		(pts
-			(xy 66.04 48.26) (xy 66.04 50.8)
+			(xy 64.77 76.2) (xy 77.47 76.2)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "ae2c4540-eae5-48dd-8259-e34f30ea3675")
+		(uuid "b0b94391-4a18-4dec-b5fc-73e4f215d9a9")
 	)
 	(wire
 		(pts
-			(xy 175.26 44.45) (xy 177.8 44.45)
+			(xy 57.15 49.53) (xy 118.11 49.53)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "b0589f57-8c45-466a-b289-d4ba6a9b05e2")
+		(uuid "b113498f-f91e-434d-86c5-54e2afe67b13")
 	)
 	(wire
 		(pts
-			(xy 66.04 53.34) (xy 66.04 55.88)
+			(xy 105.41 68.58) (xy 105.41 95.25)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "b3f590dd-008d-4537-8aaf-047e586eb852")
+		(uuid "b3d474c7-8920-49af-b510-73961c278f30")
 	)
 	(wire
 		(pts
-			(xy 66.04 137.16) (xy 71.12 137.16)
+			(xy 67.31 172.72) (xy 72.39 172.72)
 		)
 		(stroke
 			(width 0)
@@ -3676,7 +3466,7 @@
 	)
 	(wire
 		(pts
-			(xy 101.6 123.19) (xy 109.22 123.19)
+			(xy 102.87 158.75) (xy 110.49 158.75)
 		)
 		(stroke
 			(width 0)
@@ -3686,73 +3476,33 @@
 	)
 	(wire
 		(pts
-			(xy 118.11 78.74) (xy 144.78 78.74)
+			(xy 57.15 59.69) (xy 57.15 68.58)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "b98a19e3-9667-4245-91ee-28d8bd734216")
+		(uuid "b67f8213-8e26-4c61-a72f-c43ff37ef73d")
 	)
 	(wire
 		(pts
-			(xy 115.57 60.96) (xy 115.57 91.44)
+			(xy 215.9 100.33) (xy 215.9 102.87)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "b9d81dcb-7cd7-4bd0-88ea-94e0a9530e08")
+		(uuid "bc95ec76-fa18-48fc-ae6f-4c9959455b95")
 	)
 	(wire
 		(pts
-			(xy 215.9 77.47) (xy 215.9 74.93)
+			(xy 215.9 82.55) (xy 215.9 85.09)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "bc6c55fb-caaa-43ef-be41-ee4d065db628")
-	)
-	(wire
-		(pts
-			(xy 260.35 45.72) (xy 260.35 43.18)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "be10167a-979d-48a4-a391-27fff43d7b88")
-	)
-	(wire
-		(pts
-			(xy 215.9 69.85) (xy 215.9 67.31)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "be109e8e-d20a-444b-b333-041a5c402379")
-	)
-	(wire
-		(pts
-			(xy 66.04 68.58) (xy 118.11 68.58)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c0455d0d-d113-4420-9ef9-6a323657e1f8")
-	)
-	(wire
-		(pts
-			(xy 81.28 88.9) (xy 81.28 73.66)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c195c7ca-25d2-45ad-941d-684af19c2e8f")
+		(uuid "c2b6761b-1397-435c-8749-1c85fcb9283b")
 	)
 	(wire
 		(pts
@@ -3766,27 +3516,37 @@
 	)
 	(wire
 		(pts
-			(xy 66.04 78.74) (xy 118.11 78.74)
+			(xy 215.9 85.09) (xy 215.9 87.63)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "cbd767f7-2606-418a-9847-256082761015")
+		(uuid "c81be300-350a-4c0b-918a-25dc30004eaa")
 	)
 	(wire
 		(pts
-			(xy 66.04 81.28) (xy 105.41 81.28)
+			(xy 90.17 86.36) (xy 90.17 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "cf9cf11f-34fd-4f5f-a736-c16087f07772")
+		(uuid "cea65fe3-ca35-483e-a35f-ac90281fba45")
 	)
 	(wire
 		(pts
-			(xy 71.12 133.35) (xy 71.12 137.16)
+			(xy 71.12 92.71) (xy 114.3 92.71)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "cf87fbc3-532f-456e-8f3c-bdd4de58f452")
+	)
+	(wire
+		(pts
+			(xy 72.39 168.91) (xy 72.39 172.72)
 		)
 		(stroke
 			(width 0)
@@ -3796,27 +3556,17 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 105.41) (xy 215.9 102.87)
+			(xy 77.47 71.12) (xy 71.12 71.12)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "d929f737-89b9-4c31-9bd1-88ea76ca09dd")
+		(uuid "d5f79974-2eff-4ad7-8c75-1597a77c22ae")
 	)
 	(wire
 		(pts
-			(xy 144.78 78.74) (xy 156.21 78.74)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d9bd59f7-1b0d-4be8-afb3-f6a193ea6f44")
-	)
-	(wire
-		(pts
-			(xy 215.9 95.25) (xy 215.9 92.71)
+			(xy 215.9 90.17) (xy 215.9 92.71)
 		)
 		(stroke
 			(width 0)
@@ -3826,17 +3576,37 @@
 	)
 	(wire
 		(pts
-			(xy 68.58 99.06) (xy 73.66 99.06)
+			(xy 215.9 67.31) (xy 215.9 69.85)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "e09b4b23-e016-46eb-943b-7a81653f1ff9")
+		(uuid "dbba0382-bd1c-49ed-a7ff-2554ecaebdb1")
 	)
 	(wire
 		(pts
-			(xy 71.12 118.11) (xy 71.12 125.73)
+			(xy 105.41 63.5) (xy 102.87 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "de03ac7a-9f99-41b3-aa69-497cee76f794")
+	)
+	(wire
+		(pts
+			(xy 50.8 49.53) (xy 57.15 49.53)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "def9c079-47c7-42ca-8e98-a5ed932ac12f")
+	)
+	(wire
+		(pts
+			(xy 72.39 153.67) (xy 72.39 161.29)
 		)
 		(stroke
 			(width 0)
@@ -3846,7 +3616,17 @@
 	)
 	(wire
 		(pts
-			(xy 80.01 137.16) (xy 121.92 137.16)
+			(xy 64.77 76.2) (xy 64.77 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e350d981-6be2-4cf9-8dce-6a4764ff9622")
+	)
+	(wire
+		(pts
+			(xy 81.28 172.72) (xy 123.19 172.72)
 		)
 		(stroke
 			(width 0)
@@ -3856,96 +3636,86 @@
 	)
 	(wire
 		(pts
-			(xy 99.06 83.82) (xy 66.04 83.82)
+			(xy 40.64 63.5) (xy 40.64 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "ec105570-1543-4fcc-9ded-718ae4b5aa2f")
+		(uuid "e9bba38a-753e-4b00-a23d-41cea4d2ea8c")
 	)
 	(wire
 		(pts
-			(xy 215.9 113.03) (xy 215.9 110.49)
+			(xy 215.9 69.85) (xy 215.9 72.39)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "ed9a0f91-f708-470c-a704-f4a78027c592")
+		(uuid "eab96410-6a2f-4cf4-af6d-137004f41d77")
 	)
 	(wire
 		(pts
-			(xy 144.78 78.74) (xy 144.78 80.01)
+			(xy 90.17 58.42) (xy 105.41 58.42)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f27edba6-613f-4ff6-a380-194e4571b1ff")
+		(uuid "ef1efb71-320a-420a-8915-1a717f11cf7a")
 	)
 	(wire
 		(pts
-			(xy 215.9 46.99) (xy 226.06 46.99)
+			(xy 105.41 58.42) (xy 105.41 63.5)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f338d436-82f8-4934-86c3-d216a8800cef")
+		(uuid "f3d54e84-8cc5-49c5-9634-598beb6a8cdf")
 	)
 	(wire
 		(pts
-			(xy 66.04 60.96) (xy 105.41 60.96)
+			(xy 105.41 63.5) (xy 152.4 63.5)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f5006e0b-4c30-4eed-9de8-f0ef6a9c15f6")
+		(uuid "f6569faa-2608-47ab-9c02-1b046bae58e8")
 	)
 	(wire
 		(pts
-			(xy 66.04 86.36) (xy 68.58 86.36)
+			(xy 64.77 113.03) (xy 77.47 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f733dbf5-4af5-42cb-a020-c6d2bd454aff")
+		(uuid "fbb05194-cf54-44a7-8760-532771fb8d84")
 	)
 	(wire
 		(pts
-			(xy 215.9 87.63) (xy 215.9 85.09)
+			(xy 215.9 107.95) (xy 215.9 110.49)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "fe7c7c3b-e5ac-4172-9836-28ecba3dddd5")
+		(uuid "fea5cf7c-615e-4c6c-9599-53890919ab83")
 	)
-	(wire
-		(pts
-			(xy 243.84 45.72) (xy 245.11 45.72)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ffea7dec-0267-406c-974e-3ddadb9fe600")
-	)
-	(label "VBUSx"
-		(at 115.57 91.44 180)
+	(label "CC1x"
+		(at 57.15 59.69 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right bottom)
+			(justify left bottom)
 		)
-		(uuid "21b44a07-db8c-4356-bce7-031a16e4796f")
+		(uuid "17aead63-7a7e-4a3e-8a4d-fbe57ef499b5")
 	)
 	(label "ILIMx"
-		(at 116.84 120.65 0)
+		(at 118.11 156.21 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -3955,17 +3725,17 @@
 		(uuid "2f9b5938-ed66-4e6e-b7bf-d009e775a9f9")
 	)
 	(label "CC2x"
-		(at 92.71 71.12 180)
+		(at 118.11 59.69 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right bottom)
+			(justify left bottom)
 		)
-		(uuid "5dd80440-4da5-4d11-ad80-4deb96e501aa")
+		(uuid "77427d9b-a17f-480d-a020-59ce2d56c593")
 	)
 	(label "VBUSx"
-		(at 105.41 118.11 0)
+		(at 106.68 153.67 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -3974,29 +3744,19 @@
 		)
 		(uuid "88eda53b-e928-407d-990e-be29597d2667")
 	)
-	(label "CC1x"
-		(at 92.71 81.28 180)
+	(label "VBUSx"
+		(at 142.24 49.53 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify right bottom)
 		)
-		(uuid "8f4fa414-9e91-4f29-81db-dd8c26ae2f8c")
-	)
-	(label "VCCx"
-		(at 226.06 46.99 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "d04043e8-aaca-403a-8b74-8119f30e78a9")
+		(uuid "9f4bac2b-1f24-443b-876e-8b8497b788d3")
 	)
 	(hierarchical_label "5V"
 		(shape input)
-		(at 63.5 118.11 180)
+		(at 64.77 153.67 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4007,7 +3767,7 @@
 	)
 	(hierarchical_label "nOCSx"
 		(shape input)
-		(at 109.22 123.19 0)
+		(at 110.49 158.75 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4016,53 +3776,31 @@
 		)
 		(uuid "122d7bc2-623b-4efa-9ba1-cea41ab22a3c")
 	)
-	(hierarchical_label "USBDNx_D-"
+	(hierarchical_label "VCC"
 		(shape input)
-		(at 156.21 66.04 0)
+		(at 226.06 64.77 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left)
 		)
-		(uuid "15f6ed53-cb44-48bf-8adb-4ed535fee01f")
+		(uuid "3be86c66-6d2f-481b-863e-759fbc476ef1")
 	)
-	(hierarchical_label "PRTPWRx"
+	(hierarchical_label "SERVOx_BOOT0{slash}STOP"
 		(shape input)
-		(at 175.26 44.45 180)
+		(at 62.23 76.2 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify right)
 		)
-		(uuid "273eb884-0ecc-4be4-b4c2-ef3b6012faba")
-	)
-	(hierarchical_label "VCC"
-		(shape input)
-		(at 269.24 41.91 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "3b729a98-2ae8-43c6-a5da-f2ee91dc112c")
-	)
-	(hierarchical_label "USBDNx_D+"
-		(shape input)
-		(at 156.21 78.74 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "5a82c6d4-c203-4f90-84b9-36cc08e7c36d")
+		(uuid "635ad05f-b3f9-4b85-8423-27225a799918")
 	)
 	(hierarchical_label "3V3"
 		(shape input)
-		(at 104.14 133.35 0)
+		(at 105.41 168.91 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4071,20 +3809,31 @@
 		)
 		(uuid "7193566a-3977-49be-af37-eca965024809")
 	)
-	(hierarchical_label "+Probe-x"
+	(hierarchical_label "USBDNx_D+"
 		(shape input)
-		(at 262.89 45.72 0)
+		(at 125.73 73.66 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left)
 		)
-		(uuid "7c892348-15e2-42b2-b47b-511ac4e5713f")
+		(uuid "9d42358d-113c-4c05-b512-b2ac9bde9edc")
+	)
+	(hierarchical_label "SERVOx_NRST"
+		(shape input)
+		(at 128.27 68.58 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "a07b9562-7994-4b6a-986e-efab5268f943")
 	)
 	(hierarchical_label "PRTPWRx"
 		(shape input)
-		(at 59.69 123.19 180)
+		(at 60.96 158.75 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4093,365 +3842,20 @@
 		)
 		(uuid "a35658da-c9b6-4f94-a7e5-5e20e5901b00")
 	)
-	(hierarchical_label "SERVOx_NRST"
+	(hierarchical_label "USBDNx_D-"
 		(shape input)
-		(at 82.55 63.5 0)
+		(at 125.73 71.12 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left)
 		)
-		(uuid "a7086259-dbec-45bd-977f-7a378ac382f3")
-	)
-	(hierarchical_label "SERVOx_BOOT0{slash}STOP"
-		(shape input)
-		(at 82.55 73.66 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "e0c1f991-f601-4ce6-b5cd-02d7fb5f581a")
-	)
-	(hierarchical_label "-Probe-x"
-		(shape input)
-		(at 243.84 45.72 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "e5d44cd8-fa99-4879-aaf3-eac65dbc10b3")
-	)
-	(symbol
-		(lib_id "Library:FPC-05F-20PH20 Connector 20P 0.5mm spacing FPC")
-		(at 209.55 87.63 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "0d4ac30a-dcd6-48d4-9d73-9f957fefceb0")
-		(property "Reference" "FPC1"
-			(at 199.898 89.408 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" ""
-			(at 209.55 87.63 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Library:FPC-SMD_20P-P0.50_XUNPU_FPC-05F-20PH20"
-			(at 209.042 137.16 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-20PH20/3056901.html"
-			(at 209.55 130.81 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Locking Feature:Hinged Lid Contact Type:Surface Mount Number of Contacts:20P Pitch:0.5mm Mounting Type:Bottom Contact FFC, FCB Thickness:0.3mm FFC, FCB Thickness:0.3mm Height Above Board:2mm Contact Material:Phosphor Bronze Contact Plating:Tin Operating T"
-			(at 209.55 143.51 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "FPC-05F-20PH20"
-			(at 199.898 87.63 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "XUNPU(讯普)"
-			(at 209.55 150.368 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C2856803"
-			(at 209.55 154.432 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 209.55 156.718 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "翻盖式 卧贴 P数:20P 间距:0.5mm"
-			(at 209.55 147.828 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part #" "C2856803"
-			(at 199.898 86.106 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "10"
-			(uuid "e68af611-3586-4553-b2ba-30aaa1a88067")
-		)
-		(pin "1"
-			(uuid "9d489ee0-94c5-4500-b0e7-6f6476087b49")
-		)
-		(pin "2"
-			(uuid "f9013d08-eb0f-4731-b33e-b755bb5ee61c")
-		)
-		(pin "3"
-			(uuid "2d95b89b-248a-46dc-aec0-5ca3580398ec")
-		)
-		(pin "4"
-			(uuid "d0156a65-7292-48c2-9fd8-15aa66bb2e04")
-		)
-		(pin "5"
-			(uuid "029795ec-d858-4c9c-9266-4ba241174baa")
-		)
-		(pin "6"
-			(uuid "0a4de316-902b-45f0-a79b-815be941cc5f")
-		)
-		(pin "7"
-			(uuid "66b1abe8-f616-4ff7-9cf4-a1638d05a65b")
-		)
-		(pin "8"
-			(uuid "d4ff1412-f70b-4502-9c7a-5569502a75af")
-		)
-		(pin "9"
-			(uuid "f3c6a529-a2eb-42fd-a487-67b7a749887f")
-		)
-		(pin "19"
-			(uuid "ca4c69ce-dc2e-428f-a768-62d874f6d779")
-		)
-		(pin "11"
-			(uuid "d60d9da2-ba07-48c7-b5ce-60f030e89785")
-		)
-		(pin "14"
-			(uuid "bfa1ee43-1029-4e89-9552-3c708b05c5a7")
-		)
-		(pin "20"
-			(uuid "46cc1b17-446a-4313-8714-03272663095a")
-		)
-		(pin "18"
-			(uuid "c91abbdd-90d5-4bdf-a737-c88b353cc7d3")
-		)
-		(pin "17"
-			(uuid "88360be9-4c5b-4499-b1ef-dab6cc1ba34d")
-		)
-		(pin "22"
-			(uuid "5eea26d0-7489-4b0b-8511-f73acd56961c")
-		)
-		(pin "16"
-			(uuid "77fd53a3-317d-48c9-9f25-dbae62ae0786")
-		)
-		(pin "15"
-			(uuid "ee345807-6459-4519-9880-375c356cf5ec")
-		)
-		(pin "21"
-			(uuid "227e27f3-c594-4ee3-945e-c9a8ff8ca32f")
-		)
-		(pin "13"
-			(uuid "abc8309d-40d0-4d0b-8194-fb389d563a7b")
-		)
-		(pin "12"
-			(uuid "a3dabcdb-02df-4734-b1dc-158f186dc62e")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "FPC1")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "FPC4")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "FPC5")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "FPC2")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "FPC3")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "FPC6")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GND")
-		(at 68.58 100.33 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "168c70e8-25ce-4d41-a813-629b33761f96")
-		(property "Reference" "#PWR07"
-			(at 68.58 106.68 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "GND"
-			(at 68.58 105.41 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 68.58 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 68.58 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 68.58 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "a994b5bc-caad-4d51-9486-1c150b545370")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "#PWR07")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "#PWR056")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "#PWR061")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "#PWR019")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "#PWR047")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "#PWR071")
-					(unit 1)
-				)
-			)
-		)
+		(uuid "cf3815bd-72ef-436a-968a-cb23274d869c")
 	)
 	(symbol
 		(lib_id "Library:0402WGF1004TCE Resistor 1MΩ")
-		(at 81.28 93.98 90)
+		(at 105.41 100.33 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -4460,9 +3864,9 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "26ef92aa-6b60-4029-9c79-051b76508652")
+		(uuid "208112bf-a374-4bc6-bc9a-d0091b619eb2")
 		(property "Reference" "R103"
-			(at 81.28 93.98 0)
+			(at 105.41 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4472,7 +3876,7 @@
 			)
 		)
 		(property "Value" "1MΩ"
-			(at 79.248 93.98 0)
+			(at 103.378 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4482,7 +3886,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0402"
-			(at 105.664 93.98 0)
+			(at 129.794 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4493,7 +3897,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0402WGF1004TCE/26826.html"
-			(at 94.996 93.98 0)
+			(at 119.126 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4504,7 +3908,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:1MΩ Tolerance:±1% Tolerance:±1% Power(Watts):62.5mW Voltage-Supply(Max):50V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 102.108 93.98 0)
+			(at 126.238 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4515,7 +3919,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0402WGF1004TCE"
-			(at 83.058 93.98 0)
+			(at 107.188 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4525,7 +3929,7 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 99.314 93.98 0)
+			(at 123.444 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4536,7 +3940,7 @@
 			)
 		)
 		(property "Supplier Part" "C26083"
-			(at 92.202 93.98 0)
+			(at 116.332 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4547,7 +3951,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 90.17 93.98 0)
+			(at 114.3 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4558,7 +3962,7 @@
 			)
 		)
 		(property "LCSC Part Name" "1MΩ ±1% 62.5mW 厚膜电阻"
-			(at 108.966 93.98 0)
+			(at 133.096 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4569,7 +3973,7 @@
 			)
 		)
 		(property "LCSC Part #" "C26083"
-			(at 84.328 93.98 0)
+			(at 108.458 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4579,23 +3983,19 @@
 			)
 		)
 		(pin "1"
-			(uuid "01fab3e5-8fc9-4674-8999-198160f9d8ec")
+			(uuid "ada1495a-d396-4bda-9b24-5b98d94ad3ad")
 		)
 		(pin "2"
-			(uuid "9e4f4b77-2710-434f-a9ac-c0ea0b42ee80")
+			(uuid "fe217411-ffa7-4fac-8075-c40442a49405")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "R103")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
 					(reference "R106")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "R107")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
@@ -4606,16 +4006,12 @@
 					(reference "R105")
 					(unit 1)
 				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "R108")
-					(unit 1)
-				)
 			)
 		)
 	)
 	(symbol
-		(lib_id "Library:0402WGF2002TCE Resistor 20kΩ")
-		(at 121.92 125.73 90)
+		(lib_id "power:GND")
+		(at 90.17 113.03 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -4624,9 +4020,99 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "485bb5bb-45a4-49b5-84bc-fc15be2c43c6")
-		(property "Reference" "R35"
-			(at 121.92 125.73 0)
+		(uuid "226350bd-0d9a-4aa8-8685-e1dcc4c2df70")
+		(property "Reference" "#PWR037"
+			(at 90.17 119.38 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 90.17 118.11 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 90.17 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 90.17 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 90.17 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6f25c30e-6927-4ff6-bc27-3410c2bc2159")
+		)
+		(instances
+			(project "extender-cable-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
+					(reference "#PWR037")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
+					(reference "#PWR040")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
+					(reference "#PWR038")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
+					(reference "#PWR039")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Library:TC-005_C6332285 male USB-C plug")
+		(at 90.17 72.39 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "230b9c21-1332-4fbc-b4c0-5dc82e7b55b2")
+		(property "Reference" "USB1"
+			(at 90.17 70.358 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4635,8 +4121,52 @@
 				)
 			)
 		)
-		(property "Value" "20kΩ"
-			(at 119.634 125.73 0)
+		(property "Value" ""
+			(at 90.17 72.39 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Library:USB-C-SMD_TC-005"
+			(at 90.17 101.346 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://item.szlcsc.com/datasheet/TC-005/7280525.html"
+			(at 90.17 103.886 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 90.17 72.39 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part" "TC-005"
+			(at 90.17 72.39 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4645,8 +4175,8 @@
 				)
 			)
 		)
-		(property "Footprint" "Library:R0402"
-			(at 134.62 125.73 0)
+		(property "Manufacturer" "HANBO(汉博)"
+			(at 90.17 110.236 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4656,51 +4186,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://atta.szlcsc.com/upload/public/pdf/source/20200306/C422600_1E6D84923E4A46A82E41ADD87F860B5C.pdf"
-			(at 103.378 125.73 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Type:Thick Film Resistors Resistance:20kΩ Tolerance:±1% Tolerance:±1% Power(Watts): Overload Voltage (Max): Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature Range:-55°C~+155°C Operating Temperature Range:-55°C~+155°C"
-			(at 105.918 125.73 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "0402WGF2002TCE"
-			(at 123.698 125.73 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 99.06 125.73 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C25765"
-			(at 96.266 125.73 0)
+		(property "Supplier Part" "C6332285"
+			(at 90.17 107.442 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4711,7 +4198,211 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 94.234 125.73 0)
+			(at 90.17 120.142 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part Name" "Type-C 公 立贴"
+			(at 90.17 114.3 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part #" "C6332285"
+			(at 90.17 74.168 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(pin "A1"
+			(uuid "ba06df3c-cdc6-404b-977b-9fc28b705072")
+		)
+		(pin "A7"
+			(uuid "e211478d-b6a2-4911-bdbb-31c3001e6c9d")
+		)
+		(pin "B6"
+			(uuid "56f2bfff-544c-424f-a3a2-b00dd896fdf5")
+		)
+		(pin "A4"
+			(uuid "f3276464-82a0-4844-b7bb-0b6efa7c1b29")
+		)
+		(pin "B8"
+			(uuid "e2ee4a0a-924e-4004-9758-c79b1203fe55")
+		)
+		(pin "2"
+			(uuid "cabaca01-8db9-4eae-b245-d53de2c314b2")
+		)
+		(pin "B1"
+			(uuid "4a9039ad-9ff0-4fb5-835a-09fab85b63fd")
+		)
+		(pin "A5"
+			(uuid "b30d1f05-26b6-4104-bcbb-983955f98981")
+		)
+		(pin "B7"
+			(uuid "835a0bde-8afc-4b12-a115-d28c34928378")
+		)
+		(pin "B12"
+			(uuid "7f6e55f5-be01-4e91-9f97-c621c7b9dc8a")
+		)
+		(pin "1"
+			(uuid "1cd359f4-fa2c-474c-81b1-5541a1c99b8c")
+		)
+		(pin "A6"
+			(uuid "9eb08ddc-2a2d-406a-a6d8-d6364466ff03")
+		)
+		(pin "A8"
+			(uuid "b6369393-546b-4492-933b-68cb44725e47")
+		)
+		(pin "B5"
+			(uuid "fce769ab-db14-46f0-8b7e-eb84fc9e9001")
+		)
+		(pin "A12"
+			(uuid "d48190bc-18f8-4058-9efd-2a120c3df2e9")
+		)
+		(pin "A9"
+			(uuid "f85ef203-379f-48c0-b7c1-d7ec0f7b9e05")
+		)
+		(pin "B4"
+			(uuid "f379886e-644e-457a-aaa8-67328c7c428d")
+		)
+		(pin "B9"
+			(uuid "b4a281c7-51a3-44e6-9231-80e0279a700d")
+		)
+		(instances
+			(project "extender-cable-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
+					(reference "USB1")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
+					(reference "USB4")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
+					(reference "USB2")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
+					(reference "USB3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Library:0402WGF2002TCE Resistor 20kΩ")
+		(at 123.19 161.29 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "485bb5bb-45a4-49b5-84bc-fc15be2c43c6")
+		(property "Reference" "R35"
+			(at 123.19 161.29 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "20kΩ"
+			(at 120.904 161.29 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(property "Footprint" "Library:R0402"
+			(at 135.89 161.29 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://atta.szlcsc.com/upload/public/pdf/source/20200306/C422600_1E6D84923E4A46A82E41ADD87F860B5C.pdf"
+			(at 104.648 161.29 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Type:Thick Film Resistors Resistance:20kΩ Tolerance:±1% Tolerance:±1% Power(Watts): Overload Voltage (Max): Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature Range:-55°C~+155°C Operating Temperature Range:-55°C~+155°C"
+			(at 107.188 161.29 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part" "0402WGF2002TCE"
+			(at 124.968 161.29 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 0.5 0.5)
+				)
+			)
+		)
+		(property "Manufacturer" "UNI-ROYAL(厚声)"
+			(at 100.33 161.29 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier Part" "C25765"
+			(at 97.536 161.29 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier" "LCSC"
+			(at 95.504 161.29 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4722,7 +4413,7 @@
 			)
 		)
 		(property "LCSC Part Name" "20kΩ ±1% 62.5mW 厚膜电阻"
-			(at 108.204 125.73 0)
+			(at 109.474 161.29 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4733,7 +4424,7 @@
 			)
 		)
 		(property "LCSC Part #" "C25765"
-			(at 124.968 125.73 0)
+			(at 126.238 161.29 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4749,17 +4440,13 @@
 			(uuid "8e4ccb92-0e47-4148-a112-60ca0b1c03be")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "R35")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
 					(reference "R66")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "R67")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
@@ -4770,16 +4457,12 @@
 					(reference "R61")
 					(unit 1)
 				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "R70")
-					(unit 1)
-				)
 			)
 		)
 	)
 	(symbol
-		(lib_id "power:GND")
-		(at 149.86 97.79 0)
+		(lib_id "Library:PSM712-LF-T7 ETV/ESD Diodes")
+		(at 119.38 104.14 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -4788,9 +4471,20 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "6274ad4d-a335-43c9-8e54-1ff4f1b5228e")
-		(property "Reference" "#PWR09"
-			(at 149.86 104.14 0)
+		(uuid "5a57d21a-1419-40cd-a8f9-d4e36b26856e")
+		(property "Reference" "D12"
+			(at 128.27 104.5209 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" ""
+			(at 119.38 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4800,18 +4494,8 @@
 				)
 			)
 		)
-		(property "Value" "GND"
-			(at 149.86 102.87 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 149.86 97.79 0)
+		(property "Footprint" "Library:SOT-23-3_L3.0-W1.7-P0.95-LS2.9-BR"
+			(at 109.474 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4821,8 +4505,8 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
-			(at 149.86 97.79 0)
+		(property "Datasheet" "https://item.szlcsc.com/datasheet/PSM712-LF-T7/33642.html"
+			(at 129.794 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4832,8 +4516,8 @@
 				)
 			)
 		)
-		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 149.86 97.79 0)
+		(property "Description" "Polarity:Unidirectional Reverse Stand-Off Voltage (Vrwm):12V Clamping Voltage:19V Peak Pulse Current (Ipp):34A@8/20us；30A@8/20us Peak Pulse Power Dissipation (Ppp):600W@8/20us Voltage - Breakdown:13.3V Reverse Leakage Current (Ir):1uA；20uA Operating Tempe"
+			(at 140.97 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4843,105 +4527,8 @@
 				)
 			)
 		)
-		(pin "1"
-			(uuid "d9200748-056c-4134-b985-5ec68da62517")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "#PWR09")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "#PWR059")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "#PWR068")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "#PWR045")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "#PWR051")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "#PWR074")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:CL10A105KB8NNNC Capacitor 1uF")
-		(at 71.12 129.54 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "69ea9967-6a22-4772-a90e-878685eaed33")
-		(property "Reference" "C15"
-			(at 68.072 127.762 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "1uF"
-			(at 68.072 132.334 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:C0603"
-			(at 78.74 129.54 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/CL10A105KB8NNNC/16531.html"
-			(at 65.024 129.54 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Capacitance:1uF Tolerance:±10% Tolerance:±10% Voltage Rating:50V Temperature Coefficient:X5R"
-			(at 62.992 129.54 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "CL10A105KB8NNNC"
-			(at 73.914 129.54 0)
+		(property "Manufacturer Part" "PSM712-LF-T7"
+			(at 120.142 107.188 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4950,8 +4537,8 @@
 				)
 			)
 		)
-		(property "Manufacturer" "SAMSUNG(三星)"
-			(at 55.88 129.54 0)
+		(property "Manufacturer" "PROTEK"
+			(at 137.668 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4961,8 +4548,8 @@
 				)
 			)
 		)
-		(property "Supplier Part" "C15849"
-			(at 53.594 129.54 0)
+		(property "Supplier Part" "C32677"
+			(at 144.78 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4973,7 +4560,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 51.816 129.54 0)
+			(at 146.812 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4983,8 +4570,8 @@
 				)
 			)
 		)
-		(property "LCSC Part Name" "1uF ±10% 50V"
-			(at 60.706 129.54 0)
+		(property "LCSC Part Name" "单向TVS 12V截止 峰值浪涌电流：34A@8/20us 30A@8/20us"
+			(at 132.334 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4994,8 +4581,167 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C15849"
-			(at 75.184 129.54 0)
+		(property "LCSC Part #" "C32677"
+			(at 118.364 107.188 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "49273b52-5c3b-40ea-ac9d-5a7c4dee0f51")
+		)
+		(pin "3"
+			(uuid "b9dd8f06-be10-4d2a-ad40-1a9fd65f1be6")
+		)
+		(pin "2"
+			(uuid "fa7876c1-9a2c-4e3d-be0b-3f94ba4b4d7b")
+		)
+		(instances
+			(project "extender-cable-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
+					(reference "D12")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
+					(reference "D18")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
+					(reference "D14")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
+					(reference "D16")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Library:0603WAF5602T5E Resistor 56kΩ")
+		(at 57.15 54.61 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "67ab213a-137a-44a7-8403-a2aa09b457e3")
+		(property "Reference" "R76"
+			(at 57.15 54.61 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "56kΩ"
+			(at 55.118 54.61 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(property "Footprint" "Library:R0603"
+			(at 83.82 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://item.szlcsc.com/datasheet/0603WAF5602T5E/23933.html"
+			(at 77.724 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Type:Thick Film Resistor Resistance:56kΩ Tolerance:±1% Tolerance:±1% Power(Watts):100mW Voltage-Supply(Max):75V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
+			(at 81.28 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part" "0603WAF5602T5E"
+			(at 58.928 54.61 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 0.5 0.5)
+				)
+			)
+		)
+		(property "Manufacturer" "UNI-ROYAL(厚声)"
+			(at 86.868 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier Part" "C23206"
+			(at 72.136 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier" "LCSC"
+			(at 70.358 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part Name" "56kΩ ±1% 100mW 厚膜电阻"
+			(at 74.93 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part #" "C23206"
+			(at 60.198 54.61 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5005,35 +4751,183 @@
 			)
 		)
 		(pin "2"
-			(uuid "c1fb7202-c66e-4a46-80ab-448e17778022")
+			(uuid "841dd541-ec08-4418-8e43-d4b751d91a01")
 		)
 		(pin "1"
-			(uuid "27bfa797-1948-46dd-97ee-49f94595b600")
+			(uuid "306af6d1-b24f-4112-bb6e-09a95e489f8c")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
+					(reference "R76")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
+					(reference "R81")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
+					(reference "R77")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
+					(reference "R78")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Library:CC0402KRX7R7BB104 Capacitor 100nF")
+		(at 72.39 165.1 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "77b53cfd-01d6-4d3c-827a-76e4eb7c0410")
+		(property "Reference" "C15"
+			(at 70.358 162.052 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "100nF"
+			(at 70.358 168.402 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(property "Footprint" "Library:C0402"
+			(at 81.28 165.1 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://atta.szlcsc.com/upload/public/pdf/source/20211223/9278FD768280B81DDBEF48FA36411A03.pdf"
+			(at 63.754 165.1 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Capacitance: Tolerance:±10% Tolerance:±10% Voltage Rated: Temperature Coefficient:"
+			(at 60.452 165.1 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part" "CC0402KRX7R7BB104"
+			(at 75.184 165.1 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 0.5 0.5)
+				)
+			)
+		)
+		(property "Manufacturer" "YAGEO(国巨)"
+			(at 57.658 165.1 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier Part" "C60474"
+			(at 54.61 165.1 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier" "LCSC"
+			(at 46.228 165.1 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part Name" "100nF ±10% 16V"
+			(at 51.816 165.1 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part #" "C60474"
+			(at 76.454 165.1 0)
+			(show_name no)
+			(do_not_autoplace yes)
+			(effects
+				(font
+					(size 1 1)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "eb52a410-ae19-4a9f-9cba-030a1b55c9f3")
+		)
+		(pin "1"
+			(uuid "07d45032-544d-4c3b-a124-e82e4d6f9d8b")
+		)
+		(instances
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "C15")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "C28")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "C33")
+					(reference "C18")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "C26")
+					(reference "C16")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "C27")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "C40")
+					(reference "C17")
 					(unit 1)
 				)
 			)
@@ -5041,7 +4935,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 80.01 138.43 0)
+		(at 81.28 173.99 0)
 		(mirror y)
 		(unit 1)
 		(body_style 1)
@@ -5052,7 +4946,7 @@
 		(dnp no)
 		(uuid "79e207f6-a274-47fd-b994-2350f1f31f2f")
 		(property "Reference" "#PWR053"
-			(at 80.01 144.78 0)
+			(at 81.28 180.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5063,7 +4957,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 80.01 143.51 0)
+			(at 81.28 179.07 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5073,7 +4967,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 80.01 138.43 0)
+			(at 81.28 173.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5084,7 +4978,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 80.01 138.43 0)
+			(at 81.28 173.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5095,7 +4989,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 80.01 138.43 0)
+			(at 81.28 173.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5109,17 +5003,13 @@
 			(uuid "f8c3b7a8-a443-428f-9b96-70c815f6e674")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "#PWR053")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
 					(reference "#PWR057")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "#PWR062")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
@@ -5130,16 +5020,12 @@
 					(reference "#PWR055")
 					(unit 1)
 				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "#PWR072")
-					(unit 1)
-				)
 			)
 		)
 	)
 	(symbol
 		(lib_id "Library:TPS2553DBVR Active High Overcurrent Protection")
-		(at 86.36 120.65 0)
+		(at 87.63 156.21 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5150,7 +5036,7 @@
 		(fields_autoplaced yes)
 		(uuid "7e65ae75-d20a-4e36-9efe-95efd9ce60c8")
 		(property "Reference" "U7"
-			(at 86.36 120.65 0)
+			(at 87.63 156.21 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5160,7 +5046,7 @@
 			)
 		)
 		(property "Value" ""
-			(at 86.36 120.65 0)
+			(at 87.63 156.21 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5170,7 +5056,7 @@
 			)
 		)
 		(property "Footprint" "Library:SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BR"
-			(at 86.36 149.352 0)
+			(at 87.63 184.912 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5181,7 +5067,7 @@
 			)
 		)
 		(property "Datasheet" "https://www.ti.com/cn/lit/gpn/tps2553"
-			(at 86.36 146.304 0)
+			(at 87.63 181.864 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5192,7 +5078,7 @@
 			)
 		)
 		(property "Description" "Type:High Side Switch Number of Channels:1 Control Input Logic:Active High Maximum Continuous Current:1.5A Voltage - Supply:2.5V~6.5V Voltage - Supply:2.5V~6.5V RDS(on):85mΩ Operating Temperature	-:-40°C~+150°C Operating Temperature	-:-40°C~+150°C Features:Ov"
-			(at 86.36 143.256 0)
+			(at 87.63 178.816 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5203,7 +5089,7 @@
 			)
 		)
 		(property "Manufacturer Part" "TPS2553DBVR"
-			(at 86.36 127 0)
+			(at 87.63 162.56 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5213,7 +5099,7 @@
 			)
 		)
 		(property "Manufacturer" "TI(德州仪器)"
-			(at 86.36 137.668 0)
+			(at 87.63 173.228 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5224,7 +5110,7 @@
 			)
 		)
 		(property "Supplier Part" "C55266"
-			(at 86.36 154.686 0)
+			(at 87.63 190.246 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5235,7 +5121,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 86.36 152.4 0)
+			(at 87.63 187.96 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5246,7 +5132,7 @@
 			)
 		)
 		(property "LCSC Part Name" "精密可调限流电源分配开关"
-			(at 86.36 140.208 0)
+			(at 87.63 175.768 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5257,7 +5143,7 @@
 			)
 		)
 		(property "LCSC Part #" "C55266"
-			(at 86.36 128.524 0)
+			(at 87.63 164.084 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5285,17 +5171,13 @@
 			(uuid "52d53f61-f2de-4156-820b-00434a487b9a")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "U7")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
 					(reference "U28")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "U30")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
@@ -5306,16 +5188,12 @@
 					(reference "U26")
 					(unit 1)
 				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "U32")
-					(unit 1)
-				)
 			)
 		)
 	)
 	(symbol
 		(lib_id "Library:0603WAF5602T5E Resistor 56kΩ")
-		(at 105.41 66.04 90)
+		(at 118.11 54.61 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5324,9 +5202,9 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "8a534ed5-361e-485e-b0a4-c7f02e069b02")
-		(property "Reference" "R76"
-			(at 105.41 66.04 0)
+		(uuid "a02ba0bc-76a9-4903-a9f6-8eded3a0754f")
+		(property "Reference" "R17"
+			(at 118.11 54.61 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5336,7 +5214,7 @@
 			)
 		)
 		(property "Value" "56kΩ"
-			(at 103.378 66.04 0)
+			(at 116.078 54.61 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5346,7 +5224,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0603"
-			(at 132.08 66.04 0)
+			(at 144.78 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5357,7 +5235,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0603WAF5602T5E/23933.html"
-			(at 125.984 66.04 0)
+			(at 138.684 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5368,7 +5246,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:56kΩ Tolerance:±1% Tolerance:±1% Power(Watts):100mW Voltage-Supply(Max):75V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 129.54 66.04 0)
+			(at 142.24 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5379,7 +5257,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0603WAF5602T5E"
-			(at 107.188 66.04 0)
+			(at 119.888 54.61 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5389,7 +5267,7 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 135.128 66.04 0)
+			(at 147.828 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5400,7 +5278,7 @@
 			)
 		)
 		(property "Supplier Part" "C23206"
-			(at 120.396 66.04 0)
+			(at 133.096 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5411,7 +5289,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 118.618 66.04 0)
+			(at 131.318 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5422,7 +5300,7 @@
 			)
 		)
 		(property "LCSC Part Name" "56kΩ ±1% 100mW 厚膜电阻"
-			(at 123.19 66.04 0)
+			(at 135.89 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5433,7 +5311,7 @@
 			)
 		)
 		(property "LCSC Part #" "C23206"
-			(at 108.458 66.04 0)
+			(at 121.158 54.61 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5443,406 +5321,27 @@
 			)
 		)
 		(pin "2"
-			(uuid "45dee856-2bbc-4c80-ad3a-694ad9de17fb")
+			(uuid "0b670102-67ef-4bc5-900a-be2747634004")
 		)
 		(pin "1"
-			(uuid "fbabbb3a-8d64-424b-81dc-6fa74da89434")
+			(uuid "e18ffb59-4a28-42c9-accd-4929dbe77264")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "R76")
+					(reference "R17")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "R87")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "R88")
+					(reference "R20")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "R85")
+					(reference "R18")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "R86")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "R89")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:0603WAF5602T5E Resistor 56kΩ")
-		(at 105.41 86.36 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "8f80cb3a-2922-4e3b-a47b-2acd991a7e97")
-		(property "Reference" "R13"
-			(at 105.41 86.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "56kΩ"
-			(at 103.378 86.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:R0603"
-			(at 132.08 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/0603WAF5602T5E/23933.html"
-			(at 125.984 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Type:Thick Film Resistor Resistance:56kΩ Tolerance:±1% Tolerance:±1% Power(Watts):100mW Voltage-Supply(Max):75V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 129.54 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "0603WAF5602T5E"
-			(at 107.188 86.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 135.128 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C23206"
-			(at 120.396 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 118.618 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "56kΩ ±1% 100mW 厚膜电阻"
-			(at 123.19 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part #" "C23206"
-			(at 108.458 86.36 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "153d87e2-46e3-4fc9-95bd-2b5d39525dab")
-		)
-		(pin "1"
-			(uuid "d43b5a23-e3b3-4d17-86ee-1acb3a69a3d1")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "R13")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "R59")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "R65")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "R28")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "R46")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "R71")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:TYPE-C16PIN USB connector")
-		(at 57.15 67.31 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "a55a456b-b53d-4545-8b70-d3a22330f511")
-		(property "Reference" "USB1"
-			(at 57.15 38.1 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" ""
-			(at 57.15 67.31 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Library:USB-C-SMD_TYPE-C16PIN"
-			(at 57.15 95.25 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/TYPE-C16PIN/372551.html"
-			(at 57.15 101.6 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Connector Type:Type-C Protocol Standard:USB 3.1 Gender:Female Mounting Type:Surface Mount, Right Angle Number of Contacts:16P Number of Ports:1 Current Rating-Power:3A Voltage Rating:30V Connect-Disconnect Life:10,000 Cycles Detection color:Black Operatin"
-			(at 57.15 91.694 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "TYPE-C16PIN"
-			(at 57.15 43.18 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Manufacturer" "SHOU HAN(首韩)"
-			(at 57.15 112.776 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C393939"
-			(at 57.15 122.936 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 57.15 126.746 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "Type-C 母 卧贴"
-			(at 57.15 108.966 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part #" "C393939"
-			(at 57.15 41.402 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "bfd974e7-7029-4ae7-91b1-f7e84b08cc8b")
-		)
-		(pin "4"
-			(uuid "dd08ab8e-edf8-4ae0-bc64-8951abdc1ed6")
-		)
-		(pin "A8"
-			(uuid "c6d4281a-10dc-4f1f-889a-dcf34f52f465")
-		)
-		(pin "B4A9"
-			(uuid "5e85db76-d5b4-46aa-bccd-3adec7004a97")
-		)
-		(pin "A7"
-			(uuid "8b20774b-cf0d-4428-b749-2b5f8ac82243")
-		)
-		(pin "A5"
-			(uuid "a2b6232c-efd4-41e8-95db-4c943b7802f2")
-		)
-		(pin "3"
-			(uuid "12f86431-ab4b-4456-baa2-5b5580c73f07")
-		)
-		(pin "B8"
-			(uuid "7cd3d474-6082-43f0-9a9c-b7ea4999704f")
-		)
-		(pin "A4B9"
-			(uuid "0835c0ca-a8b5-41e1-9e82-0a2cd828e091")
-		)
-		(pin "B7"
-			(uuid "74516b58-acdf-4567-af3c-e0c8fa152355")
-		)
-		(pin "A6"
-			(uuid "4c8a2562-5859-47ef-9a62-0a9efbd3acc0")
-		)
-		(pin "B1A12"
-			(uuid "baec4954-18fe-4eb8-98fd-ec8b93085eb6")
-		)
-		(pin "B6"
-			(uuid "1dfeb7c2-9141-4739-853b-cb3e4aa97b96")
-		)
-		(pin "A1B12"
-			(uuid "8c346b5e-871f-4c24-beaa-8c66e504b163")
-		)
-		(pin "B5"
-			(uuid "478316e1-1b6d-4b72-b430-e5ca17eefa20")
-		)
-		(pin "2"
-			(uuid "92ab9def-8089-4d00-a546-000bb8cdf48b")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "USB1")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "USB4")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "USB5")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "USB2")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "USB3")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "USB6")
+					(reference "R19")
 					(unit 1)
 				)
 			)
@@ -5850,7 +5349,7 @@
 	)
 	(symbol
 		(lib_id "Library:0402WGF1004TCE Resistor 1MΩ")
-		(at 73.66 93.98 90)
+		(at 64.77 100.33 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5859,9 +5358,9 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "b77fdb93-057e-4e26-9ae3-6f586ea10366")
+		(uuid "bd30c952-c57d-461d-ac31-d58ac239223e")
 		(property "Reference" "R96"
-			(at 73.66 93.98 0)
+			(at 64.77 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5871,7 +5370,7 @@
 			)
 		)
 		(property "Value" "1MΩ"
-			(at 71.628 93.98 0)
+			(at 62.738 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5881,7 +5380,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0402"
-			(at 98.044 93.98 0)
+			(at 89.154 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5892,7 +5391,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0402WGF1004TCE/26826.html"
-			(at 87.376 93.98 0)
+			(at 78.486 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5903,7 +5402,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:1MΩ Tolerance:±1% Tolerance:±1% Power(Watts):62.5mW Voltage-Supply(Max):50V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 94.488 93.98 0)
+			(at 85.598 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5914,7 +5413,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0402WGF1004TCE"
-			(at 75.438 93.98 0)
+			(at 66.548 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5924,7 +5423,7 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 91.694 93.98 0)
+			(at 82.804 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5935,7 +5434,7 @@
 			)
 		)
 		(property "Supplier Part" "C26083"
-			(at 84.582 93.98 0)
+			(at 75.692 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5946,7 +5445,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 82.55 93.98 0)
+			(at 73.66 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5957,7 +5456,7 @@
 			)
 		)
 		(property "LCSC Part Name" "1MΩ ±1% 62.5mW 厚膜电阻"
-			(at 101.346 93.98 0)
+			(at 92.456 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5968,7 +5467,7 @@
 			)
 		)
 		(property "LCSC Part #" "C26083"
-			(at 76.708 93.98 0)
+			(at 67.818 100.33 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5978,23 +5477,19 @@
 			)
 		)
 		(pin "1"
-			(uuid "233f9987-6d77-4f51-a638-2661f29779f6")
+			(uuid "c9c826d3-48ce-4c50-b789-036d3c0aa967")
 		)
 		(pin "2"
-			(uuid "0f81fe05-ad21-4093-b66f-54c829ec5672")
+			(uuid "480160c9-bdc3-4a74-bb44-40e6b7225757")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "R96")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
 					(reference "R99")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "R100")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
@@ -6005,283 +5500,12 @@
 					(reference "R98")
 					(unit 1)
 				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "R101")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:PSM712-LF-T7 ETV/ESD Diodes")
-		(at 149.86 88.9 270)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "cd10f54b-7135-48d1-8b80-6d3acd13a93c")
-		(property "Reference" "D1"
-			(at 158.75 89.2809 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" ""
-			(at 149.86 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Library:SOT-23-3_L3.0-W1.7-P0.95-LS2.9-BR"
-			(at 139.954 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/PSM712-LF-T7/33642.html"
-			(at 160.274 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Polarity:Unidirectional Reverse Stand-Off Voltage (Vrwm):12V Clamping Voltage:19V Peak Pulse Current (Ipp):34A@8/20us；30A@8/20us Peak Pulse Power Dissipation (Ppp):600W@8/20us Voltage - Breakdown:13.3V Reverse Leakage Current (Ir):1uA；20uA Operating Tempe"
-			(at 171.45 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "PSM712-LF-T7"
-			(at 150.622 91.948 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "PROTEK"
-			(at 168.148 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C32677"
-			(at 175.26 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 177.292 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "单向TVS 12V截止 峰值浪涌电流：34A@8/20us 30A@8/20us"
-			(at 162.814 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part #" "C32677"
-			(at 148.844 91.948 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "7db917cb-65d5-4db0-a736-d5adf721d9c6")
-		)
-		(pin "3"
-			(uuid "568fd58a-73e8-46d4-b393-aee2ea27fded")
-		)
-		(pin "2"
-			(uuid "3cef23be-a51d-4303-a280-f26838b496be")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "D1")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "D9")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "D10")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "D2")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "D5")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "D11")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GND")
-		(at 118.11 58.42 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "cdfc3af6-4ea4-4dde-9ef7-1312e6757989")
-		(property "Reference" "#PWR08"
-			(at 118.11 64.77 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "GND"
-			(at 118.11 63.5 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 118.11 58.42 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 118.11 58.42 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 118.11 58.42 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "034facf4-a945-4f43-95a8-08626e2d4a99")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "#PWR08")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "#PWR058")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "#PWR067")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "#PWR043")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "#PWR048")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "#PWR073")
-					(unit 1)
-				)
 			)
 		)
 	)
 	(symbol
 		(lib_id "Library:0402WGF1003TCE Resistor 100kΩ")
-		(at 101.6 128.27 90)
+		(at 102.87 163.83 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6292,7 +5516,7 @@
 		(fields_autoplaced yes)
 		(uuid "d2423e29-21c0-4b58-a1a2-883b6cca5304")
 		(property "Reference" "R79"
-			(at 101.6 128.27 0)
+			(at 102.87 163.83 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -6302,7 +5526,7 @@
 			)
 		)
 		(property "Value" "100kΩ"
-			(at 99.568 128.27 0)
+			(at 100.838 163.83 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -6312,7 +5536,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0402"
-			(at 108.966 128.27 0)
+			(at 110.236 163.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6323,7 +5547,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0402WGF1003TCE/26484.html"
-			(at 89.916 128.27 0)
+			(at 91.186 163.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6334,7 +5558,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:100kΩ Tolerance:±1% Tolerance:±1% Power(Watts):62.5mW Voltage-Supply(Max):50V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 92.456 128.27 0)
+			(at 93.726 163.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6345,7 +5569,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0402WGF1003TCE"
-			(at 103.378 128.27 0)
+			(at 104.648 163.83 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -6355,7 +5579,7 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 83.312 128.27 0)
+			(at 84.582 163.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6366,7 +5590,7 @@
 			)
 		)
 		(property "Supplier Part" "C25741"
-			(at 80.264 128.27 0)
+			(at 81.534 163.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6377,7 +5601,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 77.978 128.27 0)
+			(at 79.248 163.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6388,7 +5612,7 @@
 			)
 		)
 		(property "LCSC Part Name" "100kΩ ±1% 62.5mW 厚膜电阻"
-			(at 85.344 128.27 0)
+			(at 86.614 163.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6399,7 +5623,7 @@
 			)
 		)
 		(property "LCSC Part #" "C25741"
-			(at 104.902 128.27 0)
+			(at 106.172 163.83 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -6415,17 +5639,13 @@
 			(uuid "a60e1741-2c1b-4139-aa4c-07f0c83ae165")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "R79")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
 					(reference "R83")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "R84")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
@@ -6436,27 +5656,23 @@
 					(reference "R82")
 					(unit 1)
 				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "R91")
-					(unit 1)
-				)
 			)
 		)
 	)
 	(symbol
-		(lib_id "Library:RLP25FEGMR005 Shunt resistor 5mΩ 1%")
-		(at 252.73 43.18 0)
+		(lib_id "Library:FPC-05F-6PH20 Pattern 20P 0.5mm spacing")
+		(at 208.28 88.9 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "dc5f7109-8525-4c11-a0f3-b64a8990fc08")
-		(property "Reference" "R1"
-			(at 252.73 38.1 0)
+		(uuid "dd473efd-df82-44e4-9638-b543432e3f30")
+		(property "Reference" "FPC1"
+			(at 200.66 88.9 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -6465,18 +5681,8 @@
 				)
 			)
 		)
-		(property "Value" "5mΩ"
-			(at 252.73 40.386 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:R2512 Shunt with Kelvin connections"
-			(at 252.73 56.388 0)
+		(property "Value" ""
+			(at 208.28 88.9 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6486,8 +5692,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://item.szlcsc.com/datasheet/RLP25FEGMR005/370313.html"
-			(at 252.73 33.782 0)
+		(property "Footprint" "Library:FPC-20P-P0.50-Pattern"
+			(at 208.28 134.366 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6497,8 +5703,8 @@
 				)
 			)
 		)
-		(property "Description" "Type:Current Sense Resistor Resistance:5mΩ Tolerance:±1% Tolerance:±1% Voltage Rating:- Power(Watts):3W Current Rating:- Temperature Coefficient:±50ppm/°C Temperature Coefficient:±50ppm/°C Mounting Type:Surface Mount"
-			(at 252.73 31.242 0)
+		(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-6PH20/3056894.html"
+			(at 208.28 131.064 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6508,18 +5714,8 @@
 				)
 			)
 		)
-		(property "Manufacturer Part" "RLP25FEGMR005"
-			(at 252.73 45.974 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "大毅科技"
-			(at 252.73 24.638 0)
+		(property "Description" "Pattern for FPC connector"
+			(at 208.28 138.176 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6529,85 +5725,82 @@
 				)
 			)
 		)
-		(property "Supplier Part" "C393074"
-			(at 252.73 21.082 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
+		(pin "9"
+			(uuid "a78af7a9-b0e9-47a9-9f26-10b9497b6573")
 		)
-		(property "Supplier" "LCSC"
-			(at 252.73 18.288 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
+		(pin "14"
+			(uuid "05b1eff8-9c70-43fc-99bb-47bdc9da6a2b")
 		)
-		(property "LCSC Part Name" "5mΩ ±1% 3W"
-			(at 252.73 27.432 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
+		(pin "17"
+			(uuid "b525bb64-b1f3-4fb5-bfb1-682d5881d67d")
 		)
-		(property "LCSC Part #" "C393074"
-			(at 252.73 47.244 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
+		(pin "16"
+			(uuid "db940ae3-5975-4b29-b495-c9fd35bf6be7")
+		)
+		(pin "20"
+			(uuid "a83b8416-1ae5-491c-8d23-5d7a952c9a6a")
+		)
+		(pin "10"
+			(uuid "bcfb0271-6566-4b75-9eeb-ccfe97e44aa7")
 		)
 		(pin "1"
-			(uuid "967d38e8-c380-4173-ab7b-6ff127df71ea")
+			(uuid "600e4c33-94cc-4de4-bd77-77a773193252")
+		)
+		(pin "13"
+			(uuid "9c28e957-473a-45b7-b47d-1538c6d50d37")
+		)
+		(pin "12"
+			(uuid "c93fde94-223e-4946-8ca5-0f655872da74")
 		)
 		(pin "3"
-			(uuid "39f8c59e-2398-4048-87d4-af8ef826185e")
+			(uuid "ffa96130-03fd-4744-902e-60ceb45476ee")
+		)
+		(pin "7"
+			(uuid "db0bcd5f-a194-4307-9aee-7f958a72ea1c")
+		)
+		(pin "5"
+			(uuid "699967f3-1f27-4942-885c-73915f9a196a")
 		)
 		(pin "4"
-			(uuid "7f3aeba7-0bc1-4a11-8098-98ecc12ccdff")
+			(uuid "29851780-d778-4500-8bad-503a3bf45a79")
 		)
 		(pin "2"
-			(uuid "f8354e62-cfb3-452b-88e4-ecaecdb0cef2")
+			(uuid "cff70c25-41ae-40fc-9099-e7eac84845a6")
+		)
+		(pin "6"
+			(uuid "2776f397-3177-44a1-b151-72547685456a")
+		)
+		(pin "8"
+			(uuid "37fa2546-0c09-4399-be93-c4e604589fc8")
+		)
+		(pin "11"
+			(uuid "6dc5c47d-21ec-4a2b-a554-5382820ee5d0")
+		)
+		(pin "15"
+			(uuid "4e2d3a6f-c018-4cbf-82ff-fa04c08939f3")
+		)
+		(pin "18"
+			(uuid "d160849f-ed1d-4fbd-8259-e03ea6e60642")
+		)
+		(pin "19"
+			(uuid "c62b74fb-9bfa-41f2-8edc-18ddc851dc93")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "R1")
+					(reference "FPC1")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "R4")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "R5")
+					(reference "FPC4")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "R2")
+					(reference "FPC2")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "R3")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "R6")
+					(reference "FPC3")
 					(unit 1)
 				)
 			)
@@ -6682,17 +5875,13 @@
 			(uuid "39343ff5-0510-4962-aae0-a51697449fa6")
 		)
 		(instances
-			(project "master-circuit"
+			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
 					(reference "#PWR041")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
 					(reference "#PWR060")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "#PWR069")
 					(unit 1)
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
@@ -6702,101 +5891,6 @@
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
 					(reference "#PWR052")
 					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "#PWR075")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(sheet
-		(at 177.8 40.64)
-		(size 38.1 7.62)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(stroke
-			(width 0.1524)
-			(type solid)
-		)
-		(fill
-			(color 0 0 0 0)
-		)
-		(uuid "2354809a-451c-4f80-b53f-daac78aedf9f")
-		(property "Sheetname" "back-to-back-mosfets3"
-			(at 177.8 39.9284 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left bottom)
-			)
-		)
-		(property "Sheetfile" "back-to-back-mosfets.kicad_sch"
-			(at 177.8 48.8446 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(pin "CONNECT" input
-			(at 177.8 44.45 180)
-			(uuid "f0241774-e210-4143-be3b-ba084dfe10a0")
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(pin "VIN" input
-			(at 215.9 41.91 0)
-			(uuid "cc1d0b1d-311e-48d4-b7c1-7494a6a32ba3")
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(pin "VOUT" input
-			(at 215.9 46.99 0)
-			(uuid "ea30079f-2d2b-43f3-8780-6fb312bf7c50")
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(page "4")
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(page "7")
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(page "9")
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(page "11")
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(page "13")
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(page "15")
 				)
 			)
 		)
