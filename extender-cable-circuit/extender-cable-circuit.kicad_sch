@@ -5844,6 +5844,12 @@
 		(uuid "605203fa-5cd7-464a-923e-13ef69fc8a53")
 	)
 	(junction
+		(at 490.22 151.13)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "60d28e9f-e5b0-400f-8d47-fafaaf565ffd")
+	)
+	(junction
 		(at 201.93 49.53)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -5896,12 +5902,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "7c075c37-e661-43a7-b90a-e8413e2e1b72")
-	)
-	(junction
-		(at 486.41 151.13)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "7d797b00-f6d1-44ea-8fc8-3e575c6f2bd3")
 	)
 	(junction
 		(at 524.51 191.77)
@@ -6012,18 +6012,6 @@
 		(uuid "b807a65d-e377-4609-976e-f81bedd544a2")
 	)
 	(junction
-		(at 544.83 158.75)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "bb50976d-cf58-47ee-872f-3ea18e5d5d2c")
-	)
-	(junction
-		(at 544.83 171.45)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "bd4612b4-adf7-4f7a-9b8f-551d88256002")
-	)
-	(junction
 		(at 491.49 139.7)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6102,12 +6090,6 @@
 		(uuid "e810912a-355c-47a2-9a62-63f2220a4d27")
 	)
 	(junction
-		(at 441.96 34.29)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "e942468b-ab24-48e3-847e-f233f80c65c1")
-	)
-	(junction
 		(at 497.84 64.77)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6159,7 +6141,7 @@
 	)
 	(wire
 		(pts
-			(xy 474.98 158.75) (xy 544.83 158.75)
+			(xy 474.98 158.75) (xy 477.52 158.75)
 		)
 		(stroke
 			(width 0)
@@ -6239,16 +6221,6 @@
 	)
 	(wire
 		(pts
-			(xy 441.96 36.83) (xy 441.96 34.29)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "08de4f24-00ed-4c36-b150-61a23bc9be43")
-	)
-	(wire
-		(pts
 			(xy 486.41 184.15) (xy 474.98 184.15)
 		)
 		(stroke
@@ -6269,7 +6241,7 @@
 	)
 	(wire
 		(pts
-			(xy 474.98 161.29) (xy 486.41 161.29)
+			(xy 474.98 161.29) (xy 490.22 161.29)
 		)
 		(stroke
 			(width 0)
@@ -6519,7 +6491,7 @@
 	)
 	(wire
 		(pts
-			(xy 441.96 34.29) (xy 444.5 34.29)
+			(xy 431.8 34.29) (xy 444.5 34.29)
 		)
 		(stroke
 			(width 0)
@@ -7379,7 +7351,7 @@
 	)
 	(wire
 		(pts
-			(xy 60.96 300.99) (xy 60.96 299.72)
+			(xy 50.8 300.99) (xy 50.8 299.72)
 		)
 		(stroke
 			(width 0)
@@ -7599,16 +7571,6 @@
 	)
 	(wire
 		(pts
-			(xy 544.83 166.37) (xy 544.83 171.45)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "819c0708-e2a0-4cc3-baa8-28c836d7c5da")
-	)
-	(wire
-		(pts
 			(xy 327.66 207.01) (xy 347.98 207.01)
 		)
 		(stroke
@@ -7616,6 +7578,16 @@
 			(type default)
 		)
 		(uuid "82c96502-78f4-4897-a779-fa6c87186f23")
+	)
+	(wire
+		(pts
+			(xy 63.5 300.99) (xy 63.5 299.72)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8463462d-0818-47df-a4b9-45697ff8db6f")
 	)
 	(wire
 		(pts
@@ -7809,16 +7781,6 @@
 	)
 	(wire
 		(pts
-			(xy 544.83 158.75) (xy 553.72 158.75)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "96836c67-3391-425d-8ff5-b537a860d49e")
-	)
-	(wire
-		(pts
 			(xy 497.84 54.61) (xy 506.73 54.61)
 		)
 		(stroke
@@ -7959,16 +7921,6 @@
 	)
 	(wire
 		(pts
-			(xy 431.8 34.29) (xy 441.96 34.29)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a35dee17-c173-4b99-903f-ad87290f3fb5")
-	)
-	(wire
-		(pts
 			(xy 195.58 46.99) (xy 195.58 49.53)
 		)
 		(stroke
@@ -8006,16 +7958,6 @@
 			(type default)
 		)
 		(uuid "a5b7ec88-b406-4b9b-b023-184ae25b57bc")
-	)
-	(wire
-		(pts
-			(xy 49.53 299.72) (xy 49.53 300.99)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a75bb11c-8db9-4f2f-94b4-dc6160e65be7")
 	)
 	(wire
 		(pts
@@ -8259,16 +8201,6 @@
 	)
 	(wire
 		(pts
-			(xy 486.41 151.13) (xy 516.89 151.13)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "bd8bebc2-14c5-452b-a7e0-a50124ad2e6f")
-	)
-	(wire
-		(pts
 			(xy 506.73 46.99) (xy 471.17 46.99)
 		)
 		(stroke
@@ -8479,16 +8411,6 @@
 	)
 	(wire
 		(pts
-			(xy 267.97 36.83) (xy 271.78 36.83)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d1a94a0d-e831-4327-9d6c-d002f9a2729e")
-	)
-	(wire
-		(pts
 			(xy 373.38 199.39) (xy 378.46 199.39)
 		)
 		(stroke
@@ -8669,6 +8591,16 @@
 	)
 	(wire
 		(pts
+			(xy 490.22 151.13) (xy 516.89 151.13)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e227c4fa-b703-4dac-adee-e99f11a67cc3")
+	)
+	(wire
+		(pts
 			(xy 480.06 201.93) (xy 474.98 201.93)
 		)
 		(stroke
@@ -8719,7 +8651,7 @@
 	)
 	(wire
 		(pts
-			(xy 480.06 151.13) (xy 486.41 151.13)
+			(xy 480.06 151.13) (xy 490.22 151.13)
 		)
 		(stroke
 			(width 0)
@@ -8799,7 +8731,7 @@
 	)
 	(wire
 		(pts
-			(xy 240.03 36.83) (xy 243.84 36.83)
+			(xy 240.03 36.83) (xy 271.78 36.83)
 		)
 		(stroke
 			(width 0)
@@ -9008,12 +8940,12 @@
 		(uuid "62ab28f5-ade1-4af3-89de-f3c6f378c032")
 	)
 	(label "RBIAS"
-		(at 481.33 161.29 0)
+		(at 490.22 161.29 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "6c6be348-cac7-4c42-9493-ac6645c8073b")
 	)
@@ -9046,6 +8978,16 @@
 			(justify left bottom)
 		)
 		(uuid "cba55b00-82a0-4f6c-abfb-e4587d2d92be")
+	)
+	(label "3V3-before-filter"
+		(at 243.84 36.83 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "d01227e6-2a4d-47e5-850e-976259aaa902")
 	)
 	(label "CC2"
 		(at 130.81 144.78 0)
@@ -9125,7 +9067,7 @@
 			)
 		)
 	)
-	(global_label "5V"
+	(global_label "VBUS"
 		(shape input)
 		(at 187.96 36.83 180)
 		(fields_autoplaced yes)
@@ -9146,30 +9088,6 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
-			)
-		)
-	)
-	(global_label "3V3A"
-		(shape input)
-		(at 49.53 299.72 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "078b9043-96e1-4549-a8b2-e814f8e4d386")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 57.1114 299.72 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
 			)
 		)
 	)
@@ -9485,7 +9403,7 @@
 			)
 		)
 	)
-	(global_label "5V"
+	(global_label "VBUS"
 		(shape input)
 		(at 209.55 204.47 180)
 		(fields_autoplaced yes)
@@ -9509,9 +9427,9 @@
 			)
 		)
 	)
-	(global_label "3V3A"
+	(global_label "3V3"
 		(shape input)
-		(at 553.72 158.75 0)
+		(at 477.52 158.75 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -9521,7 +9439,7 @@
 		)
 		(uuid "19eb62a3-891a-49f7-bebf-346b4a994056")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 561.3014 158.75 0)
+			(at 484.0128 158.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9677,7 +9595,7 @@
 			)
 		)
 	)
-	(global_label "3V3A"
+	(global_label "3V3"
 		(shape input)
 		(at 342.9 168.91 180)
 		(fields_autoplaced yes)
@@ -9689,7 +9607,7 @@
 		)
 		(uuid "3865a131-a07f-403b-83c2-fd5a7cbd0d99")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 335.3186 168.91 0)
+			(at 336.4072 168.91 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9797,30 +9715,6 @@
 			)
 		)
 	)
-	(global_label "3V3"
-		(shape input)
-		(at 243.84 36.83 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "41b64398-1474-4806-bc6d-80de1d23228f")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 250.3328 36.83 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
 	(global_label "USBDN1_D-"
 		(shape input)
 		(at 257.81 166.37 0)
@@ -9917,7 +9811,7 @@
 			)
 		)
 	)
-	(global_label "3V3A"
+	(global_label "3V3"
 		(shape input)
 		(at 528.32 176.53 0)
 		(fields_autoplaced yes)
@@ -9929,7 +9823,7 @@
 		)
 		(uuid "54668c69-4109-4f1f-be2d-00b63e053e6e")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 535.9014 176.53 0)
+			(at 534.8128 176.53 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9965,7 +9859,7 @@
 			)
 		)
 	)
-	(global_label "3V3A"
+	(global_label "3V3"
 		(shape input)
 		(at 304.8 36.83 0)
 		(fields_autoplaced yes)
@@ -9977,7 +9871,7 @@
 		)
 		(uuid "58ab94b9-e6df-4974-a2e6-ab09ef3c0c92")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 312.3814 36.83 0)
+			(at 311.2928 36.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10013,7 +9907,7 @@
 			)
 		)
 	)
-	(global_label "5V"
+	(global_label "VBUS"
 		(shape input)
 		(at 209.55 166.37 180)
 		(fields_autoplaced yes)
@@ -10445,7 +10339,7 @@
 			)
 		)
 	)
-	(global_label "5V"
+	(global_label "VBUS"
 		(shape input)
 		(at 209.55 280.67 180)
 		(fields_autoplaced yes)
@@ -10711,7 +10605,7 @@
 	)
 	(global_label "VCC"
 		(shape input)
-		(at 60.96 299.72 0)
+		(at 50.8 299.72 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -10721,7 +10615,7 @@
 		)
 		(uuid "90b73b33-ef27-461c-ad41-2579a8f39889")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 67.5738 299.72 0)
+			(at 57.4138 299.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10853,7 +10747,7 @@
 			)
 		)
 	)
-	(global_label "5V"
+	(global_label "VBUS"
 		(shape input)
 		(at 209.55 242.57 180)
 		(fields_autoplaced yes)
@@ -11045,6 +10939,30 @@
 			)
 		)
 	)
+	(global_label "VBUS"
+		(shape input)
+		(at 63.5 299.72 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "cc21b7cf-55ea-4472-b745-8aeeceb12315")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 71.3838 299.72 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+	)
 	(global_label "SERVO3_BOOT0"
 		(shape input)
 		(at 534.67 46.99 0)
@@ -11189,7 +11107,7 @@
 			)
 		)
 	)
-	(global_label "3V3A"
+	(global_label "3V3"
 		(shape input)
 		(at 342.9 181.61 180)
 		(fields_autoplaced yes)
@@ -11201,7 +11119,7 @@
 		)
 		(uuid "da8492d0-c1a1-49af-935c-8872e0d7ac40")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 335.3186 181.61 0)
+			(at 336.4072 181.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11418,30 +11336,6 @@
 		(uuid "ed3e791e-6617-42a0-9307-33acf5a56823")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 203.0572 208.28 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
-	(global_label "3V3"
-		(shape input)
-		(at 267.97 36.83 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "ed54b2bf-7c29-4437-b5e2-973411f85412")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 261.4772 36.83 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12120,150 +12014,6 @@
 			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
 					(reference "R7")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Library:CC0402KRX7R7BB104 Capacitor 100nF")
-		(at 544.83 162.56 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "097992ef-da8c-42cd-affb-05e28694a58a")
-		(property "Reference" "C3"
-			(at 542.798 159.512 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "100nF"
-			(at 542.798 165.862 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(property "Footprint" "Library:C0402"
-			(at 553.72 162.56 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" "https://atta.szlcsc.com/upload/public/pdf/source/20211223/9278FD768280B81DDBEF48FA36411A03.pdf"
-			(at 536.194 162.56 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Capacitance: Tolerance:±10% Tolerance:±10% Voltage Rated: Temperature Coefficient:"
-			(at 532.892 162.56 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer Part" "CC0402KRX7R7BB104"
-			(at 547.624 162.56 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 0.5 0.5)
-				)
-			)
-		)
-		(property "Manufacturer" "YAGEO(国巨)"
-			(at 530.098 162.56 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C60474"
-			(at 527.05 162.56 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 518.668 162.56 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "100nF ±10% 16V"
-			(at 524.256 162.56 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part #" "C60474"
-			(at 548.894 162.56 0)
-			(show_name no)
-			(do_not_autoplace yes)
-			(effects
-				(font
-					(size 1 1)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "86288529-110a-4ccf-a2ba-3af21385266b")
-		)
-		(pin "1"
-			(uuid "250cbc56-f4df-4e43-bf12-b7ab4d437084")
-		)
-		(instances
-			(project "extender-cable-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
-					(reference "C3")
 					(unit 1)
 				)
 			)
@@ -13722,7 +13472,7 @@
 	)
 	(symbol
 		(lib_id "Library:0603WAF1202T5E Resistor 12kΩ")
-		(at 486.41 156.21 90)
+		(at 490.22 156.21 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -13733,7 +13483,7 @@
 		(fields_autoplaced yes)
 		(uuid "5d00c699-7116-4011-9762-112ed205226a")
 		(property "Reference" "R54"
-			(at 486.41 156.21 0)
+			(at 490.22 156.21 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -13743,7 +13493,7 @@
 			)
 		)
 		(property "Value" "12kΩ"
-			(at 484.378 156.21 0)
+			(at 488.188 156.21 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -13753,7 +13503,7 @@
 			)
 		)
 		(property "Footprint" "Library:R0603"
-			(at 512.826 156.21 0)
+			(at 516.636 156.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13764,7 +13514,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/0603WAF1202T5E/23517.html"
-			(at 508.762 156.21 0)
+			(at 512.572 156.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13775,7 +13525,7 @@
 			)
 		)
 		(property "Description" "Type:Thick Film Resistor Resistance:12kΩ Tolerance:±1% Tolerance:±1% Power(Watts):100mW Voltage-Supply(Max):75V Temperature Coefficient:±100ppm/°C Temperature Coefficient:±100ppm/°C Operating Temperature:-55°C~+155°C Operating Temperature:-55°C~+155°C"
-			(at 504.444 156.21 0)
+			(at 508.254 156.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13786,7 +13536,7 @@
 			)
 		)
 		(property "Manufacturer Part" "0603WAF1202T5E"
-			(at 488.696 156.21 0)
+			(at 492.506 156.21 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -13796,39 +13546,6 @@
 			)
 		)
 		(property "Manufacturer" "UNI-ROYAL(厚声)"
-			(at 502.666 156.21 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier Part" "C22790"
-			(at 500.888 156.21 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Supplier" "LCSC"
-			(at 499.364 156.21 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part Name" "12kΩ ±1% 100mW 厚膜电阻"
 			(at 506.476 156.21 0)
 			(hide yes)
 			(show_name no)
@@ -13839,8 +13556,41 @@
 				)
 			)
 		)
+		(property "Supplier Part" "C22790"
+			(at 504.698 156.21 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Supplier" "LCSC"
+			(at 503.174 156.21 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part Name" "12kΩ ±1% 100mW 厚膜电阻"
+			(at 510.286 156.21 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(property "LCSC Part #" "C22790"
-			(at 489.966 156.21 0)
+			(at 493.776 156.21 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -14463,7 +14213,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 60.96 300.99 180)
+		(at 50.8 300.99 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -14474,7 +14224,7 @@
 		(fields_autoplaced yes)
 		(uuid "725e1ffb-5e90-4eda-86c1-1676abc292d8")
 		(property "Reference" "#FLG05"
-			(at 60.96 302.895 0)
+			(at 50.8 302.895 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -14485,7 +14235,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 60.96 306.07 0)
+			(at 50.8 306.07 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -14495,7 +14245,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 60.96 300.99 0)
+			(at 50.8 300.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -14506,7 +14256,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 60.96 300.99 0)
+			(at 50.8 300.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -14517,7 +14267,7 @@
 			)
 		)
 		(property "Description" "Special symbol for telling ERC where power comes from"
-			(at 60.96 300.99 0)
+			(at 50.8 300.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16505,6 +16255,84 @@
 		)
 	)
 	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 63.5 300.99 180)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "9ee3c0d1-007e-4512-b390-cb2c25f9cc35")
+		(property "Reference" "#FLG06"
+			(at 63.5 302.895 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 63.5 306.07 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 63.5 300.99 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 63.5 300.99 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 63.5 300.99 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6aa5214b-b63e-4db1-b9ad-f2e49bb5dc4d")
+		)
+		(instances
+			(project "extender-cable-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
+					(reference "#FLG06")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Library:USB2514BI-AEZG-TR USB hub 4 way")
 		(at 426.72 179.07 0)
 		(unit 1)
@@ -16893,84 +16721,6 @@
 			(project "extender-cable-circuit"
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
 					(reference "C19")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:PWR_FLAG")
-		(at 49.53 300.99 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "aa2250f5-ddb1-493f-9411-c3a80cbbe1bb")
-		(property "Reference" "#FLG04"
-			(at 49.53 302.895 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "PWR_FLAG"
-			(at 49.53 306.07 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 49.53 300.99 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 49.53 300.99 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Special symbol for telling ERC where power comes from"
-			(at 49.53 300.99 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "a9cd8445-0da2-4792-ba5e-102beb91fcea")
-		)
-		(instances
-			(project "extender-cable-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07"
-					(reference "#FLG04")
 					(unit 1)
 				)
 			)
@@ -18974,7 +18724,7 @@
 				(justify right)
 			)
 		)
-		(pin "5V" input
+		(pin "VBUS" input
 			(at 212.09 166.37 180)
 			(uuid "75083222-99b3-443c-afa9-9aad2cada864")
 			(effects
@@ -19110,7 +18860,7 @@
 				(justify right)
 			)
 		)
-		(pin "5V" input
+		(pin "VBUS" input
 			(at 212.09 280.67 180)
 			(uuid "de557a27-b52a-47f2-ba14-df5815b4f876")
 			(effects
@@ -19246,7 +18996,7 @@
 				(justify right)
 			)
 		)
-		(pin "5V" input
+		(pin "VBUS" input
 			(at 212.09 204.47 180)
 			(uuid "8420f468-60ec-4784-8296-ee5da54d4aa6")
 			(effects
@@ -19382,7 +19132,7 @@
 				(justify right)
 			)
 		)
-		(pin "5V" input
+		(pin "VBUS" input
 			(at 212.09 242.57 180)
 			(uuid "406115b2-61d2-49ef-8b87-b56ed5483d33")
 			(effects

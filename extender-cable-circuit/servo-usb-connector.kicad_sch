@@ -3754,7 +3754,7 @@
 		)
 		(uuid "9f4bac2b-1f24-443b-876e-8b8497b788d3")
 	)
-	(hierarchical_label "5V"
+	(hierarchical_label "VBUS"
 		(shape input)
 		(at 64.77 153.67 180)
 		(effects
