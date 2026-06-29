@@ -2810,7 +2810,7 @@
 	)
 	(text "Power FPC connector"
 		(exclude_from_sim no)
-		(at 210.82 122.428 0)
+		(at 242.57 55.372 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2899,7 +2899,7 @@
 		(uuid "11006620-aba5-4126-a16a-8334eca2f8d2")
 	)
 	(junction
-		(at 215.9 72.39)
+		(at 234.95 105.41)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "11de5502-c04a-4126-9205-f2f46a95073b")
@@ -2917,13 +2917,13 @@
 		(uuid "18709959-37bc-46e4-b65b-4910cc84e554")
 	)
 	(junction
-		(at 215.9 105.41)
+		(at 234.95 72.39)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "1ae7ff6f-63f2-4191-987c-b755b61777b2")
 	)
 	(junction
-		(at 215.9 97.79)
+		(at 234.95 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "1e01409c-21a2-41ec-b1af-30ce1654f3e2")
@@ -2935,25 +2935,25 @@
 		(uuid "2ce6085a-2fc4-4abb-8f50-f0401f4eb228")
 	)
 	(junction
-		(at 215.9 67.31)
+		(at 234.95 110.49)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "2d3cd026-8787-486e-b491-78d645210dfc")
 	)
 	(junction
-		(at 215.9 102.87)
+		(at 234.95 74.93)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "32363f1a-9739-4102-a20d-924c56b8f021")
 	)
 	(junction
-		(at 215.9 100.33)
+		(at 234.95 77.47)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "33f623b2-26b6-43f7-97e8-66a922056093")
 	)
 	(junction
-		(at 215.9 92.71)
+		(at 234.95 85.09)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "3b91e7a9-8bee-4a4e-9bc3-244844ce9019")
@@ -2965,7 +2965,7 @@
 		(uuid "495f438d-4ff7-4efe-b427-69cb02c0b4fe")
 	)
 	(junction
-		(at 215.9 74.93)
+		(at 234.95 102.87)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "4b3fab43-4ac2-40fd-a5a9-f6c160e215d7")
@@ -2989,22 +2989,16 @@
 		(uuid "57ad89ae-dd58-487b-9afc-826602931daf")
 	)
 	(junction
-		(at 215.9 95.25)
+		(at 234.95 82.55)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "67764889-ca22-4ed9-9b40-189153f12fe2")
 	)
 	(junction
-		(at 215.9 85.09)
+		(at 234.95 92.71)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "69cb640c-bbc4-4838-a9a1-eb605e698118")
-	)
-	(junction
-		(at 215.9 64.77)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6ba53ec8-2caf-4e7f-95fd-1c7c77b32b16")
 	)
 	(junction
 		(at 71.12 118.11)
@@ -3025,31 +3019,37 @@
 		(uuid "7cab0d60-cdc1-45ae-8284-6578f5e210a8")
 	)
 	(junction
+		(at 234.95 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "84785b60-5f60-4444-8a78-d0c4e8085a9b")
+	)
+	(junction
 		(at 101.6 123.19)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "874977b0-9253-4353-8ac0-6a4d2f6e710d")
 	)
 	(junction
-		(at 215.9 69.85)
+		(at 234.95 107.95)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "94eb5c6d-9013-4050-9458-4181aff23e0f")
 	)
 	(junction
-		(at 215.9 82.55)
+		(at 234.95 95.25)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "95d978ba-623d-4d10-b67e-7eca6e397464")
 	)
 	(junction
-		(at 215.9 113.03)
+		(at 234.95 64.77)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "9d882391-2c09-43b5-b860-60096d2c517b")
 	)
 	(junction
-		(at 215.9 110.49)
+		(at 234.95 67.31)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "b7e51a92-c2ce-4ed6-86ee-ff5b51fb5c9c")
@@ -3061,13 +3061,13 @@
 		(uuid "be38ba63-5bbe-414f-980f-22539e366481")
 	)
 	(junction
-		(at 215.9 107.95)
+		(at 234.95 69.85)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "bea30c2a-38eb-4214-8569-2e70eeee4907")
 	)
 	(junction
-		(at 215.9 77.47)
+		(at 234.95 100.33)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "d1aa1604-1d2c-4618-964f-d0f02887033e")
@@ -3091,17 +3091,17 @@
 		(uuid "e9f562b3-7cc4-4966-b59a-0eee95f930f1")
 	)
 	(junction
-		(at 215.9 80.01)
+		(at 234.95 97.79)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "fd6a4404-b662-4578-921a-96aece74e85c")
 	)
 	(no_connect
-		(at 207.01 59.69)
+		(at 243.84 118.11)
 		(uuid "4121fd4d-61c7-418f-89c4-19a43c57b970")
 	)
 	(no_connect
-		(at 207.01 118.11)
+		(at 243.84 59.69)
 		(uuid "6b14c925-b1d8-4533-89af-b945f04218f4")
 	)
 	(wire
@@ -3116,7 +3116,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 80.01) (xy 215.9 77.47)
+			(xy 234.95 97.79) (xy 234.95 100.33)
 		)
 		(stroke
 			(width 0)
@@ -3126,7 +3126,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 102.87) (xy 215.9 100.33)
+			(xy 234.95 74.93) (xy 234.95 77.47)
 		)
 		(stroke
 			(width 0)
@@ -3136,7 +3136,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 82.55) (xy 215.9 80.01)
+			(xy 234.95 95.25) (xy 234.95 97.79)
 		)
 		(stroke
 			(width 0)
@@ -3266,7 +3266,7 @@
 	)
 	(wire
 		(pts
-			(xy 226.06 64.77) (xy 215.9 64.77)
+			(xy 226.06 113.03) (xy 234.95 113.03)
 		)
 		(stroke
 			(width 0)
@@ -3276,7 +3276,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 97.79) (xy 215.9 95.25)
+			(xy 234.95 80.01) (xy 234.95 82.55)
 		)
 		(stroke
 			(width 0)
@@ -3316,7 +3316,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 92.71) (xy 215.9 90.17)
+			(xy 234.95 85.09) (xy 234.95 87.63)
 		)
 		(stroke
 			(width 0)
@@ -3386,7 +3386,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 85.09) (xy 215.9 82.55)
+			(xy 234.95 92.71) (xy 234.95 95.25)
 		)
 		(stroke
 			(width 0)
@@ -3436,7 +3436,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 110.49) (xy 215.9 107.95)
+			(xy 234.95 67.31) (xy 234.95 69.85)
 		)
 		(stroke
 			(width 0)
@@ -3456,7 +3456,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 107.95) (xy 215.9 105.41)
+			(xy 234.95 69.85) (xy 234.95 72.39)
 		)
 		(stroke
 			(width 0)
@@ -3486,7 +3486,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 72.39) (xy 215.9 69.85)
+			(xy 234.95 105.41) (xy 234.95 107.95)
 		)
 		(stroke
 			(width 0)
@@ -3496,7 +3496,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 64.77) (xy 215.9 67.31)
+			(xy 234.95 113.03) (xy 234.95 110.49)
 		)
 		(stroke
 			(width 0)
@@ -3596,7 +3596,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 74.93) (xy 215.9 72.39)
+			(xy 234.95 102.87) (xy 234.95 105.41)
 		)
 		(stroke
 			(width 0)
@@ -3616,7 +3616,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 100.33) (xy 215.9 97.79)
+			(xy 234.95 77.47) (xy 234.95 80.01)
 		)
 		(stroke
 			(width 0)
@@ -3706,7 +3706,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 77.47) (xy 215.9 74.93)
+			(xy 234.95 100.33) (xy 234.95 102.87)
 		)
 		(stroke
 			(width 0)
@@ -3726,7 +3726,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 69.85) (xy 215.9 67.31)
+			(xy 234.95 107.95) (xy 234.95 110.49)
 		)
 		(stroke
 			(width 0)
@@ -3756,7 +3756,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 113.03) (xy 224.79 113.03)
+			(xy 234.95 64.77) (xy 226.06 64.77)
 		)
 		(stroke
 			(width 0)
@@ -3796,7 +3796,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 105.41) (xy 215.9 102.87)
+			(xy 234.95 72.39) (xy 234.95 74.93)
 		)
 		(stroke
 			(width 0)
@@ -3816,7 +3816,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 95.25) (xy 215.9 92.71)
+			(xy 234.95 82.55) (xy 234.95 85.09)
 		)
 		(stroke
 			(width 0)
@@ -3866,7 +3866,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 113.03) (xy 215.9 110.49)
+			(xy 234.95 64.77) (xy 234.95 67.31)
 		)
 		(stroke
 			(width 0)
@@ -3916,7 +3916,7 @@
 	)
 	(wire
 		(pts
-			(xy 215.9 87.63) (xy 215.9 85.09)
+			(xy 234.95 90.17) (xy 234.95 92.71)
 		)
 		(stroke
 			(width 0)
@@ -4128,7 +4128,7 @@
 	)
 	(symbol
 		(lib_id "Library:FPC-05F-20PH20 Connector 20P 0.5mm spacing FPC")
-		(at 209.55 87.63 180)
+		(at 241.3 90.17 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -4139,7 +4139,7 @@
 		(fields_autoplaced yes)
 		(uuid "0d4ac30a-dcd6-48d4-9d73-9f957fefceb0")
 		(property "Reference" "FPC1"
-			(at 199.898 89.408 0)
+			(at 250.952 88.392 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4149,7 +4149,7 @@
 			)
 		)
 		(property "Value" ""
-			(at 209.55 87.63 0)
+			(at 241.3 90.17 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4160,7 +4160,7 @@
 			)
 		)
 		(property "Footprint" "Library:FPC-SMD_20P-P0.50_XUNPU_FPC-05F-20PH20"
-			(at 209.042 137.16 0)
+			(at 241.808 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4171,7 +4171,7 @@
 			)
 		)
 		(property "Datasheet" "https://item.szlcsc.com/datasheet/FPC-05F-20PH20/3056901.html"
-			(at 209.55 130.81 0)
+			(at 241.3 46.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4182,7 +4182,7 @@
 			)
 		)
 		(property "Description" "Locking Feature:Hinged Lid Contact Type:Surface Mount Number of Contacts:20P Pitch:0.5mm Mounting Type:Bottom Contact FFC, FCB Thickness:0.3mm FFC, FCB Thickness:0.3mm Height Above Board:2mm Contact Material:Phosphor Bronze Contact Plating:Tin Operating T"
-			(at 209.55 143.51 0)
+			(at 241.3 34.29 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4193,7 +4193,7 @@
 			)
 		)
 		(property "Manufacturer Part" "FPC-05F-20PH20"
-			(at 199.898 87.63 0)
+			(at 250.952 90.17 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -4203,7 +4203,7 @@
 			)
 		)
 		(property "Manufacturer" "XUNPU(讯普)"
-			(at 209.55 150.368 0)
+			(at 241.3 27.432 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4214,7 +4214,7 @@
 			)
 		)
 		(property "Supplier Part" "C2856803"
-			(at 209.55 154.432 0)
+			(at 241.3 23.368 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4225,7 +4225,7 @@
 			)
 		)
 		(property "Supplier" "LCSC"
-			(at 209.55 156.718 0)
+			(at 241.3 21.082 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4236,7 +4236,7 @@
 			)
 		)
 		(property "LCSC Part Name" "翻盖式 卧贴 P数:20P 间距:0.5mm"
-			(at 209.55 147.828 0)
+			(at 241.3 29.972 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4247,7 +4247,7 @@
 			)
 		)
 		(property "LCSC Part #" "C2856803"
-			(at 199.898 86.106 0)
+			(at 250.952 91.694 0)
 			(show_name no)
 			(do_not_autoplace yes)
 			(effects
@@ -5849,6 +5849,103 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 226.06 113.03 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "a7448c76-f02d-440c-bd3f-be895debd971")
+		(property "Reference" "#PWR041"
+			(at 226.06 119.38 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 226.06 116.586 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 226.06 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 226.06 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 226.06 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "2897cd5b-9902-4dc9-b166-943da0be90cf")
+		)
+		(instances
+			(project "master-circuit"
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
+					(reference "#PWR041")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
+					(reference "#PWR052")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
+					(reference "#PWR060")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
+					(reference "#PWR046")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
+					(reference "#PWR050")
+					(unit 1)
+				)
+				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
+					(reference "#PWR069")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Library:0402WGF1004TCE Resistor 1MΩ")
 		(at 73.66 93.98 90)
 		(unit 1)
@@ -6608,103 +6705,6 @@
 				)
 				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
 					(reference "R6")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GND")
-		(at 224.79 113.03 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "fba7ca44-081f-4a69-9212-62fd830f1a23")
-		(property "Reference" "#PWR041"
-			(at 224.79 119.38 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "GND"
-			(at 224.79 116.586 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 224.79 113.03 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 224.79 113.03 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 224.79 113.03 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "39343ff5-0510-4962-aae0-a51697449fa6")
-		)
-		(instances
-			(project "master-circuit"
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/3be7b3c1-0262-49c7-a4f6-ac91c068130a"
-					(reference "#PWR041")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/45541b12-3178-4a35-ba98-195b0b7ec5c7"
-					(reference "#PWR060")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/855ba32d-cbe2-4fa8-81ea-b92e9f1eee99"
-					(reference "#PWR069")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/9cbab574-5c5a-48fe-8b65-ca60995f0183"
-					(reference "#PWR046")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/c713c99b-333c-4e3a-a177-aa20b97ab5d6"
-					(reference "#PWR052")
-					(unit 1)
-				)
-				(path "/240d81ac-e9d7-42ea-a748-33df14683b07/e9d0615a-b417-460d-a006-9061a6883b3e"
-					(reference "#PWR075")
 					(unit 1)
 				)
 			)
