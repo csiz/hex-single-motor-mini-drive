@@ -216,6 +216,7 @@
         0.4,
         0.6,
         1.0,
+        1.2,
         1.5,
         2.0
       ],
@@ -595,6 +596,18 @@
       {
         "netclass": "GroupSignals",
         "pattern": "SERVO6_CURRENT"
+      },
+      {
+        "netclass": "GroupSignals",
+        "pattern": "VBUS_PINS"
+      },
+      {
+        "netclass": "GroupSignals",
+        "pattern": "VCC"
+      },
+      {
+        "netclass": "GroupSignals",
+        "pattern": "CAN_RX"
       }
     ]
   },
@@ -680,12 +693,60 @@
           "label": "Datasheet",
           "name": "Datasheet",
           "show": true
+        },
+        {
+          "group_by": false,
+          "label": "LCSC Part Name",
+          "name": "LCSC Part Name",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Manufacturer",
+          "name": "Manufacturer",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Manufacturer Part",
+          "name": "Manufacturer Part",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Supplier",
+          "name": "Supplier",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Supplier Part",
+          "name": "Supplier Part",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "LCSC Part #",
+          "name": "LCSC Part #",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Description",
+          "name": "Description",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "#",
+          "name": "${ITEM_NUMBER}",
+          "show": false
         }
       ],
       "filter_string": "",
       "group_symbols": true,
       "include_excluded_from_bom": true,
-      "name": "Default Editing",
+      "name": "",
       "sort_asc": true,
       "sort_field": "Reference"
     },
@@ -746,25 +807,13 @@
         "uuid": "240d81ac-e9d7-42ea-a748-33df14683b07"
       }
     ],
-    "used_designators": "#PWR41,#PWR46,#PWR50,#PWR52,#PWR60,#PWR69,D12,D14-15",
+    "used_designators": "R1-6",
     "variants": []
   },
   "sheets": [
     [
       "240d81ac-e9d7-42ea-a748-33df14683b07",
       "master-circuit"
-    ],
-    [
-      "0ccb8834-dc14-4d35-8825-f0674b38bfa8",
-      "back-to-back-mosfets1"
-    ],
-    [
-      "ee277489-ff18-4229-890c-930c7148df17",
-      "back-to-back-mosfets2"
-    ],
-    [
-      "2354809a-451c-4f80-b53f-daac78aedf9f",
-      "back-to-back-mosfets3"
     ],
     [
       "3be7b3c1-0262-49c7-a4f6-ac91c068130a",
@@ -775,44 +824,20 @@
       "servo-usb-connector1"
     ],
     [
-      "2354809a-451c-4f80-b53f-daac78aedf9f",
-      "back-to-back-mosfets3"
-    ],
-    [
       "c713c99b-333c-4e3a-a177-aa20b97ab5d6",
       "servo-usb-connector2"
-    ],
-    [
-      "2354809a-451c-4f80-b53f-daac78aedf9f",
-      "back-to-back-mosfets3"
     ],
     [
       "45541b12-3178-4a35-ba98-195b0b7ec5c7",
       "servo-usb-connector3"
     ],
     [
-      "2354809a-451c-4f80-b53f-daac78aedf9f",
-      "back-to-back-mosfets3"
-    ],
-    [
       "855ba32d-cbe2-4fa8-81ea-b92e9f1eee99",
       "servo-usb-connector4"
     ],
     [
-      "2354809a-451c-4f80-b53f-daac78aedf9f",
-      "back-to-back-mosfets3"
-    ],
-    [
       "e9d0615a-b417-460d-a006-9061a6883b3e",
       "servo-usb-connector5"
-    ],
-    [
-      "2354809a-451c-4f80-b53f-daac78aedf9f",
-      "back-to-back-mosfets3"
-    ],
-    [
-      "c618d416-88fb-4eed-83fb-6afc0f3a88df",
-      "back-to-back-mosfets"
     ]
   ],
   "text_variables": {},
