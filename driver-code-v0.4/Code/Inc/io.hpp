@@ -112,24 +112,24 @@ static inline void set_motor_outputs(MotorOutputs const & outputs){
 // LED functions
 // -------------
 
-// Enable the LED channels: TIM4_CH1 (RED), TIM4_CH2 (GREEN), TIM2_CH3 (BLUE).
+// Enable the LED channels: TIM2_CH3 (RED), TIM2_CH1 (GREEN), TIM2_CH2 (BLUE).
 static inline void enable_LED_channels(){
 	// RED LED.
-	LL_TIM_CC_EnableChannel(TIM4, LL_TIM_CHANNEL_CH1);
+	LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH3);
 	// Green LED.
-	LL_TIM_CC_EnableChannel(TIM4, LL_TIM_CHANNEL_CH2);
+	LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
 	// Blue LED.
 	LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH2);
 }
 
 // Set the intensity of the RED light.
 static inline void set_RED_LED(uint8_t r){
-    LL_TIM_OC_SetCompareCH1(TIM4, LL_TIM_GetAutoReload(TIM4)  * r / 0xFF);
+    LL_TIM_OC_SetCompareCH3(TIM2, LL_TIM_GetAutoReload(TIM2)  * r / 0xFF);
 }
 
 // Set the intensity of the GREEN light.
 static inline void set_GREEN_LED(uint8_t g){
-    LL_TIM_OC_SetCompareCH2(TIM4, LL_TIM_GetAutoReload(TIM4) * g / 0xFF);
+    LL_TIM_OC_SetCompareCH1(TIM2, LL_TIM_GetAutoReload(TIM2) * g / 0xFF);
 }
 
 // Set the intensity of the BLUE light.
@@ -352,12 +352,10 @@ static void enable_timers(){
     // need to generate an update event to force the timers to load the new values.
     LL_TIM_GenerateEvent_UPDATE(TIM1);
     LL_TIM_GenerateEvent_UPDATE(TIM2);
-    LL_TIM_GenerateEvent_UPDATE(TIM4);
 
     // Start the timers.
     LL_TIM_EnableCounter(TIM1);
     LL_TIM_EnableCounter(TIM2);
-    LL_TIM_EnableCounter(TIM4);
     
     // Enable TIM1 channel 5 used to trigger the ADC.
     LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH5);
