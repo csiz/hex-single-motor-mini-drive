@@ -10,8 +10,7 @@
 #include "error_handler.hpp"
 #include "type_definitions.hpp"
 
-#include "spi_com.hpp"
-// #include "usb_com.hpp"
+#include "usb_com.hpp"
 // #include "usbd_def.h"
 
 #include <cerrno>
@@ -615,21 +614,21 @@ struct WireInterface {
   }
 };
 
-// WireInterface usb_interface = {};
-WireInterface spi_interface = {spi_update};
+WireInterface usb_interface = {usb_update};
+// WireInterface spi_interface = {spi_update};
 
 void comms_init() {
-  // usb_init();
-  spi_init();
+  usb_init();
+  // spi_init();
 }
 
 void comms_update(hex_mini_drive::FullReadout const& readout){
   // USB comms
   // ---------
 
-  // // Queue the state readouts on the USB buffer.
-  // if (not usb_interface.update(readout)) usb_reset();
+  // Queue the state readouts on the USB buffer.
+  if (not usb_interface.update(readout)) usb_reset();
 
-  // SPI comms
-  if (not spi_interface.update(readout)) spi_reset();
+  // // SPI comms
+  // if (not spi_interface.update(readout)) spi_reset();
 }

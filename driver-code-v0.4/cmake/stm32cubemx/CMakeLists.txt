@@ -19,6 +19,10 @@ target_include_directories(stm32cubemx INTERFACE
     ../../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy
     ../../Drivers/CMSIS/Device/ST/STM32G4xx/Include
     ../../Drivers/CMSIS/Include
+    ../../USB_Device/App
+    ../../USB_Device/Target
+    ../../Middlewares/ST/STM32_USB_Device_Library/Core/Inc
+    ../../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
 )
 
 target_sources(stm32cubemx INTERFACE
@@ -63,6 +67,16 @@ target_sources(stm32cubemx INTERFACE
     ../../Core/Src/sysmem.c
     ../../Core/Src/syscalls.c
     ../../startup_stm32g431xx.s
+    # USB Device application/glue layer
+    ../../USB_Device/App/usb_device.c
+    ../../USB_Device/App/usbd_desc.c
+    ../../USB_Device/App/usbd_cdc_if.c
+    ../../USB_Device/Target/usbd_conf.c
+    # USB Device Library (middleware)
+    ../../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c
+    ../../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c
+    ../../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c
+    ../../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c
 )
 
 target_link_directories(stm32cubemx INTERFACE
