@@ -186,7 +186,6 @@ export async function run_current_calibration(motor_controller, max_pwm_value){
     ]) / phase_resistance;
   });
 
-
   // Make a new table with each calibration's measured phase current and
   // expected phase current inferred from the driver voltage and known
   // phase resistance (in v0 the shunt resistors vary +-50% after soldering

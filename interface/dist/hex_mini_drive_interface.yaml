@@ -222,9 +222,15 @@ definitions:
       into a history buffer after a commanded event.
 
     struct:
-      pwm_commands: 
-        type: uint32
-        doc: The PWM commands for the motor outputs; concatenated into a single value.
+      u_pwm: 
+        type: uint16
+        doc: The PWM commands for the U phase output.
+      v_pwm: 
+        type: uint16
+        doc: The PWM commands for the V phase output.
+      w_pwm:
+        type: uint16
+        doc: The PWM commands for the W phase output.
 
       readout_number:
         type: uint16

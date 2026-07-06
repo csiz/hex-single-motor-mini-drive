@@ -200,20 +200,6 @@ void set_angle(int16_t angle) {
 }
 
 
-// Helper funcs
-// ------------
-
-
-// Combine the motor duty cycles into a single 32-bit value; because it barely fits.
-static inline uint32_t encode_pwm_commands(ThreePhase const& outputs){
-    return (
-        std::get<0>(outputs) * pwm_base * pwm_base +
-        std::get<1>(outputs) * pwm_base +
-        std::get<2>(outputs)
-    );
-}
-
-
 
 // Critical function!! 23KHz PWM cycle
 // ===================================
@@ -623,7 +609,9 @@ void adc_interrupt_handler(){
     // 
     // Must be updated before the motor pwm calculation!
 
-    readout.pwm_commands = encode_pwm_commands(motor_outputs);
+    readout.u_pwm = std::get<0>(motor_outputs);
+    readout.v_pwm = std::get<1>(motor_outputs);
+    readout.w_pwm = std::get<2>(motor_outputs);
     
     readout.readout_number = readout_number;
         

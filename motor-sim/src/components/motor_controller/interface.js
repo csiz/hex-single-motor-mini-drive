@@ -45,7 +45,10 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, pos
   const local_time = Date.now();
 
   // Get the PWM commands.
-  const pwm_commands = bare_readout.pwm_commands;
+  const {u_pwm, v_pwm, w_pwm} = bare_readout;
+
+  const avg_pwm = (u_pwm + v_pwm + w_pwm) / 3;
+
   // Get the readout number, a counter that increments with each readout & PWM cycle.
   const readout_number = bare_readout.readout_number;
   const state_flags = bare_readout.state_flags;
@@ -92,12 +95,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, pos
   const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
-  // We use 1536 ticks per PWM cycle, we can pack 3 values in 32 bits with the formula: (pwm_u*pwm_base + pwm_v)*pwm_base + pwm_w
-  const u_pwm = Math.floor(pwm_commands / pwm_base / pwm_base) % pwm_base;
-  const v_pwm = Math.floor(pwm_commands / pwm_base) % pwm_base;
-  const w_pwm = pwm_commands % pwm_base;
 
-  const avg_pwm = (u_pwm + v_pwm + w_pwm) / 3;
 
   const u_drive_voltage = (u_pwm - avg_pwm) * vcc_voltage / pwm_base;
   const v_drive_voltage = (v_pwm - avg_pwm) * vcc_voltage / pwm_base;

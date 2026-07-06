@@ -203,8 +203,12 @@ static inline UnitTestOutput read_UnitTestOutput(uint8_t const* buffer) {
 // Basic readout of the motor driver internal state; can be recorded contiguously
 // into a history buffer after a commanded event.
 struct Readout {
-  // The PWM commands for the motor outputs; concatenated into a single value.
-  uint32_t pwm_commands;
+  // The PWM commands for the U phase output.
+  uint16_t u_pwm;
+  // The PWM commands for the V phase output.
+  uint16_t v_pwm;
+  // The PWM commands for the W phase output.
+  uint16_t w_pwm;
   // Readout number; used to identify the readout in the history.
   uint16_t readout_number;
   // Driver state flags; packed into a single 16-bit value.
@@ -241,8 +245,12 @@ struct Readout {
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   size_t offset = 0;
-  write_uint32(buffer + offset, value.pwm_commands);;
-  offset += 4;
+  write_uint16(buffer + offset, value.u_pwm);;
+  offset += 2;
+  write_uint16(buffer + offset, value.v_pwm);;
+  offset += 2;
+  write_uint16(buffer + offset, value.w_pwm);;
+  offset += 2;
   write_uint16(buffer + offset, value.readout_number);;
   offset += 2;
   write_uint16(buffer + offset, value.state_flags);;
@@ -277,8 +285,12 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   
   Readout result;
   
-  result.pwm_commands = read_uint32(buffer + offset);
-  offset += 4;
+  result.u_pwm = read_uint16(buffer + offset);
+  offset += 2;
+  result.v_pwm = read_uint16(buffer + offset);
+  offset += 2;
+  result.w_pwm = read_uint16(buffer + offset);
+  offset += 2;
   result.readout_number = read_uint16(buffer + offset);
   offset += 2;
   result.state_flags = read_uint16(buffer + offset);
@@ -390,7 +402,7 @@ struct FullReadout : Readout {
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
   size_t offset = 0;
   write_Readout(buffer + offset, value);;
-  offset += 32;
+  offset += 34;
   write_uint16(buffer + offset, value.main_loop_rate);;
   offset += 2;
   write_uint16(buffer + offset, value.adc_update_rate);;
@@ -444,7 +456,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   size_t offset = 0;
   
   FullReadout result {read_Readout(buffer + offset)};
-  offset += 32;
+  offset += 34;
   
   result.main_loop_rate = read_uint16(buffer + offset);
   offset += 2;
@@ -1264,10 +1276,10 @@ struct Message {
 constexpr size_t message_size(MessageCode code) {
   switch (code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
-    case MessageCode::READOUT: return 34;
+    case MessageCode::READOUT: return 36;
     case MessageCode::STREAM_FULL_READOUTS: return 4;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 82;
+    case MessageCode::FULL_READOUT: return 84;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 6;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 6;
@@ -1327,9 +1339,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 32) return 0;
+      if (max_size < 2 + 34) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 34;
+      return 36;
     }
     case MessageCode::STREAM_FULL_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_FULL_READOUTS));
@@ -1343,9 +1355,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 80) return 0;
+      if (max_size < 2 + 82) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 82;
+      return 84;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1611,7 +1623,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 32) return false;
+      if (size != 2 + 34) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1626,7 +1638,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 80) return false;
+      if (size != 2 + 82) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }

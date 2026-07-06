@@ -148,8 +148,12 @@ function read_UnitTestOutput(view, offset = 0) {
 // Basic readout of the motor driver internal state; can be recorded contiguously
 // into a history buffer after a commanded event.
 export class Readout {
-  // The PWM commands for the motor outputs; concatenated into a single value.
-  pwm_commands;
+  // The PWM commands for the U phase output.
+  u_pwm;
+  // The PWM commands for the V phase output.
+  v_pwm;
+  // The PWM commands for the W phase output.
+  w_pwm;
   // Readout number; used to identify the readout in the history.
   readout_number;
   // Driver state flags; packed into a single 16-bit value.
@@ -187,11 +191,15 @@ export class Readout {
 }
 
 function write_Readout(value) {
-  const buffer = new Uint8Array(32);
+  const buffer = new Uint8Array(34);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setUint32(offset, value.pwm_commands)
-  offset += 4;
+  view.setUint16(offset, value.u_pwm)
+  offset += 2;
+  view.setUint16(offset, value.v_pwm)
+  offset += 2;
+  view.setUint16(offset, value.w_pwm)
+  offset += 2;
   view.setUint16(offset, value.readout_number)
   offset += 2;
   view.setUint16(offset, value.state_flags)
@@ -225,8 +233,12 @@ function write_Readout(value) {
 function read_Readout(view, offset = 0) {
   let result = new Readout();
   
-  result.pwm_commands = view.getUint32(offset);
-  offset += 4;
+  result.u_pwm = view.getUint16(offset);
+  offset += 2;
+  result.v_pwm = view.getUint16(offset);
+  offset += 2;
+  result.w_pwm = view.getUint16(offset);
+  offset += 2;
   result.readout_number = view.getUint16(offset);
   offset += 2;
   result.state_flags = view.getUint16(offset);
@@ -341,12 +353,12 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(80);
+  const buffer = new Uint8Array(82);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = new Uint8Array(view.buffer, offset, 32).set(write_Readout(value), 0);
+  const base_buffer = new Uint8Array(view.buffer, offset, 34).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
-  offset += 32;
+  offset += 34;
   view.setUint16(offset, value.main_loop_rate)
   offset += 2;
   view.setUint16(offset, value.adc_update_rate)
@@ -401,7 +413,7 @@ function read_FullReadout(view, offset = 0) {
   let result = new FullReadout();
   
   Object.assign(result, read_Readout(view, offset));
-  offset += 32;
+  offset += 34;
   
   result.main_loop_rate = view.getUint16(offset);
   offset += 2;
@@ -1675,7 +1687,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case READOUT: {
-      if (buffer.length !== 2 + 32) return null;
+      if (buffer.length !== 2 + 34) return null;
       let message = read_Readout(view, 2);
       message.message_code = READOUT;
       return message;
@@ -1691,7 +1703,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 80) return null;
+      if (buffer.length !== 2 + 82) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;
