@@ -64,6 +64,7 @@ From the `Project Manager` tab select `Project` and switch `Toolchain / IDE` to 
     ! We need to also enable the DMA buffers.
     + USART3: Enable `Asynchornous` mode.
     + USB: Enable it on the `Internal Phy`.
+    ! Also enable it under "Middleware" as `USB_DEVICE` and select `Communication Device Class (Virtual Port Com)`.
 * Analog ADC1 & ADC2:
     + Set `ADCs_Common_Settings` to `Dual combined regular simultaneous + injected simultaneous`.
     + Set `External Trigger Source` to `Timer 1 Trigger Out event 2`.
