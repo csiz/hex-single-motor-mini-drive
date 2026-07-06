@@ -350,7 +350,7 @@ async function disconnect_motor_controller(show_status = true){
 // ------------------------
 
 // Automatically connect the motor driver if we have permissions from previous session.
-connect_motor_controller({force_ws: true});
+connect_motor_controller({force_ws: false});
 
 // Disconnect when the notebook is reloaded.
 invalidation.then(disconnect_motor_controller);
