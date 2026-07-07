@@ -179,19 +179,23 @@ const int limiting_divisor_m1 = limiting_divisor - 1;
 // Timing and PWM constants
 // ------------------------
 
-// Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 144MHz, same as the systme clock.
+// U and V phases are measured at the same time, followed by W and 4th phase (X).
+// 
+// The phases are preceded by the temperature, voltage and reference readings. The reason
+// for this ordering is so the update loop is ready to run as soon as the phases are read.
+// The phases must be read at the peak of the PWM cycle while all MOSFETs are shorted to ground.
+// 
+// Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 144MHz / 4.
 
-// Temperature ADC conversion time: 12.5 cycles + 92.5 cycles = 105 cycles = 7.29us.
+// Temperature ADC conversion time: 12.5 cycles + 92.5 cycles = 105 cycles = 420 ticks.
 const int temperature_sample_time = (92.5 + 12.5 + 1)*4;
 
-// Current ADC conversion time: 12.5 cycles + 6.5 cycles = 19 cycles = 1.32us.
-const int current_sample_time = (6.5 + 12.5 + 1)*4;
+// Current ADC conversion time: 12.5 cycles + 2.5 cycles = 15 cycles = 60 ticks.
+const int current_sample_time = (2.5 + 12.5 + 1)*4;
 
-const int current_sample_lead_time = 1.5 * current_sample_time;
-
-// The ADC will read the temperature first then 2 phase currents; try to time the sampling 
-// time of the phase currents symmetrically around the peak of the PWM cycle.
-const int sample_lead_time = temperature_sample_time + current_sample_lead_time;
+// The ADC will read the temperature and reference first then 2 phase currents (for each ADC).
+// Try to time the sampling  time of the phase currents symmetrically around the peak of the PWM cycle.
+const int sample_lead_time = temperature_sample_time + 2 * current_sample_time;
 
 
 // Ticks per second at 144MHz clock speed. Each tick is ~6.94ns.
@@ -219,7 +223,7 @@ const int pwm_min = 2;
 // Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
 // bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
-const int pwm_max = pwm_base - max(current_sample_lead_time, minimum_bootstrap_duty) - pwm_min;
+const int pwm_max = pwm_base - max(current_sample_time, minimum_bootstrap_duty) - pwm_min;
 
 // Maximum duty for hold commands.
 const int pwm_max_hold = pwm_base * 2 / 10;

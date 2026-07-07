@@ -205,38 +205,32 @@ static inline uint8_t read_hall_sensors_state(){
 // ADC2 IN14 = Voltage
 // ADC1 Temperature sensor
 
-static inline ADCReadings read_adc_values(){    
-
-    // TODO: recalculate
-    // U and W phases are measured at the same time, followed by V and the reference voltage.
-    // Each sampling time is 20cycles, and the conversion time is 12.5 cycles. At 12MHz this is
-    // 2.08us. The injected sequence is triggered by TIM1 channel 4, which is set to trigger
-    // 16ticks after the update event (PWM counter resets). This is a delay of 16/72MHz = 222ns.
-    
-    // For reference a PWM period is 1536 ticks, so the PWM frequency is 72MHz / 1536 / 2 = 23.4KHz.
-    // The PWM period lasts 1/23.4KHz = 42.7us.
+static inline ADCReadings read_adc_values(){
 
     // Read the reference voltage first; this is the voltage of the reference line for the current sense amplifier.
-    const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3);
+    const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
 
     // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
     // Flip the sign of V because we accidentally wired it the other way (the correct way...). Oopsie doopsie.
-    const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1) - ref_readout);
-    const int v_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1) - ref_readout);
-    const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2) - ref_readout);
-    // const int x_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_2) - ref_readout);
+    const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout);
+    const int v_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3) - ref_readout);
+    const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4) - ref_readout);
+    // const int x_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_4) - ref_readout);
 
     const int sum_div_3 = (u_readout + v_readout + w_readout) / 3;
+
 
     // Note that the reference voltage is only connected to the current sense amplifier, not the
     // microcontroller. The ADC reference voltage is 3.3V.
 
     // Also read the controller chip temperature.
-    const uint16_t temp_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4);
+    const uint16_t temp_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
 
     // And motor supply voltage.
-    const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3);
+    const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
 
+
+    
     return ADCReadings{
         ThreePhase{
             u_readout - sum_div_3,

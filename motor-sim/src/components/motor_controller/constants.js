@@ -150,6 +150,9 @@ export const max_drive_current = 6.0;
 
 export const max_drive_power = 12;
 
-export const expected_ref_readout = 2048; // Half of 12 bit ADC range. It should be half the circuit voltage, but... it ain't.
+// The reference voltage should be 3.3V/2. With the internal voltage reference at 2.9V 
+// this means we expect to read 3.3/2 * 4096 / 2.9 = 2325.5. 
+export const expected_ref_readout = 2326;
 
-export const current_calibration_base = 1024; // Base for fixed point multiplication.
+// Base for fixed point multiplication.
+export const current_calibration_base = 1024;
