@@ -217,7 +217,9 @@ static inline ADCReadings read_adc_values(){
     const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4) - ref_readout);
     // const int x_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_4) - ref_readout);
 
-    const int sum_div_3 = (u_readout + v_readout + w_readout) / 3;
+
+    // TODO: do we need to adjust our values to sum 0? what's going on when they don't?!
+    // const int sum_div_3 = (u_readout + v_readout + w_readout) / 3;
 
 
     // Note that the reference voltage is only connected to the current sense amplifier, not the
@@ -233,9 +235,9 @@ static inline ADCReadings read_adc_values(){
     
     return ADCReadings{
         ThreePhase{
-            u_readout - sum_div_3,
-            v_readout - sum_div_3,
-            w_readout - sum_div_3,
+            u_readout/*  - sum_div_3 */,
+            v_readout/* - sum_div_3 */,
+            w_readout/* - sum_div_3 */,
         },
         ref_readout,
         temp_readout,
@@ -267,16 +269,9 @@ static void adc_init(){
     LL_ADC_Enable(ADC2);
     HAL_Delay(100);
     
-    // Start ADC conversions from the external trigger in TIM1.
-    // TODO: recheck timing of conversions; it was set on the rising trigger
-    LL_ADC_REG_StartConversion(ADC1);
-    LL_ADC_REG_StartConversion(ADC2);
 
     LL_ADC_INJ_StartConversion(ADC1);
     LL_ADC_INJ_StartConversion(ADC2);
-
-    // Gotta enable ext triggers for the second channel to work in dual mode.
-    LL_ADC_REG_StartConversion(ADC2);
 }
 
 // Select which interrupts to handle.

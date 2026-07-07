@@ -190,8 +190,8 @@ const int limiting_divisor_m1 = limiting_divisor - 1;
 // Temperature ADC conversion time: 12.5 cycles + 92.5 cycles = 105 cycles = 420 ticks.
 const int temperature_sample_time = (92.5 + 12.5 + 1)*4;
 
-// Current ADC conversion time: 12.5 cycles + 2.5 cycles = 15 cycles = 60 ticks.
-const int current_sample_time = (2.5 + 12.5 + 1)*4;
+// Current ADC conversion time: 12.5 cycles + 6.5 cycles = 19 cycles = 76 ticks.
+const int current_sample_time = (6.5 + 12.5 + 1)*4;
 
 // The ADC will read the temperature and reference first then 2 phase currents (for each ADC).
 // Try to time the sampling  time of the phase currents symmetrically around the peak of the PWM cycle.
