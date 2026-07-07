@@ -90,8 +90,8 @@ const int ratio = rotor_revolutions_per_electric * gear_ratio;
 // ------------------
 
 
-// Voltage reference for the ADC; it's a filtered 3.3V that powers the board.
-const float adc_voltage_reference = 3.3;
+// Voltage reference for the ADC; it's the in-built reference on the STM32G4.
+const float adc_voltage_reference = 2.9;
 
 // Shunt resistance for the motor phase current sensing is 10mOhm, 500mW resistor.
 const float motor_shunt_resistance = 0.010;
