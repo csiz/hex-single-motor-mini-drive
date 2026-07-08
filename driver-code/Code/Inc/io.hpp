@@ -5,9 +5,11 @@
 #include <stm32g4xx_ll_gpio.h>
 #include <stm32g4xx_ll_tim.h>
 
-#include "stm32g4xx_ll_adc.h"
+#include <stm32g4xx_ll_adc.h>
+
 #include "type_definitions.hpp"
 #include "constants.hpp"
+
 
 
 // Motor PWM control
@@ -210,8 +212,8 @@ static inline ADCReadings read_adc_values(){
     // Read the reference voltage first; this is the voltage of the reference line for the current sense amplifier.
     const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
 
-    // I wired the shunt resistors in the wrong way, so we need to flip the sign of the current readings.
-    // Flip the sign of V because we accidentally wired it the other way (the correct way...). Oopsie doopsie.
+    // We need to flip the sign of the current readings. Our convention is to have settle on positive
+    // current when we apply a positive PWM duty cycle to each respective phase.
     const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout);
     const int v_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3) - ref_readout);
     const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4) - ref_readout);
@@ -250,8 +252,9 @@ static void adc_init(){
 
     // Enable the ADC interrupt for the end of the injected sequence.
     LL_ADC_EnableIT_JEOS(ADC1);
-    // Disable the ADC interrupt for the end of the regular sequence; we are not using it.
-    LL_ADC_DisableIT_EOS(ADC1);
+    // We must **not** enable the ADC2 interrupts! Both will trigger if we do, at
+    // the same time and with the same data, but we only need to process it once.
+    LL_ADC_DisableIT_JEOS(ADC2);
     
 
 
@@ -266,11 +269,20 @@ static void adc_init(){
 
     // Enable the ADCs and wait for them to settle.
     LL_ADC_Enable(ADC1);
+    // We must enable both ADCs, otherwise the second one never triggers, not even once.
     LL_ADC_Enable(ADC2);
     HAL_Delay(100);
     
-
+    
+    // We must trigger ADC1 once to start triggering for injected conversions.
     LL_ADC_INJ_StartConversion(ADC1);
+
+    // And also trigger it for ADC2. Hmm? But what about simulatenous mode you ask?
+    // ... For some reason it triggers exactly once and never again. On the old STM32F103C8T6
+    // design the same code worked perfectly fine, but now it does not. We are instead in
+    // independent mode, but the ADCs are triggered by the same trigger event and have the
+    // same settings so they are effectively simultaneous. In the indepent mode we also have
+    // to start the conversion for ADC2.
     LL_ADC_INJ_StartConversion(ADC2);
 }
 

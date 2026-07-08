@@ -199,8 +199,6 @@ void set_angle(int16_t angle) {
     readout.angle = normalize_angle(angle);
 }
 
-
-
 // Critical function!! 23KHz PWM cycle
 // ===================================
 
@@ -217,8 +215,15 @@ void adc_interrupt_handler(){
     // Start by reading the ADC conversion data
     // ----------------------------------------
 
-    // Double check the ADC end of conversion flag was set.
-    if (not LL_ADC_IsActiveFlag_JEOS(ADC1)) return set_motor_outputs(breaking_motor_outputs);
+    // Double check the ADC end of conversion flag was set for both ADCs.
+    if (not (LL_ADC_IsActiveFlag_JEOS(ADC1) and LL_ADC_IsActiveFlag_JEOS(ADC2))) {
+        // If we only get one set of readings it may be a startup timing issue, ignore it and
+        // clear both flags to reset the ADCs.
+        LL_ADC_ClearFlag_JEOS(ADC1);
+        LL_ADC_ClearFlag_JEOS(ADC2);
+        return;
+    }
+
 
     const ADCReadings adc_readings = read_adc_values();
 

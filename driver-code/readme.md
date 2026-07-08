@@ -66,7 +66,10 @@ From the `Project Manager` tab select `Project` and switch `Toolchain / IDE` to 
     + USB: Enable it on the `Internal Phy`.
     ! Also enable it under "Middleware" as `USB_DEVICE` and select `Communication Device Class (Virtual Port Com)`.
 * Analog ADC1 & ADC2:
-    + Set `ADCs_Common_Settings` to `Dual combined regular simultaneous + injected simultaneous`.
+    + Set `ADCs_Common_Settings` to `Independent Mode`! Yes, this one, the other dual options
+    seem to work exactly once for ADC2, don't understand why... The ALTERTRIG option triggers one
+    ADC then the other but not both at the same time. We are left with independent mode, however
+    we trigger both ADCs from the same timer event and so they are still synchronized.
     + Set `External Trigger Source` to `Timer 1 Trigger Out event 2`.
     + Disable call HAL handler for ADC 1 & 2.
     + Setup the adc channels according to `io.hpp` needs.
