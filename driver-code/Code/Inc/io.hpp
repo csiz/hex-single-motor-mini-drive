@@ -193,6 +193,20 @@ static inline uint8_t read_hall_sensors_state(){
     return hall_state;
 }
 
+static inline void gpio_init(){
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    // Sigh we gotta set PB0, PC6 and PC7 to pull ups. They are part of timer 3 but aren't setup there.
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+}
 
 // ADC Mappings
 // ------------
@@ -371,6 +385,9 @@ static void enable_timers(){
 static inline void io_init(){
     // Setup PWM settings.
     LL_TIM_SetAutoReload(TIM1, pwm_autoreload);
+
+    // Setup the hall sensor pins to be pull-ups; they aren't initialized by CubeMX.
+    gpio_init();
 
     // Set which interrupts to handle.
     interrupts_init();

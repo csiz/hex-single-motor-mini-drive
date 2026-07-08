@@ -234,9 +234,9 @@ function compute_gradients({current_factor, inductance_factor}, data){
 
     const loss = square(residual);
 
-    const resistance_weight = (Math.abs(resistance_drop) < 0.1 || Math.abs(inductance_drop / resistance_drop) > 0.2) ? 0.0 : 1.0;
+    const resistance_weight = (Math.abs(resistance_drop) < 0.05 || Math.abs(inductance_drop / resistance_drop) > 0.1) ? 0.0 : 1.0;
 
-    const inductance_weight = (Math.abs(resistance_drop) < 0.1) ? 0.0 : Math.min(1.0, square(inductance_drop / resistance_drop));
+    const inductance_weight = (Math.abs(resistance_drop) < 0.05 || Math.abs(inductance_drop) < 0.05) ? 0.0 : 1.0;
 
     const current_factor_gradient = invalid_to_zero(loss * current_factor / (residual * 2 * (resistance_drop + inductance_drop)));
     const inductance_factor_gradient = invalid_to_zero(loss * inductance_factor / (residual * 2 * inductance_drop));
@@ -260,7 +260,7 @@ function compute_gradients({current_factor, inductance_factor}, data){
   });
 }
 
-function multi_mean(array_of_arrays, value_fn) {
+function mean_2d(array_of_arrays, value_fn) {
   return d3.mean(array_of_arrays, (array) => {
     return d3.mean(array, value_fn);
   });
@@ -291,22 +291,22 @@ function compute_calibration_instance({u_positive, u_negative, v_positive, v_neg
     const w_gradients = [w_positive_gradients, w_negative_gradients];
     const all_gradients = [...u_gradients, ...v_gradients, ...w_gradients];
 
-    const u_resistance_weight = multi_mean(u_gradients, (d) => d.resistance_weight);
-    const v_resistance_weight = multi_mean(v_gradients, (d) => d.resistance_weight);
-    const w_resistance_weight = multi_mean(w_gradients, (d) => d.resistance_weight);
+    const u_resistance_weight = mean_2d(u_gradients, (d) => d.resistance_weight);
+    const v_resistance_weight = mean_2d(v_gradients, (d) => d.resistance_weight);
+    const w_resistance_weight = mean_2d(w_gradients, (d) => d.resistance_weight);
 
-    const u_factor_gradient = multi_mean(u_gradients, (d) => d.current_factor_gradient) / u_resistance_weight;
-    const v_factor_gradient = multi_mean(v_gradients, (d) => d.current_factor_gradient) / v_resistance_weight;
-    const w_factor_gradient = multi_mean(w_gradients, (d) => d.current_factor_gradient) / w_resistance_weight;
+    const u_factor_gradient = mean_2d(u_gradients, (d) => d.current_factor_gradient) / u_resistance_weight;
+    const v_factor_gradient = mean_2d(v_gradients, (d) => d.current_factor_gradient) / v_resistance_weight;
+    const w_factor_gradient = mean_2d(w_gradients, (d) => d.current_factor_gradient) / w_resistance_weight;
 
-    const inductance_weight = multi_mean(all_gradients, (d) => d.inductance_weight);
-    const inductance_factor_gradient = multi_mean(all_gradients, (d) => d.inductance_factor_gradient) / inductance_weight;
+    const inductance_weight = mean_2d(all_gradients, (d) => d.inductance_weight);
+    const inductance_factor_gradient = mean_2d(all_gradients, (d) => d.inductance_factor_gradient) / inductance_weight;
 
-    const u_factor_stdev = Math.sqrt(multi_mean(u_gradients, (d) => d.current_factor_variance) / u_resistance_weight);
-    const v_factor_stdev = Math.sqrt(multi_mean(v_gradients, (d) => d.current_factor_variance) / v_resistance_weight);
-    const w_factor_stdev = Math.sqrt(multi_mean(w_gradients, (d) => d.current_factor_variance) / w_resistance_weight);
+    const u_factor_stdev = Math.sqrt(mean_2d(u_gradients, (d) => d.current_factor_variance) / u_resistance_weight);
+    const v_factor_stdev = Math.sqrt(mean_2d(v_gradients, (d) => d.current_factor_variance) / v_resistance_weight);
+    const w_factor_stdev = Math.sqrt(mean_2d(w_gradients, (d) => d.current_factor_variance) / w_resistance_weight);
 
-    const inductance_factor_stdev = Math.sqrt(multi_mean(all_gradients, (d) => d.inductance_factor_variance) / inductance_weight);
+    const inductance_factor_stdev = Math.sqrt(mean_2d(all_gradients, (d) => d.inductance_factor_variance) / inductance_weight);
 
     const u_factor_change = learning_rate * u_factor_gradient;
     const v_factor_change = learning_rate * v_factor_gradient;

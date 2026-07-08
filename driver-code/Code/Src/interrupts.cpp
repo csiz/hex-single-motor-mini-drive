@@ -85,9 +85,6 @@ const int angle_fix_max = 1024;
 // Residual for the angle integration; needed because the speed is higher resolution than the angle.
 int angle_residual = 0;
 
-// Keep the active output as ThreePhase to avoid a conversion.
-ThreePhase motor_outputs = {0, 0, 0};
-
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 ThreePhase previous_motor_outputs = {0, 0, 0};
 
@@ -258,25 +255,23 @@ void adc_interrupt_handler(){
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const int vcc_voltage = (adc_readings.vcc_readout + readout.vcc_voltage * 3) / 4;
 
-    // Calculate our outputs on the motor phases. The outputs are delayed by one cycle and then
-    // quickly averaged over time (half life of 1 cycle). The averaging is masking some effects
-    // from the inductance, but averaging like this greatly reduces the noise in inferred EMF
-    // readings so... we keep it.
-    motor_outputs = (previous_motor_outputs + motor_outputs) / 2;
-
+    // Calculate our outputs on the motor phases. The outputs kick in halfway through the PWM cycle,
+    // so we average the previous and current outputs to get the effective output for this cycle.
+    const ThreePhase motor_outputs = (previous_motor_outputs + get_duties(driver_state.motor_outputs)) / 2;
+    
     // Store the active motor outputs for the next cycle. 
     previous_motor_outputs = get_duties(driver_state.motor_outputs);
-
 
     // Calculate calibrated currents.
     const ThreePhase currents = adc_readings.currents * get_calibration_factors(current_calibration) / current_calibration_fixed_point;
 
+    // TODO: the below is no longer accurate, let's investigate later, for now keep the more basic calculation.
     // Get calibrated current divergence (the time unit is defined as 1 per cycle). We average out the
     // current diffs exactly as we do with the motor outputs; this seems to work best, can't explain why.
     //
     // I've attempted to use the finite differences approach `diff(x) = ((x[n] - x[n-1]) + (x[n+1] - x[n])) / (2 * dt)`
     // but it doesn't work as well as averaging both motor outputs and single step current diff.
-    const ThreePhase currents_diff = ((currents - get_currents(readout)) + get_currents_diff(readout)) / 2;
+    const ThreePhase currents_diff = currents - get_currents(readout);
 
     // Calculate the voltage drop across the coil inductance.
     const ThreePhase inductor_voltages = currents_diff * current_calibration.inductance_factor / phase_diff_conversion;

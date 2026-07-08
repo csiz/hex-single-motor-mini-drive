@@ -1354,7 +1354,7 @@ autosave_inputs(monitoring_plots);
 // Current calibration
 // -------------------
 
-const current_calibration_pwm_slider = inputs_wide_range([0, pwm_base], {value: pwm_base, step: 1.0, label: "Calibration max PWM:"});
+const current_calibration_pwm_slider = inputs_wide_range([0, pwm_base], {value: pwm_base * 0.2, step: 1.0, label: "Calibration max PWM:"});
 
 const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
 ```
@@ -1537,6 +1537,14 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
       y: "inductance_factor_gradient", label: "Inductance Factor Gradient", color: colors.v,
       draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.inductance_factor_variance)}),
     },
+    {
+      y: "resistance_weight", label: "Resistance Weight", color: colors.w,
+      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.resistance_weight_variance)}),
+    },
+    {
+      y: "inductance_weight", label: "Inductance Weight", color: colors_categories[3],
+      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.inductance_weight_variance)}),
+    }
   ],
 });
 
