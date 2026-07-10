@@ -233,11 +233,6 @@ static inline ADCReadings read_adc_values(){
     const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4) - ref_readout);
     // const int x_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_4) - ref_readout);
 
-
-    // TODO: do we need to adjust our values to sum 0? what's going on when they don't?!
-    // const int sum_div_3 = (u_readout + v_readout + w_readout) / 3;
-
-
     // Note that the reference voltage is only connected to the current sense amplifier, not the
     // microcontroller. The ADC reference voltage is 3.3V.
 
@@ -248,12 +243,11 @@ static inline ADCReadings read_adc_values(){
     const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
 
 
-    
     return ADCReadings{
         ThreePhase{
-            u_readout/*  - sum_div_3 */,
-            v_readout/* - sum_div_3 */,
-            w_readout/* - sum_div_3 */,
+            u_readout,
+            v_readout,
+            w_readout,
         },
         ref_readout,
         temp_readout,

@@ -263,7 +263,21 @@ void adc_interrupt_handler(){
     previous_motor_outputs = get_duties(driver_state.motor_outputs);
 
     // Calculate calibrated currents.
-    const ThreePhase currents = adc_readings.currents * get_calibration_factors(current_calibration) / current_calibration_fixed_point;
+    const ThreePhase nonzero_currents = adc_readings.currents * get_calibration_factors(current_calibration) / current_calibration_fixed_point;
+
+    // Make them sum to 0.
+    // 
+    // Beware! This will mask problems with any individual phase going dark.
+    const int sum_div_3 = (
+        std::get<0>(nonzero_currents) + 
+        std::get<1>(nonzero_currents) + 
+        std::get<2>(nonzero_currents)
+    ) / 3;
+    const ThreePhase currents = {
+        std::get<0>(nonzero_currents)- sum_div_3,
+        std::get<1>(nonzero_currents) - sum_div_3,
+        std::get<2>(nonzero_currents) - sum_div_3,
+    };
 
     // TODO: the below is no longer accurate, let's investigate later, for now keep the more basic calculation.
     // Get calibrated current divergence (the time unit is defined as 1 per cycle). We average out the
