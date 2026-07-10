@@ -26,7 +26,8 @@ const int max_16bit = int_16bit_base - 1; // 32767
 
 
 // PWM base value; representing full on duty cycle.
-const uint16_t pwm_base = 3072; // 23.4375 kHz PWM frequency with 144Mhz clock.
+// 23.4375 kHz PWM frequency with 144Mhz clock.
+const uint16_t pwm_base = 3072; 
 
 // Base and number of hall sectors.
 const uint8_t hall_sector_base = 6;
@@ -207,7 +208,7 @@ const int pwm_autoreload = pwm_base - 1;
 // Number of MCU clock ticks per PWM cycle; counting up then down.
 const int pwm_period = 2 * pwm_base; 
 
-// Number of PWM cycles per second: 5120 ticks @ 144MHz = 28.125KHz.
+// Number of PWM cycles per second.
 const int pwm_cycles_per_second = ticks_per_second / pwm_period;
 
 // Maximum duty cycle for the high side MOSFETs needs to allow some off time for the
@@ -223,7 +224,7 @@ const int pwm_min = 2;
 // Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
 // bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
-const int pwm_max = pwm_base - max(current_sample_time, minimum_bootstrap_duty) - pwm_min;
+const int pwm_max = pwm_base - max(2 * current_sample_time, minimum_bootstrap_duty) - pwm_min;
 
 // Maximum duty for hold commands.
 const int pwm_max_hold = pwm_base * 2 / 10;

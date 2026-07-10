@@ -602,7 +602,7 @@ function write_SetStateDriveSmooth(value) {
   const buffer = new Uint8Array(4);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setUint16(offset, value.pwm_value)
+  view.setInt16(offset, value.pwm_value)
   offset += 2;
   view.setUint16(offset, value.timeout)
   offset += 2;
@@ -611,7 +611,7 @@ function write_SetStateDriveSmooth(value) {
 function read_SetStateDriveSmooth(view, offset = 0) {
   let result = new SetStateDriveSmooth();
   
-  result.pwm_value = view.getUint16(offset);
+  result.pwm_value = view.getInt16(offset);
   offset += 2;
   result.timeout = view.getUint16(offset);
   offset += 2;

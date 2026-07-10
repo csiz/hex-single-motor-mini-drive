@@ -11,7 +11,6 @@
 #include "type_definitions.hpp"
 
 #include "usb_com.hpp"
-// #include "usbd_def.h"
 
 #include <cerrno>
 #include <stm32g4xx_hal.h>

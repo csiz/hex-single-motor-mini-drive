@@ -467,7 +467,7 @@ definitions:
   SetStateDriveSmooth:
     struct:
       pwm_value:
-        type: uint16
+        type: int16
         doc: PWM value to use for driving the motor.
       timeout:
         type: uint16

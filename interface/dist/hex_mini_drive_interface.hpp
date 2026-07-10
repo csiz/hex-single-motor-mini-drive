@@ -622,14 +622,14 @@ static inline SetStateDrivePeriodic read_SetStateDrivePeriodic(uint8_t const* bu
 }
 struct SetStateDriveSmooth {
   // PWM value to use for driving the motor.
-  uint16_t pwm_value;
+  int16_t pwm_value;
   // Time in pwm periods to drive the motor before stopping.
   uint16_t timeout;
 };
 
 static inline void write_SetStateDriveSmooth(uint8_t * buffer, SetStateDriveSmooth const& value) {
   size_t offset = 0;
-  write_uint16(buffer + offset, value.pwm_value);;
+  write_int16(buffer + offset, value.pwm_value);;
   offset += 2;
   write_uint16(buffer + offset, value.timeout);;
   offset += 2;
@@ -639,7 +639,7 @@ static inline SetStateDriveSmooth read_SetStateDriveSmooth(uint8_t const* buffer
   
   SetStateDriveSmooth result;
   
-  result.pwm_value = read_uint16(buffer + offset);
+  result.pwm_value = read_int16(buffer + offset);
   offset += 2;
   result.timeout = read_uint16(buffer + offset);
   offset += 2;
