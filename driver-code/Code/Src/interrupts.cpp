@@ -86,7 +86,7 @@ const int angle_fix_max = 1024;
 int angle_residual = 0;
 
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
-ThreePhase previous_motor_outputs = {0, 0, 0};
+ThreePhase previous_adj_motor_outputs = {0, 0, 0};
 
 int previous_emf_angle_error = 0;
 
@@ -255,12 +255,20 @@ void adc_interrupt_handler(){
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const int vcc_voltage = (adc_readings.vcc_readout + readout.vcc_voltage * 3) / 4;
 
+    const ThreePhase motor_outputs = get_duties(driver_state.motor_outputs);
+
+    const ThreePhase adj_motor_outputs = adjust_to_sum_zero(motor_outputs);
+    
     // Calculate our outputs on the motor phases. The outputs kick in halfway through the PWM cycle,
     // so we average the previous and current outputs to get the effective output for this cycle.
-    const ThreePhase motor_outputs = (previous_motor_outputs + get_duties(driver_state.motor_outputs)) / 2;
+    // 
+    // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
+    // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
+    // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
+    const ThreePhase drive_voltages = (previous_adj_motor_outputs + adj_motor_outputs) / 2 * vcc_voltage / pwm_base;
     
     // Store the active motor outputs for the next cycle. 
-    previous_motor_outputs = get_duties(driver_state.motor_outputs);
+    previous_adj_motor_outputs = adj_motor_outputs;
 
     // Calculate calibrated currents.
     const ThreePhase currents = adjust_to_sum_zero(
@@ -281,11 +289,7 @@ void adc_interrupt_handler(){
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const ThreePhase resistive_voltages = currents * phase_current_to_voltage / current_fixed_point;
 
-    // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
-    // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
-    // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
-    const ThreePhase drive_voltages = adjust_to_sum_zero(motor_outputs) * vcc_voltage / pwm_base;
-    
+
     // Infer the back EMF voltages for each phase.
     // 
     // Calculate the EMF voltage as the remainder after subtracting the electric circuit voltages.
