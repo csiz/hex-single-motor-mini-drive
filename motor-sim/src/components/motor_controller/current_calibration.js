@@ -1,4 +1,5 @@
-import {pwm_base, cycles_per_millisecond, millis_per_cycle, history_size, phase_resistance, phase_inductance} from "./constants.js";
+import {pwm_base, cycles_per_millisecond, millis_per_cycle, phase_resistance, phase_inductance} from "./constants.js";
+import {HISTORY_SIZE} from "hex-mini-drive-interface";
 import {MessageCode} from "./motor_controller.js";
 import {wait} from "./async_utils.js";
 import {square, invalid_to_zero} from "./math_utils.js";
@@ -9,7 +10,7 @@ import * as d3 from "d3";
 import _ from "lodash";
 
 
-const short_duration = history_size / 12 * millis_per_cycle;
+const short_duration = HISTORY_SIZE / 12 * millis_per_cycle;
 const settling_time = short_duration * 0.4;
 const settling_end = short_duration * 0.95;
 
@@ -48,7 +49,7 @@ export async function run_current_calibration(motor_controller, max_pwm_value){
   const drive_options = {timeout: settle_timeout, pwm_value: settle_strength};
   const test_options = {pwm_value: max_pwm_value, take_snapshot: 1};
   const reply = {
-    expected_messages: history_size,
+    expected_messages: HISTORY_SIZE,
     expected_code: MessageCode.READOUT,
   }
 
@@ -110,30 +111,30 @@ export async function run_current_calibration(motor_controller, max_pwm_value){
 
   console.info("V negative done:", v_negative_readout);
 
-  const times = d3.range(history_size).map((i) => i * millis_per_cycle);
+  const times = d3.range(HISTORY_SIZE).map((i) => i * millis_per_cycle);
 
   // Check all calibration data is complete.
-  if (u_positive_readout.length !== history_size) {
+  if (u_positive_readout.length !== HISTORY_SIZE) {
     console.error("U positive calibration data incomplete", u_positive_readout);
     return;
   }
-  if (u_negative_readout.length !== history_size) {
+  if (u_negative_readout.length !== HISTORY_SIZE) {
     console.error("U negative calibration data incomplete", u_negative_readout);
     return;
   }
-  if (v_positive_readout.length !== history_size) {
+  if (v_positive_readout.length !== HISTORY_SIZE) {
     console.error("V positive calibration data incomplete", v_positive_readout);
     return;
   }
-  if (v_negative_readout.length !== history_size) {
+  if (v_negative_readout.length !== HISTORY_SIZE) {
     console.error("V negative calibration data incomplete", v_negative_readout);
     return;
   }
-  if (w_positive_readout.length !== history_size) {
+  if (w_positive_readout.length !== HISTORY_SIZE) {
     console.error("W positive calibration data incomplete", w_positive_readout);
     return;
   }
-  if (w_negative_readout.length !== history_size) {
+  if (w_negative_readout.length !== HISTORY_SIZE) {
     console.error("W negative calibration data incomplete", w_negative_readout);
     return;
   }
@@ -392,7 +393,7 @@ export function compute_current_calibration(calibration_results){
     current_calibration: null,
   };
   
-  const stats = d3.range(history_size).map((i) => {
+  const stats = d3.range(HISTORY_SIZE).map((i) => {
     return {
       time: i * millis_per_cycle,
       expected: d3.mean(valid_calibration_results, ({sample}) => sample[i].expected),

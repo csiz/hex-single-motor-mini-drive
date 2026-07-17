@@ -425,7 +425,7 @@ static inline DriverState setup_driver_state(
             
             return DriverState{
                 .mode = DriverMode::SCHEDULE,
-                .duration = history_size,
+                .duration = hex_mini_drive::HISTORY_SIZE,
                 .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, pending_state.target_pwm)),
                 .schedule = DriveSchedule{
                     .pointer = pending_state.schedule.pointer,

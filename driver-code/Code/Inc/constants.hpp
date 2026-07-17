@@ -8,9 +8,6 @@
 
 #include "hex_mini_drive_interface.hpp"
 
-// Data storage available.
-const size_t history_size = 336;
-
 
 // Unit definitions
 // ----------------

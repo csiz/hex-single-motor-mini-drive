@@ -460,7 +460,7 @@ async function take_readout_snapshot(command_options = {}){
   const reply_data = await controller.send_command_and_await_reply({
     message: MessageCode.GET_READOUTS_SNAPSHOT,
     expected_code: MessageCode.READOUT,
-    expected_messages: history_size,
+    expected_messages: HISTORY_SIZE,
     ...command_options,
   });
 
@@ -476,7 +476,7 @@ async function test_command(message_code){
     await take_readout_snapshot({
       message,
       expected_code: MessageCode.READOUT,
-      expected_messages: history_size,
+      expected_messages: HISTORY_SIZE,
     });
   } else {
     await send_command(message);
@@ -897,7 +897,7 @@ invalidation.then(stop_command_loop);
 
 const max_timeline_period = 2000; // ms
 
-const history_duration = Math.ceil(history_size * millis_per_cycle);
+const history_duration = Math.ceil(HISTORY_SIZE * millis_per_cycle);
 
 const time_period_input = Inputs.range([1, max_timeline_period], {
   value: max_timeline_period,
@@ -1473,7 +1473,7 @@ const current_calibration_plot = plot_lines({
   subtitle: "Current Calibration",
   description: "Current calibration results for each phase.",
   width: 1200, height: 400,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1503,7 +1503,7 @@ const current_calibration_optimizing_plot = plot_lines({
   subtitle: "Current Calibration - Optimizing resistance & inductance",
   description: "Current calibration optimization results for each phase.",
   width: 1200, height: 300,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
@@ -1524,7 +1524,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
   subtitle: "Current Calibration - resistance & inductance gradients",
   description: "Current calibration optimization results for each phase.",
   width: 1200, height: 300,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Factor Change",
@@ -1553,7 +1553,7 @@ const current_calibration_positive_mean_plot = plot_lines({
   subtitle: "Mean Response - Positive",
   description: "Current calibration mean results for each phase driven positive.",
   width: 1200, height: 300,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1586,7 +1586,7 @@ const current_calibration_negative_mean_plot = plot_lines({
   subtitle: "Mean Response - Negative (inverted)",
   description: "Current calibration mean results for each phase driven negative.",
   width: 1200, height: 300,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Current (A)",
@@ -1943,7 +1943,7 @@ const position_calibration_pos_plot = plot_lines({
   subtitle: "Electric position | drive positive then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   y_domain: [-180, 180],
   x: "time",
   x_label: "Time (ms)",
@@ -1971,7 +1971,7 @@ const position_calibration_pos_speed_plot = plot_lines({
   subtitle: "Rotor Speed | drive positive then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -1994,7 +1994,7 @@ const position_calibration_neg_plot = plot_lines({
   subtitle: "Electric position | drive negative then break",
   description: "Angular position of the rotor with respect to the electric phases, 0 when magnetic N is aligned with phase U.",
   width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   y_domain: [-180, 180],
   x: "time",
   x_label: "Time (ms)",
@@ -2021,7 +2021,7 @@ const position_calibration_neg_speed_plot = plot_lines({
   subtitle: "Rotor Speed | drive negative then break",
   description: "Angular speed of the rotor in degrees per millisecond.",
   width: 1200, height: 150,
-  x_domain: [0, history_size * millis_per_cycle],
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
   y_label: "Angular Speed (degrees/ms)",
@@ -2154,7 +2154,7 @@ import {run_position_calibration, compute_position_calibration} from "./componen
 
 import {
   cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
-  history_size, max_calibration_current,
+  HISTORY_SIZE, max_calibration_current,
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
   current_conversion, max_drive_current, max_drive_power, max_angular_speed, max_16bit,
   convert_power_units_to_watts, convert_watts_to_power_units,

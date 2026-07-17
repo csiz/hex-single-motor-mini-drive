@@ -1,4 +1,5 @@
-import {pwm_base, cycles_per_millisecond, history_size} from "./constants.js";
+import {pwm_base, cycles_per_millisecond} from "./constants.js";
+import {HISTORY_SIZE} from "hex-mini-drive-interface";
 import {MessageCode} from "./motor_controller.js";
 import {wait} from "./async_utils.js";
 import {circular_stats_degrees, interpolate_degrees, positive_degrees} from "./angular_math.js";
@@ -16,7 +17,7 @@ export async function run_position_calibration(motor_controller) {
 
   const test_options = {pwm_value: 0, take_snapshot: 1};
   const reply = {
-    expected_messages: history_size,
+    expected_messages: HISTORY_SIZE,
     expected_code: MessageCode.READOUT,
   };
 
@@ -48,11 +49,11 @@ export async function run_position_calibration(motor_controller) {
   console.info("Drive negative done");
 
   
-  if (drive_positive.length != history_size) {
+  if (drive_positive.length != HISTORY_SIZE) {
     console.error("Drive positive data is not valid", drive_positive);
     return;
   }
-  if (drive_negative.length != history_size) {
+  if (drive_negative.length != HISTORY_SIZE) {
     console.error("Drive negative data is not valid", drive_negative);
     return;
   }

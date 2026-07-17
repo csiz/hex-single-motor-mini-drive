@@ -11,7 +11,7 @@
 
 const uint16_t pwm_test = pwm_base / 2;
 
-const uint16_t short_duration = history_size / schedule_size;
+const uint16_t short_duration = hex_mini_drive::HISTORY_SIZE / schedule_size;
 
 const PWMSchedule test_all_permutations = {
     {short_duration, 0,         0,         0},

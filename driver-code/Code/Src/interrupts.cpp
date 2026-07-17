@@ -50,7 +50,7 @@ hex_mini_drive::FullReadout shared_readout = readout;
 volatile bool shared_readout_lock = false;
 
 // History of light readouts so that we can record every cycle for a short snapshot.
-hex_mini_drive::Readout readout_history[history_size] = {};
+hex_mini_drive::Readout readout_history[hex_mini_drive::HISTORY_SIZE] = {};
 
 // Current write index.
 size_t readout_history_write_index = 0;
@@ -153,7 +153,7 @@ void readout_history_reset() {
     readout_history_read_index = 0;
 }
 bool readout_history_full(){
-    return readout_history_write_index >= history_size;
+    return readout_history_write_index >= hex_mini_drive::HISTORY_SIZE;
 }
 
 bool readout_history_available(){
@@ -164,13 +164,13 @@ hex_mini_drive::Readout readout_history_pop(){
     hex_mini_drive::Readout readout = readout_history[readout_history_read_index];
     readout_history_read_index += 1;
     // Reset both indexes if we have sent the whole history.
-    if (readout_history_read_index >= history_size) readout_history_reset();
+    if (readout_history_read_index >= hex_mini_drive::HISTORY_SIZE) readout_history_reset();
     return readout;
 }
 
 // (Private func) Push a readout to the history buffer.
 static inline bool readout_history_push(hex_mini_drive::Readout const& readout){
-    if (readout_history_write_index >= history_size) return false;
+    if (readout_history_write_index >= hex_mini_drive::HISTORY_SIZE) return false;
     readout_history[readout_history_write_index] = readout;
     readout_history_write_index += 1;
     return true;

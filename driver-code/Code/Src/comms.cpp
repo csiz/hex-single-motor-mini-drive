@@ -67,7 +67,7 @@ struct WireInterface {
     // Stop emptying the readouts queue; we want to keep the test data.
     wait_full_history = take_snapshot;
 
-    readouts_to_send = take_snapshot ? history_size : 0;
+    readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
 
     // Start the test schedule.
     set_motor_command(DriverState{ 
@@ -115,7 +115,7 @@ struct WireInterface {
         readout_history_reset();
         // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
         wait_full_history = true;
-        readouts_to_send = history_size;
+        readouts_to_send = hex_mini_drive::HISTORY_SIZE;
         return;
       }
       // Turn off the motor driver.

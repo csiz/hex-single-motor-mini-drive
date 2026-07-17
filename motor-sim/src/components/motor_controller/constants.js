@@ -1,4 +1,7 @@
 // Motor driver constants copied from the C++ code.
+
+export {HISTORY_SIZE} from "hex-mini-drive-interface";
+
 import {normalize_degrees, positive_degrees} from "./angular_math.js";
 
 // Motor phase constants
@@ -107,7 +110,6 @@ export function parse_state_flags(state_flags){
 export const pwm_base = 3072;
 export const pwm_period = 2 * pwm_base;
 export const max_timeout = 0xFFFF;
-export const history_size = 336;
 export const readout_base = 0x10000;
 
 export const voltage_reference = 2.9; // V
