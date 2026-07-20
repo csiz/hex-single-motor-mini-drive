@@ -223,8 +223,6 @@ const int pwm_min = 2;
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
 const int pwm_max = pwm_base - max(2 * current_sample_time, minimum_bootstrap_duty) - pwm_min;
 
-// Maximum duty for hold commands.
-const int pwm_max_hold = pwm_base * 2 / 10;
 
 // Maximum time (in pwm cycles) while a command is in effect.
 const int max_timeout = 0xFFFF;
@@ -436,7 +434,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .battery_power_control_ki = 8,
     .speed_control_ki = 8,
     .probing_angular_speed = speed_fixed_point / 2,
-    .max_pwm_difference = pwm_max_hold,
+    .max_pwm_difference = pwm_max / 4,
 
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .min_emf_for_motor_constant = voltage_fixed_point * 1,

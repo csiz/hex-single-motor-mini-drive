@@ -408,9 +408,9 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .motor_outputs = MotorOutputs {
                     .enable_flags = pending_state.motor_outputs.enable_flags,
-                    .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.motor_outputs.u_duty)),
-                    .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.motor_outputs.v_duty)),
-                    .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max_hold, pending_state.motor_outputs.w_duty))
+                    .u_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_pwm_difference, pending_state.motor_outputs.u_duty)),
+                    .v_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_pwm_difference, pending_state.motor_outputs.v_duty)),
+                    .w_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_pwm_difference, pending_state.motor_outputs.w_duty))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
@@ -448,7 +448,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = static_cast<int16_t>(normalize_angle(
                     pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0)
                 )),
-                .active_pwm = static_cast<int16_t>(min(pwm_max_hold, faster_abs(pending_state.active_pwm))),
+                .active_pwm = static_cast<int16_t>(min(control_parameters.max_pwm_difference, faster_abs(pending_state.active_pwm))),
                 .angular_speed = static_cast<int16_t>(clip_to(-max_angular_speed, max_angular_speed, pending_state.angular_speed)),
                 .active_angle_residual = 0,
             };
