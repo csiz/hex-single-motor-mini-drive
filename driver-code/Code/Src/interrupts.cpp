@@ -230,19 +230,6 @@ void adc_interrupt_handler(){
     // Read new data from the hall sensors.
     const uint8_t hall_state = read_hall_sensors_state();
 
-    // There are 3 hall sensors each getting turned on by a positive magnetic field. When 2 sensors
-    // are on at the same time, we infer that the rotor is halfway between the two sensors. When a
-    // single sensor is on the rotor north must be very close to that sensor. This divides the circle
-    // into 6 sectors, we number the sectors from 0 to 5 with 0 indicating rotor north over hall sensor U.
-    const uint8_t hall_sector = get_hall_sector(hall_state);
-
-    // Use `hall_sector_base` to flag for invalid hall sensor readings. This happens when no sensors are
-    // active, or if they are all on for some reason (probably the sensor type).
-    const bool hall_valid = hall_sector < hall_sector_base;
-
-    // Calculate the angle of the hall reading in our angle units.
-    const int hall_angle = hall_sector * hall_sector_span;
-
 
     // Do the data calculations
     // ------------------------
@@ -452,7 +439,7 @@ void adc_interrupt_handler(){
     correct_angle_counter = clip_to(
         0, angle_fix_max, 
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
-        correct_angle_counter + (incorrect_angle ? -1 : emf_fix) + (hall_valid * control_parameters.hall_angle_ki > 0 ? +1 : 0)
+        correct_angle_counter + (incorrect_angle ? -1 : emf_fix)
     );
 
     // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
@@ -462,10 +449,6 @@ void adc_interrupt_handler(){
     // Angle update
     // ------------
 
-    // When we don't have an angle estimate from the back EMF, then calculate the angle adjustment from
-    // the hall sensors when the hall sensors are valid.
-    const int hall_prediction_error = (not emf_detected) * hall_valid * signed_angle(hall_angle - predicted_angle);
-
     // Declare the angle to be correct after a threshold certainty.
     const bool angle_fix = correct_angle_counter >= angle_fix_threshold;
     
@@ -473,8 +456,7 @@ void adc_interrupt_handler(){
     // hall gain can be set to 0 to disable the hall sensor angle correction.
     const int angle_adjustment_hires = (
         angle_adjustment_residual +
-        prediction_error * control_parameters.rotor_angle_ki +
-        hall_prediction_error * control_parameters.hall_angle_ki
+        prediction_error * control_parameters.rotor_angle_ki
     );
     
     // Use the same high resolution trick as for the `angle_residual` to accumulate fractional adjustments.
