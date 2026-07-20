@@ -204,7 +204,7 @@ struct WireInterface {
         set_motor_command(DriverState{ 
           .mode = DriverMode::DRIVE_6_SECTOR, 
           .duration = std::get<BasicDriveCommand>(message.message_data).timeout, 
-          .active_pwm = clip_to_short(-pwm_max, +pwm_max, std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction),
+          .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
         });
         return;
       }
@@ -214,8 +214,8 @@ struct WireInterface {
           .mode = DriverMode::DRIVE_PERIODIC, 
           .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
           .active_angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
-          .active_pwm = clip_to_short(0, +pwm_max, std::get<SetStateDrivePeriodic>(message.message_data).pwm_value),
-          .angular_speed = clip_to_short(-max_angular_speed, +max_angular_speed, std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction),
+          .active_pwm = std::get<SetStateDrivePeriodic>(message.message_data).pwm_value,
+          .angular_speed = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
         });
         return;
       }
@@ -224,7 +224,7 @@ struct WireInterface {
         set_motor_command(DriverState{
           .mode = DriverMode::DRIVE_SMOOTH, 
           .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout, 
-          .target_pwm = clip_to_short(-pwm_max, +pwm_max, std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction),
+          .target_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
         });
         return;
       }
@@ -233,7 +233,7 @@ struct WireInterface {
         set_motor_command(DriverState{
           .mode = DriverMode::DRIVE_TORQUE, 
           .duration = std::get<SetStateDriveTorque>(message.message_data).timeout,
-          .secondary_target = clip_to_short(-max_drive_current, +max_drive_current, std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction),
+          .secondary_target = std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction,
         });
         return;
       }
@@ -242,7 +242,7 @@ struct WireInterface {
         set_motor_command(DriverState{
           .mode = DriverMode::DRIVE_BATTERY_POWER, 
           .duration = std::get<SetStateDriveBatteryPower>(message.message_data).timeout,
-          .secondary_target = clip_to_short(-max_drive_power, +max_drive_power, std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction),
+          .secondary_target = std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction,
         });
         return;
       }
@@ -251,7 +251,7 @@ struct WireInterface {
         set_motor_command(DriverState{
           .mode = DriverMode::DRIVE_SPEED, 
           .duration = std::get<SetStateDriveSpeed>(message.message_data).timeout,
-          .secondary_target = clip_to_short(-max_angular_speed, +max_angular_speed, std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction),
+          .secondary_target = std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
         });
         return;
       }
@@ -261,9 +261,9 @@ struct WireInterface {
           .mode = DriverMode::SEEK_ANGLE_POWER, 
           .duration = std::get<SetStateSeekAngleWithPower>(message.message_data).timeout,
           .seek_angle = SeekAngle{
-            .target_rotation = clip_to_short(-max_16bit, +max_16bit, std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction),
-            .target_angle = static_cast<int16_t>(normalize_angle(std::get<SetStateSeekAngleWithPower>(message.message_data).target_angle * control_parameters.motor_direction)),
-            .max_secondary_target = clip_to_short(0, max_drive_power, std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power),
+            .target_rotation = std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction,
+            .target_angle = std::get<SetStateSeekAngleWithPower>(message.message_data).target_angle * control_parameters.motor_direction,
+            .max_secondary_target = std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power,
           }
         });
         return;
@@ -274,9 +274,9 @@ struct WireInterface {
           .mode = DriverMode::SEEK_ANGLE_TORQUE, 
           .duration = std::get<SetStateSeekAngleWithTorque>(message.message_data).timeout,
           .seek_angle = SeekAngle{
-            .target_rotation = clip_to_short(-max_16bit, +max_16bit, std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction),
-            .target_angle = static_cast<int16_t>(normalize_angle(std::get<SetStateSeekAngleWithTorque>(message.message_data).target_angle * control_parameters.motor_direction)),
-            .max_secondary_target = clip_to_short(0, max_drive_current, std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current),
+            .target_rotation = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction,
+            .target_angle = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_angle * control_parameters.motor_direction,
+            .max_secondary_target = std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current,
           }
         });
         return;
@@ -287,9 +287,9 @@ struct WireInterface {
           .mode = DriverMode::SEEK_ANGLE_SPEED, 
           .duration = std::get<SetStateSeekAngleWithSpeed>(message.message_data).timeout,
           .seek_angle = SeekAngle{
-            .target_rotation = clip_to_short(-max_16bit, +max_16bit, std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction),
-            .target_angle = static_cast<int16_t>(normalize_angle(std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_angle * control_parameters.motor_direction)),
-            .max_secondary_target = clip_to_short(0, max_angular_speed, std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed),
+            .target_rotation = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction,
+            .target_angle = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_angle * control_parameters.motor_direction,
+            .max_secondary_target = std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed,
           }
         });
         return;

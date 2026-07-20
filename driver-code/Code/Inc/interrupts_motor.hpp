@@ -489,7 +489,7 @@ static inline DriverState setup_driver_state(
                 .active_angle_residual = driver_state.active_angle_residual,
                 .target_pwm_control = driver_state.target_pwm_control,
                 .lead_angle_control = driver_state.lead_angle_control,
-                .secondary_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target)),
+                .secondary_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.secondary_target)),
             };
 
         case DriverMode::DRIVE_SPEED:
