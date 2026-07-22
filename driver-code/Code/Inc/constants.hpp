@@ -24,27 +24,37 @@ const int max_16bit = int_16bit_base - 1; // 32767
 
 // PWM base value; representing full on duty cycle.
 // 23.4375 kHz PWM frequency with 144Mhz clock.
-const uint16_t pwm_base = 3072; 
-
-// Base and number of hall sectors.
-const uint8_t hall_sector_base = 6;
-
-// Angle units of a full circle: 1 angle unit = (tau = 2pi) / 1024.
-// 
-// Note that speed units and acceleration units are defined as angle units
-// per pwm cycle. This allows for easy maths during updates because the time
-// delta is always 1 pwm cycle per cycle.
-const int angle_base = 1024;
-
-// Bit mask for the angle reading.
-const uint16_t angle_bit_mask = angle_base - 1; // 0xFFF;
-
+const uint16_t pwm_base = 3072;
 
 // The ADC has a 12-bit resolution.
 const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 
 // Readout number base; we cycle back to 0 instead of reaching this value.
 const int readout_number_base = 1 << 16;
+
+
+// Base and number of hall sectors.
+const uint8_t hall_sector_base = 6;
+
+// Number of significant bits for the angle representation (20 bits so 
+// we can multiply with 12 bit parameter values and fit within 32 bits).
+const size_t angle_bit_count = 20;
+
+// Number of bits in the sin tables; 10 bits gives us 1024 values for a full circle.
+const size_t sin_tables_bit_count = 10;
+
+// Precompute the shift value to convert from angle units to sin table units.
+const size_t angle_to_sin_table_shift = angle_bit_count - sin_tables_bit_count;
+
+// Angle units of a full circle: 1 angle unit = (tau = 2pi) / 1024.
+// 
+// Note that speed units and acceleration units are defined as angle units
+// per pwm cycle. This allows for easy maths during updates because the time
+// delta is always 1 pwm cycle per cycle.
+const int angle_base = 1 << angle_bit_count; // 1048576
+
+// Bit mask for the angle reading.
+const uint32_t angle_bit_mask = angle_base - 1; // 0xFFFFF;
 
 
 // Readout bit packing
@@ -70,6 +80,7 @@ const uint16_t incorrect_rotor_angle_bit_mask = 0b1 << incorrect_rotor_angle_bit
 
 const size_t rotor_direction_flip_imminent_bit_offset = 6;
 const uint16_t rotor_direction_flip_imminent_bit_mask = 0b1 << rotor_direction_flip_imminent_bit_offset;
+
 
 // Position constants
 // ------------------
@@ -289,8 +300,12 @@ const int eighth_circle = angle_base / 8;
 const int half_circle_div_pi = static_cast<int>(half_circle / 3.14159265);
 
 // Normalize to a positive angle (0 to 2pi).
-inline constexpr int normalize_angle(int angle){
+inline constexpr int32_t normalize_angle(int32_t angle){
     return (angle + angle_base) & angle_bit_mask;
+}
+
+inline constexpr uint32_t normalize_angle(uint32_t angle){
+    return angle & angle_bit_mask;
 }
 
 // Normalize a 0 centerd angle; keeping its sign (-pi to pi).
@@ -302,13 +317,10 @@ inline constexpr int signed_angle(int angle){
 const int hall_sector_span = angle_base / hall_sector_base;
 
 // Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
-const int default_sector_transition_variance = square(10 * angle_base / 360);
+const int default_sector_transition_variance = square(5 * angle_base / 360);
 
 // Variance of a gaussian spread over the entire sector.
-const int default_sector_center_variance = square(30 * angle_base / 360);
-
-// Ensure that our biggest variance is small enough to be usable in gaussian updates while staying < max_16bit.
-static_assert(default_sector_center_variance < max_16bit, "max_variance must be less than 32768 (max 16-bit signed int)");
+const int default_sector_center_variance = square(10 * angle_base / 360);
 
 // The hall sensors trigger later than expected going each direction.
 const int default_hysterisis = 5 * angle_base / 360;
@@ -323,32 +335,10 @@ const int default_hysterisis = 5 * angle_base / 360;
 // Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
 const int max_rpm = 32'000 * rotor_revolutions_per_electric;
 
-// Speed needs more precision than angle. The speed is in angle units per pwm cycle / fixed point.
-const int speed_fixed_point = 128;
-
-static_assert(speed_fixed_point * quarter_circle - 1 <= max_16bit, "speed_fixed_point * 90 degrees must be less than 32768 (max 16-bit signed int)");
-
-// Maximum angular speed that we want to represent in the fixed point representation.
-const int max_angular_speed = max_rpm / 60 * angle_base * speed_fixed_point / pwm_cycles_per_second;
-
-// Largest angle we could traverse take in a single cycle when going at the maximum speed.
-const int max_angle_step = max_angular_speed / speed_fixed_point;
-
-// Minimum speed in rotor revolutions per minute (RPM) that we can represent with our units.
-const int min_rpm = 1 * pwm_cycles_per_second / angle_base * 60 / speed_fixed_point / rotor_revolutions_per_electric;
-
-static_assert(max_angular_speed < max_16bit, "max_angular_speed must be less than 32768 (max 16-bit signed int)");
-
-
-// Fixed point representation of the motor constant; units are V/(rad/s) = Volt * second.
-const int motor_constant_fixed_point = 1 << 20;
+const float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / pwm_cycles_per_second;
 
 // Conversion factor between our speed units and radians per second.
-const int radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_div_pi;
-
-// Acceleration needs more precision than speed; it's in angle units per pwm cycle per pwm cycle / fixed point series.
-const int acceleration_fixed_point = 512;
-
+const float radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_div_pi;
 
 // Calibration and Control Parameters
 // ----------------------------------
@@ -417,9 +407,9 @@ const int16_t seek_pid_fixed_point = 1024;
 const hex_mini_drive::ControlParameters default_control_parameters = {
 
     .rotor_angle_ki = 1024,
-    .rotor_angular_speed_ki = 64,
-    .rotor_acceleration_ki = 32,
-    .motor_constant_ki = 2,
+    .rotor_angular_speed_ki = 64.f / hires_fixed_point,
+    .rotor_acceleration_ki = 32.f / hires_fixed_point,
+    .motor_constant_ki = 2.f / hires_fixed_point,
     
     .motor_direction = +1,
     .incorrect_direction_threshold = 256,
@@ -432,9 +422,9 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .torque_control_ki = 32,
 
     .battery_power_control_ki = 8,
-    .speed_control_ki = 8,
-    .probing_angular_speed = speed_fixed_point / 2,
-    .max_pwm_difference = pwm_max / 4,
+    .speed_control_ki = 8.f / hires_fixed_point,
+    .probing_angular_speed = angle_base / 256, // 1/256 of a rotation per PWM cycle.
+    .max_pwm_difference = pwm_max / 2,
 
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .min_emf_for_motor_constant = voltage_fixed_point * 1,
@@ -463,7 +453,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.
-const int max_lead_angle_control = 60 * angle_base / 360 * hires_fixed_point;
+const int max_lead_angle_control = 60 * angle_base / 360;
 
 // Hi resolution value for pwm_max, used for the 32bit control integral.
 const int max_pwm_control = pwm_max * hires_fixed_point;
@@ -482,6 +472,8 @@ const int seek_position_error_reference = max_seek_rotations_error * seek_rotati
 // Maximum error in the seek angle; double the control output to overcome the differential term.
 const int max_seek_error = 2 * seek_position_error_reference;
 
+// TODO: all of the seek stuff below needs to be in float.
+
 // Reference speed for the PID control (the derivative term is the speed).
 const int seek_speed_error_reference = max_angular_speed / 4;
 
@@ -495,7 +487,7 @@ const int seek_integral_divisor = max_seek_error * seek_integral_duration;
 const int max_seek_integral_control = (seek_pid_fixed_point / 2);
 
 // Maximum value to accumulate in the seek integral.
-const int max_seek_integral = seek_integral_divisor * max_seek_integral_control;
+const int max_seek_integral = seek_integral_divisor * 4;
 
 
 // Calculation precomputed constants
@@ -508,9 +500,7 @@ const int phase_diff_conversion = (
 );
 
 // Conversion factor between the motor constant and our speed/voltage units.
-const int emf_motor_constant_conversion = (
-    motor_constant_fixed_point / voltage_fixed_point * speed_fixed_point / radians_per_sec_div_angle_base
-);
+const float emf_motor_constant_conversion = radians_per_sec_div_angle_base / voltage_fixed_point;
 
 // Cap for the high resolution angular speed observer. This caps the high resolution observer so that the 
 // low resolution output is capped to the maximum angular speed.
@@ -520,7 +510,7 @@ const int max_angular_speed_observer = max_angular_speed * hires_fixed_point;
 // Waveform and Trigonometric tables
 // ---------------------------------
 
-static_assert(angle_base == 1024, "angle_base must be 4096 for the sine and cosine lookup tables to work correctly");
+static_assert(sin_tables_bit_count == 10, "These sine and cosine lookup tables are generated for 1024 points.");
 
 static_assert(pwm_base == 3072, "pwm_base must be 3072 for this waveform table; remember to update the table if pwm_base changes");
 
@@ -594,9 +584,12 @@ const uint16_t phases_waveform[1024] = {
 };
 
 // Get the PWM fraction at the specified angle.
-static inline int16_t get_phase_pwm(const int16_t angle) {
-    return phases_waveform[normalize_angle(angle)];
+static inline int16_t get_phase_pwm(const int32_t angle) {
+    return phases_waveform[normalize_angle(angle) >> angle_to_sin_table_shift];
 }
+
+// Base of the sin table values.
+const int32_t sin_tables_base = 1024;
 
 // Lookup table for the sine function; 1024 entries for a full circle (2*pi). Table is also found
 // on the `3 Phase Tricks` page.
@@ -668,26 +661,26 @@ const int16_t sin_lookup[1024] = {
 };
 
 // Get the sine value for the given angle.
-static inline int16_t get_sin(const int16_t angle) {
-    return sin_lookup[normalize_angle(angle)];
+static inline int16_t get_sin(const int32_t angle) {
+    return sin_lookup[normalize_angle(angle) >> angle_to_sin_table_shift];
 }
 
 // Get the sine value for the angle and the 120 degrees phase shifts on either side.
-static inline ThreePhase get_three_phase_sin(int16_t angle) {
+static inline ThreePhase get_three_phase_sin(int32_t angle) {
     angle = normalize_angle(angle);
     return {
-        sin_lookup[angle],
-        sin_lookup[(angle + two_thirds_circle) & angle_bit_mask],
-        sin_lookup[(angle + third_circle) & angle_bit_mask]
+        sin_lookup[angle >> angle_to_sin_table_shift],
+        sin_lookup[((angle + two_thirds_circle) & angle_bit_mask) >> angle_to_sin_table_shift],
+        sin_lookup[((angle + third_circle) & angle_bit_mask) >> angle_to_sin_table_shift]
     };
 }
 
 // For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
-static inline int16_t get_cos(const int16_t angle) {
+static inline int16_t get_cos(const int32_t angle) {
     return get_sin(angle + quarter_circle);
 }
 
 // Get the cosine value for the angle and the 120 degrees phase shifts on either side.
-static inline ThreePhase get_three_phase_cos(int16_t angle) {
+static inline ThreePhase get_three_phase_cos(int32_t angle) {
     return get_three_phase_sin(angle + quarter_circle);
 }

@@ -39,7 +39,7 @@ bool is_motor_safed();
 void set_motor_command(DriverState const& driver_state);
 
 // Set the rotor angle directly, eg. from an external sensor.
-void set_angle(int16_t angle);
+void set_angle(int32_t angle);
 
 
 // Position tracking

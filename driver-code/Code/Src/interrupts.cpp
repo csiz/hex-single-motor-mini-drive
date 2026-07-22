@@ -65,9 +65,9 @@ size_t readout_history_read_index = 0;
 // Count the number of consecutive EMF detections.
 int number_of_emf_detections = 0;
 
-const int emf_speed_threshold = 16;
-const int emf_fix_threshold = 32;
-const int emf_fix_max = 64;
+const int emf_speed_threshold_count = 16;
+const int emf_fix_threshold_count = 32;
+const int emf_fix_max_count = 64;
 
 // Count for our belief that the rotor direction is incorrect. The EMF gives the axis
 // of the rotor magnetic field, but we can have a 180 degree error in the direction
@@ -79,22 +79,13 @@ const int incorrect_direction_warning = 64;
 // Track how many times we think our angle is correct.
 int correct_angle_counter = 0;
 
-const int angle_fix_threshold = 128;
-const int angle_fix_max = 1024;
-
-// Residual for the angle integration; needed because the speed is higher resolution than the angle.
-int angle_residual = 0;
+const int angle_fix_threshold_count = 128;
+const int angle_fix_max_count = 1024;
 
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 ThreePhase previous_adj_motor_outputs = {0, 0, 0};
 
-int previous_emf_angle_error = 0;
-
-int32_t rotor_acceleration_observer = 0;
-
-int32_t angular_speed_observer = 0;
-
-int16_t angle_adjustment_residual = 0;
+int32_t previous_emf_angle_error = 0;
 
 // Start with the missing hall sector marker.
 uint8_t previous_hall_sector = hall_sector_base;
@@ -192,7 +183,7 @@ void set_motor_command(DriverState const& driver_state){
     new_pending_state = true;
 }
 
-void set_angle(int16_t angle) {
+void set_angle(int32_t angle) {
     readout.angle = normalize_angle(angle);
 }
 
@@ -305,17 +296,10 @@ void adc_interrupt_handler(){
     // Predict the position; keeping track of fractional angles at the same resolution as
     // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
     // the rotor is exactly the angular speed.
-    const int angle_hires_diff = readout.angular_speed + angle_residual;
-
-    // Advance the angle and the angle residual.
-    const int unnormalized_predicted_angle = readout.angle + angle_hires_diff / speed_fixed_point;
+    const int32_t unnormalized_predicted_angle = readout.angle + readout.angular_speed;
     
-    // Keep track of the remaining angle fraction spanned according to the angular speed for which the integer angle
-    // doesn't change. Hopefully the compiler makes the % operation free considering it follows the division above.
-    angle_residual = angle_hires_diff % speed_fixed_point;
-
     // Compute and normalize the new rotor angle.
-    const int predicted_angle = normalize_angle(unnormalized_predicted_angle);
+    const int32_t predicted_angle = normalize_angle(unnormalized_predicted_angle);
 
 
     // Switching to DQ0 Frame
@@ -346,13 +330,13 @@ void adc_interrupt_handler(){
     // The back EMF generated is always along the quadrature axis. The current direction is mostly under our control,
     // if we want to drive the motor efficiently we must also align the current along the quadrature axis.
 
-    const int direct_current = dot(currents, three_phase_cos) / angle_base;
+    const int direct_current = dot(currents, three_phase_cos) / sin_tables_base;
 
-    const int quadrature_current = -dot(currents, three_phase_sin) / angle_base;
+    const int quadrature_current = -dot(currents, three_phase_sin) / sin_tables_base;
 
-    const int direct_emf_voltage = dot(emf_voltages, three_phase_cos) / angle_base;
+    const int direct_emf_voltage = dot(emf_voltages, three_phase_cos) / sin_tables_base;
 
-    const int quadrature_emf_voltage = -dot(emf_voltages, three_phase_sin) / angle_base;
+    const int quadrature_emf_voltage = -dot(emf_voltages, three_phase_sin) / sin_tables_base;
 
 
     // Current angle calculation
@@ -369,7 +353,7 @@ void adc_interrupt_handler(){
     const int instant_current_magnitude = faster_abs(
         get_cos(inductor_angle_offset) * direct_current + 
         get_sin(inductor_angle_offset) * quadrature_current
-    ) / angle_base;
+    ) / sin_tables_base;
 
     // The current measurements have a low noise floor, but it's not 0.
     const bool current_detected = instant_current_magnitude > 4;
@@ -388,7 +372,7 @@ void adc_interrupt_handler(){
     const int instant_emf_voltage_magnitude = faster_abs(
         get_cos(emf_angle_offset) * quadrature_emf_voltage - 
         get_sin(emf_angle_offset) * direct_emf_voltage
-    ) / angle_base;
+    ) / sin_tables_base;
 
     // Average the EMF voltage magnitude over a short duration to reduce noise.
     const int emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) / 4;
@@ -399,10 +383,14 @@ void adc_interrupt_handler(){
     const int emf_angle_error = angle_or_mirror(emf_angle_offset);
 
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
-    const int emf_angle_error_variance = min(
-        max_16bit,
-        1 + (square(emf_angle_error - previous_emf_angle_error) + readout.emf_angle_error_variance * 3) / 4
-    );
+    const int emf_angle_error_variance = 1 + (
+        square(clip_to(
+            -max_16bit, 
+            +max_16bit, 
+            emf_angle_error - previous_emf_angle_error
+        )) + 
+        readout.emf_angle_error_variance * 3
+    ) / 4;
 
     // Store the current error for the noise calculation next cycle.
     previous_emf_angle_error = emf_angle_error;
@@ -414,14 +402,14 @@ void adc_interrupt_handler(){
     );
 
     // Keep track of how many EMF detections we have in a row.
-    number_of_emf_detections = clip_to(0, emf_fix_max, number_of_emf_detections + (emf_detected ? +1 : -1));
+    number_of_emf_detections = clip_to(0, emf_fix_max_count, number_of_emf_detections + (emf_detected ? +1 : -1));
 
     // Let the angle adjust a few steps before using the diff to compute the speed; our initial guess starts
     // at an arbitrary position so the apparent acceleration is just the angle converging to the correct value.
-    const bool compute_speed = number_of_emf_detections >= emf_speed_threshold;
+    const bool compute_speed = number_of_emf_detections >= emf_speed_threshold_count;
 
     // Declare that we have an emf reading after enough detections.
-    const bool emf_fix = number_of_emf_detections >= emf_fix_threshold;
+    const bool emf_fix = number_of_emf_detections >= emf_fix_threshold_count;
 
     // Check if we have the incorrect rotor angle by checking if the quad EMF voltage has opposite sign to the angular speed.
     const bool incorrect_rotor_angle_detected = emf_fix and (quadrature_emf_voltage * readout.angular_speed > 32);
@@ -437,7 +425,7 @@ void adc_interrupt_handler(){
 
     // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
     correct_angle_counter = clip_to(
-        0, angle_fix_max, 
+        0, angle_fix_max_count, 
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
         correct_angle_counter + (incorrect_angle ? -1 : emf_fix)
     );
@@ -450,21 +438,11 @@ void adc_interrupt_handler(){
     // ------------
 
     // Declare the angle to be correct after a threshold certainty.
-    const bool angle_fix = correct_angle_counter >= angle_fix_threshold;
+    const bool angle_fix = correct_angle_counter >= angle_fix_threshold_count;
     
-    // Calculate the angle adjustment error using the parametrized gains. The
-    // hall gain can be set to 0 to disable the hall sensor angle correction.
-    const int angle_adjustment_hires = (
-        angle_adjustment_residual +
-        prediction_error * control_parameters.rotor_angle_ki
-    );
-    
-    // Use the same high resolution trick as for the `angle_residual` to accumulate fractional adjustments.
-    const int angle_adjustment = angle_adjustment_hires / hires_fixed_point;
+    // Calculate the angle adjustment error using the parametrized gains.
+    const int angle_adjustment = prediction_error * control_parameters.rotor_angle_ki / hires_fixed_point;
 
-    // The compiler should optimize the modulo after the same division above.
-    angle_adjustment_residual = angle_adjustment_hires % hires_fixed_point;
-    
     // Calculate the new angle based on the angle adjustment.
     const int unnormalized_angle = unnormalized_predicted_angle + angle_adjustment;
 
@@ -497,34 +475,25 @@ void adc_interrupt_handler(){
     // Calculate the new speed based on the angle adjustment.
     // 
     // Note that the angle change is relative to the current speed because of the prediction step.
-    const int speed_adjustment = (
+    const float speed_adjustment = (
         // If we have enough EMF detections, adjust the speed according to the prediction error.
-        compute_speed ? speed_fixed_point * prediction_error * control_parameters.rotor_angular_speed_ki :
+        compute_speed ? prediction_error * control_parameters.rotor_angular_speed_ki :
         // Maintain speed if we have an EMF reading, even if noisy.
         emf_detected ? 0 :
         // Otherwise drop the speed to 0.
-        -angular_speed_observer
+        -readout.angular_speed
     );
     
-    // Clamp the speed observer such that the low resolution speed is clamped to `max_angular_speed`.
-    angular_speed_observer = clip_to(
-        -max_angular_speed_observer, 
-        +max_angular_speed_observer, 
-        angular_speed_observer + speed_adjustment
-    );
 
-    const int angular_speed = angular_speed_observer / hires_fixed_point;
+    const float angular_speed = readout.angular_speed + speed_adjustment;
     
     // Calculate the acceleration based on the speed change. We can use gradient descent to slowly
     // decrease our speed error. Equivalent to an exponential moving average, however framing it as
     // a gradient descent allows us to integrate the error into a higher resolution observer.
-    const int acceleration_error = ((angular_speed - readout.angular_speed) * acceleration_fixed_point - readout.rotor_acceleration);
+    const float acceleration_error = (speed_adjustment - readout.rotor_acceleration);
 
-    // Update the high resolution observer for the rotor acceleration.
-    rotor_acceleration_observer += acceleration_error * control_parameters.rotor_acceleration_ki;
-
-    const int rotor_acceleration = rotor_acceleration_observer / hires_fixed_point;
-
+    // Update the acceleration observer.
+    const float rotor_acceleration = acceleration_error * control_parameters.rotor_acceleration_ki;
 
     // Calculate the power use
     // -----------------------
@@ -581,7 +550,8 @@ void adc_interrupt_handler(){
     // +limiting_divisor_m1 so we do ceiling of the division.
     // 
     // The penalty should normally be negative indicating we can increase the PWM.
-    const int pwm_penalty = (max(
+    // TODO: redo penalty calculations.
+    const int pwm_penalty = 0 * (max(
         vcc_mosfet_driver_undervoltage - vcc_voltage,
         avg_resistive_power - control_parameters.max_resistive_power,
         avg_total_power - control_parameters.max_power_draw,

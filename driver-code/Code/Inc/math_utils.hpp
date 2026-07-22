@@ -49,3 +49,8 @@ static inline constexpr int signed_ceil_div(const int x, const int y) {
 static inline constexpr int faster_abs(int value) {
     return value < 0 ? -value : value;
 }
+
+// Get the absolute value of a number; somehow the std implementation is slower.
+static inline constexpr float faster_abs(float value) {
+    return value < 0.f ? -value : value;
+}

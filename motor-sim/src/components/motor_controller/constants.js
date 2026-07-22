@@ -22,8 +22,10 @@ export const phase_time_constant = phase_inductance / phase_resistance;
 
 export const ticks_per_millisecond = 144000;
 
+export const pwm_cycles_per_second = 23437;
+
 // PWM motor cycles per millisecond.
-export const cycles_per_millisecond = 28125 / 1000.0; // 28125 cycles per second: 144MHz / (2*2560) / 1000.0
+export const cycles_per_millisecond = pwm_cycles_per_second / 1000.0;
 
 // Millisecond (fractions) per PWM motor cycle.
 export const millis_per_cycle = 1.0/cycles_per_millisecond;
@@ -31,10 +33,7 @@ export const millis_per_cycle = 1.0/cycles_per_millisecond;
 // Angle units
 // -----------
 
-// Maximum value for a 16 bit signed integer.
-export const max_16bit = 32767;
-
-export const angle_base = 1024;
+export const angle_base = 1048576;
 
 // Convert degrees to angle units.
 export function degrees_to_angle_units(degrees){
@@ -57,26 +56,33 @@ export function unbounded_angle_units_to_degrees(angle){
 // Speed units
 // -----------
 
-export const speed_fixed_point = 128;
-
 export function speed_units_to_degrees_per_millisecond(speed){
-  return unbounded_angle_units_to_degrees(speed / speed_fixed_point) * cycles_per_millisecond;
+  return unbounded_angle_units_to_degrees(speed) * cycles_per_millisecond;
 }
 
 export function degrees_per_millisecond_to_speed_units(speed){
-  return unbounded_degrees_to_angle_units(speed * speed_fixed_point / cycles_per_millisecond);
+  return unbounded_degrees_to_angle_units(speed / cycles_per_millisecond);
 }
 
-export const max_angular_speed = speed_units_to_degrees_per_millisecond(11928);
+// Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
+const rotor_revolutions_per_electric = 4;
 
-export const acceleration_fixed_point = 512;
+const max_rpm = 32000 * rotor_revolutions_per_electric;
+
+// Gear ratio of our chosen motor.
+const gear_ratio = 6 * 6 * 6;
+
+// Total ratio between the electrical angle and the output shaft angle.
+const ratio = rotor_revolutions_per_electric * gear_ratio;
+
+export const max_angular_speed = speed_units_to_degrees_per_millisecond(1.0 * max_rpm * angle_base / 60.0 / pwm_cycles_per_second);
 
 export function acceleration_units_to_degrees_per_millisecond_squared(acceleration){
-  return speed_units_to_degrees_per_millisecond(acceleration / acceleration_fixed_point) * cycles_per_millisecond;
+  return speed_units_to_degrees_per_millisecond(acceleration) * cycles_per_millisecond;
 }
 
 export function degrees_per_millisecond_squared_to_acceleration_units(acceleration){
-  return degrees_per_millisecond_to_speed_units(acceleration * acceleration_fixed_point / cycles_per_millisecond);
+  return degrees_per_millisecond_to_speed_units(acceleration / cycles_per_millisecond);
 }
 
 

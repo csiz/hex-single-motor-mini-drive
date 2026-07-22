@@ -166,10 +166,10 @@ export const basic_types = {
       code.write`static inline void write_float32(uint8_t * buffer, float const& value) {`;
       code.indent();
       code.write`uint8_t const* value_pointer = reinterpret_cast<uint8_t const*>(&value);`;
-      code.write`buffer[0] = value_pointer[0];`;
-      code.write`buffer[1] = value_pointer[1];`;
-      code.write`buffer[2] = value_pointer[2];`;
-      code.write`buffer[3] = value_pointer[3];`;
+      code.write`buffer[3] = value_pointer[0];`;
+      code.write`buffer[2] = value_pointer[1];`;
+      code.write`buffer[1] = value_pointer[2];`;
+      code.write`buffer[0] = value_pointer[3];`;
       code.dedent();
       code.write`}`;
     },
@@ -178,10 +178,10 @@ export const basic_types = {
       code.indent();
       code.write`float value;`;
       code.write`uint8_t * value_pointer = reinterpret_cast<uint8_t*>(&value);`;
-      code.write`value_pointer[0] = buffer[0];`;
-      code.write`value_pointer[1] = buffer[1];`;
-      code.write`value_pointer[2] = buffer[2];`;
-      code.write`value_pointer[3] = buffer[3];`;
+      code.write`value_pointer[0] = buffer[3];`;
+      code.write`value_pointer[1] = buffer[2];`;
+      code.write`value_pointer[2] = buffer[1];`;
+      code.write`value_pointer[3] = buffer[0];`;
       code.write`return value;`;
       code.dedent();
       code.write`}`;

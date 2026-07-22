@@ -130,10 +130,10 @@ struct DriveSchedule {
 
 // Drive the motor to a specific position.
 struct SeekAngle {
+    // The target angle. This is the fractional part of the target rotation.
+    int32_t target_angle;
     // The target rotation index we want the motor to drive towards.
     int16_t target_rotation;
-    // The target angle. This is the fractional part of the target rotation.
-    int16_t target_angle;
     // The maximum control value (torque, power or speed) used to drive the motor to the target angle.
     int16_t max_secondary_target;
     // The high resolution integral error for the PID control loop.
@@ -152,31 +152,24 @@ struct DriverState {
     uint16_t duration;
 
     // Angle at which the motor is currently driven.
-    int16_t active_angle;
+    int32_t active_angle;
     
     // PWM value actively used to drive the motor.
     int16_t active_pwm;
     
     // Angular speed at which the active_angle is spinning.
-    int16_t angular_speed;
+    float angular_speed;
     
-    // The angle fraction remaining. Needed because the angular speed has higher
-    // resolution than the angle; so we need to keep track of partial increments.
-    int16_t active_angle_residual;
-
     // The target PWM value that we are aiming for with the smooth control. This
     // target can be set by the advanced control algorithms.
     int16_t target_pwm;
 
     // The lead angle value used to adjust the angle of the driven phase
     // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
-    int16_t lead_angle;
+    int32_t lead_angle;
 
     // Higher resolution control value for the target PWM.
     int32_t target_pwm_control;
-
-    // Higher resolution control value for the lead angle.
-    int32_t lead_angle_control;
 
     int16_t secondary_target;
 

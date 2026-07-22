@@ -19,8 +19,6 @@ uint32_t last_update_time_millis = 0;
 float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
 
-int32_t motor_constant_observer = 0;
-
 void app_init() {
 
     io_init();
@@ -70,9 +68,9 @@ void app_tick() {
     // We calculate the motor constant by gradient descent using the configured integral gain.
 
     // The voltage magnitude is always positive, also use the positive angular speed.
-    const int abs_angular_speed = faster_abs(readout.angular_speed);
+    const float abs_angular_speed = readout.angular_speed > 0 ? readout.angular_speed : -readout.angular_speed;
 
-    const int predicted_emf_voltage = abs_angular_speed * readout.motor_constant / emf_motor_constant_conversion;
+    const float predicted_emf_voltage = abs_angular_speed * readout.motor_constant * emf_motor_constant_conversion;
 
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
 
@@ -80,12 +78,9 @@ void app_tick() {
     const bool compute_motor_constant = angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
 
     // Get the error (gradient) for the motor constant observer.
-    const int motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
+    const float motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
 
-    // Adjust the high resolution observer for the motor constant.
-    motor_constant_observer += motor_constant_error * control_parameters.motor_constant_ki;
-
-    const int motor_constant = motor_constant_observer / hires_fixed_point;
+    const float motor_constant = readout.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
 
 
     // Write all values

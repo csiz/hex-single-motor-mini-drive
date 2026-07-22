@@ -261,8 +261,8 @@ struct WireInterface {
           .mode = DriverMode::SEEK_ANGLE_POWER, 
           .duration = std::get<SetStateSeekAngleWithPower>(message.message_data).timeout,
           .seek_angle = SeekAngle{
-            .target_rotation = std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction,
             .target_angle = std::get<SetStateSeekAngleWithPower>(message.message_data).target_angle * control_parameters.motor_direction,
+            .target_rotation = std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction,
             .max_secondary_target = std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power,
           }
         });
@@ -274,8 +274,8 @@ struct WireInterface {
           .mode = DriverMode::SEEK_ANGLE_TORQUE, 
           .duration = std::get<SetStateSeekAngleWithTorque>(message.message_data).timeout,
           .seek_angle = SeekAngle{
-            .target_rotation = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction,
             .target_angle = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_angle * control_parameters.motor_direction,
+            .target_rotation = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction,
             .max_secondary_target = std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current,
           }
         });
@@ -287,8 +287,8 @@ struct WireInterface {
           .mode = DriverMode::SEEK_ANGLE_SPEED, 
           .duration = std::get<SetStateSeekAngleWithSpeed>(message.message_data).timeout,
           .seek_angle = SeekAngle{
-            .target_rotation = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction,
             .target_angle = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_angle * control_parameters.motor_direction,
+            .target_rotation = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction,
             .max_secondary_target = std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed,
           }
         });

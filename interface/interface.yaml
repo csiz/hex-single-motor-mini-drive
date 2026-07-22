@@ -200,7 +200,7 @@ definitions:
     const: 1024
 
   PositiveNegativeTransition:
-    type: uint16
+    type: uint32
     array_len: 2
 
   SectorTransitions:
@@ -208,7 +208,7 @@ definitions:
     array_len: 6
 
   SectorCenters:
-    type: uint16
+    type: uint32
     array_len: 6
 
   UnitTestOutput:
@@ -271,15 +271,15 @@ definitions:
         doc: Phase W current readout difference to previous readout.
 
       angle:
-        type: int16
+        type: int32
         doc: Best estimate for the rotor magnetic angle.
 
       angle_adjustment:
-        type: int16
+        type: int32
         doc: Error of the angle measured from EMF to the rotor angle prediction.
 
       angular_speed:
-        type: int16
+        type: float32
         doc: Best estimate for the rotor magnetic angular speed.
 
       vcc_voltage:
@@ -377,17 +377,17 @@ definitions:
         doc: Inductive power; the power pushed into the inductor magnetic fields.
 
       motor_constant:
-        type: int16
+        type: float32
         doc: |
           Motor constant; a measure of how strong the motor is. It is computed as the 
           ratio between the quadrature EMF voltage and the angular speed.
 
       inductor_angle:
-        type: int16
+        type: int32
         doc: The current angle.
 
       rotor_acceleration:
-        type: int16
+        type: float32
         doc: The measured acceleration of the rotor.
 
       rotations:
@@ -399,11 +399,11 @@ definitions:
         doc: Magnitude of the phase current in the DQ0 coordinate frame.
 
       emf_angle_error_variance:
-        type: int16
+        type: int32
         doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
 
       lead_angle:
-        type: int16
+        type: int32
         doc: | 
           Lead angle for the motor driving; used to adjust the phase voltages to drive the 
           motor efficiently.
@@ -460,7 +460,7 @@ definitions:
         type: uint16
         doc: Starting angle.
       angular_speed:
-        type: int16
+        type: float32
         doc: Angular speed to drive the motor at.
       
 
@@ -494,7 +494,7 @@ definitions:
   SetStateDriveSpeed:
     struct:
       target_speed:
-        type: int16
+        type: float32
         doc: Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
       timeout:
         type: uint16
@@ -506,7 +506,7 @@ definitions:
         type: int16
         doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
       target_angle:
-        type: uint16
+        type: uint32
         doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
       timeout:
         type: uint16
@@ -521,7 +521,7 @@ definitions:
         type: int16
         doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
       target_angle:
-        type: uint16
+        type: uint32
         doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
       timeout:
         type: uint16
@@ -536,13 +536,13 @@ definitions:
         type: int16
         doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
       target_angle:
-        type: uint16
+        type: uint32
         doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
       timeout:
         type: uint16
         doc: Time in pwm periods to drive the motor before stopping.
       max_drive_speed:
-        type: uint16
+        type: float32
         doc: Maximum speed to use for driving the motor; used to prevent overheating and overcurrent.
 
   CurrentCalibration:
@@ -619,23 +619,23 @@ definitions:
 
     struct:
       rotor_angle_ki:
-        type: int16
+        type: int32
         doc: Magnet position integral gain.
 
       rotor_angular_speed_ki:
-        type: int16
+        type: float32
         doc: Magnet angular speed integral gain.
 
       rotor_acceleration_ki:
-        type: int16
+        type: float32
         doc: Averaging gain for the acceleration of the rotor.
 
       motor_constant_ki:
-        type: int16
+        type: float32
         doc: Motor constant integral gain.
 
       motor_direction:
-        type: int16
+        type: int32
         doc: Sign of the motor direction (positive by default, negative to reverse turning direction).
 
       incorrect_direction_threshold:
@@ -647,7 +647,7 @@ definitions:
         doc: Maximum PWM adjustment per cycle.
 
       max_angle_change:
-        type: int16
+        type: int32
         doc: Maximum target angle change per cycle.
 
       min_emf_voltage:
@@ -655,11 +655,11 @@ definitions:
         doc: Minimum EMF voltage to consider EMF detected (above the noise level)
 
       hall_angle_ki:
-        type: int16
+        type: int32
         doc: Integral gain for the hall angle adjustment (0 to ignore).
 
       lead_angle_control_ki:
-        type: int16
+        type: int32
         doc: Lead angle integral gain for efficient driving.
 
       torque_control_ki:
@@ -671,11 +671,11 @@ definitions:
         doc: Battery power control gain.
 
       speed_control_ki:
-        type: int16
+        type: float32
         doc: Speed control gain.
 
       probing_angular_speed:
-        type: int16
+        type: float32
         doc: Probing angular speed for initial EMF detection.
 
       max_pwm_difference:
@@ -683,7 +683,7 @@ definitions:
         doc: Maximum PWM difference from motor PWM required to compensate back EMF.
 
       emf_angle_error_variance_threshold:
-        type: int16
+        type: int32
         doc: Maximum EMF angle correction variance when it's too noisy to update the angle.
 
       min_emf_for_motor_constant:
@@ -699,7 +699,7 @@ definitions:
         doc: Resistive power long duration average observer gain.
 
       max_angular_speed:
-        type: int16
+        type: float32
         doc: Maximum angular speed of the motor.
 
       max_power_draw:
@@ -773,5 +773,5 @@ definitions:
   SetAngle:
     struct:
       angle:
-        type: uint16
+        type: uint32
         doc: Set the current angle of the motor; used for initial angle calibration.
