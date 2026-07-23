@@ -304,7 +304,7 @@ void adc_interrupt_handler(){
 
     // Switching to DQ0 Frame
     // ----------------------
-
+    // 
     // Calculate the park transformed currents and voltages
     // 
     // Use gradient descent to estimate the inductor current angle. We don't have compute to
@@ -341,6 +341,11 @@ void adc_interrupt_handler(){
 
     // Current angle calculation
     // -------------------------
+    // 
+    // We calculate the angle of the current vector that is running through the motor coils.
+    // 
+    // In our convention the inductors driven with positive current form a south pole that attracts
+    // the north pole of the rotor.
 
     // Calculate the angle at which the current is running on the motor coils. The angle offset is
     // with respect to the predicted angle as that was the angle used in the park transform.
