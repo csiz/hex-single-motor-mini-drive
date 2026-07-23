@@ -69,12 +69,6 @@ const int emf_speed_threshold_count = 16;
 const int emf_fix_threshold_count = 32;
 const int emf_fix_max_count = 64;
 
-// Count for our belief that the rotor direction is incorrect. The EMF gives the axis
-// of the rotor magnetic field, but we can have a 180 degree error in the direction
-// until we identify the rotation direction.
-int incorrect_direction_detections = 0;
-
-const int incorrect_direction_warning = 64;
 
 // Track how many times we think our angle is correct.
 int correct_angle_counter = 0;
@@ -86,10 +80,6 @@ const int angle_fix_max_count = 1024;
 ThreePhase previous_motor_mid_pwm_duties = {0, 0, 0};
 
 int32_t previous_emf_angle_error = 0;
-
-// Start with the missing hall sector marker.
-uint8_t previous_hall_sector = hall_sector_base;
-
 
 
 // Motor driver state
@@ -278,21 +268,6 @@ void adc_interrupt_handler(){
     // Position Update
     // ---------------
 
-    // Flip the rotor if we have reached the threshold number of incorrect detections.
-    const bool rotor_direction_flip = incorrect_direction_detections >= control_parameters.incorrect_direction_threshold;
-
-    // Flip the rotor angle if we have reached the threshold number of incorrect detections.
-    // 
-    // Note: do this before computing any DQ0 values as they should be consistent with the angle.
-    if (rotor_direction_flip) {
-        // It should be normalized below.
-        readout.angle += half_circle;
-
-        // Reset the incorrect direction counter on flip.
-        incorrect_direction_detections = 0;
-    }
-
-
     // Predict the position; keeping track of fractional angles at the same resolution as
     // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
     // the rotor is exactly the angular speed.
@@ -416,23 +391,13 @@ void adc_interrupt_handler(){
     // Declare that we have an emf reading after enough detections.
     const bool emf_fix = number_of_emf_detections >= emf_fix_threshold_count;
 
-    // Check if we have the incorrect rotor angle by checking if the quad EMF voltage has opposite sign to the angular speed.
-    const bool incorrect_rotor_angle_detected = emf_fix and (quadrature_emf_voltage * readout.angular_speed > 32);
-
-    // Keep track of the number of times we detected an incorrect direction for the speed and EMF sign.
-    incorrect_direction_detections = max(0, incorrect_direction_detections + (incorrect_rotor_angle_detected ? +1 : -1));
-
-    // Set the flag for immininent rotor correction, we need to set it over multiple cycles otherwise it might be missed.
-    const bool rotor_direction_flip_imminent = incorrect_direction_detections >= incorrect_direction_warning;
-
-    // Our angle is incorrect if we're detecting a flip; or if we don't have an EMF reading whilst driving the motor.
-    const bool incorrect_angle = incorrect_direction_detections or (driver_state.active_pwm and not emf_fix);
 
     // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
     correct_angle_counter = clip_to(
         0, angle_fix_max_count, 
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
-        correct_angle_counter + (incorrect_angle ? -1 : emf_fix)
+        // Our angle is incorrect if we don't have an EMF reading whilst driving the motor.
+        correct_angle_counter + ((driver_state.active_pwm and not emf_fix) ? -1 : emf_fix)
     );
 
     // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
@@ -540,8 +505,9 @@ void adc_interrupt_handler(){
         (emf_detected << emf_detected_bit_offset) |
         (current_detected << current_detected_bit_offset) |
         (angle_fix << angle_fix_bit_offset) |
-        (incorrect_rotor_angle_detected << incorrect_rotor_angle_bit_offset) |
-        (rotor_direction_flip_imminent << rotor_direction_flip_imminent_bit_offset) |
+        // TODO: remove/reuse unused flags
+        (false << incorrect_rotor_angle_bit_offset) |
+        (false << rotor_direction_flip_imminent_bit_offset) |
         (hall_state << hall_state_bit_offset)
     );
 
