@@ -1,6 +1,6 @@
 #pragma once
 
-#include "interrupts_data.hpp"
+#include "interrupts.hpp"
 #include "interrupts_pid.hpp"
 
 #include "type_definitions.hpp"

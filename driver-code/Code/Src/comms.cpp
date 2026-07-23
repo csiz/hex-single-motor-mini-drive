@@ -2,7 +2,7 @@
 
 #include "hex_mini_drive_interface.hpp"
 
-#include "interrupts_data.hpp"
+#include "interrupts.hpp"
 #include "parameters_store.hpp"
 
 #include "integer_math.hpp"

@@ -1,7 +1,7 @@
 #include "app_main.hpp"
 
 #include "interrupts.hpp"
-#include "interrupts_data.hpp"
+#include "interrupts.hpp"
 #include "comms.hpp"
 #include "io.hpp"
 
