@@ -355,8 +355,8 @@ struct FullReadout : Readout {
   // PWM counter value at the start of the control update. Should occur immediately 
   // after the halfway point.
   int16_t cycle_start_tick;
-  // PWM counter value at the end of the control update. Should occur immediately 
-  // before the halfway point.
+  // PWM counter value at the end of the control update. Should occur *before* the end
+  // of the PWM cycle so we have finished setting the motor outputs in time.
   int16_t cycle_end_tick;
   // Current in DQ0 coordinates; aligned with the rotor angle.
   int16_t direct_current;

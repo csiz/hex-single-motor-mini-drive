@@ -19,6 +19,12 @@ uint32_t last_update_time_millis = 0;
 float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
 
+
+int32_t resistive_power_observer = 0;
+
+int32_t total_power_observer = 0;
+
+
 void app_init() {
 
     io_init();
@@ -55,6 +61,44 @@ void app_tick() {
         last_loop_number = main_loop_number;
         last_readout_number = readout.readout_number;
     }
+
+    // Limits!
+    // -------
+
+    // Calculate slowly varying averages of the resistive power; this represents the energy
+    // dissipated in the motor coils which should be proportional to the temperature rise.
+    const int avg_resistive_power = resistive_power_observer / hires_fixed_point;
+    
+    // Update the higher resolution observer.
+    resistive_power_observer += (readout.resistive_power - avg_resistive_power) * control_parameters.resistive_power_ki;
+
+    // Calculate slowly varying averages of the total power; this represents the energy
+    // drawn from the battery. At constant voltage, this is proportional to the current drawn.
+    const int avg_total_power = total_power_observer / hires_fixed_point;
+
+    // Update the higher resolution observer.
+    total_power_observer += (readout.total_power - avg_total_power) * control_parameters.power_draw_ki;
+
+
+    // Reduce the maximum output PWM to keep within safe limits:
+    // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
+    // let the battery recharge our local capacitors.
+    // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
+    // 3. The total power is a good proxy for total current consumed from the battery.
+    // 
+    // +limiting_divisor_m1 so we do ceiling of the division.
+    // 
+    // The penalty should normally be negative indicating we can increase the PWM.
+    // TODO: redo penalty calculations.
+    const int pwm_penalty = (max(
+        vcc_mosfet_driver_undervoltage - readout.vcc_voltage,
+        avg_resistive_power - control_parameters.max_resistive_power,
+        avg_total_power - control_parameters.max_power_draw,
+        faster_abs(readout.angular_speed) - control_parameters.max_angular_speed
+    ) + limiting_divisor_m1) / limiting_divisor;
+
+    const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);
+
 
     
     // Calculate the motor constant
@@ -100,6 +144,9 @@ void app_tick() {
     readout.rotations = control_parameters.motor_direction * readout.rotations;
     readout.rotor_acceleration = control_parameters.motor_direction * readout.rotor_acceleration;
 
+    // TODO: this doesn't get reported to the driver loop... we need to rethink that in a bit.
+    readout.live_max_pwm = live_max_pwm;
+    
 
     // Comms update
     comms_update(readout);
