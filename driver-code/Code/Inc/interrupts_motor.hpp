@@ -411,7 +411,9 @@ static inline DriverState setup_driver_state(
             if (pending_state.schedule.pointer == nullptr) return breaking_driver_state;
 
             // Clear the readouts buffer of old data.
-            readout_history_reset();
+            // TODO: this needs to be done directly on the flag as we don't want to invoke a non-inline function
+            // during the interrupt loop.
+            readout_history_mark_reset();
             
             return DriverState{
                 .mode = DriverMode::SCHEDULE,

@@ -19,14 +19,6 @@
 const uint32_t partial_message_timeout_ms = 500;
 const uint32_t sending_timeout_ms = 500;
 
-// Adjust angle directions based on the motor_direction control settings.
-inline hex_mini_drive::Readout adjust_direction(hex_mini_drive::Readout && readout){
-  readout.angle = normalize_angle(control_parameters.motor_direction * readout.angle);
-  readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
-  readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
-  return readout;
-}
-
 struct WireInterface {
   using update_function_t = std::function<bool(uint8_t * buffer, size_t size, std::function<void(uint8_t * buffer, size_t size)> process_received_data)>;
 
@@ -62,7 +54,7 @@ struct WireInterface {
   // Start an active test of the motor.
   void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {
     // Clear the readouts buffer of old data.
-    readout_history_reset();
+    readout_history_mark_reset();
     
     // Stop emptying the readouts queue; we want to keep the test data.
     wait_full_history = take_snapshot;
@@ -112,9 +104,8 @@ struct WireInterface {
         // Cancel streaming; so we can take a data snapshot without interruptions.
         stream_state = 0;
         
-        readout_history_reset();
+        readout_history_mark_reset();
         // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
-        wait_full_history = true;
         readouts_to_send = hex_mini_drive::HISTORY_SIZE;
         return;
       }
@@ -414,8 +405,9 @@ struct WireInterface {
         reply_control_parameters = true;
         return;
 
+      // TODO: rename to SET_ANGLE_OFFSET
       case SET_ANGLE: {
-        set_angle(std::get<SetAngle>(message.message_data).angle);
+        set_angle_offset(std::get<SetAngle>(message.message_data).angle);
         return;
       }
 
@@ -474,27 +466,19 @@ struct WireInterface {
     // Wait until the previous message has been sent or buffers reset before encoding a new message.
     if (encoding_buffer.is_message_encoded()) return;
 
-    // Check if we have to wait for the queue to fill before sending readouts.
-    // This is used to prevent sending readouts while the motor is commutating.
-    if (wait_full_history) {
-      if(readout_history_full()){
-        // The queue is full; we can start sending readouts.
-        wait_full_history = false;
-      } else {
-        // We have not filled the queue yet; don't send readouts.
-        return;
-      }
-    }
-
     // Queue the readout history to the send buffer.
     if(readouts_to_send > 0){
-      // Stop if we have caught up to the readout history.
-      if (not readout_history_available()) return readout_history_reset();
+      // Wait until the reset flag is cleared before sending the readouts.
+      if (readout_history_get_reset_flag()) return;
 
+      hex_mini_drive::Readout * readout_ptr = readout_history_pop();
+
+      // Stop if we don't have any readouts in the history buffer.
+      if (readout_ptr == nullptr) return;
 
       serialize_message(hex_mini_drive::Message{
         .message_code = hex_mini_drive::MessageCode::READOUT,
-        .message_data = adjust_direction(readout_history_pop())
+        .message_data = *readout_ptr
       });
       
       // Readout added to the USB buffer.

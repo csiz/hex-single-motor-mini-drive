@@ -20,13 +20,13 @@ hex_mini_drive::FullReadout get_readout();
 // ----------
 
 // Reset the history buffer indexes.
-void readout_history_reset();
-// Check if the readout history is full.
-bool readout_history_full();
-// Check if there's data to read.
-bool readout_history_available();
+void readout_history_mark_reset();
+
+// Check if the history buffer is still marked for reset.
+bool readout_history_get_reset_flag();
+
 // Read the oldest data in the history buffer.
-hex_mini_drive::Readout readout_history_pop();
+hex_mini_drive::Readout * readout_history_pop();
 
 
 // Motor control
@@ -38,8 +38,9 @@ bool is_motor_safed();
 // Set the motor command to be executed by the interrupt loop.
 void set_motor_command(DriverState const& driver_state);
 
-// Set the rotor angle directly, eg. from an external sensor.
-void set_angle(int32_t angle);
+// Set the rotor angle directly, eg. from an external sensor. The angle
+// is set as an offset to the current angle.
+void set_angle_offset(int32_t angle_offset);
 
 
 // Position tracking

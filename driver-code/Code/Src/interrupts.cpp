@@ -58,6 +58,10 @@ size_t readout_history_write_index = 0;
 // Current read index.
 size_t readout_history_read_index = 0;
 
+volatile bool readout_history_reset_flag = false;
+
+// Angle offsetting from the main loop or via commands; it will not influence speed.
+volatile int32_t external_angle_offset = 0;
 
 // Additional state
 // ----------------
@@ -126,28 +130,26 @@ hex_mini_drive::FullReadout get_readout(){
     return latest_readout;
 }
 
-void readout_history_reset() {
-    readout_history_write_index = 0;
-    readout_history_read_index = 0;
-}
-bool readout_history_full(){
-    return readout_history_write_index >= hex_mini_drive::HISTORY_SIZE;
+bool readout_history_get_reset_flag(){
+    return readout_history_reset_flag;
 }
 
-bool readout_history_available(){
-    return readout_history_read_index < readout_history_write_index;
+void readout_history_mark_reset() {
+    readout_history_reset_flag = true;
 }
 
-hex_mini_drive::Readout readout_history_pop(){
-    hex_mini_drive::Readout readout = readout_history[readout_history_read_index];
-    readout_history_read_index += 1;
-    // Reset both indexes if we have sent the whole history.
-    if (readout_history_read_index >= hex_mini_drive::HISTORY_SIZE) readout_history_reset();
-    return readout;
+hex_mini_drive::Readout * readout_history_pop(){
+    if (readout_history_read_index >= readout_history_write_index) return nullptr;
+    else return &readout_history[readout_history_read_index++];
 }
 
 // (Private func) Push a readout to the history buffer.
 static inline bool readout_history_push(hex_mini_drive::Readout const& readout){
+    if (readout_history_reset_flag) {
+        readout_history_write_index = 0;
+        readout_history_read_index = 0;
+        readout_history_reset_flag = false;
+    }
     if (readout_history_write_index >= hex_mini_drive::HISTORY_SIZE) return false;
     readout_history[readout_history_write_index] = readout;
     readout_history_write_index += 1;
@@ -170,8 +172,8 @@ void set_motor_command(DriverState const& driver_state){
     new_pending_state = true;
 }
 
-void set_angle(int32_t angle) {
-    readout.angle = normalize_angle(angle);
+void set_angle_offset(int32_t angle_offset) {
+    external_angle_offset = angle_offset;
 }
 
 // Critical function!! 23KHz PWM cycle
@@ -267,6 +269,11 @@ void adc_interrupt_handler(){
 
     // Position Update
     // ---------------
+
+    // Add the external offset directly to the readout angle before the update. The update will
+    // calculate all values in the new angle frame; this update is ignored by the speed calculation.
+    readout.angle = normalize_angle(readout.angle + external_angle_offset);
+    external_angle_offset = 0;
 
     // Predict the position; keeping track of fractional angles at the same resolution as
     // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
@@ -597,6 +604,8 @@ void adc_interrupt_handler(){
     // 
     // There are a few checks when copying to state, so to keep things glitchlessly fast we update it
     // after we've set the motor outputs. The new state will be ready for the next cycle.
+    // 
+    // Note, the new pending state may clear the readout history so this must be done after the history push.
     if (new_pending_state) {
         driver_state = setup_driver_state(driver_state, pending_state, readout);
         new_pending_state = false;
