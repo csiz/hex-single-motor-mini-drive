@@ -83,7 +83,7 @@ const int angle_fix_threshold_count = 128;
 const int angle_fix_max_count = 1024;
 
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
-ThreePhase previous_adj_motor_outputs = {0, 0, 0};
+ThreePhase previous_motor_mid_pwm_duties = {0, 0, 0};
 
 int32_t previous_emf_angle_error = 0;
 
@@ -233,20 +233,23 @@ void adc_interrupt_handler(){
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const int vcc_voltage = (adc_readings.vcc_readout + readout.vcc_voltage * 3) / 4;
 
-    const ThreePhase motor_outputs = get_duties(driver_state.motor_outputs);
+    // Get the motor duties that were set at the mid point of the PWM cycle, between current readings.
+    const ThreePhase motor_mid_pwm_duties = get_duties(driver_state.motor_outputs);
 
-    const ThreePhase adj_motor_outputs = adjust_to_sum_zero(motor_outputs);
-    
+    // Calculate the effective motor outputs for this set of measurements as the average of the last 2.
+    const ThreePhase motor_outputs = (previous_motor_mid_pwm_duties + motor_mid_pwm_duties) / 2;
+
+    // Store the active motor outputs for the next cycle.
+    previous_motor_mid_pwm_duties = motor_mid_pwm_duties;
+
     // Calculate our outputs on the motor phases. The outputs kick in halfway through the PWM cycle,
     // so we average the previous and current outputs to get the effective output for this cycle.
     // 
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
     // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
     // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
-    const ThreePhase drive_voltages = (previous_adj_motor_outputs + adj_motor_outputs) / 2 * vcc_voltage / pwm_base;
+    const ThreePhase drive_voltages = adjust_to_sum_zero(motor_outputs) * vcc_voltage / pwm_base;
     
-    // Store the active motor outputs for the next cycle. 
-    previous_adj_motor_outputs = adj_motor_outputs;
 
     // Calculate calibrated currents.
     const ThreePhase currents = adjust_to_sum_zero(
@@ -565,14 +568,10 @@ void adc_interrupt_handler(){
     // Write the latest readout data
     // -----------------------------
     // 
-    // Must be updated before the motor pwm calculation!
+    // Must update the whole state before motor pwm calculation!
 
-    readout.u_pwm = std::get<0>(motor_outputs);
-    readout.v_pwm = std::get<1>(motor_outputs);
-    readout.w_pwm = std::get<2>(motor_outputs);
-    
     readout.readout_number = readout_number;
-        
+    
     readout.state_flags = (
         (emf_fix << emf_fix_bit_offset) |
         (emf_detected << emf_detected_bit_offset) |
@@ -583,6 +582,9 @@ void adc_interrupt_handler(){
         (hall_state << hall_state_bit_offset)
     );
 
+    readout.u_pwm = std::get<0>(motor_outputs);
+    readout.v_pwm = std::get<1>(motor_outputs);
+    readout.w_pwm = std::get<2>(motor_outputs);        
     
     readout.u_current = std::get<0>(currents);
     readout.v_current = std::get<1>(currents);
@@ -633,24 +635,11 @@ void adc_interrupt_handler(){
         shared_readout_lock = true;
     }
 
-    // Calculate motor outputs
-    // -----------------------
-
-    // Setup the new state if we were commanded by the main loop.
-    if (new_pending_state) {
-        driver_state = setup_driver_state(driver_state, pending_state, readout);
-        new_pending_state = false;
-    }
+    // Calculate and set motor outputs!!
+    // ---------------------------------
 
     // Update the motor controls using the readout data.
     update_motor_control(driver_state, readout);
-
-    // Try to write the latest readout snippet if there's space.
-    readout_history_push(readout);
-
-
-    // Set Motor Outputs!!
-    // -------------------
 
     // Disable the update for the control registers so we can write all 3.
     LL_TIM_DisableUpdateEvent(TIM1);
@@ -663,7 +652,25 @@ void adc_interrupt_handler(){
     // Re-enable the update for the control registers now that we've written all 3.
     LL_TIM_EnableUpdateEvent(TIM1);
 
+
+    // End of cycle
+    // ------------
+
+    // Get the tick after we've written the motor control, we need to make sure this one is 
+    // within the half cycle before the pwm registers update.
     readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
+
+    // Write the latest readout to the history buffer for the main loop to read.
+    readout_history_push(readout);
+    
+    // Setup the new state if we were commanded by the main loop so we are prepared for the next cycle.
+    // 
+    // There are a few checks when copying to state, so to keep things glitchlessly fast we update it
+    // after we've set the motor outputs. The new state will be ready for the next cycle.
+    if (new_pending_state) {
+        driver_state = setup_driver_state(driver_state, pending_state, readout);
+        new_pending_state = false;
+    }
 
     // Clear the ADC end of conversion flag so we're ready for the next conversion.
     LL_ADC_ClearFlag_JEOS(ADC1);
