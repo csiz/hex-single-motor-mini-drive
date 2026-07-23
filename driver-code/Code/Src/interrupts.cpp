@@ -133,12 +133,12 @@ hex_mini_drive::FullReadout get_readout(){
     return latest_readout;
 }
 
-bool readout_history_get_reset_flag(){
-    return readout_history_reset_flag;
-}
-
 void readout_history_mark_reset() {
     readout_history_reset_flag = true;
+}
+
+bool readout_history_get_reset_flag() {
+    return readout_history_reset_flag;
 }
 
 hex_mini_drive::Readout * readout_history_pop(){
@@ -148,15 +148,16 @@ hex_mini_drive::Readout * readout_history_pop(){
 
 // (Private func) Push a readout to the history buffer.
 static inline bool readout_history_push(hex_mini_drive::Readout const& readout){
-    if (readout_history_reset_flag) {
-        readout_history_write_index = 0;
-        readout_history_read_index = 0;
-        readout_history_reset_flag = false;
-    }
     if (readout_history_write_index >= hex_mini_drive::HISTORY_SIZE) return false;
     readout_history[readout_history_write_index] = readout;
     readout_history_write_index += 1;
     return true;
+}
+
+static inline void readout_history_reset() {
+    readout_history_write_index = 0;
+    readout_history_read_index = 0;
+    readout_history_reset_flag = false;
 }
 
 bool is_motor_safed(){
@@ -555,6 +556,9 @@ static inline DriverState setup_driver_state(
                 .mode = DriverMode::FREEWHEEL
             };
 
+        case DriverMode::CONTINUE:
+            return driver_state;
+
         case DriverMode::HOLD:
             return DriverState{
                 .motor_outputs = MotorOutputs {
@@ -571,11 +575,6 @@ static inline DriverState setup_driver_state(
             // We should not enter testing mode without a valid schedule.
             if (pending_state.schedule.pointer == nullptr) return breaking_driver_state;
 
-            // Clear the readouts buffer of old data.
-            // TODO: this needs to be done directly on the flag as we don't want to invoke a non-inline function
-            // during the interrupt loop.
-            readout_history_mark_reset();
-            
             return DriverState{
                 .mode = DriverMode::SCHEDULE,
                 .duration = hex_mini_drive::HISTORY_SIZE,
@@ -718,6 +717,10 @@ static inline void update_motor_control(
             // Continuously reset the motor outputs to freewheel state.
             driver_state.motor_outputs = freewheel_motor_outputs;
             return;
+
+        case DriverMode::CONTINUE:
+            // Continue is not a valid driver mode, only used for the pending state.
+            return set_breaking_control(driver_state);
 
         case DriverMode::HOLD:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
@@ -1235,6 +1238,8 @@ void adc_interrupt_handler(){
     // 
     // Note, the new pending state may clear the readout history so this must be done after the history push.
     if (new_pending_state) {
+        if (readout_history_reset_flag) readout_history_reset();
+
         driver_state = setup_driver_state(driver_state, pending_state, readout);
         new_pending_state = false;
     }

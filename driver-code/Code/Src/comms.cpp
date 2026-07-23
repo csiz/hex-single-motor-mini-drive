@@ -105,6 +105,9 @@ struct WireInterface {
         stream_state = 0;
         
         readout_history_mark_reset();
+        // Ping the driver loop to reset the history.
+        set_motor_command(DriverState{.mode = DriverMode::CONTINUE});
+
         // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
         readouts_to_send = hex_mini_drive::HISTORY_SIZE;
         return;

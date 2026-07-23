@@ -36,6 +36,8 @@ enum struct DriverMode : uint16_t {
     // overcome the MOSFETs body diodes and effectively turn the MOSFETs on. At that point the motor
     // will break, behaving as in the OFF mode. The only way to prevent it is to disconnect the cable.
     FREEWHEEL,
+    // Continue previous command, used to ping the interrupt loop.
+    CONTINUE,
     // Hold the commanded duty cycle for each phase.
     HOLD,
     // Drive the motor using a time indexed schedule with a sequence of hold commands.
