@@ -10,31 +10,6 @@ import * as d3 from "d3";
 import _ from "lodash";
 
 
-const short_duration = HISTORY_SIZE / 12 * millis_per_cycle;
-const settling_time = short_duration * 0.4;
-const settling_end = short_duration * 0.95;
-
-const calibration_start = short_duration * 0.5;
-const calibration_end = short_duration * 10.5;
-
-export const current_calibration_zones = [
-  {pwm: 0.1, start: short_duration * 1.0},
-  {pwm: 0.2, start: short_duration * 2.0},
-  {pwm: 0.3, start: short_duration * 3.0},
-  {pwm: 0.4, start: short_duration * 4.0},
-  {pwm: 0.5, start: short_duration * 5.0},
-  {pwm: 0.6, start: short_duration * 6.0},
-  {pwm: 0.7, start: short_duration * 7.0},
-  {pwm: 0.8, start: short_duration * 8.0},
-  {pwm: 0.9, start: short_duration * 9.0},
-].map((zone) => ({
-  ...zone,
-  settle_start: zone.start + settling_time,
-  settle_end: zone.start + settling_end,
-}));
-
-
-
 
 export async function run_current_calibration(motor_controller, max_pwm_value){
   if (!motor_controller.current_calibration) {
@@ -224,7 +199,7 @@ export async function run_current_calibration(motor_controller, max_pwm_value){
 
 function compute_gradients({current_factor, inductance_factor}, data){
 
-  return data.filter((d) => d.time >= calibration_start && d.time <= calibration_end).map((d) => {
+  return data.map((d) => {
     const {drive_voltage, uncalibrated_current, uncalibrated_current_diff} = d;
 
 
@@ -274,7 +249,12 @@ function compute_calibration_instance({u_positive, u_negative, v_positive, v_neg
   let w_factor = 1.0;
   let inductance_factor = 1.0;
 
-  const learning_rate = 0.20;
+  // Linearly decrease the learning rate from start to end over the maximum number of iterations.
+  // 
+  // The simplest hack to get it to converge more often. We should use AdamW optimizer, but this
+  // is good enough to also run on the microcontroller.
+  const learning_rate_start = 0.20;
+  const learning_rate_end = 0.02;
   const max_iterations = 1000;
   const stability_threshold = 0.000_01;
 
@@ -309,6 +289,8 @@ function compute_calibration_instance({u_positive, u_negative, v_positive, v_neg
 
     const inductance_factor_stdev = Math.sqrt(mean_2d(all_gradients, (d) => d.inductance_factor_variance) / inductance_weight);
 
+    const learning_rate = learning_rate_start + (learning_rate_end - learning_rate_start) * (i / max_iterations);
+    
     const u_factor_change = learning_rate * u_factor_gradient;
     const v_factor_change = learning_rate * v_factor_gradient;
     const w_factor_change = learning_rate * w_factor_gradient;
