@@ -1,9 +1,9 @@
 #include "app_main.hpp"
 
 #include "interrupts.hpp"
-#include "interrupts.hpp"
-#include "comms.hpp"
 #include "io.hpp"
+#include "usb_com.hpp"
+#include "comms.hpp"
 
 #include <stm32g4xx_hal.h>
 
@@ -34,7 +34,7 @@ void app_init() {
     // Get initial hall sensor state and initialize position tracking.
     initialize_angle_tracking();
 
-    comms_init();
+    usb_init();
 }
 
 
