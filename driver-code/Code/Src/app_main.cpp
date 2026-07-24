@@ -3,11 +3,15 @@
 #include "interrupts.hpp"
 #include "io.hpp"
 #include "usb_com.hpp"
-#include "comms.hpp"
+#include "test_schedules.hpp"
+#include "parameters_store.hpp"
+#include "integer_math.hpp"
 
 #include <stm32g4xx_hal.h>
 
 
+// Main loop stats tracking
+// ------------------------
 uint32_t main_loop_number = 0;
 uint32_t last_loop_number = 0;
 uint16_t last_readout_number = 0;
@@ -25,129 +29,740 @@ int32_t resistive_power_observer = 0;
 int32_t total_power_observer = 0;
 
 
+// Communication buffers and state
+// -------------------------------
+
+const uint32_t partial_message_timeout_ms = 500;
+const uint32_t sending_timeout_ms = 500;
+
+hex_mini_drive::ConsistentOverheadByteStuffing<hex_mini_drive::MAX_MESSAGE_SIZE> encoding_buffer = {};
+
+// Time of last USB packet sent; used to detect timeouts.
+uint32_t last_send_time = 0;
+
+// Time of the last USB packet received; used to detect timeouts.
+uint32_t last_receive_time = 0;
+
+// Number of bytes discarded due to invalid messages.
+uint32_t bytes_discarded = 0;
+
+uint32_t bytes_sent = 0;
+
+uint16_t stream_state = 0;
+uint16_t stream_last_sent = 0;
+uint16_t readouts_to_send = 0;
+bool reply_current_factors = false;
+bool reply_control_parameters = false;
+bool reply_hall_positions = false;
+bool reply_unit_test = false;
+
+UnitTestFunction unit_test_function = nullptr;
+
+
+
+// Initialization
+// --------------
+
+
 void app_init() {
 
-    io_init();
+  io_init();
 
-    set_GREEN_LED(0xFF);
+  set_GREEN_LED(0xFF);
 
-    // Get initial hall sensor state and initialize position tracking.
-    initialize_angle_tracking();
+  // Get initial hall sensor state and initialize position tracking.
+  initialize_angle_tracking();
 
-    usb_init();
+  usb_init();
 }
 
 
-void app_tick() {
-    main_loop_number += 1;
 
-    hex_mini_drive::FullReadout readout = get_readout();
+// Communications and commands
+// ---------------------------
 
-    // Timing
-    // ------
 
-    // Update timing information.
-    const uint32_t milliseconds = HAL_GetTick();
+// Start an active test of the motor.
+void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {
+  // Clear the readouts buffer of old data.
+  readout_history_mark_reset();
+  readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
 
-    const uint32_t duration_since_timing_update = milliseconds - last_update_time_millis;
-    if (duration_since_timing_update > min_timing_period_millis) {
-        last_update_time_millis = milliseconds;
+  // Start the test schedule.
+  set_motor_command(DriverState{ 
+    .mode = DriverMode::SCHEDULE,
+    .target_pwm = value,
+    .schedule = DriveSchedule{ .pointer = &schedule } 
+  });
+}
+
+// Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
+bool run_unit_test(UnitTestFunction test_function) {
+  if (reply_unit_test) return true; // We are already running a unit test.
+
+  // Remember which test to run when the USB queue is ready.
+  unit_test_function = test_function;
+
+  // Set the flag to indicate that we have a unit test result ready to send.
+  reply_unit_test = true;
+
+  return false;
+}
+
+
+// Handle the command on the buffer; returns whether there was an error.
+void handle_message(hex_mini_drive::Message const& message) {
+
+  using namespace hex_mini_drive;
+
+  switch (message.message_code) {
+    case NULL_MESSAGE_CODE:
+      // No command received; ignore it.
+      return;
+
+    case STREAM_FULL_READOUTS: {
+      // Continuously stream data if timeout > 0.
+      stream_state = std::get<StreamFullReadouts>(message.message_data).stream_state;
+      // Also stop the motor if we stop the stream.
+      if (not stream_state) set_motor_command(DriverState{.mode = DriverMode::OFF});
+      return;
+    }
+    case GET_READOUTS_SNAPSHOT: {
+      // Cancel streaming; so we can take a data snapshot without interruptions.
+      stream_state = 0;
+      
+      readout_history_mark_reset();
+      // Ping the driver loop to reset the history.
+      set_motor_command(DriverState{.mode = DriverMode::CONTINUE});
+
+      // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
+      readouts_to_send = hex_mini_drive::HISTORY_SIZE;
+      return;
+    }
+    // Turn off the motor driver.
+    case SET_STATE_OFF: {
+      // Repeat command, with the interrupt guards.
+      set_motor_command(DriverState{.mode = DriverMode::OFF});
+      return;
+    }
         
-        float seconds = duration_since_timing_update / 1000.f;
+    // Measure the motor phase currents.
+    
+    case SET_STATE_TEST_ALL_PERMUTATIONS:
+      motor_start_test(
+        test_all_permutations, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_GROUND_SHORT:
+      motor_start_test(
+        test_ground_short, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_POSITIVE_SHORT:
+      motor_start_test(
+        test_positive_short, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_U_DIRECTIONS:
+      motor_start_test(
+        test_u_directions,
+        std::get<TestCommand>(message.message_data).pwm_value,
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
 
-        main_loop_rate = (main_loop_number - last_loop_number) / seconds;
-        adc_update_rate = ((readout_number_base + readout.readout_number - last_readout_number) % readout_number_base) / seconds;
+    case SET_STATE_TEST_U_INCREASING:
+      motor_start_test(
+        test_u_increasing, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_U_DECREASING:
+      motor_start_test(
+        test_u_decreasing, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_V_INCREASING:
+      motor_start_test(
+        test_v_increasing, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_V_DECREASING:
+      motor_start_test(
+        test_v_decreasing, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_W_INCREASING:
+      motor_start_test(
+        test_w_increasing, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
+    case SET_STATE_TEST_W_DECREASING:
+      motor_start_test(
+        test_w_decreasing, 
+        std::get<TestCommand>(message.message_data).pwm_value, 
+        std::get<TestCommand>(message.message_data).take_snapshot > 0
+      );
+      return;
 
-        last_loop_number = main_loop_number;
-        last_readout_number = readout.readout_number;
+    // Drive the motor.
+    case SET_STATE_DRIVE_6_SECTOR: {
+      set_motor_command(DriverState{ 
+        .mode = DriverMode::DRIVE_6_SECTOR, 
+        .duration = std::get<BasicDriveCommand>(message.message_data).timeout, 
+        .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
+      });
+      return;
     }
 
-    // Limits!
-    // -------
+    case SET_STATE_DRIVE_PERIODIC: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::DRIVE_PERIODIC, 
+        .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
+        .active_angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
+        .active_pwm = std::get<SetStateDrivePeriodic>(message.message_data).pwm_value,
+        .angular_speed = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
+      });
+      return;
+    }
 
-    // Calculate slowly varying averages of the resistive power; this represents the energy
-    // dissipated in the motor coils which should be proportional to the temperature rise.
-    const int avg_resistive_power = resistive_power_observer / hires_fixed_point;
+    case SET_STATE_DRIVE_SMOOTH: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::DRIVE_SMOOTH, 
+        .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout, 
+        .target_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
+      });
+      return;
+    }
+
+    case SET_STATE_DRIVE_TORQUE: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::DRIVE_TORQUE, 
+        .duration = std::get<SetStateDriveTorque>(message.message_data).timeout,
+        .secondary_target = std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction,
+      });
+      return;
+    }
+
+    case SET_STATE_DRIVE_BATTERY_POWER: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::DRIVE_BATTERY_POWER, 
+        .duration = std::get<SetStateDriveBatteryPower>(message.message_data).timeout,
+        .secondary_target = std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction,
+      });
+      return;
+    }
+
+    case SET_STATE_DRIVE_SPEED: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::DRIVE_SPEED, 
+        .duration = std::get<SetStateDriveSpeed>(message.message_data).timeout,
+        .secondary_target = std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
+      });
+      return;
+    }
+
+    case SET_STATE_SEEK_ANGLE_WITH_POWER: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::SEEK_ANGLE_POWER, 
+        .duration = std::get<SetStateSeekAngleWithPower>(message.message_data).timeout,
+        .seek_angle = SeekAngle{
+          .target_angle = std::get<SetStateSeekAngleWithPower>(message.message_data).target_angle * control_parameters.motor_direction,
+          .target_rotation = std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction,
+          .max_secondary_target = std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power,
+        }
+      });
+      return;
+    }
+
+    case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::SEEK_ANGLE_TORQUE, 
+        .duration = std::get<SetStateSeekAngleWithTorque>(message.message_data).timeout,
+        .seek_angle = SeekAngle{
+          .target_angle = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_angle * control_parameters.motor_direction,
+          .target_rotation = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction,
+          .max_secondary_target = std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current,
+        }
+      });
+      return;
+    }
+
+    case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
+      set_motor_command(DriverState{
+        .mode = DriverMode::SEEK_ANGLE_SPEED, 
+        .duration = std::get<SetStateSeekAngleWithSpeed>(message.message_data).timeout,
+        .seek_angle = SeekAngle{
+          .target_angle = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_angle * control_parameters.motor_direction,
+          .target_rotation = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction,
+          .max_secondary_target = std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed,
+        }
+      });
+      return;
+    }
+
+    // Freewheel the motor.
+    case SET_STATE_FREEWHEEL:
+      set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
+      return;
+
+    case SET_STATE_HOLD_U_POSITIVE: {
+      set_motor_command(DriverState{ 
+        .motor_outputs = MotorOutputs{ 
+          .enable_flags = enable_flags_all, 
+          .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
+        },
+        .mode = DriverMode::HOLD,
+        .duration = std::get<HoldCommand>(message.message_data).timeout, 
+      });
+      return;
+    }
+    case SET_STATE_HOLD_V_POSITIVE: {
+      set_motor_command(DriverState{ 
+        .motor_outputs = MotorOutputs{ 
+          .enable_flags = enable_flags_all, 
+          .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
+        },
+        .mode = DriverMode::HOLD,
+        .duration = std::get<HoldCommand>(message.message_data).timeout, 
+      });
+      return;
+    }
+    case SET_STATE_HOLD_W_POSITIVE: {
+      set_motor_command(DriverState{ 
+        .motor_outputs = MotorOutputs{ 
+          .enable_flags = enable_flags_all, 
+          .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
+        },
+        .mode = DriverMode::HOLD,
+        .duration = std::get<HoldCommand>(message.message_data).timeout, 
+      });
+      return;
+    }
+    case SET_STATE_HOLD_U_NEGATIVE: {
+      set_motor_command(DriverState{ 
+        .motor_outputs = MotorOutputs{ 
+          .enable_flags = enable_flags_all, 
+          .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
+          .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
+        },
+        .mode = DriverMode::HOLD,
+        .duration = std::get<HoldCommand>(message.message_data).timeout, 
+      });
+      return;
+    }
+    case SET_STATE_HOLD_V_NEGATIVE: {
+      set_motor_command(DriverState{ 
+        .motor_outputs = MotorOutputs{ 
+          .enable_flags = enable_flags_all, 
+          .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
+          .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
+        },
+        .mode = DriverMode::HOLD,
+        .duration = std::get<HoldCommand>(message.message_data).timeout, 
+      });
+      return;
+    }
+    case SET_STATE_HOLD_W_NEGATIVE: {
+
+      set_motor_command(DriverState{
+        .motor_outputs = MotorOutputs{ 
+          .enable_flags = enable_flags_all, 
+          .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
+          .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
+        },
+        .mode = DriverMode::HOLD,
+        .duration = std::get<HoldCommand>(message.message_data).timeout, 
+      });
+      return;
+    }
+    case SET_CURRENT_CALIBRATION:
+      current_calibration = std::get<CurrentCalibration>(message.message_data);
+      reply_current_factors = true;
+      return;
+        
+    case RESET_CURRENT_CALIBRATION:
+      // Reset the current factors to the default values.
+      current_calibration = default_current_calibration;
+      reply_current_factors = true;
+      return;
+
+    case SET_HALL_POSITIONS:
+      position_calibration = std::get<HallPositions>(message.message_data);
+      reply_hall_positions = true;
+      return;
+
+    case RESET_HALL_POSITIONS:
+      // Reset the hall positions to the default values.
+      position_calibration = default_position_calibration;
+      reply_hall_positions = true;
+      return;
+
+    case SET_CONTROL_PARAMETERS:
+      control_parameters = std::get<ControlParameters>(message.message_data);
+      reply_control_parameters = true;
+      return;
+
+    case RESET_CONTROL_PARAMETERS:
+      control_parameters = default_control_parameters;
+      reply_control_parameters = true;
+      return;
+
+    case GET_CURRENT_CALIBRATION:
+      reply_current_factors = true;
+      return;
+
+    case GET_HALL_POSITIONS:
+      reply_hall_positions = true;
+      return;
+
+    case GET_CONTROL_PARAMETERS:
+      reply_control_parameters = true;
+      return;
+
+    // TODO: rename to SET_ANGLE_OFFSET
+    case SET_ANGLE: {
+      set_angle_offset(std::get<SetAngle>(message.message_data).angle);
+      return;
+    }
+
+    case SAVE_SETTINGS_TO_FLASH:
+      if(is_motor_safed()){
+        save_settings_to_flash(current_calibration, position_calibration, control_parameters);
+
+        current_calibration = get_current_calibration();
+        position_calibration = get_position_calibration();
+        control_parameters = get_control_parameters();
+        
+        return;
+      }
+
+    // We shouldn't receive these messages; the driver only sends them.
+    case CURRENT_CALIBRATION:
+    case CONTROL_PARAMETERS:
+    case HALL_POSITIONS:
+    case READOUT:
+    case FULL_READOUT:
+    case UNIT_TEST_OUTPUT:
+      return;
+
+    case RUN_UNIT_TEST_FUNKY_ATAN:
+      run_unit_test(unit_test_funky_atan);
+      return;
+
+    case RUN_UNIT_TEST_FUNKY_ATAN_PART2:
+      run_unit_test(unit_test_funky_atan_part_2);
+      return;
+
+    case RUN_UNIT_TEST_FUNKY_ATAN_PART3:
+      run_unit_test(unit_test_funky_atan_part_3);
+      return;
+
     
-    // Update the higher resolution observer.
-    resistive_power_observer += (readout.resistive_power - avg_resistive_power) * control_parameters.resistive_power_ki;
+    case SET_STATE_RESISTANCE_CALIBRATION: {
+      // Clear the readouts buffer of old data.
+      readout_history_mark_reset();
+      readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
 
-    // Calculate slowly varying averages of the total power; this represents the energy
-    // drawn from the battery. At constant voltage, this is proportional to the current drawn.
-    const int avg_total_power = total_power_observer / hires_fixed_point;
+      set_motor_command(DriverState{
+        .mode = DriverMode::RESISTANCE_CALIBRATION,
+        .duration = hex_mini_drive::HISTORY_SIZE,
+        .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, std::get<TestCommand>(message.message_data).pwm_value)),
+      });
+      return;
+    }
 
-    // Update the higher resolution observer.
-    total_power_observer += (readout.total_power - avg_total_power) * control_parameters.power_draw_ki;
+    case SET_STATE_INDUCTANCE_CALIBRATION: {
+      // Clear the readouts buffer of old data.
+      readout_history_mark_reset();
+      readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
+
+      set_motor_command(DriverState{
+        .mode = DriverMode::INDUCTANCE_CALIBRATION,
+        .duration = hex_mini_drive::HISTORY_SIZE,
+        .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, std::get<TestCommand>(message.message_data).pwm_value)),
+      });
+      return;
+    }
+  }
+}
+
+void reset_buffers(){
+  set_motor_command(DriverState{.mode = DriverMode::OFF});
+
+  encoding_buffer.encode_reset();
+  encoding_buffer.decode_reset();
+  last_receive_time = 0;
+  stream_state = 0;
+}
 
 
-    // Reduce the maximum output PWM to keep within safe limits:
-    // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
-    // let the battery recharge our local capacitors.
-    // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
-    // 3. The total power is a good proxy for total current consumed from the battery.
-    // 
-    // +limiting_divisor_m1 so we do ceiling of the division.
-    // 
-    // The penalty should normally be negative indicating we can increase the PWM.
-    // TODO: redo penalty calculations.
-    const int pwm_penalty = (max(
-        vcc_mosfet_driver_undervoltage - readout.vcc_voltage,
-        avg_resistive_power - control_parameters.max_resistive_power,
-        avg_total_power - control_parameters.max_power_draw,
-        faster_abs(readout.angular_speed) - control_parameters.max_angular_speed
-    ) + limiting_divisor_m1) / limiting_divisor;
+void serialize_message(hex_mini_drive::Message const& message) {
+  uint8_t out_buffer[hex_mini_drive::MAX_MESSAGE_SIZE] = {0};
+  size_t out_buffer_size = hex_mini_drive::write_message(out_buffer, hex_mini_drive::MAX_MESSAGE_SIZE, message);
 
-    const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);
+  if (out_buffer_size) encoding_buffer.encode_message(out_buffer, out_buffer_size);
+}
 
+void queue_response(hex_mini_drive::FullReadout const& readout) {
+  // Wait until the previous message has been sent or buffers reset before encoding a new message.
+  if (encoding_buffer.is_message_encoded()) return;
 
+  // Queue the readout history to the send buffer.
+  if(readouts_to_send > 0){
+    // Wait until the reset flag is cleared before sending the readouts.
+    if (readout_history_get_reset_flag()) return;
+
+    hex_mini_drive::Readout * readout_ptr = readout_history_pop();
+
+    // Stop if we don't have any readouts in the history buffer.
+    if (readout_ptr == nullptr) return;
+
+    serialize_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::READOUT,
+      .message_data = *readout_ptr
+    });
     
-    // Calculate the motor constant
-    // ----------------------------
-    // 
-    // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
-    // 
-    // It is also the ratio between the torque produced by the motor and the quadrature current. We 
-    // can compute the motor constant from the a spinning motor and use it to estimate our torque.
-    // 
-    // We calculate the motor constant by gradient descent using the configured integral gain.
+    // Readout added to the USB buffer.
+    readouts_to_send -= 1;
 
-    // The voltage magnitude is always positive, also use the positive angular speed.
-    const float abs_angular_speed = readout.angular_speed > 0 ? readout.angular_speed : -readout.angular_speed;
+    return;
+  }
 
-    const float predicted_emf_voltage = abs_angular_speed * readout.motor_constant * emf_motor_constant_conversion;
+  // Stream readouts but only once per readout number.
+  if(stream_state and stream_last_sent != readout.readout_number){
+    serialize_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::FULL_READOUT,
+      .message_data = readout
+    });
 
-    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
+    stream_last_sent = readout.readout_number;
+    return;
+  }
 
-    // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
-    const bool compute_motor_constant = angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
+  // Send unit test response if requested.
+  if (reply_unit_test) {
+    hex_mini_drive::Message message = {
+      .message_code = hex_mini_drive::MessageCode::UNIT_TEST_OUTPUT,
+      .message_data = hex_mini_drive::UnitTestOutput{}
+    };
+    unit_test_function(
+      reinterpret_cast<char*>(std::get<hex_mini_drive::UnitTestOutput>(message.message_data).data()), 
+      hex_mini_drive::UNIT_TEST_OUTPUT_SIZE
+    );
+    serialize_message(message);
+    reply_unit_test = false;
+    return;
+  }
 
-    // Get the error (gradient) for the motor constant observer.
-    const float motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
+  // Send control parameters if requested.
+  if (reply_control_parameters) {
+    serialize_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::CONTROL_PARAMETERS,
+      .message_data = control_parameters
+    });
+    reply_control_parameters = false;
+    return;
+  }
 
-    const float motor_constant = readout.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
+  // Send current factors if requested.
+  if (reply_current_factors) {
+    serialize_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::CURRENT_CALIBRATION,
+      .message_data = current_calibration
+    });
+    reply_current_factors = false;
+    return;
+  }
 
+  // Send trigger angles if requested.
+  if (reply_hall_positions) {
+    serialize_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::HALL_POSITIONS,
+      .message_data = position_calibration
+    });
+    reply_hall_positions = false;
+    return;
+  }
+}
 
-    // Write all values
-    // ----------------
+void receive_data(uint8_t * rx_buffer, size_t rx_size) {
+  // We have a partial message that has timed out; reset the buffer and continue 
+  // reading as a fresh message.
+  if (encoding_buffer.decode_ongoing() and 
+    (HAL_GetTick() - last_receive_time) > partial_message_timeout_ms) {
+    reset_buffers();
+  }
+
+  encoding_buffer.decode_chunk(rx_buffer, rx_size, [&](uint8_t * buffer, size_t size){
+    hex_mini_drive::Message message;
+    if(hex_mini_drive::read_message(message, buffer, size)){
+      // We have a valid message; handle it.
+      handle_message(message);
+    } else {
+      // Invalid message; ignore it.
+      bytes_discarded += size;
+    }
+  });
+  last_receive_time = HAL_GetTick();
+}
+
+void comms_update(hex_mini_drive::FullReadout const& readout) {
+  // Queue the state readouts on the USB buffer.
+  queue_response(readout);
+
+  const bool update_success = usb_update(
+    encoding_buffer.encoding_buffer, encoding_buffer.encoding_buffer_size, 
+    [&](uint8_t * buffer, size_t size){
+      receive_data(buffer, size);
+    }
+  );
+
+  if (update_success) {
+    bytes_sent += encoding_buffer.encoding_buffer_size;
+
+    // Data was queued; clear the response buffer.
+    encoding_buffer.encode_reset();
+    last_send_time = HAL_GetTick();
+  } else if (encoding_buffer.is_message_encoded()) {
+    // We have data to send but the queue is busy.
+    if(HAL_GetTick() - last_send_time > sending_timeout_ms){
+      // Timeout waiting for send; reset the buffers.
+      reset_buffers();
+
+      return usb_reset();
+    }
+  }
+}
+
+// Main app loop
+// -------------
+
+void app_tick() {
+  main_loop_number += 1;
+
+  hex_mini_drive::FullReadout readout = get_readout();
+
+  // Timing
+  // ------
+
+  // Update timing information.
+  const uint32_t milliseconds = HAL_GetTick();
+
+  const uint32_t duration_since_timing_update = milliseconds - last_update_time_millis;
+  if (duration_since_timing_update > min_timing_period_millis) {
+    last_update_time_millis = milliseconds;
     
-    readout.main_loop_rate = static_cast<int>(main_loop_rate);
-    readout.adc_update_rate = static_cast<int>(adc_update_rate);
-    readout.motor_constant = motor_constant;
+    float seconds = duration_since_timing_update / 1000.f;
 
-    // Adjust direction
-    // ----------------
+    main_loop_rate = (main_loop_number - last_loop_number) / seconds;
+    adc_update_rate = ((readout_number_base + readout.readout_number - last_readout_number) % readout_number_base) / seconds;
 
-    readout.angle = normalize_angle(control_parameters.motor_direction * readout.angle);
-    readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
-    readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
+    last_loop_number = main_loop_number;
+    last_readout_number = readout.readout_number;
+  }
 
-    readout.rotations = control_parameters.motor_direction * readout.rotations;
-    readout.rotor_acceleration = control_parameters.motor_direction * readout.rotor_acceleration;
+  // Limits!
+  // -------
 
-    // TODO: this doesn't get reported to the driver loop... we need to rethink that in a bit.
-    readout.live_max_pwm = live_max_pwm;
-    
+  // Calculate slowly varying averages of the resistive power; this represents the energy
+  // dissipated in the motor coils which should be proportional to the temperature rise.
+  const int avg_resistive_power = resistive_power_observer / hires_fixed_point;
+  
+  // Update the higher resolution observer.
+  resistive_power_observer += (readout.resistive_power - avg_resistive_power) * control_parameters.resistive_power_ki;
 
-    // Comms update
-    comms_update(readout);
+  // Calculate slowly varying averages of the total power; this represents the energy
+  // drawn from the battery. At constant voltage, this is proportional to the current drawn.
+  const int avg_total_power = total_power_observer / hires_fixed_point;
+
+  // Update the higher resolution observer.
+  total_power_observer += (readout.total_power - avg_total_power) * control_parameters.power_draw_ki;
+
+
+  // Reduce the maximum output PWM to keep within safe limits:
+  // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
+  // let the battery recharge our local capacitors.
+  // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
+  // 3. The total power is a good proxy for total current consumed from the battery.
+  // 
+  // +limiting_divisor_m1 so we do ceiling of the division.
+  // 
+  // The penalty should normally be negative indicating we can increase the PWM.
+  // TODO: redo penalty calculations.
+  const int pwm_penalty = (max(
+    vcc_mosfet_driver_undervoltage - readout.vcc_voltage,
+    avg_resistive_power - control_parameters.max_resistive_power,
+    avg_total_power - control_parameters.max_power_draw,
+    faster_abs(readout.angular_speed) - control_parameters.max_angular_speed
+  ) + limiting_divisor_m1) / limiting_divisor;
+
+  const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);
+
+
+  
+  // Calculate the motor constant
+  // ----------------------------
+  // 
+  // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
+  // 
+  // It is also the ratio between the torque produced by the motor and the quadrature current. We 
+  // can compute the motor constant from the a spinning motor and use it to estimate our torque.
+  // 
+  // We calculate the motor constant by gradient descent using the configured integral gain.
+
+  // The voltage magnitude is always positive, also use the positive angular speed.
+  const float abs_angular_speed = readout.angular_speed > 0 ? readout.angular_speed : -readout.angular_speed;
+
+  const float predicted_emf_voltage = abs_angular_speed * readout.motor_constant * emf_motor_constant_conversion;
+
+  const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
+
+  // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
+  const bool compute_motor_constant = angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
+
+  // Get the error (gradient) for the motor constant observer.
+  const float motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
+
+  const float motor_constant = readout.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
+
+
+  // Write all values
+  // ----------------
+  
+  readout.main_loop_rate = static_cast<int>(main_loop_rate);
+  readout.adc_update_rate = static_cast<int>(adc_update_rate);
+  readout.motor_constant = motor_constant;
+
+  // Adjust direction
+  // ----------------
+
+  readout.angle = normalize_angle(control_parameters.motor_direction * readout.angle);
+  readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
+  readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
+
+  readout.rotations = control_parameters.motor_direction * readout.rotations;
+  readout.rotor_acceleration = control_parameters.motor_direction * readout.rotor_acceleration;
+
+  // TODO: this doesn't get reported to the driver loop... we need to rethink that in a bit.
+  readout.live_max_pwm = live_max_pwm;
+  
+
+  // Comms update
+  comms_update(readout);
 }
