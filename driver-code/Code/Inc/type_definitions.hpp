@@ -66,6 +66,12 @@ enum struct DriverMode : uint16_t {
     SEEK_ANGLE_TORQUE,
     // Drive the motor to a specific angle. Uses a secondary PID loop to control the speed of the motor.
     SEEK_ANGLE_SPEED,
+    // Drive the motor phases with a pyramid waveform at each phase angle to measure the current
+    // response and determine the resistance of the motor windings.
+    RESISTANCE_CALIBRATION,
+    // Drive the motor phases with large steps at opposite poles to measure the current response
+    // and determine the inductance of the motor windings.
+    INDUCTANCE_CALIBRATION,
 };
 
 // Motor duty cycle (compare register values and enable settings).

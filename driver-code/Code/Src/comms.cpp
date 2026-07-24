@@ -38,7 +38,6 @@ struct WireInterface {
   uint16_t stream_state = 0;
   uint16_t stream_last_sent = 0;
   uint16_t readouts_to_send = 0;
-  bool wait_full_history = false;
   bool reply_current_factors = false;
   bool reply_control_parameters = false;
   bool reply_hall_positions = false;
@@ -55,10 +54,6 @@ struct WireInterface {
   void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {
     // Clear the readouts buffer of old data.
     readout_history_mark_reset();
-    
-    // Stop emptying the readouts queue; we want to keep the test data.
-    wait_full_history = take_snapshot;
-
     readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
 
     // Start the test schedule.
@@ -445,6 +440,33 @@ struct WireInterface {
       case RUN_UNIT_TEST_FUNKY_ATAN_PART3:
         run_unit_test(unit_test_funky_atan_part_3);
         return;
+
+      
+      case SET_STATE_RESISTANCE_CALIBRATION: {
+        // Clear the readouts buffer of old data.
+        readout_history_mark_reset();
+        readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
+
+        set_motor_command(DriverState{
+          .mode = DriverMode::RESISTANCE_CALIBRATION,
+          .duration = hex_mini_drive::HISTORY_SIZE,
+          .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, std::get<TestCommand>(message.message_data).pwm_value)),
+        });
+        return;
+      }
+
+      case SET_STATE_INDUCTANCE_CALIBRATION: {
+        // Clear the readouts buffer of old data.
+        readout_history_mark_reset();
+        readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
+
+        set_motor_command(DriverState{
+          .mode = DriverMode::INDUCTANCE_CALIBRATION,
+          .duration = hex_mini_drive::HISTORY_SIZE,
+          .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, std::get<TestCommand>(message.message_data).pwm_value)),
+        });
+        return;
+      }
     }
   }
 

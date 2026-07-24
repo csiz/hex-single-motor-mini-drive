@@ -583,6 +583,12 @@ const test_buttons = Inputs.button(
     ["Test W decreasing", function(){
       test_command(MessageCode.SET_STATE_TEST_W_DECREASING);
     }],
+    ["Run resistance calibration", function(){
+      test_command(MessageCode.SET_STATE_RESISTANCE_CALIBRATION);
+    }],
+    ["Run inductance calibration", function(){
+      test_command(MessageCode.SET_STATE_INDUCTANCE_CALIBRATION);
+    }],
   ],
   {label: "Test sequence"},
 );

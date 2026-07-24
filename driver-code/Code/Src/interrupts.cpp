@@ -261,6 +261,97 @@ static inline MotorOutputs update_motor_periodic(
     return update_motor_at_angle(driver_state, readout);
 }
 
+
+// For the resistance calibration we will drive the motor U V and W phases with a pyramid waveform
+// and measure the current response to determine the resistance of the motor windings.
+static inline MotorOutputs update_motor_resistance_calibration(
+    DriverState & driver_state,
+    hex_mini_drive::FullReadout const& readout
+){
+    // The total duration is HISTORY_SIZE, let's divide it into 6 segments where we
+    // drive the current at 0, 60, 120, 180, 240, and 300 degrees phase angle. For
+    // each phase divide the duration into 3 segments, first we stay at 0, then ramp
+    // up to the target PWM, then ramp down to 0.
+
+    // Number of PWM cycles elapsed since the calibration started.
+    const int elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
+
+    // Duration of a single phase angle segment.
+    const int segment_duration = hex_mini_drive::HISTORY_SIZE / 6;
+
+    // Which of the 6 phase angle segments we are currently in.
+    const int segment_index = elapsed / segment_duration;
+
+    // How far we are into the current segment.
+    const int segment_progress = elapsed - segment_index * segment_duration;
+
+    // Duration of a single ramp (a third of the segment).
+    const int ramp_duration = segment_duration / 3;
+
+    // Drive the phases at 0, 60, 120, 180, 240, and 300 degrees.
+    driver_state.active_angle = normalize_angle(static_cast<int32_t>(segment_index * (angle_base / 6)));
+
+    // Build a pyramid waveform: hold at 0, ramp up to the target PWM, then ramp back down to 0.
+    const int abs_pwm = (
+        segment_progress < ramp_duration ? 0 :
+        segment_progress < 2 * ramp_duration ? driver_state.target_pwm * (segment_progress - ramp_duration) / ramp_duration :
+        driver_state.target_pwm * (3 * ramp_duration - segment_progress) / ramp_duration
+    );
+
+    driver_state.active_pwm = static_cast<int16_t>(clip_to(0, driver_state.target_pwm, abs_pwm));
+
+    return update_motor_at_angle(driver_state, readout);
+}
+
+// Drive the motor using large step increases to measure the inductance of the motor windings.
+static inline MotorOutputs update_motor_inductance_calibration(
+    DriverState & driver_state,
+    hex_mini_drive::FullReadout const& readout
+){
+    // For the inductance calibration we will also drive the 3 motor phases, however this time
+    // we will do so in large steps and at opposite poles. This time split the HISTORY_SIZE total
+    // into 3 segments, each phase is further divided into 6 segments as such, assuming we start at 0: 
+    // first a step to half target PWM then a step to negative half target then step to 0,
+    // then step to positive target PWM then a step to negative target PWM then back to 0.
+    
+    // Number of PWM cycles elapsed since the calibration started.
+    const int elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
+
+    // Duration of a single phase angle segment (one per phase: 0, 120, and 240 degrees).
+    const int segment_duration = hex_mini_drive::HISTORY_SIZE / 3;
+
+    // Which of the 3 phase angle segments we are currently in.
+    const int segment_index = elapsed / segment_duration;
+
+    // How far we are into the current segment.
+    const int segment_progress = elapsed - segment_index * segment_duration;
+
+    // Duration of a single step (a sixth of the segment).
+    const int step_duration = segment_duration / 6;
+
+    // Which of the 6 steps we are currently in.
+    const int step_index = segment_progress / step_duration;
+
+    // Drive the phases at 0, 120, and 240 degrees.
+    driver_state.active_angle = normalize_angle(static_cast<int32_t>(segment_index * (angle_base / 3)));
+
+    // Half of the target PWM used for the first two steps.
+    const int half_pwm = driver_state.target_pwm / 2;
+
+    // Build the step waveform: +half, -half, 0, +full, -full, 0. Negative PWM drives the
+    // opposite pole via update_motor_at_angle flipping the angle by half a circle.
+    driver_state.active_pwm = (
+        step_index == 0 ? +half_pwm :
+        step_index == 1 ? -half_pwm :
+        step_index == 3 ? +driver_state.target_pwm :
+        step_index == 4 ? -driver_state.target_pwm :
+        0
+    );
+
+    return update_motor_at_angle(driver_state, readout);
+}
+
+
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
 // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
 // The PWM is varried smoothly and is bounded by the back EMF from the rotating magnet.
@@ -695,6 +786,20 @@ static inline DriverState setup_driver_state(
                     .error_integral = driver_state.seek_angle.error_integral
                 }
             };
+
+        case DriverMode::RESISTANCE_CALIBRATION:
+            return DriverState{
+                .mode = DriverMode::RESISTANCE_CALIBRATION,
+                .duration = hex_mini_drive::HISTORY_SIZE,
+                .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, pending_state.target_pwm)),
+            };
+
+        case DriverMode::INDUCTANCE_CALIBRATION:
+            return DriverState{
+                .mode = DriverMode::INDUCTANCE_CALIBRATION,
+                .duration = hex_mini_drive::HISTORY_SIZE,
+                .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, pending_state.target_pwm)),
+            };
     }
 
     return breaking_driver_state;
@@ -799,6 +904,20 @@ static inline void update_motor_control(
             
             // Update the motor outputs for the seek angle driving using speed control.
             driver_state.motor_outputs = update_motor_seek_angle_speed(driver_state, readout);
+            return;
+
+        case DriverMode::RESISTANCE_CALIBRATION:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            // Update the motor outputs for the resistance calibration.
+            driver_state.motor_outputs = update_motor_resistance_calibration(driver_state, readout);
+            return;
+
+        case DriverMode::INDUCTANCE_CALIBRATION:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            // Update the motor outputs for the inductance calibration.
+            driver_state.motor_outputs = update_motor_inductance_calibration(driver_state, readout);
             return;
     }
 

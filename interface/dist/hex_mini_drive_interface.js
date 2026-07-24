@@ -1244,6 +1244,8 @@ const UNIT_TEST_OUTPUT = 20544;
 const RUN_UNIT_TEST_FUNKY_ATAN = 20546;
 const RUN_UNIT_TEST_FUNKY_ATAN_PART2 = 20547;
 const RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548;
+const SET_STATE_RESISTANCE_CALIBRATION = 20549;
+const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
 
 export const MessageCode = {
   NULL_MESSAGE_CODE,
@@ -1296,6 +1298,8 @@ export const MessageCode = {
   RUN_UNIT_TEST_FUNKY_ATAN,
   RUN_UNIT_TEST_FUNKY_ATAN_PART2,
   RUN_UNIT_TEST_FUNKY_ATAN_PART3,
+  SET_STATE_RESISTANCE_CALIBRATION,
+  SET_STATE_INDUCTANCE_CALIBRATION,
 };
 
 // Generic Serialize Function
@@ -1673,6 +1677,22 @@ export function write_message(message) {
       view.setUint16(0, message.message_code);
       return buffer;
     }
+    case SET_STATE_RESISTANCE_CALIBRATION: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
+    case SET_STATE_INDUCTANCE_CALIBRATION: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
   }
 }
 
@@ -1953,6 +1973,18 @@ export function read_message(buffer) {
     case RUN_UNIT_TEST_FUNKY_ATAN_PART3: {
       if (buffer.length !== 2) return null;
       return {message_code};
+    }
+    case SET_STATE_RESISTANCE_CALIBRATION: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_RESISTANCE_CALIBRATION;
+      return message;
+    }
+    case SET_STATE_INDUCTANCE_CALIBRATION: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_INDUCTANCE_CALIBRATION;
+      return message;
     }
   }
   
