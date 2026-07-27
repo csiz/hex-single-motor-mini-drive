@@ -47,20 +47,22 @@ hex_mini_drive::FullReadout readout = {
     .emf_angle_error_variance = max_16bit,
 };
 
+// Latest readout we have copied from the shared_readout in the main loop.
 hex_mini_drive::FullReadout latest_readout = readout;
 
+// The readout where the ADC loop writes the latest value if not locked by the main loop.
 hex_mini_drive::FullReadout shared_readout = readout;
+
+// Lock away writes from the ADC loop so we can copy the shared_readout to the main loop.
 volatile bool shared_readout_lock = false;
 
 // History of light readouts so that we can record every cycle for a short snapshot.
 hex_mini_drive::Readout readout_history[hex_mini_drive::HISTORY_SIZE] = {};
 
 // Current write index.
-size_t readout_history_write_index = 0;
+volatile size_t readout_history_write_index = 0;
 
-// Current read index.
-size_t readout_history_read_index = 0;
-
+// Mark the readout history for reset.
 volatile bool readout_history_reset_flag = false;
 
 // Angle offsetting from the main loop or via commands; it will not influence speed.
@@ -123,8 +125,7 @@ hex_mini_drive::HallPositions position_calibration = get_position_calibration();
 hex_mini_drive::CurrentCalibration current_calibration = get_current_calibration();
 hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 
-// Guard the data access by disabling the ADC interrupt while we read/write the data.
-
+// Guard the data access by indicating to the ADC interrupt that it shouldn't write data.
 hex_mini_drive::FullReadout get_readout(){
     if (shared_readout_lock) {
         latest_readout = shared_readout;
@@ -141,22 +142,26 @@ bool readout_history_get_reset_flag() {
     return readout_history_reset_flag;
 }
 
-hex_mini_drive::Readout * readout_history_pop(){
-    if (readout_history_read_index >= readout_history_write_index) return nullptr;
-    else return &readout_history[readout_history_read_index++];
+hex_mini_drive::Readout const* get_readout_history(){
+    return readout_history;
+}
+
+size_t get_readout_history_size() {
+    return readout_history_write_index;
 }
 
 // (Private func) Push a readout to the history buffer.
 static inline bool readout_history_push(hex_mini_drive::Readout const& readout){
     if (readout_history_write_index >= hex_mini_drive::HISTORY_SIZE) return false;
     readout_history[readout_history_write_index] = readout;
+    // Increment after we have finished copying the readout.
     readout_history_write_index += 1;
     return true;
 }
 
+// (Private func) Reset the readout history.
 static inline void readout_history_reset() {
     readout_history_write_index = 0;
-    readout_history_read_index = 0;
     readout_history_reset_flag = false;
 }
 

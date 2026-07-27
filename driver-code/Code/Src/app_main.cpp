@@ -50,7 +50,8 @@ uint32_t bytes_sent = 0;
 
 uint16_t stream_state = 0;
 uint16_t stream_last_sent = 0;
-uint16_t readouts_to_send = 0;
+size_t readouts_to_send = 0;
+size_t readouts_sent = 0;
 bool reply_current_factors = false;
 bool reply_control_parameters = false;
 bool reply_hall_positions = false;
@@ -87,6 +88,7 @@ void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snap
   // Clear the readouts buffer of old data.
   readout_history_mark_reset();
   readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
+  readouts_sent = 0;
 
   // Start the test schedule.
   set_motor_command(DriverState{ 
@@ -131,12 +133,15 @@ void handle_message(hex_mini_drive::Message const& message) {
       // Cancel streaming; so we can take a data snapshot without interruptions.
       stream_state = 0;
       
+      // Reply with the full history.
       readout_history_mark_reset();
+      readouts_to_send = hex_mini_drive::HISTORY_SIZE;
+      readouts_sent = 0;
+
       // Ping the driver loop to reset the history.
       set_motor_command(DriverState{.mode = DriverMode::CONTINUE});
 
-      // Dissalow sending until we fill the queue, so it doesn't interrupt commutation.
-      readouts_to_send = hex_mini_drive::HISTORY_SIZE;
+
       return;
     }
     // Turn off the motor driver.
@@ -478,6 +483,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       // Clear the readouts buffer of old data.
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
+      readouts_sent = 0;
 
       set_motor_command(DriverState{
         .mode = DriverMode::RESISTANCE_CALIBRATION,
@@ -491,7 +497,8 @@ void handle_message(hex_mini_drive::Message const& message) {
       // Clear the readouts buffer of old data.
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
-
+      readouts_sent = 0;
+      
       set_motor_command(DriverState{
         .mode = DriverMode::INDUCTANCE_CALIBRATION,
         .duration = hex_mini_drive::HISTORY_SIZE,
@@ -525,21 +532,25 @@ void queue_response(hex_mini_drive::FullReadout const& readout) {
 
   // Queue the readout history to the send buffer.
   if(readouts_to_send > 0){
-    // Wait until the reset flag is cleared before sending the readouts.
-    if (readout_history_get_reset_flag()) return;
-
-    hex_mini_drive::Readout * readout_ptr = readout_history_pop();
-
-    // Stop if we don't have any readouts in the history buffer.
-    if (readout_ptr == nullptr) return;
+    const bool reset_ongoing = readout_history_get_reset_flag();
+    const bool waiting_for_data = get_readout_history_size() < readouts_to_send;
+    
+    // Wait until we filled the buffer before sending readouts, to avoid interfering with the ADC loop.
+    if (reset_ongoing or waiting_for_data) return;
 
     serialize_message(hex_mini_drive::Message{
       .message_code = hex_mini_drive::MessageCode::READOUT,
-      .message_data = *readout_ptr
+      .message_data = get_readout_history()[readouts_sent]
     });
     
     // Readout added to the USB buffer.
-    readouts_to_send -= 1;
+    readouts_sent += 1;
+
+    if (readouts_sent >= readouts_to_send) {
+      // We have sent all the readouts; reset the counters.
+      readouts_to_send = 0;
+      readouts_sent = 0;
+    }
 
     return;
   }

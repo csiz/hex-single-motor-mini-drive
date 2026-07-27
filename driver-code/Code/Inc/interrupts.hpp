@@ -40,8 +40,11 @@ void readout_history_mark_reset();
 // Check if the history buffer is still marked for reset.
 bool readout_history_get_reset_flag();
 
-// Read the oldest data in the history buffer.
-hex_mini_drive::Readout * readout_history_pop();
+// Get a pointer to the readout history buffer.
+hex_mini_drive::Readout const* get_readout_history();
+
+// Get the number of readouts available in the history buffer.
+size_t get_readout_history_size();
 
 
 // Motor control
