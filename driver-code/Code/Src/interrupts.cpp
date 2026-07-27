@@ -485,16 +485,16 @@ static inline MotorOutputs update_motor_battery_power(
     // counter the EMF voltage to minimize phase resistance heating, but we don't
     // want to absorb more power than the target setting.
 
-    const int target_power = driver_state.secondary_target;
+    const float target_power = driver_state.secondary_target;
 
     const bool total_power_dominates = faster_abs(readout.total_power) > faster_abs(readout.emf_power);
 
-    const int measured_power = (total_power_dominates ? 
+    const float measured_power = (total_power_dominates ? 
         sign(driver_state.active_pwm) * readout.total_power :
         -sign(readout.quadrature_emf_voltage) * readout.emf_power
     );
 
-    const int control_error = (target_power - measured_power) * control_parameters.battery_power_control_ki;
+    const float control_error = (target_power - measured_power) * control_parameters.battery_power_control_ki;
 
 
     // Update the PID control for the torque.
@@ -548,7 +548,7 @@ static inline MotorOutputs update_motor_seek_angle_power(
         control_parameters.seek_via_power_kd
     );
 
-    const int max_power = driver_state.seek_angle.max_secondary_target;
+    const float max_power = driver_state.seek_angle.max_secondary_target;
 
     driver_state.secondary_target = max_power * pid_control / seek_pid_fixed_point;
 
@@ -1226,19 +1226,19 @@ void adc_interrupt_handler(){
     // -----------------------
 
     // Resistive power is the power dissipated in the motor coils and MOSFETs.
-    const int resistive_power = dot(currents, resistive_voltages) / voltage_current_div_power_fixed_point;
+    const float resistive_power = dot(currents, resistive_voltages) * voltage_mul_current_fixed_point_inverse;
 
     // Inductive power is the power transfered to the motor inductors.
-    const int inductive_power = dot(currents, inductor_voltages) / voltage_current_div_power_fixed_point;
+    const float inductive_power = dot(currents, inductor_voltages) * voltage_mul_current_fixed_point_inverse;
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
     // 
     // Use the DQ0 transformed values to calculate the EMF power quickly. We also have a chance to 
     // smooth out the values to better approximate the real power use.
-    const int emf_power = - (
+    const float emf_power = - (
         sign(quadrature_current) * current_magnitude * 
         sign(quadrature_emf_voltage) * emf_voltage_magnitude 
-    ) / dq0_to_power_fixed_point;
+    ) * dq0_voltage_mul_current_fixed_point_inverse;
 
     // The total power is the power used from the battery. It will be positive when driving
     // the motor, meaning that we drain the battery. If this is negative it means we are charging
@@ -1247,7 +1247,7 @@ void adc_interrupt_handler(){
     // The balance of all powers must be zero assuming no other source or sink of power. Thus
     // we can compute the total power from the others; mostly determined by EMF. The resistive
     // power is quite reliable and inductive_power is very small.
-    const int total_power = resistive_power + inductive_power + emf_power;
+    const float total_power = resistive_power + inductive_power + emf_power;
 
 
     // Write the latest readout data

@@ -143,7 +143,7 @@ struct SeekAngle {
     // The target rotation index we want the motor to drive towards.
     int16_t target_rotation;
     // The maximum control value (torque, power or speed) used to drive the motor to the target angle.
-    int16_t max_secondary_target;
+    float max_secondary_target;
     // The high resolution integral error for the PID control loop.
     int32_t error_integral;
 };
@@ -179,7 +179,7 @@ struct DriverState {
     // Higher resolution control value for the target PWM.
     int32_t target_pwm_control;
 
-    int16_t secondary_target;
+    float secondary_target;
 
     // The additional data depends on the driver mode.
     union {

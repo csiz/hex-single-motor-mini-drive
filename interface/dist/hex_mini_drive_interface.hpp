@@ -367,14 +367,14 @@ struct FullReadout : Readout {
   // EMF voltage in DQ0 coordinates; crossed with the rotor angle.
   int16_t quadrature_emf_voltage;
   // Total power used/given to VCC line (the battery usually).
-  int16_t total_power;
+  float total_power;
   // Resistive power; the power dissipated in the phase resistances.
-  int16_t resistive_power;
+  float resistive_power;
   // EMF power; the power used to drive the motor (which is reflected to the 
   // inductors as back EMF).
-  int16_t emf_power;
+  float emf_power;
   // Inductive power; the power pushed into the inductor magnetic fields.
-  int16_t inductive_power;
+  float inductive_power;
   // Motor constant; a measure of how strong the motor is. It is computed as the 
   // ratio between the quadrature EMF voltage and the angular speed.
   float motor_constant;
@@ -423,14 +423,14 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 2;
   write_int16(buffer + offset, value.quadrature_emf_voltage);;
   offset += 2;
-  write_int16(buffer + offset, value.total_power);;
-  offset += 2;
-  write_int16(buffer + offset, value.resistive_power);;
-  offset += 2;
-  write_int16(buffer + offset, value.emf_power);;
-  offset += 2;
-  write_int16(buffer + offset, value.inductive_power);;
-  offset += 2;
+  write_float32(buffer + offset, value.total_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistive_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductive_power);;
+  offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
   write_int32(buffer + offset, value.inductor_angle);;
@@ -478,14 +478,14 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 2;
   result.quadrature_emf_voltage = read_int16(buffer + offset);
   offset += 2;
-  result.total_power = read_int16(buffer + offset);
-  offset += 2;
-  result.resistive_power = read_int16(buffer + offset);
-  offset += 2;
-  result.emf_power = read_int16(buffer + offset);
-  offset += 2;
-  result.inductive_power = read_int16(buffer + offset);
-  offset += 2;
+  result.total_power = read_float32(buffer + offset);
+  offset += 4;
+  result.resistive_power = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_power = read_float32(buffer + offset);
+  offset += 4;
+  result.inductive_power = read_float32(buffer + offset);
+  offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
   result.inductor_angle = read_int32(buffer + offset);
@@ -672,15 +672,15 @@ static inline SetStateDriveTorque read_SetStateDriveTorque(uint8_t const* buffer
 }
 struct SetStateDriveBatteryPower {
   // Target power draw from the battery; the driver will try to achieve this power by adjusting the PWM commands.
-  int16_t target_power;
+  float target_power;
   // Time in pwm periods to drive the motor before stopping.
   uint16_t timeout;
 };
 
 static inline void write_SetStateDriveBatteryPower(uint8_t * buffer, SetStateDriveBatteryPower const& value) {
   size_t offset = 0;
-  write_int16(buffer + offset, value.target_power);;
-  offset += 2;
+  write_float32(buffer + offset, value.target_power);;
+  offset += 4;
   write_uint16(buffer + offset, value.timeout);;
   offset += 2;
 }
@@ -689,8 +689,8 @@ static inline SetStateDriveBatteryPower read_SetStateDriveBatteryPower(uint8_t c
   
   SetStateDriveBatteryPower result;
   
-  result.target_power = read_int16(buffer + offset);
-  offset += 2;
+  result.target_power = read_float32(buffer + offset);
+  offset += 4;
   result.timeout = read_uint16(buffer + offset);
   offset += 2;
   return result;
@@ -728,7 +728,7 @@ struct SetStateSeekAngleWithPower {
   // Time in pwm periods to drive the motor before stopping.
   uint16_t timeout;
   // Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
-  uint16_t max_drive_power;
+  float max_drive_power;
 };
 
 static inline void write_SetStateSeekAngleWithPower(uint8_t * buffer, SetStateSeekAngleWithPower const& value) {
@@ -739,8 +739,8 @@ static inline void write_SetStateSeekAngleWithPower(uint8_t * buffer, SetStateSe
   offset += 4;
   write_uint16(buffer + offset, value.timeout);;
   offset += 2;
-  write_uint16(buffer + offset, value.max_drive_power);;
-  offset += 2;
+  write_float32(buffer + offset, value.max_drive_power);;
+  offset += 4;
 }
 static inline SetStateSeekAngleWithPower read_SetStateSeekAngleWithPower(uint8_t const* buffer) {
   size_t offset = 0;
@@ -753,8 +753,8 @@ static inline SetStateSeekAngleWithPower read_SetStateSeekAngleWithPower(uint8_t
   offset += 4;
   result.timeout = read_uint16(buffer + offset);
   offset += 2;
-  result.max_drive_power = read_uint16(buffer + offset);
-  offset += 2;
+  result.max_drive_power = read_float32(buffer + offset);
+  offset += 4;
   return result;
 }
 struct SetStateSeekAngleWithTorque {
@@ -955,9 +955,9 @@ struct ControlParameters {
   // Lead angle integral gain for efficient driving.
   int32_t lead_angle_control_ki;
   // Torque control gain.
-  int16_t torque_control_ki;
+  float torque_control_ki;
   // Battery power control gain.
-  int16_t battery_power_control_ki;
+  float battery_power_control_ki;
   // Speed control gain.
   float speed_control_ki;
   // Probing angular speed for initial EMF detection.
@@ -969,15 +969,15 @@ struct ControlParameters {
   // Minium EMF voltage to compute the motor constant.
   int16_t min_emf_for_motor_constant;
   // Maximum resistive power that can be dissipated in the motor coils.
-  int16_t max_resistive_power;
+  float max_resistive_power;
   // Resistive power long duration average observer gain.
-  int16_t resistive_power_ki;
+  float resistive_power_ki;
   // Maximum angular speed of the motor.
   float max_angular_speed;
   // Maximum power draw from the battery (proxy for maximum current).
-  int16_t max_power_draw;
+  float max_power_draw;
   // Power draw long duration average observer gain.
-  int16_t power_draw_ki;
+  float power_draw_ki;
   // Maximum PWM value for the motor outputs.
   int16_t max_pwm;
   // Seek via torque, prediction duration factor for integral error.
@@ -1034,10 +1034,10 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_int32(buffer + offset, value.lead_angle_control_ki);;
   offset += 4;
-  write_int16(buffer + offset, value.torque_control_ki);;
-  offset += 2;
-  write_int16(buffer + offset, value.battery_power_control_ki);;
-  offset += 2;
+  write_float32(buffer + offset, value.torque_control_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.battery_power_control_ki);;
+  offset += 4;
   write_float32(buffer + offset, value.speed_control_ki);;
   offset += 4;
   write_float32(buffer + offset, value.probing_angular_speed);;
@@ -1048,16 +1048,16 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_int16(buffer + offset, value.min_emf_for_motor_constant);;
   offset += 2;
-  write_int16(buffer + offset, value.max_resistive_power);;
-  offset += 2;
-  write_int16(buffer + offset, value.resistive_power_ki);;
-  offset += 2;
+  write_float32(buffer + offset, value.max_resistive_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistive_power_ki);;
+  offset += 4;
   write_float32(buffer + offset, value.max_angular_speed);;
   offset += 4;
-  write_int16(buffer + offset, value.max_power_draw);;
-  offset += 2;
-  write_int16(buffer + offset, value.power_draw_ki);;
-  offset += 2;
+  write_float32(buffer + offset, value.max_power_draw);;
+  offset += 4;
+  write_float32(buffer + offset, value.power_draw_ki);;
+  offset += 4;
   write_int16(buffer + offset, value.max_pwm);;
   offset += 2;
   write_int16(buffer + offset, value.seek_via_torque_k_prediction);;
@@ -1116,10 +1116,10 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.lead_angle_control_ki = read_int32(buffer + offset);
   offset += 4;
-  result.torque_control_ki = read_int16(buffer + offset);
-  offset += 2;
-  result.battery_power_control_ki = read_int16(buffer + offset);
-  offset += 2;
+  result.torque_control_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.battery_power_control_ki = read_float32(buffer + offset);
+  offset += 4;
   result.speed_control_ki = read_float32(buffer + offset);
   offset += 4;
   result.probing_angular_speed = read_float32(buffer + offset);
@@ -1130,16 +1130,16 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.min_emf_for_motor_constant = read_int16(buffer + offset);
   offset += 2;
-  result.max_resistive_power = read_int16(buffer + offset);
-  offset += 2;
-  result.resistive_power_ki = read_int16(buffer + offset);
-  offset += 2;
+  result.max_resistive_power = read_float32(buffer + offset);
+  offset += 4;
+  result.resistive_power_ki = read_float32(buffer + offset);
+  offset += 4;
   result.max_angular_speed = read_float32(buffer + offset);
   offset += 4;
-  result.max_power_draw = read_int16(buffer + offset);
-  offset += 2;
-  result.power_draw_ki = read_int16(buffer + offset);
-  offset += 2;
+  result.max_power_draw = read_float32(buffer + offset);
+  offset += 4;
+  result.power_draw_ki = read_float32(buffer + offset);
+  offset += 4;
   result.max_pwm = read_int16(buffer + offset);
   offset += 2;
   result.seek_via_torque_k_prediction = read_int16(buffer + offset);
@@ -1281,7 +1281,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::READOUT: return 42;
     case MessageCode::STREAM_FULL_READOUTS: return 4;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 100;
+    case MessageCode::FULL_READOUT: return 108;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 6;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 6;
@@ -1304,9 +1304,9 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_DRIVE_PERIODIC: return 12;
     case MessageCode::SET_STATE_DRIVE_SMOOTH: return 6;
     case MessageCode::SET_STATE_DRIVE_TORQUE: return 6;
-    case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 6;
+    case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 8;
     case MessageCode::SET_STATE_DRIVE_SPEED: return 8;
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER: return 12;
+    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER: return 14;
     case MessageCode::SET_STATE_SEEK_ANGLE_WITH_TORQUE: return 12;
     case MessageCode::SET_STATE_SEEK_ANGLE_WITH_SPEED: return 14;
     case MessageCode::CURRENT_CALIBRATION: return 10;
@@ -1317,8 +1317,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_HALL_POSITIONS: return 2;
     case MessageCode::SET_HALL_POSITIONS: return 146;
     case MessageCode::RESET_HALL_POSITIONS: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 102;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 102;
+    case MessageCode::CONTROL_PARAMETERS: return 114;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 114;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
@@ -1359,9 +1359,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 98) return 0;
+      if (max_size < 2 + 106) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 100;
+      return 108;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1493,9 +1493,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_BATTERY_POWER));
-      if (max_size < 2 + 4) return 0;
+      if (max_size < 2 + 6) return 0;
       write_SetStateDriveBatteryPower(buffer + 2, std::get<SetStateDriveBatteryPower>(message.message_data));
-      return 6;
+      return 8;
     }
     case MessageCode::SET_STATE_DRIVE_SPEED: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_SPEED));
@@ -1505,9 +1505,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER));
-      if (max_size < 2 + 10) return 0;
+      if (max_size < 2 + 12) return 0;
       write_SetStateSeekAngleWithPower(buffer + 2, std::get<SetStateSeekAngleWithPower>(message.message_data));
-      return 12;
+      return 14;
     }
     case MessageCode::SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE_WITH_TORQUE));
@@ -1563,15 +1563,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 100) return 0;
+      if (max_size < 2 + 112) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 102;
+      return 114;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 100) return 0;
+      if (max_size < 2 + 112) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 102;
+      return 114;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1654,7 +1654,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 98) return false;
+      if (size != 2 + 106) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }
@@ -1769,7 +1769,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: {
-      if (size != 2 + 4) return false;
+      if (size != 2 + 6) return false;
       message.message_data = read_SetStateDriveBatteryPower(buffer + 2);
       return true;
     }
@@ -1779,7 +1779,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER: {
-      if (size != 2 + 10) return false;
+      if (size != 2 + 12) return false;
       message.message_data = read_SetStateSeekAngleWithPower(buffer + 2);
       return true;
     }
@@ -1834,12 +1834,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 100) return false;
+      if (size != 2 + 112) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 100) return false;
+      if (size != 2 + 112) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

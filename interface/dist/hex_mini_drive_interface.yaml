@@ -366,21 +366,21 @@ definitions:
         doc: EMF voltage in DQ0 coordinates; crossed with the rotor angle.
 
       total_power:
-        type: int16
+        type: float32
         doc: Total power used/given to VCC line (the battery usually).
 
       resistive_power:
-        type: int16
+        type: float32
         doc: Resistive power; the power dissipated in the phase resistances.
 
       emf_power:
-        type: int16
+        type: float32
         doc: |
           EMF power; the power used to drive the motor (which is reflected to the 
           inductors as back EMF).
 
       inductive_power:
-        type: int16
+        type: float32
         doc: Inductive power; the power pushed into the inductor magnetic fields.
 
       motor_constant:
@@ -492,7 +492,7 @@ definitions:
   SetStateDriveBatteryPower:
     struct:
       target_power:
-        type: int16
+        type: float32
         doc: Target power draw from the battery; the driver will try to achieve this power by adjusting the PWM commands.
       timeout:
         type: uint16
@@ -519,7 +519,7 @@ definitions:
         type: uint16
         doc: Time in pwm periods to drive the motor before stopping.
       max_drive_power:
-        type: uint16
+        type: float32
         doc: Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
 
   SetStateSeekAngleWithTorque:
@@ -670,11 +670,11 @@ definitions:
         doc: Lead angle integral gain for efficient driving.
 
       torque_control_ki:
-        type: int16
+        type: float32
         doc: Torque control gain.
 
       battery_power_control_ki:
-        type: int16
+        type: float32
         doc: Battery power control gain.
 
       speed_control_ki:
@@ -698,11 +698,11 @@ definitions:
         doc: Minium EMF voltage to compute the motor constant.
 
       max_resistive_power:
-        type: int16
+        type: float32
         doc: Maximum resistive power that can be dissipated in the motor coils.
 
       resistive_power_ki:
-        type: int16
+        type: float32
         doc: Resistive power long duration average observer gain.
 
       max_angular_speed:
@@ -710,11 +710,11 @@ definitions:
         doc: Maximum angular speed of the motor.
 
       max_power_draw:
-        type: int16
+        type: float32
         doc: Maximum power draw from the battery (proxy for maximum current).
 
       power_draw_ki:
-        type: int16
+        type: float32
         doc: Power draw long duration average observer gain.
 
       max_pwm:

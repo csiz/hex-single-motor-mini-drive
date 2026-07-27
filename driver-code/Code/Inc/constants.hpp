@@ -163,22 +163,17 @@ const int phase_current_to_voltage = phase_resistance * voltage_fixed_point / re
 // The drivers need over 8V to power the MOSFETs.
 const int vcc_mosfet_driver_undervoltage = voltage_fixed_point * 8;
 
-// Power conversion: 1 power unit = 1/224 W.
-const int power_fixed_point = 4 * voltage_fixed_point;
 
 // 12W max drive power.
-const int max_drive_power = 12 * power_fixed_point;
-
-// We need this to convert a few formulas using voltage to power.
-const int power_div_voltage_fixed_point = power_fixed_point / voltage_fixed_point;
+const float max_drive_power = 12.0;
 
 // Directly convert voltage * current to power in fixed point format.
-const int voltage_current_div_power_fixed_point = current_fixed_point / power_div_voltage_fixed_point;
+const float voltage_mul_current_fixed_point_inverse = 1.0 / (voltage_fixed_point * current_fixed_point);
 
-// Our dq0 transformation lead to a factor or 3/2 overestimation for the current and therefore power.
-const int dq0_to_power_fixed_point = voltage_current_div_power_fixed_point * 3 / 2;
+// Our dq0 transformation lead to a factor of 3/2 overestimation for the current and therefore power.
+const float dq0_voltage_mul_current_fixed_point_inverse = voltage_mul_current_fixed_point_inverse * 2.0 / 3.0;
 
-// Divisor used to limit the PWM per cycle.
+// Divisordq0_voltage_mul_current_fixed_point_inverseer cycle.
 const int limiting_divisor = 128;
 
 // We also need the divisor minus one for ceiling division.
@@ -421,19 +416,19 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = 4,
     .torque_control_ki = 32,
 
-    .battery_power_control_ki = 8,
+    .battery_power_control_ki = 8.f / hires_fixed_point,
     .speed_control_ki = 8.f / hires_fixed_point,
     .probing_angular_speed = angle_base / 256, // 1/256 of a rotation per PWM cycle.
     .max_pwm_difference = pwm_max / 2,
 
     .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
     .min_emf_for_motor_constant = voltage_fixed_point * 1,
-    .max_resistive_power = power_fixed_point * 2,
+    .max_resistive_power = 2.0,
     .resistive_power_ki = 1,
 
     .max_angular_speed = max_angular_speed,
     .max_power_draw = max_drive_power,
-    .power_draw_ki = 1,
+    .power_draw_ki = 1.f / hires_fixed_point,
     .max_pwm = pwm_max,
 
     .seek_via_torque_k_prediction = 0,
