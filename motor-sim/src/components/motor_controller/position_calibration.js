@@ -1,5 +1,4 @@
-import {pwm_base, cycles_per_millisecond} from "./constants.js";
-import {HISTORY_SIZE} from "hex-mini-drive-interface";
+import {PWM_BASE, HISTORY_SIZE, cycles_per_millisecond} from "./constants.js";
 import {MessageCode} from "./motor_controller.js";
 import {wait} from "./async_utils.js";
 import {circular_stats_degrees, interpolate_degrees, positive_degrees} from "./angular_math.js";
@@ -13,7 +12,7 @@ export async function run_position_calibration(motor_controller) {
   const drive_time = 200;
   const drive_timeout = Math.floor((drive_time + 300) * cycles_per_millisecond);
 
-  const drive_strength = Math.floor(pwm_base * 2 / 10);
+  const drive_strength = Math.floor(PWM_BASE * 2 / 10);
 
   const test_options = {pwm_value: 0, take_snapshot: 1};
   const reply = {

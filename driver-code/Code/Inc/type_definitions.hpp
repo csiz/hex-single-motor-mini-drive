@@ -8,7 +8,7 @@
 #include "hex_mini_drive_interface.hpp"
 
 // Most useful datatype for this system, the 3 phase coordinates.
-using ThreePhase = std::tuple<int, int, int>;
+using ThreePhase = std::tuple<float, float, float>;
 
 // Function signature for unit tests; the unit test prints text to the buffer.
 using UnitTestFunction = void (*)(char * buffer, size_t max_size);
@@ -17,7 +17,9 @@ using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 // ------------
 
 struct ADCReadings {
-    ThreePhase currents;
+    uint16_t u_readout;
+    uint16_t v_readout;
+    uint16_t w_readout;
     uint16_t ref_readout;
     uint16_t temp_readout;
     uint16_t vcc_readout;
@@ -111,13 +113,13 @@ const MotorOutputs freewheel_motor_outputs = {
 
 struct PWMStage {
     // Duration of the stage in PWM cycles.
-    uint16_t duration;
+    uint32_t duration;
     // PWM duty cycle for U phase.
-    uint16_t u_duty;
+    float u_duty;
     // PWM duty cycle for V phase.
-    uint16_t v_duty;
+    float v_duty;
     // PWM duty cycle for W phase.
-    uint16_t w_duty;
+    float w_duty;
 };
 
 // Number of steps in test schedules.
@@ -141,11 +143,11 @@ struct SeekAngle {
     // The target angle. This is the fractional part of the target rotation.
     int32_t target_angle;
     // The target rotation index we want the motor to drive towards.
-    int16_t target_rotation;
+    int32_t target_rotation;
     // The maximum control value (torque, power or speed) used to drive the motor to the target angle.
     float max_secondary_target;
     // The high resolution integral error for the PID control loop.
-    int32_t error_integral;
+    float error_integral;
 };
 
 // The complete driver state, these values control the motor behaviour.
@@ -163,21 +165,18 @@ struct DriverState {
     int32_t active_angle;
     
     // PWM value actively used to drive the motor.
-    int16_t active_pwm;
+    float active_pwm;
     
     // Angular speed at which the active_angle is spinning.
     float angular_speed;
     
     // The target PWM value that we are aiming for with the smooth control. This
     // target can be set by the advanced control algorithms.
-    int16_t target_pwm;
+    float target_pwm;
 
     // The lead angle value used to adjust the angle of the driven phase
     // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
     int32_t lead_angle;
-
-    // Higher resolution control value for the target PWM.
-    int32_t target_pwm_control;
 
     float secondary_target;
 
@@ -207,15 +206,6 @@ static_assert(driver_state_size <= 64, "DriverState size exceeds 64 bytes, try t
 // ----------------------------
 
 
-// Extract the three phase duty cycles from the motor outputs.
-static inline ThreePhase get_duties(MotorOutputs const& outputs) {
-    return ThreePhase{
-        static_cast<int>(outputs.u_duty),
-        static_cast<int>(outputs.v_duty),
-        static_cast<int>(outputs.w_duty)
-    };
-}
-
 // Extract the three phase currents from the readout.
 static inline ThreePhase get_currents(hex_mini_drive::FullReadout const& readout) {
     return ThreePhase{
@@ -243,17 +233,22 @@ static inline ThreePhase get_calibration_factors(hex_mini_drive::CurrentCalibrat
     };
 }
 
+const float three_inverse = 1.0 / 3.0;
 
 // Adjust the three-phase values so that their sum is zero.
 static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
     // Adjust the values so that their sum is zero.
-    const int avg = (std::get<0>(values) + std::get<1>(values) + std::get<2>(values)) / 3;
+    const float avg = (std::get<0>(values) + std::get<1>(values) + std::get<2>(values)) * three_inverse;
     return ThreePhase{
         std::get<0>(values) - avg,
         std::get<1>(values) - avg,
         std::get<2>(values) - avg
     };
 }
+
+// Three phase arithmetic operators
+// --------------------------------
+
 
 // Element-wise difference.
 static inline ThreePhase operator - (ThreePhase const& a, ThreePhase const& b) {
@@ -274,7 +269,7 @@ static inline ThreePhase operator + (ThreePhase const& a, ThreePhase const& b) {
 }
 
 // Scalar multiplication.
-static inline ThreePhase operator * (ThreePhase const& a, int b) {
+static inline ThreePhase operator * (ThreePhase const& a, float b) {
     return ThreePhase {
         std::get<0>(a) * b,
         std::get<1>(a) * b,
@@ -292,7 +287,7 @@ static inline ThreePhase operator * (ThreePhase const& a, ThreePhase const& b) {
 }
 
 // Scalar division.
-static inline ThreePhase operator / (ThreePhase const& a, int b) {
+static inline ThreePhase operator / (ThreePhase const& a, float b) {
     return ThreePhase {
         std::get<0>(a) / b,
         std::get<1>(a) / b,
@@ -309,11 +304,13 @@ static inline ThreePhase operator / (ThreePhase const& a, ThreePhase const& b) {
     };
 }
 
-// Dot product between three phase vectors.
-static inline int dot(ThreePhase const& a, ThreePhase const& b) {
+// Dot product between three phase float vectors.
+static inline float dot(ThreePhase const& a, ThreePhase const& b) {
     return (
         std::get<0>(a) * std::get<0>(b) +
         std::get<1>(a) * std::get<1>(b) +
         std::get<2>(a) * std::get<2>(b)
     );
 }
+
+

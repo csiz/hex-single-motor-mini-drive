@@ -1,4 +1,4 @@
-import {pwm_base, cycles_per_millisecond, millis_per_cycle, phase_resistance, phase_inductance} from "./constants.js";
+import {cycles_per_millisecond, millis_per_cycle, phase_resistance, phase_inductance} from "./constants.js";
 import {HISTORY_SIZE} from "hex-mini-drive-interface";
 import {MessageCode} from "./motor_controller.js";
 import {wait} from "./async_utils.js";

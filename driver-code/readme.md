@@ -185,7 +185,7 @@ After generating the CubeMX configuration code we need to make the following cha
         `
     8. Update `cmake/gcc-arm-none-eabi.cmake` with our C++ build flags:
         `
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wpedantic -fdata-sections -ffunction-sections -Wno-unused-parameter")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fwrapv -Wall -Wextra -Wpedantic -fdata-sections -ffunction-sections -Wno-unused-parameter -Wno-missing-field-initializers")
         set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++23 -fno-rtti -fno-exceptions -fno-threadsafe-statics -Wno-register -Wno-narrowing -Werror=switch")
         `
     9. Edit the linker script, a file that looks like `stm32.*_flash.ld`, we need to reserve a small section for user data.

@@ -386,7 +386,7 @@ const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
 
 // Slider to choose the command specific PWM setting.
 const command_pwm_slider = inputs_wide_range([0, 1.0], {value: 0.05, step: 0.001, label: "Command value:"});
-const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.round(value * pwm_base));
+const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.round(value * PWM_BASE));
 
 // Timeout duration for each command. For safety, the motor runs each drive command for a short period until commanded again.
 const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
@@ -402,11 +402,11 @@ const command_angle = transformed_input_value(command_angle_slider, degrees_to_a
 
 // Choose the torque target for torque driving modes.
 const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.200, step: 0.010, label: "Command torque (Amps):"});
-const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => Math.floor(amps / current_conversion));
+const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => amps / CURRENT_UNITS_PER_AMP);
 
 // Choose the power target for power driving modes.
 const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 0.200, step: 0.010, label: "Command power (Watts):"});
-const command_power = transformed_input_value(command_power_slider, convert_watts_to_power_units);
+const command_power = Generators.input(command_power_slider);
 
 // Choose the position for target seeking.
 const command_seek_rotation_slider = inputs_wide_range([-1024, +1024], {value: 0, step: 1, label: "Seek angle (rotations):"});
@@ -1080,7 +1080,7 @@ const plot_cycle_loop_stats = plot_lines({
     {y: "cycle_start_tick", label: "Tick at start", color: colors.u},
     {y: "cycle_end_tick", label: "Tick at end", color: colors.v},
     {y: (d) => (pwm_period + d.cycle_end_tick - d.cycle_start_tick) % pwm_period , label: "Cycle duration", color: colors.w},
-    {y: (d) => d.cycle_start_tick - pwm_base, label: "Ticks at start since mid cycle", color: d3.color(colors.u).brighter(1)},
+    {y: (d) => d.cycle_start_tick - PWM_BASE, label: "Ticks at start since mid cycle", color: d3.color(colors.u).brighter(1)},
   ],
   curve,
 });
@@ -1360,7 +1360,7 @@ autosave_inputs(monitoring_plots);
 // Current calibration
 // -------------------
 
-const current_calibration_pwm_slider = inputs_wide_range([0, pwm_base], {value: pwm_base * 0.3, step: 1.0, label: "Calibration max PWM:"});
+const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.3, step: 1.0, label: "Calibration max PWM:"});
 
 const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
 ```
@@ -2159,11 +2159,10 @@ import {run_current_calibration, compute_current_calibration} from "./components
 import {run_position_calibration, compute_position_calibration} from "./components/motor_controller/position_calibration.js";
 
 import {
-  cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_base, pwm_period, 
-  HISTORY_SIZE, max_calibration_current,
+  PWM_BASE, HISTORY_SIZE, CURRENT_UNITS_PER_AMP, VOLTAGE_UNITS_PER_VOLT,
+  cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_period, 
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
-  current_conversion, max_drive_current, max_drive_power, max_angular_speed, max_16bit,
-  convert_power_units_to_watts, convert_watts_to_power_units,
+  max_drive_current, max_drive_power, max_angular_speed,
 } from "./components/motor_controller/constants.js";
 
 import {unit_test_expected} from "./components/motor_controller/driver_unit_tests.js";

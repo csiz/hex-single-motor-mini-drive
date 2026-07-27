@@ -44,7 +44,7 @@
 // Electrical and position state
 hex_mini_drive::FullReadout readout = {
     .live_max_pwm = pwm_max,
-    .emf_angle_error_variance = max_16bit,
+    .emf_angle_error_variance = square(10 * angle_base / 360),
 };
 
 // Latest readout we have copied from the shared_readout in the main loop.
@@ -72,18 +72,18 @@ volatile int32_t external_angle_offset = 0;
 // ----------------
 
 // Count the number of consecutive EMF detections.
-int number_of_emf_detections = 0;
+int32_t number_of_emf_detections = 0;
 
-const int emf_speed_threshold_count = 16;
-const int emf_fix_threshold_count = 32;
-const int emf_fix_max_count = 64;
+const int32_t emf_speed_threshold_count = 16;
+const int32_t emf_fix_threshold_count = 32;
+const int32_t emf_fix_max_count = 64;
 
 
 // Track how many times we think our angle is correct.
-int correct_angle_counter = 0;
+int32_t correct_angle_counter = 0;
 
-const int angle_fix_threshold_count = 128;
-const int angle_fix_max_count = 1024;
+const int32_t angle_fix_threshold_count = 128;
+const int32_t angle_fix_max_count = 1024;
 
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 ThreePhase previous_motor_mid_pwm_duties = {0, 0, 0};
@@ -212,20 +212,20 @@ static inline MotorOutputs update_motor_6_sector(
 
     // Get the voltage for the three phases from the table.
 
-    const uint16_t voltage_phase_u = motor_sector_driving_table[hall_sector][0];
-    const uint16_t voltage_phase_v = motor_sector_driving_table[hall_sector][1];
-    const uint16_t voltage_phase_w = motor_sector_driving_table[hall_sector][2];
+    const float voltage_phase_u = motor_sector_driving_table[hall_sector][0];
+    const float voltage_phase_v = motor_sector_driving_table[hall_sector][1];
+    const float voltage_phase_w = motor_sector_driving_table[hall_sector][2];
 
-    const uint16_t abs_pwm = min(
+    const float abs_pwm = min(
         readout.live_max_pwm,
         faster_abs(driver_state.active_pwm)
     );
 
     return MotorOutputs{
         .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm / pwm_base),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm / pwm_base),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm / pwm_base)
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
     };
 }
 
@@ -235,7 +235,7 @@ static inline MotorOutputs update_motor_at_angle(
     hex_mini_drive::FullReadout const& readout
 ) {
     // The PWM counter value must be positive, we use the sign to determine the direction.
-    const int abs_pwm = min(readout.live_max_pwm, faster_abs(driver_state.active_pwm));
+    const float abs_pwm = min(readout.live_max_pwm, faster_abs(driver_state.active_pwm));
 
     // Use the active angle or flip it depending on the sign of the PWM.
     const int angle = driver_state.active_angle + (driver_state.active_pwm < 0 ? half_circle : 0);
@@ -244,15 +244,15 @@ static inline MotorOutputs update_motor_at_angle(
 
     // Get the voltage for the three phases from the waveform table.
 
-    const uint16_t voltage_phase_u = get_phase_pwm(angle);
-    const uint16_t voltage_phase_v = get_phase_pwm(angle - third_circle);
-    const uint16_t voltage_phase_w = get_phase_pwm(angle - two_thirds_circle);
+    const float voltage_phase_u = get_phase_pwm(angle);
+    const float voltage_phase_v = get_phase_pwm(angle - third_circle);
+    const float voltage_phase_w = get_phase_pwm(angle - two_thirds_circle);
 
     return MotorOutputs{
         .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm / pwm_base),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm / pwm_base),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm / pwm_base)
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
     };
 }
 
@@ -279,31 +279,31 @@ static inline MotorOutputs update_motor_resistance_calibration(
     // up to the target PWM, then ramp down to 0.
 
     // Number of PWM cycles elapsed since the calibration started.
-    const int elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
+    const int32_t elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
 
     // Duration of a single phase angle segment.
-    const int segment_duration = hex_mini_drive::HISTORY_SIZE / 6;
+    const int32_t segment_duration = hex_mini_drive::HISTORY_SIZE / 6;
 
     // Which of the 6 phase angle segments we are currently in.
-    const int segment_index = elapsed / segment_duration;
+    const int32_t segment_index = elapsed / segment_duration;
 
     // How far we are into the current segment.
-    const int segment_progress = elapsed - segment_index * segment_duration;
+    const int32_t segment_progress = elapsed - segment_index * segment_duration;
 
     // Duration of a single ramp (a third of the segment).
-    const int ramp_duration = segment_duration / 3;
+    const int32_t ramp_duration = segment_duration / 3;
 
     // Drive the phases at 0, 60, 120, 180, 240, and 300 degrees.
     driver_state.active_angle = normalize_angle(static_cast<int32_t>(segment_index * (angle_base / 6)));
 
     // Build a pyramid waveform: hold at 0, ramp up to the target PWM, then ramp back down to 0.
-    const int abs_pwm = (
+    const float abs_pwm = (
         segment_progress < ramp_duration ? 0 :
         segment_progress < 2 * ramp_duration ? driver_state.target_pwm * (segment_progress - ramp_duration) / ramp_duration :
-        driver_state.target_pwm * (3 * ramp_duration - segment_progress) / ramp_duration
+        driver_state.target_pwm * (3.0 * ramp_duration - segment_progress) / ramp_duration
     );
 
-    driver_state.active_pwm = static_cast<int16_t>(clip_to(0, driver_state.target_pwm, abs_pwm));
+    driver_state.active_pwm = clip_to(0.0f, driver_state.target_pwm, abs_pwm);
 
     return update_motor_at_angle(driver_state, readout);
 }
@@ -412,17 +412,17 @@ static inline MotorOutputs update_motor_smooth(
     driver_state.lead_angle = clip_to(
         -max_lead_angle_control,
         +max_lead_angle_control,
-        driver_state.lead_angle + (control_parameters.lead_angle_control_ki * lead_angle_error / hires_fixed_point)
+        driver_state.lead_angle + static_cast<int32_t>(control_parameters.lead_angle_control_ki * lead_angle_error)
     );
 
     if (angle_fix) {
         // If we have an accurate position, we can use it to adjust our control.
 
-        const int target_angle = normalize_angle(ideal_angle + driver_state.lead_angle);
+        const int32_t target_angle = normalize_angle(ideal_angle + driver_state.lead_angle);
         
         // Compensate the target angle by the control output. At high speed we need
         // to lead by more than 90 degrees to compensate for the RL time constant.
-        const int active_angle_error = clip_to(
+        const int32_t active_angle_error = clip_to(
             -control_parameters.max_angle_change,
             +control_parameters.max_angle_change,
             signed_angle(target_angle - driver_state.active_angle)
@@ -466,14 +466,11 @@ static inline MotorOutputs update_motor_torque(
     const int control_error = (current_target - measured_current);
 
     // Update the PID control for the torque.
-    driver_state.target_pwm_control = clip_to(
-        -max_pwm_control,
-        +max_pwm_control,
-        driver_state.target_pwm_control + control_error * control_parameters.torque_control_ki
+    driver_state.target_pwm = clip_to(
+        -pwm_max,
+        +pwm_max,
+        driver_state.target_pwm + control_error * control_parameters.torque_control_ki
     );
-
-    // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.target_pwm_control / hires_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -503,14 +500,11 @@ static inline MotorOutputs update_motor_battery_power(
 
 
     // Update the PID control for the torque.
-    driver_state.target_pwm_control = clip_to(
-        -max_pwm_control,
-        +max_pwm_control,
-        driver_state.target_pwm_control + control_error
+    driver_state.target_pwm = clip_to(
+        -pwm_max,
+        +pwm_max,
+        driver_state.target_pwm + control_error
     );
-
-    // Get the target PWM after torque control.
-    driver_state.target_pwm = driver_state.target_pwm_control / hires_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -527,14 +521,11 @@ static inline MotorOutputs update_motor_speed(
     const int control_error = (speed_target - readout.angular_speed);
 
     // Update the PID control for the torque.
-    driver_state.target_pwm_control = clip_to(
-        -max_pwm_control,
-        +max_pwm_control,
-        driver_state.target_pwm_control + control_error * control_parameters.speed_control_ki
+    driver_state.target_pwm = clip_to(
+        -pwm_max,
+        +pwm_max,
+        driver_state.target_pwm + control_error * control_parameters.speed_control_ki
     );
-
-    // Get the target PWM after speed control.
-    driver_state.target_pwm = driver_state.target_pwm_control / hires_fixed_point;
 
     return update_motor_smooth(driver_state, readout);
 }
@@ -555,7 +546,7 @@ static inline MotorOutputs update_motor_seek_angle_power(
 
     const float max_power = driver_state.seek_angle.max_secondary_target;
 
-    driver_state.secondary_target = max_power * pid_control / seek_pid_fixed_point;
+    driver_state.secondary_target = max_power * pid_control;
 
     return update_motor_battery_power(driver_state, readout);
 }
@@ -575,7 +566,7 @@ static inline MotorOutputs update_motor_seek_angle_torque(
 
     const int max_current = driver_state.seek_angle.max_secondary_target;
 
-    driver_state.secondary_target = max_current * pid_control / seek_pid_fixed_point;
+    driver_state.secondary_target = max_current * pid_control;
 
     return update_motor_torque(driver_state, readout);
 }
@@ -595,7 +586,7 @@ static inline MotorOutputs update_motor_seek_angle_speed(
 
     const int max_speed = driver_state.seek_angle.max_secondary_target;
 
-    driver_state.secondary_target = max_speed * pid_control / seek_pid_fixed_point;
+    driver_state.secondary_target = max_speed * pid_control;
 
     return update_motor_speed(driver_state, readout);
 }
@@ -618,9 +609,9 @@ static inline MotorOutputs update_motor_schedule(
     
     return MotorOutputs{
         .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>(schedule_stage.u_duty * driver_state.target_pwm / pwm_base),
-        .v_duty = static_cast<uint16_t>(schedule_stage.v_duty * driver_state.target_pwm / pwm_base),
-        .w_duty = static_cast<uint16_t>(schedule_stage.w_duty * driver_state.target_pwm / pwm_base)
+        .u_duty = static_cast<uint16_t>(schedule_stage.u_duty * driver_state.target_pwm),
+        .v_duty = static_cast<uint16_t>(schedule_stage.v_duty * driver_state.target_pwm),
+        .w_duty = static_cast<uint16_t>(schedule_stage.w_duty * driver_state.target_pwm)
     };
 }
 
@@ -669,24 +660,22 @@ static inline DriverState setup_driver_state(
 
         case DriverMode::SCHEDULE:
             // We should not enter testing mode without a valid schedule.
-            if (pending_state.schedule.pointer == nullptr) return breaking_driver_state;
-
-            return DriverState{
+            return pending_state.schedule.pointer == nullptr ? breaking_driver_state : DriverState{
                 .mode = DriverMode::SCHEDULE,
                 .duration = hex_mini_drive::HISTORY_SIZE,
-                .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, pending_state.target_pwm)),
+                .target_pwm = clip_to(0.0f, pwm_max, pending_state.target_pwm),
                 .schedule = DriveSchedule{
                     .pointer = pending_state.schedule.pointer,
                     .current_stage = 0,
                     .stage_counter = 0
                 }
             };
-
+        
         case DriverMode::DRIVE_6_SECTOR:
             return DriverState{
                 .mode = DriverMode::DRIVE_6_SECTOR,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_pwm = static_cast<int16_t>(clip_to(-pwm_max, pwm_max, pending_state.active_pwm))
+                .active_pwm = clip_to(-pwm_max, pwm_max, pending_state.active_pwm),
             };
 
         case DriverMode::DRIVE_PERIODIC:
@@ -696,7 +685,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = static_cast<int16_t>(normalize_angle(
                     pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0)
                 )),
-                .active_pwm = static_cast<int16_t>(min(control_parameters.max_pwm_difference, faster_abs(pending_state.active_pwm))),
+                .active_pwm = min(control_parameters.max_pwm_difference, faster_abs(pending_state.active_pwm)),
                 .angular_speed = static_cast<int16_t>(clip_to(-max_angular_speed, max_angular_speed, pending_state.angular_speed)),
             };
 
@@ -708,7 +697,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .target_pwm = static_cast<int16_t>(clip_to(-pwm_max, +pwm_max, pending_state.target_pwm)),
+                .target_pwm = clip_to(-pwm_max, +pwm_max, pending_state.target_pwm),
             };
             
         case DriverMode::DRIVE_TORQUE:
@@ -718,8 +707,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .target_pwm_control = driver_state.target_pwm_control,
-                .secondary_target = static_cast<int16_t>(clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target)),
+                .secondary_target = clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target),
             };
 
         case DriverMode::DRIVE_BATTERY_POWER:
@@ -729,7 +717,6 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .target_pwm_control = driver_state.target_pwm_control,
                 .secondary_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.secondary_target)),
             };
 
@@ -740,7 +727,6 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .target_pwm_control = driver_state.target_pwm_control,
                 .secondary_target = static_cast<int16_t>(clip_to(-max_angular_speed, +max_angular_speed, pending_state.secondary_target)),
             };
 
@@ -751,10 +737,9 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .target_pwm_control = driver_state.target_pwm_control,
                 .seek_angle = SeekAngle{
                     .target_angle = static_cast<int32_t>(normalize_angle(pending_state.seek_angle.target_angle)),
-                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
+                    .target_rotation = pending_state.seek_angle.target_rotation,
                     .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_power, pending_state.seek_angle.max_secondary_target)),
                     .error_integral = driver_state.seek_angle.error_integral
                 }
@@ -767,10 +752,9 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .target_pwm_control = driver_state.target_pwm_control,
                 .seek_angle = SeekAngle{
                     .target_angle = static_cast<int32_t>(normalize_angle(pending_state.seek_angle.target_angle)),
-                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
+                    .target_rotation = pending_state.seek_angle.target_rotation,
                     .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_current, pending_state.seek_angle.max_secondary_target)),
                     .error_integral = driver_state.seek_angle.error_integral
                 }
@@ -783,10 +767,9 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
-                .target_pwm_control = driver_state.target_pwm_control,
                 .seek_angle = SeekAngle{
                     .target_angle = static_cast<int32_t>(normalize_angle(pending_state.seek_angle.target_angle)),
-                    .target_rotation = static_cast<int16_t>(clip_to(-max_16bit, +max_16bit, pending_state.seek_angle.target_rotation)),
+                    .target_rotation = pending_state.seek_angle.target_rotation,
                     .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_angular_speed, pending_state.seek_angle.max_secondary_target)),
                     .error_integral = driver_state.seek_angle.error_integral
                 }
@@ -796,14 +779,14 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::RESISTANCE_CALIBRATION,
                 .duration = hex_mini_drive::HISTORY_SIZE,
-                .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, pending_state.target_pwm)),
+                .target_pwm = clip_to(0.0f, pwm_max, pending_state.target_pwm),
             };
 
         case DriverMode::INDUCTANCE_CALIBRATION:
             return DriverState{
                 .mode = DriverMode::INDUCTANCE_CALIBRATION,
                 .duration = hex_mini_drive::HISTORY_SIZE,
-                .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, pending_state.target_pwm)),
+                .target_pwm = clip_to(0.0f, pwm_max, pending_state.target_pwm),
             };
     }
 
@@ -972,16 +955,20 @@ void adc_interrupt_handler(){
     // Average the temperature readings since we are sampling quicker than the manufacturer indicates.
     // We can't extend the sampling time longer than it is set at the moment (about half the recommendation),
     // so we have to massage the readings for noise. Temperature varies slowly anyway.
-    const int temperature = (adc_readings.temp_readout + readout.temperature * 3) / 4;
+    const float temperature = (adc_readings.temp_readout + readout.temperature * 3) * 0.25f;
 
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
-    const int vcc_voltage = (adc_readings.vcc_readout + readout.vcc_voltage * 3) / 4;
+    const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion + readout.vcc_voltage * 3) * 0.25f;
 
     // Get the motor duties that were set at the mid point of the PWM cycle, between current readings.
-    const ThreePhase motor_mid_pwm_duties = get_duties(driver_state.motor_outputs);
+    const ThreePhase motor_mid_pwm_duties = {
+        driver_state.motor_outputs.u_duty,
+        driver_state.motor_outputs.v_duty,
+        driver_state.motor_outputs.w_duty
+    };
 
     // Calculate the effective motor outputs for this set of measurements as the average of the last 2.
-    const ThreePhase motor_outputs = (previous_motor_mid_pwm_duties + motor_mid_pwm_duties) / 2;
+    const ThreePhase motor_outputs = (previous_motor_mid_pwm_duties + motor_mid_pwm_duties) * 0.5f;
 
     // Store the active motor outputs for the next cycle.
     previous_motor_mid_pwm_duties = motor_mid_pwm_duties;
@@ -992,13 +979,15 @@ void adc_interrupt_handler(){
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
     // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
     // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
-    const ThreePhase drive_voltages = adjust_to_sum_zero(motor_outputs) * vcc_voltage / pwm_base;
+    const ThreePhase drive_voltages = adjust_to_sum_zero(motor_outputs) * vcc_voltage * pwm_base_inverse;
     
 
     // Calculate calibrated currents.
-    const ThreePhase currents = adjust_to_sum_zero(
-        adc_readings.currents * get_calibration_factors(current_calibration) / current_calibration_fixed_point
-    );
+    const ThreePhase currents = adjust_to_sum_zero(ThreePhase{
+        static_cast<float>(adc_readings.u_readout),
+        static_cast<float>(adc_readings.v_readout),
+        static_cast<float>(adc_readings.w_readout)
+    }) * get_calibration_factors(current_calibration);
 
     // TODO: the below is no longer accurate, let's investigate later, for now keep the more basic calculation.
     // Get calibrated current divergence (the time unit is defined as 1 per cycle). We average out the
@@ -1009,10 +998,10 @@ void adc_interrupt_handler(){
     const ThreePhase currents_diff = currents - get_currents(readout);
 
     // Calculate the voltage drop across the coil inductance.
-    const ThreePhase inductor_voltages = currents_diff * current_calibration.inductance_factor / phase_diff_conversion;
+    const ThreePhase inductor_voltages = currents_diff * current_calibration.inductance_factor * phase_current_diff_to_voltage_units;
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const ThreePhase resistive_voltages = currents * phase_current_to_voltage / current_fixed_point;
+    const ThreePhase resistive_voltages = currents * phase_current_to_voltage;
 
 
     // Infer the back EMF voltages for each phase.
@@ -1067,13 +1056,13 @@ void adc_interrupt_handler(){
     // The back EMF generated is always along the quadrature axis. The current direction is mostly under our control,
     // if we want to drive the motor efficiently we must also align the current along the quadrature axis.
 
-    const int direct_current = dot(currents, three_phase_cos) / sin_tables_base;
+    const float direct_current = dot(currents, three_phase_cos);
 
-    const int quadrature_current = -dot(currents, three_phase_sin) / sin_tables_base;
+    const float quadrature_current = -dot(currents, three_phase_sin);
 
-    const int direct_emf_voltage = dot(emf_voltages, three_phase_cos) / sin_tables_base;
+    const float direct_emf_voltage = dot(emf_voltages, three_phase_cos);
 
-    const int quadrature_emf_voltage = -dot(emf_voltages, three_phase_sin) / sin_tables_base;
+    const float quadrature_emf_voltage = -dot(emf_voltages, three_phase_sin);
 
 
     // Current angle calculation
@@ -1092,16 +1081,16 @@ void adc_interrupt_handler(){
     const int inductor_angle = normalize_angle(predicted_angle + inductor_angle_offset);
     
     // Calculate the magnitude by rotating the current vector entirely on the quadrature axis.
-    const int instant_current_magnitude = faster_abs(
+    const float instant_current_magnitude = faster_abs(
         get_cos(inductor_angle_offset) * direct_current + 
         get_sin(inductor_angle_offset) * quadrature_current
-    ) / sin_tables_base;
+    );
 
     // The current measurements have a low noise floor, but it's not 0.
     const bool current_detected = instant_current_magnitude > 4;
 
     // Average the current magnitude over a short duration to reduce noise.
-    const int current_magnitude = (instant_current_magnitude + readout.current_magnitude * 3) / 4;
+    const float current_magnitude = (instant_current_magnitude + readout.current_magnitude * 3) * 0.25f;
     
 
     // Back EMF angle observer
@@ -1111,13 +1100,13 @@ void adc_interrupt_handler(){
     const int emf_angle_offset = funky_atan2(direct_emf_voltage, -quadrature_emf_voltage);
 
     // Calculate the emf voltage as a rotation of the quad voltage that zeroes out the direct component.
-    const int instant_emf_voltage_magnitude = faster_abs(
+    const float instant_emf_voltage_magnitude = faster_abs(
         get_cos(emf_angle_offset) * quadrature_emf_voltage - 
         get_sin(emf_angle_offset) * direct_emf_voltage
-    ) / sin_tables_base;
+    );
 
     // Average the EMF voltage magnitude over a short duration to reduce noise.
-    const int emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) / 4;
+    const float emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) * 0.25f;
 
     // The rotor angle inferred from the EMF can be either aligned with the positive quadrature direction or 
     // the negative. It's going to be aligned with the negative direction when we have the rotor switches
@@ -1125,14 +1114,10 @@ void adc_interrupt_handler(){
     const int emf_angle_error = angle_or_mirror(emf_angle_offset);
 
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
-    const int emf_angle_error_variance = 1 + (
-        square(clip_to(
-            -max_16bit, 
-            +max_16bit, 
-            emf_angle_error - previous_emf_angle_error
-        )) + 
+    const float emf_angle_error_variance = (
+        square(emf_angle_error - previous_emf_angle_error) + 
         readout.emf_angle_error_variance * 3
-    ) / 4;
+    ) * 0.25f;
 
     // Store the current error for the noise calculation next cycle.
     previous_emf_angle_error = emf_angle_error;
@@ -1173,7 +1158,7 @@ void adc_interrupt_handler(){
     const bool angle_fix = correct_angle_counter >= angle_fix_threshold_count;
     
     // Calculate the angle adjustment error using the parametrized gains.
-    const int angle_adjustment = prediction_error * control_parameters.rotor_angle_ki / hires_fixed_point;
+    const int angle_adjustment = prediction_error * control_parameters.rotor_angle_ki;
 
     // Calculate the new angle based on the angle adjustment.
     const int unnormalized_angle = unnormalized_predicted_angle + angle_adjustment;
@@ -1189,17 +1174,7 @@ void adc_interrupt_handler(){
     const int angle = unnormalized_angle - rotations_increment * angle_base;
 
     // Calculate the new rotation index.
-    const int unnormalized_rotations = readout.rotations + rotations_increment;
-
-    // Normalize the rotations to the 16-bit range. Note that we don't use the minimum
-    // negative 16 bit value so that calculations with the negative of rotations are still
-    // in the valid range for signed 16 bit arithmetic.
-    const int rotations = (
-        unnormalized_rotations > max_16bit ? -max_16bit : 
-        unnormalized_rotations < -max_16bit ? +max_16bit : 
-        unnormalized_rotations
-    );
-
+    const int rotations = readout.rotations + rotations_increment;
 
     // Calculate speed and acceleration
     // --------------------------------
@@ -1231,10 +1206,10 @@ void adc_interrupt_handler(){
     // -----------------------
 
     // Resistive power is the power dissipated in the motor coils and MOSFETs.
-    const float resistive_power = dot(currents, resistive_voltages) * voltage_mul_current_fixed_point_inverse;
+    const float resistive_power = dot(currents, resistive_voltages) * voltage_mul_current_to_power;
 
     // Inductive power is the power transfered to the motor inductors.
-    const float inductive_power = dot(currents, inductor_voltages) * voltage_mul_current_fixed_point_inverse;
+    const float inductive_power = dot(currents, inductor_voltages) * voltage_mul_current_to_power;
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
     // 
@@ -1243,7 +1218,7 @@ void adc_interrupt_handler(){
     const float emf_power = - (
         sign(quadrature_current) * current_magnitude * 
         sign(quadrature_emf_voltage) * emf_voltage_magnitude 
-    ) * dq0_voltage_mul_current_fixed_point_inverse;
+    ) * dq0_voltage_mul_current_to_power;
 
     // The total power is the power used from the battery. It will be positive when driving
     // the motor, meaning that we drain the battery. If this is negative it means we are charging
@@ -1318,7 +1293,7 @@ void adc_interrupt_handler(){
     readout.target_pwm = driver_state.target_pwm;
     
     readout.secondary_target = driver_state.secondary_target;
-    readout.seek_integral = driver_state.seek_angle.error_integral / seek_integral_divisor;
+    readout.seek_integral = driver_state.seek_angle.error_integral;
 
 
     // Calculate and set motor outputs!!

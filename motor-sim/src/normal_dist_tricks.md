@@ -173,7 +173,7 @@ const position_input = inputs_wide_range(domain, {
 
 const position = Generators.input(position_input);
 
-const position_stdev_input = inputs_wide_range([0, span], {
+const position_stdev_input = inputs_wide_range([0, 2*span], {
   value: 15,
   step: 0.1,
   label: "Prior angle stdev:",
@@ -188,8 +188,8 @@ const upper_input = inputs_wide_range([0, domain[1]], {
 });
 const upper = Generators.input(upper_input);
 
-const upper_stdev_input = inputs_wide_range([0, span / 10], {
-  value: 3,
+const upper_stdev_input = inputs_wide_range([0, 2*span / 10], {
+  value: 15,
   step: 0.1,
   label: "Hall trigger b stdev:",
 });
@@ -211,8 +211,8 @@ const lower_input = inputs_wide_range([domain[0], 0], {
 
 const lower = Generators.input(lower_input);
 
-const lower_stdev_input = inputs_wide_range([0, span / 10], {
-  value: 3,
+const lower_stdev_input = inputs_wide_range([0, 2*span / 10], {
+  value: 15,
   step: 0.1,
   label: "Hall trigger a stdev:",
 });

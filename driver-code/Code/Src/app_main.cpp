@@ -24,9 +24,8 @@ float main_loop_rate = 0.0f;
 float adc_update_rate = 0.0f;
 
 
-int32_t resistive_power_observer = 0;
-
-int32_t total_power_observer = 0;
+float resistive_power_observer = 0.0f;
+float total_power_observer = 0.0f;
 
 
 // Communication buffers and state
@@ -488,7 +487,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::RESISTANCE_CALIBRATION,
         .duration = hex_mini_drive::HISTORY_SIZE,
-        .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, std::get<TestCommand>(message.message_data).pwm_value)),
+        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
       });
       return;
     }
@@ -502,7 +501,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::INDUCTANCE_CALIBRATION,
         .duration = hex_mini_drive::HISTORY_SIZE,
-        .target_pwm = static_cast<int16_t>(clip_to(0, pwm_max, std::get<TestCommand>(message.message_data).pwm_value)),
+        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
       });
       return;
     }
@@ -693,17 +692,12 @@ void app_tick() {
 
   // Calculate slowly varying averages of the resistive power; this represents the energy
   // dissipated in the motor coils which should be proportional to the temperature rise.
-  const int avg_resistive_power = resistive_power_observer / hires_fixed_point;
-  
   // Update the higher resolution observer.
-  resistive_power_observer += (readout.resistive_power - avg_resistive_power) * control_parameters.resistive_power_ki;
+  resistive_power_observer += (readout.resistive_power - resistive_power_observer) * control_parameters.resistive_power_ki;
 
   // Calculate slowly varying averages of the total power; this represents the energy
   // drawn from the battery. At constant voltage, this is proportional to the current drawn.
-  const int avg_total_power = total_power_observer / hires_fixed_point;
-
-  // Update the higher resolution observer.
-  total_power_observer += (readout.total_power - avg_total_power) * control_parameters.power_draw_ki;
+  total_power_observer += (readout.total_power - total_power_observer) * control_parameters.power_draw_ki;
 
 
   // Reduce the maximum output PWM to keep within safe limits:
@@ -716,12 +710,12 @@ void app_tick() {
   // 
   // The penalty should normally be negative indicating we can increase the PWM.
   // TODO: redo penalty calculations.
-  const int pwm_penalty = (max(
+  const int pwm_penalty = max(
     vcc_mosfet_driver_undervoltage - readout.vcc_voltage,
-    avg_resistive_power - control_parameters.max_resistive_power,
-    avg_total_power - control_parameters.max_power_draw,
+    resistive_power_observer - control_parameters.max_resistive_power,
+    total_power_observer - control_parameters.max_power_draw,
     faster_abs(readout.angular_speed) - control_parameters.max_angular_speed
-  ) + limiting_divisor_m1) / limiting_divisor;
+  );
 
   const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);
 

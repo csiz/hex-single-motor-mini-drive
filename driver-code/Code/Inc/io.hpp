@@ -244,11 +244,9 @@ static inline ADCReadings read_adc_values(){
 
 
     return ADCReadings{
-        ThreePhase{
-            u_readout,
-            v_readout,
-            w_readout,
-        },
+        u_readout,
+        v_readout,
+        w_readout,
         ref_readout,
         temp_readout,
         vcc_readout,
@@ -349,7 +347,7 @@ static void enable_timers(){
     // 
     // Use the TIM1 channel 5 to generate an event a short time before the counter reaches
     // the auto reload value. This event triggers the ADC to read the motor phase currents.
-    const uint16_t injected_conversion_start = pwm_base - sample_lead_time;
+    const uint16_t injected_conversion_start = hex_mini_drive::PWM_BASE - sample_lead_time;
     LL_TIM_OC_SetCompareCH5(TIM1, injected_conversion_start);
 
     // Invert the PWM mode of channel 5 instead so we emit a rising edge during up counting.

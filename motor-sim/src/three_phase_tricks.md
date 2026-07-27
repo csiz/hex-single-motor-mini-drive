@@ -35,23 +35,25 @@ We need to approximate the atan2 function because we don't have enough processin
 compute it in real time.
 
 <div class="card tight">
+  <div>${atan_approx_input}</div>
   <div>${atan_approx_plot}</div>
+  <div>Maximum atan2 error is: ${(d3.max(atan_approx, d => Math.abs(d.atan_error))).toFixed(3)} degrees</div>
+  <div>Mean atan2 error is: ${(d3.mean(atan_approx, d => Math.abs(d.atan_error))).toFixed(3)} degrees</div>
 </div>
 
 Trig and waveform lookup tables
 -------------------------------
 
-<pre>${phases_wave_form_lookup_table}</pre>
+<pre>${phases_waveform_lookup_table}</pre>
 <pre>${sin_lookup_table}</pre>
 </main>
 
 
 
 ```js
+const sin_table_size = 4096;
 
-import {angle_base, pwm_base} from "./components/motor_controller/constants.js";
-
-const phi = d3.range(angle_base).map(x => 2 * Math.PI * x / angle_base);
+const phi = d3.range(sin_table_size).map(x => 2 * Math.PI * x / sin_table_size);
 function phase_func(t){
   const deg = t * 180 / Math.PI;
 
@@ -113,18 +115,29 @@ function chunk_array(arr) {
   return Array.from({length: Math.ceil(arr.length / chunk_size)}, (_, i) => arr.slice(i * chunk_size, i * chunk_size + chunk_size));
 }
 
-const phases_waveform = d3.range(angle_base).map((x) => (x * 2 * Math.PI / (angle_base))).map(phase_func);
+const phases_waveform = d3.range(sin_table_size).map((x) => (x * 2 * Math.PI / (sin_table_size))).map(phase_func);
 
-const phases_wave_form_lookup_table = `const uint16_t phases_waveform[${angle_base}] = {\n    ${chunk_array(phases_waveform).map(chunk => chunk.map(d => Math.ceil(d.adj_u / max_adj * pwm_base).toFixed(0).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
+const phases_waveform_lookup_table = `const float phases_waveform[${sin_table_size}] = {\n    ${chunk_array(phases_waveform).map(chunk => chunk.map(d => (1.0 * d.adj_u / max_adj).toFixed(10).padStart(4, " ")).join(', ')).join(',\n    ')}\n};`;
 
-const sin_waveform = d3.range(angle_base).map((x) => (x * 2 * Math.PI / (angle_base))).map(t => ({t, sin: Math.sin(t)}));
+const sin_waveform = d3.range(sin_table_size).map((x) => (x * 2 * Math.PI / (sin_table_size))).map(t => ({t, sin: Math.sin(t)}));
 
-const sin_lookup_table = `const int16_t sin_lookup[${angle_base}] = {\n    ${chunk_array(sin_waveform).map(chunk => chunk.map(({sin}) => (Math.round(sin * angle_base).toFixed(0).padStart(5, " "))).join(', ')).join(',\n    ')}\n};`;
+const sin_lookup_table = `const float sin_lookup[${sin_table_size}] = {\n    ${chunk_array(sin_waveform).map(chunk => chunk.map(({sin}) => (sin.toFixed(10).padStart(5, " "))).join(', ')).join(',\n    ')}\n};`;
 
 
+```
+```js
+const atan_approx_input = Inputs.range([1, 10], {
+  value: 4,
+  step: 0.1,
+  label: "Funky atan2 factor:",
+});
+
+const atan_approx_factor = Generators.input(atan_approx_input);
+```
+```js
 
 function funky_atan2(y, x){
-  const c = 4; // constant to avoid division by zero
+  const c = atan_approx_factor; // constant to avoid division by zero
 
   let result = 0;
 
@@ -144,7 +157,7 @@ function funky_atan2(y, x){
 
   // Final adjustment; divide the first quadrant into 2 parts by y == x
   // and compute the complementary angle for y > x that we mirror onto the result.
-  result += x >= y ? (y / (x + y/c)) : (Math.PI / 2 - x / (y + x/c));
+  result += x >= y ? ((y*c) / (x*c + y)) : (Math.PI / 2 - (x*c) / (y*c + x));
 
   return (result + Math.PI) % (2 * Math.PI) - Math.PI;
 }
@@ -159,7 +172,7 @@ const atan_approx = phi.map(t => {
   const atan = Math.atan2(y, x) * 180 / Math.PI;
   const atan_approx = funky_atan2(y, x) * 180 / Math.PI;
 
-  const atan_error = atan - atan_approx;
+  const atan_error = (atan - atan_approx) % 360;
   return {deg, x, y, atan, atan_approx, atan_error};
 });
 

@@ -183,28 +183,51 @@ message_codes:
 
 
 definitions:
+  HISTORY_SIZE:
+    doc: Number of contiguous readouts to store in the history buffer for a snapshot.
+    type: uint32
+    const: 288
+
   MAX_MESSAGE_SIZE:
     doc: Maximum size of a message in bytes; used to allocate buffers for the messages.
     type: uint32
     const: 256
-    
-  HISTORY_SIZE:
-    doc: Number of contiguous readouts to store in the history buffer for a snapshot.
-    type: uint32
-    const: 336
 
   UNIT_TEST_OUTPUT_SIZE:
     doc: Number of bytes in the unit test output; should be enough to store the output of the funky atan unit test.
     type: uint32
     const: 248
 
-  SPI_TRANSACTION_SIZE:
+  CURRENT_UNITS_PER_AMP:
     doc: |
-      Maximum size of a SPI transaction in bytes, we should preload the data into a send buffer at least this big.
-      At the moment there's a bug in the master control board circuit means we have to reserve last 3 bytes for next
-      address. Because the SPI and chip select lines are driven by the same pins...
-    type: uint32
-    const: 1024
+      Scaling factor for the current units; although values are in float32 there are internal sections of code
+      that use Q1.31 integer math so we must be able to convert between the float32 and Q1.31 representations
+      without losing too much precision.
+    type: float32
+    const: 1000000.0
+
+  VOLTAGE_UNITS_PER_VOLT:
+    doc: |
+      Scaling factor for the voltage units; although values are in float32 there are internal sections of code
+      that use Q1.31 integer math so we must be able to convert between the float32 and Q1.31 representations
+      without losing too much precision.
+    type: float32
+    const: 1000000.0
+
+  CLOCK_FREQUENCY:
+    doc: |
+      Clock frequency of the microcontroller. We need this value to compute the time unit for the driver.
+      Each tick is ~6.94ns.
+    type: int32
+    const: 144000000
+
+  PWM_BASE:
+    doc: | 
+      Number of clock cycles for one section of the PWM counter. The PWM is a triangle wave that goes from
+      0 to PWM_BASE and back to 0. The PWM frequency is CLOCK_FREQUENCY / (2 * PWM_BASE).
+      !The time unit for the driver is the duration of a whole PWM cycle, which is 2 * PWM_BASE clock cycles.
+    type: int32
+    const: 3072
 
   PositiveNegativeTransition:
     type: uint32
@@ -230,13 +253,13 @@ definitions:
 
     struct:
       u_pwm: 
-        type: uint16
+        type: float32
         doc: The PWM commands for the U phase output.
       v_pwm: 
-        type: uint16
+        type: float32
         doc: The PWM commands for the V phase output.
       w_pwm:
-        type: uint16
+        type: float32
         doc: The PWM commands for the W phase output.
 
       readout_number:
@@ -246,35 +269,35 @@ definitions:
       state_flags:
         type: uint16
         doc: Driver state flags; packed into a single 16-bit value.
-
-      u_current:
-        type: int16
-        doc: Raw phase U current readout (ADC value).
-
-      v_current:
-        type: int16
-        doc: Raw phase V current readout (ADC value).
-
-      w_current:
-        type: int16
-        doc: Raw phase W current readout (ADC value).
-
+        
       ref_readout:
         type: int16
         doc: |
           Raw reference readout (ADC value); this is the reference voltage for the current 
           readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
 
+      u_current:
+        type: float32
+        doc: Raw phase U current readout (ADC value).
+
+      v_current:
+        type: float32
+        doc: Raw phase V current readout (ADC value).
+
+      w_current:
+        type: float32
+        doc: Raw phase W current readout (ADC value).
+
       u_current_diff:
-        type: int16
+        type: float32
         doc: Phase U current readout difference to previous readout.
 
       v_current_diff:
-        type: int16
+        type: float32
         doc: Phase V current readout difference to previous readout.
 
       w_current_diff:
-        type: int16
+        type: float32
         doc: Phase W current readout difference to previous readout.
 
       angle:
@@ -290,11 +313,11 @@ definitions:
         doc: Best estimate for the rotor magnetic angular speed.
 
       vcc_voltage:
-        type: int16
+        type: float32
         doc: Instantaneous VCC voltage readout (ADC value); from resistance divider.
       
       emf_voltage_magnitude: 
-        type: int16
+        type: float32
         doc: |
           EMF voltage magnitude. The EMF is always along the beta direction, but we can have 
           errors in the measurements and the rotor position and thus we see alpha component 
@@ -307,7 +330,7 @@ definitions:
 
     struct:
       stream_state:
-        type: uint16
+        type: uint32
         doc: |
           Number of messages to send; the stream command should be repeated to keep sending messages.
 
@@ -320,21 +343,21 @@ definitions:
     
     struct:
       main_loop_rate:
-        type: uint16
+        type: float32
         doc: Tick rate; the number of main loop (communication and commands) updates per second.
 
       adc_update_rate:
-        type: uint16
+        type: float32
         doc: |
           ADC update rate; the number of ADC readouts per second. This is usually higher 
           than the main loop rate because we read the ADCs multiple times per main loop.
 
       temperature:
-        type: uint16
+        type: float32
         doc: Instantaneous temperature readout (ADC value); from the temperature sensor.
 
       live_max_pwm:
-        type: uint16
+        type: float32
         doc: Current maximum PWM allowed by the driver.
 
       cycle_start_tick:
@@ -350,19 +373,19 @@ definitions:
           before the halfway point.
 
       direct_current:
-        type: int16
+        type: float32
         doc: Current in DQ0 coordinates; aligned with the rotor angle.
 
       quadrature_current:
-        type: int16
+        type: float32
         doc: Current in DQ0 coordinates; crossed with the rotor angle.
 
       direct_emf_voltage:
-        type: int16
+        type: float32
         doc: EMF voltage in DQ0 coordinates; aligned with the rotor angle.
 
       quadrature_emf_voltage:
-        type: int16
+        type: float32
         doc: EMF voltage in DQ0 coordinates; crossed with the rotor angle.
 
       total_power:
@@ -398,15 +421,15 @@ definitions:
         doc: The measured acceleration of the rotor.
 
       rotations:
-        type: int16
+        type: int32
         doc: Integrated number of EMF deduced rotor angle rotations since startup.
 
       current_magnitude:
-        type: int16
+        type: float32
         doc: Magnitude of the phase current in the DQ0 coordinate frame.
 
       emf_angle_error_variance:
-        type: int32
+        type: float32
         doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
 
       lead_angle:
@@ -416,55 +439,55 @@ definitions:
           motor efficiently.
 
       target_pwm:
-        type: int16
+        type: float32
         doc: Target PWM value for the motor outputs, value set by the advanced control algorithms.
 
       secondary_target:
-        type: int16
+        type: float32
         doc: Target for the advanced control algorithms.
 
       seek_integral:
-        type: int16
+        type: float32
         doc: Spare debug output.
 
 
   BasicDriveCommand:
     struct:
       pwm_value:
-        type: int16
+        type: float32
         doc: PWM value to use for driving the motor in 6 sector commutation mode.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
 
   TestCommand:
     struct:
       pwm_value:
-        type: uint16
+        type: float32
         doc: PWM value to use for the test.
       take_snapshot:
-        type: uint16
+        type: uint32
         doc: Whether to take a snapshot while running the test.
 
   HoldCommand:
     struct:
       pwm_value:
-        type: uint16
+        type: float32
         doc: PWM value to use for holding the position.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to hold the position before stopping.
 
   SetStateDrivePeriodic:
     struct:
       pwm_value:
-        type: uint16
+        type: float32
         doc: PWM value to use for driving the motor.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
       angle:
-        type: uint16
+        type: int32
         doc: Starting angle.
       angular_speed:
         type: float32
@@ -474,19 +497,19 @@ definitions:
   SetStateDriveSmooth:
     struct:
       pwm_value:
-        type: int16
+        type: float32
         doc: PWM value to use for driving the motor.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateDriveTorque:
     struct:
       target_current:
-        type: int16
+        type: float32
         doc: Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateDriveBatteryPower:
@@ -495,7 +518,7 @@ definitions:
         type: float32
         doc: Target power draw from the battery; the driver will try to achieve this power by adjusting the PWM commands.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateDriveSpeed:
@@ -504,19 +527,19 @@ definitions:
         type: float32
         doc: Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
 
   SetStateSeekAngleWithPower:
     struct:
       target_rotation:
-        type: int16
+        type: int32
         doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
       target_angle:
-        type: uint32
+        type: int32
         doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
       max_drive_power:
         type: float32
@@ -525,28 +548,28 @@ definitions:
   SetStateSeekAngleWithTorque:
     struct:
       target_rotation:
-        type: int16
+        type: int32
         doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
       target_angle:
-        type: uint32
+        type: int32
         doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
       max_drive_current:
-        type: uint16
+        type: float32
         doc: Maximum current to use for driving the motor; used to prevent overheating and overcurrent.
 
   SetStateSeekAngleWithSpeed:
     struct:
       target_rotation:
-        type: int16
+        type: int32
         doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
       target_angle:
-        type: uint32
+        type: int32
         doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
       timeout:
-        type: uint16
+        type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
       max_drive_speed:
         type: float32
@@ -566,19 +589,19 @@ definitions:
 
     struct:
       u_factor:
-        type: int16
+        type: float32
         doc: Adjustment factor for the U phase current readout.
 
       v_factor:
-        type: int16
+        type: float32
         doc: Adjustment factor for the V phase current readout.
 
       w_factor:
-        type: int16
+        type: float32
         doc: Adjustment factor for the W phase current readout.
 
       inductance_factor:
-        type: int16
+        type: float32
         doc: Adjustment factor for the motor inductance; used to calibrate the coil inductance.
       
 
@@ -626,7 +649,7 @@ definitions:
 
     struct:
       rotor_angle_ki:
-        type: int32
+        type: float32
         doc: Magnet position integral gain.
 
       rotor_angular_speed_ki:
@@ -642,7 +665,7 @@ definitions:
         doc: Motor constant integral gain.
 
       motor_direction:
-        type: int32
+        type: int16
         doc: Sign of the motor direction (positive by default, negative to reverse turning direction).
 
       incorrect_direction_threshold:
@@ -650,7 +673,7 @@ definitions:
         doc: Number of incorrect direction detections before we flip our motor angle.
 
       max_pwm_change:
-        type: int16
+        type: float32
         doc: Maximum PWM adjustment per cycle.
 
       max_angle_change:
@@ -658,15 +681,15 @@ definitions:
         doc: Maximum target angle change per cycle.
 
       min_emf_voltage:
-        type: int16
+        type: float32
         doc: Minimum EMF voltage to consider EMF detected (above the noise level)
 
       hall_angle_ki:
-        type: int32
+        type: float32
         doc: Integral gain for the hall angle adjustment (0 to ignore).
 
       lead_angle_control_ki:
-        type: int32
+        type: float32
         doc: Lead angle integral gain for efficient driving.
 
       torque_control_ki:
@@ -686,15 +709,15 @@ definitions:
         doc: Probing angular speed for initial EMF detection.
 
       max_pwm_difference:
-        type: int16
+        type: float32
         doc: Maximum PWM difference from motor PWM required to compensate back EMF.
 
       emf_angle_error_variance_threshold:
-        type: int32
+        type: float32
         doc: Maximum EMF angle correction variance when it's too noisy to update the angle.
 
       min_emf_for_motor_constant:
-        type: int16
+        type: float32
         doc: Minium EMF voltage to compute the motor constant.
 
       max_resistive_power:
@@ -718,67 +741,67 @@ definitions:
         doc: Power draw long duration average observer gain.
 
       max_pwm:
-        type: int16
+        type: float32
         doc: Maximum PWM value for the motor outputs.
       
       seek_via_torque_k_prediction:
-        type: int16
+        type: float32
         doc: Seek via torque, prediction duration factor for integral error.
 
       seek_via_torque_ki:
-        type: int16
+        type: float32
         doc: Seek via torque, integral gain for the PID control.
 
       seek_via_torque_kp:
-        type: int16
+        type: float32
         doc: Seek via torque, proportional gain for the PID control.
 
       seek_via_torque_kd:
-        type: int16
+        type: float32
         doc: Seek via torque, derivative gain for the PID control.
 
       seek_via_power_k_prediction:
-        type: int16
+        type: float32
         doc: Seek via power, prediction duration factor for integral error.
 
       seek_via_power_ki:
-        type: int16
+        type: float32
         doc: Seek via power, integral gain for the PID control.
 
       seek_via_power_kp:
-        type: int16
+        type: float32
         doc: Seek via power, proportional gain for the PID control.
 
       seek_via_power_kd:
-        type: int16
+        type: float32
         doc: Seek via power, derivative gain for the PID control.
 
       seek_via_speed_k_prediction:
-        type: int16
+        type: float32
         doc: Seek via speed, prediction duration factor for integral error.
 
       seek_via_speed_ki:
-        type: int16
+        type: float32
         doc: Seek via speed, integral gain for the PID control.
 
       seek_via_speed_kp:
-        type: int16
+        type: float32
         doc: Seek via speed, proportional gain for the PID control.
 
       seek_via_speed_kd:
-        type: int16
+        type: float32
         doc: Seek via speed, derivative gain for the PID control.
 
       phase_resistance:
-        type: int16
+        type: float32
         doc: Resistance of motor coils per phase (star configuration).
 
       phase_inductance:
-        type: int16
+        type: float32
         doc: Inductance of motor coils per phase (star configuration).
 
   SetAngle:
     struct:
       angle:
-        type: uint32
+        type: int32
         doc: Set the current angle of the motor; used for initial angle calibration.
