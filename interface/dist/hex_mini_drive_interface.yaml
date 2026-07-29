@@ -128,20 +128,6 @@ message_codes:
     message_code: 0x4043
     returns: CURRENT_CALIBRATION
 
-  HALL_POSITIONS:
-    message_code: 0x4044
-    type: HallPositions
-  GET_HALL_POSITIONS:
-    message_code: 0x4045
-    returns: HALL_POSITIONS
-  SET_HALL_POSITIONS:
-    message_code: 0x4046
-    type: HallPositions
-    returns: HALL_POSITIONS
-  RESET_HALL_POSITIONS:
-    message_code: 0x4047
-    returns: HALL_POSITIONS
-
   CONTROL_PARAMETERS:
     message_code: 0x4049
     type: ControlParameters
@@ -228,18 +214,6 @@ definitions:
       !The time unit for the driver is the duration of a whole PWM cycle, which is 2 * PWM_BASE clock cycles.
     type: int32
     const: 3072
-
-  PositiveNegativeTransition:
-    type: uint32
-    array_len: 2
-
-  SectorTransitions:
-    type: PositiveNegativeTransition
-    array_len: 6
-
-  SectorCenters:
-    type: uint32
-    array_len: 6
 
   UnitTestOutput:
     doc: Output data from unit test.
@@ -604,43 +578,6 @@ definitions:
         type: float32
         doc: Adjustment factor for the motor inductance; used to calibrate the coil inductance.
       
-
-  HallPositions:
-    doc: |
-      Hall sensor position calibration data.
-      
-      Apparently, millimiter precision in the placement of the hall sensor chips means an error up to 
-      30 degrees in the electrical angle of the magnetic rotor. Note that for each physical rotation
-      of the magnet there are N magnet poles times P coil pairs rotations of the electrical angle.
-      
-      With this big of an error, we need to calibrate the hall sensor positions using the angle
-      inferred from the back EMF voltage induced in the coils.
-      
-    struct:
-      sector_transition_angles:
-        type: SectorTransitions
-        doc: | 
-          The angle at the transition to the current sector from the left and from the 
-          right. By "left" I mean the hall sector has transitioned from a lower to a higher 
-          number, the rotor has a positive speed and is rotating counter-clockwise (trigonometric 
-          direction). The left angle is lower than the right angle. Note that the left angle 
-          of a sector and the right angle of the previous sector do not coincide because the 
-          hall sensors have a designed hysteresis that latches the output.
-
-      sector_transition_variances:
-        type: SectorTransitions
-        doc: |
-          The variance of the angles (it is expensive to compute the standard deviation with 
-          a square root but we only need the variance, so we only store the variance).
-
-      sector_center_angles:
-        type: SectorCenters
-        doc: The center angle of each sector; the average of the left and right angles.
-
-      sector_center_variances:
-        type: SectorCenters
-        doc: The variance of the center angles; at the moment it represents the span of the hall sector.
-
   ControlParameters:
     doc: |
       Parameters used in the motor control loop; for detailed descriptions check the

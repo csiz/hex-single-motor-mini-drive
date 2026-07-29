@@ -21,11 +21,9 @@ uint8_t user_data[user_data_size];
 uint8_t page_buffer[FLASH_PAGE_SIZE] = {0};
 
 const size_t current_calibration_offset = 0x00;
-const size_t position_calibration_offset = 0x20;
 const size_t control_parameters_offset = 0xF0;
 
 const uint8_t * const current_calibration_address = user_data + current_calibration_offset;
-const uint8_t * const position_calibration_address = user_data + position_calibration_offset;
 const uint8_t * const control_parameters_address = user_data + control_parameters_offset;
 
 
@@ -36,15 +34,6 @@ CurrentCalibration get_current_calibration(){
         return std::get<CurrentCalibration>(stored_data.message_data);
     } else {
         return default_current_calibration;
-    }
-}
-HallPositions get_position_calibration(){
-    Message stored_data;
-    read_message(stored_data, position_calibration_address, message_size(HALL_POSITIONS));
-    if (stored_data.message_code == MessageCode::HALL_POSITIONS) {
-        return std::get<HallPositions>(stored_data.message_data);
-    } else {
-        return default_position_calibration;
     }
 }
 
@@ -123,17 +112,11 @@ uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
 
 void save_settings_to_flash(
     CurrentCalibration const& current_calibration, 
-    HallPositions const& position_calibration,
     ControlParameters const& control_parameters
 ) {
     write_message(page_buffer + current_calibration_offset, message_size(CURRENT_CALIBRATION), Message{
         .message_code = MessageCode::CURRENT_CALIBRATION,
         .message_data = current_calibration
-    });
-
-    write_message(page_buffer + position_calibration_offset, message_size(HALL_POSITIONS), Message{
-        .message_code = MessageCode::HALL_POSITIONS,
-        .message_data = position_calibration
     });
 
     write_message(page_buffer + control_parameters_offset, message_size(CONTROL_PARAMETERS), Message{

@@ -39,7 +39,7 @@ export function get_hall_sector({hall_u, hall_v, hall_w}){
 }
 
 
-function parse_readout(bare_readout, previous_readout, {current_calibration, position_calibration}) {
+function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const local_time = Date.now();
 
   // Get the PWM commands.
@@ -180,7 +180,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, pos
     web_angle_stdev,
     web_angular_speed,
     web_angular_speed_stdev,
-  } = accumulate_position_from_hall({dt, hall_sector, is_hall_transition}, previous_readout, {position_calibration});
+  } = accumulate_position_from_hall({dt, hall_sector, is_hall_transition}, previous_readout, {});
 
 
   // Running averages
@@ -407,62 +407,6 @@ export function make_current_calibration(current_calibration) {
   };
 }
 
-function parse_position_calibration(bare_position_calibration) {
-  const sector_transition_degrees = bare_position_calibration.sector_transition_angles.map((inner_array) => inner_array.map((value) => {
-    const angle = angle_units_to_degrees(value);
-    return angle;
-  }));
-
-  const sector_transition_stdev = bare_position_calibration.sector_transition_variances.map((inner_array) => inner_array.map((value) => {
-    // We receive the variance, not the stdev.
-    const stdev = angle_units_to_degrees(Math.sqrt(value));
-    return stdev;
-  }));
-
-  const sector_center_degrees = bare_position_calibration.sector_center_angles.map((value) => {
-    return angle_units_to_degrees(value);
-  });
-
-  const sector_center_stdev = bare_position_calibration.sector_center_variances.map((value) => {
-    // We receive the variance, not the stdev.
-    return angle_units_to_degrees(Math.sqrt(value));
-  });
-
-  return {
-    sector_transition_degrees,
-    sector_transition_stdev,
-    sector_center_degrees,
-    sector_center_stdev,
-  };
-}
-
-export function make_position_calibration(position_calibration) {
-  const sector_transition_angles = position_calibration.sector_transition_degrees.map((inner_array) => inner_array.map((value) => {
-    const angle = degrees_to_angle_units(value);
-    return angle;
-  }));
-  const sector_transition_variances = position_calibration.sector_transition_stdev.map((inner_array) => inner_array.map((value) => {
-    // We send the stdev, not the variance, so we need to square it.
-    const variance = square(degrees_to_angle_units(value));
-    return variance;
-  }));
-  const sector_center_angles = position_calibration.sector_center_degrees.map((value) => {
-    return degrees_to_angle_units(value);
-  });
-  const sector_center_variances = position_calibration.sector_center_stdev.map((value) => {
-    // We send the stdev, not the variance, so we need to square it.
-    return square(degrees_to_angle_units(value));
-  });
-
-  return {
-    sector_transition_angles,
-    sector_transition_variances,
-    sector_center_angles,
-    sector_center_variances,
-  };
-}
-
-
 function parse_unit_test_output(bare_unit_test) {
   // Convert number array to Uint8Array.
   const uint8_array = new Uint8Array(bare_unit_test);
@@ -482,7 +426,6 @@ function parse_unit_test_output(bare_unit_test) {
 export const parser_mapping = {
   [MessageCode.READOUT]: parse_readout,
   [MessageCode.FULL_READOUT]: parse_full_readout,
-  [MessageCode.HALL_POSITIONS]: parse_position_calibration,
   [MessageCode.UNIT_TEST_OUTPUT]: parse_unit_test_output,
   [MessageCode.CURRENT_CALIBRATION]: parse_current_calibration,
 };

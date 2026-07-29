@@ -34,99 +34,6 @@ export const CLOCK_FREQUENCY = 144000000;
 // !The time unit for the driver is the duration of a whole PWM cycle, which is 2 * PWM_BASE clock cycles.
 export const PWM_BASE = 3072;
 
-export class PositiveNegativeTransition extends Array {
-  constructor(init) {
-    if (Array.isArray(init)) {
-      super(...init);
-    } else {
-      super(2);
-    }
-  }
-}
-
-
-function write_PositiveNegativeTransition(value) {
-  const buffer = new Uint8Array(8);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  for (let i = 0; i < 2; i++) {
-    view.setUint32(offset, value[i])
-    offset += 4;
-  }
-  return buffer;
-}
-
-function read_PositiveNegativeTransition(view, offset = 0) {
-  let result = new PositiveNegativeTransition();
-  for (let i = 0; i < 2; i++) {
-    result[i] = view.getUint32(offset);
-    offset += 4;
-  }
-  return result;
-}
-
-export class SectorTransitions extends Array {
-  constructor(init) {
-    if (Array.isArray(init)) {
-      super(...init);
-    } else {
-      super(6);
-    }
-  }
-}
-
-
-function write_SectorTransitions(value) {
-  const buffer = new Uint8Array(48);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  for (let i = 0; i < 6; i++) {
-    new Uint8Array(view.buffer, offset, 8).set(write_PositiveNegativeTransition(value[i]), 0);
-    offset += 8;
-  }
-  return buffer;
-}
-
-function read_SectorTransitions(view, offset = 0) {
-  let result = new SectorTransitions();
-  for (let i = 0; i < 6; i++) {
-    result[i] = read_PositiveNegativeTransition(view, offset);
-    offset += 8;
-  }
-  return result;
-}
-
-export class SectorCenters extends Array {
-  constructor(init) {
-    if (Array.isArray(init)) {
-      super(...init);
-    } else {
-      super(6);
-    }
-  }
-}
-
-
-function write_SectorCenters(value) {
-  const buffer = new Uint8Array(24);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  for (let i = 0; i < 6; i++) {
-    view.setUint32(offset, value[i])
-    offset += 4;
-  }
-  return buffer;
-}
-
-function read_SectorCenters(view, offset = 0) {
-  let result = new SectorCenters();
-  for (let i = 0; i < 6; i++) {
-    result[i] = view.getUint32(offset);
-    offset += 4;
-  }
-  return result;
-}
-
 // Output data from unit test.
 export class UnitTestOutput extends Array {
   constructor(init) {
@@ -884,60 +791,6 @@ function read_CurrentCalibration(view, offset = 0) {
   offset += 4;
   return result;
 }
-// Hall sensor position calibration data.
-// 
-// Apparently, millimiter precision in the placement of the hall sensor chips means an error up to 
-// 30 degrees in the electrical angle of the magnetic rotor. Note that for each physical rotation
-// of the magnet there are N magnet poles times P coil pairs rotations of the electrical angle.
-// 
-// With this big of an error, we need to calibrate the hall sensor positions using the angle
-// inferred from the back EMF voltage induced in the coils.
-export class HallPositions {
-  // The angle at the transition to the current sector from the left and from the 
-  // right. By "left" I mean the hall sector has transitioned from a lower to a higher 
-  // number, the rotor has a positive speed and is rotating counter-clockwise (trigonometric 
-  // direction). The left angle is lower than the right angle. Note that the left angle 
-  // of a sector and the right angle of the previous sector do not coincide because the 
-  // hall sensors have a designed hysteresis that latches the output.
-  sector_transition_angles;
-  // The variance of the angles (it is expensive to compute the standard deviation with 
-  // a square root but we only need the variance, so we only store the variance).
-  sector_transition_variances;
-  // The center angle of each sector; the average of the left and right angles.
-  sector_center_angles;
-  // The variance of the center angles; at the moment it represents the span of the hall sector.
-  sector_center_variances;
-  
-  constructor(init) {Object.assign(this, init);}
-}
-
-function write_HallPositions(value) {
-  const buffer = new Uint8Array(144);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  new Uint8Array(view.buffer, offset, 48).set(write_SectorTransitions(value.sector_transition_angles), 0);
-  offset += 48;
-  new Uint8Array(view.buffer, offset, 48).set(write_SectorTransitions(value.sector_transition_variances), 0);
-  offset += 48;
-  new Uint8Array(view.buffer, offset, 24).set(write_SectorCenters(value.sector_center_angles), 0);
-  offset += 24;
-  new Uint8Array(view.buffer, offset, 24).set(write_SectorCenters(value.sector_center_variances), 0);
-  offset += 24;
-  return buffer;
-}
-function read_HallPositions(view, offset = 0) {
-  let result = new HallPositions();
-  
-  result.sector_transition_angles = read_SectorTransitions(view, offset);
-  offset += 48;
-  result.sector_transition_variances = read_SectorTransitions(view, offset);
-  offset += 48;
-  result.sector_center_angles = read_SectorCenters(view, offset);
-  offset += 24;
-  result.sector_center_variances = read_SectorCenters(view, offset);
-  offset += 24;
-  return result;
-}
 // Parameters used in the motor control loop; for detailed descriptions check the
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
@@ -1244,10 +1097,6 @@ const CURRENT_CALIBRATION = 16448;
 const GET_CURRENT_CALIBRATION = 16449;
 const SET_CURRENT_CALIBRATION = 16450;
 const RESET_CURRENT_CALIBRATION = 16451;
-const HALL_POSITIONS = 16452;
-const GET_HALL_POSITIONS = 16453;
-const SET_HALL_POSITIONS = 16454;
-const RESET_HALL_POSITIONS = 16455;
 const CONTROL_PARAMETERS = 16457;
 const SET_CONTROL_PARAMETERS = 16458;
 const GET_CONTROL_PARAMETERS = 16459;
@@ -1298,10 +1147,6 @@ export const MessageCode = {
   GET_CURRENT_CALIBRATION,
   SET_CURRENT_CALIBRATION,
   RESET_CURRENT_CALIBRATION,
-  HALL_POSITIONS,
-  GET_HALL_POSITIONS,
-  SET_HALL_POSITIONS,
-  RESET_HALL_POSITIONS,
   CONTROL_PARAMETERS,
   SET_CONTROL_PARAMETERS,
   GET_CONTROL_PARAMETERS,
@@ -1590,34 +1435,6 @@ export function write_message(message) {
       return buffer;
     }
     case RESET_CURRENT_CALIBRATION: {
-      const buffer = new Uint8Array(2);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      return buffer;
-    }
-    case HALL_POSITIONS: {
-      const message_buffer = write_HallPositions(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case GET_HALL_POSITIONS: {
-      const buffer = new Uint8Array(2);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      return buffer;
-    }
-    case SET_HALL_POSITIONS: {
-      const message_buffer = write_HallPositions(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case RESET_HALL_POSITIONS: {
       const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1917,26 +1734,6 @@ export function read_message(buffer) {
       return message;
     }
     case RESET_CURRENT_CALIBRATION: {
-      if (buffer.length !== 2) return null;
-      return {message_code};
-    }
-    case HALL_POSITIONS: {
-      if (buffer.length !== 2 + 144) return null;
-      let message = read_HallPositions(view, 2);
-      message.message_code = HALL_POSITIONS;
-      return message;
-    }
-    case GET_HALL_POSITIONS: {
-      if (buffer.length !== 2) return null;
-      return {message_code};
-    }
-    case SET_HALL_POSITIONS: {
-      if (buffer.length !== 2 + 144) return null;
-      let message = read_HallPositions(view, 2);
-      message.message_code = SET_HALL_POSITIONS;
-      return message;
-    }
-    case RESET_HALL_POSITIONS: {
       if (buffer.length !== 2) return null;
       return {message_code};
     }

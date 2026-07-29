@@ -64,9 +64,6 @@ void set_angle_offset(int32_t angle_offset);
 // Position tracking
 // -----------------
 
-// Position calibration data. These are the trigger angles for each hall sensor output.
-extern hex_mini_drive::HallPositions position_calibration;
-
 // Current calibration factors.
 extern hex_mini_drive::CurrentCalibration current_calibration;
 

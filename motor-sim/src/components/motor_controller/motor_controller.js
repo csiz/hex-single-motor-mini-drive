@@ -1,5 +1,5 @@
 import {exponential_average} from "./math_utils.js";
-import {parser_mapping, make_position_calibration, make_current_calibration} from "./interface.js";
+import {parser_mapping, make_current_calibration} from "./interface.js";
 
 import {ConsistentOverheadByteStuffing, MessageCode, write_message, read_message, MAX_MESSAGE_SIZE} from "hex-mini-drive-interface";
 
@@ -103,7 +103,6 @@ export class MotorController {
 
   async when_opened(){
     await this.load_current_calibration();
-    await this.load_position_calibration();
     await this.load_control_parameters();
     this.onready(this);
     console.info(`Motor controller is ready: ${this.motor_uri}`);
@@ -341,47 +340,6 @@ export class MotorController {
       });
     } catch (error) {
       console.error("Error resetting current calibration:", error);
-      throw error;
-    }
-  }
-
-
-  async load_position_calibration(){
-    try {
-      this.position_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.GET_HALL_POSITIONS,
-        expected_code: MessageCode.HALL_POSITIONS,
-        expected_messages: 1,
-      });
-    } catch (error) {
-      console.error("Error loading position calibration:", error);
-    }
-  }
-
-  async upload_position_calibration(position_calibration){
-    if(!position_calibration) return;
-
-    try {
-      this.position_calibration = await this.send_command_and_await_reply({
-        message: {message_code: MessageCode.SET_HALL_POSITIONS, ...make_position_calibration(position_calibration)},
-        expected_code: MessageCode.HALL_POSITIONS,
-        expected_messages: 1
-      });
-    } catch (error) {
-      console.error("Error uploading position calibration:", error);
-      throw error;
-    }
-  }
-
-  async reset_position_calibration(){
-    try {
-      this.position_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.RESET_HALL_POSITIONS,
-        expected_code: MessageCode.HALL_POSITIONS,
-        expected_messages: 1
-      });
-    } catch (error) {
-      console.error("Error resetting position calibration:", error);
       throw error;
     }
   }

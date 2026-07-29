@@ -53,7 +53,6 @@ size_t readouts_to_send = 0;
 size_t readouts_sent = 0;
 bool reply_current_factors = false;
 bool reply_control_parameters = false;
-bool reply_hall_positions = false;
 bool reply_unit_test = false;
 
 UnitTestFunction unit_test_function = nullptr;
@@ -383,7 +382,6 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
     case SET_STATE_HOLD_W_NEGATIVE: {
-
       set_motor_command(DriverState{
         .motor_outputs = MotorOutputs{ 
           .enable_flags = enable_flags_all, 
@@ -406,17 +404,6 @@ void handle_message(hex_mini_drive::Message const& message) {
       reply_current_factors = true;
       return;
 
-    case SET_HALL_POSITIONS:
-      position_calibration = std::get<HallPositions>(message.message_data);
-      reply_hall_positions = true;
-      return;
-
-    case RESET_HALL_POSITIONS:
-      // Reset the hall positions to the default values.
-      position_calibration = default_position_calibration;
-      reply_hall_positions = true;
-      return;
-
     case SET_CONTROL_PARAMETERS:
       control_parameters = std::get<ControlParameters>(message.message_data);
       reply_control_parameters = true;
@@ -431,10 +418,6 @@ void handle_message(hex_mini_drive::Message const& message) {
       reply_current_factors = true;
       return;
 
-    case GET_HALL_POSITIONS:
-      reply_hall_positions = true;
-      return;
-
     case GET_CONTROL_PARAMETERS:
       reply_control_parameters = true;
       return;
@@ -447,10 +430,9 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     case SAVE_SETTINGS_TO_FLASH:
       if(is_motor_safed()){
-        save_settings_to_flash(current_calibration, position_calibration, control_parameters);
+        save_settings_to_flash(current_calibration, control_parameters);
 
         current_calibration = get_current_calibration();
-        position_calibration = get_position_calibration();
         control_parameters = get_control_parameters();
         
         return;
@@ -459,7 +441,6 @@ void handle_message(hex_mini_drive::Message const& message) {
     // We shouldn't receive these messages; the driver only sends them.
     case CURRENT_CALIBRATION:
     case CONTROL_PARAMETERS:
-    case HALL_POSITIONS:
     case READOUT:
     case FULL_READOUT:
     case UNIT_TEST_OUTPUT:
@@ -597,16 +578,6 @@ void queue_response(hex_mini_drive::FullReadout const& readout) {
       .message_data = current_calibration
     });
     reply_current_factors = false;
-    return;
-  }
-
-  // Send trigger angles if requested.
-  if (reply_hall_positions) {
-    serialize_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::HALL_POSITIONS,
-      .message_data = position_calibration
-    });
-    reply_hall_positions = false;
     return;
   }
 }

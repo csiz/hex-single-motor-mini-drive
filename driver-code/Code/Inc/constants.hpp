@@ -276,16 +276,6 @@ inline constexpr int32_t signed_angle(int32_t angle){
 // The angle units per hall sector; 60 degrees.
 const int32_t hall_sector_span = angle_base / hall_sector_base;
 
-// Variance of the hall sensor; it doesn't seem to be consistent, even between two rotations.
-const int32_t default_sector_transition_variance = square(5 * angle_base / 360);
-
-// Variance of a gaussian spread over the entire sector.
-const int32_t default_sector_center_variance = square(10 * angle_base / 360);
-
-// The hall sensors trigger later than expected going each direction.
-const int32_t default_hysterisis = 5 * angle_base / 360;
-
-
 
 // Speed and acceleration constants
 // --------------------------------
@@ -303,48 +293,6 @@ const float radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle
 
 // Calibration and Control Parameters
 // ----------------------------------
-
-// By default assume the hall sensors are perfectly placed 120 degrees apart.
-const hex_mini_drive::HallPositions default_position_calibration = {
-    // The angle at which we transition to this sector. The first is when rotating in the
-    // positive direction; second for the negative direction.
-    .sector_transition_angles = {{
-        {330 * angle_base / 360 + default_hysterisis,  30 * angle_base / 360 - default_hysterisis},
-        { 30 * angle_base / 360 + default_hysterisis,  90 * angle_base / 360 - default_hysterisis},
-        { 90 * angle_base / 360 + default_hysterisis, 150 * angle_base / 360 - default_hysterisis},
-        {150 * angle_base / 360 + default_hysterisis, 210 * angle_base / 360 - default_hysterisis},
-        {210 * angle_base / 360 + default_hysterisis, 270 * angle_base / 360 - default_hysterisis},
-        {270 * angle_base / 360 + default_hysterisis, 330 * angle_base / 360 - default_hysterisis},
-    }},
-    // Variance of each sector transition; we can calibrate it.
-    .sector_transition_variances = {{
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-        {default_sector_transition_variance, default_sector_transition_variance},
-    }},
-    // The center of each hall sector; the motor should rest at these poles.
-    .sector_center_angles = {{
-        (  0 * angle_base / 360),
-        ( 60 * angle_base / 360),
-        (120 * angle_base / 360),
-        (180 * angle_base / 360),
-        (240 * angle_base / 360),
-        (300 * angle_base / 360),
-    }},
-    // Variance of the centers.
-    .sector_center_variances = {{
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-        default_sector_center_variance,
-    }},
-};
-
 
 // By default assume the current calibration is 1.0 for all phases and inductance.
 const hex_mini_drive::CurrentCalibration default_current_calibration = {

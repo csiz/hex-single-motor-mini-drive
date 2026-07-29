@@ -16,12 +16,8 @@ hex_mini_drive::CurrentCalibration get_current_calibration();
 // Load the control parameters from flash memory.
 hex_mini_drive::ControlParameters get_control_parameters();
 
-// Load the position calibration from flash memory.
-hex_mini_drive::HallPositions get_position_calibration();
-
 // Write all calibration data to flash memory. (Flash memory is erased by pages, so we need to re-write it all.)
 void save_settings_to_flash(
   hex_mini_drive::CurrentCalibration const& current_calibration, 
-  hex_mini_drive::HallPositions const& position_calibration,
   hex_mini_drive::ControlParameters const& control_parameters
 );

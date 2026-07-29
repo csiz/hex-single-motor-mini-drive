@@ -121,7 +121,6 @@ DriverState pending_state = breaking_driver_state;
 // Initialize the loop control parameters and the calibration data. Either load 
 // them from the flash or use the defaults.
 
-hex_mini_drive::HallPositions position_calibration = get_position_calibration();
 hex_mini_drive::CurrentCalibration current_calibration = get_current_calibration();
 hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 

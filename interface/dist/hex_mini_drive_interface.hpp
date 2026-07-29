@@ -125,66 +125,6 @@ constexpr int32_t CLOCK_FREQUENCY = 144000000;
 
 constexpr int32_t PWM_BASE = 3072;
 
-using PositiveNegativeTransition = std::array<uint32_t, 2>;
-
-static inline void write_PositiveNegativeTransition(uint8_t * buffer, PositiveNegativeTransition const& value) {
-  size_t offset = 0;
-  for (size_t i = 0; i < 2; ++i) {
-    write_uint32(buffer + offset, value[i]);;
-    offset += 4;
-  }
-}
-
-static inline PositiveNegativeTransition read_PositiveNegativeTransition(uint8_t const* buffer) {
-  PositiveNegativeTransition result;
-  size_t offset = 0;
-  for (size_t i = 0; i < 2; ++i) {
-    result[i] = read_uint32(buffer + offset);
-    offset += 4;
-  }
-  return result;
-}
-
-using SectorTransitions = std::array<PositiveNegativeTransition, 6>;
-
-static inline void write_SectorTransitions(uint8_t * buffer, SectorTransitions const& value) {
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    write_PositiveNegativeTransition(buffer + offset, value[i]);;
-    offset += 8;
-  }
-}
-
-static inline SectorTransitions read_SectorTransitions(uint8_t const* buffer) {
-  SectorTransitions result;
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    result[i] = read_PositiveNegativeTransition(buffer + offset);
-    offset += 8;
-  }
-  return result;
-}
-
-using SectorCenters = std::array<uint32_t, 6>;
-
-static inline void write_SectorCenters(uint8_t * buffer, SectorCenters const& value) {
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    write_uint32(buffer + offset, value[i]);;
-    offset += 4;
-  }
-}
-
-static inline SectorCenters read_SectorCenters(uint8_t const* buffer) {
-  SectorCenters result;
-  size_t offset = 0;
-  for (size_t i = 0; i < 6; ++i) {
-    result[i] = read_uint32(buffer + offset);
-    offset += 4;
-  }
-  return result;
-}
-
 // Output data from unit test.
 using UnitTestOutput = std::array<uint8_t, 248>;
 
@@ -883,57 +823,6 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   offset += 4;
   return result;
 }
-// Hall sensor position calibration data.
-// 
-// Apparently, millimiter precision in the placement of the hall sensor chips means an error up to 
-// 30 degrees in the electrical angle of the magnetic rotor. Note that for each physical rotation
-// of the magnet there are N magnet poles times P coil pairs rotations of the electrical angle.
-// 
-// With this big of an error, we need to calibrate the hall sensor positions using the angle
-// inferred from the back EMF voltage induced in the coils.
-struct HallPositions {
-  // The angle at the transition to the current sector from the left and from the 
-  // right. By "left" I mean the hall sector has transitioned from a lower to a higher 
-  // number, the rotor has a positive speed and is rotating counter-clockwise (trigonometric 
-  // direction). The left angle is lower than the right angle. Note that the left angle 
-  // of a sector and the right angle of the previous sector do not coincide because the 
-  // hall sensors have a designed hysteresis that latches the output.
-  SectorTransitions sector_transition_angles;
-  // The variance of the angles (it is expensive to compute the standard deviation with 
-  // a square root but we only need the variance, so we only store the variance).
-  SectorTransitions sector_transition_variances;
-  // The center angle of each sector; the average of the left and right angles.
-  SectorCenters sector_center_angles;
-  // The variance of the center angles; at the moment it represents the span of the hall sector.
-  SectorCenters sector_center_variances;
-};
-
-static inline void write_HallPositions(uint8_t * buffer, HallPositions const& value) {
-  size_t offset = 0;
-  write_SectorTransitions(buffer + offset, value.sector_transition_angles);;
-  offset += 48;
-  write_SectorTransitions(buffer + offset, value.sector_transition_variances);;
-  offset += 48;
-  write_SectorCenters(buffer + offset, value.sector_center_angles);;
-  offset += 24;
-  write_SectorCenters(buffer + offset, value.sector_center_variances);;
-  offset += 24;
-}
-static inline HallPositions read_HallPositions(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  HallPositions result;
-  
-  result.sector_transition_angles = read_SectorTransitions(buffer + offset);
-  offset += 48;
-  result.sector_transition_variances = read_SectorTransitions(buffer + offset);
-  offset += 48;
-  result.sector_center_angles = read_SectorCenters(buffer + offset);
-  offset += 24;
-  result.sector_center_variances = read_SectorCenters(buffer + offset);
-  offset += 24;
-  return result;
-}
 // Parameters used in the motor control loop; for detailed descriptions check the
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
@@ -1235,10 +1124,6 @@ enum MessageCode : uint16_t {
   GET_CURRENT_CALIBRATION = 16449,
   SET_CURRENT_CALIBRATION = 16450,
   RESET_CURRENT_CALIBRATION = 16451,
-  HALL_POSITIONS = 16452,
-  GET_HALL_POSITIONS = 16453,
-  SET_HALL_POSITIONS = 16454,
-  RESET_HALL_POSITIONS = 16455,
   CONTROL_PARAMETERS = 16457,
   SET_CONTROL_PARAMETERS = 16458,
   GET_CONTROL_PARAMETERS = 16459,
@@ -1273,7 +1158,6 @@ struct Message {
     SetStateSeekAngleWithTorque,
     SetStateSeekAngleWithSpeed,
     CurrentCalibration,
-    HallPositions,
     ControlParameters,
     SetAngle,
     UnitTestOutput,
@@ -1319,10 +1203,6 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
     case MessageCode::SET_CURRENT_CALIBRATION: return 18;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::HALL_POSITIONS: return 146;
-    case MessageCode::GET_HALL_POSITIONS: return 2;
-    case MessageCode::SET_HALL_POSITIONS: return 146;
-    case MessageCode::RESET_HALL_POSITIONS: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 150;
     case MessageCode::SET_CONTROL_PARAMETERS: return 150;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
@@ -1545,26 +1425,6 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::RESET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CURRENT_CALIBRATION));
-      return 2;
-    }
-    case MessageCode::HALL_POSITIONS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::HALL_POSITIONS));
-      if (max_size < 2 + 144) return 0;
-      write_HallPositions(buffer + 2, std::get<HallPositions>(message.message_data));
-      return 146;
-    }
-    case MessageCode::GET_HALL_POSITIONS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_HALL_POSITIONS));
-      return 2;
-    }
-    case MessageCode::SET_HALL_POSITIONS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_HALL_POSITIONS));
-      if (max_size < 2 + 144) return 0;
-      write_HallPositions(buffer + 2, std::get<HallPositions>(message.message_data));
-      return 146;
-    }
-    case MessageCode::RESET_HALL_POSITIONS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_HALL_POSITIONS));
       return 2;
     }
     case MessageCode::CONTROL_PARAMETERS: {
@@ -1815,26 +1675,6 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::RESET_CURRENT_CALIBRATION: {
-      if (size != 2) return false;
-      message.message_data = std::monostate{};
-      return true;
-    }
-    case MessageCode::HALL_POSITIONS: {
-      if (size != 2 + 144) return false;
-      message.message_data = read_HallPositions(buffer + 2);
-      return true;
-    }
-    case MessageCode::GET_HALL_POSITIONS: {
-      if (size != 2) return false;
-      message.message_data = std::monostate{};
-      return true;
-    }
-    case MessageCode::SET_HALL_POSITIONS: {
-      if (size != 2 + 144) return false;
-      message.message_data = read_HallPositions(buffer + 2);
-      return true;
-    }
-    case MessageCode::RESET_HALL_POSITIONS: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;
