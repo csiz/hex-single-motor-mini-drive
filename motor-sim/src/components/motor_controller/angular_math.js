@@ -28,6 +28,8 @@ export function circular_stats_degrees(values){
   };
 }
 
+
+
 export function radians_to_degrees(radians){
   if (radians === undefined || radians === null) return radians;
   return radians * 180 / Math.PI;
@@ -44,6 +46,14 @@ export function normalize_degrees(a){
 
 export function positive_degrees(d){
   return (d % 360 + 360) % 360;
+}
+
+export function cos_degrees(degrees){
+  return Math.cos(normalize_degrees(degrees) * Math.PI / 180.0);
+}
+
+export function sin_degrees(degrees){
+  return Math.sin(normalize_degrees(degrees) * Math.PI / 180.0);
 }
 
 export function interpolate_degrees(a, b, fraction){

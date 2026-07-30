@@ -86,7 +86,7 @@ const int32_t angle_fix_threshold_count = 128;
 const int32_t angle_fix_max_count = 1024;
 
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
-ThreePhase previous_drive_voltages = {0, 0, 0};
+ThreePhase previous_half_cycle_drive_voltages = {0, 0, 0};
 
 int32_t previous_emf_angle_error = 0;
 
@@ -974,18 +974,24 @@ void adc_interrupt_handler(){
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
     // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
     // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
-    const ThreePhase drive_voltages = (previous_drive_voltages + half_cycle_drive_voltage) * 0.5f;
+    const ThreePhase drive_voltages = (previous_half_cycle_drive_voltages + half_cycle_drive_voltage) * 0.5f;
 
     // Store the active motor outputs for the next cycle.
-    previous_drive_voltages = half_cycle_drive_voltage;
+    previous_half_cycle_drive_voltages = half_cycle_drive_voltage;
 
 
     // Calculate calibrated currents.
+    // 
+    // We need to flip the sign of the current readings. Our convention is to have settle on positive
+    // current when we apply a positive PWM duty cycle to each respective phase.
+    // 
+    // Note that the reference voltage is only connected to the current sense amplifier, not the
+    // microcontroller. The ADC reference voltage is 3.3V.
     const ThreePhase currents = adjust_to_sum_zero(ThreePhase{
-        static_cast<float>(adc_readings.u_readout),
-        static_cast<float>(adc_readings.v_readout),
-        static_cast<float>(adc_readings.w_readout)
-    }) * get_calibration_factors(current_calibration);
+        -(static_cast<float>(adc_readings.u_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units,
+        -(static_cast<float>(adc_readings.v_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units,
+        -(static_cast<float>(adc_readings.w_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units
+    });
 
     // TODO: the below is no longer accurate, let's investigate later, for now keep the more basic calculation.
     // Get calibrated current divergence (the time unit is defined as 1 per cycle). We average out the
@@ -996,10 +1002,10 @@ void adc_interrupt_handler(){
     const ThreePhase currents_diff = currents - get_currents(readout);
 
     // Calculate the voltage drop across the coil inductance.
-    const ThreePhase inductor_voltages = currents_diff * current_calibration.inductance_factor * phase_current_diff_to_voltage_units;
+    const ThreePhase inductor_voltages = currents_diff * (current_calibration.phase_inductance_baseline * current_diff_to_voltage_units);
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const ThreePhase resistive_voltages = currents * phase_current_to_voltage;
+    const ThreePhase resistive_voltages = currents * get_phase_resistances(current_calibration) * current_to_voltage_units;
 
 
     // Infer the back EMF voltages for each phase.
@@ -1293,6 +1299,11 @@ void adc_interrupt_handler(){
     readout.secondary_target = driver_state.secondary_target;
     readout.seek_integral = driver_state.seek_angle.error_integral;
 
+    readout.phase_u_resistance = current_calibration.phase_u_resistance;
+    readout.phase_v_resistance = current_calibration.phase_v_resistance;
+    readout.phase_w_resistance = current_calibration.phase_w_resistance;
+    readout.phase_inductance_baseline = current_calibration.phase_inductance_baseline;
+    
 
     // Calculate and set motor outputs!!
     // ---------------------------------

@@ -225,11 +225,11 @@ static inline ThreePhase get_currents_diff(hex_mini_drive::FullReadout const& re
 }
 
 // Grab the calibration factors as a three phase tuple.
-static inline ThreePhase get_calibration_factors(hex_mini_drive::CurrentCalibration const& calibration) {
+static inline ThreePhase get_phase_resistances(hex_mini_drive::CurrentCalibration const& calibration) {
     return ThreePhase{
-        calibration.u_factor,
-        calibration.v_factor,
-        calibration.w_factor
+        calibration.phase_u_resistance,
+        calibration.phase_v_resistance,
+        calibration.phase_w_resistance,
     };
 }
 
@@ -244,6 +244,11 @@ static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
         std::get<1>(values) - avg,
         std::get<2>(values) - avg
     };
+}
+
+// Create a three phase tuple with the same value for all phases.
+static inline ThreePhase three_same(float value) {
+    return ThreePhase{value, value, value};
 }
 
 // Three phase arithmetic operators

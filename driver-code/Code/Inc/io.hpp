@@ -222,34 +222,17 @@ static inline void gpio_init(){
 // ADC1 Temperature sensor
 
 static inline ADCReadings read_adc_values(){
-
-    // Read the reference voltage first; this is the voltage of the reference line for the current sense amplifier.
-    const uint16_t ref_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2);
-
-    // We need to flip the sign of the current readings. Our convention is to have settle on positive
-    // current when we apply a positive PWM duty cycle to each respective phase.
-    const int u_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3) - ref_readout);
-    const int v_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3) - ref_readout);
-    const int w_readout = -(LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4) - ref_readout);
-    // const int x_readout = -(LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_4) - ref_readout);
-
-    // Note that the reference voltage is only connected to the current sense amplifier, not the
-    // microcontroller. The ADC reference voltage is 3.3V.
-
-    // Also read the controller chip temperature.
-    const uint16_t temp_readout = LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1);
-
-    // And motor supply voltage.
-    const uint16_t vcc_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1);
-
-
     return ADCReadings{
-        u_readout,
-        v_readout,
-        w_readout,
-        ref_readout,
-        temp_readout,
-        vcc_readout,
+        .u_readout=LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_3),
+        .v_readout=LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_3),
+        .w_readout=LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_4),
+        // .x_readout = LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_4);
+        // Read the reference voltage first; this is the voltage of the reference line for the current sense amplifier.
+        .ref_readout=LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_2),
+        // Also read the controller chip temperature.
+        .temp_readout=LL_ADC_INJ_ReadConversionData12(ADC1, LL_ADC_INJ_RANK_1),
+        // And motor supply voltage.
+        .vcc_readout=LL_ADC_INJ_ReadConversionData12(ADC2, LL_ADC_INJ_RANK_1),
     };
 }
 

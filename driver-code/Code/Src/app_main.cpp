@@ -6,6 +6,7 @@
 #include "test_schedules.hpp"
 #include "parameters_store.hpp"
 #include "integer_math.hpp"
+#include "constants.hpp"
 
 #include <stm32g4xx_hal.h>
 
@@ -26,6 +27,17 @@ float adc_update_rate = 0.0f;
 
 float resistive_power_observer = 0.0f;
 float total_power_observer = 0.0f;
+
+// Calibration tracking
+// --------------------
+
+enum struct CalibrationMode {
+  NONE,
+  RESISTANCE,
+  INDUCTANCE
+};
+
+CalibrationMode calibration_mode = CalibrationMode::NONE;
 
 
 // Communication buffers and state
@@ -460,6 +472,8 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     
     case SET_STATE_RESISTANCE_CALIBRATION: {
+      calibration_mode = CalibrationMode::RESISTANCE;
+      
       // Clear the readouts buffer of old data.
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
@@ -474,6 +488,8 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_STATE_INDUCTANCE_CALIBRATION: {
+      calibration_mode = CalibrationMode::INDUCTANCE;
+
       // Clear the readouts buffer of old data.
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
@@ -717,6 +733,105 @@ void app_tick() {
 
   const float motor_constant = readout.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
 
+  
+  // Calibration calculations
+  // ------------------------
+
+  if (
+    calibration_mode != CalibrationMode::NONE and
+    not readout_history_get_reset_flag() and
+    (get_readout_history_size() >= hex_mini_drive::HISTORY_SIZE)
+  ) {
+    // We are in calibration mode; run the calibration calculations.
+    // 
+    // The calibration is done in the driver loop, but we need to run the calculations here
+    // to update the calibration values and send them to the host.
+
+    // Check if the calibration is complete.
+    // 
+    // The calibration starts after the reset flag is cleared, and ends when the motor returns to
+    // a safe state.
+
+
+    ThreePhase resistance_gradient_step_sum = {0.0f, 0.0f, 0.0f};
+    ThreePhase inductance_gradient_step_sum = {0.0f, 0.0f, 0.0f};
+
+    const float learning_rate = 0.2f;
+
+    // Get data from history and compute gradients and the mean of the samples.
+    // Then run gradient descent on the resistance and inductance values.
+    hex_mini_drive::Readout const* readout_history = get_readout_history();
+    const size_t history_size = get_readout_history_size();
+    for (size_t i = 0; i < history_size; ++i) {
+      hex_mini_drive::Readout const& readout = readout_history[i];
+
+      const ThreePhase drive_voltages = {readout.u_drive_voltage, readout.v_drive_voltage, readout.w_drive_voltage};
+      
+      const ThreePhase currents_prescaled = ThreePhase{
+        readout.u_current,
+        readout.v_current,
+        readout.w_current
+      } * current_to_voltage_units;
+
+      const ThreePhase current_diffs_prescaled = ThreePhase{
+        readout.u_current_diff,
+        readout.v_current_diff,
+        readout.w_current_diff
+      } * current_diff_to_voltage_units;
+
+      // Calculate the voltage drop across the coil inductance.
+      const ThreePhase inductor_voltages = current_diffs_prescaled * current_calibration.phase_inductance_baseline;
+
+      // Calculate the resistive voltage drop across the coil and MOSFET resistance.
+      const ThreePhase resistive_voltages = currents_prescaled * get_phase_resistances(current_calibration);
+
+      // In the running loop we allocate all residual voltages to the EMF response, but in the calibration
+      // modes we expect the motor to be nearly stationary so we can neglect the EMF and instead the diff
+      // is the error residual due to our miscalibrated resistance and inductance values.
+      const ThreePhase residual_voltages = inductor_voltages + resistive_voltages - drive_voltages;
+
+      // Now that we have recalculated the values, we can calculate the gradients.
+
+      const ThreePhase resistance_gradients = /* 2 * */residual_voltages * currents_prescaled;
+      const ThreePhase inductance_gradients = /* 2 * */residual_voltages * current_diffs_prescaled;
+
+      const ThreePhase resistance_2nd_gradients = /* 2 * */currents_prescaled * currents_prescaled;
+      const ThreePhase inductance_2nd_gradients = /* 2 * */current_diffs_prescaled * current_diffs_prescaled;
+
+      static const float current_measurement_variance_prescaled = current_measurement_variance * current_to_voltage_units;
+      static const float current_diff_measurement_variance_prescaled = current_diff_measurement_variance * current_diff_to_voltage_units;
+
+      const ThreePhase resistance_gradient_step = resistance_gradients / (resistance_2nd_gradients + three_same(current_measurement_variance_prescaled));
+      const ThreePhase inductance_gradient_step = inductance_gradients / (inductance_2nd_gradients + three_same(current_diff_measurement_variance_prescaled));
+
+      resistance_gradient_step_sum = resistance_gradient_step_sum + resistance_gradient_step;
+      inductance_gradient_step_sum = inductance_gradient_step_sum + inductance_gradient_step;
+    }
+
+    static const float inverse_history_size = 1.0f / static_cast<float>(history_size);
+
+    const ThreePhase resistance_gradient_step_mean = resistance_gradient_step_sum * inverse_history_size;
+    const ThreePhase inductance_gradient_step_mean = inductance_gradient_step_sum * inverse_history_size;
+
+    // Update the calibration values using gradient descent.
+
+    if (calibration_mode == CalibrationMode::RESISTANCE) {
+      current_calibration.phase_u_resistance -= learning_rate * std::get<0>(resistance_gradient_step_mean);
+      current_calibration.phase_v_resistance -= learning_rate * std::get<1>(resistance_gradient_step_mean);
+      current_calibration.phase_w_resistance -= learning_rate * std::get<2>(resistance_gradient_step_mean);
+    } else if (calibration_mode == CalibrationMode::INDUCTANCE) {
+      current_calibration.phase_inductance_baseline -= learning_rate * (
+        std::get<0>(inductance_gradient_step_mean) +
+        std::get<1>(inductance_gradient_step_mean) +
+        std::get<2>(inductance_gradient_step_mean)
+      ) * 0.333333f; // Average the inductance gradients across the three phases.
+    }
+
+    // Done an iteration of the calibration (it should take about 10 for a good value and 90 to stabilise).
+    calibration_mode = CalibrationMode::NONE;
+  }
+
+  
 
   // Write all values
   // ----------------

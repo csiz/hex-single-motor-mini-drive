@@ -2,22 +2,21 @@ import {
   PWM_BASE,
   CURRENT_UNITS_PER_AMP,
   VOLTAGE_UNITS_PER_VOLT,
-  millis_per_cycle, 
+  millis_per_cycle,
+  pwm_cycles_per_second,
   readout_base,
-  expected_ref_readout, 
   calculate_temperature, 
   angle_units_to_degrees, 
   degrees_to_angle_units,
   speed_units_to_degrees_per_millisecond,
   acceleration_units_to_degrees_per_millisecond_squared,
-  phase_resistance, 
-  phase_inductance,
   parse_state_flags,
 } from './constants.js';
 
 import {normalize_degrees, radians_to_degrees, degrees_to_radians} from './angular_math.js';
 import {square, dq0_transform, exponential_stats} from './math_utils.js';
 import {accumulate_position_from_hall} from './position_kalman_filter.js';
+
 import { MessageCode, UNIT_TEST_OUTPUT_SIZE } from 'hex-mini-drive-interface';
 
 
@@ -51,11 +50,11 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const u_current = bare_readout.u_current / CURRENT_UNITS_PER_AMP;
   const v_current = bare_readout.v_current / CURRENT_UNITS_PER_AMP;
   const w_current = bare_readout.w_current / CURRENT_UNITS_PER_AMP;
-  const ref_readout = (bare_readout.ref_readout - expected_ref_readout) / CURRENT_UNITS_PER_AMP;
+  const ref_readout = bare_readout.ref_readout;
 
-  const u_current_diff = bare_readout.u_current_diff / CURRENT_UNITS_PER_AMP / millis_per_cycle;
-  const v_current_diff = bare_readout.v_current_diff / CURRENT_UNITS_PER_AMP / millis_per_cycle;
-  const w_current_diff = bare_readout.w_current_diff / CURRENT_UNITS_PER_AMP / millis_per_cycle;
+  const u_current_diff = bare_readout.u_current_diff / CURRENT_UNITS_PER_AMP;
+  const v_current_diff = bare_readout.v_current_diff / CURRENT_UNITS_PER_AMP;
+  const w_current_diff = bare_readout.w_current_diff / CURRENT_UNITS_PER_AMP;
 
   // Get electric angle data. Angle 0 means the rotor North is aligned when holding positive current on the U phase.
   const angle = angle_units_to_degrees(bare_readout.angle);
@@ -109,35 +108,28 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const drive_voltage_magnitude = Math.sqrt(drive_voltage_direct * drive_voltage_direct + drive_voltage_quadrature * drive_voltage_quadrature);
   const drive_voltage_angle_offset = normalize_degrees(drive_voltage_angle - predicted_angle);
 
-  const u_factor = (current_calibration?.u_factor ?? 1);
-  const v_factor = (current_calibration?.v_factor ?? 1);
-  const w_factor = (current_calibration?.w_factor ?? 1);
-
-  const u_readout = u_current / u_factor;
-  const v_readout = v_current / v_factor;
-  const w_readout = w_current / w_factor;
-
+  
   const avg_current = (u_current + v_current + w_current) / 3.0;
-
+  
   const [web_direct_current, web_quadrature_current] = dq0_transform(u_current, v_current, w_current, degrees_to_radians(predicted_angle));
-
+  
   const web_inductor_angle = normalize_degrees(predicted_angle + radians_to_degrees(Math.atan2(web_quadrature_current, web_direct_current)));
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
-
-  const u_readout_diff = u_current_diff / u_factor;
-  const v_readout_diff = v_current_diff / v_factor;
-  const w_readout_diff = w_current_diff / w_factor;
-
-  const inductance_factor = (current_calibration?.inductance_factor ?? 1);
-
+  
+  const phase_inductance_baseline = (current_calibration?.phase_inductance_baseline ?? 1);
+  
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_current_diff * 1000 * phase_inductance * inductance_factor;
-  const v_L_voltage = v_current_diff * 1000 * phase_inductance * inductance_factor;
-  const w_L_voltage = w_current_diff * 1000 * phase_inductance * inductance_factor;
+  const u_L_voltage = u_current_diff * phase_inductance_baseline * pwm_cycles_per_second;
+  const v_L_voltage = v_current_diff * phase_inductance_baseline * pwm_cycles_per_second;
+  const w_L_voltage = w_current_diff * phase_inductance_baseline * pwm_cycles_per_second;
+  
+  const phase_u_resistance = (current_calibration?.phase_u_resistance ?? 1.0);
+  const phase_v_resistance = (current_calibration?.phase_v_resistance ?? 1.0);
+  const phase_w_resistance = (current_calibration?.phase_w_resistance ?? 1.0);
 
-  const u_R_voltage = phase_resistance * u_current;
-  const v_R_voltage = phase_resistance * v_current;
-  const w_R_voltage = phase_resistance * w_current;
+  const u_R_voltage = phase_u_resistance * u_current;
+  const v_R_voltage = phase_v_resistance * v_current;
+  const w_R_voltage = phase_w_resistance * w_current;
 
   const u_emf_voltage = -u_drive_voltage + u_L_voltage + u_R_voltage;
   const v_emf_voltage = -v_drive_voltage + v_L_voltage + v_R_voltage;
@@ -151,10 +143,10 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
   const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
-  const web_resistive_power = (square(u_current) * phase_resistance + square(v_current) * phase_resistance + square(w_current) * phase_resistance);
+  const web_resistive_power = (square(u_current) * phase_u_resistance + square(v_current) * phase_v_resistance + square(w_current) * phase_w_resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
-  const steady_state_drive_current = drive_voltage_magnitude / phase_resistance;
+  const steady_state_drive_current = drive_voltage_magnitude / ((phase_u_resistance + phase_v_resistance + phase_w_resistance) / 3.0);
 
 
   // Time indexing
@@ -232,15 +224,13 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
     angle_fix,
     incorrect_rotor_angle,
     rotor_direction_flip_imminent,
-    // Raw readout values
-    u_readout, v_readout, w_readout,
-    u_readout_diff, v_readout_diff, w_readout_diff,
-    ref_readout,
     // Readouts converted to physical dimensions
     u_current, v_current, w_current, avg_current,
     web_direct_current, web_quadrature_current, 
     web_current_magnitude,
     web_inductor_angle, 
+    // Reference readouts in adc units
+    ref_readout,
 
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
@@ -306,7 +296,6 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
   const emf_power = bare_full_readout.emf_power;
   const inductive_power = bare_full_readout.inductive_power;
 
-  const motor_constant = bare_full_readout.motor_constant;
   const inductor_angle = angle_units_to_degrees(bare_full_readout.inductor_angle);
   const rotor_acceleration = acceleration_units_to_degrees_per_millisecond_squared(bare_full_readout.rotor_acceleration);
   const rotations = bare_full_readout.rotations;
@@ -316,6 +305,14 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
   const target_pwm = bare_full_readout.target_pwm;
   const secondary_target = bare_full_readout.secondary_target;
   const seek_integral = bare_full_readout.seek_integral;
+  
+  const motor_constant = bare_full_readout.motor_constant;
+  const phase_u_resistance = bare_full_readout.phase_u_resistance;
+  const phase_v_resistance = bare_full_readout.phase_v_resistance;
+  const phase_w_resistance = bare_full_readout.phase_w_resistance;
+  const phase_inductance_baseline = bare_full_readout.phase_inductance_baseline;
+  const phase_inductance_angle = angle_units_to_degrees(bare_full_readout.phase_inductance_angle);
+  const phase_inductance_offset = bare_full_readout.phase_inductance_offset;
 
   const battery_current = total_power / readout.vcc_voltage;
 
@@ -366,7 +363,6 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
     inductive_power,
     
     emf_angle_error_stdev,
-    motor_constant,
     
     inductor_angle,
     inductor_angle_offset,
@@ -374,42 +370,22 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
     rotor_acceleration,
     rotations,
     current_magnitude,
-
+    
     lead_angle,
     target_pwm,
     secondary_target,
     seek_integral,
+    
+    motor_constant,
+    phase_u_resistance,
+    phase_v_resistance,
+    phase_w_resistance,
+    phase_inductance_baseline,
+    
   };
 
 }
 
-function parse_current_calibration(bare_current_calibration) {
-  const u_factor = bare_current_calibration.u_factor;
-  const v_factor = bare_current_calibration.v_factor;
-  const w_factor = bare_current_calibration.w_factor;
-  const inductance_factor = bare_current_calibration.inductance_factor;
-
-  return {
-    u_factor,
-    v_factor,
-    w_factor,
-    inductance_factor,
-  };
-}
-
-export function make_current_calibration(current_calibration) {
-  const u_factor = current_calibration.u_factor;
-  const v_factor = current_calibration.v_factor;
-  const w_factor = current_calibration.w_factor;
-  const inductance_factor = current_calibration.inductance_factor;
-
-  return {
-    u_factor,
-    v_factor,
-    w_factor,
-    inductance_factor,
-  };
-}
 
 function parse_unit_test_output(bare_unit_test) {
   // Convert number array to Uint8Array.
@@ -426,6 +402,27 @@ function parse_unit_test_output(bare_unit_test) {
   return new TextDecoder().decode(data_view.buffer.slice(0, len));
 }
 
+function parse_current_calibration(bare_calibration) {
+  return {
+    phase_u_resistance: bare_calibration.phase_u_resistance,
+    phase_v_resistance: bare_calibration.phase_v_resistance,
+    phase_w_resistance: bare_calibration.phase_w_resistance,
+    phase_inductance_baseline: bare_calibration.phase_inductance_baseline,
+    phase_inductance_angle: angle_units_to_degrees(bare_calibration.phase_inductance_angle),
+    phase_inductance_offset: bare_calibration.phase_inductance_offset,
+  };
+} 
+
+export function make_current_calibration(current_calibraton){
+  return {
+    phase_u_resistance: current_calibraton.phase_u_resistance,
+    phase_v_resistance: current_calibraton.phase_v_resistance,
+    phase_w_resistance: current_calibraton.phase_w_resistance,
+    phase_inductance_baseline: current_calibraton.phase_inductance_baseline,
+    phase_inductance_angle: degrees_to_angle_units(current_calibraton.phase_inductance_angle),
+    phase_inductance_offset: current_calibraton.phase_inductance_offset,
+  };
+}
 
 export const parser_mapping = {
   [MessageCode.READOUT]: parse_readout,

@@ -112,32 +112,22 @@ Current Calibration Procedures
 
 <div class="card tight">
   <div>${current_calibration_buttons}</div>
+  <div>${current_calibration_run_buttons}</div>
   <div>${current_calibration_pwm_slider}</div>
-  <div>Number of calibration data sets: ${current_calibration.results.length}</div>
 </div>
 <div class="card tight">
   <h3>Current Calibration Results</h3>
   <div>
-    <p>Phase current correction factors:</p>
-    <pre>${current_calibration_table}</pre>
-    <p>Active phase current correction factors:</p>
+    <p>Active electrical phase properties:</p>
     <pre>${active_current_calibration_table}</pre>
   </div>
-  <div>${current_calibration_result_to_display_input}</div>
-  <div>${current_calibration_plot}</div>
   <div>${current_calibration_optimization_iteration_input}</div>
-  <div>${current_calibration_optimization_phase_input}</div>
-  <div>${current_calibration_optimizing_plot}</div>
-  <div>${current_calibration_optimizing_gradients_plot}</div>
   <div>
-    <p>Current calibration factors at displayed iteration:</p>
+    <p>Electrical phase properties at displayed iteration:</p>
     <pre>${current_calibration_iteration_table}</pre>
+    <div>${current_calibration_optimizing_plot}</div>
+    <div>${current_calibration_optimizing_gradients_plot}</div>
   </div>
-</div>
-<div class="card tight">  
-  <h3>Current Calibration Statistics</h3>
-  <div>${current_calibration_positive_mean_plot}</div>
-  <div>${current_calibration_negative_mean_plot}</div>
 </div>
 
 
@@ -518,45 +508,23 @@ const data_request_buttons = Inputs.button(
 );
 d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 
+const test_buttons_to_code = [
+  ["Test all permutation", MessageCode.SET_STATE_TEST_ALL_PERMUTATIONS],
+  ["Test ground short", MessageCode.SET_STATE_TEST_GROUND_SHORT],
+  ["Test positive short", MessageCode.SET_STATE_TEST_POSITIVE_SHORT],
+  ["Test U directions", MessageCode.SET_STATE_TEST_U_DIRECTIONS],
+  ["Test U increasing", MessageCode.SET_STATE_TEST_U_INCREASING],
+  ["Test U decreasing", MessageCode.SET_STATE_TEST_U_DECREASING],
+  ["Test V increasing", MessageCode.SET_STATE_TEST_V_INCREASING],
+  ["Test V decreasing", MessageCode.SET_STATE_TEST_V_DECREASING],
+  ["Test W increasing", MessageCode.SET_STATE_TEST_W_INCREASING],
+  ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
+  ["Run resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
+  ["Run inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
+];
+
 const test_buttons = Inputs.button(
-  [
-    ["Test all permutations", function(){
-      test_command(MessageCode.SET_STATE_TEST_ALL_PERMUTATIONS);
-    }],
-    ["Test ground short", function(){
-      test_command(MessageCode.SET_STATE_TEST_GROUND_SHORT);
-    }],
-    ["Test positive short", function(){
-      test_command(MessageCode.SET_STATE_TEST_POSITIVE_SHORT);
-    }],
-    ["Test U directions", function(){
-      test_command(MessageCode.SET_STATE_TEST_U_DIRECTIONS);
-    }],
-    ["Test U increasing", function(){
-      test_command(MessageCode.SET_STATE_TEST_U_INCREASING);
-    }],
-    ["Test U decreasing", function(){
-      test_command(MessageCode.SET_STATE_TEST_U_DECREASING);
-    }],
-    ["Test V increasing", function(){
-      test_command(MessageCode.SET_STATE_TEST_V_INCREASING);
-    }],
-    ["Test V decreasing", function(){
-      test_command(MessageCode.SET_STATE_TEST_V_DECREASING);
-    }],
-    ["Test W increasing", function(){
-      test_command(MessageCode.SET_STATE_TEST_W_INCREASING);
-    }],
-    ["Test W decreasing", function(){
-      test_command(MessageCode.SET_STATE_TEST_W_DECREASING);
-    }],
-    ["Run resistance calibration", function(){
-      test_command(MessageCode.SET_STATE_RESISTANCE_CALIBRATION);
-    }],
-    ["Run inductance calibration", function(){
-      test_command(MessageCode.SET_STATE_INDUCTANCE_CALIBRATION);
-    }],
-  ],
+  test_buttons_to_code.map(([label, code]) => [label, () => test_command(code)]),
   {label: "Test sequence"},
 );
 d3.select(test_buttons).selectAll("button").style("height", "4em");
@@ -1151,12 +1119,9 @@ const plot_measured_current = plot_lines({
     {y: "u_current", label: "Current U", color: colors.u},
     {y: "v_current", label: "Current V", color: colors.v},
     {y: "w_current", label: "Current W", color: colors.w},
-    {y: "u_readout", label: "Current U (uncalibrated)", color: d3.color(colors.u).darker(1)},
-    {y: "v_readout", label: "Current V (uncalibrated)", color: d3.color(colors.v).darker(1)},
-    {y: "w_readout", label: "Current W (uncalibrated)", color: d3.color(colors.w).darker(1)},
     {y: "battery_current", label: "Battery Current", color: colors.other},
     {y: (d) => d.avg_current * 3, label: "Sum", color: colors.sum},
-    {y: "ref_readout", label: "Reference Diff", color: colors.ref_readout},
+    {y: "ref_readout", label: "Reference value", color: colors.ref_readout},
   ],
   curve,
 });
@@ -1296,6 +1261,10 @@ const plot_motor_values = plot_lines({
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
     {y: "secondary_target", label: "Secondary Target", color: colors_categories[2]},
     {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
+    {y: "phase_u_resistance", label: "Phase U Resistance", color: colors.u},
+    {y: "phase_v_resistance", label: "Phase V Resistance", color: colors.v},
+    {y: "phase_w_resistance", label: "Phase W Resistance", color: colors.w},
+    {y: "phase_inductance_baseline", label: "Phase Inductance Baseline", color: colors_categories[4]},
   ],
   curve,
 });
@@ -1330,10 +1299,6 @@ autosave_inputs(monitoring_plots);
 const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.3, step: 1.0, label: "Calibration max PWM:"});
 
 const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
-```
-
-```js
-
 
 function stringify_active_current_calibration() {
   return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
@@ -1345,69 +1310,64 @@ function show_active_current_calibration() {
   active_current_calibration_table.value = stringify_active_current_calibration();
 }
 
-const initial_current_calibration_result = {results: [], ...compute_current_calibration([])};
+const current_calibration_data = Mutable(null);
+
+const update_current_calibration_data = (new_value) => {
+  current_calibration_data.value = new_value;
+  show_active_current_calibration();
+};
+```
+
+```js
+
+async function run_current_calibration_by_code(code) {
+  if (!motor_controller) return;
+  const calibration_data = await run_current_calibration(
+    motor_controller, 
+    code,
+    current_calibration_pwm,
+  );
+  update_current_calibration_data(calibration_data);
+}
+
+const current_calibration_run_buttons = Inputs.button(
+  test_buttons_to_code.map(([label, code]) => [label, () => run_current_calibration_by_code(code)]),
+  {label: "Run calibration sequence"},
+);
+d3.select(current_calibration_run_buttons).selectAll("button").style("height", "4em");
+
 
 const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
-    ["Start Current Calibration", wait_previous(async function(value){
-      const calibration_data = await run_current_calibration(motor_controller, current_calibration_pwm);
-      const results = [...value.results, calibration_data];
-      return {results, ...compute_current_calibration(results)};
-    })],
-    ["Reset Results", wait_previous(async function(value){
-      return initial_current_calibration_result;
-    })],
-    ["Upload to Driver", wait_previous(async function(value){
-      const current_calibration = value.current_calibration ?? motor_controller.current_calibration;
-      await motor_controller.upload_current_calibration(current_calibration);
+    ["Upload to Driver", async function(){
+      if (!motor_controller || !current_calibration_data || !current_calibration_data.is_stable) return;
+      await motor_controller.upload_current_calibration(current_calibration_data.current_calibration);
       show_active_current_calibration();
-      return value;
-    })],
-    ["Reload from Driver", wait_previous(async function(value){
+    }],
+    ["Reload from Driver", async function(){
       await motor_controller.load_current_calibration();
       show_active_current_calibration();
-      return value;
-    })],
-    ["Reset to Defaults", wait_previous(async function(value){
+    }],
+    ["Reset to Defaults", async function(){
       await motor_controller.reset_current_calibration();
       show_active_current_calibration();
-      return value;
-    })],
+    }],
   ],
   {
     label: "Current Calibration",
-    value: initial_current_calibration_result
   },
 );
 
 d3.select(current_calibration_buttons).style("width", "100%");
-
-const current_calibration = !motor_controller ? initial_current_calibration_result : Generators.input(current_calibration_buttons);
 ```
 
 
 
 ```js
-
-// Write out the current calibration results in copyable format.
-const current_calibration_table = `current_calibration = ${JSON.stringify(current_calibration?.current_calibration, null, 2)}`;
-
-// Select which of the calibration runs to display.
-
-const current_calibration_result_to_display_input = Inputs.select(d3.range(current_calibration.results.length), {
-  value: current_calibration.results.length - 1,
-  label: "Select calibration result to display:",
-});
-const current_calibration_result_to_display = Generators.input(current_calibration_result_to_display_input);
-```
-
-```js
-const current_calibration_result = current_calibration.results[current_calibration_result_to_display];
-
-const current_calibration_iterations = current_calibration_result?.iterations ?? [];
+const current_calibration_iterations = current_calibration_data?.iterations ?? [];
 
 // Select the optimization iteration to display.
-const current_calibration_optimization_iteration_input = !current_calibration_result ? 
+const current_calibration_optimization_iteration_input = !current_calibration_data ? 
   html`<p>No optimization iterations available.</p>` : 
   inputs_wide_range(
     [0, current_calibration_iterations.length - 1], {
@@ -1415,61 +1375,20 @@ const current_calibration_optimization_iteration_input = !current_calibration_re
     label: "Select optimization iteration to display:",
   });
 
-
-const current_calibration_optimization_phase_input = Inputs.radio(
-  new Map([
-    ["U positive", "u_positive_gradients"],
-    ["U negative", "u_negative_gradients"],
-    ["V positive", "v_positive_gradients"],
-    ["V negative", "v_negative_gradients"],
-    ["W positive", "w_positive_gradients"],
-    ["W negative", "w_negative_gradients"],
-  ]),
-  {
-    label: "Select calibration phase to display:",
-  },
-);
-
 const current_calibration_optimization_iteration = Generators.input(current_calibration_optimization_iteration_input);
-const current_calibration_optimization_phase = Generators.input(current_calibration_optimization_phase_input);
 
 set_input_value(current_calibration_optimization_iteration_input, current_calibration_iterations?.length - 1);
-set_input_value(current_calibration_optimization_phase_input, "u_positive_gradients");
+
 
 ```
 
 ```js
 
-
-const current_calibration_plot = plot_lines({
-  data: current_calibration_result?.sample,
-  subtitle: "Current Calibration",
-  description: "Current calibration results for each phase.",
-  width: 1200, height: 400,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Current (A)",
-  channels: [
-    {y: "u_positive_uncalibrated_current", label: "U positive", color: colors.u},
-    {y: "u_negative_uncalibrated_current", label: "U negative", color: d3.color(colors.u).darker(1)},
-    {y: "v_positive_uncalibrated_current", label: "V positive", color: colors.v},
-    {y: "v_negative_uncalibrated_current", label: "V negative", color: d3.color(colors.v).darker(1)},
-    {y: "w_positive_uncalibrated_current", label: "W positive", color: colors.w},
-    {y: "w_negative_uncalibrated_current", label: "W negative", color: d3.color(colors.w).darker(1)},
-    {
-      y: "expected",
-      draw_extra: setup_faint_area({y0: 0.0, y1: "expected"}),
-      label: "Expected", color: "gray",
-    }
-  ],
-});
-
 const current_calibration_iteration = current_calibration_iterations[current_calibration_optimization_iteration];
-const current_calibration_gradients = current_calibration_iteration?.[current_calibration_optimization_phase];
+const current_calibration_gradients = current_calibration_iteration?.gradients ?? [];
 
 // Write out the current calibration results in copyable format.
-const current_calibration_iteration_table = `iteration_current_calibration = ${JSON.stringify(current_calibration_iterations[current_calibration_optimization_iteration]?.current_calibration, null, 2)}`;
+const current_calibration_iteration_table = `current_calibration = ${JSON.stringify(current_calibration_iterations[current_calibration_optimization_iteration]?.current_calibration, null, 2)}`;
 
 const current_calibration_optimizing_plot = plot_lines({
   data: current_calibration_gradients,
@@ -1481,14 +1400,15 @@ const current_calibration_optimizing_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "resistance_drop", label: "Resistance Drop", color: colors.u},
-    {y: "inductance_drop", label: "Inductance Drop", color: colors.v},
-    {y: "drive_voltage", label: "Drive Voltage", color: colors.w},
+    {y: "u_resistive_voltage", label: "Resistance Drop", color: colors.u},
+    {y: "u_inductance_voltage", label: "Inductance Drop", color: colors.v},
+    {y: "u_drive_voltage", label: "Drive Voltage", color: colors.w},
     {
-      y: "residual",
-      draw_extra: setup_faint_area({y0: 0.0, y1: "residual"}),
+      y: "u_residual",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "u_residual"}),
       label: "Residual", color: "grey",
     },
+    {y: (readout)=>Math.sqrt(readout.loss), label: "Sqrt Loss", color: colors_categories[2]},
   ],
 });
 
@@ -1500,99 +1420,18 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
   x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Factor Change",
+  y_label: "Gradients (unitless)",
   channels: [
-    {
-      y: "current_factor_gradient", label: "Current Factor Gradient", color: colors.u,
-      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.current_factor_variance)}),
-    },
-    {
-      y: "inductance_factor_gradient", label: "Inductance Factor Gradient", color: colors.v,
-      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.inductance_factor_variance)}),
-    },
-    {
-      y: "resistance_weight", label: "Resistance Weight", color: colors.w,
-      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.resistance_weight_variance)}),
-    },
-    {
-      y: "inductance_weight", label: "Inductance Weight", color: colors_categories[3],
-      draw_extra: setup_stdev_95({stdev: (d) => Math.sqrt(d.inductance_weight_variance)}),
-    }
-  ],
-});
-
-const current_calibration_positive_mean_plot = plot_lines({
-  data: current_calibration.stats,
-  subtitle: "Mean Response - Positive",
-  description: "Current calibration mean results for each phase driven positive.",
-  width: 1200, height: 300,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Current (A)",
-  channels: [
-    {
-      y: "u_positive", 
-      draw_extra: setup_stdev_95({stdev: "u_positive_stdev"}),
-      label: "U positive mean", color: colors.u,
-    },
-    {
-      y: "v_positive",
-      draw_extra: setup_stdev_95({stdev: "v_positive_stdev"}),
-      label: "V positive mean", color: colors.v,
-    },
-    {
-      y: "w_positive",
-      draw_extra: setup_stdev_95({stdev: "w_positive_stdev"}),
-      label: "W positive mean", color: colors.w,
-    },
-    {
-      y: "expected",
-      draw_extra: setup_stdev_95({stdev: "expected_stdev"}),
-      label: "Expected", color: "gray",
-    },
-  ],
-});
-
-const current_calibration_negative_mean_plot = plot_lines({
-  data: current_calibration.stats,
-  subtitle: "Mean Response - Negative (inverted)",
-  description: "Current calibration mean results for each phase driven negative.",
-  width: 1200, height: 300,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Current (A)",
-  channels: [
-    {
-      y: "u_negative", 
-      draw_extra: setup_stdev_95({stdev: "u_negative_stdev"}),
-      label: "U negative mean", color: colors.u,
-    },
-    {
-      y: "v_negative",
-      draw_extra: setup_stdev_95({stdev: "v_negative_stdev"}),
-      label: "V negative mean", color: colors.v,
-    },
-    {
-      y: "w_negative",
-      draw_extra: setup_stdev_95({stdev: "w_negative_stdev"}),
-      label: "W negative mean", color: colors.w,
-    },
-    {
-      y: "expected",
-      draw_extra: setup_stdev_95({stdev: "expected_stdev"}),
-      label: "Expected", color: "gray",
-    },
+    {y: "u_resistance_gradient", label: "Resistance Gradient", color: colors.u},
+    {y: "u_resistance_gradient_2nd_order", label: "Resistance 2nd Order Gradient", color: colors.v},
+    {y: (d)=>(d.u_inductance_gradient / pwm_cycles_per_second), label: "Inductance Gradient", color: colors_categories[2]},
+    {y: (d)=>(d.u_inductance_gradient_2nd_order / square(pwm_cycles_per_second)), label: "Inductance 2nd Order Gradient", color: colors_categories[3]},
   ],
 });
 
 autosave_inputs({
-  current_calibration_plot,
   current_calibration_optimizing_plot,
   current_calibration_optimizing_gradients_plot,
-  current_calibration_positive_mean_plot,
-  current_calibration_negative_mean_plot,
 });
 ```
 
@@ -1911,15 +1750,16 @@ import {
   inputs_wide_range, transformed_input_value,
 } from "./components/input_utils.js";
 
+import {square} from "./components/motor_controller/math_utils.js";
 import {interpolate_degrees, normalize_degrees} from "./components/motor_controller/angular_math.js";
 
 import {MessageCode, prompt_com_port_get_index, default_ws_uri, MotorController} from "./components/motor_controller/motor_controller.js";
 
-import {run_current_calibration, compute_current_calibration} from "./components/motor_controller/current_calibration.js";
+import {run_current_calibration} from "./components/motor_controller/current_calibration.js";
 
 import {
   PWM_BASE, HISTORY_SIZE, CURRENT_UNITS_PER_AMP, VOLTAGE_UNITS_PER_VOLT,
-  cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_period, 
+  pwm_cycles_per_second, cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_period, 
   degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
   max_drive_current, max_drive_power, max_angular_speed,
 } from "./components/motor_controller/constants.js";

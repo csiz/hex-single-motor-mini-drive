@@ -202,7 +202,10 @@ export class MotorController {
     const last_message = this.last_message.get(message_code);
 
     // Add additional data to readout messages.
-    const message = parser_mapping[message_code] ? parser_mapping[message_code](bare_message, last_message, this) : bare_message;
+    const message = parser_mapping[message_code] ? 
+      parser_mapping[message_code](bare_message, last_message, this) : 
+      // Otherwise just return the bare message.
+      bare_message;
 
     // Remember for the next message so we can increment the message index.
     this.last_message.set(message_code, message);
@@ -321,7 +324,7 @@ export class MotorController {
 
     try {
       this.current_calibration = await this.send_command_and_await_reply({
-        message: {message_code: MessageCode.SET_CURRENT_CALIBRATION, ...make_current_calibration(current_calibration)},
+        message: {...make_current_calibration(current_calibration), message_code: MessageCode.SET_CURRENT_CALIBRATION},
         expected_code: MessageCode.CURRENT_CALIBRATION,
         expected_messages: 1,
       });

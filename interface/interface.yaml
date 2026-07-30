@@ -425,15 +425,15 @@ definitions:
           Motor constant; a measure of how strong the motor is. It is computed as the 
           ratio between the quadrature EMF voltage and the angular speed.
 
-      phase_a_resistance:
+      phase_u_resistance:
         type: float32
         doc: Estimated resistance of the U phase coil.
 
-      phase_b_resistance:
+      phase_v_resistance:
         type: float32
         doc: Estimated resistance of the V phase coil.
 
-      phase_c_resistance:
+      phase_w_resistance:
         type: float32
         doc: Estimated resistance of the W phase coil.
       
@@ -585,32 +585,41 @@ definitions:
 
   CurrentCalibration:
     doc: |
-      Calibration factors for the current sensors.
-
-      The soldering joints vary during manufacturing and therefore they affect the total
-      resistance of the shunt resistors. We can calibrate for this effect by multiplying
-      the readout by a factor for each phase.
-      
-      For the v1 design, we shall improve the shunt resistors and soldering pad design to
-      to improve the accuracy. We can then switch to automatically calibrating the phase
-      resistance and motor inductance. For now we calibrate using the motor monitor app.
+      Estimate resistance and inductance values for the motor coils.
 
     struct:
-      u_factor:
+      phase_u_resistance:
         type: float32
-        doc: Adjustment factor for the U phase current readout.
+        doc: Estimated resistance of the U phase coil.
 
-      v_factor:
+      phase_v_resistance:
         type: float32
-        doc: Adjustment factor for the V phase current readout.
+        doc: Estimated resistance of the V phase coil.
 
-      w_factor:
+      phase_w_resistance:
         type: float32
-        doc: Adjustment factor for the W phase current readout.
+        doc: Estimated resistance of the W phase coil.
+      
+      phase_inductance_baseline:
+        type: float32
+        doc: | 
+          Estimated baseline inductance of the motor coils.
 
-      inductance_factor:
+          The inductance is composed of a baseline inductance and a bias inductance that depends
+          on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
+          the magnetic material saturates at different levels depending eventually on the angle
+          of the rotor. The rotor being composed of magnets of alternating polarity. 
+
+      phase_inductance_angle:
+        type: int32
+        doc: |
+          The estimated angle of the phase inductance variation.
+
+          This is the magnetic north of the rotor in the frame of the stator coils.
+
+      phase_inductance_offset:
         type: float32
-        doc: Adjustment factor for the motor inductance; used to calibrate the coil inductance.
+        doc: The offset of the phase inductance variation.
       
   ControlParameters:
     doc: |

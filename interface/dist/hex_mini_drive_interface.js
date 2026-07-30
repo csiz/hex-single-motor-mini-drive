@@ -271,11 +271,11 @@ export class FullReadout extends Readout {
   // ratio between the quadrature EMF voltage and the angular speed.
   motor_constant;
   // Estimated resistance of the U phase coil.
-  phase_a_resistance;
+  phase_u_resistance;
   // Estimated resistance of the V phase coil.
-  phase_b_resistance;
+  phase_v_resistance;
   // Estimated resistance of the W phase coil.
-  phase_c_resistance;
+  phase_w_resistance;
   // Estimated baseline inductance of the motor coils.
   // 
   // The inductance is composed of a baseline inductance and a bias inductance that depends
@@ -348,11 +348,11 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
   offset += 4;
-  view.setFloat32(offset, value.phase_a_resistance)
+  view.setFloat32(offset, value.phase_u_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_b_resistance)
+  view.setFloat32(offset, value.phase_v_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_c_resistance)
+  view.setFloat32(offset, value.phase_w_resistance)
   offset += 4;
   view.setFloat32(offset, value.phase_inductance_baseline)
   offset += 4;
@@ -416,11 +416,11 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
   offset += 4;
-  result.phase_a_resistance = view.getFloat32(offset);
+  result.phase_u_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_b_resistance = view.getFloat32(offset);
+  result.phase_v_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_c_resistance = view.getFloat32(offset);
+  result.phase_w_resistance = view.getFloat32(offset);
   offset += 4;
   result.phase_inductance_baseline = view.getFloat32(offset);
   offset += 4;
@@ -786,52 +786,63 @@ function read_SetStateSeekAngleWithSpeed(view, offset = 0) {
   offset += 4;
   return result;
 }
-// Calibration factors for the current sensors.
-// 
-// The soldering joints vary during manufacturing and therefore they affect the total
-// resistance of the shunt resistors. We can calibrate for this effect by multiplying
-// the readout by a factor for each phase.
-// 
-// For the v1 design, we shall improve the shunt resistors and soldering pad design to
-// to improve the accuracy. We can then switch to automatically calibrating the phase
-// resistance and motor inductance. For now we calibrate using the motor monitor app.
+// Estimate resistance and inductance values for the motor coils.
 export class CurrentCalibration {
-  // Adjustment factor for the U phase current readout.
-  u_factor;
-  // Adjustment factor for the V phase current readout.
-  v_factor;
-  // Adjustment factor for the W phase current readout.
-  w_factor;
-  // Adjustment factor for the motor inductance; used to calibrate the coil inductance.
-  inductance_factor;
+  // Estimated resistance of the U phase coil.
+  phase_u_resistance;
+  // Estimated resistance of the V phase coil.
+  phase_v_resistance;
+  // Estimated resistance of the W phase coil.
+  phase_w_resistance;
+  // Estimated baseline inductance of the motor coils.
+  // 
+  // The inductance is composed of a baseline inductance and a bias inductance that depends
+  // on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
+  // the magnetic material saturates at different levels depending eventually on the angle
+  // of the rotor. The rotor being composed of magnets of alternating polarity.
+  phase_inductance_baseline;
+  // The estimated angle of the phase inductance variation.
+  // 
+  // This is the magnetic north of the rotor in the frame of the stator coils.
+  phase_inductance_angle;
+  // The offset of the phase inductance variation.
+  phase_inductance_offset;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_CurrentCalibration(value) {
-  const buffer = new Uint8Array(16);
+  const buffer = new Uint8Array(24);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.u_factor)
+  view.setFloat32(offset, value.phase_u_resistance)
   offset += 4;
-  view.setFloat32(offset, value.v_factor)
+  view.setFloat32(offset, value.phase_v_resistance)
   offset += 4;
-  view.setFloat32(offset, value.w_factor)
+  view.setFloat32(offset, value.phase_w_resistance)
   offset += 4;
-  view.setFloat32(offset, value.inductance_factor)
+  view.setFloat32(offset, value.phase_inductance_baseline)
+  offset += 4;
+  view.setInt32(offset, value.phase_inductance_angle)
+  offset += 4;
+  view.setFloat32(offset, value.phase_inductance_offset)
   offset += 4;
   return buffer;
 }
 function read_CurrentCalibration(view, offset = 0) {
   let result = new CurrentCalibration();
   
-  result.u_factor = view.getFloat32(offset);
+  result.phase_u_resistance = view.getFloat32(offset);
   offset += 4;
-  result.v_factor = view.getFloat32(offset);
+  result.phase_v_resistance = view.getFloat32(offset);
   offset += 4;
-  result.w_factor = view.getFloat32(offset);
+  result.phase_w_resistance = view.getFloat32(offset);
   offset += 4;
-  result.inductance_factor = view.getFloat32(offset);
+  result.phase_inductance_baseline = view.getFloat32(offset);
+  offset += 4;
+  result.phase_inductance_angle = view.getInt32(offset);
+  offset += 4;
+  result.phase_inductance_offset = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -1762,7 +1773,7 @@ export function read_message(buffer) {
       return message;
     }
     case CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 24) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = CURRENT_CALIBRATION;
       return message;
@@ -1772,7 +1783,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 24) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = SET_CURRENT_CALIBRATION;
       return message;

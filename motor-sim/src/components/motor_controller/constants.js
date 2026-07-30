@@ -18,17 +18,6 @@ export {
   VOLTAGE_UNITS_PER_VOLT,
 };
 
-// Motor phase constants
-// ---------------------
-
-
-// Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
-export const phase_inductance = 0.000_145; // 290 uH measured with LCR meter across phase pairs.
-
-// Resistance per phase in Ohms. Assuming the motor is a 3 phase star connected motor.
-export const phase_resistance = 2.00 * 2/3; // 2.00 Ohm measured with voltmeter between 1 phase and the other 2 in parallel.
-
-
 // Timing constants
 // ----------------
 
@@ -131,9 +120,10 @@ export const max_timeout = 0xFFFF;
 export const readout_base = 0x10000;
 
 // Constants for the temperature sensor. This sensor isn't very accurate.
-export const voltage_at_reference_temperature = 1.43; // V (varies between 1.34 and 1.52)
-export const temperature_slope = 4.3; // mV/C (varies between 4.0 and 4.6)
-export const temperature_celsius_reference = 25.0; // C
+// TODO: do on chip side
+const voltage_at_reference_temperature = 1.43; // V (varies between 1.34 and 1.52)
+const temperature_slope = 4.3; // mV/C (varies between 4.0 and 4.6)
+const temperature_celsius_reference = 25.0; // C
 
 export function calculate_temperature(adc_reading){
   return (voltage_at_reference_temperature - adc_reading * 2.9 / 4096) * 1000 / temperature_slope + temperature_celsius_reference;
@@ -142,7 +132,3 @@ export function calculate_temperature(adc_reading){
 export const max_drive_current = 6.0;
 
 export const max_drive_power = 12;
-
-// The reference voltage should be 3.3V/2. With the internal voltage reference at 2.9V 
-// this means we expect to read 3.3/2 * 4096 / 2.9 = 2325.5. 
-export const expected_ref_readout = 2326;

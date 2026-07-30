@@ -89,14 +89,14 @@ const float ratio = rotor_revolutions_per_electric * gear_ratio;
 
 
 // Voltage reference for the ADC; it's the in-built reference on the STM32G4.
-const float adc_voltage_reference = 2.9;
+const float adc_voltage_reference = 2.9f;
 
 // Shunt resistance for the motor phase current sensing is 10mOhm, 500mW resistor.
-const float motor_shunt_resistance = 0.010;
+const float motor_shunt_resistance = 0.010f;
 
 // The voltage on the shunt resistor is amplified by INA4181 Bidirectional, Low and 
 // High Side Voltage Output, Current-Sense Amplifier.
-const float amplifier_gain = 20.0;
+const float amplifier_gain = 20.0f;
 
 
 // The formula that determines the current from the ADC readout: 
@@ -105,18 +105,17 @@ const float amplifier_gain = 20.0;
 //   Vout = adc_voltage_reference * (adc_current_readout / adc_max_value).
 // So the current is:
 //   Iload = (Vout - Vref) / (Rsense * GAIN) = adc_voltage_reference * (adc_readout_diff / adc_max_value) / (Rsense * GAIN).
-const float current_conversion = hex_mini_drive::CURRENT_UNITS_PER_AMP * adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
+const float adc_to_current_units = hex_mini_drive::CURRENT_UNITS_PER_AMP * adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
+
+// Baseline noise for the current measurements.
+const float current_measurement_variance = square(2 * adc_to_current_units);
+
+// Noise for the difference between two consecutive current measurements.
+const float current_diff_measurement_variance = square(4 * adc_to_current_units);
 
 // 6A max DQ0 driving current.
 const float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
 
-
-// Inductance per phase in Henries. Assuming the motor is a 3 phase star connected motor.
-// 290 uH measured with LCR meter across phase pairs.
-const float phase_inductance = 0.000'145;
-
-// Resistance of the motor phase windings & mosfet; in Ohm. Assuming the motor is a 3 phase star connected motor.
-const float phase_resistance = 2.00 * 2/3;
 
 // We can use 0.86% of the voltage range; we need the inverse constant.
 const int32_t pwm_waveform_base = static_cast<int32_t>(hex_mini_drive::PWM_BASE / 0.866);
@@ -131,10 +130,10 @@ const float voltage_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * adc_vo
 const float volts_per_voltage_units = 1.0 / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 // Conversion factor between current and phase resistance voltage.
-const float phase_current_to_voltage = phase_resistance * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
+const float current_to_voltage_units = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
 // The drivers need over 8V to power the MOSFETs.
-const int32_t vcc_mosfet_driver_undervoltage = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * 8.0;
+const float vcc_mosfet_driver_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 // 12W max drive power.
 const float max_drive_power = 12.0;
@@ -146,13 +145,15 @@ const float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UNITS_
 const float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 2.0 / 3.0;
 
 
+
+
 // Timing and PWM constants
 // ------------------------
 
 // U and V phases are measured at the same time, followed by W and 4th phase (X).
 // 
 // The phases are preceded by the temperature, voltage and reference readings. The reason
-// for this ordering is so the update loop is ready to run as soon as the phases are read.
+// for this ordering is so the update looph is ready to run as soon as the phases are read.
 // The phases must be read at the peak of the PWM cycle while all MOSFETs are shorted to ground.
 // 
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 144MHz / 4.
@@ -294,12 +295,14 @@ const float radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle
 // Calibration and Control Parameters
 // ----------------------------------
 
-// By default assume the current calibration is 1.0 for all phases and inductance.
+// Default to a the planetary 3 phase motor.
 const hex_mini_drive::CurrentCalibration default_current_calibration = {
-    .u_factor = 1.0,
-    .v_factor = 1.0,
-    .w_factor = 1.0,
-    .inductance_factor = 1.0,
+    .phase_u_resistance = 1.3,
+    .phase_v_resistance = 1.3,
+    .phase_w_resistance = 1.3,
+    .phase_inductance_baseline = 0.000'145f,
+    .phase_inductance_angle = 0,
+    .phase_inductance_offset = 0.0
 };
 
 // The default control parameters should be set to reasonable values for any motor.
@@ -356,7 +359,6 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.
 const int32_t max_lead_angle_control = 60 * angle_base / 360;
 
-
 // Maximum rotations to use in the PID angle seeking loop (max rotations should imply max control when KP == 1.0).
 const float max_seek_rotations_error = 128;
 
@@ -379,10 +381,8 @@ const float seek_integral_decay_fraction = 0.02;
 // ---------------------------------
 
 // Conversion factor between current difference and the implied inductor voltage given the phase inductance (V = L * di/dt).
-const float phase_current_diff_to_voltage_units = (
-    hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP * 
-    phase_inductance / seconds_per_pwm_cycle
-);
+const float current_diff_to_voltage_units = pwm_cycles_per_second *
+    hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
 // Conversion factor between the motor constant and our speed/voltage units.
 const float emf_motor_constant_conversion = radians_per_sec_div_angle_base / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
