@@ -69,24 +69,25 @@ function read_UnitTestOutput(view, offset = 0) {
 // Basic readout of the motor driver internal state; can be recorded contiguously
 // into a history buffer after a commanded event.
 export class Readout {
-  // The PWM commands for the U phase output.
-  u_pwm;
-  // The PWM commands for the V phase output.
-  v_pwm;
-  // The PWM commands for the W phase output.
-  w_pwm;
+  // The PWM voltage for the U phase output.
+  u_drive_voltage;
+  // The PWM voltage for the V phase output.
+  v_drive_voltage;
+  // The PWM voltage for the W phase output.
+  w_drive_voltage;
   // Readout number; used to identify the readout in the history.
   readout_number;
   // Driver state flags; packed into a single 16-bit value.
   state_flags;
   // Raw reference readout (ADC value); this is the reference voltage for the current 
-  // readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
+  // readouts as seen by the amplifier. The phase readouts are relative to this voltage
+  // so if this is quite noisy then the phases will also be noisy. We must track it!
   ref_readout;
-  // Raw phase U current readout (ADC value).
+  // Phase U current readout (ADC value).
   u_current;
-  // Raw phase V current readout (ADC value).
+  // Phase V current readout (ADC value).
   v_current;
-  // Raw phase W current readout (ADC value).
+  // Phase W current readout (ADC value).
   w_current;
   // Phase U current readout difference to previous readout.
   u_current_diff;
@@ -115,11 +116,11 @@ function write_Readout(value) {
   const buffer = new Uint8Array(62);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.u_pwm)
+  view.setFloat32(offset, value.u_drive_voltage)
   offset += 4;
-  view.setFloat32(offset, value.v_pwm)
+  view.setFloat32(offset, value.v_drive_voltage)
   offset += 4;
-  view.setFloat32(offset, value.w_pwm)
+  view.setFloat32(offset, value.w_drive_voltage)
   offset += 4;
   view.setUint16(offset, value.readout_number)
   offset += 2;
@@ -154,11 +155,11 @@ function write_Readout(value) {
 function read_Readout(view, offset = 0) {
   let result = new Readout();
   
-  result.u_pwm = view.getFloat32(offset);
+  result.u_drive_voltage = view.getFloat32(offset);
   offset += 4;
-  result.v_pwm = view.getFloat32(offset);
+  result.v_drive_voltage = view.getFloat32(offset);
   offset += 4;
-  result.w_pwm = view.getFloat32(offset);
+  result.w_drive_voltage = view.getFloat32(offset);
   offset += 4;
   result.readout_number = view.getUint16(offset);
   offset += 2;
@@ -247,9 +248,6 @@ export class FullReadout extends Readout {
   emf_power;
   // Inductive power; the power pushed into the inductor magnetic fields.
   inductive_power;
-  // Motor constant; a measure of how strong the motor is. It is computed as the 
-  // ratio between the quadrature EMF voltage and the angular speed.
-  motor_constant;
   // The current angle.
   inductor_angle;
   // The measured acceleration of the rotor.
@@ -269,12 +267,34 @@ export class FullReadout extends Readout {
   secondary_target;
   // Spare debug output.
   seek_integral;
+  // Motor constant; a measure of how strong the motor is. It is computed as the 
+  // ratio between the quadrature EMF voltage and the angular speed.
+  motor_constant;
+  // Estimated resistance of the U phase coil.
+  phase_a_resistance;
+  // Estimated resistance of the V phase coil.
+  phase_b_resistance;
+  // Estimated resistance of the W phase coil.
+  phase_c_resistance;
+  // Estimated baseline inductance of the motor coils.
+  // 
+  // The inductance is composed of a baseline inductance and a bias inductance that depends
+  // on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
+  // the magnetic material saturates at different levels depending eventually on the angle
+  // of the rotor. The rotor being composed of magnets of alternating polarity.
+  phase_inductance_baseline;
+  // The estimated angle of the phase inductance variation.
+  // 
+  // This is the magnetic north of the rotor in the frame of the stator coils.
+  phase_inductance_angle;
+  // The offset of the phase inductance variation.
+  phase_inductance_offset;
   
   constructor(init) {super(init);Object.assign(this, init);}
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(154);
+  const buffer = new Uint8Array(178);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   const base_buffer = new Uint8Array(view.buffer, offset, 62).set(write_Readout(value), 0);
@@ -308,8 +328,6 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.inductive_power)
   offset += 4;
-  view.setFloat32(offset, value.motor_constant)
-  offset += 4;
   view.setInt32(offset, value.inductor_angle)
   offset += 4;
   view.setFloat32(offset, value.rotor_acceleration)
@@ -327,6 +345,20 @@ function write_FullReadout(value) {
   view.setFloat32(offset, value.secondary_target)
   offset += 4;
   view.setFloat32(offset, value.seek_integral)
+  offset += 4;
+  view.setFloat32(offset, value.motor_constant)
+  offset += 4;
+  view.setFloat32(offset, value.phase_a_resistance)
+  offset += 4;
+  view.setFloat32(offset, value.phase_b_resistance)
+  offset += 4;
+  view.setFloat32(offset, value.phase_c_resistance)
+  offset += 4;
+  view.setFloat32(offset, value.phase_inductance_baseline)
+  offset += 4;
+  view.setInt32(offset, value.phase_inductance_angle)
+  offset += 4;
+  view.setFloat32(offset, value.phase_inductance_offset)
   offset += 4;
   return buffer;
 }
@@ -364,8 +396,6 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.inductive_power = view.getFloat32(offset);
   offset += 4;
-  result.motor_constant = view.getFloat32(offset);
-  offset += 4;
   result.inductor_angle = view.getInt32(offset);
   offset += 4;
   result.rotor_acceleration = view.getFloat32(offset);
@@ -383,6 +413,20 @@ function read_FullReadout(view, offset = 0) {
   result.secondary_target = view.getFloat32(offset);
   offset += 4;
   result.seek_integral = view.getFloat32(offset);
+  offset += 4;
+  result.motor_constant = view.getFloat32(offset);
+  offset += 4;
+  result.phase_a_resistance = view.getFloat32(offset);
+  offset += 4;
+  result.phase_b_resistance = view.getFloat32(offset);
+  offset += 4;
+  result.phase_c_resistance = view.getFloat32(offset);
+  offset += 4;
+  result.phase_inductance_baseline = view.getFloat32(offset);
+  offset += 4;
+  result.phase_inductance_angle = view.getInt32(offset);
+  offset += 4;
+  result.phase_inductance_offset = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -1554,7 +1598,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 154) return null;
+      if (buffer.length !== 2 + 178) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;

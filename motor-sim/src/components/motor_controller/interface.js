@@ -42,10 +42,6 @@ export function get_hall_sector({hall_u, hall_v, hall_w}){
 function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const local_time = Date.now();
 
-  // Get the PWM commands.
-  const {u_pwm, v_pwm, w_pwm} = bare_readout;
-
-  const avg_pwm = (u_pwm + v_pwm + w_pwm) / 3;
 
   // Get the readout number, a counter that increments with each readout & PWM cycle.
   const readout_number = bare_readout.readout_number;
@@ -95,10 +91,18 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
 
+  // Get the PWM voltage commands.
+  const u_drive_voltage = bare_readout.u_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
+  const v_drive_voltage = bare_readout.v_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
+  const w_drive_voltage = bare_readout.w_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
+  
+  // Derive the PWM duty cycles given the VCC voltage. (Done this way to avoid duplicating calculations
+  // on the microcontroller.)
+  const min_drive_voltage = Math.min(u_drive_voltage, v_drive_voltage, w_drive_voltage);
+  const u_pwm = (u_drive_voltage - min_drive_voltage) / vcc_voltage * PWM_BASE;
+  const v_pwm = (v_drive_voltage - min_drive_voltage) / vcc_voltage * PWM_BASE;
+  const w_pwm = (w_drive_voltage - min_drive_voltage) / vcc_voltage * PWM_BASE;
 
-  const u_drive_voltage = (u_pwm - avg_pwm) * vcc_voltage / PWM_BASE;
-  const v_drive_voltage = (v_pwm - avg_pwm) * vcc_voltage / PWM_BASE;
-  const w_drive_voltage = (w_pwm - avg_pwm) * vcc_voltage / PWM_BASE;
 
   const [drive_voltage_direct, drive_voltage_quadrature] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
   const drive_voltage_angle = radians_to_degrees(Math.atan2(drive_voltage_quadrature, drive_voltage_direct));

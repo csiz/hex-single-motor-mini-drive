@@ -86,7 +86,7 @@ const int32_t angle_fix_threshold_count = 128;
 const int32_t angle_fix_max_count = 1024;
 
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
-ThreePhase previous_motor_mid_pwm_duties = {0, 0, 0};
+ThreePhase previous_drive_voltages = {0, 0, 0};
 
 int32_t previous_emf_angle_error = 0;
 
@@ -960,17 +960,13 @@ void adc_interrupt_handler(){
     const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion + readout.vcc_voltage * 3) * 0.25f;
 
     // Get the motor duties that were set at the mid point of the PWM cycle, between current readings.
-    const ThreePhase motor_mid_pwm_duties = {
+    const ThreePhase motor_outputs = {
         driver_state.motor_outputs.u_duty,
         driver_state.motor_outputs.v_duty,
         driver_state.motor_outputs.w_duty
     };
 
-    // Calculate the effective motor outputs for this set of measurements as the average of the last 2.
-    const ThreePhase motor_outputs = (previous_motor_mid_pwm_duties + motor_mid_pwm_duties) * 0.5f;
-
-    // Store the active motor outputs for the next cycle.
-    previous_motor_mid_pwm_duties = motor_mid_pwm_duties;
+    const ThreePhase half_cycle_drive_voltage = adjust_to_sum_zero(motor_outputs) * (vcc_voltage * pwm_base_inverse);
 
     // Calculate our outputs on the motor phases. The outputs kick in halfway through the PWM cycle,
     // so we average the previous and current outputs to get the effective output for this cycle.
@@ -978,8 +974,11 @@ void adc_interrupt_handler(){
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
     // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
     // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
-    const ThreePhase drive_voltages = adjust_to_sum_zero(motor_outputs) * vcc_voltage * pwm_base_inverse;
-    
+    const ThreePhase drive_voltages = (previous_drive_voltages + half_cycle_drive_voltage) * 0.5f;
+
+    // Store the active motor outputs for the next cycle.
+    previous_drive_voltages = half_cycle_drive_voltage;
+
 
     // Calculate calibrated currents.
     const ThreePhase currents = adjust_to_sum_zero(ThreePhase{
@@ -1247,9 +1246,9 @@ void adc_interrupt_handler(){
         (hall_state << hall_state_bit_offset)
     );
 
-    readout.u_pwm = std::get<0>(motor_outputs);
-    readout.v_pwm = std::get<1>(motor_outputs);
-    readout.w_pwm = std::get<2>(motor_outputs);        
+    readout.u_drive_voltage = std::get<0>(drive_voltages);
+    readout.v_drive_voltage = std::get<1>(drive_voltages);
+    readout.w_drive_voltage = std::get<2>(drive_voltages);
     
     readout.u_current = std::get<0>(currents);
     readout.v_current = std::get<1>(currents);

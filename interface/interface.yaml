@@ -226,15 +226,15 @@ definitions:
       into a history buffer after a commanded event.
 
     struct:
-      u_pwm: 
+      u_drive_voltage: 
         type: float32
-        doc: The PWM commands for the U phase output.
-      v_pwm: 
+        doc: The PWM voltage for the U phase output.
+      v_drive_voltage: 
         type: float32
-        doc: The PWM commands for the V phase output.
-      w_pwm:
+        doc: The PWM voltage for the V phase output.
+      w_drive_voltage: 
         type: float32
-        doc: The PWM commands for the W phase output.
+        doc: The PWM voltage for the W phase output.
 
       readout_number:
         type: uint16
@@ -248,19 +248,20 @@ definitions:
         type: int16
         doc: |
           Raw reference readout (ADC value); this is the reference voltage for the current 
-          readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
+          readouts as seen by the amplifier. The phase readouts are relative to this voltage
+          so if this is quite noisy then the phases will also be noisy. We must track it!
 
       u_current:
         type: float32
-        doc: Raw phase U current readout (ADC value).
+        doc: Phase U current readout (ADC value).
 
       v_current:
         type: float32
-        doc: Raw phase V current readout (ADC value).
+        doc: Phase V current readout (ADC value).
 
       w_current:
         type: float32
-        doc: Raw phase W current readout (ADC value).
+        doc: Phase W current readout (ADC value).
 
       u_current_diff:
         type: float32
@@ -380,12 +381,6 @@ definitions:
         type: float32
         doc: Inductive power; the power pushed into the inductor magnetic fields.
 
-      motor_constant:
-        type: float32
-        doc: |
-          Motor constant; a measure of how strong the motor is. It is computed as the 
-          ratio between the quadrature EMF voltage and the angular speed.
-
       inductor_angle:
         type: int32
         doc: The current angle.
@@ -423,6 +418,45 @@ definitions:
       seek_integral:
         type: float32
         doc: Spare debug output.
+
+      motor_constant:
+        type: float32
+        doc: |
+          Motor constant; a measure of how strong the motor is. It is computed as the 
+          ratio between the quadrature EMF voltage and the angular speed.
+
+      phase_a_resistance:
+        type: float32
+        doc: Estimated resistance of the U phase coil.
+
+      phase_b_resistance:
+        type: float32
+        doc: Estimated resistance of the V phase coil.
+
+      phase_c_resistance:
+        type: float32
+        doc: Estimated resistance of the W phase coil.
+      
+      phase_inductance_baseline:
+        type: float32
+        doc: | 
+          Estimated baseline inductance of the motor coils.
+
+          The inductance is composed of a baseline inductance and a bias inductance that depends
+          on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
+          the magnetic material saturates at different levels depending eventually on the angle
+          of the rotor. The rotor being composed of magnets of alternating polarity. 
+
+      phase_inductance_angle:
+        type: int32
+        doc: |
+          The estimated angle of the phase inductance variation.
+
+          This is the magnetic north of the rotor in the frame of the stator coils.
+
+      phase_inductance_offset:
+        type: float32
+        doc: The offset of the phase inductance variation.
 
 
   BasicDriveCommand:

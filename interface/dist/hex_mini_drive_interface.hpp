@@ -149,24 +149,25 @@ static inline UnitTestOutput read_UnitTestOutput(uint8_t const* buffer) {
 // Basic readout of the motor driver internal state; can be recorded contiguously
 // into a history buffer after a commanded event.
 struct Readout {
-  // The PWM commands for the U phase output.
-  float u_pwm;
-  // The PWM commands for the V phase output.
-  float v_pwm;
-  // The PWM commands for the W phase output.
-  float w_pwm;
+  // The PWM voltage for the U phase output.
+  float u_drive_voltage;
+  // The PWM voltage for the V phase output.
+  float v_drive_voltage;
+  // The PWM voltage for the W phase output.
+  float w_drive_voltage;
   // Readout number; used to identify the readout in the history.
   uint16_t readout_number;
   // Driver state flags; packed into a single 16-bit value.
   uint16_t state_flags;
   // Raw reference readout (ADC value); this is the reference voltage for the current 
-  // readouts as seen by the amplifier. Needs to be subtracted from the phase readouts.
+  // readouts as seen by the amplifier. The phase readouts are relative to this voltage
+  // so if this is quite noisy then the phases will also be noisy. We must track it!
   int16_t ref_readout;
-  // Raw phase U current readout (ADC value).
+  // Phase U current readout (ADC value).
   float u_current;
-  // Raw phase V current readout (ADC value).
+  // Phase V current readout (ADC value).
   float v_current;
-  // Raw phase W current readout (ADC value).
+  // Phase W current readout (ADC value).
   float w_current;
   // Phase U current readout difference to previous readout.
   float u_current_diff;
@@ -191,11 +192,11 @@ struct Readout {
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   size_t offset = 0;
-  write_float32(buffer + offset, value.u_pwm);;
+  write_float32(buffer + offset, value.u_drive_voltage);;
   offset += 4;
-  write_float32(buffer + offset, value.v_pwm);;
+  write_float32(buffer + offset, value.v_drive_voltage);;
   offset += 4;
-  write_float32(buffer + offset, value.w_pwm);;
+  write_float32(buffer + offset, value.w_drive_voltage);;
   offset += 4;
   write_uint16(buffer + offset, value.readout_number);;
   offset += 2;
@@ -231,11 +232,11 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   
   Readout result;
   
-  result.u_pwm = read_float32(buffer + offset);
+  result.u_drive_voltage = read_float32(buffer + offset);
   offset += 4;
-  result.v_pwm = read_float32(buffer + offset);
+  result.v_drive_voltage = read_float32(buffer + offset);
   offset += 4;
-  result.w_pwm = read_float32(buffer + offset);
+  result.w_drive_voltage = read_float32(buffer + offset);
   offset += 4;
   result.readout_number = read_uint16(buffer + offset);
   offset += 2;
@@ -321,9 +322,6 @@ struct FullReadout : Readout {
   float emf_power;
   // Inductive power; the power pushed into the inductor magnetic fields.
   float inductive_power;
-  // Motor constant; a measure of how strong the motor is. It is computed as the 
-  // ratio between the quadrature EMF voltage and the angular speed.
-  float motor_constant;
   // The current angle.
   int32_t inductor_angle;
   // The measured acceleration of the rotor.
@@ -343,6 +341,28 @@ struct FullReadout : Readout {
   float secondary_target;
   // Spare debug output.
   float seek_integral;
+  // Motor constant; a measure of how strong the motor is. It is computed as the 
+  // ratio between the quadrature EMF voltage and the angular speed.
+  float motor_constant;
+  // Estimated resistance of the U phase coil.
+  float phase_a_resistance;
+  // Estimated resistance of the V phase coil.
+  float phase_b_resistance;
+  // Estimated resistance of the W phase coil.
+  float phase_c_resistance;
+  // Estimated baseline inductance of the motor coils.
+  // 
+  // The inductance is composed of a baseline inductance and a bias inductance that depends
+  // on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
+  // the magnetic material saturates at different levels depending eventually on the angle
+  // of the rotor. The rotor being composed of magnets of alternating polarity.
+  float phase_inductance_baseline;
+  // The estimated angle of the phase inductance variation.
+  // 
+  // This is the magnetic north of the rotor in the frame of the stator coils.
+  int32_t phase_inductance_angle;
+  // The offset of the phase inductance variation.
+  float phase_inductance_offset;
 };
 
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
@@ -377,8 +397,6 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.inductive_power);;
   offset += 4;
-  write_float32(buffer + offset, value.motor_constant);;
-  offset += 4;
   write_int32(buffer + offset, value.inductor_angle);;
   offset += 4;
   write_float32(buffer + offset, value.rotor_acceleration);;
@@ -396,6 +414,20 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   write_float32(buffer + offset, value.secondary_target);;
   offset += 4;
   write_float32(buffer + offset, value.seek_integral);;
+  offset += 4;
+  write_float32(buffer + offset, value.motor_constant);;
+  offset += 4;
+  write_float32(buffer + offset, value.phase_a_resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.phase_b_resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.phase_c_resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.phase_inductance_baseline);;
+  offset += 4;
+  write_int32(buffer + offset, value.phase_inductance_angle);;
+  offset += 4;
+  write_float32(buffer + offset, value.phase_inductance_offset);;
   offset += 4;
 }
 static inline FullReadout read_FullReadout(uint8_t const* buffer) {
@@ -432,8 +464,6 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.inductive_power = read_float32(buffer + offset);
   offset += 4;
-  result.motor_constant = read_float32(buffer + offset);
-  offset += 4;
   result.inductor_angle = read_int32(buffer + offset);
   offset += 4;
   result.rotor_acceleration = read_float32(buffer + offset);
@@ -451,6 +481,20 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   result.secondary_target = read_float32(buffer + offset);
   offset += 4;
   result.seek_integral = read_float32(buffer + offset);
+  offset += 4;
+  result.motor_constant = read_float32(buffer + offset);
+  offset += 4;
+  result.phase_a_resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.phase_b_resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.phase_c_resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.phase_inductance_baseline = read_float32(buffer + offset);
+  offset += 4;
+  result.phase_inductance_angle = read_int32(buffer + offset);
+  offset += 4;
+  result.phase_inductance_offset = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1171,7 +1215,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::READOUT: return 64;
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 156;
+    case MessageCode::FULL_READOUT: return 180;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 10;
@@ -1245,9 +1289,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 154) return 0;
+      if (max_size < 2 + 178) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 156;
+      return 180;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1520,7 +1564,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 154) return false;
+      if (size != 2 + 178) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }
