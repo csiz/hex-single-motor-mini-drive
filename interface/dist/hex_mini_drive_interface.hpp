@@ -356,13 +356,13 @@ struct FullReadout : Readout {
   // on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
   // the magnetic material saturates at different levels depending eventually on the angle
   // of the rotor. The rotor being composed of magnets of alternating polarity.
-  float phase_inductance_baseline;
+  float phase_inductance_base;
   // The estimated angle of the phase inductance variation.
   // 
   // This is the magnetic north of the rotor in the frame of the stator coils.
   int32_t phase_inductance_angle;
   // The offset of the phase inductance variation.
-  float phase_inductance_offset;
+  float phase_inductance_bias;
 };
 
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
@@ -423,11 +423,11 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.phase_w_resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.phase_inductance_baseline);;
+  write_float32(buffer + offset, value.phase_inductance_base);;
   offset += 4;
   write_int32(buffer + offset, value.phase_inductance_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.phase_inductance_offset);;
+  write_float32(buffer + offset, value.phase_inductance_bias);;
   offset += 4;
 }
 static inline FullReadout read_FullReadout(uint8_t const* buffer) {
@@ -490,11 +490,11 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.phase_w_resistance = read_float32(buffer + offset);
   offset += 4;
-  result.phase_inductance_baseline = read_float32(buffer + offset);
+  result.phase_inductance_base = read_float32(buffer + offset);
   offset += 4;
   result.phase_inductance_angle = read_int32(buffer + offset);
   offset += 4;
-  result.phase_inductance_offset = read_float32(buffer + offset);
+  result.phase_inductance_bias = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -835,13 +835,13 @@ struct CurrentCalibration {
   // on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
   // the magnetic material saturates at different levels depending eventually on the angle
   // of the rotor. The rotor being composed of magnets of alternating polarity.
-  float phase_inductance_baseline;
+  float phase_inductance_base;
   // The estimated angle of the phase inductance variation.
   // 
   // This is the magnetic north of the rotor in the frame of the stator coils.
   int32_t phase_inductance_angle;
   // The offset of the phase inductance variation.
-  float phase_inductance_offset;
+  float phase_inductance_bias;
 };
 
 static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration const& value) {
@@ -852,11 +852,11 @@ static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration
   offset += 4;
   write_float32(buffer + offset, value.phase_w_resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.phase_inductance_baseline);;
+  write_float32(buffer + offset, value.phase_inductance_base);;
   offset += 4;
   write_int32(buffer + offset, value.phase_inductance_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.phase_inductance_offset);;
+  write_float32(buffer + offset, value.phase_inductance_bias);;
   offset += 4;
 }
 static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) {
@@ -870,11 +870,11 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   offset += 4;
   result.phase_w_resistance = read_float32(buffer + offset);
   offset += 4;
-  result.phase_inductance_baseline = read_float32(buffer + offset);
+  result.phase_inductance_base = read_float32(buffer + offset);
   offset += 4;
   result.phase_inductance_angle = read_int32(buffer + offset);
   offset += 4;
-  result.phase_inductance_offset = read_float32(buffer + offset);
+  result.phase_inductance_bias = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1191,6 +1191,7 @@ enum MessageCode : uint16_t {
   RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548,
   SET_STATE_RESISTANCE_CALIBRATION = 20549,
   SET_STATE_INDUCTANCE_CALIBRATION = 20550,
+  SET_STATE_POSITION_CALIBRATION = 20551,
 };
 
 // Generic Message Structure
@@ -1270,6 +1271,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART3: return 2;
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 10;
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 10;
+    case MessageCode::SET_STATE_POSITION_CALIBRATION: return 10;
   }
   return 0; // Unknown message code
 }
@@ -1542,6 +1544,12 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
       return 10;
     }
+    case MessageCode::SET_STATE_POSITION_CALIBRATION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_POSITION_CALIBRATION));
+      if (max_size < 2 + 8) return 0;
+      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
+      return 10;
+    }
   }
   return 0;
 }
@@ -1790,6 +1798,11 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: {
+      if (size != 2 + 8) return false;
+      message.message_data = read_TestCommand(buffer + 2);
+      return true;
+    }
+    case MessageCode::SET_STATE_POSITION_CALIBRATION: {
       if (size != 2 + 8) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;

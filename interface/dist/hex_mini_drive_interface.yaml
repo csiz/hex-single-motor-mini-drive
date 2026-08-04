@@ -166,6 +166,9 @@ message_codes:
   SET_STATE_INDUCTANCE_CALIBRATION:
     message_code: 0x5046
     type: TestCommand
+  SET_STATE_POSITION_CALIBRATION:
+    message_code: 0x5047
+    type: TestCommand
 
 
 definitions:
@@ -437,7 +440,7 @@ definitions:
         type: float32
         doc: Estimated resistance of the W phase coil.
       
-      phase_inductance_baseline:
+      phase_inductance_base:
         type: float32
         doc: | 
           Estimated baseline inductance of the motor coils.
@@ -454,7 +457,7 @@ definitions:
 
           This is the magnetic north of the rotor in the frame of the stator coils.
 
-      phase_inductance_offset:
+      phase_inductance_bias:
         type: float32
         doc: The offset of the phase inductance variation.
 
@@ -600,7 +603,7 @@ definitions:
         type: float32
         doc: Estimated resistance of the W phase coil.
       
-      phase_inductance_baseline:
+      phase_inductance_base:
         type: float32
         doc: | 
           Estimated baseline inductance of the motor coils.
@@ -617,7 +620,7 @@ definitions:
 
           This is the magnetic north of the rotor in the frame of the stator coils.
 
-      phase_inductance_offset:
+      phase_inductance_bias:
         type: float32
         doc: The offset of the phase inductance variation.
       

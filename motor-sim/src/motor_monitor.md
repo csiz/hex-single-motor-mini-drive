@@ -521,6 +521,7 @@ const test_buttons_to_code = [
   ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
   ["Run resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
   ["Run inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
+  ["Run position calibration", MessageCode.SET_STATE_POSITION_CALIBRATION],
 ];
 
 const test_buttons = Inputs.button(
@@ -1264,7 +1265,7 @@ const plot_motor_values = plot_lines({
     {y: "phase_u_resistance", label: "Phase U Resistance", color: colors.u},
     {y: "phase_v_resistance", label: "Phase V Resistance", color: colors.v},
     {y: "phase_w_resistance", label: "Phase W Resistance", color: colors.w},
-    {y: "phase_inductance_baseline", label: "Phase Inductance Baseline", color: colors_categories[4]},
+    {y: "phase_inductance_base", label: "Phase Inductance Baseline", color: colors_categories[4]},
   ],
   curve,
 });
@@ -1328,6 +1329,7 @@ async function run_current_calibration_by_code(code) {
     current_calibration_pwm,
   );
   update_current_calibration_data(calibration_data);
+  set_readout_series(calibration_data.sample, active_port);
 }
 
 const current_calibration_run_buttons = Inputs.button(
@@ -1400,13 +1402,31 @@ const current_calibration_optimizing_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "u_resistive_voltage", label: "Resistance Drop", color: colors.u},
-    {y: "u_inductance_voltage", label: "Inductance Drop", color: colors.v},
-    {y: "u_drive_voltage", label: "Drive Voltage", color: colors.w},
+    {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
+    {y: "u_inductance_voltage", label: "U Inductance Drop", color: colors.v},
+    {y: "u_drive_voltage", label: "U Drive Voltage", color: colors.w},
     {
       y: "u_residual",
       draw_extra: setup_faint_area({y0: 0.0, y1: "u_residual"}),
-      label: "Residual", color: "grey",
+      label: "U Residual", color: "grey",
+    },
+    {y: "residual_magnitude", label: "Residual Magnitude", color: colors_categories[1]},
+    {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
+    {y: "v_resistive_voltage", label: "V Resistance Drop", color: d3.color(colors.u).darker(1)},
+    {y: "v_inductance_voltage", label: "V Inductance Drop", color: d3.color(colors.v).darker(1)},
+    {y: "v_drive_voltage", label: "V Drive Voltage", color: d3.color(colors.w).darker(1)},
+    {
+      y: "v_residual",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "v_residual"}),
+      label: "V Residual", color: "grey",
+    },
+    {y: "w_resistive_voltage", label: "W Resistance Drop", color: d3.color(colors.u).darker(2)},
+    {y: "w_inductance_voltage", label: "W Inductance Drop", color: d3.color(colors.v).darker(2)},
+    {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).darker(2)},
+    {
+      y: "w_residual",
+      draw_extra: setup_faint_area({y0: 0.0, y1: "w_residual"}),
+      label: "W Residual", color: "grey",
     },
     {y: (readout)=>Math.sqrt(readout.loss), label: "Sqrt Loss", color: colors_categories[2]},
   ],
@@ -1422,10 +1442,17 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Gradients (unitless)",
   channels: [
-    {y: "u_resistance_gradient", label: "Resistance Gradient", color: colors.u},
-    {y: "u_resistance_gradient_2nd_order", label: "Resistance 2nd Order Gradient", color: colors.v},
-    {y: (d)=>(d.u_inductance_gradient / pwm_cycles_per_second), label: "Inductance Gradient", color: colors_categories[2]},
-    {y: (d)=>(d.u_inductance_gradient_2nd_order / square(pwm_cycles_per_second)), label: "Inductance 2nd Order Gradient", color: colors_categories[3]},
+    {y: "u_resistance_gradient", label: "U Resistance Gradient", color: colors.u},
+    {y: "u_resistance_gradient_2nd_order", label: "U Resistance 2nd Order Gradient", color: colors.v},
+    {y: "v_resistance_gradient", label: "V Resistance Gradient", color: d3.color(colors.u).darker(1)},
+    {y: "v_resistance_gradient_2nd_order", label: "V Resistance 2nd Order Gradient", color: d3.color(colors.v).darker(1)},
+    {y: "w_resistance_gradient", label: "W Resistance Gradient", color: d3.color(colors.u).darker(2)},
+    {y: "w_resistance_gradient_2nd_order", label: "W Resistance 2nd Order Gradient", color: d3.color(colors.v).darker(2)},
+    
+    {y: (d)=>(d.inductance_base_gradient / pwm_cycles_per_second), label: "Inductance Base Gradient", color: colors_categories[2]},
+    {y: (d)=>(d.inductance_base_gradient_2nd_order / square(pwm_cycles_per_second)), label: "Inductance Base 2nd Order Gradient", color: colors_categories[3]},
+
+
   ],
 });
 

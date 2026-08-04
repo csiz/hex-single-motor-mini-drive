@@ -355,6 +355,27 @@ static inline MotorOutputs update_motor_inductance_calibration(
     return update_motor_at_angle(driver_state, readout);
 }
 
+static inline MotorOutputs update_motor_position_calibration(
+    DriverState & driver_state,
+    hex_mini_drive::FullReadout const& readout
+){
+    static const int32_t cycles_per_rotation = hex_mini_drive::HISTORY_SIZE / 12;
+
+    // Number of PWM cycles elapsed since the calibration started.
+    const int elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
+
+    // For the position calibration we will drive the motor quickly around a few
+    // full rotations to measure the inductance bias and estimate the rotor position.
+    // In the calibration mode we assume the motor starts at standstill so if we
+    // drive the calibration routine quickly enough the rotor shouldn't be start spinning.
+
+    driver_state.active_pwm = driver_state.target_pwm;
+
+    driver_state.active_angle = normalize_angle(static_cast<int32_t>(elapsed * angle_base / cycles_per_rotation));
+
+    return update_motor_at_angle(driver_state, readout);
+}
+
 
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
 // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
@@ -787,6 +808,13 @@ static inline DriverState setup_driver_state(
                 .duration = hex_mini_drive::HISTORY_SIZE,
                 .target_pwm = clip_to(0.0f, pwm_max, pending_state.target_pwm),
             };
+
+        case DriverMode::POSITION_CALIBRATION:
+            return DriverState{
+                .mode = DriverMode::POSITION_CALIBRATION,
+                .duration = hex_mini_drive::HISTORY_SIZE,
+                .target_pwm = clip_to(0.0f, pwm_max, pending_state.target_pwm),
+            };
     }
 
     return breaking_driver_state;
@@ -906,6 +934,13 @@ static inline void update_motor_control(
             // Update the motor outputs for the inductance calibration.
             driver_state.motor_outputs = update_motor_inductance_calibration(driver_state, readout);
             return;
+
+        case DriverMode::POSITION_CALIBRATION:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            // Update the motor outputs for the position calibration.
+            driver_state.motor_outputs = update_motor_position_calibration(driver_state, readout);
+            return;
     }
 
     // If we get here, we have an unknown/corrupted driver state.
@@ -1002,7 +1037,7 @@ void adc_interrupt_handler(){
     const ThreePhase currents_diff = currents - get_currents(readout);
 
     // Calculate the voltage drop across the coil inductance.
-    const ThreePhase inductor_voltages = currents_diff * (current_calibration.phase_inductance_baseline * current_diff_to_voltage_units);
+    const ThreePhase inductor_voltages = currents_diff * (current_calibration.phase_inductance_base * current_diff_to_voltage_units);
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const ThreePhase resistive_voltages = currents * get_phase_resistances(current_calibration) * current_to_voltage_units;
@@ -1302,7 +1337,7 @@ void adc_interrupt_handler(){
     readout.phase_u_resistance = current_calibration.phase_u_resistance;
     readout.phase_v_resistance = current_calibration.phase_v_resistance;
     readout.phase_w_resistance = current_calibration.phase_w_resistance;
-    readout.phase_inductance_baseline = current_calibration.phase_inductance_baseline;
+    readout.phase_inductance_base = current_calibration.phase_inductance_base;
     
 
     // Calculate and set motor outputs!!

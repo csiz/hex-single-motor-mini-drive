@@ -300,9 +300,9 @@ const hex_mini_drive::CurrentCalibration default_current_calibration = {
     .phase_u_resistance = 1.3,
     .phase_v_resistance = 1.3,
     .phase_w_resistance = 1.3,
-    .phase_inductance_baseline = 0.000'145f,
+    .phase_inductance_base = 0.000'145f,
     .phase_inductance_angle = 0,
-    .phase_inductance_offset = 0.0
+    .phase_inductance_bias = 0.0
 };
 
 // The default control parameters should be set to reasonable values for any motor.

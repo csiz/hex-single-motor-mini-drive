@@ -74,6 +74,8 @@ enum struct DriverMode : uint16_t {
     // Drive the motor phases with large steps at opposite poles to measure the current response
     // and determine the inductance of the motor windings.
     INDUCTANCE_CALIBRATION,
+    // Drive the motor around a few full rotations to measure inductance bias, and estimate rotor position.
+    POSITION_CALIBRATION,
 };
 
 // Motor duty cycle (compare register values and enable settings).

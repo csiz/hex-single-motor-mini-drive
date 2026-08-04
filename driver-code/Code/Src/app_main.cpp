@@ -34,7 +34,8 @@ float total_power_observer = 0.0f;
 enum struct CalibrationMode {
   NONE,
   RESISTANCE,
-  INDUCTANCE
+  INDUCTANCE,
+  POSITION
 };
 
 CalibrationMode calibration_mode = CalibrationMode::NONE;
@@ -502,6 +503,21 @@ void handle_message(hex_mini_drive::Message const& message) {
       });
       return;
     }
+
+    case SET_STATE_POSITION_CALIBRATION: {
+      calibration_mode = CalibrationMode::POSITION;
+      // Clear the readouts buffer of old data.
+      readout_history_mark_reset();
+      readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
+      readouts_sent = 0;
+
+      set_motor_command(DriverState{
+        .mode = DriverMode::POSITION_CALIBRATION,
+        .duration = hex_mini_drive::HISTORY_SIZE,
+        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+      });
+      return;
+    }
   }
 }
 
@@ -756,7 +772,7 @@ void app_tick() {
     ThreePhase resistance_gradient_step_sum = {0.0f, 0.0f, 0.0f};
     ThreePhase inductance_gradient_step_sum = {0.0f, 0.0f, 0.0f};
 
-    const float learning_rate = 0.2f;
+    const float learning_rate = 0.0f;
 
     // Get data from history and compute gradients and the mean of the samples.
     // Then run gradient descent on the resistance and inductance values.
@@ -780,7 +796,7 @@ void app_tick() {
       } * current_diff_to_voltage_units;
 
       // Calculate the voltage drop across the coil inductance.
-      const ThreePhase inductor_voltages = current_diffs_prescaled * current_calibration.phase_inductance_baseline;
+      const ThreePhase inductor_voltages = current_diffs_prescaled * current_calibration.phase_inductance_base;
 
       // Calculate the resistive voltage drop across the coil and MOSFET resistance.
       const ThreePhase resistive_voltages = currents_prescaled * get_phase_resistances(current_calibration);
@@ -820,11 +836,13 @@ void app_tick() {
       current_calibration.phase_v_resistance -= learning_rate * std::get<1>(resistance_gradient_step_mean);
       current_calibration.phase_w_resistance -= learning_rate * std::get<2>(resistance_gradient_step_mean);
     } else if (calibration_mode == CalibrationMode::INDUCTANCE) {
-      current_calibration.phase_inductance_baseline -= learning_rate * (
+      current_calibration.phase_inductance_base -= learning_rate * (
         std::get<0>(inductance_gradient_step_mean) +
         std::get<1>(inductance_gradient_step_mean) +
         std::get<2>(inductance_gradient_step_mean)
       ) * 0.333333f; // Average the inductance gradients across the three phases.
+    } else if (calibration_mode == CalibrationMode::POSITION) {
+      // TODO: implement position calibration.
     }
 
     // Done an iteration of the calibration (it should take about 10 for a good value and 90 to stabilise).
