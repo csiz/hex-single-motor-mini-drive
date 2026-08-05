@@ -1441,6 +1441,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
     {y: "v_resistance_gradient", label: "V Resistance Gradient", color: colors.v},
     {y: "w_resistance_gradient", label: "W Resistance Gradient", color: colors.w},
     {y: (d)=>(d.inductance_base_gradient / pwm_cycles_per_second), label: "Inductance Base Gradient", color: colors_categories[1]},
+    {y: "saturation_current_gradient", label: "Saturation Current Gradient", color: colors_categories[2]},
   ],
   curve,
 });
