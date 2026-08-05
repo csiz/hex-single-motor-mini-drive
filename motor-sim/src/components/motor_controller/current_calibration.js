@@ -8,13 +8,12 @@ import {zip_records} from "./data_utils.js";
 import {product_of_normals} from "./stats_utils.js";
 
 import * as d3 from "d3";
-import _ from "lodash";
 
-const current_noise = square(0.100);
-const current_diff_noise = square(0.100 * pwm_cycles_per_second);
 const min_inductance = 0.000_001;
-const current_angle_noise = square(0.100 * pwm_cycles_per_second * min_inductance);
-
+const max_inductance_bias_fraction = 0.2;
+const min_inductance_noise = 0.000_000_1;
+const min_resistance_noise = 0.000_1;
+const min_degree_noise = 1.0;
 
 function compute_gradients(readout, current_calibration){
   const {
@@ -77,33 +76,10 @@ function compute_gradients(readout, current_calibration){
     v_residual * v_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle - 120) +
     w_residual * w_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle + 120)
   );
-
-  const u_resistance_gradient_2nd_order = square(u_current);
-  const v_resistance_gradient_2nd_order = square(v_current);
-  const w_resistance_gradient_2nd_order = square(w_current);
-
-  const inductance_base_gradient_2nd_order = square(
-    u_scaled_current_diff + 
-    v_scaled_current_diff + 
-    w_scaled_current_diff
-  );
-
-  const inductance_bias_gradient_2nd_order = square(
-    u_scaled_current_diff * cos_degrees(phase_inductance_angle) +
-    v_scaled_current_diff * cos_degrees(phase_inductance_angle - 120) +
-    w_scaled_current_diff * cos_degrees(phase_inductance_angle + 120)
-  );
-
-  const inductance_angle_gradient_2nd_order = square(
-    u_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle) +
-    v_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle - 120) +
-    w_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle + 120)
-  );
-
   
-    const [residual_direct, residual_quadrature] = dq0_transform(u_residual, v_residual, w_residual, 0);
-    const residual_angle = radians_to_degrees(Math.atan2(residual_quadrature, residual_direct));
-    const residual_magnitude = Math.sqrt(residual_direct * residual_direct + residual_quadrature * residual_quadrature);
+  const [residual_direct, residual_quadrature] = dq0_transform(u_residual, v_residual, w_residual, 0);
+  const residual_angle = radians_to_degrees(Math.atan2(residual_quadrature, residual_direct));
+  const residual_magnitude = Math.sqrt(residual_direct * residual_direct + residual_quadrature * residual_quadrature);
   
   return {
     ...readout,
@@ -132,13 +108,6 @@ function compute_gradients(readout, current_calibration){
     inductance_base_gradient,
     inductance_bias_gradient,
     inductance_angle_gradient,
-    
-    u_resistance_gradient_2nd_order,
-    v_resistance_gradient_2nd_order,
-    w_resistance_gradient_2nd_order,
-    inductance_base_gradient_2nd_order,
-    inductance_bias_gradient_2nd_order,
-    inductance_angle_gradient_2nd_order,
   };
 }
 
@@ -180,11 +149,27 @@ export async function run_current_calibration(motor_controller, message_code, ma
 
   let is_stable = false;
 
-  const start_learning_rate = 0.2;
-  const end_learning_rate = 0.001;
-  const max_iterations = 1000;
-  const stability_threshold = 0.000_01;
+  const max_iterations = 200;
+  const stability_threshold = 0.000_001;
   let iterations = [];
+
+  let u_resistance_rate = 0.01;
+  let v_resistance_rate = 0.01;
+  let w_resistance_rate = 0.01;
+  let inductance_base_rate = 0.000_01;
+  let inductance_bias_rate = 0.000_001;
+  let inductance_angle_rate = 1.0;
+
+  let u_resistance_sign = 0.0;
+  let v_resistance_sign = 0.0;
+  let w_resistance_sign = 0.0;
+  let inductance_base_sign = 0.0;
+  let inductance_bias_sign = 0.0;
+  let inductance_angle_sign = 0.0;
+
+  const rate_increase = 1.2;
+  const rate_decrease = 0.5;
+
   for (let i = 0; !is_stable && (i < max_iterations); i++) {
     const gradients = sample.map((readout) => compute_gradients(readout, {
       phase_u_resistance, 
@@ -195,47 +180,47 @@ export async function run_current_calibration(motor_controller, message_code, ma
       phase_inductance_bias,
     }));
 
-    const u_resistance_step = (
-      d3.mean(gradients, (d) => d.u_resistance_gradient) / 
-      (d3.mean(gradients, (d) => d.u_resistance_gradient_2nd_order) + current_noise)
-    );
-    const v_resistance_step = (
-      d3.mean(gradients, (d) => d.v_resistance_gradient) / 
-      (d3.mean(gradients, (d) => d.v_resistance_gradient_2nd_order) + current_noise)
-    );
-    const w_resistance_step = (
-      d3.mean(gradients, (d) => d.w_resistance_gradient) / 
-      (d3.mean(gradients, (d) => d.w_resistance_gradient_2nd_order) + current_noise)
+    function compute_rate(records, accessor, rate, previous_sign) {
+      const sign = Math.sign(d3.mean(records, accessor));
+      if (sign === previous_sign) {
+        return [rate * rate_increase, sign];
+      } else {
+        return [rate * rate_decrease, sign];
+      }
+    }
+
+    // Resilient Backpropagation
+    // -------------------------
+    // 
+    // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
+
+    [u_resistance_rate, u_resistance_sign] = compute_rate(gradients, (d) => d.u_resistance_gradient, u_resistance_rate, u_resistance_sign);
+    [v_resistance_rate, v_resistance_sign] = compute_rate(gradients, (d) => d.v_resistance_gradient, v_resistance_rate, v_resistance_sign);
+    [w_resistance_rate, w_resistance_sign] = compute_rate(gradients, (d) => d.w_resistance_gradient, w_resistance_rate, w_resistance_sign);
+    [inductance_base_rate, inductance_base_sign] = compute_rate(gradients, (d) => d.inductance_base_gradient, inductance_base_rate, inductance_base_sign);
+    [inductance_bias_rate, inductance_bias_sign] = compute_rate(gradients, (d) => d.inductance_bias_gradient, inductance_bias_rate, inductance_bias_sign);
+    [inductance_angle_rate, inductance_angle_sign] = compute_rate(gradients, (d) => d.inductance_angle_gradient, inductance_angle_rate, inductance_angle_sign);
+
+    const u_resistance_step = u_resistance_rate * u_resistance_sign;
+    const v_resistance_step = v_resistance_rate * v_resistance_sign;
+    const w_resistance_step = w_resistance_rate * w_resistance_sign;
+
+    const inductance_base_step = inductance_base_rate * inductance_base_sign;
+    const inductance_bias_step = inductance_bias_rate * inductance_bias_sign;
+    const inductance_angle_step = inductance_angle_rate * inductance_angle_sign;
+
+    phase_u_resistance -= u_resistance_step;
+    phase_v_resistance -= v_resistance_step;
+    phase_w_resistance -= w_resistance_step;
+
+    phase_inductance_base = Math.max(min_inductance, phase_inductance_base - inductance_base_step);
+    phase_inductance_bias = Math.min(
+      max_inductance_bias_fraction * phase_inductance_base,
+      Math.max(min_inductance, phase_inductance_bias - inductance_bias_step)
     );
 
-    const inductance_base_step = (
-      d3.mean(gradients, (d) => d.inductance_base_gradient) / 
-      (d3.mean(gradients, (d) => d.inductance_base_gradient_2nd_order) + current_diff_noise)
-    );
-    const inductance_bias_step = (
-      d3.mean(gradients, (d) => d.inductance_bias_gradient) / 
-      (d3.mean(gradients, (d) => d.inductance_bias_gradient_2nd_order) + current_diff_noise)
-    );
-    const inductance_angle_step = (
-      d3.mean(gradients, (d) => d.inductance_angle_gradient) / 
-      (d3.mean(gradients, (d) => d.inductance_angle_gradient_2nd_order) + current_angle_noise)
-    );
+    phase_inductance_angle = normalize_degrees(phase_inductance_angle - inductance_angle_step);
 
-    const learning_rate = start_learning_rate + (end_learning_rate - start_learning_rate) * (i / max_iterations);
-
-    const u_resistance_change = learning_rate * u_resistance_step;
-    const v_resistance_change = learning_rate * v_resistance_step;
-    const w_resistance_change = learning_rate * w_resistance_step;
-    const inductance_base_change = learning_rate * inductance_base_step;
-    const inductance_bias_change = learning_rate * inductance_bias_step;
-    const inductance_angle_change = learning_rate * inductance_angle_step;
-
-    phase_u_resistance -= u_resistance_change;
-    phase_v_resistance -= v_resistance_change;
-    phase_w_resistance -= w_resistance_change;
-    phase_inductance_base = Math.max(min_inductance, phase_inductance_base - inductance_base_change);
-    phase_inductance_bias = Math.max(min_inductance, phase_inductance_bias - inductance_bias_change);
-    phase_inductance_angle = normalize_degrees(phase_inductance_angle - inductance_angle_change);
 
     iterations.push({
       iteration: i,
@@ -260,10 +245,12 @@ export async function run_current_calibration(motor_controller, message_code, ma
 
     // Stop iterating if all changes are under the threshold.
     is_stable = (
-      (Math.abs(u_resistance_change) < stability_threshold) &&
-      (Math.abs(v_resistance_change) < stability_threshold) &&
-      (Math.abs(w_resistance_change) < stability_threshold) &&
-      (Math.abs(inductance_base_change) < stability_threshold)
+      (Math.abs(u_resistance_step) < stability_threshold) &&
+      (Math.abs(v_resistance_step) < stability_threshold) &&
+      (Math.abs(w_resistance_step) < stability_threshold) &&
+      (Math.abs(inductance_base_step) < stability_threshold) &&
+      (Math.abs(inductance_bias_step) < stability_threshold) &&
+      (Math.abs(inductance_angle_step) < stability_threshold)
     );
   }
 
