@@ -95,7 +95,7 @@ void app_init() {
 
 
 // Start an active test of the motor.
-void motor_start_test(PWMSchedule const& schedule, int16_t value, bool take_snapshot) {
+void motor_start_test(PWMSchedule const& schedule, float value, bool take_snapshot) {
   // Clear the readouts buffer of old data.
   readout_history_mark_reset();
   readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
