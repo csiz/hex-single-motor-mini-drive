@@ -1036,7 +1036,7 @@ const plot_electric_position = plot_lines({
     {y: (d) => d.current_detected ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
     {
-      y: (d) => d.emf_detected ? d.web_emf_voltage_angle : null, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle,
+      y: (d) => d.web_emf_voltage_angle, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
     },
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
