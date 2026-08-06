@@ -10,14 +10,9 @@ import {product_of_normals} from "./stats_utils.js";
 import * as d3 from "d3";
 
 const min_inductance = 0.000_001;
-const max_inductance_bias_fraction = 0.2;
 const min_inductance_noise = 0.000_000_1;
 const min_resistance_noise = 0.000_1;
 const min_degree_noise = 1.0;
-
-const saturation_current_guess = 1.0;
-const saturation_width = 0.5;
-const saturation_halfwidth = 0.5 * saturation_width;
 
 export async function run_current_calibration(motor_controller, message_code, max_pwm_value){
   if (!motor_controller.current_calibration) {
@@ -53,10 +48,7 @@ export async function run_current_calibration(motor_controller, message_code, ma
     phase_inductance_base,
     phase_inductance_angle,
     phase_inductance_bias,
-    saturation_current,
   } = current_calibration;
-
-  saturation_current = saturation_current_guess;
 
   let is_stable = false;
 
@@ -70,7 +62,6 @@ export async function run_current_calibration(motor_controller, message_code, ma
   let inductance_base_rate = 0.000_01;
   let inductance_bias_rate = 0.000_001;
   let inductance_angle_rate = 1.0;
-  let saturation_current_rate = 0.01;
 
   let u_resistance_sign = 0.0;
   let v_resistance_sign = 0.0;
@@ -78,7 +69,6 @@ export async function run_current_calibration(motor_controller, message_code, ma
   let inductance_base_sign = 0.0;
   let inductance_bias_sign = 0.0;
   let inductance_angle_sign = 0.0;
-  let saturation_current_sign = 0.0;
 
   const rate_increase = 1.2;
   const rate_decrease = 0.5;
@@ -92,6 +82,10 @@ export async function run_current_calibration(motor_controller, message_code, ma
         u_drive_voltage, v_drive_voltage, w_drive_voltage,
       } = readout;
 
+      const [current_direct, current_quadrature] = dq0_transform(u_current, v_current, w_current, 0);
+      const current_angle = radians_to_degrees(Math.atan2(current_quadrature, current_direct));
+      const current_magnitude = Math.sqrt(square(current_direct) + square(current_quadrature));
+
       const u_scaled_current_diff = u_current_diff * pwm_cycles_per_second;
       const v_scaled_current_diff = v_current_diff * pwm_cycles_per_second;
       const w_scaled_current_diff = w_current_diff * pwm_cycles_per_second;
@@ -100,28 +94,33 @@ export async function run_current_calibration(motor_controller, message_code, ma
       const v_resistive_voltage = v_current * phase_v_resistance;
       const w_resistive_voltage = w_current * phase_w_resistance;
 
-      function saturation_factor(current) {
-        const abs_current = Math.abs(current);
-        if (abs_current < (1.0 - saturation_halfwidth) * saturation_current) {
-          return 1.0;
-        } else if (abs_current > (1.0 + saturation_halfwidth) * saturation_current) {
-          return 0.0;
-        } else {
-          return 1.0 - (abs_current - (1.0 - saturation_halfwidth) * saturation_current) / (saturation_width * saturation_current);
-        }
-      }
-
-      const u_inductance = phase_inductance_base * saturation_factor(u_current);
-      const v_inductance = phase_inductance_base * saturation_factor(v_current);
-      const w_inductance = phase_inductance_base * saturation_factor(w_current);
+      const u_inductance = phase_inductance_base * 1.0;
+      const v_inductance = phase_inductance_base * 1.0;
+      const w_inductance = phase_inductance_base * 1.0;
 
       const u_inductance_voltage = u_scaled_current_diff * u_inductance;
       const v_inductance_voltage = v_scaled_current_diff * v_inductance;
       const w_inductance_voltage = w_scaled_current_diff * w_inductance;
 
-      const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage;
-      const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage;
-      const w_residual = w_resistive_voltage + w_inductance_voltage - w_drive_voltage;
+      const u_inductance_power = u_inductance_voltage * u_current;
+      const v_inductance_power = v_inductance_voltage * v_current;
+      const w_inductance_power = w_inductance_voltage * w_current;
+
+      const [inductance_voltage_direct, inductance_voltage_quadrature] = dq0_transform(u_inductance_voltage, v_inductance_voltage, w_inductance_voltage, 0);
+      const inductance_voltage_angle = radians_to_degrees(Math.atan2(inductance_voltage_quadrature, inductance_voltage_direct));
+      const inductance_voltage_magnitude = Math.sqrt(square(inductance_voltage_direct) + square(inductance_voltage_quadrature));
+
+      const [inductance_power_direct, inductance_power_quadrature] = dq0_transform(u_inductance_power, v_inductance_power, w_inductance_power, 0);
+      const inductance_power_angle = radians_to_degrees(Math.atan2(inductance_power_quadrature, inductance_power_direct));
+      const inductance_power_magnitude = Math.sqrt(square(inductance_power_direct) + square(inductance_power_quadrature));
+
+      const u_wtf = phase_inductance_bias * inductance_power_magnitude * cos_degrees(2*current_angle - phase_inductance_angle);
+      const v_wtf = phase_inductance_bias * inductance_power_magnitude * cos_degrees(2*current_angle - 120 - phase_inductance_angle);
+      const w_wtf = phase_inductance_bias * inductance_power_magnitude * cos_degrees(2*current_angle + 120 - phase_inductance_angle);
+
+      const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage + u_wtf;
+      const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage + v_wtf;
+      const w_residual = w_resistive_voltage + w_inductance_voltage - w_drive_voltage + w_wtf;
 
       // We define the loss as the sum of the squares of the unexplained residual voltages. We assume
       // during the calibration that EMF is negligible, and therefore we calibrate the resistance against
@@ -137,39 +136,22 @@ export async function run_current_calibration(motor_controller, message_code, ma
         w_residual * w_scaled_current_diff
       );
 
-      // Gradient with respect to the saturation_factor
-      function saturation_factor_gradient(current){
-        const abs_current = Math.abs(current);
-        if (abs_current < (1.0 - saturation_halfwidth) * saturation_current) {
-          return -1.0;
-        } else if (abs_current > (1.0 + saturation_halfwidth) * saturation_current) {
-          return +1.0;
-        } else {
-          return (abs_current - (1.0 - saturation_halfwidth) * saturation_current) / (saturation_halfwidth * saturation_current);
-        }
-      }
 
-      const saturation_current_gradient = (
-        u_residual * u_scaled_current_diff * phase_inductance_base * saturation_factor_gradient(u_current) +
-        v_residual * v_scaled_current_diff * phase_inductance_base * saturation_factor_gradient(v_current) +
-        w_residual * w_scaled_current_diff * phase_inductance_base * saturation_factor_gradient(w_current)
+      const inductance_bias_gradient = (
+        u_residual * inductance_power_magnitude * cos_degrees(2*current_angle - phase_inductance_angle) +
+        v_residual * inductance_power_magnitude * cos_degrees(2*current_angle - 120 - phase_inductance_angle) +
+        w_residual * inductance_power_magnitude * cos_degrees(2*current_angle + 120 - phase_inductance_angle)
       );
 
-      const inductance_bias_gradient = 0.0 * -1.0 * (
-        u_residual * u_scaled_current_diff * cos_degrees(phase_inductance_angle) +
-        v_residual * v_scaled_current_diff * cos_degrees(phase_inductance_angle - 120) +
-        w_residual * w_scaled_current_diff * cos_degrees(phase_inductance_angle + 120)
+      const inductance_angle_gradient = (
+        u_residual * phase_inductance_bias * inductance_power_magnitude * sin_degrees(2*current_angle - phase_inductance_angle) +
+        v_residual * phase_inductance_bias * inductance_power_magnitude * sin_degrees(2*current_angle - 120 - phase_inductance_angle) +
+        w_residual * phase_inductance_bias * inductance_power_magnitude * sin_degrees(2*current_angle + 120 - phase_inductance_angle)
       );
 
-      const inductance_angle_gradient = 0.0 * (
-        u_residual * u_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle) +
-        v_residual * v_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle - 120) +
-        w_residual * w_scaled_current_diff * phase_inductance_bias * sin_degrees(phase_inductance_angle + 120)
-      );
-      
       const [residual_direct, residual_quadrature] = dq0_transform(u_residual, v_residual, w_residual, 0);
       const residual_angle = radians_to_degrees(Math.atan2(residual_quadrature, residual_direct));
-      const residual_magnitude = Math.sqrt(residual_direct * residual_direct + residual_quadrature * residual_quadrature);
+      const residual_magnitude = Math.sqrt(square(residual_direct) + square(residual_quadrature));
       
       return {
         ...readout,
@@ -198,7 +180,6 @@ export async function run_current_calibration(motor_controller, message_code, ma
         inductance_base_gradient,
         inductance_bias_gradient,
         inductance_angle_gradient,
-        saturation_current_gradient,
       };
     });
 
@@ -224,7 +205,6 @@ export async function run_current_calibration(motor_controller, message_code, ma
     [inductance_base_rate, inductance_base_sign] = compute_rate(gradients, (d) => d.inductance_base_gradient, inductance_base_rate, inductance_base_sign);
     [inductance_bias_rate, inductance_bias_sign] = compute_rate(gradients, (d) => d.inductance_bias_gradient, inductance_bias_rate, inductance_bias_sign);
     [inductance_angle_rate, inductance_angle_sign] = compute_rate(gradients, (d) => d.inductance_angle_gradient, inductance_angle_rate, inductance_angle_sign);
-    [saturation_current_rate, saturation_current_sign] = compute_rate(gradients, (d) => d.saturation_current_gradient, saturation_current_rate, saturation_current_sign);
 
     const u_resistance_step = u_resistance_rate * u_resistance_sign;
     const v_resistance_step = v_resistance_rate * v_resistance_sign;
@@ -233,8 +213,6 @@ export async function run_current_calibration(motor_controller, message_code, ma
     const inductance_base_step = inductance_base_rate * inductance_base_sign;
     const inductance_bias_step = inductance_bias_rate * inductance_bias_sign;
     const inductance_angle_step = inductance_angle_rate * inductance_angle_sign;
-
-    const saturation_current_step = saturation_current_rate * saturation_current_sign;
 
     
     iterations.push({
@@ -246,7 +224,6 @@ export async function run_current_calibration(motor_controller, message_code, ma
         phase_inductance_base,
         phase_inductance_angle,
         phase_inductance_bias,
-        saturation_current,
         sqrt_loss
       },
       gradients,
@@ -259,14 +236,10 @@ export async function run_current_calibration(motor_controller, message_code, ma
     phase_w_resistance -= w_resistance_step;
 
     phase_inductance_base = Math.max(min_inductance, phase_inductance_base - inductance_base_step);
-    phase_inductance_bias = Math.min(
-      max_inductance_bias_fraction * phase_inductance_base,
-      Math.max(min_inductance, phase_inductance_bias - inductance_bias_step)
-    );
+    phase_inductance_bias = Math.max(0.000_000_001, phase_inductance_bias - inductance_bias_step);
 
     phase_inductance_angle = normalize_degrees(phase_inductance_angle - inductance_angle_step);
 
-    saturation_current = Math.max(0.1, saturation_current - saturation_current_step);
 
     // Stop iterating if all changes are under the threshold.
     is_stable = (
@@ -275,8 +248,7 @@ export async function run_current_calibration(motor_controller, message_code, ma
       (Math.abs(w_resistance_step) < stability_threshold) &&
       (Math.abs(inductance_base_step) < stability_threshold) &&
       (Math.abs(inductance_bias_step) < stability_threshold) &&
-      (Math.abs(inductance_angle_step) < stability_threshold) &&
-      (Math.abs(saturation_current_step) < stability_threshold)
+      (Math.abs(inductance_angle_step) < stability_threshold)
     );
   }
 
@@ -291,7 +263,6 @@ export async function run_current_calibration(motor_controller, message_code, ma
       phase_inductance_base,
       phase_inductance_angle,
       phase_inductance_bias,
-      saturation_current,
     }
   };
 

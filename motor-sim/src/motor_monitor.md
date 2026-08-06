@@ -1402,6 +1402,8 @@ const current_calibration_optimizing_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
+    {y: (d)=>(d.u_inductance_voltage * d.u_current), label: "U Resistive * Inductance Voltage", color: colors.u},
+
     {y: "residual_magnitude", label: "Residual Magnitude", color: colors_categories[1]},
     {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
     {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
