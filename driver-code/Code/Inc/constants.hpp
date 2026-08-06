@@ -159,15 +159,19 @@ const float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 2.
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 144MHz / 4.
 
 // Temperature ADC conversion time: 12.5 cycles + 92.5 cycles = 105 cycles = 420 ticks.
-const int32_t temperature_sample_time = (92.5 + 12.5 + 1)*4;
+const int32_t temperature_sample_time = (6.5 + 12.5 + 1)*4;
 
 // Current ADC conversion time: 12.5 cycles + 6.5 cycles = 19 cycles = 76 ticks.
 const int32_t current_sample_time = (6.5 + 12.5 + 1)*4;
 
 // The ADC will read the temperature and reference first then 2 phase currents (for each ADC).
 // Try to time the sampling  time of the phase currents symmetrically around the peak of the PWM cycle.
-const int32_t sample_lead_time = temperature_sample_time + 2 * current_sample_time;
+const int32_t sample_lead_time = temperature_sample_time + 0 * current_sample_time;
 
+// The current sense resistors are only connected to the low side MOSFETs. Therefore we can only read
+// the phase currents when the low side MOSFETs are on. So we must eat into our PWM cycle to sample
+// the currents. The PWM can't be set higher than the ARR - reserve time.
+const int32_t sample_reserve_time = 232;
 
 // Auto-reload value for the PWM timer.
 const int32_t pwm_autoreload = hex_mini_drive::PWM_BASE - 1;
@@ -185,16 +189,10 @@ const float seconds_per_pwm_cycle = 1.0 / pwm_cycles_per_second;
 // bootstrap capacitor to charge so it has enough voltage to turn high side MOSFET on.
 const int32_t minimum_bootstrap_duty = 30; // 30/144MHz = 208ns
 
-// Because of this version's electronic design (v0) the current measurement degrades if the
-// phase is set exactly to 0; we'll set it to the lowest on value. The phase voltage 
-// difference won't change at all. Therefore this setting doesn't affect our driving algorithm
-// besides consuming another unit of the PWM range, but this is less than the bootstrapping...
-const int32_t pwm_min = 2;
-
 // Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
 // bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
-const float pwm_max = hex_mini_drive::PWM_BASE - max(2 * current_sample_time, minimum_bootstrap_duty) - pwm_min;
+const float pwm_max = hex_mini_drive::PWM_BASE - max(sample_reserve_time, minimum_bootstrap_duty);
 
 // Maximum time (in pwm cycles) while a command is in effect.
 const int32_t max_timeout = 0xFFFF;

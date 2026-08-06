@@ -68,9 +68,9 @@ static inline void disable_motor_outputs(){
 
 // Set all motor outputs according to the MotorOutputs struct.
 static inline void set_motor_outputs(MotorOutputs const & outputs){
-    LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty + pwm_min);
-    LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty + pwm_min);
-    LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty + pwm_min);
+    LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty);
+    LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty);
+    LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty);
     switch(outputs.enable_flags) {
         case 0b000:
             disable_motor_outputs();
@@ -325,11 +325,12 @@ static void enable_timers(){
     // around the PWM cycle up to down transition (when the ground mosfet is on). When 
     // the ADC is triggered in injected mode both ADC modules read the current for the 
     // U and V phases first then W and reference voltage second.
-    // 
-    // The ADC sample time is 20cycles, so the total sampling period is 20/12MHz = 1.67us.
-    // 
+    //
     // Use the TIM1 channel 5 to generate an event a short time before the counter reaches
     // the auto reload value. This event triggers the ADC to read the motor phase currents.
+
+    // TODO: huh? V should be measured as rank 3 on adc2 same as U is rank 3 on adc1. Then why
+    // is V saturating at a different PWM duty cycle than U?
     const uint16_t injected_conversion_start = hex_mini_drive::PWM_BASE - sample_lead_time;
     LL_TIM_OC_SetCompareCH5(TIM1, injected_conversion_start);
 
