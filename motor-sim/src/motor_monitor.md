@@ -1403,13 +1403,22 @@ const current_calibration_optimizing_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: (d)=>(d.u_inductance_voltage * d.u_current), label: "U Resistive * Inductance Voltage", color: colors.u},
+    {y: (d)=>(d.u_inductance_voltage * d.u_current), label: "U Inductor Power", color: colors.u},
+    {y: (d)=>(d.v_inductance_voltage * d.v_current), label: "V Inductor Power", color: colors.v},
+    {y: (d)=>(d.w_inductance_voltage * d.w_current), label: "W Inductor Power", color: colors.w},
+
+    {y: "u_wtf", label: "U WTF", color: d3.color(colors.u).darker(1)},
+    {y: "v_wtf", label: "V WTF", color: d3.color(colors.v).darker(1)},
+    {y: "w_wtf", label: "W WTF", color: d3.color(colors.w).darker(1)},
+
+    {y: (d)=>Math.sqrt(d.loss2), label: "Sqrt Loss2", color: d3.color(colors_categories[0]).darker(1)},
+    {y: "magnitude_prediction", label: "Predicted Magnitude", color: colors_categories[0]},
 
     {y: "residual_magnitude", label: "Residual Magnitude", color: colors_categories[1]},
     {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
     {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
     {y: "web_inductor_angle", label: "Inductor Angle", color: colors.inductor_angle},
-    {y: (readout)=>Math.sqrt(readout.loss), label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
+    {y: (d)=>Math.sqrt(d.loss), label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
 
 
     {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
