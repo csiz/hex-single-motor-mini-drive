@@ -369,9 +369,11 @@ static inline MotorOutputs update_motor_position_calibration(
     // In the calibration mode we assume the motor starts at standstill so if we
     // drive the calibration routine quickly enough the rotor shouldn't be start spinning.
 
-    driver_state.active_pwm = driver_state.target_pwm;
+    driver_state.active_pwm = faster_abs(driver_state.target_pwm);
 
-    driver_state.active_angle = normalize_angle(static_cast<int32_t>(elapsed * angle_base / cycles_per_rotation));
+    driver_state.active_angle = normalize_angle(static_cast<int32_t>(
+        sign(driver_state.target_pwm) * elapsed * angle_base / cycles_per_rotation
+    ));
 
     return update_motor_at_angle(driver_state, readout);
 }
@@ -813,7 +815,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::POSITION_CALIBRATION,
                 .duration = hex_mini_drive::HISTORY_SIZE,
-                .target_pwm = clip_to(0.0f, pwm_max, pending_state.target_pwm),
+                .target_pwm = clip_to(-pwm_max, pwm_max, pending_state.target_pwm),
             };
     }
 
@@ -1037,7 +1039,7 @@ void adc_interrupt_handler(){
     const ThreePhase currents_diff = currents - get_currents(readout);
 
     // Calculate the voltage drop across the coil inductance.
-    const ThreePhase inductor_voltages = currents_diff * (current_calibration.phase_inductance_base * current_diff_to_voltage_units);
+    const ThreePhase inductor_voltages = currents_diff * (current_calibration.inductance * current_diff_to_voltage_units);
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const ThreePhase resistive_voltages = currents * get_phase_resistances(current_calibration) * current_to_voltage_units;
@@ -1334,11 +1336,12 @@ void adc_interrupt_handler(){
     readout.secondary_target = driver_state.secondary_target;
     readout.seek_integral = driver_state.seek_angle.error_integral;
 
-    readout.phase_u_resistance = current_calibration.phase_u_resistance;
-    readout.phase_v_resistance = current_calibration.phase_v_resistance;
-    readout.phase_w_resistance = current_calibration.phase_w_resistance;
-    readout.phase_inductance_base = current_calibration.phase_inductance_base;
-    
+    readout.u_resistance = current_calibration.u_resistance;
+    readout.v_resistance = current_calibration.v_resistance;
+    readout.w_resistance = current_calibration.w_resistance;
+    readout.inductance = current_calibration.inductance;
+    readout.inductance_power_angle = current_calibration.inductance_power_angle;
+    readout.inductance_power_factor = current_calibration.inductance_power_factor;
 
     // Calculate and set motor outputs!!
     // ---------------------------------

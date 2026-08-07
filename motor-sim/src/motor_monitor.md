@@ -521,7 +521,8 @@ const test_buttons_to_code = [
   ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
   ["Run resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
   ["Run inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
-  ["Run position calibration", MessageCode.SET_STATE_POSITION_CALIBRATION],
+  ["Run + position calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_POSITIVE],
+  ["Run - position calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_NEGATIVE],
 ];
 
 const test_buttons = Inputs.button(
@@ -1262,9 +1263,9 @@ const plot_motor_values = plot_lines({
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
     {y: "secondary_target", label: "Secondary Target", color: colors_categories[2]},
     {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
-    {y: "phase_u_resistance", label: "Phase U Resistance", color: colors.u},
-    {y: "phase_v_resistance", label: "Phase V Resistance", color: colors.v},
-    {y: "phase_w_resistance", label: "Phase W Resistance", color: colors.w},
+    {y: "u_resistance", label: "Phase U Resistance", color: colors.u},
+    {y: "v_resistance", label: "Phase V Resistance", color: colors.v},
+    {y: "w_resistance", label: "Phase W Resistance", color: colors.w},
     {y: "phase_inductance_base", label: "Phase Inductance Baseline", color: colors_categories[4]},
   ],
   curve,

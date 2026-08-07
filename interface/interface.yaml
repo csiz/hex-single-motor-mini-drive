@@ -166,8 +166,11 @@ message_codes:
   SET_STATE_INDUCTANCE_CALIBRATION:
     message_code: 0x5046
     type: TestCommand
-  SET_STATE_POSITION_CALIBRATION:
+  SET_STATE_POSITION_CALIBRATION_POSITIVE:
     message_code: 0x5047
+    type: TestCommand
+  SET_STATE_POSITION_CALIBRATION_NEGATIVE:
+    message_code: 0x5048
     type: TestCommand
 
 
@@ -428,38 +431,36 @@ definitions:
           Motor constant; a measure of how strong the motor is. It is computed as the 
           ratio between the quadrature EMF voltage and the angular speed.
 
-      phase_u_resistance:
+      u_resistance:
         type: float32
         doc: Estimated resistance of the U phase coil.
 
-      phase_v_resistance:
+      v_resistance:
         type: float32
         doc: Estimated resistance of the V phase coil.
 
-      phase_w_resistance:
+      w_resistance:
         type: float32
         doc: Estimated resistance of the W phase coil.
       
-      phase_inductance_base:
+      inductance:
         type: float32
         doc: | 
           Estimated baseline inductance of the motor coils.
 
-          The inductance is composed of a baseline inductance and a bias inductance that depends
-          on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
-          the magnetic material saturates at different levels depending eventually on the angle
-          of the rotor. The rotor being composed of magnets of alternating polarity. 
-
-      phase_inductance_angle:
+      inductance_power_angle:
         type: int32
         doc: |
-          The estimated angle of the phase inductance variation.
+          The estimated angle of the inductance power variation.
 
-          This is the magnetic north of the rotor in the frame of the stator coils.
+          Not sure what exactly is this (maybe magnetic hysterisis) but it is proportional
+          to the power transmitted to the inductor coils and is periodic, spinning twice
+          as fast as the current angle. The offset of the inductance power oscillation
+          seems to depend on the angle of the rotor.
 
-      phase_inductance_bias:
+      inductance_power_factor:
         type: float32
-        doc: The offset of the phase inductance variation.
+        doc: The magnitude of the voltage variation due to the inductance power pattern.
 
 
   BasicDriveCommand:
@@ -591,36 +592,27 @@ definitions:
       Estimate resistance and inductance values for the motor coils.
 
     struct:
-      phase_u_resistance:
+      u_resistance:
         type: float32
         doc: Estimated resistance of the U phase coil.
 
-      phase_v_resistance:
+      v_resistance:
         type: float32
         doc: Estimated resistance of the V phase coil.
 
-      phase_w_resistance:
+      w_resistance:
         type: float32
         doc: Estimated resistance of the W phase coil.
       
-      phase_inductance_base:
+      inductance:
         type: float32
-        doc: | 
-          Estimated baseline inductance of the motor coils.
+        doc: Estimated baseline inductance of the motor coils.
 
-          The inductance is composed of a baseline inductance and a bias inductance that depends
-          on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
-          the magnetic material saturates at different levels depending eventually on the angle
-          of the rotor. The rotor being composed of magnets of alternating polarity. 
-
-      phase_inductance_angle:
+      inductance_power_angle:
         type: int32
-        doc: |
-          The estimated angle of the phase inductance variation.
+        doc: The estimated angle of the phase inductance variation.
 
-          This is the magnetic north of the rotor in the frame of the stator coils.
-
-      phase_inductance_bias:
+      inductance_power_factor:
         type: float32
         doc: The offset of the phase inductance variation.
       

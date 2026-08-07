@@ -295,12 +295,12 @@ const float radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::CurrentCalibration default_current_calibration = {
-    .phase_u_resistance = 1.3,
-    .phase_v_resistance = 1.3,
-    .phase_w_resistance = 1.3,
-    .phase_inductance_base = 0.000'145f,
-    .phase_inductance_angle = 0,
-    .phase_inductance_bias = 0.0
+    .u_resistance = 1.3,
+    .v_resistance = 1.3,
+    .w_resistance = 1.3,
+    .inductance = 0.000'145f,
+    .inductance_power_angle = 0,
+    .inductance_power_factor = 0.0
 };
 
 // The default control parameters should be set to reasonable values for any motor.

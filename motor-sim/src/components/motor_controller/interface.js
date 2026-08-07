@@ -116,20 +116,20 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const web_inductor_angle = normalize_degrees(predicted_angle + radians_to_degrees(Math.atan2(web_quadrature_current, web_direct_current)));
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
   
-  const phase_inductance_base = (current_calibration?.phase_inductance_base ?? 1);
+  const inductance = (current_calibration?.inductance ?? 1);
   
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_current_diff * phase_inductance_base * pwm_cycles_per_second;
-  const v_L_voltage = v_current_diff * phase_inductance_base * pwm_cycles_per_second;
-  const w_L_voltage = w_current_diff * phase_inductance_base * pwm_cycles_per_second;
+  const u_L_voltage = u_current_diff * inductance * pwm_cycles_per_second;
+  const v_L_voltage = v_current_diff * inductance * pwm_cycles_per_second;
+  const w_L_voltage = w_current_diff * inductance * pwm_cycles_per_second;
   
-  const phase_u_resistance = (current_calibration?.phase_u_resistance ?? 1.0);
-  const phase_v_resistance = (current_calibration?.phase_v_resistance ?? 1.0);
-  const phase_w_resistance = (current_calibration?.phase_w_resistance ?? 1.0);
+  const u_resistance = (current_calibration?.u_resistance ?? 1.0);
+  const v_resistance = (current_calibration?.v_resistance ?? 1.0);
+  const w_resistance = (current_calibration?.w_resistance ?? 1.0);
 
-  const u_R_voltage = phase_u_resistance * u_current;
-  const v_R_voltage = phase_v_resistance * v_current;
-  const w_R_voltage = phase_w_resistance * w_current;
+  const u_R_voltage = u_resistance * u_current;
+  const v_R_voltage = v_resistance * v_current;
+  const w_R_voltage = w_resistance * w_current;
 
   const u_emf_voltage =  u_L_voltage + u_R_voltage - u_drive_voltage;
   const v_emf_voltage =  v_L_voltage + v_R_voltage - v_drive_voltage;
@@ -143,10 +143,10 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
 
   const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
   const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
-  const web_resistive_power = (square(u_current) * phase_u_resistance + square(v_current) * phase_v_resistance + square(w_current) * phase_w_resistance);
+  const web_resistive_power = (square(u_current) * u_resistance + square(v_current) * v_resistance + square(w_current) * w_resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
-  const steady_state_drive_current = drive_voltage_magnitude / ((phase_u_resistance + phase_v_resistance + phase_w_resistance) / 3.0);
+  const steady_state_drive_current = drive_voltage_magnitude / ((u_resistance + v_resistance + w_resistance) / 3.0);
 
 
   // Time indexing
@@ -307,12 +307,12 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
   const seek_integral = bare_full_readout.seek_integral;
   
   const motor_constant = bare_full_readout.motor_constant;
-  const phase_u_resistance = bare_full_readout.phase_u_resistance;
-  const phase_v_resistance = bare_full_readout.phase_v_resistance;
-  const phase_w_resistance = bare_full_readout.phase_w_resistance;
-  const phase_inductance_base = bare_full_readout.phase_inductance_base;
-  const phase_inductance_angle = angle_units_to_degrees(bare_full_readout.phase_inductance_angle);
-  const phase_inductance_bias = bare_full_readout.phase_inductance_bias;
+  const u_resistance = bare_full_readout.u_resistance;
+  const v_resistance = bare_full_readout.v_resistance;
+  const w_resistance = bare_full_readout.w_resistance;
+  const inductance = bare_full_readout.inductance;
+  const inductance_power_angle = angle_units_to_degrees(bare_full_readout.inductance_power_angle);
+  const inductance_power_factor = bare_full_readout.inductance_power_factor;
 
   const battery_current = total_power / readout.vcc_voltage;
 
@@ -377,11 +377,12 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
     seek_integral,
     
     motor_constant,
-    phase_u_resistance,
-    phase_v_resistance,
-    phase_w_resistance,
-    phase_inductance_base,
-    
+    u_resistance,
+    v_resistance,
+    w_resistance,
+    inductance,
+    inductance_power_angle,
+    inductance_power_factor,
   };
 
 }
@@ -404,23 +405,23 @@ function parse_unit_test_output(bare_unit_test) {
 
 function parse_current_calibration(bare_calibration) {
   return {
-    phase_u_resistance: bare_calibration.phase_u_resistance,
-    phase_v_resistance: bare_calibration.phase_v_resistance,
-    phase_w_resistance: bare_calibration.phase_w_resistance,
-    phase_inductance_base: bare_calibration.phase_inductance_base,
-    phase_inductance_angle: angle_units_to_degrees(bare_calibration.phase_inductance_angle),
-    phase_inductance_bias: bare_calibration.phase_inductance_bias,
+    u_resistance: bare_calibration.u_resistance,
+    v_resistance: bare_calibration.v_resistance,
+    w_resistance: bare_calibration.w_resistance,
+    inductance: bare_calibration.inductance,
+    inductance_power_angle: angle_units_to_degrees(bare_calibration.inductance_power_angle),
+    inductance_power_factor: bare_calibration.inductance_power_factor,
   };
 } 
 
 export function make_current_calibration(current_calibraton){
   return {
-    phase_u_resistance: current_calibraton.phase_u_resistance,
-    phase_v_resistance: current_calibraton.phase_v_resistance,
-    phase_w_resistance: current_calibraton.phase_w_resistance,
-    phase_inductance_base: current_calibraton.phase_inductance_base,
-    phase_inductance_angle: degrees_to_angle_units(current_calibraton.phase_inductance_angle),
-    phase_inductance_bias: current_calibraton.phase_inductance_bias,
+    u_resistance: current_calibraton.u_resistance,
+    v_resistance: current_calibraton.v_resistance,
+    w_resistance: current_calibraton.w_resistance,
+    inductance: current_calibraton.inductance,
+    inductance_power_angle: degrees_to_angle_units(current_calibraton.inductance_power_angle),
+    inductance_power_factor: current_calibraton.inductance_power_factor,
   };
 }
 

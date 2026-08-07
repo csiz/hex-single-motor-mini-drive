@@ -229,9 +229,9 @@ static inline ThreePhase get_currents_diff(hex_mini_drive::FullReadout const& re
 // Grab the calibration factors as a three phase tuple.
 static inline ThreePhase get_phase_resistances(hex_mini_drive::CurrentCalibration const& calibration) {
     return ThreePhase{
-        calibration.phase_u_resistance,
-        calibration.phase_v_resistance,
-        calibration.phase_w_resistance,
+        calibration.u_resistance,
+        calibration.v_resistance,
+        calibration.w_resistance,
     };
 }
 

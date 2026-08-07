@@ -42,12 +42,12 @@ export async function run_current_calibration(motor_controller, message_code, ma
   }
 
   let {
-    phase_u_resistance, 
-    phase_v_resistance, 
-    phase_w_resistance, 
-    phase_inductance_base,
-    phase_inductance_angle,
-    phase_inductance_bias,
+    u_resistance, 
+    v_resistance, 
+    w_resistance, 
+    inductance,
+    inductance_power_angle,
+    inductance_power_factor,
   } = current_calibration;
 
   let is_stable = false;
@@ -59,16 +59,16 @@ export async function run_current_calibration(motor_controller, message_code, ma
   let u_resistance_rate = 0.01;
   let v_resistance_rate = 0.01;
   let w_resistance_rate = 0.01;
-  let inductance_base_rate = 0.000_01;
-  let inductance_bias_rate = 0.000_001;
-  let inductance_angle_rate = 1.0;
+  let inductance_rate = 0.000_01;
+  let inductance_power_factor_rate = 0.000_001;
+  let inductance_power_angle_rate = 1.0;
 
   let u_resistance_sign = 0.0;
   let v_resistance_sign = 0.0;
   let w_resistance_sign = 0.0;
-  let inductance_base_sign = 0.0;
-  let inductance_bias_sign = 0.0;
-  let inductance_angle_sign = 0.0;
+  let inductance_sign = 0.0;
+  let inductance_power_factor_sign = 0.0;
+  let inductance_power_angle_sign = 0.0;
 
   const rate_increase = 1.2;
   const rate_decrease = 0.5;
@@ -90,13 +90,13 @@ export async function run_current_calibration(motor_controller, message_code, ma
       const v_scaled_current_diff = v_current_diff * pwm_cycles_per_second;
       const w_scaled_current_diff = w_current_diff * pwm_cycles_per_second;
 
-      const u_resistive_voltage = u_current * phase_u_resistance;
-      const v_resistive_voltage = v_current * phase_v_resistance;
-      const w_resistive_voltage = w_current * phase_w_resistance;
+      const u_resistive_voltage = u_current * u_resistance;
+      const v_resistive_voltage = v_current * v_resistance;
+      const w_resistive_voltage = w_current * w_resistance;
 
-      const u_inductance = phase_inductance_base * 1.0;
-      const v_inductance = phase_inductance_base * 1.0;
-      const w_inductance = phase_inductance_base * 1.0;
+      const u_inductance = inductance * 1.0;
+      const v_inductance = inductance * 1.0;
+      const w_inductance = inductance * 1.0;
 
       const u_inductance_voltage = u_scaled_current_diff * u_inductance;
       const v_inductance_voltage = v_scaled_current_diff * v_inductance;
@@ -111,12 +111,11 @@ export async function run_current_calibration(motor_controller, message_code, ma
       const inductance_voltage_magnitude = Math.sqrt(square(inductance_voltage_direct) + square(inductance_voltage_quadrature));
 
       const [inductance_power_direct, inductance_power_quadrature] = dq0_transform(u_inductance_power, v_inductance_power, w_inductance_power, 0);
-      const inductance_power_angle = radians_to_degrees(Math.atan2(inductance_power_quadrature, inductance_power_direct));
       const inductance_power_magnitude = Math.sqrt(square(inductance_power_direct) + square(inductance_power_quadrature));
 
-      const u_wtf = phase_inductance_bias * inductance_power_magnitude * cos_degrees(2*current_angle - phase_inductance_angle);
-      const v_wtf = phase_inductance_bias * inductance_power_magnitude * cos_degrees(2*current_angle - 120 - phase_inductance_angle);
-      const w_wtf = phase_inductance_bias * inductance_power_magnitude * cos_degrees(2*current_angle + 120 - phase_inductance_angle);
+      const u_wtf = inductance_power_factor * inductance_power_magnitude * cos_degrees(2*current_angle - inductance_power_angle);
+      const v_wtf = inductance_power_factor * inductance_power_magnitude * cos_degrees(2*current_angle - 120 - inductance_power_angle);
+      const w_wtf = inductance_power_factor * inductance_power_magnitude * cos_degrees(2*current_angle + 120 - inductance_power_angle);
 
       const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage + u_wtf;
       const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage + v_wtf;
@@ -130,23 +129,23 @@ export async function run_current_calibration(motor_controller, message_code, ma
       const v_resistance_gradient = v_residual * v_current;
       const w_resistance_gradient = w_residual * w_current;
 
-      const inductance_base_gradient = (
+      const inductance_gradient = (
         u_residual * u_scaled_current_diff +
         v_residual * v_scaled_current_diff +
         w_residual * w_scaled_current_diff
       );
 
 
-      const inductance_bias_gradient = (
-        u_residual * inductance_power_magnitude * cos_degrees(2*current_angle - phase_inductance_angle) +
-        v_residual * inductance_power_magnitude * cos_degrees(2*current_angle - 120 - phase_inductance_angle) +
-        w_residual * inductance_power_magnitude * cos_degrees(2*current_angle + 120 - phase_inductance_angle)
+      const inductance_power_factor_gradient = (
+        u_residual * inductance_power_magnitude * cos_degrees(2*current_angle - inductance_power_angle) +
+        v_residual * inductance_power_magnitude * cos_degrees(2*current_angle - 120 - inductance_power_angle) +
+        w_residual * inductance_power_magnitude * cos_degrees(2*current_angle + 120 - inductance_power_angle)
       );
 
-      const inductance_angle_gradient = (
-        u_residual * phase_inductance_bias * inductance_power_magnitude * sin_degrees(2*current_angle - phase_inductance_angle) +
-        v_residual * phase_inductance_bias * inductance_power_magnitude * sin_degrees(2*current_angle - 120 - phase_inductance_angle) +
-        w_residual * phase_inductance_bias * inductance_power_magnitude * sin_degrees(2*current_angle + 120 - phase_inductance_angle)
+      const inductance_power_angle_gradient = (
+        u_residual * inductance_power_factor * inductance_power_magnitude * sin_degrees(2*current_angle - inductance_power_angle) +
+        v_residual * inductance_power_factor * inductance_power_magnitude * sin_degrees(2*current_angle - 120 - inductance_power_angle) +
+        w_residual * inductance_power_factor * inductance_power_magnitude * sin_degrees(2*current_angle + 120 - inductance_power_angle)
       );
 
       const [residual_direct, residual_quadrature] = dq0_transform(u_residual, v_residual, w_residual, 0);
@@ -177,9 +176,9 @@ export async function run_current_calibration(motor_controller, message_code, ma
         u_resistance_gradient,
         v_resistance_gradient,
         w_resistance_gradient,
-        inductance_base_gradient,
-        inductance_bias_gradient,
-        inductance_angle_gradient,
+        inductance_gradient,
+        inductance_power_factor_gradient,
+        inductance_power_angle_gradient,
       };
     });
 
@@ -202,28 +201,28 @@ export async function run_current_calibration(motor_controller, message_code, ma
     [u_resistance_rate, u_resistance_sign] = compute_rate(gradients, (d) => d.u_resistance_gradient, u_resistance_rate, u_resistance_sign);
     [v_resistance_rate, v_resistance_sign] = compute_rate(gradients, (d) => d.v_resistance_gradient, v_resistance_rate, v_resistance_sign);
     [w_resistance_rate, w_resistance_sign] = compute_rate(gradients, (d) => d.w_resistance_gradient, w_resistance_rate, w_resistance_sign);
-    [inductance_base_rate, inductance_base_sign] = compute_rate(gradients, (d) => d.inductance_base_gradient, inductance_base_rate, inductance_base_sign);
-    [inductance_bias_rate, inductance_bias_sign] = compute_rate(gradients, (d) => d.inductance_bias_gradient, inductance_bias_rate, inductance_bias_sign);
-    [inductance_angle_rate, inductance_angle_sign] = compute_rate(gradients, (d) => d.inductance_angle_gradient, inductance_angle_rate, inductance_angle_sign);
+    [inductance_rate, inductance_sign] = compute_rate(gradients, (d) => d.inductance_gradient, inductance_rate, inductance_sign);
+    [inductance_power_factor_rate, inductance_power_factor_sign] = compute_rate(gradients, (d) => d.inductance_power_factor_gradient, inductance_power_factor_rate, inductance_power_factor_sign);
+    [inductance_power_angle_rate, inductance_power_angle_sign] = compute_rate(gradients, (d) => d.inductance_power_angle_gradient, inductance_power_angle_rate, inductance_power_angle_sign);
 
     const u_resistance_step = u_resistance_rate * u_resistance_sign;
     const v_resistance_step = v_resistance_rate * v_resistance_sign;
     const w_resistance_step = w_resistance_rate * w_resistance_sign;
 
-    const inductance_base_step = inductance_base_rate * inductance_base_sign;
-    const inductance_bias_step = inductance_bias_rate * inductance_bias_sign;
-    const inductance_angle_step = inductance_angle_rate * inductance_angle_sign;
+    const inductance_step = inductance_rate * inductance_sign;
+    const inductance_power_factor_step = inductance_power_factor_rate * inductance_power_factor_sign;
+    const inductance_power_angle_step = inductance_power_angle_rate * inductance_power_angle_sign;
 
     
     iterations.push({
       iteration: i,
       current_calibration: {
-        phase_u_resistance, 
-        phase_v_resistance, 
-        phase_w_resistance, 
-        phase_inductance_base,
-        phase_inductance_angle,
-        phase_inductance_bias,
+        u_resistance, 
+        v_resistance, 
+        w_resistance, 
+        inductance,
+        inductance_power_angle,
+        inductance_power_factor,
         sqrt_loss
       },
       gradients,
@@ -231,14 +230,14 @@ export async function run_current_calibration(motor_controller, message_code, ma
     
     // Update calibration values after pushing the iteration data! The iteration should then
     // contain the calibration values that were used to calculate the gradients and other values.
-    phase_u_resistance -= u_resistance_step;
-    phase_v_resistance -= v_resistance_step;
-    phase_w_resistance -= w_resistance_step;
+    u_resistance -= u_resistance_step;
+    v_resistance -= v_resistance_step;
+    w_resistance -= w_resistance_step;
 
-    phase_inductance_base = Math.max(min_inductance, phase_inductance_base - inductance_base_step);
-    phase_inductance_bias = Math.max(0.000_000_001, phase_inductance_bias - inductance_bias_step);
+    inductance = Math.max(min_inductance, inductance - inductance_step);
+    inductance_power_factor = Math.max(0.000_000_001, inductance_power_factor - inductance_power_factor_step);
 
-    phase_inductance_angle = normalize_degrees(phase_inductance_angle - inductance_angle_step);
+    inductance_power_angle = normalize_degrees(inductance_power_angle - inductance_power_angle_step);
 
 
     // Stop iterating if all changes are under the threshold.
@@ -246,9 +245,9 @@ export async function run_current_calibration(motor_controller, message_code, ma
       (Math.abs(u_resistance_step) < stability_threshold) &&
       (Math.abs(v_resistance_step) < stability_threshold) &&
       (Math.abs(w_resistance_step) < stability_threshold) &&
-      (Math.abs(inductance_base_step) < stability_threshold) &&
-      (Math.abs(inductance_bias_step) < stability_threshold) &&
-      (Math.abs(inductance_angle_step) < stability_threshold)
+      (Math.abs(inductance_step) < stability_threshold) &&
+      (Math.abs(inductance_power_factor_step) < stability_threshold) &&
+      (Math.abs(inductance_power_angle_step) < stability_threshold)
     );
   }
 
@@ -257,12 +256,12 @@ export async function run_current_calibration(motor_controller, message_code, ma
     is_stable,
     iterations,
     current_calibration: {
-      phase_u_resistance,
-      phase_v_resistance,
-      phase_w_resistance,
-      phase_inductance_base,
-      phase_inductance_angle,
-      phase_inductance_bias,
+      u_resistance,
+      v_resistance,
+      w_resistance,
+      inductance,
+      inductance_power_angle,
+      inductance_power_factor,
     }
   };
 

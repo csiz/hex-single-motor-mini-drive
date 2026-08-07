@@ -271,24 +271,22 @@ export class FullReadout extends Readout {
   // ratio between the quadrature EMF voltage and the angular speed.
   motor_constant;
   // Estimated resistance of the U phase coil.
-  phase_u_resistance;
+  u_resistance;
   // Estimated resistance of the V phase coil.
-  phase_v_resistance;
+  v_resistance;
   // Estimated resistance of the W phase coil.
-  phase_w_resistance;
+  w_resistance;
   // Estimated baseline inductance of the motor coils.
+  inductance;
+  // The estimated angle of the inductance power variation.
   // 
-  // The inductance is composed of a baseline inductance and a bias inductance that depends
-  // on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
-  // the magnetic material saturates at different levels depending eventually on the angle
-  // of the rotor. The rotor being composed of magnets of alternating polarity.
-  phase_inductance_base;
-  // The estimated angle of the phase inductance variation.
-  // 
-  // This is the magnetic north of the rotor in the frame of the stator coils.
-  phase_inductance_angle;
-  // The offset of the phase inductance variation.
-  phase_inductance_bias;
+  // Not sure what exactly is this (maybe magnetic hysterisis) but it is proportional
+  // to the power transmitted to the inductor coils and is periodic, spinning twice
+  // as fast as the current angle. The offset of the inductance power oscillation
+  // seems to depend on the angle of the rotor.
+  inductance_power_angle;
+  // The magnitude of the voltage variation due to the inductance power pattern.
+  inductance_power_factor;
   
   constructor(init) {super(init);Object.assign(this, init);}
 }
@@ -348,17 +346,17 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
   offset += 4;
-  view.setFloat32(offset, value.phase_u_resistance)
+  view.setFloat32(offset, value.u_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_v_resistance)
+  view.setFloat32(offset, value.v_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_w_resistance)
+  view.setFloat32(offset, value.w_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_inductance_base)
+  view.setFloat32(offset, value.inductance)
   offset += 4;
-  view.setInt32(offset, value.phase_inductance_angle)
+  view.setInt32(offset, value.inductance_power_angle)
   offset += 4;
-  view.setFloat32(offset, value.phase_inductance_bias)
+  view.setFloat32(offset, value.inductance_power_factor)
   offset += 4;
   return buffer;
 }
@@ -416,17 +414,17 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
   offset += 4;
-  result.phase_u_resistance = view.getFloat32(offset);
+  result.u_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_v_resistance = view.getFloat32(offset);
+  result.v_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_w_resistance = view.getFloat32(offset);
+  result.w_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_inductance_base = view.getFloat32(offset);
+  result.inductance = view.getFloat32(offset);
   offset += 4;
-  result.phase_inductance_angle = view.getInt32(offset);
+  result.inductance_power_angle = view.getInt32(offset);
   offset += 4;
-  result.phase_inductance_bias = view.getFloat32(offset);
+  result.inductance_power_factor = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -789,24 +787,17 @@ function read_SetStateSeekAngleWithSpeed(view, offset = 0) {
 // Estimate resistance and inductance values for the motor coils.
 export class CurrentCalibration {
   // Estimated resistance of the U phase coil.
-  phase_u_resistance;
+  u_resistance;
   // Estimated resistance of the V phase coil.
-  phase_v_resistance;
+  v_resistance;
   // Estimated resistance of the W phase coil.
-  phase_w_resistance;
+  w_resistance;
   // Estimated baseline inductance of the motor coils.
-  // 
-  // The inductance is composed of a baseline inductance and a bias inductance that depends
-  // on the magnetic angle. The magnets bias the coils and the iron cores inside them thus
-  // the magnetic material saturates at different levels depending eventually on the angle
-  // of the rotor. The rotor being composed of magnets of alternating polarity.
-  phase_inductance_base;
+  inductance;
   // The estimated angle of the phase inductance variation.
-  // 
-  // This is the magnetic north of the rotor in the frame of the stator coils.
-  phase_inductance_angle;
+  inductance_power_angle;
   // The offset of the phase inductance variation.
-  phase_inductance_bias;
+  inductance_power_factor;
   
   constructor(init) {Object.assign(this, init);}
 }
@@ -815,34 +806,34 @@ function write_CurrentCalibration(value) {
   const buffer = new Uint8Array(24);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.phase_u_resistance)
+  view.setFloat32(offset, value.u_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_v_resistance)
+  view.setFloat32(offset, value.v_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_w_resistance)
+  view.setFloat32(offset, value.w_resistance)
   offset += 4;
-  view.setFloat32(offset, value.phase_inductance_base)
+  view.setFloat32(offset, value.inductance)
   offset += 4;
-  view.setInt32(offset, value.phase_inductance_angle)
+  view.setInt32(offset, value.inductance_power_angle)
   offset += 4;
-  view.setFloat32(offset, value.phase_inductance_bias)
+  view.setFloat32(offset, value.inductance_power_factor)
   offset += 4;
   return buffer;
 }
 function read_CurrentCalibration(view, offset = 0) {
   let result = new CurrentCalibration();
   
-  result.phase_u_resistance = view.getFloat32(offset);
+  result.u_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_v_resistance = view.getFloat32(offset);
+  result.v_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_w_resistance = view.getFloat32(offset);
+  result.w_resistance = view.getFloat32(offset);
   offset += 4;
-  result.phase_inductance_base = view.getFloat32(offset);
+  result.inductance = view.getFloat32(offset);
   offset += 4;
-  result.phase_inductance_angle = view.getInt32(offset);
+  result.inductance_power_angle = view.getInt32(offset);
   offset += 4;
-  result.phase_inductance_bias = view.getFloat32(offset);
+  result.inductance_power_factor = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -1164,7 +1155,8 @@ const RUN_UNIT_TEST_FUNKY_ATAN_PART2 = 20547;
 const RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548;
 const SET_STATE_RESISTANCE_CALIBRATION = 20549;
 const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
-const SET_STATE_POSITION_CALIBRATION = 20551;
+const SET_STATE_POSITION_CALIBRATION_POSITIVE = 20551;
+const SET_STATE_POSITION_CALIBRATION_NEGATIVE = 20552;
 
 export const MessageCode = {
   NULL_MESSAGE_CODE,
@@ -1215,7 +1207,8 @@ export const MessageCode = {
   RUN_UNIT_TEST_FUNKY_ATAN_PART3,
   SET_STATE_RESISTANCE_CALIBRATION,
   SET_STATE_INDUCTANCE_CALIBRATION,
-  SET_STATE_POSITION_CALIBRATION,
+  SET_STATE_POSITION_CALIBRATION_POSITIVE,
+  SET_STATE_POSITION_CALIBRATION_NEGATIVE,
 };
 
 // Generic Serialize Function
@@ -1581,7 +1574,15 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_POSITION_CALIBRATION: {
+    case SET_STATE_POSITION_CALIBRATION_POSITIVE: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
+    case SET_STATE_POSITION_CALIBRATION_NEGATIVE: {
       const message_buffer = write_TestCommand(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
@@ -1862,10 +1863,16 @@ export function read_message(buffer) {
       message.message_code = SET_STATE_INDUCTANCE_CALIBRATION;
       return message;
     }
-    case SET_STATE_POSITION_CALIBRATION: {
+    case SET_STATE_POSITION_CALIBRATION_POSITIVE: {
       if (buffer.length !== 2 + 8) return null;
       let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_POSITION_CALIBRATION;
+      message.message_code = SET_STATE_POSITION_CALIBRATION_POSITIVE;
+      return message;
+    }
+    case SET_STATE_POSITION_CALIBRATION_NEGATIVE: {
+      if (buffer.length !== 2 + 8) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_POSITION_CALIBRATION_NEGATIVE;
       return message;
     }
   }
