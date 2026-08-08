@@ -118,9 +118,11 @@ export async function run_current_calibration(motor_controller, message_code, ma
       const [inductance_power_direct, inductance_power_quadrature] = dq0_transform(u_inductance_power, v_inductance_power, w_inductance_power, 0);
       const inductance_power_magnitude = Math.sqrt(square(inductance_power_direct) + square(inductance_power_quadrature));
 
-      const u_wtf = inductance_power_factor * inductance_power_magnitude * sin_degrees(2*current_angle - inductance_power_angle);
-      const v_wtf = inductance_power_factor * inductance_power_magnitude * sin_degrees(2*current_angle - 120 - inductance_power_angle);
-      const w_wtf = inductance_power_factor * inductance_power_magnitude * sin_degrees(2*current_angle + 120 - inductance_power_angle);
+      const inductance_power_emf = inductance_power_factor * inductance_power_magnitude;
+
+      const u_wtf = inductance_power_emf * sin_degrees(2*current_angle - inductance_power_angle);
+      const v_wtf = inductance_power_emf * sin_degrees(2*current_angle - 120 - inductance_power_angle);
+      const w_wtf = inductance_power_emf * sin_degrees(2*current_angle + 120 - inductance_power_angle);
 
       const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage + u_wtf;
       const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage + v_wtf;
@@ -159,6 +161,11 @@ export async function run_current_calibration(motor_controller, message_code, ma
       
       const magnitude_prediction = inductance_power_factor * inductance_power_magnitude * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle));
 
+      const u_wtf2 = inductance_power_emf * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle)) * cos_degrees(3*current_angle - inductance_power_angle);
+      // ! Yeah, the signs of the 120 degree offsets are reversed here, no idea why, but this is how it fits perfectly.
+      const v_wtf2 = inductance_power_emf * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle)) * cos_degrees(3*current_angle + 120 - inductance_power_angle);
+      const w_wtf2 = inductance_power_emf * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle)) * cos_degrees(3*current_angle - 120 - inductance_power_angle);
+
       const residual2 = magnitude_prediction - residual_magnitude;
 
       const loss2 = square(magnitude_prediction - residual_magnitude);
@@ -180,6 +187,10 @@ export async function run_current_calibration(motor_controller, message_code, ma
         u_wtf,
         v_wtf,
         w_wtf,
+
+        u_wtf2,
+        v_wtf2,
+        w_wtf2,
         
         u_residual,
         v_residual,

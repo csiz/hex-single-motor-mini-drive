@@ -1411,6 +1411,11 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: "v_wtf", label: "V WTF", color: d3.color(colors.v).darker(1)},
     {y: "w_wtf", label: "W WTF", color: d3.color(colors.w).darker(1)},
 
+    {y: "u_wtf2", label: "U WTF2", color: d3.color(colors.u).brighter(1)},
+    {y: "v_wtf2", label: "V WTF2", color: d3.color(colors.v).brighter(1)},
+    {y: "w_wtf2", label: "W WTF2", color: d3.color(colors.w).brighter(1)},
+
+
     {y: (d)=>Math.sqrt(d.loss2), label: "Sqrt Loss2", color: d3.color(colors_categories[0]).darker(1)},
     {y: "magnitude_prediction", label: "Predicted Magnitude", color: colors_categories[0]},
 
