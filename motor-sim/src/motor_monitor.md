@@ -106,6 +106,7 @@ Current Calibration Procedures
     <p>Electrical phase properties at displayed iteration:</p>
     <pre>${current_calibration_iteration_table}</pre>
     <div>${current_calibration_optimizing_plot}</div>
+    <div>${current_calibration_angles_plot}</div>
     <div>${current_calibration_optimizing_gradients_plot}</div>
   </div>
   <div>
@@ -1420,11 +1421,7 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: "magnitude_prediction", label: "Predicted Magnitude", color: colors_categories[0]},
 
     {y: "residual_magnitude", label: "Residual Magnitude", color: colors_categories[1]},
-    {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
-    {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
-    {y: "web_inductor_angle", label: "Inductor Angle", color: colors.inductor_angle},
     {y: (d)=>Math.sqrt(d.loss), label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
-
 
     {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
     {y: "u_inductance_voltage", label: "U Inductance Drop", color: d3.color(colors.u).darker(1)},
@@ -1440,6 +1437,27 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: "w_inductance_voltage", label: "W Inductance Drop", color: d3.color(colors.w).darker(1)},
     {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).brighter(1)},
     {y: "w_residual", label: "W Residual", color: d3.color(colors.w).darker(2)},
+  ],
+  curve,
+});
+
+
+const current_calibration_angles_plot = plot_lines({
+  data: current_calibration_gradients,
+  subtitle: "Current Calibration - Optimizing angles",
+  description: "Current calibration optimization results for each phase.",
+  width: 1200, height: 300,
+  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Angle (degrees)",
+  channels: [
+    {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
+    {y: (d)=>normalize_degrees(d.inductance_voltage_angle - d.current_angle), label: "Inductor-Current Angle Diff", color: colors_categories[3]},
+    {y: "inductance_power_instant_angle", label: "Inductor Power Instant Angle", color: colors_categories[4]},
+    {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
+    {y: (d)=>normalize_degrees(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
+    {y: "inductance_voltage_angle", label: "Inductor Angle", color: colors.inductor_angle},
   ],
   curve,
 });
@@ -1466,6 +1484,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
 autosave_inputs({
   current_calibration_optimizing_plot,
   current_calibration_optimizing_gradients_plot,
+  current_calibration_angles_plot,
 });
 ```
 
