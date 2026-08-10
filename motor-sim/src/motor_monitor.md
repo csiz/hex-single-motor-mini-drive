@@ -1416,6 +1416,13 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: "v_wtf2", label: "V WTF2", color: d3.color(colors.v).brighter(1)},
     {y: "w_wtf2", label: "W WTF2", color: d3.color(colors.w).brighter(1)},
 
+    {y: (d) => -(d.u_residual - d.u_wtf), label: "U Residual - WTF", color: d3.color(colors.u).darker(2)},
+    {y: (d) => -(d.v_residual - d.v_wtf), label: "V Residual - WTF", color: d3.color(colors.v).darker(2)},
+    {y: (d) => -(d.w_residual - d.w_wtf), label: "W Residual - WTF", color: d3.color(colors.w).darker(2)},
+
+    {y: (d) => d.u_residual - d.u_wtf + d.u_wtf2, label: "U Residual - WTF + WTF2", color: d3.color(colors.u).darker(3)},
+    {y: (d) => d.v_residual - d.v_wtf + d.v_wtf2, label: "V Residual - WTF + WTF2", color: d3.color(colors.v).darker(3)},
+    {y: (d) => d.w_residual - d.w_wtf + d.w_wtf2, label: "W Residual - WTF + WTF2", color: d3.color(colors.w).darker(3)},
 
     {y: (d)=>Math.sqrt(d.loss2), label: "Sqrt Loss2", color: d3.color(colors_categories[0]).darker(1)},
     {y: "magnitude_prediction", label: "Predicted Magnitude", color: colors_categories[0]},
@@ -1424,19 +1431,20 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: (d)=>Math.sqrt(d.loss), label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
 
     {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
-    {y: "u_inductance_voltage", label: "U Inductance Drop", color: d3.color(colors.u).darker(1)},
-    {y: "u_drive_voltage", label: "U Drive Voltage", color: d3.color(colors.u).brighter(1)},
-    {y: "u_residual", label: "U Residual", color: d3.color(colors.u).darker(2)},
-
     {y: "v_resistive_voltage", label: "V Resistance Drop", color: colors.v},
-    {y: "v_inductance_voltage", label: "V Inductance Drop", color: d3.color(colors.v).darker(1)},
-    {y: "v_drive_voltage", label: "V Drive Voltage", color: d3.color(colors.v).brighter(1)},
-    {y: "v_residual", label: "V Residual", color: d3.color(colors.v).darker(2)},
-
     {y: "w_resistive_voltage", label: "W Resistance Drop", color: colors.w},
+
+    {y: "u_inductance_voltage", label: "U Inductance Drop", color: d3.color(colors.u).darker(1)},
+    {y: "v_inductance_voltage", label: "V Inductance Drop", color: d3.color(colors.v).darker(1)},
     {y: "w_inductance_voltage", label: "W Inductance Drop", color: d3.color(colors.w).darker(1)},
-    {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).brighter(1)},
+
+    {y: "u_residual", label: "U Residual", color: d3.color(colors.u).darker(2)},
+    {y: "v_residual", label: "V Residual", color: d3.color(colors.v).darker(2)},
     {y: "w_residual", label: "W Residual", color: d3.color(colors.w).darker(2)},
+
+    {y: "u_drive_voltage", label: "U Drive Voltage", color: d3.color(colors.u).brighter(1)},
+    {y: "v_drive_voltage", label: "V Drive Voltage", color: d3.color(colors.v).brighter(1)},
+    {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).brighter(1)},
   ],
   curve,
 });
@@ -1477,6 +1485,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
     {y: "w_resistance_gradient", label: "W Resistance Gradient", color: colors.w},
     {y: (d)=>(d.inductance_base_gradient / pwm_cycles_per_second), label: "Inductance Base Gradient", color: colors_categories[1]},
     {y: "saturation_current_gradient", label: "Saturation Current Gradient", color: colors_categories[2]},
+    {y: "predicted_angle_gradient", label: "Predicted Angle Gradient", color: colors_categories[3]},
   ],
   curve,
 });

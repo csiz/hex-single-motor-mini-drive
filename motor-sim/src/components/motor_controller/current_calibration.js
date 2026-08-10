@@ -162,16 +162,19 @@ export async function run_current_calibration(motor_controller, message_code, ma
       
       const magnitude_prediction = inductance_power_factor * inductance_power_magnitude * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle));
 
-      const u_wtf2 = inductance_power_emf * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle)) * cos_degrees(3*current_angle - inductance_power_angle);
-      // ! Yeah, the signs of the 120 degree offsets are reversed here, no idea why, but this is how it fits perfectly.
-      const v_wtf2 = inductance_power_emf * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle)) * cos_degrees(3*current_angle + 120 - inductance_power_angle);
-      const w_wtf2 = inductance_power_emf * (0.5 + 0.5 * cos_degrees(current_angle - predicted_angle)) * cos_degrees(3*current_angle - 120 - inductance_power_angle);
-
       const residual2 = magnitude_prediction - residual_magnitude;
 
       const loss2 = square(magnitude_prediction - residual_magnitude);
 
       const predicted_angle_gradient = residual2 * inductance_power_factor * inductance_power_magnitude * 0.5 * sin_degrees(current_angle - predicted_angle);
+
+
+      const magnet_distortion = 20;
+      const magnet_distortion_factor = 0.5;
+
+      const u_wtf2 = inductance_power_emf * cos_degrees(2*current_angle - inductance_power_angle + magnet_distortion * sin_degrees(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * cos_degrees(current_angle - predicted_angle));
+      const v_wtf2 = inductance_power_emf * cos_degrees(2*current_angle - 120 - inductance_power_angle + magnet_distortion * sin_degrees(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor +magnet_distortion_factor * cos_degrees(current_angle - predicted_angle));
+      const w_wtf2 = inductance_power_emf * cos_degrees(2*current_angle + 120 - inductance_power_angle + magnet_distortion * sin_degrees(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * cos_degrees(current_angle - predicted_angle));
 
       return {
         ...readout,
