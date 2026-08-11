@@ -352,15 +352,15 @@ struct FullReadout : Readout {
   float w_resistance;
   // Estimated baseline inductance of the motor coils.
   float inductance;
-  // The estimated angle of the inductance power variation.
+  // The estimated angle of the magnetization pattern.
   // 
   // Not sure what exactly is this (maybe magnetic hysterisis) but it is proportional
   // to the power transmitted to the inductor coils and is periodic, spinning twice
-  // as fast as the current angle. The offset of the inductance power oscillation
+  // as fast as the current angle. The offset of the magnetization pattern
   // seems to depend on the angle of the rotor.
-  int32_t inductance_power_angle;
-  // The magnitude of the voltage variation due to the inductance power pattern.
-  float inductance_power_factor;
+  int32_t magnetization_angle;
+  // The magnitude of the voltage variation due to the magnetization pattern.
+  float magnetization_factor;
 };
 
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
@@ -423,9 +423,9 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
-  write_int32(buffer + offset, value.inductance_power_angle);;
+  write_int32(buffer + offset, value.magnetization_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_power_factor);;
+  write_float32(buffer + offset, value.magnetization_factor);;
   offset += 4;
 }
 static inline FullReadout read_FullReadout(uint8_t const* buffer) {
@@ -490,9 +490,9 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_power_angle = read_int32(buffer + offset);
+  result.magnetization_angle = read_int32(buffer + offset);
   offset += 4;
-  result.inductance_power_factor = read_float32(buffer + offset);
+  result.magnetization_factor = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -526,6 +526,10 @@ struct TestCommand {
   float pwm_value;
   // Whether to take a snapshot while running the test.
   uint32_t take_snapshot;
+  // Speed target for the test.
+  float test_speed;
+  // Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
+  uint32_t test_duration;
 };
 
 static inline void write_TestCommand(uint8_t * buffer, TestCommand const& value) {
@@ -533,6 +537,10 @@ static inline void write_TestCommand(uint8_t * buffer, TestCommand const& value)
   write_float32(buffer + offset, value.pwm_value);;
   offset += 4;
   write_uint32(buffer + offset, value.take_snapshot);;
+  offset += 4;
+  write_float32(buffer + offset, value.test_speed);;
+  offset += 4;
+  write_uint32(buffer + offset, value.test_duration);;
   offset += 4;
 }
 static inline TestCommand read_TestCommand(uint8_t const* buffer) {
@@ -543,6 +551,10 @@ static inline TestCommand read_TestCommand(uint8_t const* buffer) {
   result.pwm_value = read_float32(buffer + offset);
   offset += 4;
   result.take_snapshot = read_uint32(buffer + offset);
+  offset += 4;
+  result.test_speed = read_float32(buffer + offset);
+  offset += 4;
+  result.test_duration = read_uint32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -830,9 +842,9 @@ struct CurrentCalibration {
   // Estimated baseline inductance of the motor coils.
   float inductance;
   // The estimated angle of the phase inductance variation.
-  int32_t inductance_power_angle;
-  // The offset of the phase inductance variation.
-  float inductance_power_factor;
+  int32_t magnetization_angle;
+  // The factor of the voltage variation due to the magnetization pattern.
+  float magnetization_factor;
 };
 
 static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration const& value) {
@@ -845,9 +857,9 @@ static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration
   offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
-  write_int32(buffer + offset, value.inductance_power_angle);;
+  write_int32(buffer + offset, value.magnetization_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_power_factor);;
+  write_float32(buffer + offset, value.magnetization_factor);;
   offset += 4;
 }
 static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) {
@@ -863,9 +875,9 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_power_angle = read_int32(buffer + offset);
+  result.magnetization_angle = read_int32(buffer + offset);
   offset += 4;
-  result.inductance_power_factor = read_float32(buffer + offset);
+  result.magnetization_factor = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1182,8 +1194,8 @@ enum MessageCode : uint16_t {
   RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548,
   SET_STATE_RESISTANCE_CALIBRATION = 20549,
   SET_STATE_INDUCTANCE_CALIBRATION = 20550,
-  SET_STATE_POSITION_CALIBRATION_POSITIVE = 20551,
-  SET_STATE_POSITION_CALIBRATION_NEGATIVE = 20552,
+  SET_STATE_POSITION_CALIBRATION_CHIRP = 20551,
+  SET_STATE_POSITION_CALIBRATION_EMF = 20552,
 };
 
 // Generic Message Structure
@@ -1222,17 +1234,17 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::FULL_READOUT: return 180;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
-    case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 10;
+    case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 18;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
-    case MessageCode::SET_STATE_TEST_GROUND_SHORT: return 10;
-    case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: return 10;
-    case MessageCode::SET_STATE_TEST_U_DIRECTIONS: return 10;
-    case MessageCode::SET_STATE_TEST_U_INCREASING: return 10;
-    case MessageCode::SET_STATE_TEST_U_DECREASING: return 10;
-    case MessageCode::SET_STATE_TEST_V_INCREASING: return 10;
-    case MessageCode::SET_STATE_TEST_V_DECREASING: return 10;
-    case MessageCode::SET_STATE_TEST_W_INCREASING: return 10;
-    case MessageCode::SET_STATE_TEST_W_DECREASING: return 10;
+    case MessageCode::SET_STATE_TEST_GROUND_SHORT: return 18;
+    case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: return 18;
+    case MessageCode::SET_STATE_TEST_U_DIRECTIONS: return 18;
+    case MessageCode::SET_STATE_TEST_U_INCREASING: return 18;
+    case MessageCode::SET_STATE_TEST_U_DECREASING: return 18;
+    case MessageCode::SET_STATE_TEST_V_INCREASING: return 18;
+    case MessageCode::SET_STATE_TEST_V_DECREASING: return 18;
+    case MessageCode::SET_STATE_TEST_W_INCREASING: return 18;
+    case MessageCode::SET_STATE_TEST_W_DECREASING: return 18;
     case MessageCode::SET_STATE_HOLD_U_POSITIVE: return 10;
     case MessageCode::SET_STATE_HOLD_V_POSITIVE: return 10;
     case MessageCode::SET_STATE_HOLD_W_POSITIVE: return 10;
@@ -1261,10 +1273,10 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN: return 2;
     case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART2: return 2;
     case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART3: return 2;
-    case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 10;
-    case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 10;
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_POSITIVE: return 10;
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_NEGATIVE: return 10;
+    case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 18;
+    case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 18;
+    case MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP: return 18;
+    case MessageCode::SET_STATE_POSITION_CALIBRATION_EMF: return 18;
   }
   return 0; // Unknown message code
 }
@@ -1311,9 +1323,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_FREEWHEEL: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_FREEWHEEL));
@@ -1321,57 +1333,57 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_TEST_GROUND_SHORT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_GROUND_SHORT));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_POSITIVE_SHORT));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_U_DIRECTIONS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_DIRECTIONS));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_U_INCREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_INCREASING));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_U_DECREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_DECREASING));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_V_INCREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_V_INCREASING));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_V_DECREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_V_DECREASING));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_W_INCREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_W_INCREASING));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_TEST_W_DECREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_W_DECREASING));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_HOLD_U_POSITIVE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_U_POSITIVE));
@@ -1527,27 +1539,27 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_RESISTANCE_CALIBRATION));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_INDUCTANCE_CALIBRATION));
-      if (max_size < 2 + 8) return 0;
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_POSITIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_POSITION_CALIBRATION_POSITIVE));
-      if (max_size < 2 + 8) return 0;
+    case MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP));
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_NEGATIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_POSITION_CALIBRATION_NEGATIVE));
-      if (max_size < 2 + 8) return 0;
+    case MessageCode::SET_STATE_POSITION_CALIBRATION_EMF: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_POSITION_CALIBRATION_EMF));
+      if (max_size < 2 + 16) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 10;
+      return 18;
     }
   }
   return 0;
@@ -1597,7 +1609,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
@@ -1607,47 +1619,47 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_TEST_GROUND_SHORT: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_U_DIRECTIONS: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_U_INCREASING: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_U_DECREASING: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_V_INCREASING: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_V_DECREASING: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_W_INCREASING: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_W_DECREASING: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
@@ -1792,22 +1804,22 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: {
-      if (size != 2 + 8) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_POSITIVE: {
-      if (size != 2 + 8) return false;
+    case MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP: {
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_NEGATIVE: {
-      if (size != 2 + 8) return false;
+    case MessageCode::SET_STATE_POSITION_CALIBRATION_EMF: {
+      if (size != 2 + 16) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }

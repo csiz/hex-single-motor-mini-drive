@@ -355,28 +355,55 @@ static inline MotorOutputs update_motor_inductance_calibration(
     return update_motor_at_angle(driver_state, readout);
 }
 
-static inline MotorOutputs update_motor_position_calibration(
+// The chirp test drives the inductor at pwm_target around the coils at the requested speed
+// and number of rotations. Because the chirp is fast and the motor is presumed stationary,
+// we can measure the residual voltage terms after accounting for resistance and inductance
+// to isolate the response of the iron core of the coils. We can use this to determine the
+// rotor position.
+static inline MotorOutputs update_motor_position_calibration_chirp(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    static const int32_t cycles_per_rotation = hex_mini_drive::HISTORY_SIZE / 12;
+    if (driver_state.test_parameters.test_duration > 0) {
+        driver_state.test_parameters.test_duration -= 1;
 
-    // Number of PWM cycles elapsed since the calibration started.
-    const int elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
-
-    // For the position calibration we will drive the motor quickly around a few
-    // full rotations to measure the inductance bias and estimate the rotor position.
-    // In the calibration mode we assume the motor starts at standstill so if we
-    // drive the calibration routine quickly enough the rotor shouldn't be start spinning.
-
-    driver_state.active_pwm = faster_abs(driver_state.target_pwm);
-
-    driver_state.active_angle = normalize_angle(static_cast<int32_t>(
-        sign(driver_state.target_pwm) * elapsed * angle_base / cycles_per_rotation
-    ));
-
-    return update_motor_at_angle(driver_state, readout);
+        // Drive at the requested PWM until the test is done.
+        driver_state.active_angle = normalize_angle(static_cast<int32_t>(driver_state.active_angle + driver_state.test_parameters.test_speed));
+        driver_state.active_pwm = faster_abs(driver_state.target_pwm);
+        return update_motor_at_angle(driver_state, readout);
+    } else {
+        return breaking_motor_outputs;
+    }
 }
+
+// For the EMF test we spin the motor using start_speed and start_rotations, then we
+// short the motor and start recording the EMF voltage.
+static inline MotorOutputs update_motor_position_calibration_emf(
+    DriverState & driver_state,
+    hex_mini_drive::FullReadout const& readout
+){
+
+    if (driver_state.duration > hex_mini_drive::HISTORY_SIZE) {
+        // Keep marking history for reset until we have finished spinning up the motor.
+        readout_history_reset_flag = true;
+
+        const int32_t elapsed = hex_mini_drive::HISTORY_SIZE + driver_state.test_parameters.test_duration - driver_state.duration;
+
+        // Linearly ramp up the speed from 0 to test_speed over the duration of test_duration.
+        const float speed = static_cast<float>(driver_state.test_parameters.test_speed) * static_cast<float>(elapsed) / static_cast<float>(driver_state.test_parameters.test_duration);
+
+
+        // Spin up phase, spin the motor at start_speed and start_rotations.
+        driver_state.active_angle = normalize_angle(static_cast<int32_t>(driver_state.active_angle + speed));
+        driver_state.active_pwm = faster_abs(driver_state.target_pwm);
+        return update_motor_at_angle(driver_state, readout);
+
+    } else {
+        // Record the shorted outputs.
+        return breaking_motor_outputs;
+    }
+}
+    
 
 
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
@@ -811,11 +838,27 @@ static inline DriverState setup_driver_state(
                 .target_pwm = clip_to(0.0f, pwm_max, pending_state.target_pwm),
             };
 
-        case DriverMode::POSITION_CALIBRATION:
+        case DriverMode::POSITION_CALIBRATION_CHIRP:
             return DriverState{
-                .mode = DriverMode::POSITION_CALIBRATION,
+                .mode = DriverMode::POSITION_CALIBRATION_CHIRP,
                 .duration = hex_mini_drive::HISTORY_SIZE,
                 .target_pwm = clip_to(-pwm_max, pwm_max, pending_state.target_pwm),
+                .test_parameters = TestParameters{
+                    .test_speed = clip_to(-max_angular_speed, max_angular_speed, pending_state.test_parameters.test_speed),
+                    .test_duration = pending_state.test_parameters.test_duration,
+
+                },
+            };
+
+        case DriverMode::POSITION_CALIBRATION_EMF:
+            return DriverState{
+                .mode = DriverMode::POSITION_CALIBRATION_EMF,
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .target_pwm = clip_to(-pwm_max, pwm_max, pending_state.target_pwm),
+                .test_parameters = TestParameters{
+                    .test_speed = clip_to(-max_angular_speed, max_angular_speed, pending_state.test_parameters.test_speed),
+                    .test_duration = pending_state.test_parameters.test_duration,
+                },
             };
     }
 
@@ -937,11 +980,18 @@ static inline void update_motor_control(
             driver_state.motor_outputs = update_motor_inductance_calibration(driver_state, readout);
             return;
 
-        case DriverMode::POSITION_CALIBRATION:
+        case DriverMode::POSITION_CALIBRATION_CHIRP:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
             // Update the motor outputs for the position calibration.
-            driver_state.motor_outputs = update_motor_position_calibration(driver_state, readout);
+            driver_state.motor_outputs = update_motor_position_calibration_chirp(driver_state, readout);
+            return;
+
+        case DriverMode::POSITION_CALIBRATION_EMF:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            // Update the motor outputs for the position calibration.
+            driver_state.motor_outputs = update_motor_position_calibration_emf(driver_state, readout);
             return;
     }
 
@@ -1340,8 +1390,8 @@ void adc_interrupt_handler(){
     readout.v_resistance = current_calibration.v_resistance;
     readout.w_resistance = current_calibration.w_resistance;
     readout.inductance = current_calibration.inductance;
-    readout.inductance_power_angle = current_calibration.inductance_power_angle;
-    readout.inductance_power_factor = current_calibration.inductance_power_factor;
+    readout.magnetization_angle = current_calibration.magnetization_angle;
+    readout.magnetization_factor = current_calibration.magnetization_factor;
 
     // Calculate and set motor outputs!!
     // ---------------------------------
@@ -1376,7 +1426,8 @@ void adc_interrupt_handler(){
 
     // Write the latest readout to the history buffer for the main loop to read.
     readout_history_push(readout);
-    
+    if (readout_history_reset_flag) readout_history_reset();
+
     // Setup the new state if we were commanded by the main loop so we are prepared for the next cycle.
     // 
     // There are a few checks when copying to state, so to keep things glitchlessly fast we update it
@@ -1384,8 +1435,6 @@ void adc_interrupt_handler(){
     // 
     // Note, the new pending state may clear the readout history so this must be done after the history push.
     if (new_pending_state) {
-        if (readout_history_reset_flag) readout_history_reset();
-
         driver_state = setup_driver_state(driver_state, pending_state, readout);
         new_pending_state = false;
     }

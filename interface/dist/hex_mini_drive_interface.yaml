@@ -166,10 +166,10 @@ message_codes:
   SET_STATE_INDUCTANCE_CALIBRATION:
     message_code: 0x5046
     type: TestCommand
-  SET_STATE_POSITION_CALIBRATION_POSITIVE:
+  SET_STATE_POSITION_CALIBRATION_CHIRP:
     message_code: 0x5047
     type: TestCommand
-  SET_STATE_POSITION_CALIBRATION_NEGATIVE:
+  SET_STATE_POSITION_CALIBRATION_EMF:
     message_code: 0x5048
     type: TestCommand
 
@@ -448,19 +448,19 @@ definitions:
         doc: | 
           Estimated baseline inductance of the motor coils.
 
-      inductance_power_angle:
+      magnetization_angle:
         type: int32
         doc: |
-          The estimated angle of the inductance power variation.
+          The estimated angle of the magnetization pattern.
 
           Not sure what exactly is this (maybe magnetic hysterisis) but it is proportional
           to the power transmitted to the inductor coils and is periodic, spinning twice
-          as fast as the current angle. The offset of the inductance power oscillation
+          as fast as the current angle. The offset of the magnetization pattern
           seems to depend on the angle of the rotor.
 
-      inductance_power_factor:
+      magnetization_factor:
         type: float32
-        doc: The magnitude of the voltage variation due to the inductance power pattern.
+        doc: The magnitude of the voltage variation due to the magnetization pattern.
 
 
   BasicDriveCommand:
@@ -480,6 +480,13 @@ definitions:
       take_snapshot:
         type: uint32
         doc: Whether to take a snapshot while running the test.
+      test_speed:
+        type: float32
+        doc: Speed target for the test.
+      test_duration:
+        type: uint32
+        doc: Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
+
 
   HoldCommand:
     struct:
@@ -608,13 +615,14 @@ definitions:
         type: float32
         doc: Estimated baseline inductance of the motor coils.
 
-      inductance_power_angle:
+      magnetization_angle:
         type: int32
         doc: The estimated angle of the phase inductance variation.
 
-      inductance_power_factor:
+      magnetization_factor:
         type: float32
-        doc: The offset of the phase inductance variation.
+        doc: The factor of the voltage variation due to the magnetization pattern.
+      
       
   ControlParameters:
     doc: |

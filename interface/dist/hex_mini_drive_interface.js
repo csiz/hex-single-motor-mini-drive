@@ -278,15 +278,15 @@ export class FullReadout extends Readout {
   w_resistance;
   // Estimated baseline inductance of the motor coils.
   inductance;
-  // The estimated angle of the inductance power variation.
+  // The estimated angle of the magnetization pattern.
   // 
   // Not sure what exactly is this (maybe magnetic hysterisis) but it is proportional
   // to the power transmitted to the inductor coils and is periodic, spinning twice
-  // as fast as the current angle. The offset of the inductance power oscillation
+  // as fast as the current angle. The offset of the magnetization pattern
   // seems to depend on the angle of the rotor.
-  inductance_power_angle;
-  // The magnitude of the voltage variation due to the inductance power pattern.
-  inductance_power_factor;
+  magnetization_angle;
+  // The magnitude of the voltage variation due to the magnetization pattern.
+  magnetization_factor;
   
   constructor(init) {super(init);Object.assign(this, init);}
 }
@@ -354,9 +354,9 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.inductance)
   offset += 4;
-  view.setInt32(offset, value.inductance_power_angle)
+  view.setInt32(offset, value.magnetization_angle)
   offset += 4;
-  view.setFloat32(offset, value.inductance_power_factor)
+  view.setFloat32(offset, value.magnetization_factor)
   offset += 4;
   return buffer;
 }
@@ -422,9 +422,9 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.inductance = view.getFloat32(offset);
   offset += 4;
-  result.inductance_power_angle = view.getInt32(offset);
+  result.magnetization_angle = view.getInt32(offset);
   offset += 4;
-  result.inductance_power_factor = view.getFloat32(offset);
+  result.magnetization_factor = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -461,17 +461,25 @@ export class TestCommand {
   pwm_value;
   // Whether to take a snapshot while running the test.
   take_snapshot;
+  // Speed target for the test.
+  test_speed;
+  // Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
+  test_duration;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_TestCommand(value) {
-  const buffer = new Uint8Array(8);
+  const buffer = new Uint8Array(16);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.pwm_value)
   offset += 4;
   view.setUint32(offset, value.take_snapshot)
+  offset += 4;
+  view.setFloat32(offset, value.test_speed)
+  offset += 4;
+  view.setUint32(offset, value.test_duration)
   offset += 4;
   return buffer;
 }
@@ -481,6 +489,10 @@ function read_TestCommand(view, offset = 0) {
   result.pwm_value = view.getFloat32(offset);
   offset += 4;
   result.take_snapshot = view.getUint32(offset);
+  offset += 4;
+  result.test_speed = view.getFloat32(offset);
+  offset += 4;
+  result.test_duration = view.getUint32(offset);
   offset += 4;
   return result;
 }
@@ -795,9 +807,9 @@ export class CurrentCalibration {
   // Estimated baseline inductance of the motor coils.
   inductance;
   // The estimated angle of the phase inductance variation.
-  inductance_power_angle;
-  // The offset of the phase inductance variation.
-  inductance_power_factor;
+  magnetization_angle;
+  // The factor of the voltage variation due to the magnetization pattern.
+  magnetization_factor;
   
   constructor(init) {Object.assign(this, init);}
 }
@@ -814,9 +826,9 @@ function write_CurrentCalibration(value) {
   offset += 4;
   view.setFloat32(offset, value.inductance)
   offset += 4;
-  view.setInt32(offset, value.inductance_power_angle)
+  view.setInt32(offset, value.magnetization_angle)
   offset += 4;
-  view.setFloat32(offset, value.inductance_power_factor)
+  view.setFloat32(offset, value.magnetization_factor)
   offset += 4;
   return buffer;
 }
@@ -831,9 +843,9 @@ function read_CurrentCalibration(view, offset = 0) {
   offset += 4;
   result.inductance = view.getFloat32(offset);
   offset += 4;
-  result.inductance_power_angle = view.getInt32(offset);
+  result.magnetization_angle = view.getInt32(offset);
   offset += 4;
-  result.inductance_power_factor = view.getFloat32(offset);
+  result.magnetization_factor = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -1155,8 +1167,8 @@ const RUN_UNIT_TEST_FUNKY_ATAN_PART2 = 20547;
 const RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548;
 const SET_STATE_RESISTANCE_CALIBRATION = 20549;
 const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
-const SET_STATE_POSITION_CALIBRATION_POSITIVE = 20551;
-const SET_STATE_POSITION_CALIBRATION_NEGATIVE = 20552;
+const SET_STATE_POSITION_CALIBRATION_CHIRP = 20551;
+const SET_STATE_POSITION_CALIBRATION_EMF = 20552;
 
 export const MessageCode = {
   NULL_MESSAGE_CODE,
@@ -1207,8 +1219,8 @@ export const MessageCode = {
   RUN_UNIT_TEST_FUNKY_ATAN_PART3,
   SET_STATE_RESISTANCE_CALIBRATION,
   SET_STATE_INDUCTANCE_CALIBRATION,
-  SET_STATE_POSITION_CALIBRATION_POSITIVE,
-  SET_STATE_POSITION_CALIBRATION_NEGATIVE,
+  SET_STATE_POSITION_CALIBRATION_CHIRP,
+  SET_STATE_POSITION_CALIBRATION_EMF,
 };
 
 // Generic Serialize Function
@@ -1574,7 +1586,7 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_POSITION_CALIBRATION_POSITIVE: {
+    case SET_STATE_POSITION_CALIBRATION_CHIRP: {
       const message_buffer = write_TestCommand(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
@@ -1582,7 +1594,7 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_POSITION_CALIBRATION_NEGATIVE: {
+    case SET_STATE_POSITION_CALIBRATION_EMF: {
       const message_buffer = write_TestCommand(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
@@ -1636,7 +1648,7 @@ export function read_message(buffer) {
       return message;
     }
     case SET_STATE_TEST_ALL_PERMUTATIONS: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_ALL_PERMUTATIONS;
       return message;
@@ -1646,55 +1658,55 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_STATE_TEST_GROUND_SHORT: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_GROUND_SHORT;
       return message;
     }
     case SET_STATE_TEST_POSITIVE_SHORT: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_POSITIVE_SHORT;
       return message;
     }
     case SET_STATE_TEST_U_DIRECTIONS: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_U_DIRECTIONS;
       return message;
     }
     case SET_STATE_TEST_U_INCREASING: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_U_INCREASING;
       return message;
     }
     case SET_STATE_TEST_U_DECREASING: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_U_DECREASING;
       return message;
     }
     case SET_STATE_TEST_V_INCREASING: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_V_INCREASING;
       return message;
     }
     case SET_STATE_TEST_V_DECREASING: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_V_DECREASING;
       return message;
     }
     case SET_STATE_TEST_W_INCREASING: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_W_INCREASING;
       return message;
     }
     case SET_STATE_TEST_W_DECREASING: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_W_DECREASING;
       return message;
@@ -1852,27 +1864,27 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_STATE_RESISTANCE_CALIBRATION: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_RESISTANCE_CALIBRATION;
       return message;
     }
     case SET_STATE_INDUCTANCE_CALIBRATION: {
-      if (buffer.length !== 2 + 8) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_INDUCTANCE_CALIBRATION;
       return message;
     }
-    case SET_STATE_POSITION_CALIBRATION_POSITIVE: {
-      if (buffer.length !== 2 + 8) return null;
+    case SET_STATE_POSITION_CALIBRATION_CHIRP: {
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_POSITION_CALIBRATION_POSITIVE;
+      message.message_code = SET_STATE_POSITION_CALIBRATION_CHIRP;
       return message;
     }
-    case SET_STATE_POSITION_CALIBRATION_NEGATIVE: {
-      if (buffer.length !== 2 + 8) return null;
+    case SET_STATE_POSITION_CALIBRATION_EMF: {
+      if (buffer.length !== 2 + 16) return null;
       let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_POSITION_CALIBRATION_NEGATIVE;
+      message.message_code = SET_STATE_POSITION_CALIBRATION_EMF;
       return message;
     }
   }

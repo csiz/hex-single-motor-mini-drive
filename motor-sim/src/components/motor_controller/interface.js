@@ -311,8 +311,8 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
   const v_resistance = bare_full_readout.v_resistance;
   const w_resistance = bare_full_readout.w_resistance;
   const inductance = bare_full_readout.inductance;
-  const inductance_power_angle = angle_units_to_degrees(bare_full_readout.inductance_power_angle);
-  const inductance_power_factor = bare_full_readout.inductance_power_factor;
+  const magnetization_angle = angle_units_to_degrees(bare_full_readout.magnetization_angle);
+  const magnetization_factor = bare_full_readout.magnetization_factor;
 
   const battery_current = total_power / readout.vcc_voltage;
 
@@ -381,8 +381,8 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
     v_resistance,
     w_resistance,
     inductance,
-    inductance_power_angle,
-    inductance_power_factor,
+    magnetization_angle,
+    magnetization_factor,
   };
 
 }
@@ -409,8 +409,8 @@ function parse_current_calibration(bare_calibration) {
     v_resistance: bare_calibration.v_resistance,
     w_resistance: bare_calibration.w_resistance,
     inductance: bare_calibration.inductance,
-    inductance_power_angle: angle_units_to_degrees(bare_calibration.inductance_power_angle),
-    inductance_power_factor: bare_calibration.inductance_power_factor,
+    magnetization_angle: angle_units_to_degrees(bare_calibration.magnetization_angle),
+    magnetization_factor: bare_calibration.magnetization_factor,
   };
 } 
 
@@ -420,8 +420,8 @@ export function make_current_calibration(current_calibraton){
     v_resistance: current_calibraton.v_resistance,
     w_resistance: current_calibraton.w_resistance,
     inductance: current_calibraton.inductance,
-    inductance_power_angle: degrees_to_angle_units(current_calibraton.inductance_power_angle),
-    inductance_power_factor: current_calibraton.inductance_power_factor,
+    magnetization_angle: degrees_to_angle_units(current_calibraton.magnetization_angle),
+    magnetization_factor: current_calibraton.magnetization_factor,
   };
 }
 

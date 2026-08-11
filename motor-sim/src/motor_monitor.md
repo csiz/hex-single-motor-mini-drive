@@ -98,6 +98,8 @@ Current Calibration Procedures
   <div>${current_calibration_buttons}</div>
   <div>${current_calibration_run_buttons}</div>
   <div>${current_calibration_pwm_slider}</div>
+  <div>${current_calibration_test_speed_slider}</div>
+  <div>${current_calibration_test_duration_slider}</div>
 </div>
 <div class="card tight">
   <h3>Current Calibration Results</h3>
@@ -522,8 +524,8 @@ const test_buttons_to_code = [
   ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
   ["Run resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
   ["Run inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
-  ["Run + position calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_POSITIVE],
-  ["Run - position calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_NEGATIVE],
+  ["Run chirp calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_CHIRP],
+  ["Run EMF calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_EMF],
 ];
 
 const test_buttons = Inputs.button(
@@ -1303,6 +1305,15 @@ const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: 
 
 const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
 
+
+const current_calibration_test_speed_slider = inputs_wide_range([0, max_angular_speed], {value: 360, step: 1.0, label: "Calibration test speed (deg/ms):"});
+const current_calibration_test_speed = transformed_input_value(current_calibration_test_speed_slider, degrees_per_millisecond_to_speed_units);
+
+const current_calibration_test_duration_slider = inputs_wide_range([0, 16*HISTORY_SIZE], {value: HISTORY_SIZE, step: 1, label: "Calibration test duration:"});
+
+const current_calibration_duration = Generators.input(current_calibration_test_duration_slider);
+
+
 function stringify_active_current_calibration() {
   return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
 }
@@ -1323,12 +1334,16 @@ const update_current_calibration_data = (new_value) => {
 
 ```js
 
-async function run_current_calibration_by_code(code) {
+async function run_current_calibration_by_code(message_code) {
   if (!motor_controller) return;
   const calibration_data = await run_current_calibration(
     motor_controller, 
-    code,
-    current_calibration_pwm,
+    {
+      message_code,
+      pwm_value: current_calibration_pwm,
+      test_speed: current_calibration_test_speed,
+      test_duration: current_calibration_duration,
+    }
   );
   update_current_calibration_data(calibration_data);
   set_readout_series(calibration_data.sample, active_port);
@@ -1462,7 +1477,7 @@ const current_calibration_angles_plot = plot_lines({
   channels: [
     {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
     {y: (d)=>normalize_degrees(d.inductance_voltage_angle - d.current_angle), label: "Inductor-Current Angle Diff", color: colors_categories[3]},
-    {y: "inductance_power_instant_angle", label: "Inductor Power Instant Angle", color: colors_categories[4]},
+    {y: "inductance_power_angle", label: "Inductor Power Angle", color: colors_categories[4]},
     {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
     {y: (d)=>normalize_degrees(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
     {y: "inductance_voltage_angle", label: "Inductor Angle", color: colors.inductor_angle},

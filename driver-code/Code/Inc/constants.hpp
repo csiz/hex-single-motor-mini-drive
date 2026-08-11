@@ -42,6 +42,9 @@ const size_t angle_to_sin_table_shift = angle_bit_count - sin_tables_bit_count;
 // delta is always 1 pwm cycle per cycle.
 const int32_t angle_base = 1 << angle_bit_count; // 1048576
 
+// Inverse of the angle base so we can convert to floating point values without doing a division.
+const float angle_base_inverse = 1.0f / static_cast<float>(angle_base);
+
 // Bit mask for the angle reading.
 const uint32_t angle_bit_mask = angle_base - 1; // 0xFFFFF;
 
@@ -299,8 +302,8 @@ const hex_mini_drive::CurrentCalibration default_current_calibration = {
     .v_resistance = 1.3,
     .w_resistance = 1.3,
     .inductance = 0.000'145f,
-    .inductance_power_angle = 0,
-    .inductance_power_factor = 0.0
+    .magnetization_angle = 0,
+    .magnetization_factor = 0.0
 };
 
 // The default control parameters should be set to reasonable values for any motor.

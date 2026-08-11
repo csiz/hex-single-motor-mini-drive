@@ -35,7 +35,8 @@ enum struct CalibrationMode {
   NONE,
   RESISTANCE,
   INDUCTANCE,
-  POSITION
+  POSITION_CHIRP,
+  POSITION_EMF
 };
 
 CalibrationMode calibration_mode = CalibrationMode::NONE;
@@ -504,31 +505,40 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    case SET_STATE_POSITION_CALIBRATION_POSITIVE: {
-      calibration_mode = CalibrationMode::POSITION;
+    case SET_STATE_POSITION_CALIBRATION_CHIRP: {
+      calibration_mode = CalibrationMode::POSITION_CHIRP;
       // Clear the readouts buffer of old data.
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
       readouts_sent = 0;
 
       set_motor_command(DriverState{
-        .mode = DriverMode::POSITION_CALIBRATION,
+        .mode = DriverMode::POSITION_CALIBRATION_CHIRP,
         .duration = hex_mini_drive::HISTORY_SIZE,
         .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+        .test_parameters = TestParameters{
+          .test_speed = std::get<TestCommand>(message.message_data).test_speed,
+          .test_duration = std::get<TestCommand>(message.message_data).test_duration,
+        },
       });
       return;
     }
-    case SET_STATE_POSITION_CALIBRATION_NEGATIVE: {
-      calibration_mode = CalibrationMode::POSITION;
-      // Clear the readouts buffer of old data.
+    case SET_STATE_POSITION_CALIBRATION_EMF: {
+      calibration_mode = CalibrationMode::POSITION_EMF;
+      
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
       readouts_sent = 0;
 
+
       set_motor_command(DriverState{
-        .mode = DriverMode::POSITION_CALIBRATION,
-        .duration = hex_mini_drive::HISTORY_SIZE,
-        .target_pwm = -clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+        .mode = DriverMode::POSITION_CALIBRATION_EMF,
+        .duration = hex_mini_drive::HISTORY_SIZE + std::get<TestCommand>(message.message_data).test_duration,
+        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+        .test_parameters = TestParameters{
+          .test_speed = std::get<TestCommand>(message.message_data).test_speed,
+          .test_duration = std::get<TestCommand>(message.message_data).test_duration,
+        },
       });
       return;
     }
@@ -855,8 +865,10 @@ void app_tick() {
         std::get<1>(inductance_gradient_step_mean) +
         std::get<2>(inductance_gradient_step_mean)
       ) * 0.333333f; // Average the inductance gradients across the three phases.
-    } else if (calibration_mode == CalibrationMode::POSITION) {
-      // TODO: implement position calibration.
+    } else if (calibration_mode == CalibrationMode::POSITION_CHIRP) {
+      // TODO: implement position chirp calibration.
+    } else if (calibration_mode == CalibrationMode::POSITION_EMF) {
+      // TODO: implement position EMF calibration.
     }
 
     // Done an iteration of the calibration (it should take about 10 for a good value and 90 to stabilise).

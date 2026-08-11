@@ -75,7 +75,9 @@ enum struct DriverMode : uint16_t {
     // and determine the inductance of the motor windings.
     INDUCTANCE_CALIBRATION,
     // Drive the motor around a few full rotations to measure inductance bias, and estimate rotor position.
-    POSITION_CALIBRATION,
+    POSITION_CALIBRATION_CHIRP,
+    // Drive the motor ahead of recording EMF while shorting the motor phases. Also chirp at end.
+    POSITION_CALIBRATION_EMF
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -152,6 +154,11 @@ struct SeekAngle {
     float error_integral;
 };
 
+struct TestParameters {
+    float test_speed;
+    uint32_t test_duration;
+};
+
 // The complete driver state, these values control the motor behaviour.
 struct DriverState {
     // Settings for the 3 phase MOSFET PWM drivers.
@@ -189,6 +196,9 @@ struct DriverState {
 
         // Drive the motor to a specific angle.
         SeekAngle seek_angle;
+
+        // Run a test chirp to calibrate/test the motor.
+        TestParameters test_parameters;
     };
 };
 
