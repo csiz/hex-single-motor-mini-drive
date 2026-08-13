@@ -888,7 +888,7 @@ void app_tick() {
   // Adjust direction
   // ----------------
 
-  readout.angle = control_parameters.motor_direction > 0 ? readout.angle : readout.angle + half_circle;
+  readout.angle = control_parameters.motor_direction * readout.angle;
   readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
   readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
 

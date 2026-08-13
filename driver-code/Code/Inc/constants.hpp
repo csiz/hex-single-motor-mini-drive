@@ -240,7 +240,7 @@ const int32_t half_circle = -angle_base / 2;
 const int32_t third_circle = angle_base / 3;
 
 // 2/3 of a circle (2pi/3) aka 240 degrees.
-const int32_t two_thirds_circle = -third_circle;
+const int32_t neg_third_circle = -third_circle;
 
 // 1/4 of a circle (pi/4) aka 90 degrees.
 const int32_t quarter_circle = angle_base / 4;
@@ -904,7 +904,7 @@ static inline float get_sin(const int32_t angle) {
 static inline ThreePhase get_three_phase_sin(int32_t angle) {
     return {
         sin_lookup[std::bit_cast<uint32_t>(angle) >> angle_to_sin_table_shift],
-        sin_lookup[std::bit_cast<uint32_t>(angle + two_thirds_circle) >> angle_to_sin_table_shift],
+        sin_lookup[std::bit_cast<uint32_t>(angle + neg_third_circle) >> angle_to_sin_table_shift],
         sin_lookup[std::bit_cast<uint32_t>(angle + third_circle) >> angle_to_sin_table_shift]
     };
 }

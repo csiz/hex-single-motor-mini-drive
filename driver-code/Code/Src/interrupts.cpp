@@ -278,7 +278,7 @@ static inline MotorOutputs update_motor_at_angle(
 
     const float voltage_phase_u = get_phase_pwm(angle);
     const float voltage_phase_v = get_phase_pwm(angle - third_circle);
-    const float voltage_phase_w = get_phase_pwm(angle - two_thirds_circle);
+    const float voltage_phase_w = get_phase_pwm(angle - neg_third_circle);
 
     return MotorOutputs{
         .enable_flags = enable_flags_all,
@@ -1203,9 +1203,10 @@ void adc_interrupt_handler(){
     set_cordic(-quadrature_emf_voltage, direct_emf_voltage);
 
     // Current angle in the stator frame of reference.
-    const int inductor_angle = predicted_angle + inductor_angle_offset;
+    const int32_t inductor_angle = predicted_angle + inductor_angle_offset;
     
     // The current measurements have a low noise floor, but it's not 0.
+    // TODO: recalculate threshold for float units
     const bool current_detected = instant_current_magnitude > 4;
 
     // Average the current magnitude over a short duration to reduce noise.
@@ -1224,7 +1225,7 @@ void adc_interrupt_handler(){
     // The rotor angle inferred from the EMF can be either aligned with the positive quadrature direction or 
     // the negative. It's going to be aligned with the negative direction when we have the rotor switches
     // from positive to negative speed. The angle becomes extremely noisy at standstill (crossing 0 speed).
-    const int emf_angle_error = angle_or_mirror(emf_angle_offset);
+    const int32_t emf_angle_error = angle_or_mirror(emf_angle_offset);
 
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
     const float emf_angle_error_variance = (
@@ -1261,7 +1262,7 @@ void adc_interrupt_handler(){
     );
 
     // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
-    const int prediction_error = emf_detected * emf_angle_error;
+    const int32_t prediction_error = emf_detected * emf_angle_error;
     
 
     // Angle update
@@ -1271,21 +1272,24 @@ void adc_interrupt_handler(){
     const bool angle_fix = correct_angle_counter >= angle_fix_threshold_count;
     
     // Calculate the angle adjustment error using the parametrized gains.
-    const int angle_adjustment = prediction_error * control_parameters.rotor_angle_ki;
+    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki;
 
     // Calculate the new angle based on the angle adjustment.
-    const int angle = predicted_angle + angle_adjustment;
+    const int32_t angle = predicted_angle + angle_adjustment;
 
-    // Increment rotations if we have moved outside the 0 to 2*pi range. By checking for overlfows.
-    const int rotations_increment = (
-        angle_adjustment > 0 ? (angle < readout.angle ? +1 : 0) :
-        angle_adjustment < 0 ? (angle > readout.angle ? -1 : 0) :
+    // Get the total angle change for the current cycle.
+    const int32_t angle_diff = angle - readout.angle;
+    
+    // Check if the angle overflowed and count rotations. Note, we need to flag the compiler to treat
+    // integer overflow as well defined behaviour!
+    const int32_t rotations_increment = (
+        angle_diff > 0 ? (angle < readout.angle ? +1 : 0) :
+        angle_diff < 0 ? (angle > readout.angle ? -1 : 0) :
         0
     );
 
-
     // Calculate the new rotation index.
-    const int rotations = readout.rotations + rotations_increment;
+    const int32_t rotations = readout.rotations + rotations_increment;
 
     // Calculate speed and acceleration
     // --------------------------------
