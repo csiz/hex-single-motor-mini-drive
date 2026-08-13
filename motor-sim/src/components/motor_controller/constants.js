@@ -7,7 +7,7 @@ import {
   VOLTAGE_UNITS_PER_VOLT,
 } from "hex-mini-drive-interface";
 
-import {normalize_degrees, positive_degrees} from "./angular_math.js";
+import {normalize_radians, positive_radians} from "./angular_math.js";
 
 
 export {
@@ -37,32 +37,32 @@ export const millis_per_cycle = 1.0/cycles_per_millisecond;
 export const angle_base = 2**32;
 
 // Convert degrees to angle units.
-export function degrees_to_angle_units(degrees){
-  return Math.round(positive_degrees(degrees) * angle_base / 360.0);
+export function radians_to_angle_units(radians){
+  return Math.round(positive_radians(radians) * angle_base / (2 * Math.PI));
 }
 
-export function angle_units_to_degrees(angle){
-  return normalize_degrees(unbounded_angle_units_to_degrees(angle));
+export function angle_units_to_radians(angle){
+  return normalize_radians(unbounded_angle_units_to_radians(angle));
 }
 
-export function unbounded_degrees_to_angle_units(degrees){
-  return degrees * angle_base / 360.0;
+export function unbounded_radians_to_angle_units(degrees){
+  return degrees * angle_base / (2 * Math.PI);
 }
 
-export function unbounded_angle_units_to_degrees(angle){
-  return angle * 360.0 / angle_base;
+export function unbounded_angle_units_to_radians(angle){
+  return angle * 2 * Math.PI / angle_base;
 }
 
 
 // Speed units
 // -----------
 
-export function speed_units_to_degrees_per_millisecond(speed){
-  return unbounded_angle_units_to_degrees(speed) * cycles_per_millisecond;
+export function speed_units_to_rotations_per_millisecond(speed){
+  return unbounded_angle_units_to_radians(speed) * cycles_per_millisecond / (2 * Math.PI);
 }
 
-export function degrees_per_millisecond_to_speed_units(speed){
-  return unbounded_degrees_to_angle_units(speed / cycles_per_millisecond);
+export function rotations_per_millisecond_to_speed_units(speed){
+  return unbounded_radians_to_angle_units(speed * 2 * Math.PI / cycles_per_millisecond);
 }
 
 // Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
@@ -77,14 +77,14 @@ const gear_ratio = 6 * 6 * 6;
 const ratio = rotor_revolutions_per_electric * gear_ratio;
 
 // Maximum angular speed that we can command the driver.
-export const max_angular_speed = speed_units_to_degrees_per_millisecond(1.0 * max_rpm * angle_base / 60.0 / pwm_cycles_per_second);
+export const max_angular_speed = 1.0 * max_rpm * angle_base / 60.0 / pwm_cycles_per_second;
 
-export function acceleration_units_to_degrees_per_millisecond_squared(acceleration){
-  return speed_units_to_degrees_per_millisecond(acceleration) * cycles_per_millisecond;
+export function acceleration_units_to_rotations_per_millisecond_squared(acceleration){
+  return speed_units_to_rotations_per_millisecond(acceleration) * cycles_per_millisecond;
 }
 
-export function degrees_per_millisecond_squared_to_acceleration_units(acceleration){
-  return degrees_per_millisecond_to_speed_units(acceleration / cycles_per_millisecond);
+export function rotations_per_millisecond_squared_to_acceleration_units(acceleration){
+  return rotations_per_millisecond_to_speed_units(acceleration / cycles_per_millisecond);
 }
 
 

@@ -1,4 +1,4 @@
-import {normalize_degrees} from "./angular_math.js";
+import {normalize_radians} from "./angular_math.js";
 import {product_of_normals, add_stdev, weighted_product_of_normals, cdf_normal} from "./stats_utils.js";
 import {valid_number} from "./math_utils.js"
 
@@ -89,7 +89,7 @@ export function accumulate_position_from_hall(readout, prev_readout, {position_c
     angular_acceleration_stdev * dt,
   );
 
-  const predicted_angle = normalize_degrees(prev_web_angle + predicted_distance);
+  const predicted_angle = normalize_radians(prev_web_angle + predicted_distance);
 
   const next_sector = direction >= 0 ? (hall_sector + 1) % 6 : (hall_sector - 1 + 6) % 6;
   
@@ -103,7 +103,7 @@ export function accumulate_position_from_hall(readout, prev_readout, {position_c
   };
 
 
-  const distance_to_hall_angle = normalize_degrees(hall_angle - predicted_angle);
+  const distance_to_hall_angle = normalize_radians(hall_angle - predicted_angle);
 
   const distance_to_hall_angle_stdev = add_stdev(hall_stdev, predicted_distance_stdev);
 
@@ -114,7 +114,7 @@ export function accumulate_position_from_hall(readout, prev_readout, {position_c
   );
 
 
-  const distance_to_hall_center = normalize_degrees(sector_center_degrees[hall_sector] - predicted_angle);
+  const distance_to_hall_center = normalize_radians(sector_center_degrees[hall_sector] - predicted_angle);
   const distance_to_hall_center_stdev = sector_center_stdev[hall_sector];
 
 
@@ -133,7 +133,7 @@ export function accumulate_position_from_hall(readout, prev_readout, {position_c
     weight_b: evidence,
   });
 
-  const web_angle = normalize_degrees(predicted_angle + distance_adjustment);
+  const web_angle = normalize_radians(predicted_angle + distance_adjustment);
 
 
   const {mean: speed_adjustment, stdev: web_angular_speed_stdev} = weighted_product_of_normals({

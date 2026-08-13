@@ -353,12 +353,12 @@ const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycl
 const command_timeout = transformed_input_value(command_timeout_slider, (millis) => Math.floor(millis * cycles_per_millisecond));
 
 // Choose the angular speed target for certain commands.
-const command_angular_speed_slider = inputs_wide_range([0, max_angular_speed], {value: 1, step: 0.1, label: "Angular speed value (degrees/ms)"});
-const command_angular_speed = transformed_input_value(command_angular_speed_slider, degrees_per_millisecond_to_speed_units);
+const command_angular_speed_slider = inputs_wide_range([0, speed_units_to_rotations_per_millisecond(max_angular_speed)], {value: 1, step: 0.1, label: "Angular speed value (rotations/ms)"});
+const command_angular_speed = transformed_input_value(command_angular_speed_slider, rotations_per_millisecond_to_speed_units);
 
 // Choose the target angle for certain commands.
-const command_angle_slider = inputs_wide_range([-180, 180], {value: 0, step: 1, label: "Command angle (degrees):"});
-const command_angle = transformed_input_value(command_angle_slider, degrees_to_angle_units);
+const command_angle_slider = inputs_wide_range([-Math.PI, Math.PI], {value: 0, step: 0.01, label: "Command angle (radians):"});
+const command_angle = transformed_input_value(command_angle_slider, radians_to_angle_units);
 
 // Choose the torque target for torque driving modes.
 const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.200, step: 0.010, label: "Command torque (Amps):"});
@@ -881,8 +881,8 @@ const timeline_position_input = plot_line({
   width: 1200, height: 150,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Electric position (degrees)",
-  y_domain: [-180, 180],
+  y_label: "Electric position (radians)",
+  y_domain: [-Math.PI, Math.PI],
   y: "angle", 
   color: colors.angle,
   include_brush: true,
@@ -1033,8 +1033,8 @@ const plot_electric_position = plot_lines({
   width: 1200, height: 200,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Electric position (degrees)",
-  y_domain: [-180, 180],
+  y_label: "Electric position (radians)",
+  y_domain: [-Math.PI, Math.PI],
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: (d) => d.current_detected ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
@@ -1054,7 +1054,7 @@ const plot_electric_offsets = plot_lines({
   width: 1200, height: 200,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Angle (degrees)",
+  y_label: "Angle (radians)",
   channels: [
     {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
     {
@@ -1072,11 +1072,11 @@ const plot_electric_offsets = plot_lines({
 
 const plot_speed = plot_lines({
   subtitle: "Rotor Speed",
-  description: "Angular speed of the rotor in degrees per millisecond.",
+  description: "Angular speed of the rotor in rotations per millisecond.",
   width: 1200, height: 300,
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Angular Speed (degrees/ms)",
+  y_label: "Angular Speed (rotations/ms)",
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: (d) => d.rotor_acceleration * 10, label: "Rotor Acceleration (10ms speed diff)", color: colors.angle_driven},
@@ -1306,8 +1306,9 @@ const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: 
 const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
 
 
-const current_calibration_test_speed_slider = inputs_wide_range([0, max_angular_speed], {value: 360, step: 1.0, label: "Calibration test speed (deg/ms):"});
-const current_calibration_test_speed = transformed_input_value(current_calibration_test_speed_slider, degrees_per_millisecond_to_speed_units);
+const current_calibration_test_speed_slider = inputs_wide_range([0, speed_units_to_rotations_per_millisecond(max_angular_speed)], {value: 1.0, step: 0.01, label: "Calibration test speed (rotations/ms):"});
+
+const current_calibration_test_speed = transformed_input_value(current_calibration_test_speed_slider, rotations_per_millisecond_to_speed_units);
 
 const current_calibration_test_duration_slider = inputs_wide_range([0, 16*HISTORY_SIZE], {value: HISTORY_SIZE, step: 1, label: "Calibration test duration:"});
 
@@ -1473,13 +1474,13 @@ const current_calibration_angles_plot = plot_lines({
   x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
   x_label: "Time (ms)",
-  y_label: "Angle (degrees)",
+  y_label: "Angle (radians)",
   channels: [
     {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
-    {y: (d)=>normalize_degrees(d.inductance_voltage_angle - d.current_angle), label: "Inductor-Current Angle Diff", color: colors_categories[3]},
+    {y: (d)=>normalize_radians(d.inductance_voltage_angle - d.current_angle), label: "Inductor-Current Angle Diff", color: colors_categories[3]},
     {y: "inductance_power_angle", label: "Inductor Power Angle", color: colors_categories[4]},
     {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
-    {y: (d)=>normalize_degrees(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
+    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
     {y: "inductance_voltage_angle", label: "Inductor Angle", color: colors.inductor_angle},
   ],
   curve,
@@ -1826,7 +1827,7 @@ import {
 } from "./components/input_utils.js";
 
 import {square} from "./components/motor_controller/math_utils.js";
-import {interpolate_degrees, normalize_degrees} from "./components/motor_controller/angular_math.js";
+import {normalize_radians} from "./components/motor_controller/angular_math.js";
 
 import {MessageCode, prompt_com_port_get_index, default_ws_uri, MotorController} from "./components/motor_controller/motor_controller.js";
 
@@ -1834,8 +1835,10 @@ import {run_current_calibration} from "./components/motor_controller/current_cal
 
 import {
   PWM_BASE, HISTORY_SIZE, CURRENT_UNITS_PER_AMP, VOLTAGE_UNITS_PER_VOLT,
-  pwm_cycles_per_second, cycles_per_millisecond, millis_per_cycle, max_timeout, angle_base, pwm_period, 
-  degrees_to_angle_units, degrees_per_millisecond_to_speed_units,
+  pwm_cycles_per_second, cycles_per_millisecond, millis_per_cycle, max_timeout, pwm_period, 
+  radians_to_angle_units, 
+  rotations_per_millisecond_to_speed_units,
+  speed_units_to_rotations_per_millisecond,
   max_drive_current, max_drive_power, max_angular_speed,
 } from "./components/motor_controller/constants.js";
 
