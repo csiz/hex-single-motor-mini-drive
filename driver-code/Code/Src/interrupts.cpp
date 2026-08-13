@@ -10,7 +10,6 @@
 #include "io.hpp"
 #include "constants.hpp"
 #include "type_definitions.hpp"
-#include "integer_math.hpp"
 
 // The interrupts must not enter the error handler!
 // 
@@ -24,10 +23,13 @@
 #include <stm32g4xx_ll_adc.h>
 #include <stm32g4xx_ll_tim.h>
 #include <stm32g4xx_ll_gpio.h>
+#include <stm32g4xx_ll_cordic.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <bit>
+#include <tuple>
 
 #include "hex_mini_drive_interface.hpp"
 
@@ -184,6 +186,37 @@ void set_angle_offset(int32_t angle_offset) {
     external_angle_offset = angle_offset;
 }
 
+// Helper functions
+// ----------------
+
+
+static inline int32_t angle_or_mirror(const int32_t angle){
+    return (
+        angle >= 0 ? (
+            angle <= quarter_circle ?
+                angle :
+                angle - half_circle
+        ) : (
+            angle >= -quarter_circle ?
+                angle :
+                angle + half_circle
+        )
+    );
+}
+
+static inline void set_cordic(int32_t const& x, int32_t const& y){
+    LL_CORDIC_WriteData(CORDIC, std::bit_cast<uint32_t>(x));
+    LL_CORDIC_WriteData(CORDIC, std::bit_cast<uint32_t>(y));
+}
+
+static inline std::pair<int32_t, int32_t> get_cordic(){
+    return {
+        std::bit_cast<int32_t>(LL_CORDIC_ReadData(CORDIC)),
+        std::bit_cast<int32_t>(LL_CORDIC_ReadData(CORDIC))
+    };
+}
+
+
 // Critical functions!! 23KHz PWM cycle
 // ====================================
 
@@ -260,7 +293,7 @@ static inline MotorOutputs update_motor_periodic(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    driver_state.active_angle = normalize_angle(static_cast<int32_t>(driver_state.active_angle + driver_state.angular_speed));
+    driver_state.active_angle += static_cast<int32_t>(driver_state.angular_speed);
 
     return update_motor_at_angle(driver_state, readout);
 }
@@ -293,7 +326,7 @@ static inline MotorOutputs update_motor_resistance_calibration(
     const int32_t ramp_duration = segment_duration / 3;
 
     // Drive the phases at 0, 60, 120, 180, 240, and 300 degrees.
-    driver_state.active_angle = normalize_angle(static_cast<int32_t>(segment_index * (angle_base / 6)));
+    driver_state.active_angle = static_cast<int32_t>(segment_index * (angle_base / 6));
 
     // Build a pyramid waveform: hold at 0, ramp up to the target PWM, then ramp back down to 0.
     const float abs_pwm = (
@@ -337,7 +370,7 @@ static inline MotorOutputs update_motor_inductance_calibration(
     const int step_index = segment_progress / step_duration;
 
     // Drive the phases at 0, 120, and 240 degrees.
-    driver_state.active_angle = normalize_angle(static_cast<int32_t>(segment_index * (angle_base / 3)));
+    driver_state.active_angle = static_cast<int32_t>(segment_index * (angle_base * 0.33333333));
 
     // Half of the target PWM used for the first two steps.
     const int half_pwm = driver_state.target_pwm / 2;
@@ -368,7 +401,7 @@ static inline MotorOutputs update_motor_position_calibration_chirp(
         driver_state.test_parameters.test_duration -= 1;
 
         // Drive at the requested PWM until the test is done.
-        driver_state.active_angle = normalize_angle(static_cast<int32_t>(driver_state.active_angle + driver_state.test_parameters.test_speed));
+        driver_state.active_angle += static_cast<int32_t>(driver_state.test_parameters.test_speed);
         driver_state.active_pwm = faster_abs(driver_state.target_pwm);
         return update_motor_at_angle(driver_state, readout);
     } else {
@@ -394,7 +427,7 @@ static inline MotorOutputs update_motor_position_calibration_emf(
 
 
         // Spin up phase, spin the motor at start_speed and start_rotations.
-        driver_state.active_angle = normalize_angle(static_cast<int32_t>(driver_state.active_angle + speed));
+        driver_state.active_angle += static_cast<int32_t>(speed);
         driver_state.active_pwm = faster_abs(driver_state.target_pwm);
         return update_motor_at_angle(driver_state, readout);
 
@@ -440,17 +473,17 @@ static inline MotorOutputs update_motor_smooth(
 
 
     // Calculate the predicted active angle (we want to maintain constant speed in angular coordinate space).
-    driver_state.active_angle = normalize_angle(static_cast<int32_t>(driver_state.active_angle + driver_state.angular_speed));
+    driver_state.active_angle = driver_state.active_angle + static_cast<int32_t>(driver_state.angular_speed);
 
     // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
     // 
     // Of course, the inductors take a while to charge and the rotor is producing an EMF
     // which all interacts with the current. However, the current that we end up measuring
     // should be as close to the 90 degrees as possible for maximum torque per current use.
-    const int32_t ideal_angle = normalize_angle(readout.angle + quarter_circle);
+    const int32_t ideal_angle = readout.angle + quarter_circle;
 
     // Get the error between the measured current and the ideal current angle.
-    const int32_t ideal_angle_diff = current_detected * signed_angle(ideal_angle - readout.inductor_angle);
+    const int32_t ideal_angle_diff = current_detected * (ideal_angle - readout.inductor_angle);
 
     // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
     const int32_t lead_angle_error = emf_detected ? 
@@ -467,18 +500,18 @@ static inline MotorOutputs update_motor_smooth(
     if (angle_fix) {
         // If we have an accurate position, we can use it to adjust our control.
 
-        const int32_t target_angle = normalize_angle(ideal_angle + driver_state.lead_angle);
+        const int32_t target_angle = ideal_angle + driver_state.lead_angle;
         
         // Compensate the target angle by the control output. At high speed we need
         // to lead by more than 90 degrees to compensate for the RL time constant.
         const int32_t active_angle_error = clip_to(
             -control_parameters.max_angle_change,
             +control_parameters.max_angle_change,
-            signed_angle(target_angle - driver_state.active_angle)
+            target_angle - driver_state.active_angle
         );
 
         // Update the driving angle.
-        driver_state.active_angle = normalize_angle(driver_state.active_angle + active_angle_error);
+        driver_state.active_angle += active_angle_error;
 
         // Push our speed towards the target angle.
         driver_state.angular_speed += active_angle_error;
@@ -731,9 +764,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_PERIODIC,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = static_cast<int16_t>(normalize_angle(
-                    pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0)
-                )),
+                .active_angle = pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0),
                 .active_pwm = min(control_parameters.max_pwm_difference, faster_abs(pending_state.active_pwm)),
                 .angular_speed = static_cast<int16_t>(clip_to(-max_angular_speed, max_angular_speed, pending_state.angular_speed)),
             };
@@ -743,7 +774,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_SMOOTH,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .target_pwm = clip_to(-pwm_max, +pwm_max, pending_state.target_pwm),
@@ -753,7 +784,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_TORQUE,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .secondary_target = clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target),
@@ -763,7 +794,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_BATTERY_POWER,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .secondary_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.secondary_target)),
@@ -773,7 +804,7 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::DRIVE_SPEED,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(readout.angle),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .secondary_target = static_cast<int16_t>(clip_to(-max_angular_speed, +max_angular_speed, pending_state.secondary_target)),
@@ -783,11 +814,11 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::SEEK_ANGLE_POWER,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .seek_angle = SeekAngle{
-                    .target_angle = static_cast<int32_t>(normalize_angle(pending_state.seek_angle.target_angle)),
+                    .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
                     .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_power, pending_state.seek_angle.max_secondary_target)),
                     .error_integral = driver_state.seek_angle.error_integral
@@ -798,11 +829,11 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::SEEK_ANGLE_TORQUE,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .seek_angle = SeekAngle{
-                    .target_angle = static_cast<int32_t>(normalize_angle(pending_state.seek_angle.target_angle)),
+                    .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
                     .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_drive_current, pending_state.seek_angle.max_secondary_target)),
                     .error_integral = driver_state.seek_angle.error_integral
@@ -813,13 +844,13 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .mode = DriverMode::SEEK_ANGLE_SPEED,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : static_cast<int16_t>(normalize_angle(readout.angle)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .seek_angle = SeekAngle{
-                    .target_angle = static_cast<int32_t>(normalize_angle(pending_state.seek_angle.target_angle)),
+                    .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
-                    .max_secondary_target = static_cast<int16_t>(clip_to(0, +max_angular_speed, pending_state.seek_angle.max_secondary_target)),
+                    .max_secondary_target = clip_to(0, +max_angular_speed, pending_state.seek_angle.max_secondary_target),
                     .error_integral = driver_state.seek_angle.error_integral
                 }
             };
@@ -1107,16 +1138,13 @@ void adc_interrupt_handler(){
 
     // Add the external offset directly to the readout angle before the update. The update will
     // calculate all values in the new angle frame; this update is ignored by the speed calculation.
-    readout.angle = normalize_angle(readout.angle + external_angle_offset);
+    readout.angle += external_angle_offset;
     external_angle_offset = 0;
 
     // Predict the position; keeping track of fractional angles at the same resolution as
     // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
     // the rotor is exactly the angular speed.
-    const int32_t unnormalized_predicted_angle = readout.angle + readout.angular_speed;
-    
-    // Compute and normalize the new rotor angle.
-    const int32_t predicted_angle = normalize_angle(unnormalized_predicted_angle);
+    const int32_t predicted_angle = readout.angle + static_cast<int32_t>(readout.angular_speed);
 
 
     // Switching to DQ0 Frame
@@ -1151,6 +1179,9 @@ void adc_interrupt_handler(){
 
     const float quadrature_current = -dot(currents, three_phase_sin);
 
+    // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
+    set_cordic(direct_current, quadrature_current);
+
     const float direct_emf_voltage = dot(emf_voltages, three_phase_cos);
 
     const float quadrature_emf_voltage = -dot(emf_voltages, three_phase_sin);
@@ -1166,17 +1197,14 @@ void adc_interrupt_handler(){
 
     // Calculate the angle at which the current is running on the motor coils. The angle offset is
     // with respect to the predicted angle as that was the angle used in the park transform.
-    const int inductor_angle_offset = funky_atan2(quadrature_current, direct_current);
-    
-    // Current angle in the stator frame of reference.
-    const int inductor_angle = normalize_angle(predicted_angle + inductor_angle_offset);
-    
-    // Calculate the magnitude by rotating the current vector entirely on the quadrature axis.
-    const float instant_current_magnitude = faster_abs(
-        get_cos(inductor_angle_offset) * direct_current + 
-        get_sin(inductor_angle_offset) * quadrature_current
-    );
+    const auto [inductor_angle_offset, instant_current_magnitude] = get_cordic();
 
+    // We can queue up the CORDIC engine for the next calculation before we read the first (I think).
+    set_cordic(-quadrature_emf_voltage, direct_emf_voltage);
+
+    // Current angle in the stator frame of reference.
+    const int inductor_angle = predicted_angle + inductor_angle_offset;
+    
     // The current measurements have a low noise floor, but it's not 0.
     const bool current_detected = instant_current_magnitude > 4;
 
@@ -1188,13 +1216,7 @@ void adc_interrupt_handler(){
     // -----------------------
 
     // Get the angle measured from EMF relative to the predicted rotor angle.
-    const int emf_angle_offset = funky_atan2(direct_emf_voltage, -quadrature_emf_voltage);
-
-    // Calculate the emf voltage as a rotation of the quad voltage that zeroes out the direct component.
-    const float instant_emf_voltage_magnitude = faster_abs(
-        get_cos(emf_angle_offset) * quadrature_emf_voltage - 
-        get_sin(emf_angle_offset) * direct_emf_voltage
-    );
+    const auto [emf_angle_offset, instant_emf_voltage_magnitude] = get_cordic();
 
     // Average the EMF voltage magnitude over a short duration to reduce noise.
     const float emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) * 0.25f;
@@ -1252,17 +1274,15 @@ void adc_interrupt_handler(){
     const int angle_adjustment = prediction_error * control_parameters.rotor_angle_ki;
 
     // Calculate the new angle based on the angle adjustment.
-    const int unnormalized_angle = unnormalized_predicted_angle + angle_adjustment;
+    const int angle = predicted_angle + angle_adjustment;
 
-    // Increment rotations if we have moved outside the 0 to 2*pi range.
+    // Increment rotations if we have moved outside the 0 to 2*pi range. By checking for overlfows.
     const int rotations_increment = (
-        unnormalized_angle < 0 ? -1 : 
-        unnormalized_angle > angle_base ? +1 : 
+        angle_adjustment > 0 ? (angle < readout.angle ? +1 : 0) :
+        angle_adjustment < 0 ? (angle > readout.angle ? -1 : 0) :
         0
     );
 
-    // Calculate the new angle and keep it normalized using the rotations calculation.
-    const int angle = unnormalized_angle - rotations_increment * angle_base;
 
     // Calculate the new rotation index.
     const int rotations = readout.rotations + rotations_increment;
@@ -1443,24 +1463,3 @@ void adc_interrupt_handler(){
     LL_ADC_ClearFlag_JEOS(ADC1);
     LL_ADC_ClearFlag_JEOS(ADC2);
 }
-
-// Initialization
-// --------------
-
-// We might need this to make sure we can quickly read the sin and phase tables (make
-// sure they are loaded from flash to RAM). Not sure if this does anything though...
-
-#pragma GCC push_options
-#pragma GCC optimize ("O0")
-
-// Write only variable, for funsies.
-volatile int write_only = 0;
-
-void initialize_angle_tracking(){
-    // Load the phase and sin tables into memory.
-    for (int i = 0; i < angle_base; i += 1) {
-        write_only = get_phase_pwm(i);
-        write_only = get_sin(i);
-    }
-}
-#pragma GCC pop_options

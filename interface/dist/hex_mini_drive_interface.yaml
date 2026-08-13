@@ -150,15 +150,6 @@ message_codes:
   UNIT_TEST_OUTPUT:
     message_code: 0x5040
     type: UnitTestOutput
-  RUN_UNIT_TEST_FUNKY_ATAN:
-    message_code: 0x5042
-    returns: UNIT_TEST_OUTPUT
-  RUN_UNIT_TEST_FUNKY_ATAN_PART2:
-    message_code: 0x5043
-    returns: UNIT_TEST_OUTPUT
-  RUN_UNIT_TEST_FUNKY_ATAN_PART3:
-    message_code: 0x5044
-    returns: UNIT_TEST_OUTPUT
 
   SET_STATE_RESISTANCE_CALIBRATION:
     message_code: 0x5045

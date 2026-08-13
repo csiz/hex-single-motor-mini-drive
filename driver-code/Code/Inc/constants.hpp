@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cmath>
+#include <bit>
 
 #include "type_definitions.hpp"
 #include "math_utils.hpp"
@@ -27,7 +29,7 @@ const uint8_t hall_sector_base = 6;
 
 // Number of significant bits for the angle representation (20 bits so 
 // we can multiply with 12 bit parameter values and fit within 32 bits).
-const size_t angle_bit_count = 20;
+const size_t angle_bit_count = 32;
 
 // Number of bits in the sin tables; 12 bits gives us 4096 values for a full circle.
 const size_t sin_tables_bit_count = 12;
@@ -35,18 +37,12 @@ const size_t sin_tables_bit_count = 12;
 // Precompute the shift value to convert from angle units to sin table units.
 const size_t angle_to_sin_table_shift = angle_bit_count - sin_tables_bit_count;
 
-// Angle units of a full circle: 1 angle unit = (tau = 2pi) / 1024.
-// 
-// Note that speed units and acceleration units are defined as angle units
-// per pwm cycle. This allows for easy maths during updates because the time
-// delta is always 1 pwm cycle per cycle.
-const int32_t angle_base = 1 << angle_bit_count; // 1048576
+// Angle base is the max uint32_t + 1, so we need to express it as float.
+const float angle_base = std::pow(2, angle_bit_count);
 
 // Inverse of the angle base so we can convert to floating point values without doing a division.
-const float angle_base_inverse = 1.0f / static_cast<float>(angle_base);
+const float angle_base_inverse = 1.0f / angle_base;
 
-// Bit mask for the angle reading.
-const uint32_t angle_bit_mask = angle_base - 1; // 0xFFFFF;
 
 
 // Readout bit packing
@@ -238,42 +234,20 @@ const float motor_sector_driving_negative[6][3] = {
 
 
 // Half a circle (pi) aka 180 degrees.
-const int32_t half_circle = angle_base / 2;
-
-// 3/2 of a circle (3pi/2) aka 540 degrees.
-const int32_t one_and_half_circle = (3 * angle_base) / 2;
-
-// 2/3 of a circle (2pi/3) aka 240 degrees.
-const int32_t two_thirds_circle = (2 * angle_base) / 3;
+const int32_t half_circle = -angle_base / 2;
 
 // 1/3 of a circle (pi/3) aka 120 degrees.
 const int32_t third_circle = angle_base / 3;
 
-// 3/4 of a circle (3pi/4) aka 270 degrees.
-const int32_t three_quarters_circle = (3 * angle_base) / 4;
+// 2/3 of a circle (2pi/3) aka 240 degrees.
+const int32_t two_thirds_circle = -third_circle;
 
 // 1/4 of a circle (pi/4) aka 90 degrees.
 const int32_t quarter_circle = angle_base / 4;
 
-// 1/8 of a circle (pi/8) aka 45 degrees.
-const int32_t eighth_circle = angle_base / 8;
-
 // Conversion factor between angle units and radians.
-const int32_t half_circle_div_pi = static_cast<int32_t>(half_circle / 3.14159265);
+const float half_circle_div_pi = half_circle / 3.14159265;
 
-// Normalize to a positive angle (0 to 2pi).
-inline constexpr int32_t normalize_angle(int32_t angle){
-    return (angle + angle_base) & angle_bit_mask;
-}
-
-inline constexpr uint32_t normalize_angle(uint32_t angle){
-    return angle & angle_bit_mask;
-}
-
-// Normalize a 0 centerd angle; keeping its sign (-pi to pi).
-inline constexpr int32_t signed_angle(int32_t angle){
-    return ((angle + one_and_half_circle) & angle_bit_mask) - half_circle;
-}
 
 // The angle units per hall sector; 60 degrees.
 const int32_t hall_sector_span = angle_base / hall_sector_base;
@@ -285,7 +259,7 @@ const int32_t hall_sector_span = angle_base / hall_sector_base;
 // Note speed values written in degrees per ms and converted to speed units.
 
 // Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
-const int32_t max_rpm = 32'000 * rotor_revolutions_per_electric;
+const float max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 const float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / pwm_cycles_per_second;
 
@@ -657,7 +631,7 @@ const float phases_waveform[4096] = {
 
 // Get the PWM fraction at the specified angle.
 static inline float get_phase_pwm(const int32_t angle) {
-    return phases_waveform[normalize_angle(angle) >> angle_to_sin_table_shift];
+    return phases_waveform[std::bit_cast<uint32_t>(angle) >> angle_to_sin_table_shift];
 }
 
 // Lookup table for the sine function; 1024 entries for a full circle (2*pi). Table is also found
@@ -923,16 +897,15 @@ const float sin_lookup[4096] = {
 
 // Get the sine value for the given angle.
 static inline float get_sin(const int32_t angle) {
-    return sin_lookup[normalize_angle(angle) >> angle_to_sin_table_shift];
+    return sin_lookup[std::bit_cast<uint32_t>(angle) >> angle_to_sin_table_shift];
 }
 
 // Get the sine value for the angle and the 120 degrees phase shifts on either side.
 static inline ThreePhase get_three_phase_sin(int32_t angle) {
-    angle = normalize_angle(angle);
     return {
-        sin_lookup[angle >> angle_to_sin_table_shift],
-        sin_lookup[((angle + two_thirds_circle) & angle_bit_mask) >> angle_to_sin_table_shift],
-        sin_lookup[((angle + third_circle) & angle_bit_mask) >> angle_to_sin_table_shift]
+        sin_lookup[std::bit_cast<uint32_t>(angle) >> angle_to_sin_table_shift],
+        sin_lookup[std::bit_cast<uint32_t>(angle + two_thirds_circle) >> angle_to_sin_table_shift],
+        sin_lookup[std::bit_cast<uint32_t>(angle + third_circle) >> angle_to_sin_table_shift]
     };
 }
 

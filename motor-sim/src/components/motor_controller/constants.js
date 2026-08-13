@@ -34,7 +34,7 @@ export const millis_per_cycle = 1.0/cycles_per_millisecond;
 // Angle units
 // -----------
 
-export const angle_base = 1048576.0;
+export const angle_base = 2**32;
 
 // Convert degrees to angle units.
 export function degrees_to_angle_units(degrees){

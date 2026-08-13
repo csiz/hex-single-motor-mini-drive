@@ -1790,9 +1790,7 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
       unit_test_results.value = [];
 
       const all_passed = [
-        await command_unit_test(MessageCode.RUN_UNIT_TEST_FUNKY_ATAN, "Funky atan2"),
-        await command_unit_test(MessageCode.RUN_UNIT_TEST_FUNKY_ATAN_PART2, "Funky atan2 part 2"),
-        await command_unit_test(MessageCode.RUN_UNIT_TEST_FUNKY_ATAN_PART3, "Funky atan2 part 3"),
+
       ].reduce((acc, passed) => acc && passed, true);
 
       unit_test_results.value = [

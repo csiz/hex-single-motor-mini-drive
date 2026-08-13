@@ -1189,9 +1189,6 @@ enum MessageCode : uint16_t {
   SET_ANGLE = 16464,
   SAVE_SETTINGS_TO_FLASH = 16512,
   UNIT_TEST_OUTPUT = 20544,
-  RUN_UNIT_TEST_FUNKY_ATAN = 20546,
-  RUN_UNIT_TEST_FUNKY_ATAN_PART2 = 20547,
-  RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548,
   SET_STATE_RESISTANCE_CALIBRATION = 20549,
   SET_STATE_INDUCTANCE_CALIBRATION = 20550,
   SET_STATE_POSITION_CALIBRATION_CHIRP = 20551,
@@ -1270,9 +1267,6 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_ANGLE: return 6;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
     case MessageCode::UNIT_TEST_OUTPUT: return 250;
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN: return 2;
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART2: return 2;
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART3: return 2;
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 18;
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 18;
     case MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP: return 18;
@@ -1525,18 +1519,6 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_UnitTestOutput(buffer + 2, std::get<UnitTestOutput>(message.message_data));
       return 250;
     }
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_UNIT_TEST_FUNKY_ATAN));
-      return 2;
-    }
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART2: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART2));
-      return 2;
-    }
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART3: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART3));
-      return 2;
-    }
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_RESISTANCE_CALIBRATION));
       if (max_size < 2 + 16) return 0;
@@ -1786,21 +1768,6 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
     case MessageCode::UNIT_TEST_OUTPUT: {
       if (size != 2 + 248) return false;
       message.message_data = read_UnitTestOutput(buffer + 2);
-      return true;
-    }
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN: {
-      if (size != 2) return false;
-      message.message_data = std::monostate{};
-      return true;
-    }
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART2: {
-      if (size != 2) return false;
-      message.message_data = std::monostate{};
-      return true;
-    }
-    case MessageCode::RUN_UNIT_TEST_FUNKY_ATAN_PART3: {
-      if (size != 2) return false;
-      message.message_data = std::monostate{};
       return true;
     }
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {

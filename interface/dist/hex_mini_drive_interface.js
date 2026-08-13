@@ -1162,9 +1162,6 @@ const RESET_CONTROL_PARAMETERS = 16460;
 const SET_ANGLE = 16464;
 const SAVE_SETTINGS_TO_FLASH = 16512;
 const UNIT_TEST_OUTPUT = 20544;
-const RUN_UNIT_TEST_FUNKY_ATAN = 20546;
-const RUN_UNIT_TEST_FUNKY_ATAN_PART2 = 20547;
-const RUN_UNIT_TEST_FUNKY_ATAN_PART3 = 20548;
 const SET_STATE_RESISTANCE_CALIBRATION = 20549;
 const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
 const SET_STATE_POSITION_CALIBRATION_CHIRP = 20551;
@@ -1214,9 +1211,6 @@ export const MessageCode = {
   SET_ANGLE,
   SAVE_SETTINGS_TO_FLASH,
   UNIT_TEST_OUTPUT,
-  RUN_UNIT_TEST_FUNKY_ATAN,
-  RUN_UNIT_TEST_FUNKY_ATAN_PART2,
-  RUN_UNIT_TEST_FUNKY_ATAN_PART3,
   SET_STATE_RESISTANCE_CALIBRATION,
   SET_STATE_INDUCTANCE_CALIBRATION,
   SET_STATE_POSITION_CALIBRATION_CHIRP,
@@ -1552,24 +1546,6 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case RUN_UNIT_TEST_FUNKY_ATAN: {
-      const buffer = new Uint8Array(2);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      return buffer;
-    }
-    case RUN_UNIT_TEST_FUNKY_ATAN_PART2: {
-      const buffer = new Uint8Array(2);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      return buffer;
-    }
-    case RUN_UNIT_TEST_FUNKY_ATAN_PART3: {
-      const buffer = new Uint8Array(2);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      return buffer;
-    }
     case SET_STATE_RESISTANCE_CALIBRATION: {
       const message_buffer = write_TestCommand(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
@@ -1850,18 +1826,6 @@ export function read_message(buffer) {
       let message = read_UnitTestOutput(view, 2);
       message.message_code = UNIT_TEST_OUTPUT;
       return message;
-    }
-    case RUN_UNIT_TEST_FUNKY_ATAN: {
-      if (buffer.length !== 2) return null;
-      return {message_code};
-    }
-    case RUN_UNIT_TEST_FUNKY_ATAN_PART2: {
-      if (buffer.length !== 2) return null;
-      return {message_code};
-    }
-    case RUN_UNIT_TEST_FUNKY_ATAN_PART3: {
-      if (buffer.length !== 2) return null;
-      return {message_code};
     }
     case SET_STATE_RESISTANCE_CALIBRATION: {
       if (buffer.length !== 2 + 16) return null;

@@ -277,7 +277,6 @@ static void adc_init(){
 
 // Select which interrupts to handle.
 static void interrupts_init(){
-
     // TIM1 is used to generate the PWM signals for the motor phases, and to trigger the ADC.
     // 
     // Note that we don't need to set dead-time at this point; the gate driver FD6288T&Q has a 

@@ -5,10 +5,11 @@
 #include "usb_com.hpp"
 #include "test_schedules.hpp"
 #include "parameters_store.hpp"
-#include "integer_math.hpp"
+#include "math_utils.hpp"
 #include "constants.hpp"
 
 #include <stm32g4xx_hal.h>
+#include <stm32g4xx_ll_cordic.h>
 
 
 // Main loop stats tracking
@@ -79,12 +80,21 @@ UnitTestFunction unit_test_function = nullptr;
 
 void app_init() {
 
+  // Setup the CORDIC engine to compute atan2 using 32bit parameters.
+  LL_CORDIC_Config(
+    CORDIC, 
+    LL_CORDIC_FUNCTION_PHASE,     // Calculates phase and magnitude
+    LL_CORDIC_PRECISION_6CYCLES,   // Balance of precision vs execution speed
+    LL_CORDIC_SCALE_0,            // Scale factor 0 (Input bounds: [-1, 1])
+    LL_CORDIC_NBWRITE_2,          // Expecting 2 writes: X then Y
+    LL_CORDIC_NBREAD_2,           // Yields 2 reads: Phase then Magnitude
+    LL_CORDIC_INSIZE_32BITS,       // 32-bit Q1.31 fixed-point input
+    LL_CORDIC_OUTSIZE_32BITS     // 32-bit Q1.31 fixed-point output
+  );
+  
   io_init();
 
   set_GREEN_LED(0xFF);
-
-  // Get initial hall sensor state and initialize position tracking.
-  initialize_angle_tracking();
 
   usb_init();
 }
@@ -458,18 +468,6 @@ void handle_message(hex_mini_drive::Message const& message) {
     case READOUT:
     case FULL_READOUT:
     case UNIT_TEST_OUTPUT:
-      return;
-
-    case RUN_UNIT_TEST_FUNKY_ATAN:
-      run_unit_test(unit_test_funky_atan);
-      return;
-
-    case RUN_UNIT_TEST_FUNKY_ATAN_PART2:
-      run_unit_test(unit_test_funky_atan_part_2);
-      return;
-
-    case RUN_UNIT_TEST_FUNKY_ATAN_PART3:
-      run_unit_test(unit_test_funky_atan_part_3);
       return;
 
     
@@ -854,17 +852,20 @@ void app_tick() {
     const ThreePhase inductance_gradient_step_mean = inductance_gradient_step_sum * inverse_history_size;
 
     // Update the calibration values using gradient descent.
+    static float dummy = 0.0f;
+
+    dummy += learning_rate + std::get<0>(resistance_gradient_step_mean) + std::get<0>(inductance_gradient_step_mean);
 
     if (calibration_mode == CalibrationMode::RESISTANCE) {
-      current_calibration.u_resistance -= learning_rate * std::get<0>(resistance_gradient_step_mean);
-      current_calibration.v_resistance -= learning_rate * std::get<1>(resistance_gradient_step_mean);
-      current_calibration.w_resistance -= learning_rate * std::get<2>(resistance_gradient_step_mean);
+      // current_calibration.u_resistance -= learning_rate * std::get<0>(resistance_gradient_step_mean);
+      // current_calibration.v_resistance -= learning_rate * std::get<1>(resistance_gradient_step_mean);
+      // current_calibration.w_resistance -= learning_rate * std::get<2>(resistance_gradient_step_mean);
     } else if (calibration_mode == CalibrationMode::INDUCTANCE) {
-      current_calibration.inductance -= learning_rate * (
-        std::get<0>(inductance_gradient_step_mean) +
-        std::get<1>(inductance_gradient_step_mean) +
-        std::get<2>(inductance_gradient_step_mean)
-      ) * 0.333333f; // Average the inductance gradients across the three phases.
+      // current_calibration.inductance -= learning_rate * (
+      //   std::get<0>(inductance_gradient_step_mean) +
+      //   std::get<1>(inductance_gradient_step_mean) +
+      //   std::get<2>(inductance_gradient_step_mean)
+      // ) * 0.333333f; // Average the inductance gradients across the three phases.
     } else if (calibration_mode == CalibrationMode::POSITION_CHIRP) {
       // TODO: implement position chirp calibration.
     } else if (calibration_mode == CalibrationMode::POSITION_EMF) {
@@ -887,7 +888,7 @@ void app_tick() {
   // Adjust direction
   // ----------------
 
-  readout.angle = normalize_angle(control_parameters.motor_direction * readout.angle);
+  readout.angle = control_parameters.motor_direction > 0 ? readout.angle : readout.angle + half_circle;
   readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
   readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
 
