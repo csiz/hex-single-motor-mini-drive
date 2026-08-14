@@ -236,6 +236,8 @@ const float motor_sector_driving_negative[6][3] = {
 // Half a circle (pi) aka 180 degrees.
 const int32_t half_circle = -angle_base / 2;
 
+const int32_t most_positive_angle = 0x7FFFFFFF;
+
 // 1/3 of a circle (pi/3) aka 120 degrees.
 const int32_t third_circle = angle_base / 3;
 
@@ -288,7 +290,6 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .rotor_angle_ki = 0.25,
     .rotor_angular_speed_ki = 0.015625,
     .rotor_acceleration_ki = 0.0078125,
-    .motor_constant_ki = 0.00048828125,
     
     .motor_direction = +1,
     .incorrect_direction_threshold = 256,
@@ -305,7 +306,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .probing_angular_speed = angle_base / 256, // 1/256 of a rotation per PWM cycle.
     .max_pwm_difference = pwm_max / 2,
 
-    .emf_angle_error_variance_threshold = square(10 * angle_base / 360),
+    .emf_angle_error_variance_threshold = square(10.0 * angle_base / 360.0),
     .min_emf_for_motor_constant = 1.0,
     .max_resistive_power = 2.0,
     .resistive_power_ki = 0.000244140625,
@@ -329,6 +330,12 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_via_speed_ki = 0.f,
     .seek_via_speed_kp = 0.f,
     .seek_via_speed_kd = 0.f,
+
+    .phase_resistance_ki = 0.000244140625,
+    .phase_inductance_ki = 0.000244140625,
+    .magnetization_angle_ki = 0.000244140625,
+    .magnetization_factor_ki = 0.000244140625,
+    .motor_constant_ki = 0.00048828125,
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

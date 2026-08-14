@@ -202,6 +202,14 @@ static inline int32_t angle_or_mirror(const int32_t angle){
                 angle + half_circle
         )
     );
+
+    // Can we re-write the function above using less ops?
+    // return (angle + quarter_circle) % half_circle - quarter_circle;
+    
+    // Hold on, does that work when half_circle is the most negative int32?
+    // return ((angle + quarter_circle) & most_positive_angle) - quarter_circle;
+
+    // TODO: check if last one works and is faster.
 }
 
 static inline void set_cordic(int32_t const& x, int32_t const& y){
@@ -483,7 +491,7 @@ static inline MotorOutputs update_motor_smooth(
     const int32_t ideal_angle = readout.angle + quarter_circle;
 
     // Get the error between the measured current and the ideal current angle.
-    const int32_t ideal_angle_diff = current_detected * (ideal_angle - readout.inductor_angle);
+    const int32_t ideal_angle_diff = current_detected * (ideal_angle - readout.current_angle);
 
     // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
     const int32_t lead_angle_error = emf_detected ? 
@@ -1197,13 +1205,13 @@ void adc_interrupt_handler(){
 
     // Calculate the angle at which the current is running on the motor coils. The angle offset is
     // with respect to the predicted angle as that was the angle used in the park transform.
-    const auto [inductor_angle_offset, instant_current_magnitude] = get_cordic();
+    const auto [current_angle_offset, instant_current_magnitude] = get_cordic();
 
     // We can queue up the CORDIC engine for the next calculation before we read the first (I think).
     set_cordic(-quadrature_emf_voltage, direct_emf_voltage);
 
     // Current angle in the stator frame of reference.
-    const int32_t inductor_angle = predicted_angle + inductor_angle_offset;
+    const int32_t current_angle = predicted_angle + current_angle_offset;
     
     // The current measurements have a low noise floor, but it's not 0.
     // TODO: recalculate threshold for float units
@@ -1277,7 +1285,7 @@ void adc_interrupt_handler(){
     // Calculate the new angle based on the angle adjustment.
     const int32_t angle = predicted_angle + angle_adjustment;
 
-    // Get the total angle change for the current cycle.
+    // Get the total angle change for the current cycle including adjustment and speed.
     const int32_t angle_diff = angle - readout.angle;
     
     // Check if the angle overflowed and count rotations. Note, we need to flag the compiler to treat
@@ -1396,7 +1404,7 @@ void adc_interrupt_handler(){
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
     
-    readout.inductor_angle = inductor_angle;
+    readout.current_angle = current_angle;
 
     readout.rotor_acceleration = rotor_acceleration;
     readout.rotations = rotations;

@@ -61,10 +61,18 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const angle_adjustment = angle_units_to_radians(bare_readout.angle_adjustment);
   const angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.angular_speed);
   const vcc_voltage = bare_readout.vcc_voltage / VOLTAGE_UNITS_PER_VOLT;
+
+  const emf_voltage_angle = angle_units_to_radians(bare_readout.emf_voltage_angle);
   const emf_voltage_magnitude = bare_readout.emf_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
+  const current_angle = angle_units_to_radians(bare_readout.current_angle);
+  const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
+  const inductance_power_angle = angle_units_to_radians(bare_readout.inductance_power_angle);
+  const inductance_power_magnitude = bare_readout.inductance_power_magnitude;
 
-
+  
   const predicted_angle = normalize_radians(angle - angle_adjustment);
+
+  const current_angle_offset = normalize_radians(current_angle - predicted_angle);
 
   const {
     hall_state,
@@ -113,7 +121,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   
   const [web_direct_current, web_quadrature_current] = dq0_transform(u_current, v_current, w_current, predicted_angle);
   
-  const web_inductor_angle = normalize_radians(predicted_angle + Math.atan2(web_quadrature_current, web_direct_current));
+  const web_current_angle = normalize_radians(predicted_angle + Math.atan2(web_quadrature_current, web_direct_current));
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
   
   const inductance = (current_calibration?.inductance ?? 1);
@@ -226,9 +234,11 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
     rotor_direction_flip_imminent,
     // Readouts converted to physical dimensions
     u_current, v_current, w_current, avg_current,
+
+
     web_direct_current, web_quadrature_current, 
     web_current_magnitude,
-    web_inductor_angle, 
+    web_current_angle, 
     // Reference readouts in adc units
     ref_readout,
 
@@ -252,7 +262,10 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
     angle_adjustment,
     angular_speed,
     vcc_voltage,
-    emf_voltage_magnitude,
+    emf_voltage_angle, emf_voltage_magnitude,
+    current_angle, current_magnitude,
+    current_angle_offset,
+    inductance_power_angle, inductance_power_magnitude,
     web_direct_emf_voltage, web_quadrature_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 
@@ -296,28 +309,25 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
   const emf_power = bare_full_readout.emf_power;
   const inductive_power = bare_full_readout.inductive_power;
 
-  const inductor_angle = angle_units_to_radians(bare_full_readout.inductor_angle);
   const rotor_acceleration = acceleration_units_to_rotations_per_millisecond_squared(bare_full_readout.rotor_acceleration);
   const rotations = bare_full_readout.rotations;
-  const current_magnitude = bare_full_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
   const emf_angle_error_stdev = angle_units_to_radians(Math.sqrt(bare_full_readout.emf_angle_error_variance));
   const lead_angle = angle_units_to_radians(bare_full_readout.lead_angle);
   const target_pwm = bare_full_readout.target_pwm;
   const secondary_target = bare_full_readout.secondary_target;
   const seek_integral = bare_full_readout.seek_integral;
   
-  const motor_constant = bare_full_readout.motor_constant;
   const u_resistance = bare_full_readout.u_resistance;
   const v_resistance = bare_full_readout.v_resistance;
   const w_resistance = bare_full_readout.w_resistance;
   const inductance = bare_full_readout.inductance;
   const magnetization_angle = angle_units_to_radians(bare_full_readout.magnetization_angle);
   const magnetization_factor = bare_full_readout.magnetization_factor;
+  const motor_constant = bare_full_readout.motor_constant;
+  const friction_torque = bare_full_readout.friction_torque;
+  const rotor_mass = bare_full_readout.rotor_mass;
 
   const battery_current = total_power / readout.vcc_voltage;
-
-
-  const inductor_angle_offset = normalize_radians(inductor_angle - readout.predicted_angle);
 
   const exp_stats = exponential_stats(readout.dt, 2.0);
 
@@ -364,25 +374,23 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
     
     emf_angle_error_stdev,
     
-    inductor_angle,
-    inductor_angle_offset,
-    
     rotor_acceleration,
     rotations,
-    current_magnitude,
     
     lead_angle,
     target_pwm,
     secondary_target,
     seek_integral,
     
-    motor_constant,
     u_resistance,
     v_resistance,
     w_resistance,
     inductance,
     magnetization_angle,
     magnetization_factor,
+    motor_constant,
+    friction_torque,
+    rotor_mass,
   };
 
 }
@@ -411,17 +419,23 @@ function parse_current_calibration(bare_calibration) {
     inductance: bare_calibration.inductance,
     magnetization_angle: angle_units_to_radians(bare_calibration.magnetization_angle),
     magnetization_factor: bare_calibration.magnetization_factor,
+    motor_constant: bare_calibration.motor_constant,
+    friction_torque: bare_calibration.friction_torque,
+    rotor_mass: bare_calibration.rotor_mass,
   };
 } 
 
-export function make_current_calibration(current_calibraton){
+export function make_current_calibration(current_calibration){
   return {
-    u_resistance: current_calibraton.u_resistance,
-    v_resistance: current_calibraton.v_resistance,
-    w_resistance: current_calibraton.w_resistance,
-    inductance: current_calibraton.inductance,
-    magnetization_angle: radians_to_angle_units(current_calibraton.magnetization_angle),
-    magnetization_factor: current_calibraton.magnetization_factor,
+    u_resistance: current_calibration.u_resistance,
+    v_resistance: current_calibration.v_resistance,
+    w_resistance: current_calibration.w_resistance,
+    inductance: current_calibration.inductance,
+    magnetization_angle: radians_to_angle_units(current_calibration.magnetization_angle),
+    magnetization_factor: current_calibration.magnetization_factor,
+    motor_constant: current_calibration.motor_constant,
+    friction_torque: current_calibration.friction_torque,
+    rotor_mass: current_calibration.rotor_mass,
   };
 }
 

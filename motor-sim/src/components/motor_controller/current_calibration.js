@@ -99,21 +99,13 @@ export async function run_current_calibration(motor_controller, message_options)
       const v_resistive_voltage = v_current * v_resistance;
       const w_resistive_voltage = w_current * w_resistance;
 
-      const u_inductance = inductance * 1.0;
-      const v_inductance = inductance * 1.0;
-      const w_inductance = inductance * 1.0;
-
-      const u_inductance_voltage = u_scaled_current_diff * u_inductance;
-      const v_inductance_voltage = v_scaled_current_diff * v_inductance;
-      const w_inductance_voltage = w_scaled_current_diff * w_inductance;
+      const u_inductance_voltage = u_scaled_current_diff * inductance;
+      const v_inductance_voltage = v_scaled_current_diff * inductance;
+      const w_inductance_voltage = w_scaled_current_diff * inductance;
 
       const u_inductance_power = u_inductance_voltage * u_current;
       const v_inductance_power = v_inductance_voltage * v_current;
       const w_inductance_power = w_inductance_voltage * w_current;
-
-      const [inductance_voltage_direct, inductance_voltage_quadrature] = dq0_transform(u_inductance_voltage, v_inductance_voltage, w_inductance_voltage, 0);
-      const inductance_voltage_angle = Math.atan2(inductance_voltage_quadrature, inductance_voltage_direct);
-      const inductance_voltage_magnitude = Math.sqrt(square(inductance_voltage_direct) + square(inductance_voltage_quadrature));
 
       const [inductance_power_direct, inductance_power_quadrature] = dq0_transform(u_inductance_power, v_inductance_power, w_inductance_power, 0);
       const inductance_power_magnitude = Math.sqrt(square(inductance_power_direct) + square(inductance_power_quadrature));
@@ -155,18 +147,15 @@ export async function run_current_calibration(motor_controller, message_options)
         w_residual * magnetization_factor * inductance_power_magnitude * Math.sin(magnetization_angle - inductance_power_angle + 2 * Math.PI / 3)
       );
 
-      const [residual_direct, residual_quadrature] = dq0_transform(u_residual, v_residual, w_residual, 0);
-      const residual_angle = Math.atan2(residual_quadrature, residual_direct);
-      const residual_magnitude = Math.sqrt(square(residual_direct) + square(residual_quadrature)) * Math.sqrt(2 / 3);
+      const residual_square = square(u_residual) + square(v_residual) + square(w_residual);
       
-      const magnitude_prediction = magnetization_factor * inductance_power_magnitude * (0.5 + 0.5 * Math.cos(current_angle - predicted_angle));
+      const residual_square_prediction = square(magnetization_factor * inductance_power_magnitude * (0.5 + 0.5 * Math.cos(current_angle - predicted_angle)));
 
-      const residual2 = magnitude_prediction - residual_magnitude;
+      const residual2 = residual_square_prediction - residual_square;
 
-      const loss2 = square(magnitude_prediction - residual_magnitude);
+      const loss2 = Math.abs(residual2);
 
-      const predicted_angle_gradient = residual2 * magnetization_factor * inductance_power_magnitude * 0.5 * Math.sin(current_angle - predicted_angle);
-
+      const predicted_angle_gradient = residual2 * square(magnetization_factor * inductance_power_magnitude) * Math.sin(current_angle - predicted_angle);
 
       const magnet_distortion = 20;
       const magnet_distortion_factor = 0.5;
@@ -199,11 +188,8 @@ export async function run_current_calibration(motor_controller, message_options)
         v_residual,
         w_residual,
 
-        residual_direct,
-        residual_quadrature,
-        residual_angle,
-        residual_magnitude,
-        magnitude_prediction,
+        residual_square,
+        residual_square_prediction,
         loss2,
 
         u_resistance_gradient,
@@ -215,7 +201,6 @@ export async function run_current_calibration(motor_controller, message_options)
         predicted_angle_gradient,
 
         inductance_power_angle,
-        inductance_voltage_angle,
         current_angle,
         drive_voltage_angle,
       };
@@ -262,6 +247,7 @@ export async function run_current_calibration(motor_controller, message_options)
     iterations.push({
       iteration: i,
       current_calibration: {
+        ...current_calibration,
         u_resistance, 
         v_resistance, 
         w_resistance, 
@@ -305,6 +291,7 @@ export async function run_current_calibration(motor_controller, message_options)
     is_stable,
     iterations,
     current_calibration: {
+      ...current_calibration,
       u_resistance,
       v_resistance,
       w_resistance,

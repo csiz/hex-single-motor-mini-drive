@@ -982,7 +982,7 @@ const plot_power = plot_lines({
       y: "emf_power_avg", label: "EMF Power (2ms average)", color: d3.color(colors.angle).darker(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_power_stdev}),
     },
-    {y: "inductive_power", label: "Inductive Power", color: colors.inductor_angle},
+    {y: "inductive_power", label: "Inductive Power", color: colors.current_angle},
     
     {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
     {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
@@ -1037,8 +1037,8 @@ const plot_electric_position = plot_lines({
   y_domain: [-Math.PI, Math.PI],
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
-    {y: (d) => d.current_detected ? d.inductor_angle : null, label: "Inductor Angle", color: colors.web_angle},
-    {y: (d) => d.web_current_magnitude > 0.010 ? d.web_inductor_angle : null, label: "Inductor Angle (computed online)", color: colors.inductor_angle},
+    {y: (d) => d.current_detected ? d.current_angle : null, label: "Current Angle", color: colors.web_angle},
+    {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {
       y: (d) => d.web_emf_voltage_angle, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
@@ -1056,7 +1056,7 @@ const plot_electric_offsets = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (radians)",
   channels: [
-    {y: (d) => d.current_detected ? d.inductor_angle_offset : null, label: "Inductor Angle Offset", color: colors.inductor_angle},
+    {y: (d) => d.current_detected ? d.current_angle_offset : null, label: "Current Angle Offset", color: colors.current_angle},
     {
       y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
@@ -1441,9 +1441,9 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: (d) => d.w_residual - d.w_wtf + d.w_wtf2, label: "W Residual - WTF + WTF2", color: d3.color(colors.w).darker(3)},
 
     {y: (d)=>Math.sqrt(d.loss2), label: "Sqrt Loss2", color: d3.color(colors_categories[0]).darker(1)},
-    {y: "magnitude_prediction", label: "Predicted Magnitude", color: colors_categories[0]},
+    {y: "residual_square_prediction", label: "Predicted Residual Square", color: colors_categories[0]},
 
-    {y: "residual_magnitude", label: "Residual Magnitude", color: colors_categories[1]},
+    {y: "residual_square", label: "Residual Square", color: colors_categories[1]},
     {y: (d)=>Math.sqrt(d.loss), label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
 
     {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
@@ -1476,12 +1476,11 @@ const current_calibration_angles_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (radians)",
   channels: [
+    {y: "current_angle", label: "Current Angle", color: colors_categories[0]},
     {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
-    {y: (d)=>normalize_radians(d.inductance_voltage_angle - d.current_angle), label: "Inductor-Current Angle Diff", color: colors_categories[3]},
     {y: "inductance_power_angle", label: "Inductor Power Angle", color: colors_categories[4]},
     {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
     {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
-    {y: "inductance_voltage_angle", label: "Inductor Angle", color: colors.inductor_angle},
   ],
   curve,
 });
@@ -1538,10 +1537,6 @@ const control_parameters_input = Object.fromEntries(
     ["rotor_acceleration_ki", {
       label: "Rotor Acceleration KI", 
       description: "Integral gain for the rotor acceleration observer; same as above, more resolution."
-    }],
-    ["motor_constant_ki", {
-      label: "Motor Constant KI", 
-      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
     }],
     ["motor_direction", {
       label: "Motor direction", 
@@ -1676,13 +1671,33 @@ const control_parameters_input = Object.fromEntries(
       label: "Seek via Speed KD",
       description: "Seek via speed derivative gain. Dampening factor to lower speed when the error is decreasing quickly."
     }],
-    ["phase_resistance", {
-      label: "Phase Resistance",
-      description: "Resistance of each motor phase in star configuration. Used to compute the resistive voltage drop and power loss."
+    ["phase_resistance_ki", {
+      label: "Phase Resistance KI",
+      description: "Integral gain for phase resistance estimation. Helps in accurately estimating the resistance of each motor phase in star configuration."
     }],
-    ["phase_inductance", {
-      label: "Phase Inductance",
-      description: "Inductance of each motor phase in star configuration. Used to compute the inductive voltage drop."
+    ["phase_inductance_ki", {
+      label: "Phase Inductance KI",
+      description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
+    }],
+    ["magnetization_angle_ki", {
+      label: "Magnetization Angle KI",
+      description: "Integral gain for magnetization angle estimation. To be explained later..."
+    }],
+    ["magnetization_factor_ki", {
+      label: "Magnetization Factor KI",
+      description: "Integral gain for magnetization factor. To be explained later..."
+    }],
+    ["motor_constant_ki", {
+      label: "Motor Constant KI", 
+      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
+    }],
+    ["friction_torque_ki", {
+      label: "Friction Torque KI", 
+      description: "Integral gain for the friction torque observer; the relation between speed and torque required to overcome friction."
+    }],
+    ["rotor_mass_ki", {
+      label: "Rotor Mass KI", 
+      description: "Integral gain for the rotor mass observer; the relation between speed and torque required to accelerate the rotor."
     }],
   ].map(([key, {label, description}]) => {
 
@@ -1855,7 +1870,7 @@ const colors = {
   web_angle: "rgb(178, 228, 0)",
   angle: "rgb(39, 163, 185)",
   web_current_magnitude: "rgb(197, 152, 67)",
-  inductor_angle: "rgb(102, 166, 30)",
+  current_angle: "rgb(102, 166, 30)",
   voltage_angle: "rgb(0, 185, 124)",
   angle_driven: "rgb(166, 30, 132)",
   angular_speed: "rgb(41, 194, 173)",
