@@ -1039,6 +1039,7 @@ const plot_electric_position = plot_lines({
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: (d) => d.current_detected ? d.current_angle : null, label: "Current Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
+    {y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
     {
       y: (d) => d.web_emf_voltage_angle, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),

@@ -189,29 +189,6 @@ void set_angle_offset(int32_t angle_offset) {
 // Helper functions
 // ----------------
 
-
-static inline int32_t angle_or_mirror(const int32_t angle){
-    return (
-        angle >= 0 ? (
-            angle <= quarter_circle ?
-                angle :
-                angle - half_circle
-        ) : (
-            angle >= -quarter_circle ?
-                angle :
-                angle + half_circle
-        )
-    );
-
-    // Can we re-write the function above using less ops?
-    // return (angle + quarter_circle) % half_circle - quarter_circle;
-    
-    // Hold on, does that work when half_circle is the most negative int32?
-    // return ((angle + quarter_circle) & most_positive_angle) - quarter_circle;
-
-    // TODO: check if last one works and is faster.
-}
-
 static inline void set_cordic(int32_t const& x, int32_t const& y){
     LL_CORDIC_WriteData(CORDIC, std::bit_cast<uint32_t>(x));
     LL_CORDIC_WriteData(CORDIC, std::bit_cast<uint32_t>(y));
@@ -1208,7 +1185,7 @@ void adc_interrupt_handler(){
     const auto [current_angle_offset, instant_current_magnitude] = get_cordic();
 
     // We can queue up the CORDIC engine for the next calculation before we read the first (I think).
-    set_cordic(-quadrature_emf_voltage, direct_emf_voltage);
+    set_cordic(direct_emf_voltage, quadrature_emf_voltage);
 
     // Current angle in the stator frame of reference.
     const int32_t current_angle = predicted_angle + current_angle_offset;
@@ -1225,15 +1202,22 @@ void adc_interrupt_handler(){
     // -----------------------
 
     // Get the angle measured from EMF relative to the predicted rotor angle.
-    const auto [emf_angle_offset, instant_emf_voltage_magnitude] = get_cordic();
+    const auto [emf_voltage_angle_offset, instant_emf_voltage_magnitude] = get_cordic();
+
+    // Also calculate the EMF angle for completeness.
+    const int32_t emf_voltage_angle = predicted_angle + emf_voltage_angle_offset;
 
     // Average the EMF voltage magnitude over a short duration to reduce noise.
     const float emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) * 0.25f;
 
-    // The rotor angle inferred from the EMF can be either aligned with the positive quadrature direction or 
-    // the negative. It's going to be aligned with the negative direction when we have the rotor switches
-    // from positive to negative speed. The angle becomes extremely noisy at standstill (crossing 0 speed).
-    const int32_t emf_angle_error = angle_or_mirror(emf_angle_offset);
+    // The rotor angle inferred from the EMF is going to be perpendicular and show up on either side (depending
+    // on rotation direction). In order to calculate the error we need the angle to the axis of the EMF voltage.
+    // 
+    // Branching if statements are easier to understand, but they do take 40 cycles extra, so we end up doing
+    // it the bit bang "clever" way. Anyway, the point is we divide the angle space in 2 by and-ing the maximum
+    // positive angle and then we center it on 0 by subtracting a quarter circle. We would've had to add a quarter
+    // circle to our original angle, but the EMF is already perpendicular, so we don't have to.
+    const int32_t emf_angle_error = (emf_voltage_angle_offset & most_positive_angle) - quarter_circle;
 
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
     const float emf_angle_error_variance = (
@@ -1269,7 +1253,7 @@ void adc_interrupt_handler(){
         correct_angle_counter + ((driver_state.active_pwm and not emf_fix) ? -1 : emf_fix)
     );
 
-    // If the angle error is between -90 and +90 degrees, use it directly otherwise use the mirror angle.
+    // Integreate the EMF position error only if we're detecting EMF.
     const int32_t prediction_error = emf_detected * emf_angle_error;
     
 
@@ -1390,7 +1374,6 @@ void adc_interrupt_handler(){
     readout.angle_adjustment = angle_adjustment;
     readout.angular_speed = angular_speed;
     readout.vcc_voltage = vcc_voltage;
-    readout.emf_voltage_magnitude = emf_voltage_magnitude;
 
     readout.temperature = temperature;
 
@@ -1404,13 +1387,16 @@ void adc_interrupt_handler(){
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
     
+    readout.emf_voltage_angle = emf_voltage_angle;
+    readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.current_angle = current_angle;
+    readout.current_magnitude = current_magnitude;
+
 
     readout.rotor_acceleration = rotor_acceleration;
     readout.rotations = rotations;
 
     readout.emf_angle_error_variance = emf_angle_error_variance;
-    readout.current_magnitude = current_magnitude;
     
     readout.lead_angle = driver_state.lead_angle;
     readout.target_pwm = driver_state.target_pwm;
