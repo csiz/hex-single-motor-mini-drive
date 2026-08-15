@@ -66,8 +66,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const emf_voltage_magnitude = bare_readout.emf_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
   const current_angle = angle_units_to_radians(bare_readout.current_angle);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
-  const inductance_power_angle = angle_units_to_radians(bare_readout.inductance_power_angle);
-  const inductance_power_magnitude = bare_readout.inductance_power_magnitude;
+  const current_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.current_angular_speed);
 
   
   const predicted_angle = normalize_radians(angle - angle_adjustment);
@@ -265,7 +264,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
     emf_voltage_angle, emf_voltage_magnitude,
     current_angle, current_magnitude,
     current_angle_offset,
-    inductance_power_angle, inductance_power_magnitude,
+    current_angular_speed,
     web_direct_emf_voltage, web_quadrature_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 

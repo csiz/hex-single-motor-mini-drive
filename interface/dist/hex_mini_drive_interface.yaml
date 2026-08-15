@@ -308,13 +308,9 @@ definitions:
         type: float32
         doc: Magnitude of the current vector.  
 
-      inductance_power_angle:
-        type: int32
-        doc: Angle of the inductance power vector.
-      
-      inductance_power_magnitude:
+      current_angular_speed:
         type: float32
-        doc: Magnitude of the inductance power vector.
+        doc: Angular speed of the current vector.
 
 
   StreamFullReadouts:

@@ -1194,9 +1194,11 @@ void adc_interrupt_handler(){
     // TODO: recalculate threshold for float units
     const bool current_detected = instant_current_magnitude > 4;
 
+    
     // Average the current magnitude over a short duration to reduce noise.
     const float current_magnitude = (instant_current_magnitude + readout.current_magnitude * 3) * 0.25f;
     
+    const float current_angular_speed = static_cast<float>(current_angle - readout.current_angle);
 
     // Back EMF angle observer
     // -----------------------
@@ -1391,6 +1393,7 @@ void adc_interrupt_handler(){
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.current_angle = current_angle;
     readout.current_magnitude = current_magnitude;
+    readout.current_angular_speed = current_angular_speed;
 
 
     readout.rotor_acceleration = rotor_acceleration;

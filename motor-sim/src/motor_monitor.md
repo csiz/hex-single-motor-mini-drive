@@ -1307,7 +1307,12 @@ const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: 
 const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
 
 
-const current_calibration_test_speed_slider = inputs_wide_range([0, speed_units_to_rotations_per_millisecond(max_angular_speed)], {value: 1.0, step: 0.01, label: "Calibration test speed (rotations/ms):"});
+const current_calibration_test_speed_slider = inputs_wide_range(
+  [
+    -speed_units_to_rotations_per_millisecond(max_angular_speed), 
+    +speed_units_to_rotations_per_millisecond(max_angular_speed)
+  ], 
+  {value: 1.0, step: 0.01, label: "Calibration test speed (rotations/ms):"});
 
 const current_calibration_test_speed = transformed_input_value(current_calibration_test_speed_slider, rotations_per_millisecond_to_speed_units);
 
@@ -1478,8 +1483,7 @@ const current_calibration_angles_plot = plot_lines({
   y_label: "Angle (radians)",
   channels: [
     {y: "current_angle", label: "Current Angle", color: colors_categories[0]},
-    {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
-    {y: "inductance_power_angle", label: "Inductor Power Angle", color: colors_categories[4]},
+    {y: "current_angular_speed", label: "Current Angular Speed", color: colors_categories[1]},
     {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
     {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
   ],

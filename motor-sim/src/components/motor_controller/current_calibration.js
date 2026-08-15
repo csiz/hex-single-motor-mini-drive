@@ -82,14 +82,11 @@ export async function run_current_calibration(motor_controller, message_options)
     const gradients = sample.map((readout) => {
       const {
         u_current, v_current, w_current, 
+        current_angle, current_magnitude, current_angular_speed,
         u_current_diff, v_current_diff, w_current_diff, 
         u_drive_voltage, v_drive_voltage, w_drive_voltage,
         drive_voltage_angle,
       } = readout;
-
-      const [current_direct, current_quadrature] = dq0_transform(u_current, v_current, w_current, 0);
-      const current_angle = Math.atan2(current_quadrature, current_direct);
-      const current_magnitude = Math.sqrt(square(current_direct) + square(current_quadrature));
 
       const u_scaled_current_diff = u_current_diff * pwm_cycles_per_second;
       const v_scaled_current_diff = v_current_diff * pwm_cycles_per_second;
@@ -107,14 +104,14 @@ export async function run_current_calibration(motor_controller, message_options)
       const v_inductance_power = v_inductance_voltage * v_current;
       const w_inductance_power = w_inductance_voltage * w_current;
 
-      const [inductance_power_direct, inductance_power_quadrature] = dq0_transform(u_inductance_power, v_inductance_power, w_inductance_power, 0);
-      const inductance_power_magnitude = Math.sqrt(square(inductance_power_direct) + square(inductance_power_quadrature));
-      const inductance_power_angle = Math.atan2(inductance_power_quadrature, inductance_power_direct);
-      const inductance_power_emf = magnetization_factor * inductance_power_magnitude;
+      const inductance_power_ish = square(current_magnitude) * Math.abs(current_angular_speed);
+      const inductance_power_emf = magnetization_factor * inductance_power_ish;
 
-      const u_wtf = inductance_power_emf * Math.cos(magnetization_angle - inductance_power_angle);
-      const v_wtf = inductance_power_emf * Math.cos(magnetization_angle - inductance_power_angle - 2 * Math.PI / 3);
-      const w_wtf = inductance_power_emf * Math.cos(magnetization_angle - inductance_power_angle + 2 * Math.PI / 3);
+      const wtf_angle = 2*current_angle - magnetization_angle;
+
+      const u_wtf = inductance_power_emf * Math.cos(wtf_angle);
+      const v_wtf = inductance_power_emf * Math.cos(wtf_angle - 2 * Math.PI / 3);
+      const w_wtf = inductance_power_emf * Math.cos(wtf_angle + 2 * Math.PI / 3);
 
       const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage + u_wtf;
       const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage + v_wtf;
@@ -136,33 +133,33 @@ export async function run_current_calibration(motor_controller, message_options)
 
 
       const magnetization_factor_gradient = (
-        u_residual * inductance_power_magnitude * Math.cos(magnetization_angle - inductance_power_angle) +
-        v_residual * inductance_power_magnitude * Math.cos(magnetization_angle - inductance_power_angle - 2 * Math.PI / 3) +
-        w_residual * inductance_power_magnitude * Math.cos(magnetization_angle - inductance_power_angle + 2 * Math.PI / 3)
+        u_residual * inductance_power_ish * Math.cos(wtf_angle) +
+        v_residual * inductance_power_ish * Math.cos(wtf_angle - 2 * Math.PI / 3) +
+        w_residual * inductance_power_ish * Math.cos(wtf_angle + 2 * Math.PI / 3)
       );
 
-      const magnetization_angle_gradient = -(
-        u_residual * magnetization_factor * inductance_power_magnitude * Math.sin(magnetization_angle - inductance_power_angle) +
-        v_residual * magnetization_factor * inductance_power_magnitude * Math.sin(magnetization_angle - inductance_power_angle - 2 * Math.PI / 3) +
-        w_residual * magnetization_factor * inductance_power_magnitude * Math.sin(magnetization_angle - inductance_power_angle + 2 * Math.PI / 3)
+      const magnetization_angle_gradient = (
+        u_residual * inductance_power_emf * Math.sin(wtf_angle) +
+        v_residual * inductance_power_emf * Math.sin(wtf_angle - 2 * Math.PI / 3) +
+        w_residual * inductance_power_emf * Math.sin(wtf_angle + 2 * Math.PI / 3)
       );
 
       const residual_square = square(u_residual) + square(v_residual) + square(w_residual);
       
-      const residual_square_prediction = square(magnetization_factor * inductance_power_magnitude * (0.5 + 0.5 * Math.cos(current_angle - predicted_angle)));
+      const residual_square_prediction = square(inductance_power_emf * (0.5 + 0.5 * Math.cos(current_angle - predicted_angle)));
 
       const residual2 = residual_square_prediction - residual_square;
 
       const loss2 = Math.abs(residual2);
 
-      const predicted_angle_gradient = residual2 * square(magnetization_factor * inductance_power_magnitude) * Math.sin(current_angle - predicted_angle);
+      const predicted_angle_gradient = residual2 * square(inductance_power_emf) * Math.sin(current_angle - predicted_angle);
 
-      const magnet_distortion = 20;
+      const magnet_distortion = 20.0 * Math.PI / 180.0;
       const magnet_distortion_factor = 0.5;
 
-      const u_wtf2 = inductance_power_emf * Math.cos(magnetization_angle - inductance_power_angle + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
-      const v_wtf2 = inductance_power_emf * Math.cos(magnetization_angle - inductance_power_angle - 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor +magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
-      const w_wtf2 = inductance_power_emf * Math.cos(magnetization_angle - inductance_power_angle + 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
+      const u_wtf2 = inductance_power_emf * Math.cos(wtf_angle + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
+      const v_wtf2 = inductance_power_emf * Math.cos(wtf_angle - 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
+      const w_wtf2 = inductance_power_emf * Math.cos(wtf_angle + 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
 
       return {
         ...readout,
@@ -200,7 +197,6 @@ export async function run_current_calibration(motor_controller, message_options)
         magnetization_angle_gradient,
         predicted_angle_gradient,
 
-        inductance_power_angle,
         current_angle,
         drive_voltage_angle,
       };

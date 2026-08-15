@@ -114,16 +114,14 @@ export class Readout {
   current_angle;
   // Magnitude of the current vector.
   current_magnitude;
-  // Angle of the inductance power vector.
-  inductance_power_angle;
-  // Magnitude of the inductance power vector.
-  inductance_power_magnitude;
+  // Angular speed of the current vector.
+  current_angular_speed;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_Readout(value) {
-  const buffer = new Uint8Array(82);
+  const buffer = new Uint8Array(78);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.u_drive_voltage)
@@ -166,9 +164,7 @@ function write_Readout(value) {
   offset += 4;
   view.setFloat32(offset, value.current_magnitude)
   offset += 4;
-  view.setInt32(offset, value.inductance_power_angle)
-  offset += 4;
-  view.setFloat32(offset, value.inductance_power_magnitude)
+  view.setFloat32(offset, value.current_angular_speed)
   offset += 4;
   return buffer;
 }
@@ -215,9 +211,7 @@ function read_Readout(view, offset = 0) {
   offset += 4;
   result.current_magnitude = view.getFloat32(offset);
   offset += 4;
-  result.inductance_power_angle = view.getInt32(offset);
-  offset += 4;
-  result.inductance_power_magnitude = view.getFloat32(offset);
+  result.current_angular_speed = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -321,12 +315,12 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(198);
+  const buffer = new Uint8Array(194);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = new Uint8Array(view.buffer, offset, 82).set(write_Readout(value), 0);
+  const base_buffer = new Uint8Array(view.buffer, offset, 78).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
-  offset += 82;
+  offset += 78;
   view.setFloat32(offset, value.main_loop_rate)
   offset += 4;
   view.setFloat32(offset, value.adc_update_rate)
@@ -393,7 +387,7 @@ function read_FullReadout(view, offset = 0) {
   let result = new FullReadout();
   
   Object.assign(result, read_Readout(view, offset));
-  offset += 82;
+  offset += 78;
   
   result.main_loop_rate = view.getFloat32(offset);
   offset += 4;
@@ -1663,7 +1657,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case READOUT: {
-      if (buffer.length !== 2 + 82) return null;
+      if (buffer.length !== 2 + 78) return null;
       let message = read_Readout(view, 2);
       message.message_code = READOUT;
       return message;
@@ -1679,7 +1673,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 198) return null;
+      if (buffer.length !== 2 + 194) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;

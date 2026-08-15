@@ -194,10 +194,8 @@ struct Readout {
   int32_t current_angle;
   // Magnitude of the current vector.
   float current_magnitude;
-  // Angle of the inductance power vector.
-  int32_t inductance_power_angle;
-  // Magnitude of the inductance power vector.
-  float inductance_power_magnitude;
+  // Angular speed of the current vector.
+  float current_angular_speed;
 };
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
@@ -242,9 +240,7 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
   offset += 4;
-  write_int32(buffer + offset, value.inductance_power_angle);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_power_magnitude);;
+  write_float32(buffer + offset, value.current_angular_speed);;
   offset += 4;
 }
 static inline Readout read_Readout(uint8_t const* buffer) {
@@ -292,9 +288,7 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_power_angle = read_int32(buffer + offset);
-  offset += 4;
-  result.inductance_power_magnitude = read_float32(buffer + offset);
+  result.current_angular_speed = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -395,7 +389,7 @@ struct FullReadout : Readout {
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
   size_t offset = 0;
   write_Readout(buffer + offset, value);;
-  offset += 82;
+  offset += 78;
   write_float32(buffer + offset, value.main_loop_rate);;
   offset += 4;
   write_float32(buffer + offset, value.adc_update_rate);;
@@ -461,7 +455,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   size_t offset = 0;
   
   FullReadout result {read_Readout(buffer + offset)};
-  offset += 82;
+  offset += 78;
   
   result.main_loop_rate = read_float32(buffer + offset);
   offset += 4;
@@ -1296,10 +1290,10 @@ struct Message {
 constexpr size_t message_size(MessageCode code) {
   switch (code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
-    case MessageCode::READOUT: return 84;
+    case MessageCode::READOUT: return 80;
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 200;
+    case MessageCode::FULL_READOUT: return 196;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 18;
@@ -1356,9 +1350,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 82) return 0;
+      if (max_size < 2 + 78) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 84;
+      return 80;
     }
     case MessageCode::STREAM_FULL_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_FULL_READOUTS));
@@ -1372,9 +1366,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 198) return 0;
+      if (max_size < 2 + 194) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 200;
+      return 196;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1632,7 +1626,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 82) return false;
+      if (size != 2 + 78) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1647,7 +1641,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 198) return false;
+      if (size != 2 + 194) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }
