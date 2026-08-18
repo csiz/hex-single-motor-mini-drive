@@ -304,7 +304,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .motor_direction = +1,
     .incorrect_direction_threshold = 256,
     .max_pwm_change = 8,
-    .max_angle_change = 8,
+    .max_angle_change = angle_base / 32.f,
 
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -10),
