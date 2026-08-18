@@ -353,7 +353,12 @@ const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycl
 const command_timeout = transformed_input_value(command_timeout_slider, (millis) => Math.floor(millis * cycles_per_millisecond));
 
 // Choose the angular speed target for certain commands.
-const command_angular_speed_slider = inputs_wide_range([0, speed_units_to_rotations_per_millisecond(max_angular_speed)], {value: 1, step: 0.1, label: "Angular speed value (rotations/ms)"});
+const command_angular_speed_slider = inputs_wide_range(
+  [
+    0.0,
+    speed_units_to_rotations_per_millisecond(max_angular_speed)
+  ], 
+  {value: 1, step: 0.01, label: "Angular speed value (rotations/ms)"});
 const command_angular_speed = transformed_input_value(command_angular_speed_slider, rotations_per_millisecond_to_speed_units);
 
 // Choose the target angle for certain commands.
@@ -1081,6 +1086,7 @@ const plot_speed = plot_lines({
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: (d) => d.rotor_acceleration * 10, label: "Rotor Acceleration (10ms speed diff)", color: colors.angle_driven},
+    {y: "emf_voltage_angular_speed", label: "EMF Voltage Angular Speed", color: colors.voltage_angle},
   ],
   curve,
 });
@@ -1530,6 +1536,15 @@ let active_control_parameters_table =  Mutable(stringify_active_control_paramete
 
 const control_parameters_input = Object.fromEntries(
   [
+    ["min_emf_speed", {
+      label: "Minimum EMF Speed for detection", 
+      description: `Minimum EMF speed required to declare EMF detected. There is noise in the EMF measurement, so
+      we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated.`
+    }],
+    ["emf_probing_interval", {
+      label: "EMF Probing Interval",
+      description: "Interval for probing the EMF angle when it is too noisy to use. Determines how frequently we check the EMF angle."
+    }],
     ["rotor_angle_ki", {
       label: "Rotor Angle KI", 
       description: "Integral gain for the rotor angle observer from the measured EMF angle.",
@@ -1559,11 +1574,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Maximum Angle Change per cycle", 
       description: `Maximum allowed change in the actively driving angle per control cycle (this 
       change is relative to the angle predicted at the active driving speed).`
-    }],
-    ["min_emf_voltage", {
-      label: "Minimum EMF Voltage for detection", 
-      description: `Minimum EMF voltage required to declare EMF detected. There is noise in the EMF measurement, so
-      we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated.`
     }],
     ["hall_angle_ki", {
       label: "Position adjustment from hall angle KI", 
@@ -1595,10 +1605,6 @@ const control_parameters_input = Object.fromEntries(
       description: `Maximum PWM allowed compared to the PWM required to compensate for the back EMF. This allows us to
       drive the motor at the maximum speed allowed by our voltage source whilst capping the PWM component that generates
       driving current. Note that this is the maximum PWM allowed whilst the motor is stationary and back EMF is 0.`
-    }],
-    ["emf_angle_error_variance_threshold", {
-      label: "EMF Variance Threshold",
-      description: "Variance for the EMF angle when it is too noisy to use. If the variance is above this threshold we don't use to for the angle calculation."
     }],
     ["min_emf_for_motor_constant", {
       label: "Threshold for motor constant",

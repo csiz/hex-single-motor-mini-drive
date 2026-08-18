@@ -190,6 +190,8 @@ struct Readout {
   // as well. We can rotate the EMF voltage vector fully to the beta direction and get 
   // closer to the actual EMF voltage magnitude.
   float emf_voltage_magnitude;
+  // Angular speed of the EMF voltage vector.
+  float emf_voltage_angular_speed;
   // Angle of the current vector.
   int32_t current_angle;
   // Magnitude of the current vector.
@@ -235,6 +237,8 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   write_int32(buffer + offset, value.emf_voltage_angle);;
   offset += 4;
   write_float32(buffer + offset, value.emf_voltage_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_voltage_angular_speed);;
   offset += 4;
   write_int32(buffer + offset, value.current_angle);;
   offset += 4;
@@ -283,6 +287,8 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   result.emf_voltage_angle = read_int32(buffer + offset);
   offset += 4;
   result.emf_voltage_magnitude = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_voltage_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.current_angle = read_int32(buffer + offset);
   offset += 4;
@@ -389,7 +395,7 @@ struct FullReadout : Readout {
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
   size_t offset = 0;
   write_Readout(buffer + offset, value);;
-  offset += 78;
+  offset += 82;
   write_float32(buffer + offset, value.main_loop_rate);;
   offset += 4;
   write_float32(buffer + offset, value.adc_update_rate);;
@@ -455,7 +461,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   size_t offset = 0;
   
   FullReadout result {read_Readout(buffer + offset)};
-  offset += 78;
+  offset += 82;
   
   result.main_loop_rate = read_float32(buffer + offset);
   offset += 4;
@@ -926,6 +932,10 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
 struct ControlParameters {
+  // Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
+  float min_emf_speed;
+  // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
+  uint32_t emf_probing_interval;
   // Magnet position integral gain.
   float rotor_angle_ki;
   // Magnet angular speed integral gain.
@@ -940,8 +950,6 @@ struct ControlParameters {
   float max_pwm_change;
   // Maximum target angle change per cycle.
   int32_t max_angle_change;
-  // Minimum EMF voltage to consider EMF detected (above the noise level)
-  float min_emf_voltage;
   // Integral gain for the hall angle adjustment (0 to ignore).
   float hall_angle_ki;
   // Lead angle integral gain for efficient driving.
@@ -956,8 +964,6 @@ struct ControlParameters {
   float probing_angular_speed;
   // Maximum PWM difference from motor PWM required to compensate back EMF.
   float max_pwm_difference;
-  // Maximum EMF angle correction variance when it's too noisy to update the angle.
-  float emf_angle_error_variance_threshold;
   // Minium EMF voltage to compute the motor constant.
   float min_emf_for_motor_constant;
   // Maximum resistive power that can be dissipated in the motor coils.
@@ -1014,6 +1020,10 @@ struct ControlParameters {
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
   size_t offset = 0;
+  write_float32(buffer + offset, value.min_emf_speed);;
+  offset += 4;
+  write_uint32(buffer + offset, value.emf_probing_interval);;
+  offset += 4;
   write_float32(buffer + offset, value.rotor_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.rotor_angular_speed_ki);;
@@ -1028,8 +1038,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_int32(buffer + offset, value.max_angle_change);;
   offset += 4;
-  write_float32(buffer + offset, value.min_emf_voltage);;
-  offset += 4;
   write_float32(buffer + offset, value.hall_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.lead_angle_control_ki);;
@@ -1043,8 +1051,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.probing_angular_speed);;
   offset += 4;
   write_float32(buffer + offset, value.max_pwm_difference);;
-  offset += 4;
-  write_float32(buffer + offset, value.emf_angle_error_variance_threshold);;
   offset += 4;
   write_float32(buffer + offset, value.min_emf_for_motor_constant);;
   offset += 4;
@@ -1104,6 +1110,10 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   
   ControlParameters result;
   
+  result.min_emf_speed = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_probing_interval = read_uint32(buffer + offset);
+  offset += 4;
   result.rotor_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.rotor_angular_speed_ki = read_float32(buffer + offset);
@@ -1118,8 +1128,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.max_angle_change = read_int32(buffer + offset);
   offset += 4;
-  result.min_emf_voltage = read_float32(buffer + offset);
-  offset += 4;
   result.hall_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.lead_angle_control_ki = read_float32(buffer + offset);
@@ -1133,8 +1141,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   result.probing_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.max_pwm_difference = read_float32(buffer + offset);
-  offset += 4;
-  result.emf_angle_error_variance_threshold = read_float32(buffer + offset);
   offset += 4;
   result.min_emf_for_motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -1290,10 +1296,10 @@ struct Message {
 constexpr size_t message_size(MessageCode code) {
   switch (code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
-    case MessageCode::READOUT: return 80;
+    case MessageCode::READOUT: return 84;
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 196;
+    case MessageCode::FULL_READOUT: return 200;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 18;
@@ -1350,9 +1356,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 78) return 0;
+      if (max_size < 2 + 82) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 80;
+      return 84;
     }
     case MessageCode::STREAM_FULL_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_FULL_READOUTS));
@@ -1366,9 +1372,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 194) return 0;
+      if (max_size < 2 + 198) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 196;
+      return 200;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1626,7 +1632,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 78) return false;
+      if (size != 2 + 82) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1641,7 +1647,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 194) return false;
+      if (size != 2 + 198) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }

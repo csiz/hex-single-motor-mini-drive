@@ -110,6 +110,8 @@ export class Readout {
   // as well. We can rotate the EMF voltage vector fully to the beta direction and get 
   // closer to the actual EMF voltage magnitude.
   emf_voltage_magnitude;
+  // Angular speed of the EMF voltage vector.
+  emf_voltage_angular_speed;
   // Angle of the current vector.
   current_angle;
   // Magnitude of the current vector.
@@ -121,7 +123,7 @@ export class Readout {
 }
 
 function write_Readout(value) {
-  const buffer = new Uint8Array(78);
+  const buffer = new Uint8Array(82);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.u_drive_voltage)
@@ -159,6 +161,8 @@ function write_Readout(value) {
   view.setInt32(offset, value.emf_voltage_angle)
   offset += 4;
   view.setFloat32(offset, value.emf_voltage_magnitude)
+  offset += 4;
+  view.setFloat32(offset, value.emf_voltage_angular_speed)
   offset += 4;
   view.setInt32(offset, value.current_angle)
   offset += 4;
@@ -206,6 +210,8 @@ function read_Readout(view, offset = 0) {
   result.emf_voltage_angle = view.getInt32(offset);
   offset += 4;
   result.emf_voltage_magnitude = view.getFloat32(offset);
+  offset += 4;
+  result.emf_voltage_angular_speed = view.getFloat32(offset);
   offset += 4;
   result.current_angle = view.getInt32(offset);
   offset += 4;
@@ -315,12 +321,12 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(194);
+  const buffer = new Uint8Array(198);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = new Uint8Array(view.buffer, offset, 78).set(write_Readout(value), 0);
+  const base_buffer = new Uint8Array(view.buffer, offset, 82).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
-  offset += 78;
+  offset += 82;
   view.setFloat32(offset, value.main_loop_rate)
   offset += 4;
   view.setFloat32(offset, value.adc_update_rate)
@@ -387,7 +393,7 @@ function read_FullReadout(view, offset = 0) {
   let result = new FullReadout();
   
   Object.assign(result, read_Readout(view, offset));
-  offset += 78;
+  offset += 82;
   
   result.main_loop_rate = view.getFloat32(offset);
   offset += 4;
@@ -894,6 +900,10 @@ function read_CurrentCalibration(view, offset = 0) {
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
 export class ControlParameters {
+  // Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
+  min_emf_speed;
+  // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
+  emf_probing_interval;
   // Magnet position integral gain.
   rotor_angle_ki;
   // Magnet angular speed integral gain.
@@ -908,8 +918,6 @@ export class ControlParameters {
   max_pwm_change;
   // Maximum target angle change per cycle.
   max_angle_change;
-  // Minimum EMF voltage to consider EMF detected (above the noise level)
-  min_emf_voltage;
   // Integral gain for the hall angle adjustment (0 to ignore).
   hall_angle_ki;
   // Lead angle integral gain for efficient driving.
@@ -924,8 +932,6 @@ export class ControlParameters {
   probing_angular_speed;
   // Maximum PWM difference from motor PWM required to compensate back EMF.
   max_pwm_difference;
-  // Maximum EMF angle correction variance when it's too noisy to update the angle.
-  emf_angle_error_variance_threshold;
   // Minium EMF voltage to compute the motor constant.
   min_emf_for_motor_constant;
   // Maximum resistive power that can be dissipated in the motor coils.
@@ -986,6 +992,10 @@ function write_ControlParameters(value) {
   const buffer = new Uint8Array(164);
   const view = new DataView(buffer.buffer);
   let offset = 0;
+  view.setFloat32(offset, value.min_emf_speed)
+  offset += 4;
+  view.setUint32(offset, value.emf_probing_interval)
+  offset += 4;
   view.setFloat32(offset, value.rotor_angle_ki)
   offset += 4;
   view.setFloat32(offset, value.rotor_angular_speed_ki)
@@ -1000,8 +1010,6 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setInt32(offset, value.max_angle_change)
   offset += 4;
-  view.setFloat32(offset, value.min_emf_voltage)
-  offset += 4;
   view.setFloat32(offset, value.hall_angle_ki)
   offset += 4;
   view.setFloat32(offset, value.lead_angle_control_ki)
@@ -1015,8 +1023,6 @@ function write_ControlParameters(value) {
   view.setFloat32(offset, value.probing_angular_speed)
   offset += 4;
   view.setFloat32(offset, value.max_pwm_difference)
-  offset += 4;
-  view.setFloat32(offset, value.emf_angle_error_variance_threshold)
   offset += 4;
   view.setFloat32(offset, value.min_emf_for_motor_constant)
   offset += 4;
@@ -1075,6 +1081,10 @@ function write_ControlParameters(value) {
 function read_ControlParameters(view, offset = 0) {
   let result = new ControlParameters();
   
+  result.min_emf_speed = view.getFloat32(offset);
+  offset += 4;
+  result.emf_probing_interval = view.getUint32(offset);
+  offset += 4;
   result.rotor_angle_ki = view.getFloat32(offset);
   offset += 4;
   result.rotor_angular_speed_ki = view.getFloat32(offset);
@@ -1089,8 +1099,6 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.max_angle_change = view.getInt32(offset);
   offset += 4;
-  result.min_emf_voltage = view.getFloat32(offset);
-  offset += 4;
   result.hall_angle_ki = view.getFloat32(offset);
   offset += 4;
   result.lead_angle_control_ki = view.getFloat32(offset);
@@ -1104,8 +1112,6 @@ function read_ControlParameters(view, offset = 0) {
   result.probing_angular_speed = view.getFloat32(offset);
   offset += 4;
   result.max_pwm_difference = view.getFloat32(offset);
-  offset += 4;
-  result.emf_angle_error_variance_threshold = view.getFloat32(offset);
   offset += 4;
   result.min_emf_for_motor_constant = view.getFloat32(offset);
   offset += 4;
@@ -1657,7 +1663,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case READOUT: {
-      if (buffer.length !== 2 + 78) return null;
+      if (buffer.length !== 2 + 82) return null;
       let message = read_Readout(view, 2);
       message.message_code = READOUT;
       return message;
@@ -1673,7 +1679,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 194) return null;
+      if (buffer.length !== 2 + 198) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;

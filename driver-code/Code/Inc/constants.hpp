@@ -238,6 +238,8 @@ const int32_t half_circle = -angle_base / 2;
 
 const int32_t most_positive_angle = 0x7FFFFFFF;
 
+const int32_t most_negative_angle = 0x80000000;
+
 // 1/3 of a circle (pi/3) aka 120 degrees.
 const int32_t third_circle = angle_base / 3;
 
@@ -263,10 +265,16 @@ const int32_t hall_sector_span = angle_base / hall_sector_base;
 // Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
 const float max_rpm = 32'000 * rotor_revolutions_per_electric;
 
-const float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / pwm_cycles_per_second;
+const float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / static_cast<float>(pwm_cycles_per_second);
 
 // Conversion factor between our speed units and radians per second.
-const float radians_per_sec_div_angle_base = pwm_cycles_per_second / half_circle_div_pi;
+const float radians_per_sec_div_angle_base = static_cast<float>(pwm_cycles_per_second) / half_circle_div_pi;
+
+// Maximum variance of the EMF angle before we start computing EMF angular speed.
+const float emf_angle_variance_threshold = square(30.f * angle_base / 360.f);
+
+// Inverse of the EMF angle variance threshold to avoid divisions in the fast loop.
+const float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_threshold;
 
 
 // Calibration and Control Parameters
@@ -286,34 +294,34 @@ const hex_mini_drive::CurrentCalibration default_current_calibration = {
 // 
 // The reset button will reload these values.
 const hex_mini_drive::ControlParameters default_control_parameters = {
+    .min_emf_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
+    .emf_probing_interval = pwm_cycles_per_second / 20,
 
-    .rotor_angle_ki = 0.25,
-    .rotor_angular_speed_ki = 0.015625,
-    .rotor_acceleration_ki = 0.0078125,
+    .rotor_angle_ki = std::pow(2, -2),
+    .rotor_angular_speed_ki = std::pow(2, -8),
+    .rotor_acceleration_ki = std::pow(2, -8),
     
     .motor_direction = +1,
     .incorrect_direction_threshold = 256,
     .max_pwm_change = 8,
     .max_angle_change = 8,
 
-    .min_emf_voltage = 0.1,
-    .hall_angle_ki = 0.0625,
-    .lead_angle_control_ki = 0.0009765625,
-    .torque_control_ki = 0.0078125,
+    .hall_angle_ki = std::pow(2, -4),
+    .lead_angle_control_ki = std::pow(2, -10),
+    .torque_control_ki = std::pow(2, -7),
 
-    .battery_power_control_ki = 0.001953125,
-    .speed_control_ki = 0.001953125,
-    .probing_angular_speed = angle_base / 256, // 1/256 of a rotation per PWM cycle.
+    .battery_power_control_ki = std::pow(2, -9),
+    .speed_control_ki = std::pow(2, -9),
+    .probing_angular_speed = 30.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .max_pwm_difference = pwm_max / 2,
 
-    .emf_angle_error_variance_threshold = square(10.0 * angle_base / 360.0),
     .min_emf_for_motor_constant = 1.0,
     .max_resistive_power = 2.0,
-    .resistive_power_ki = 0.000244140625,
+    .resistive_power_ki = std::pow(2, -12),
 
     .max_angular_speed = max_angular_speed,
     .max_power_draw = max_drive_power,
-    .power_draw_ki = 0.000244140625,
+    .power_draw_ki = std::pow(2, -12),
     .max_pwm = pwm_max,
 
     .seek_via_torque_k_prediction = 0.f,
@@ -331,11 +339,11 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_via_speed_kp = 0.f,
     .seek_via_speed_kd = 0.f,
 
-    .phase_resistance_ki = 0.000244140625,
-    .phase_inductance_ki = 0.000244140625,
-    .magnetization_angle_ki = 0.000244140625,
-    .magnetization_factor_ki = 0.000244140625,
-    .motor_constant_ki = 0.00048828125,
+    .phase_resistance_ki = std::pow(2, -12),
+    .phase_inductance_ki = std::pow(2, -12),
+    .magnetization_angle_ki = std::pow(2, -12),
+    .magnetization_factor_ki = std::pow(2, -12),
+    .motor_constant_ki = std::pow(2, -11),
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

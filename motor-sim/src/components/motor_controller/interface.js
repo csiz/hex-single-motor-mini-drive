@@ -64,6 +64,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
 
   const emf_voltage_angle = angle_units_to_radians(bare_readout.emf_voltage_angle);
   const emf_voltage_magnitude = bare_readout.emf_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
+  const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
   const current_angle = angle_units_to_radians(bare_readout.current_angle);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
   const current_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.current_angular_speed);
@@ -261,7 +262,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
     angle_adjustment,
     angular_speed,
     vcc_voltage,
-    emf_voltage_angle, emf_voltage_magnitude,
+    emf_voltage_angle, emf_voltage_magnitude, emf_voltage_angular_speed,
     current_angle, current_magnitude,
     current_angle_offset,
     current_angular_speed,

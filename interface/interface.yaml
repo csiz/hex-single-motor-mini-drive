@@ -299,6 +299,10 @@ definitions:
           errors in the measurements and the rotor position and thus we see alpha component 
           as well. We can rotate the EMF voltage vector fully to the beta direction and get 
           closer to the actual EMF voltage magnitude.
+
+      emf_voltage_angular_speed:
+        type: float32
+        doc: Angular speed of the EMF voltage vector.
         
       current_angle:
         type: int32
@@ -649,6 +653,14 @@ definitions:
       the respective variables in the readout while driving a physical motor.
 
     struct:
+      min_emf_speed:
+        type: float32
+        doc: Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
+
+      emf_probing_interval:
+        type: uint32
+        doc: Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
+
       rotor_angle_ki:
         type: float32
         doc: Magnet position integral gain.
@@ -677,10 +689,6 @@ definitions:
         type: int32
         doc: Maximum target angle change per cycle.
 
-      min_emf_voltage:
-        type: float32
-        doc: Minimum EMF voltage to consider EMF detected (above the noise level)
-
       hall_angle_ki:
         type: float32
         doc: Integral gain for the hall angle adjustment (0 to ignore).
@@ -708,10 +716,6 @@ definitions:
       max_pwm_difference:
         type: float32
         doc: Maximum PWM difference from motor PWM required to compensate back EMF.
-
-      emf_angle_error_variance_threshold:
-        type: float32
-        doc: Maximum EMF angle correction variance when it's too noisy to update the angle.
 
       min_emf_for_motor_constant:
         type: float32
