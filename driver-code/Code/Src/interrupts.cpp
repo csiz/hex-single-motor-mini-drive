@@ -428,7 +428,6 @@ static inline MotorOutputs update_motor_smooth(
     // Base the direction on the sign of the target PWM.
     const int32_t active_pwm_sign = sign(driver_state.active_pwm);
 
-
     if (angle_fix) {
         // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
         // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
@@ -450,16 +449,14 @@ static inline MotorOutputs update_motor_smooth(
 
         // Drive the motor to produce current perpendicular to the magnetic angle.
         driver_state.active_angle = ideal_angle + active_pwm_sign * driver_state.lead_angle;
-
-        return update_motor_at_angle(driver_state, readout);
     } else {
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
 
         // Use the probing speed.
         driver_state.active_angle += active_pwm_sign * static_cast<int32_t>(control_parameters.probing_angular_speed);
-
-        return update_motor_at_angle(driver_state, readout);
     }
+
+    return update_motor_at_angle(driver_state, readout);
 }
 
 // Drive the motor with the desired output current (note the DQ0 current is 3/2 phase current).
