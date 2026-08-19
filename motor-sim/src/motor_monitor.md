@@ -1252,8 +1252,6 @@ const plot_readout_flags = plot_lines({
     {y: "emf_fix", label: "EMF position fix", color: colors_categories[4]},
     {y: "current_detected", label: "Current detected", color: colors_categories[6]},
     {y: "angle_fix", label: "Rotor position fix", color: colors_categories[7]},
-    {y: "incorrect_rotor_angle", label: "Incorrect Rotor Angle", color: colors_categories[8]},
-    {y: "rotor_direction_flip_imminent", label: "Rotor Direction Flip Imminent", color: colors_categories[12]},
     {y: "hall_u", label: "Hall U", color: colors.u},
     {y: "hall_v", label: "Hall V", color: colors.v},
     {y: "hall_w", label: "Hall W", color: colors.w},

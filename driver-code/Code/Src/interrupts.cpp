@@ -1339,9 +1339,6 @@ void adc_interrupt_handler(){
         (emf_detected << emf_detected_bit_offset) |
         (current_detected << current_detected_bit_offset) |
         (angle_fix << angle_fix_bit_offset) |
-        // TODO: remove/reuse unused flags
-        (false << incorrect_rotor_angle_bit_offset) |
-        (false << rotor_direction_flip_imminent_bit_offset) |
         (hall_state << hall_state_bit_offset)
     );
 

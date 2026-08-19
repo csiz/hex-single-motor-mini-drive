@@ -63,12 +63,6 @@ const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 const size_t angle_fix_bit_offset = 8;
 const uint16_t angle_fix_bit_mask = 0b1 << angle_fix_bit_offset;
 
-const size_t incorrect_rotor_angle_bit_offset = 7;
-const uint16_t incorrect_rotor_angle_bit_mask = 0b1 << incorrect_rotor_angle_bit_offset;
-
-const size_t rotor_direction_flip_imminent_bit_offset = 6;
-const uint16_t rotor_direction_flip_imminent_bit_mask = 0b1 << rotor_direction_flip_imminent_bit_offset;
-
 
 // Position constants
 // ------------------

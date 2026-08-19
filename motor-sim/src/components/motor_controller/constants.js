@@ -95,8 +95,6 @@ export const emf_detected_bit_offset = 11;
 export const emf_fix_bit_offset = 10;
 export const current_detected_bit_offset = 9;
 export const angle_fix_bit_offset = 8;
-export const incorrect_rotor_angle_bit_offset = 7;
-export const rotor_direction_flip_imminent_bit_offset = 6;
 
 export const hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
@@ -107,8 +105,6 @@ export function parse_state_flags(state_flags){
     emf_fix: (state_flags >> emf_fix_bit_offset) & 0b1,
     current_detected: (state_flags >> current_detected_bit_offset) & 0b1,
     angle_fix: (state_flags >> angle_fix_bit_offset) & 0b1,
-    incorrect_rotor_angle: (state_flags >> incorrect_rotor_angle_bit_offset) & 0b1,
-    rotor_direction_flip_imminent: (state_flags >> rotor_direction_flip_imminent_bit_offset) & 0b1,
   };
 }
 
