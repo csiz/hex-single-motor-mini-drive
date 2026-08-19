@@ -735,6 +735,7 @@ static inline DriverState setup_driver_state(
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
                 .target_pwm = clip_to(-pwm_max, +pwm_max, pending_state.target_pwm),
+                .lead_angle = driver_state.lead_angle,
             };
             
         case DriverMode::DRIVE_TORQUE:
@@ -744,6 +745,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
+                .lead_angle = driver_state.lead_angle,
                 .secondary_target = clip_to(-max_drive_current, +max_drive_current, pending_state.secondary_target),
             };
 
@@ -754,6 +756,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
+                .lead_angle = driver_state.lead_angle,
                 .secondary_target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.secondary_target)),
             };
 
@@ -764,6 +767,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
+                .lead_angle = driver_state.lead_angle,
                 .secondary_target = static_cast<int16_t>(clip_to(-max_angular_speed, +max_angular_speed, pending_state.secondary_target)),
             };
 
@@ -774,6 +778,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
+                .lead_angle = driver_state.lead_angle,
                 .seek_angle = SeekAngle{
                     .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
@@ -789,6 +794,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
+                .lead_angle = driver_state.lead_angle,
                 .seek_angle = SeekAngle{
                     .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
@@ -804,6 +810,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .angular_speed = driver_state.angular_speed,
+                .lead_angle = driver_state.lead_angle,
                 .seek_angle = SeekAngle{
                     .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,

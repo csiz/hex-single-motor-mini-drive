@@ -61,12 +61,12 @@ static inline constexpr int round_div(const int x, const int y) {
 
 
 // Get the absolute value of a number; somehow the std implementation is slower.
-static inline constexpr int faster_abs(int value) {
+static inline constexpr int32_t faster_abs(int32_t value) {
     return value < 0 ? -value : value;
 }
 
 // Get the absolute value of a number; somehow the std implementation is slower.
-static inline constexpr int faster_abs(int16_t value) {
+static inline constexpr int16_t faster_abs(int16_t value) {
     return value < 0 ? -value : value;
 }
 

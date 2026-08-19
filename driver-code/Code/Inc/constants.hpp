@@ -319,7 +319,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .max_angle_change = angle_base / 32.f,
 
     .hall_angle_ki = std::pow(2, -4),
-    .lead_angle_control_ki = std::pow(2, -12),
+    .lead_angle_control_ki = std::pow(2, -11),
     .torque_control_ki = std::pow(2, -7),
 
     .battery_power_control_ki = std::pow(2, -9),
