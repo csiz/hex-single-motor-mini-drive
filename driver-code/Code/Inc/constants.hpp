@@ -116,8 +116,11 @@ const float current_diff_measurement_variance = square(4 * adc_to_current_units)
 const float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
 
 
-// We can use 0.86% of the voltage range; we need the inverse constant.
-const int32_t pwm_waveform_base = static_cast<int32_t>(hex_mini_drive::PWM_BASE / 0.866);
+// We can use 0.86% of the voltage range; we need the inverse constant to compute the required PWM duty to achieve
+// a target phase voltage.
+// const int32_t pwm_waveform_base = static_cast<int32_t>(hex_mini_drive::PWM_BASE / 0.866);
+// const int pwm_for_emf_compensation = -readout.quadrature_emf_voltage * pwm_waveform_base / readout.vcc_voltage;
+
 
 // Voltage divider between VCC and the ADC reference voltage: 10kohm/110kohm divider
 const float vcc_divider = 10.0/110.0;

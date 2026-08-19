@@ -241,16 +241,16 @@ static inline MotorOutputs update_motor_at_angle(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ) {
+    // We need a single comparison and we can then use arithmetic math instead of branching conditionals.
+    const bool negative_pwm = driver_state.active_pwm < 0.f;
+
     // The PWM counter value must be positive, we use the sign to determine the direction.
-    const float abs_pwm = min(readout.live_max_pwm, faster_abs(driver_state.active_pwm));
+    const float abs_pwm = min(readout.live_max_pwm, negative_pwm ? -driver_state.active_pwm : driver_state.active_pwm);
 
     // Use the active angle or flip it depending on the sign of the PWM.
-    const int angle = driver_state.active_angle + (driver_state.active_pwm < 0 ? half_circle : 0);
-
-    driver_state.active_pwm = driver_state.active_pwm < 0 ? -abs_pwm : abs_pwm;
+    const int32_t angle = driver_state.active_angle + negative_pwm * half_circle;
 
     // Get the voltage for the three phases from the waveform table.
-
     const float voltage_phase_u = get_phase_pwm(angle);
     const float voltage_phase_v = get_phase_pwm(angle - third_circle);
     const float voltage_phase_w = get_phase_pwm(angle - neg_third_circle);
@@ -416,7 +416,7 @@ static inline MotorOutputs update_motor_position_calibration_emf(
 
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
 // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
-// The PWM is varried smoothly and is bounded by the back EMF from the rotating magnet.
+// The PWM duty cycle, drive angle, and angle speed are varied smoothly.
 static inline MotorOutputs update_motor_smooth(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
@@ -424,58 +424,41 @@ static inline MotorOutputs update_motor_smooth(
     // Check if we have an accurate readout angle.
     const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
-    const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
-
-    const int pwm_for_emf_compensation = -readout.quadrature_emf_voltage * pwm_waveform_base / readout.vcc_voltage;
-
-    // Adjust the target PWM to be close to the current EMF voltage (which is 0 at standstill).
-    const int16_t target_pwm = clip_to(
-        pwm_for_emf_compensation - control_parameters.max_pwm_difference, 
-        pwm_for_emf_compensation + control_parameters.max_pwm_difference, 
-        driver_state.target_pwm
-    );
-
-    const int pwm_error = target_pwm - driver_state.active_pwm;
 
     driver_state.active_pwm += clip_to(
         -control_parameters.max_pwm_change, 
         +control_parameters.max_pwm_change, 
-        pwm_error
+        driver_state.target_pwm - driver_state.active_pwm
     );
 
     // Base the direction on the sign of the target PWM.
-    const int active_pwm_direction = sign(driver_state.active_pwm);
-
+    const int active_pwm_sign = sign(driver_state.active_pwm);
 
     // Calculate the predicted active angle (we want to maintain constant speed in angular coordinate space).
     driver_state.active_angle = driver_state.active_angle + static_cast<int32_t>(driver_state.angular_speed);
-
-    // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
-    // 
-    // Of course, the inductors take a while to charge and the rotor is producing an EMF
-    // which all interacts with the current. However, the current that we end up measuring
-    // should be as close to the 90 degrees as possible for maximum torque per current use.
-    const int32_t ideal_angle = readout.angle + quarter_circle;
-
-    // Get the error between the measured current and the ideal current angle.
-    const int32_t ideal_angle_diff = current_detected * (ideal_angle - readout.current_angle);
-
-    // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
-    const int32_t lead_angle_error = emf_detected ? 
-        active_pwm_direction * ideal_angle_diff :
-        -sign(driver_state.lead_angle);
-
-    // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-    driver_state.lead_angle = clip_to(
-        -max_lead_angle_control,
-        +max_lead_angle_control,
-        driver_state.lead_angle + static_cast<int32_t>(control_parameters.lead_angle_control_ki * lead_angle_error)
-    );
-
+    
+    
     if (angle_fix) {
-        // If we have an accurate position, we can use it to adjust our control.
+        // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
+        // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+        // 
+        // Of course, the inductors take a while to charge and the rotor is producing an EMF
+        // which all interacts with the current. However, the current that we end up measuring
+        // should be as close to the 90 degrees as possible for maximum torque per current use.
+        const int32_t ideal_angle = readout.angle + quarter_circle;
+    
+        // Get the error between the measured current and the ideal current angle.
+        const int32_t lead_angle_error = current_detected * (ideal_angle - readout.current_angle);
 
-        const int32_t target_angle = ideal_angle + driver_state.lead_angle;
+        // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
+        driver_state.lead_angle = clip_to(
+            -max_lead_angle_control,
+            +max_lead_angle_control,
+            driver_state.lead_angle + static_cast<int32_t>(control_parameters.lead_angle_control_ki * lead_angle_error)
+        );
+
+        // If we have an accurate position, we can use it to adjust our control.
+        const int32_t target_angle = ideal_angle + active_pwm_sign * driver_state.lead_angle;
         
         // Compensate the target angle by the control output. At high speed we need
         // to lead by more than 90 degrees to compensate for the RL time constant.
@@ -485,7 +468,6 @@ static inline MotorOutputs update_motor_smooth(
             target_angle - driver_state.active_angle
         );
 
-        // Update the driving angle.
         driver_state.active_angle += active_angle_error;
 
         // Push our speed towards the target angle.
@@ -496,7 +478,7 @@ static inline MotorOutputs update_motor_smooth(
         // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
 
         // Use the probing speed.
-        driver_state.angular_speed = active_pwm_direction * control_parameters.probing_angular_speed;
+        driver_state.angular_speed = active_pwm_sign * control_parameters.probing_angular_speed;
 
         return update_motor_at_angle(driver_state, readout);
     }
