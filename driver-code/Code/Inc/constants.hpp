@@ -82,14 +82,16 @@ const float ratio = rotor_revolutions_per_electric * gear_ratio;
 
 
 // Voltage reference for the ADC; it's the in-built reference on the STM32G4.
-const float adc_voltage_reference = 2.9f;
+constexpr float adc_voltage_reference = 2.9f;
+
+constexpr float amplifier_voltage_reference = 3.3f / 2;
 
 // Shunt resistance for the motor phase current sensing is 10mOhm, 500mW resistor.
-const float motor_shunt_resistance = 0.010f;
+constexpr float current_shunt_resistance = 0.010f;
 
 // The voltage on the shunt resistor is amplified by INA4181 Bidirectional, Low and 
 // High Side Voltage Output, Current-Sense Amplifier.
-const float amplifier_gain = 20.0f;
+constexpr float amplifier_gain = 20.0f;
 
 
 // The formula that determines the current from the ADC readout: 
@@ -98,17 +100,30 @@ const float amplifier_gain = 20.0f;
 //   Vout = adc_voltage_reference * (adc_current_readout / adc_max_value).
 // So the current is:
 //   Iload = (Vout - Vref) / (Rsense * GAIN) = adc_voltage_reference * (adc_readout_diff / adc_max_value) / (Rsense * GAIN).
-const float adc_to_current_units = hex_mini_drive::CURRENT_UNITS_PER_AMP * adc_voltage_reference / (adc_max_value * motor_shunt_resistance * amplifier_gain);
+constexpr float adc_to_current_units = hex_mini_drive::CURRENT_UNITS_PER_AMP * adc_voltage_reference / (adc_max_value * current_shunt_resistance * amplifier_gain);
+
+// Noise level of the current measurements, in current units.
+constexpr float current_measurement_noise = 5 * adc_to_current_units;
+
+// Minimum threshold for current detections, note it must be int32_t because it is compared to the cordic result.
+constexpr int32_t current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f); 
 
 // Baseline noise for the current measurements.
-const float current_measurement_variance = square(2 * adc_to_current_units);
+constexpr float current_measurement_variance = square(current_measurement_noise);
 
 // Noise for the difference between two consecutive current measurements.
-const float current_diff_measurement_variance = square(4 * adc_to_current_units);
+constexpr float current_diff_measurement_variance = square(2 * current_measurement_noise);
+
+// Maximum current we can measure per phase using our setup. This is less than
+// the total adc resolution span because the amplifier is referenced to half 3.3V while
+// the adc of the chip is referenced to its internal 2.9V voltage reference. And can
+// therefore only measure up to 2.9V. We could measure higher negative currents though.
+constexpr float max_measured_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * (adc_voltage_reference - amplifier_voltage_reference) / (current_shunt_resistance * amplifier_gain);
 
 // 6A max DQ0 driving current.
-const float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
+constexpr float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
 
+static_assert(max_drive_current < max_measured_current, "We must be able to measure the maximum driving current.");
 
 // We can use 0.86% of the voltage range; we need the inverse constant to compute the required PWM duty to achieve
 // a target phase voltage.
@@ -292,19 +307,19 @@ const hex_mini_drive::CurrentCalibration default_current_calibration = {
 // The reset button will reload these values.
 const hex_mini_drive::ControlParameters default_control_parameters = {
     .min_emf_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    .emf_probing_interval = pwm_cycles_per_second / 20,
+    .emf_probing_interval = pwm_cycles_per_second / 20, // unused for now
 
     .rotor_angle_ki = std::pow(2, -2),
     .rotor_angular_speed_ki = std::pow(2, -8),
     .rotor_acceleration_ki = std::pow(2, -8),
     
     .motor_direction = +1,
-    .incorrect_direction_threshold = 256,
+    .incorrect_direction_threshold = 0, // unused
     .max_pwm_change = 8,
     .max_angle_change = angle_base / 32.f,
 
     .hall_angle_ki = std::pow(2, -4),
-    .lead_angle_control_ki = std::pow(2, -10),
+    .lead_angle_control_ki = std::pow(2, -12),
     .torque_control_ki = std::pow(2, -7),
 
     .battery_power_control_ki = std::pow(2, -9),

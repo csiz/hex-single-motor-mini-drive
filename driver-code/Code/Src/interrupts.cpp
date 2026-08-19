@@ -1163,9 +1163,7 @@ void adc_interrupt_handler(){
     const int32_t current_angle = predicted_angle + current_angle_offset;
     
     // The current measurements have a low noise floor, but it's not 0.
-    // TODO: recalculate threshold for float units
-    const bool current_detected = instant_current_magnitude > 4;
-
+    const bool current_detected = instant_current_magnitude > current_measurement_minimum;
     
     // Average the current magnitude over a short duration to reduce noise.
     const float current_magnitude = (instant_current_magnitude + readout.current_magnitude * 3) * 0.25f;
