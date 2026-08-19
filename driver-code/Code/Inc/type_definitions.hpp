@@ -149,7 +149,7 @@ struct SeekAngle {
     // The target rotation index we want the motor to drive towards.
     int32_t target_rotation;
     // The maximum control value (torque, power or speed) used to drive the motor to the target angle.
-    float max_secondary_target;
+    float max_target;
     // The high resolution integral error for the PID control loop.
     float error_integral;
 };
@@ -175,19 +175,14 @@ struct DriverState {
     
     // PWM value actively used to drive the motor.
     float active_pwm;
-    
-    // Angular speed at which the active_angle is spinning.
-    float angular_speed;
-    
-    // The target PWM value that we are aiming for with the smooth control. This
-    // target can be set by the advanced control algorithms.
-    float target_pwm;
 
     // The lead angle value used to adjust the angle of the driven phase
     // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
     int32_t lead_angle;
+    
+    // The target we are aiming for with the command.
+    float target;
 
-    float secondary_target;
 
     // The additional data depends on the driver mode.
     union {

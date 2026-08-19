@@ -1235,7 +1235,7 @@ const plot_pwm_settings = plot_lines({
     {y: "v_pwm", label: "PWM V", color: colors.v},
     {y: "w_pwm", label: "PWM W", color: colors.w},
     {y: "live_max_pwm", label: "Live Max PWM", color: colors_categories[0]},
-    {y: "target_pwm", label: "Target PWM", color: colors_categories[1]},
+    {y: "active_pwm", label: "Active PWM", color: colors_categories[1]},
   ],
   curve,
 });
@@ -1269,7 +1269,7 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "secondary_target", label: "Secondary Target", color: colors_categories[2]},
+    {y: "target", label: "Target", color: colors_categories[2]},
     {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
     {y: "u_resistance", label: "Phase U Resistance", color: colors.u},
     {y: "v_resistance", label: "Phase V Resistance", color: colors.v},
@@ -1564,14 +1564,13 @@ const control_parameters_input = Object.fromEntries(
       label: "Incorrect Direction Threshold", 
       description: "Number of incorrect direction detections before flipping the angle."
     }],
-    ["max_pwm_change", {
-      label: "Maximum PWM Change per cycle", 
-      description: "Maximum allowed change in PWM per control cycle. We want to increase PWM smoothly to make our math stable."
+    ["emf_angle_ki", {
+      label: "EMF Angle KI", 
+      description: "Integral gain for the EMF angle observer from the measured EMF angle."
     }],
-    ["max_angle_change", {
-      label: "Maximum Angle Change per cycle", 
-      description: `Maximum allowed change in the actively driving angle per control cycle (this 
-      change is relative to the angle predicted at the active driving speed).`
+    ["emf_angular_speed_ki", {
+      label: "EMF Angular Speed KI", 
+      description: "Integral gain for the EMF angular speed observer from the measured EMF angle."
     }],
     ["hall_angle_ki", {
       label: "Position adjustment from hall angle KI", 

@@ -115,8 +115,8 @@ void motor_start_test(PWMSchedule const& schedule, float value, bool take_snapsh
   // Start the test schedule.
   set_motor_command(DriverState{ 
     .mode = DriverMode::SCHEDULE,
-    .target_pwm = value,
-    .schedule = DriveSchedule{ .pointer = &schedule } 
+    .target = value,
+    .schedule = DriveSchedule{ .pointer = &schedule },
   });
 }
 
@@ -263,7 +263,7 @@ void handle_message(hex_mini_drive::Message const& message) {
         .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
         .active_angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
         .active_pwm = std::get<SetStateDrivePeriodic>(message.message_data).pwm_value,
-        .angular_speed = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
+        .target = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
       });
       return;
     }
@@ -271,8 +271,8 @@ void handle_message(hex_mini_drive::Message const& message) {
     case SET_STATE_DRIVE_SMOOTH: {
       set_motor_command(DriverState{
         .mode = DriverMode::DRIVE_SMOOTH, 
-        .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout, 
-        .target_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
+        .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout,
+        .active_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
       });
       return;
     }
@@ -281,7 +281,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::DRIVE_TORQUE, 
         .duration = std::get<SetStateDriveTorque>(message.message_data).timeout,
-        .secondary_target = std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction,
+        .target = std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction,
       });
       return;
     }
@@ -290,7 +290,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::DRIVE_BATTERY_POWER, 
         .duration = std::get<SetStateDriveBatteryPower>(message.message_data).timeout,
-        .secondary_target = std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction,
+        .target = std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction,
       });
       return;
     }
@@ -299,7 +299,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::DRIVE_SPEED, 
         .duration = std::get<SetStateDriveSpeed>(message.message_data).timeout,
-        .secondary_target = std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
+        .target = std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
       });
       return;
     }
@@ -311,7 +311,7 @@ void handle_message(hex_mini_drive::Message const& message) {
         .seek_angle = SeekAngle{
           .target_angle = std::get<SetStateSeekAngleWithPower>(message.message_data).target_angle * control_parameters.motor_direction,
           .target_rotation = std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction,
-          .max_secondary_target = std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power,
+          .max_target = std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power,
         }
       });
       return;
@@ -324,7 +324,7 @@ void handle_message(hex_mini_drive::Message const& message) {
         .seek_angle = SeekAngle{
           .target_angle = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_angle * control_parameters.motor_direction,
           .target_rotation = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction,
-          .max_secondary_target = std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current,
+          .max_target = std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current,
         }
       });
       return;
@@ -337,7 +337,7 @@ void handle_message(hex_mini_drive::Message const& message) {
         .seek_angle = SeekAngle{
           .target_angle = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_angle * control_parameters.motor_direction,
           .target_rotation = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction,
-          .max_secondary_target = std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed,
+          .max_target = std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed,
         }
       });
       return;
@@ -482,7 +482,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::RESISTANCE_CALIBRATION,
         .duration = hex_mini_drive::HISTORY_SIZE,
-        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+        .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
       });
       return;
     }
@@ -498,7 +498,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::INDUCTANCE_CALIBRATION,
         .duration = hex_mini_drive::HISTORY_SIZE,
-        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+        .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
       });
       return;
     }
@@ -513,7 +513,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::POSITION_CALIBRATION_CHIRP,
         .duration = hex_mini_drive::HISTORY_SIZE,
-        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+        .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
         .test_parameters = TestParameters{
           .test_speed = std::get<TestCommand>(message.message_data).test_speed,
           .test_duration = std::get<TestCommand>(message.message_data).test_duration,
@@ -532,7 +532,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::POSITION_CALIBRATION_EMF,
         .duration = hex_mini_drive::HISTORY_SIZE + std::get<TestCommand>(message.message_data).test_duration,
-        .target_pwm = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+        .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
         .test_parameters = TestParameters{
           .test_speed = std::get<TestCommand>(message.message_data).test_speed,
           .test_duration = std::get<TestCommand>(message.message_data).test_duration,

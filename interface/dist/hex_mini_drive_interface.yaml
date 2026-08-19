@@ -417,11 +417,11 @@ definitions:
           Lead angle for the motor driving; used to adjust the phase voltages to drive the 
           motor efficiently.
 
-      target_pwm:
+      active_pwm:
         type: float32
-        doc: Target PWM value for the motor outputs, value set by the advanced control algorithms.
+        doc: Active PWM value for the motor outputs, value set by the advanced control algorithms.
 
-      secondary_target:
+      target:
         type: float32
         doc: Target for the advanced control algorithms.
 
@@ -681,13 +681,13 @@ definitions:
         type: int16
         doc: Number of incorrect direction detections before we flip our motor angle.
 
-      max_pwm_change:
+      emf_angle_ki:
         type: float32
-        doc: Maximum PWM adjustment per cycle.
+        doc: Integral gain for the EMF angle adjustment.
 
-      max_angle_change:
-        type: int32
-        doc: Maximum target angle change per cycle.
+      emf_angular_speed_ki:
+        type: float32
+        doc: Integral gain for the EMF angular speed adjustment.
 
       hall_angle_ki:
         type: float32

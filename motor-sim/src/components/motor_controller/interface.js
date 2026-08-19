@@ -313,8 +313,8 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
   const rotations = bare_full_readout.rotations;
   const emf_angle_error_stdev = angle_units_to_radians(Math.sqrt(bare_full_readout.emf_angle_error_variance));
   const lead_angle = angle_units_to_radians(bare_full_readout.lead_angle);
-  const target_pwm = bare_full_readout.target_pwm;
-  const secondary_target = bare_full_readout.secondary_target;
+  const active_pwm = bare_full_readout.active_pwm;
+  const target = bare_full_readout.target;
   const seek_integral = bare_full_readout.seek_integral;
   
   const u_resistance = bare_full_readout.u_resistance;
@@ -378,8 +378,8 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
     rotations,
     
     lead_angle,
-    target_pwm,
-    secondary_target,
+    active_pwm,
+    target,
     seek_integral,
     
     u_resistance,

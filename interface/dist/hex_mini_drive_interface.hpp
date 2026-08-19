@@ -361,10 +361,10 @@ struct FullReadout : Readout {
   // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
   // motor efficiently.
   int32_t lead_angle;
-  // Target PWM value for the motor outputs, value set by the advanced control algorithms.
-  float target_pwm;
+  // Active PWM value for the motor outputs, value set by the advanced control algorithms.
+  float active_pwm;
   // Target for the advanced control algorithms.
-  float secondary_target;
+  float target;
   // Spare debug output.
   float seek_integral;
   // Estimated resistance of the U phase coil.
@@ -432,9 +432,9 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_int32(buffer + offset, value.lead_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.target_pwm);;
+  write_float32(buffer + offset, value.active_pwm);;
   offset += 4;
-  write_float32(buffer + offset, value.secondary_target);;
+  write_float32(buffer + offset, value.target);;
   offset += 4;
   write_float32(buffer + offset, value.seek_integral);;
   offset += 4;
@@ -499,9 +499,9 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.lead_angle = read_int32(buffer + offset);
   offset += 4;
-  result.target_pwm = read_float32(buffer + offset);
+  result.active_pwm = read_float32(buffer + offset);
   offset += 4;
-  result.secondary_target = read_float32(buffer + offset);
+  result.target = read_float32(buffer + offset);
   offset += 4;
   result.seek_integral = read_float32(buffer + offset);
   offset += 4;
@@ -946,10 +946,10 @@ struct ControlParameters {
   int16_t motor_direction;
   // Number of incorrect direction detections before we flip our motor angle.
   int16_t incorrect_direction_threshold;
-  // Maximum PWM adjustment per cycle.
-  float max_pwm_change;
-  // Maximum target angle change per cycle.
-  int32_t max_angle_change;
+  // Integral gain for the EMF angle adjustment.
+  float emf_angle_ki;
+  // Integral gain for the EMF angular speed adjustment.
+  float emf_angular_speed_ki;
   // Integral gain for the hall angle adjustment (0 to ignore).
   float hall_angle_ki;
   // Lead angle integral gain for efficient driving.
@@ -1034,9 +1034,9 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 2;
   write_int16(buffer + offset, value.incorrect_direction_threshold);;
   offset += 2;
-  write_float32(buffer + offset, value.max_pwm_change);;
+  write_float32(buffer + offset, value.emf_angle_ki);;
   offset += 4;
-  write_int32(buffer + offset, value.max_angle_change);;
+  write_float32(buffer + offset, value.emf_angular_speed_ki);;
   offset += 4;
   write_float32(buffer + offset, value.hall_angle_ki);;
   offset += 4;
@@ -1124,9 +1124,9 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 2;
   result.incorrect_direction_threshold = read_int16(buffer + offset);
   offset += 2;
-  result.max_pwm_change = read_float32(buffer + offset);
+  result.emf_angle_ki = read_float32(buffer + offset);
   offset += 4;
-  result.max_angle_change = read_int32(buffer + offset);
+  result.emf_angular_speed_ki = read_float32(buffer + offset);
   offset += 4;
   result.hall_angle_ki = read_float32(buffer + offset);
   offset += 4;

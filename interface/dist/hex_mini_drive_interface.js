@@ -287,10 +287,10 @@ export class FullReadout extends Readout {
   // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
   // motor efficiently.
   lead_angle;
-  // Target PWM value for the motor outputs, value set by the advanced control algorithms.
-  target_pwm;
+  // Active PWM value for the motor outputs, value set by the advanced control algorithms.
+  active_pwm;
   // Target for the advanced control algorithms.
-  secondary_target;
+  target;
   // Spare debug output.
   seek_integral;
   // Estimated resistance of the U phase coil.
@@ -363,9 +363,9 @@ function write_FullReadout(value) {
   offset += 4;
   view.setInt32(offset, value.lead_angle)
   offset += 4;
-  view.setFloat32(offset, value.target_pwm)
+  view.setFloat32(offset, value.active_pwm)
   offset += 4;
-  view.setFloat32(offset, value.secondary_target)
+  view.setFloat32(offset, value.target)
   offset += 4;
   view.setFloat32(offset, value.seek_integral)
   offset += 4;
@@ -431,9 +431,9 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.lead_angle = view.getInt32(offset);
   offset += 4;
-  result.target_pwm = view.getFloat32(offset);
+  result.active_pwm = view.getFloat32(offset);
   offset += 4;
-  result.secondary_target = view.getFloat32(offset);
+  result.target = view.getFloat32(offset);
   offset += 4;
   result.seek_integral = view.getFloat32(offset);
   offset += 4;
@@ -914,10 +914,10 @@ export class ControlParameters {
   motor_direction;
   // Number of incorrect direction detections before we flip our motor angle.
   incorrect_direction_threshold;
-  // Maximum PWM adjustment per cycle.
-  max_pwm_change;
-  // Maximum target angle change per cycle.
-  max_angle_change;
+  // Integral gain for the EMF angle adjustment.
+  emf_angle_ki;
+  // Integral gain for the EMF angular speed adjustment.
+  emf_angular_speed_ki;
   // Integral gain for the hall angle adjustment (0 to ignore).
   hall_angle_ki;
   // Lead angle integral gain for efficient driving.
@@ -1006,9 +1006,9 @@ function write_ControlParameters(value) {
   offset += 2;
   view.setInt16(offset, value.incorrect_direction_threshold)
   offset += 2;
-  view.setFloat32(offset, value.max_pwm_change)
+  view.setFloat32(offset, value.emf_angle_ki)
   offset += 4;
-  view.setInt32(offset, value.max_angle_change)
+  view.setFloat32(offset, value.emf_angular_speed_ki)
   offset += 4;
   view.setFloat32(offset, value.hall_angle_ki)
   offset += 4;
@@ -1095,9 +1095,9 @@ function read_ControlParameters(view, offset = 0) {
   offset += 2;
   result.incorrect_direction_threshold = view.getInt16(offset);
   offset += 2;
-  result.max_pwm_change = view.getFloat32(offset);
+  result.emf_angle_ki = view.getFloat32(offset);
   offset += 4;
-  result.max_angle_change = view.getInt32(offset);
+  result.emf_angular_speed_ki = view.getFloat32(offset);
   offset += 4;
   result.hall_angle_ki = view.getFloat32(offset);
   offset += 4;

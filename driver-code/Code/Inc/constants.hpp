@@ -16,65 +16,65 @@
 
 
 // Inverse of the PWM base so we can convert to floating point values without doing a division.
-const float pwm_base_inverse = 1.0 / hex_mini_drive::PWM_BASE;
+constexpr float pwm_base_inverse = 1.0f / static_cast<float>(hex_mini_drive::PWM_BASE);
 
 // The ADC has a 12-bit resolution.
-const uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
+constexpr uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 
 // Readout number base; we cycle back to 0 instead of reaching this value.
-const int32_t readout_number_base = 1 << 16;
+constexpr int32_t readout_number_base = 1 << 16;
 
 // Base and number of hall sectors.
-const uint8_t hall_sector_base = 6;
+constexpr uint8_t hall_sector_base = 6;
 
 // Number of significant bits for the angle representation (20 bits so 
 // we can multiply with 12 bit parameter values and fit within 32 bits).
-const size_t angle_bit_count = 32;
+constexpr size_t angle_bit_count = 32;
 
 // Number of bits in the sin tables; 12 bits gives us 4096 values for a full circle.
-const size_t sin_tables_bit_count = 12;
+constexpr size_t sin_tables_bit_count = 12;
 
 // Precompute the shift value to convert from angle units to sin table units.
-const size_t angle_to_sin_table_shift = angle_bit_count - sin_tables_bit_count;
+constexpr size_t angle_to_sin_table_shift = angle_bit_count - sin_tables_bit_count;
 
-// Angle base is the max uint32_t + 1, so we need to express it as float.
-const float angle_base = std::pow(2, angle_bit_count);
+// Angle base is the max uint32_t + 1, so we need to express it as float: std::pow(2, angle_bit_count).
+constexpr float angle_base = 4294967296.f;
 
 // Inverse of the angle base so we can convert to floating point values without doing a division.
-const float angle_base_inverse = 1.0f / angle_base;
+constexpr float angle_base_inverse = 1.0f / angle_base;
 
 
 
 // Readout bit packing
 // -------------------
 
-const size_t hall_state_bit_offset = 0;
-const uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
+constexpr size_t hall_state_bit_offset = 0;
+constexpr uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
-const size_t emf_detected_bit_offset = 11;
-const uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
+constexpr size_t emf_detected_bit_offset = 11;
+constexpr uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 
-const size_t emf_fix_bit_offset = 10;
-const uint16_t emf_fix_bit_mask = 0b1 << emf_fix_bit_offset;
+constexpr size_t emf_fix_bit_offset = 10;
+constexpr uint16_t emf_fix_bit_mask = 0b1 << emf_fix_bit_offset;
 
-const size_t current_detected_bit_offset = 9;
-const uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
+constexpr size_t current_detected_bit_offset = 9;
+constexpr uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 
-const size_t angle_fix_bit_offset = 8;
-const uint16_t angle_fix_bit_mask = 0b1 << angle_fix_bit_offset;
+constexpr size_t angle_fix_bit_offset = 8;
+constexpr uint16_t angle_fix_bit_mask = 0b1 << angle_fix_bit_offset;
 
 
 // Position constants
 // ------------------
 
 // Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
-const float rotor_revolutions_per_electric = 4;
+constexpr float rotor_revolutions_per_electric = 4;
 
 // Gear ratio of our chosen motor.
-const float gear_ratio = 6.0 * 6.0 * 6.0;
+constexpr float gear_ratio = 6.0 * 6.0 * 6.0;
 
 // Total ratio between the electrical angle and the output shaft angle.
-const float ratio = rotor_revolutions_per_electric * gear_ratio;
+constexpr float ratio = rotor_revolutions_per_electric * gear_ratio;
 
 
 // Electric constants
@@ -191,22 +191,22 @@ const int32_t pwm_autoreload = hex_mini_drive::PWM_BASE - 1;
 const int32_t pwm_period = 2 * hex_mini_drive::PWM_BASE; 
 
 // Number of PWM cycles per second.
-const int32_t pwm_cycles_per_second = hex_mini_drive::CLOCK_FREQUENCY / pwm_period;
+constexpr int32_t pwm_cycles_per_second = hex_mini_drive::CLOCK_FREQUENCY / pwm_period;
 
 // Time of a single PWM cycle in seconds.
-const float seconds_per_pwm_cycle = 1.0 / pwm_cycles_per_second;
+constexpr float seconds_per_pwm_cycle = 1.0f / static_cast<float>(pwm_cycles_per_second);
 
 // Maximum duty cycle for the high side MOSFETs needs to allow some off time for the
 // bootstrap capacitor to charge so it has enough voltage to turn high side MOSFET on.
-const int32_t minimum_bootstrap_duty = 30; // 30/144MHz = 208ns
+constexpr int32_t minimum_bootstrap_duty = 30; // 30/144MHz = 208ns
 
 // Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
 // bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
-const float pwm_max = hex_mini_drive::PWM_BASE - max(sample_reserve_time, minimum_bootstrap_duty);
+constexpr float pwm_max = hex_mini_drive::PWM_BASE - max(sample_reserve_time, minimum_bootstrap_duty);
 
 // Maximum time (in pwm cycles) while a command is in effect.
-const int32_t max_timeout = 0xFFFF;
+constexpr int32_t max_timeout = 0xFFFF;
 
 
 
@@ -279,6 +279,8 @@ const float max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 const float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / static_cast<float>(pwm_cycles_per_second);
 
+const float friction_speed = 0.01f * angle_base / static_cast<float>(pwm_cycles_per_second);
+
 // Conversion factor between our speed units and radians per second.
 const float radians_per_sec_div_angle_base = static_cast<float>(pwm_cycles_per_second) / half_circle_div_pi;
 
@@ -291,6 +293,7 @@ const float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_thre
 
 // Calibration and Control Parameters
 // ----------------------------------
+
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::CurrentCalibration default_current_calibration = {
@@ -306,17 +309,26 @@ const hex_mini_drive::CurrentCalibration default_current_calibration = {
 // 
 // The reset button will reload these values.
 const hex_mini_drive::ControlParameters default_control_parameters = {
+    // Minimum emf speed to be confident in the rotation direction.
     .min_emf_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    .emf_probing_interval = pwm_cycles_per_second / 20, // unused for now
+    // Unused for now.
+    .emf_probing_interval = pwm_cycles_per_second / 20,
 
+    // Rotor control gains.
     .rotor_angle_ki = std::pow(2, -2),
-    .rotor_angular_speed_ki = std::pow(2, -8),
-    .rotor_acceleration_ki = std::pow(2, -8),
+    // Gain for the angular speed, it should be much lower than the angle gain to average out the noise.
+    .rotor_angular_speed_ki = std::pow(2, -3),
+    // Gain for the acceleration, it should be even lower than speed. These are all relative to the position error.
+    .rotor_acceleration_ki = std::pow(2, -4),
     
+    // Option to flip the motor direction.
     .motor_direction = +1,
-    .incorrect_direction_threshold = 0, // unused
-    .max_pwm_change = 8,
-    .max_angle_change = angle_base / 32.f,
+    // Unused!
+    .incorrect_direction_threshold = 0,
+    // Gain for the EMF angle, it should be much lower than the rotor angle gain to average out the noise.
+    .emf_angle_ki = std::pow(2, -2),
+    // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.
+    .emf_angular_speed_ki = std::pow(2, -8),
 
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
