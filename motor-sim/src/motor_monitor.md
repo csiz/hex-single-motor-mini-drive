@@ -367,7 +367,7 @@ const command_angle = transformed_input_value(command_angle_slider, radians_to_a
 
 // Choose the torque target for torque driving modes.
 const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.200, step: 0.010, label: "Command torque (Amps):"});
-const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => amps / CURRENT_UNITS_PER_AMP);
+const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => amps * CURRENT_UNITS_PER_AMP);
 
 // Choose the power target for power driving modes.
 const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 0.200, step: 0.010, label: "Command power (Watts):"});

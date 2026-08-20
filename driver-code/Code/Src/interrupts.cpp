@@ -467,17 +467,14 @@ static inline MotorOutputs update_motor_torque(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    // Alias the current target.
-    const int current_target = driver_state.target;
-
     // Squash very low currents to 0 to avoid noise.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
     // Get the signed current magnitude to compare against the target.
-    const int measured_current = current_detected * sign(readout.quadrature_current) * readout.current_magnitude;
+    const float measured_current = current_detected * sign(readout.quadrature_current) * readout.current_magnitude;
 
     // Calculate the difference between the target and measured current.
-    const int control_error = (current_target - measured_current);
+    const float control_error = (driver_state.target - measured_current) * max_drive_current_inverse;
 
     // Update the PID control for the torque.
     driver_state.active_pwm = clip_to(
@@ -501,8 +498,6 @@ static inline MotorOutputs update_motor_battery_power(
     // counter the EMF voltage to minimize phase resistance heating, but we don't
     // want to absorb more power than the target setting.
 
-    const float target_power = driver_state.target;
-
     const bool total_power_dominates = faster_abs(readout.total_power) > faster_abs(readout.emf_power);
 
     const float measured_power = (total_power_dominates ? 
@@ -510,14 +505,14 @@ static inline MotorOutputs update_motor_battery_power(
         -sign(readout.quadrature_emf_voltage) * readout.emf_power
     );
 
-    const float control_error = (target_power - measured_power) * control_parameters.battery_power_control_ki;
+    const float control_error = (driver_state.target - measured_power) * max_drive_power_inverse;
 
 
     // Update the PID control for the torque.
     driver_state.active_pwm = clip_to(
         -pwm_max,
         +pwm_max,
-        driver_state.active_pwm + control_error
+        driver_state.active_pwm + control_error * control_parameters.battery_power_control_ki
     );
 
     return update_motor_smooth(driver_state, readout);
@@ -528,11 +523,8 @@ static inline MotorOutputs update_motor_speed(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    // Alias the speed target.
-    const int speed_target = driver_state.target;
-
     // Calculate the difference between the target and measured current.
-    const int control_error = (speed_target - readout.angular_speed);
+    const float control_error = (driver_state.target - readout.angular_speed) * max_angular_speed_inverse;
 
     // Update the PID control for the torque.
     driver_state.active_pwm = clip_to(
@@ -698,7 +690,7 @@ static inline DriverState setup_driver_state(
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0),
                 .active_pwm = min(control_parameters.max_pwm_difference, faster_abs(pending_state.active_pwm)),
-                .target = static_cast<int16_t>(clip_to(-max_angular_speed, max_angular_speed, pending_state.target)),
+                .target = clip_to(-max_angular_speed, max_angular_speed, pending_state.target),
             };
 
         case DriverMode::DRIVE_SMOOTH:
@@ -728,7 +720,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .lead_angle = driver_state.lead_angle,
-                .target = static_cast<int16_t>(clip_to(-max_drive_power, +max_drive_power, pending_state.target)),
+                .target = clip_to(-max_drive_power, +max_drive_power, pending_state.target),
             };
 
         case DriverMode::DRIVE_SPEED:
@@ -738,7 +730,7 @@ static inline DriverState setup_driver_state(
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .lead_angle = driver_state.lead_angle,
-                .target = static_cast<int16_t>(clip_to(-max_angular_speed, +max_angular_speed, pending_state.target)),
+                .target = clip_to(-max_angular_speed, +max_angular_speed, pending_state.target),
             };
 
         case DriverMode::SEEK_ANGLE_POWER:
@@ -751,7 +743,7 @@ static inline DriverState setup_driver_state(
                 .seek_angle = SeekAngle{
                     .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
-                    .max_target = static_cast<int16_t>(clip_to(0, +max_drive_power, pending_state.seek_angle.max_target)),
+                    .max_target = clip_to(0, +max_drive_power, pending_state.seek_angle.max_target),
                     .error_integral = driver_state.seek_angle.error_integral
                 }
             };
@@ -766,7 +758,7 @@ static inline DriverState setup_driver_state(
                 .seek_angle = SeekAngle{
                     .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
-                    .max_target = static_cast<int16_t>(clip_to(0, +max_drive_current, pending_state.seek_angle.max_target)),
+                    .max_target = clip_to(0, +max_drive_current, pending_state.seek_angle.max_target),
                     .error_integral = driver_state.seek_angle.error_integral
                 }
             };

@@ -352,10 +352,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
-    .torque_control_ki = std::pow(2, -7),
+    .torque_control_ki = 1.0f,
 
-    .battery_power_control_ki = std::pow(2, -9),
-    .speed_control_ki = std::pow(2, -9),
+    .battery_power_control_ki = 4.0f,
+    .speed_control_ki = 2.0f,
     .probing_angular_speed = 30.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .max_pwm_difference = pwm_max / 2,
 

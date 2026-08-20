@@ -42,27 +42,18 @@ export function radians_to_angle_units(radians){
 }
 
 export function angle_units_to_radians(angle){
-  return normalize_radians(unbounded_angle_units_to_radians(angle));
+  return normalize_radians(angle * 2 * Math.PI / angle_base);
 }
-
-export function unbounded_radians_to_angle_units(degrees){
-  return degrees * angle_base / (2 * Math.PI);
-}
-
-export function unbounded_angle_units_to_radians(angle){
-  return angle * 2 * Math.PI / angle_base;
-}
-
 
 // Speed units
 // -----------
 
 export function speed_units_to_rotations_per_millisecond(speed){
-  return unbounded_angle_units_to_radians(speed) * cycles_per_millisecond / (2 * Math.PI);
+  return speed * cycles_per_millisecond / angle_base;
 }
 
 export function rotations_per_millisecond_to_speed_units(speed){
-  return unbounded_radians_to_angle_units(speed * 2 * Math.PI / cycles_per_millisecond);
+  return angle_base * speed / cycles_per_millisecond;
 }
 
 // Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
