@@ -881,8 +881,8 @@ void app_tick() {
   // Write all values
   // ----------------
   
-  readout.main_loop_rate = static_cast<int>(main_loop_rate);
-  readout.adc_update_rate = static_cast<int>(adc_update_rate);
+  readout.main_loop_rate = main_loop_rate;
+  readout.adc_update_rate = adc_update_rate;
   readout.motor_constant = motor_constant;
 
   // Adjust direction
