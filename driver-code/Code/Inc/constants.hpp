@@ -368,20 +368,20 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .power_draw_ki = std::pow(2, -12),
     .max_pwm = pwm_max,
 
-    .seek_via_torque_k_prediction = 0.f,
-    .seek_via_torque_ki = 0.f,
-    .seek_via_torque_kp = 0.f,
-    .seek_via_torque_kd = 0.f,
+    .seek_via_torque_k_prediction = 2.0f,
+    .seek_via_torque_ki = std::pow(2, -10),
+    .seek_via_torque_kp = 0.0f,
+    .seek_via_torque_kd = 0.0f,
 
-    .seek_via_power_k_prediction = 0.5,
-    .seek_via_power_ki = 0.f,
-    .seek_via_power_kp = 0.f,
-    .seek_via_power_kd = 0.f,
+    .seek_via_power_k_prediction = 10.0f,
+    .seek_via_power_ki = std::pow(2, -10),
+    .seek_via_power_kp = 0.0f,
+    .seek_via_power_kd = 0.0f,
 
-    .seek_via_speed_k_prediction = 0.f,
-    .seek_via_speed_ki = 0.f,
-    .seek_via_speed_kp = 0.f,
-    .seek_via_speed_kd = 0.f,
+    .seek_via_speed_k_prediction = 20.0f,
+    .seek_via_speed_ki = std::pow(2, -10),
+    .seek_via_speed_kp = 0.0f,
+    .seek_via_speed_kd = 0.0f,
 
     .phase_resistance_ki = std::pow(2, -12),
     .phase_inductance_ki = std::pow(2, -12),
@@ -395,6 +395,9 @@ const int32_t max_lead_angle_control = 60 * angle_base / 360;
 
 // Maximum rotations to use in the PID angle seeking loop (max rotations should imply max control when KP == 1.0).
 const float max_seek_rotations_error = 128;
+
+// Inverse for the max error for quicker math.
+const float max_seek_rotations_error_inverse = 1.f / max_seek_rotations_error;
 
 // Maximum value to accumulate in the seek integral.
 const float max_seek_integral = 1.0;

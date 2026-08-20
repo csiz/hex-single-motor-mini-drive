@@ -20,31 +20,36 @@ static inline float compute_seek_pid_control(
     
     // Get the error between the target angle and the current angle; predicted to
     // a future position determined by prediction parameter.
-    const float uncapped_position_error = (
-        (seek_angle.target_rotation - readout.rotations) * angle_base +
-        k_prediction * position_error_derivative
+    const float rotations_error = (
+        (seek_angle.target_rotation - readout.rotations) +
+        k_prediction * position_error_derivative * angle_base_inverse
     );
 
     // Cap to the maximum seek error which is set to 2x the maximum control output so
     // that the position term can overcome the derivative term. The cap is applied
     // here so we can use the position_error for the integral term as well.
-    const float position_error = clip_to(-max_seek_position_control, +max_seek_position_control, uncapped_position_error);
-
-    // Decay the integral term over time.
-    seek_angle.error_integral -= sign(seek_angle.error_integral);
-
+    const float position_error = clip_to(
+        -max_seek_position_control, 
+        +max_seek_position_control, 
+        rotations_error * max_seek_rotations_error_inverse
+    );
+    
     // Proportional term with respect to the maximum position error (control maxes out at greater errors).
     const float proportional = kp * position_error;
         
     // Derivative term with respect to the reference speed.
-    const float derivative = clip_to(-max_seek_derivative_control, +max_seek_derivative_control,
+    const float derivative = clip_to(
+        -max_seek_derivative_control, 
+        +max_seek_derivative_control,
         kd * position_error_derivative
     );
 
     // Calculate the new integral term using the predicted position error (to minimize oscillations).
     // 
     // Note that we don't update the integral term just yet, we will update it if the output isn't saturated.
-    const float integral = clip_to(-max_seek_integral_control, +max_seek_integral_control,
+    const float integral = clip_to(
+        -max_seek_integral_control, 
+        +max_seek_integral_control,
         seek_angle.error_integral + ki * position_error
     );
 

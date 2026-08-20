@@ -541,7 +541,7 @@ static inline MotorOutputs update_motor_seek_angle_power(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    const int pid_control = compute_seek_pid_control(
+    const float pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
         readout,
         control_parameters.seek_via_power_k_prediction,
@@ -550,9 +550,7 @@ static inline MotorOutputs update_motor_seek_angle_power(
         control_parameters.seek_via_power_kd
     );
 
-    const float max_power = driver_state.seek_angle.max_target;
-
-    driver_state.target = max_power * pid_control;
+    driver_state.target = driver_state.seek_angle.max_target * pid_control;
 
     return update_motor_battery_power(driver_state, readout);
 }
@@ -561,7 +559,7 @@ static inline MotorOutputs update_motor_seek_angle_torque(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    const int pid_control = compute_seek_pid_control(
+    const float pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
         readout,
         control_parameters.seek_via_torque_k_prediction,
@@ -570,9 +568,7 @@ static inline MotorOutputs update_motor_seek_angle_torque(
         control_parameters.seek_via_torque_kd
     );
 
-    const int max_current = driver_state.seek_angle.max_target;
-
-    driver_state.target = max_current * pid_control;
+    driver_state.target = driver_state.seek_angle.max_target * pid_control;
 
     return update_motor_torque(driver_state, readout);
 }
@@ -581,7 +577,7 @@ static inline MotorOutputs update_motor_seek_angle_speed(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    const int pid_control = compute_seek_pid_control(
+    const float pid_control = compute_seek_pid_control(
         driver_state.seek_angle,
         readout,
         control_parameters.seek_via_speed_k_prediction,
@@ -590,9 +586,7 @@ static inline MotorOutputs update_motor_seek_angle_speed(
         control_parameters.seek_via_speed_kd
     );
 
-    const int max_speed = driver_state.seek_angle.max_target;
-
-    driver_state.target = max_speed * pid_control;
+    driver_state.target = driver_state.seek_angle.max_target * pid_control;
 
     return update_motor_speed(driver_state, readout);
 }
