@@ -11,6 +11,43 @@
 #include "hex_mini_drive_interface.hpp"
 
 
+// Electrical and control limits
+// -----------------------------
+
+// 6A max DQ0 driving current.
+constexpr float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
+
+// Inverse for fast math.
+constexpr float max_drive_current_inverse = 1.f / max_drive_current;
+
+// 12W max drive power.
+constexpr float max_drive_power = 12.0;
+
+// Inverse for fast math.
+constexpr float max_drive_power_inverse = 1.f / max_drive_power;
+
+// Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
+constexpr float rotor_revolutions_per_electric = 4;
+
+// Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
+constexpr float max_rpm = 32'000 * rotor_revolutions_per_electric;
+
+// Angle base is the max uint32_t + 1, so we need to express it as float: std::pow(2, angle_bit_count).
+constexpr float angle_base = 4294967296.f;
+
+// Number of MCU clock ticks per PWM cycle; counting up then down.
+constexpr int32_t pwm_period = 2 * hex_mini_drive::PWM_BASE;
+
+// Number of PWM cycles per second.
+constexpr int32_t pwm_cycles_per_second = hex_mini_drive::CLOCK_FREQUENCY / pwm_period;
+
+// Maximum angular speed we can achieve in our angle units per PWM cycle.
+constexpr float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / static_cast<float>(pwm_cycles_per_second);
+
+// Inverse of the maximum angular speed so we can convert to floating point values without doing a division.
+constexpr float max_angular_speed_inverse = 1.f / max_angular_speed;
+
+
 // Unit definitions
 // ----------------
 
@@ -37,8 +74,6 @@ constexpr size_t sin_tables_bit_count = 12;
 // Precompute the shift value to convert from angle units to sin table units.
 constexpr size_t angle_to_sin_table_shift = angle_bit_count - sin_tables_bit_count;
 
-// Angle base is the max uint32_t + 1, so we need to express it as float: std::pow(2, angle_bit_count).
-constexpr float angle_base = 4294967296.f;
 
 // Inverse of the angle base so we can convert to floating point values without doing a division.
 constexpr float angle_base_inverse = 1.0f / angle_base;
@@ -67,8 +102,6 @@ constexpr uint16_t angle_fix_bit_mask = 0b1 << angle_fix_bit_offset;
 // Position constants
 // ------------------
 
-// Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
-constexpr float rotor_revolutions_per_electric = 4;
 
 // Gear ratio of our chosen motor.
 constexpr float gear_ratio = 6.0 * 6.0 * 6.0;
@@ -120,8 +153,7 @@ constexpr float current_diff_measurement_variance = square(2 * current_measureme
 // therefore only measure up to 2.9V. We could measure higher negative currents though.
 constexpr float max_measured_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * (adc_voltage_reference - amplifier_voltage_reference) / (current_shunt_resistance * amplifier_gain);
 
-// 6A max DQ0 driving current.
-constexpr float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
+
 
 static_assert(max_drive_current < max_measured_current, "We must be able to measure the maximum driving current.");
 
@@ -132,28 +164,25 @@ static_assert(max_drive_current < max_measured_current, "We must be able to meas
 
 
 // Voltage divider between VCC and the ADC reference voltage: 10kohm/110kohm divider
-const float vcc_divider = 10.0/110.0;
+constexpr float vcc_divider = 10.0/110.0;
 
 // Conversion factor for the voltage readout from the ADC.
-const float voltage_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * adc_voltage_reference / (adc_max_value * vcc_divider);
+constexpr float voltage_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * adc_voltage_reference / (adc_max_value * vcc_divider);
 
 // Voltage conversion back to volts.
-const float volts_per_voltage_units = 1.0 / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+constexpr float volts_per_voltage_units = 1.0 / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 // Conversion factor between current and phase resistance voltage.
-const float current_to_voltage_units = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
+constexpr float current_to_voltage_units = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
 // The drivers need over 8V to power the MOSFETs.
-const float vcc_mosfet_driver_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
-
-// 12W max drive power.
-const float max_drive_power = 12.0;
+constexpr float vcc_mosfet_driver_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 // Directly convert voltage * current to power in Watts.
-const float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * hex_mini_drive::CURRENT_UNITS_PER_AMP);
+constexpr float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * hex_mini_drive::CURRENT_UNITS_PER_AMP);
 
 // Our dq0 transformation lead to a factor of 3/2 overestimation for the current and therefore power.
-const float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 2.0 / 3.0;
+constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 2.0 / 3.0;
 
 
 
@@ -170,28 +199,23 @@ const float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 2.
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 144MHz / 4.
 
 // Temperature ADC conversion time: 12.5 cycles + 92.5 cycles = 105 cycles = 420 ticks.
-const int32_t temperature_sample_time = (6.5 + 12.5 + 1)*4;
+constexpr int32_t temperature_sample_time = (6.5 + 12.5 + 1)*4;
 
 // Current ADC conversion time: 12.5 cycles + 6.5 cycles = 19 cycles = 76 ticks.
-const int32_t current_sample_time = (6.5 + 12.5 + 1)*4;
+constexpr int32_t current_sample_time = (6.5 + 12.5 + 1)*4;
 
 // The ADC will read the temperature and reference first then 2 phase currents (for each ADC).
 // Try to time the sampling  time of the phase currents symmetrically around the peak of the PWM cycle.
-const int32_t sample_lead_time = temperature_sample_time + 0 * current_sample_time;
+constexpr int32_t sample_lead_time = temperature_sample_time + 0 * current_sample_time;
 
 // The current sense resistors are only connected to the low side MOSFETs. Therefore we can only read
 // the phase currents when the low side MOSFETs are on. So we must eat into our PWM cycle to sample
 // the currents. The PWM can't be set higher than the ARR - reserve time.
-const int32_t sample_reserve_time = 232;
+constexpr int32_t sample_reserve_time = 232;
 
 // Auto-reload value for the PWM timer.
-const int32_t pwm_autoreload = hex_mini_drive::PWM_BASE - 1;
+constexpr int32_t pwm_autoreload = hex_mini_drive::PWM_BASE - 1;
 
-// Number of MCU clock ticks per PWM cycle; counting up then down.
-const int32_t pwm_period = 2 * hex_mini_drive::PWM_BASE; 
-
-// Number of PWM cycles per second.
-constexpr int32_t pwm_cycles_per_second = hex_mini_drive::CLOCK_FREQUENCY / pwm_period;
 
 // Time of a single PWM cycle in seconds.
 constexpr float seconds_per_pwm_cycle = 1.0f / static_cast<float>(pwm_cycles_per_second);
@@ -274,10 +298,6 @@ const int32_t hall_sector_span = angle_base / hall_sector_base;
 
 // Note speed values written in degrees per ms and converted to speed units.
 
-// Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
-const float max_rpm = 32'000 * rotor_revolutions_per_electric;
-
-const float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / static_cast<float>(pwm_cycles_per_second);
 
 const float friction_speed = 0.01f * angle_base / static_cast<float>(pwm_cycles_per_second);
 
