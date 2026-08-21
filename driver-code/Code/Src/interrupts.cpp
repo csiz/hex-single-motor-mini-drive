@@ -1268,13 +1268,7 @@ void ADC1_2_IRQHandler(void){
     const float inductive_power = dot(currents, inductor_voltages) * voltage_mul_current_to_power;
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
-    // 
-    // Use the DQ0 transformed values to calculate the EMF power quickly. We also have a chance to 
-    // smooth out the values to better approximate the real power use.
-    const float emf_power = - (
-        sign(quadrature_current) * current_magnitude * 
-        sign(quadrature_emf_voltage) * emf_voltage_magnitude 
-    ) * dq0_voltage_mul_current_to_power;
+    const float emf_power = -dot(currents, emf_voltages) * voltage_mul_current_to_power;
 
     // The total power is the power used from the battery. It will be positive when driving
     // the motor, meaning that we drain the battery. If this is negative it means we are charging

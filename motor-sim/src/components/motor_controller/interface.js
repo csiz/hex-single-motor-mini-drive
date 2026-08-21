@@ -149,7 +149,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
   const web_emf_voltage_angle = normalize_radians(predicted_angle + emf_voltage_angle_offset);
   const web_emf_voltage_magnitude = Math.sqrt(web_direct_emf_voltage * web_direct_emf_voltage + web_quadrature_emf_voltage * web_quadrature_emf_voltage);
 
-  const web_total_power = -(u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
+  const web_total_power = (u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
   const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
   const web_resistive_power = (square(u_current) * u_resistance + square(v_current) * v_resistance + square(w_current) * w_resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
