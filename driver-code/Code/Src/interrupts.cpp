@@ -952,18 +952,16 @@ static inline void update_motor_control(
 // ---------------------------------
 
 // Process ADC readings for phase currents when the injected conversion is done.
-void adc_interrupt_handler(){
+void ADC1_2_IRQHandler(void){
     // Note: a single float assignment will cost us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
 
     // Check what time it is on the PWM cycle.
     readout.cycle_start_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
     
-    // Increment the readout number.
-    const uint16_t readout_number = readout.readout_number + 1;
-
-    // Start by reading the ADC conversion data
-    // ----------------------------------------
-
+    
+    // Start by reading sensor data
+    // ----------------------------
+    
     // Double check the ADC end of conversion flag was set for both ADCs.
     if (not (LL_ADC_IsActiveFlag_JEOS(ADC1) and LL_ADC_IsActiveFlag_JEOS(ADC2))) {
         // If we only get one set of readings it may be a startup timing issue, ignore it and
@@ -972,15 +970,15 @@ void adc_interrupt_handler(){
         LL_ADC_ClearFlag_JEOS(ADC2);
         return;
     }
-
-
+    
+    // Get the ADC readings for the phase currents, temperature, and VCC voltage.
     const ADCReadings adc_readings = read_adc_values();
-
-    // Get hall sensor state
-    // ---------------------
 
     // Read new data from the hall sensors.
     const uint8_t hall_state = read_hall_sensors_state();
+    
+    // Increment the readout number.
+    const uint16_t readout_number = readout.readout_number + 1;
 
 
     // Do the data calculations
