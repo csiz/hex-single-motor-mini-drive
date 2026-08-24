@@ -83,6 +83,9 @@ const int32_t angle_fix_max_count = 512;
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 ThreePhase previous_half_cycle_drive_voltages = {0, 0, 0};
 
+float resistive_power_observer = 0.0f;
+float total_power_observer = 0.0f;
+
 // Motor driver state
 // ------------------
 
@@ -1320,6 +1323,34 @@ void ADC1_2_IRQHandler(void){
     // power is quite reliable and inductive_power is very small.
     const float total_power = resistive_power + inductive_power + emf_power;
 
+    // Limits!
+    // -------
+
+    // Calculate slowly varying averages of the resistive power; this represents the energy
+    // dissipated in the motor coils which should be proportional to the temperature rise.
+    // Update the higher resolution observer.
+    resistive_power_observer += (resistive_power - resistive_power_observer) * control_parameters.resistive_power_ki;
+
+    // Calculate slowly varying averages of the total power; this represents the energy
+    // drawn from the battery. At constant voltage, this is proportional to the current drawn.
+    total_power_observer += (total_power - total_power_observer) * control_parameters.power_draw_ki;
+
+
+    // Reduce the maximum output PWM to keep within safe limits:
+    // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
+    // let the battery recharge our local capacitors.
+    // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
+    // 3. The total power is a good proxy for total current consumed from the battery.
+    // 
+    // The penalty should normally be negative indicating we can increase the PWM.
+    const float pwm_penalty = max(max(
+        vcc_mosfet_driver_undervoltage - readout.vcc_voltage,
+        resistive_power_observer - control_parameters.max_resistive_power),
+        total_power_observer - control_parameters.max_power_draw
+    );
+
+    const float live_max_pwm = clip_to(0, pwm_max, readout.live_max_pwm - pwm_penalty);
+
 
     // Write the latest readout data
     // -----------------------------
@@ -1358,6 +1389,7 @@ void ADC1_2_IRQHandler(void){
     readout.vcc_voltage = vcc_voltage;
 
     readout.temperature = temperature;
+    readout.live_max_pwm = live_max_pwm;
 
     readout.direct_current = direct_current;
     readout.quadrature_current = quadrature_current;
