@@ -655,13 +655,13 @@ const advanced_drive_buttons = Inputs.button(
     ["Drive power +", async function(){
       await snapshot_if_checked({
         message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
-        target_power: +command_power
+        target_power: +command_power,
       });
     }],
     ["Drive power -", async function(){
       await snapshot_if_checked({
         message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
-        target_power: -command_power
+        target_power: -command_power,
       });
     }],
     ["Drive speed +", async function(){
@@ -676,6 +676,20 @@ const advanced_drive_buttons = Inputs.button(
         target_speed: -command_angular_speed
       });
     }],
+    ["Drive torque speed +", async function(){
+      await snapshot_if_checked({
+        message_code: MessageCode.SET_STATE_DRIVE_TORQUE_SPEED,
+        target_speed: +command_angular_speed,
+        target_current: +command_torque_current,
+      });
+    }],
+    ["Drive torque speed -", async function(){
+      await snapshot_if_checked({
+        message_code: MessageCode.SET_STATE_DRIVE_TORQUE_SPEED,
+        target_speed: -command_angular_speed,
+        target_current: -command_torque_current,
+      });
+    }],
   ],
   {label: "Advanced drive commands"},
 );
@@ -684,52 +698,22 @@ d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
 
 const seek_drive_buttons = Inputs.button(
   [
-    ["Seek angle (power)", async function(){
+    ["Seek angle", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE,
         target_rotation: command_seek_rotation, 
         target_angle: command_angle,
-        max_drive_power: command_power,
+        target_speed: command_angular_speed,
+        target_current: command_torque_current,
       });
     }],
-    ["Go to zero (power)", async function(){
+    ["Go to zero", async function(){
       await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
+        message_code: MessageCode.SET_STATE_SEEK_ANGLE,
         target_rotation: 0, 
-        target_angle: command_angle,
-        max_drive_power: command_power,
-      });
-    }],
-    ["Seek angle (torque)", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
-        target_rotation: command_seek_rotation, 
-        target_angle: command_angle,
-        max_drive_current: command_torque_current,
-      });
-    }],
-    ["Go to zero (torque)", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
-        target_rotation: 0, 
-        target_angle: command_angle,
-        max_drive_current: command_torque_current,
-      });
-    }],
-    ["Seek angle (speed)", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_SPEED,
-        target_rotation: command_seek_rotation, 
-        target_angle: command_angle,
-        max_drive_speed: command_angular_speed,
-      });
-    }],
-    ["Go to zero (speed)", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_SPEED,
-        target_rotation: 0, 
-        target_angle: command_angle,
-        max_drive_speed: command_angular_speed,
+        target_angle: 0,
+        target_speed: command_angular_speed,
+        target_current: command_torque_current,
       });
     }],
   ],
@@ -1584,24 +1568,34 @@ const control_parameters_input = Object.fromEntries(
       label: "Torque Control KI",
       description: "Torque control gain. Controls how fast we adjust the PWM to achieve the desired torque."
     }],
+    ["torque_control_kff", {
+      label: "Torque Control KFF",
+      description: "Torque control feedforward gain. Controls how much we drive the PWM based on the desired torque."
+    }],
     ["battery_power_control_ki", {
       label: "Battery Power Control KI",
       description: "Battery power control gain. Controls how fast we adjust the PWM to achieve the desired battery power."
     }],
+    ["battery_power_control_kff", {
+      label: "Battery Power Control KFF",
+      description: "Battery power control feedforward gain. Controls how much we drive the PWM based on the desired battery power."
+    }],
     ["speed_control_ki", {
       label: "Speed Control KI",
       description: "Speed control gain. Controls how fast we adjust the PWM to achieve the desired speed."
+    }],
+    ["speed_control_kff", {
+      label: "Speed Control KFF",
+      description: "Speed control feedforward gain. Controls how much we drive the PWM based on the desired speed."
     }],
     ["probing_angular_speed", {
       label: "Probing Angular Speed",
       description: `Probing angular speed. We use this default speed to drive a current around the coils in order to
       move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
     }],
-    ["max_pwm_difference", {
-      label: "Max PWM Difference",
-      description: `Maximum PWM allowed compared to the PWM required to compensate for the back EMF. This allows us to
-      drive the motor at the maximum speed allowed by our voltage source whilst capping the PWM component that generates
-      driving current. Note that this is the maximum PWM allowed whilst the motor is stationary and back EMF is 0.`
+    ["max_hold_pwm", {
+      label: "Max Hold PWM",
+      description: `Maximum PWM for holding commands.`
     }],
     ["min_emf_for_motor_constant", {
       label: "Threshold for motor constant",
@@ -1615,10 +1609,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Resistive Power KI",
       description: "Resistive power integral gain. How fast we average the resistive power to avoid spikes."
     }],
-    ["max_angular_speed", {
-      label: "Maximum Angular Speed",
-      description: "Maximum angular speed allowed."
-    }],
     ["max_power_draw", {
       label: "Max Power Draw",
       description: "Maximum power draw allowed. This is a proxy for the maximum current draw at constant supply voltage."
@@ -1627,57 +1617,21 @@ const control_parameters_input = Object.fromEntries(
       label: "Power Draw KI",
       description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
     }],
-    ["max_pwm", {
-      label: "Maximum PWM allowed",
-      description: "Maximum PWM value allowed. We must reserve some of the PWM range for current measurements and MOSFET driver boost capacitor charging."
-    }],
-    ["seek_via_torque_k_prediction", {
-      label: "Seek via Torque prediction factor",
+    ["seek_kff", {
+      label: "Seek prediction factor",
       description: "We compute the integral error using the predicted position a few milliseconds ahead. This parameter controls how far ahead we predict."
     }],
-    ["seek_via_torque_ki", {
-      label: "Seek via Torque KI",
+    ["seek_ki", {
+      label: "Seek KI",
       description: "Seek via torque integral gain. How fast we adjust the driving power to adjust for small errors."
     }],
-    ["seek_via_torque_kp", {
-      label: "Seek via Torque KP",
+    ["seek_kp", {
+      label: "Seek KP",
       description: "Seek via torque proportional gain. The spring constant for the torque control; the torque we apply per distance from the target."
     }],
-    ["seek_via_torque_kd", {
-      label: "Seek via Torque KD",
+    ["seek_kd", {
+      label: "Seek KD",
       description: "Seek via torque derivative gain. Dampening factor to lower torque when the error is decreasing quickly."
-    }],
-    ["seek_via_power_k_prediction", {
-      label: "Seek via Power prediction factor",
-      description: "We compute the integral error using the predicted position a few milliseconds ahead. This parameter controls how far ahead we predict."
-    }],
-    ["seek_via_power_ki", {
-      label: "Seek via Power KI",
-      description: "Seek via power integral gain. How fast we adjust the driving power to adjust for small errors."
-    }],
-    ["seek_via_power_kp", {
-      label: "Seek via Power KP",
-      description: "Seek via power proportional gain. This is effectively battery current draw per distance from the target."
-    }],
-    ["seek_via_power_kd", {
-      label: "Seek via Power KD",
-      description: "Seek via power derivative gain. Dampening factor to lower power when the error is decreasing quickly."
-    }],
-    ["seek_via_speed_k_prediction", {
-      label: "Seek via Speed prediction factor",
-      description: "We compute the integral error using the predicted position a few milliseconds ahead. This parameter controls how far ahead we predict."
-    }],
-    ["seek_via_speed_ki", {
-      label: "Seek via Speed KI",
-      description: "Seek via speed integral gain. How fast we adjust the driving speed to adjust for small errors."
-    }],
-    ["seek_via_speed_kp", {
-      label: "Seek via Speed KP",
-      description: "Seek via speed proportional gain. The speed we apply per distance from the target."
-    }],
-    ["seek_via_speed_kd", {
-      label: "Seek via Speed KD",
-      description: "Seek via speed derivative gain. Dampening factor to lower speed when the error is decreasing quickly."
     }],
     ["phase_resistance_ki", {
       label: "Phase Resistance KI",

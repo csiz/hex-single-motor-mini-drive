@@ -84,19 +84,16 @@ constexpr float angle_base_inverse = 1.0f / angle_base;
 // -------------------
 
 constexpr size_t hall_state_bit_offset = 0;
-constexpr uint16_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
+constexpr uint8_t hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
-constexpr size_t emf_detected_bit_offset = 11;
-constexpr uint16_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
+constexpr size_t current_detected_bit_offset = 4;
+constexpr uint8_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
 
-constexpr size_t emf_fix_bit_offset = 10;
-constexpr uint16_t emf_fix_bit_mask = 0b1 << emf_fix_bit_offset;
+constexpr size_t emf_fix_bit_offset = 5;
+constexpr uint8_t emf_fix_bit_mask = 0b1 << emf_fix_bit_offset;
 
-constexpr size_t current_detected_bit_offset = 9;
-constexpr uint16_t current_detected_bit_mask = 0b1 << current_detected_bit_offset;
-
-constexpr size_t angle_fix_bit_offset = 8;
-constexpr uint16_t angle_fix_bit_mask = 0b1 << angle_fix_bit_offset;
+constexpr size_t emf_detected_bit_offset = 6;
+constexpr uint8_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
 
 
 // Position constants
@@ -353,35 +350,26 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
     .torque_control_ki = 1.0f,
+    .torque_control_kff = 0.1f,
 
     .battery_power_control_ki = 4.0f,
+    .battery_power_control_kff = 0.1f,
     .speed_control_ki = 2.0f,
+    .speed_control_kff = 0.1f,
     .probing_angular_speed = 30.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    .max_pwm_difference = pwm_max / 2,
+    .max_hold_pwm = pwm_max / 4,
 
     .min_emf_for_motor_constant = 1.0,
     .max_resistive_power = 2.0,
     .resistive_power_ki = std::pow(2, -12),
 
-    .max_angular_speed = max_angular_speed,
     .max_power_draw = max_drive_power,
     .power_draw_ki = std::pow(2, -12),
-    .max_pwm = pwm_max,
 
-    .seek_via_torque_k_prediction = 2.0f,
-    .seek_via_torque_ki = std::pow(2, -10),
-    .seek_via_torque_kp = 0.0f,
-    .seek_via_torque_kd = 0.0f,
-
-    .seek_via_power_k_prediction = 10.0f,
-    .seek_via_power_ki = std::pow(2, -10),
-    .seek_via_power_kp = 0.0f,
-    .seek_via_power_kd = 0.0f,
-
-    .seek_via_speed_k_prediction = 20.0f,
-    .seek_via_speed_ki = std::pow(2, -10),
-    .seek_via_speed_kp = 0.0f,
-    .seek_via_speed_kd = 0.0f,
+    .seek_kff = 0.0f,
+    .seek_ki = std::pow(2, -12),
+    .seek_kp = 1.0f,
+    .seek_kd = 0.0f,
 
     .phase_resistance_ki = std::pow(2, -12),
     .phase_inductance_ki = std::pow(2, -12),

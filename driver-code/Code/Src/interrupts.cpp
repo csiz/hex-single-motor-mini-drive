@@ -1,7 +1,4 @@
 #include "interrupts.hpp"
-#include "interrupts_pid.hpp"
-
-#include <cstdint>
 
 #include "hex_mini_drive_interface.hpp"
 
@@ -422,13 +419,12 @@ static inline MotorOutputs update_motor_smooth(
     hex_mini_drive::FullReadout const& readout
 ){
     // Check if we have an accurate readout angle.
-    const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
     // Base the direction on the sign of the target PWM.
     const int32_t active_pwm_sign = sign(driver_state.active_pwm);
 
-    if (angle_fix) {
+    if (readout.angle_fix) {
         // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
         // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
         // 
@@ -467,11 +463,17 @@ static inline MotorOutputs update_motor_torque(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
+    
     // Squash very low currents to 0 to avoid noise.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
+    
+    // Use the quadrature current when we have an angle fix because we know the smooth mode is trying
+    // to drive current orthogonal to the rotor angle. However without an angle fix the target changes
+    // during probing periods so we need to base the sign on the active PWM to cap the max current.
+    const float current_sign = readout.angle_fix ? sign(readout.quadrature_current) : sign(driver_state.active_pwm);
 
     // Get the signed current magnitude to compare against the target.
-    const float measured_current = current_detected * sign(readout.quadrature_current) * readout.current_magnitude;
+    const float measured_current = current_detected * readout.current_magnitude * current_sign;
 
     // Calculate the difference between the target and measured current.
     const float control_error = (driver_state.target - measured_current) * max_drive_current_inverse;
@@ -497,7 +499,6 @@ static inline MotorOutputs update_motor_battery_power(
     // Note that total power will be 0 when not driving; in that case we want to
     // counter the EMF voltage to minimize phase resistance heating, but we don't
     // want to absorb more power than the target setting.
-
     const bool total_power_dominates = faster_abs(readout.total_power) > faster_abs(readout.emf_power);
 
     const float measured_power = (total_power_dominates ? 
@@ -506,7 +507,6 @@ static inline MotorOutputs update_motor_battery_power(
     );
 
     const float control_error = (driver_state.target - measured_power) * max_drive_power_inverse;
-
 
     // Update the PID control for the torque.
     driver_state.active_pwm = clip_to(
@@ -536,59 +536,113 @@ static inline MotorOutputs update_motor_speed(
     return update_motor_smooth(driver_state, readout);
 }
 
-
-static inline MotorOutputs update_motor_seek_angle_power(
+static inline MotorOutputs update_motor_torque_speed(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    const float pid_control = compute_seek_pid_control(
-        driver_state.seek_angle,
-        readout,
-        control_parameters.seek_via_power_k_prediction,
-        control_parameters.seek_via_power_ki,
-        control_parameters.seek_via_power_kp,
-        control_parameters.seek_via_power_kd
+    const float command_sign = sign(driver_state.speed_target);
+    
+    // Squash very low currents to 0 to avoid noise.
+    const bool current_detected = readout.state_flags & current_detected_bit_mask;
+    
+    // Use the quadrature current when we have an angle fix because we know the smooth mode is trying
+    // to drive current orthogonal to the rotor angle. However without an angle fix the target changes
+    // during probing periods so we need to base the sign on the active PWM to cap the max current.
+    const float current_sign = readout.angle_fix ? sign(readout.quadrature_current) : sign(driver_state.active_pwm);
+
+    // Get the signed current magnitude to compare against the target.
+    const float measured_current = current_detected * readout.current_magnitude * current_sign;
+
+    // Calculate the difference between the target and measured current.
+    const float current_error = (driver_state.current_target - measured_current) * 
+        max_drive_current_inverse * control_parameters.torque_control_ki;
+
+    // Calculate the difference between the target and measured current.
+    const float speed_error = (driver_state.speed_target - readout.angular_speed) * 
+        max_angular_speed_inverse * control_parameters.speed_control_ki;
+
+
+    const float control_error = (
+        sign(current_error) != command_sign ? current_error :
+        sign(speed_error) != command_sign ? speed_error :
+        current_error + speed_error
     );
 
-    driver_state.target = driver_state.seek_angle.max_target * pid_control;
+    // Update the PID control for the torque.
+    driver_state.active_pwm = clip_to(
+        -pwm_max,
+        +pwm_max,
+        driver_state.active_pwm + control_error
+    );
 
-    return update_motor_battery_power(driver_state, readout);
+    return update_motor_smooth(driver_state, readout);
 }
 
-static inline MotorOutputs update_motor_seek_angle_torque(
+
+static inline MotorOutputs update_motor_seek_angle(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    const float pid_control = compute_seek_pid_control(
-        driver_state.seek_angle,
-        readout,
-        control_parameters.seek_via_torque_k_prediction,
-        control_parameters.seek_via_torque_ki,
-        control_parameters.seek_via_torque_kp,
-        control_parameters.seek_via_torque_kd
+    // The derivative of the error is negative the angular speed.
+    const float position_error_derivative = -readout.angular_speed;
+    
+    // Get the error between the target angle and the current angle; predicted to
+    // a future position determined by prediction parameter.
+    const float rotations_error = driver_state.seek_angle.target_rotation - readout.rotations;
+
+    // Cap to the maximum seek error which is set to 2x the maximum control output so
+    // that the position term can overcome the derivative term. The cap is applied
+    // here so we can use the position_error for the integral term as well.
+    const float position_error = clip_to(
+        -max_seek_position_control, 
+        +max_seek_position_control, 
+        rotations_error * max_seek_rotations_error_inverse
     );
 
-    driver_state.target = driver_state.seek_angle.max_target * pid_control;
-
-    return update_motor_torque(driver_state, readout);
-}
-
-static inline MotorOutputs update_motor_seek_angle_speed(
-    DriverState & driver_state,
-    hex_mini_drive::FullReadout const& readout
-){
-    const float pid_control = compute_seek_pid_control(
-        driver_state.seek_angle,
-        readout,
-        control_parameters.seek_via_speed_k_prediction,
-        control_parameters.seek_via_speed_ki,
-        control_parameters.seek_via_speed_kp,
-        control_parameters.seek_via_speed_kd
+    // Proportional term with respect to the maximum position error (control maxes out at greater errors).
+    const float proportional = control_parameters.seek_kp * position_error;
+        
+    // Derivative term with respect to the reference speed.
+    const float derivative = clip_to(
+        -max_seek_derivative_control, 
+        +max_seek_derivative_control,
+        control_parameters.seek_kd * position_error_derivative
     );
 
-    driver_state.target = driver_state.seek_angle.max_target * pid_control;
+    
+    // Calculate the new integral term using the predicted position error (to minimize oscillations).
+    // 
+    // Note that we don't update the integral term just yet, we will update it if the output isn't saturated.
+    const float integral = clip_to(
+        -max_seek_integral_control, 
+        +max_seek_integral_control,
+        driver_state.seek_integral + control_parameters.seek_ki * position_error
+    );
 
-    return update_motor_speed(driver_state, readout);
+    // Update the output of the Proportional Integral Derivative (PID) control.
+    float output = (proportional + integral + derivative);
+    
+    // Only accumulate the integral if the output isn't saturated.
+
+    if (output > +1.0) {
+        // Decay the integral if we are saturating the output.
+        driver_state.seek_integral -= driver_state.seek_integral * seek_integral_decay_fraction;
+        // Maximum output.
+        output = +1.0;
+    } else if (output < -1.0) {
+        // Decay the integral if we are saturating the output negatively.
+        driver_state.seek_integral -= driver_state.seek_integral * seek_integral_decay_fraction;
+        // Minimum output.
+        output = -1.0;
+    } else {
+        // Output is not saturated, we can update the integral either direction.
+        driver_state.seek_integral = integral;
+    }
+
+    driver_state.current_target = output * driver_state.target;
+    driver_state.speed_target = sign(driver_state.current_target) * faster_abs(driver_state.speed_target);
+
+    return update_motor_torque_speed(driver_state, readout);
 }
 
 // Drive the motor using a fixed schedule for the PWM outputs.
@@ -650,9 +704,9 @@ static inline DriverState setup_driver_state(
             return DriverState{
                 .motor_outputs = MotorOutputs {
                     .enable_flags = pending_state.motor_outputs.enable_flags,
-                    .u_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_pwm_difference, pending_state.motor_outputs.u_duty)),
-                    .v_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_pwm_difference, pending_state.motor_outputs.v_duty)),
-                    .w_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_pwm_difference, pending_state.motor_outputs.w_duty))
+                    .u_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_hold_pwm, pending_state.motor_outputs.u_duty)),
+                    .v_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_hold_pwm, pending_state.motor_outputs.v_duty)),
+                    .w_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_hold_pwm, pending_state.motor_outputs.w_duty))
                 },
                 .mode = DriverMode::HOLD,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
@@ -683,7 +737,7 @@ static inline DriverState setup_driver_state(
                 .mode = DriverMode::DRIVE_PERIODIC,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0),
-                .active_pwm = min(control_parameters.max_pwm_difference, faster_abs(pending_state.active_pwm)),
+                .active_pwm = min(control_parameters.max_hold_pwm, faster_abs(pending_state.active_pwm)),
                 .target = clip_to(-max_angular_speed, max_angular_speed, pending_state.target),
             };
 
@@ -727,50 +781,34 @@ static inline DriverState setup_driver_state(
                 .target = clip_to(-max_angular_speed, +max_angular_speed, pending_state.target),
             };
 
-        case DriverMode::SEEK_ANGLE_POWER:
+        case DriverMode::DRIVE_TORQUE_SPEED:
             return DriverState{
-                .mode = DriverMode::SEEK_ANGLE_POWER,
+                .mode = DriverMode::DRIVE_TORQUE_SPEED,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
                 .lead_angle = driver_state.lead_angle,
+                .current_target = clip_to(-max_drive_current, +max_drive_current, pending_state.current_target),
+                .speed_target = clip_to(-max_angular_speed, +max_angular_speed, pending_state.speed_target),
+            };
+
+        case DriverMode::SEEK_ANGLE:
+            return DriverState{
+                .mode = DriverMode::SEEK_ANGLE,
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
+                .active_pwm = driver_state.active_pwm,
+                .lead_angle = driver_state.lead_angle,
+                .pwm_integral = driver_state.pwm_integral,
+                .speed_target = clip_to(-max_angular_speed, +max_angular_speed, pending_state.speed_target),
+                .target = clip_to(-max_drive_current, +max_drive_current, pending_state.target),
+                .seek_integral = driver_state.seek_integral,
                 .seek_angle = SeekAngle{
                     .target_angle = pending_state.seek_angle.target_angle,
                     .target_rotation = pending_state.seek_angle.target_rotation,
-                    .max_target = clip_to(0, +max_drive_power, pending_state.seek_angle.max_target),
-                    .error_integral = driver_state.seek_angle.error_integral
                 }
             };
 
-        case DriverMode::SEEK_ANGLE_TORQUE:
-            return DriverState{
-                .mode = DriverMode::SEEK_ANGLE_TORQUE,
-                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
-                .active_pwm = driver_state.active_pwm,
-                .lead_angle = driver_state.lead_angle,
-                .seek_angle = SeekAngle{
-                    .target_angle = pending_state.seek_angle.target_angle,
-                    .target_rotation = pending_state.seek_angle.target_rotation,
-                    .max_target = clip_to(0, +max_drive_current, pending_state.seek_angle.max_target),
-                    .error_integral = driver_state.seek_angle.error_integral
-                }
-            };
-
-        case DriverMode::SEEK_ANGLE_SPEED:
-            return DriverState{
-                .mode = DriverMode::SEEK_ANGLE_SPEED,
-                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
-                .active_pwm = driver_state.active_pwm,
-                .lead_angle = driver_state.lead_angle,
-                .seek_angle = SeekAngle{
-                    .target_angle = pending_state.seek_angle.target_angle,
-                    .target_rotation = pending_state.seek_angle.target_rotation,
-                    .max_target = clip_to(0, +max_angular_speed, pending_state.seek_angle.max_target),
-                    .error_integral = driver_state.seek_angle.error_integral
-                }
-            };
 
         case DriverMode::RESISTANCE_CALIBRATION:
             return DriverState{
@@ -893,26 +931,19 @@ static inline void update_motor_control(
             driver_state.motor_outputs = update_motor_speed(driver_state, readout);
             return;
 
-        case DriverMode::SEEK_ANGLE_POWER:
+        case DriverMode::DRIVE_TORQUE_SPEED:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
-            // Update the motor outputs for the seek angle driving using power control.
-            driver_state.motor_outputs = update_motor_seek_angle_power(driver_state, readout);
+            driver_state.motor_outputs = update_motor_torque_speed(driver_state, readout);
             return;
 
-        case DriverMode::SEEK_ANGLE_TORQUE:
+        case DriverMode::SEEK_ANGLE:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
             // Update the motor outputs for the seek angle driving using torque control.
-            driver_state.motor_outputs = update_motor_seek_angle_torque(driver_state, readout);
+            driver_state.motor_outputs = update_motor_seek_angle(driver_state, readout);
             return;
         
-        case DriverMode::SEEK_ANGLE_SPEED:
-            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
-            
-            // Update the motor outputs for the seek angle driving using speed control.
-            driver_state.motor_outputs = update_motor_seek_angle_speed(driver_state, readout);
-            return;
 
         case DriverMode::RESISTANCE_CALIBRATION:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
@@ -1287,12 +1318,13 @@ void ADC1_2_IRQHandler(void){
 
     readout.readout_number = readout_number;
     
+    readout.angle_fix = angle_fix;
+    
     readout.state_flags = (
-        (emf_fix << emf_fix_bit_offset) |
-        (emf_detected << emf_detected_bit_offset) |
+        (hall_state << hall_state_bit_offset) |
         (current_detected << current_detected_bit_offset) |
-        (angle_fix << angle_fix_bit_offset) |
-        (hall_state << hall_state_bit_offset)
+        (emf_fix << emf_fix_bit_offset) |
+        (emf_detected << emf_detected_bit_offset)
     );
 
     readout.u_drive_voltage = std::get<0>(drive_voltages);
@@ -1342,8 +1374,8 @@ void ADC1_2_IRQHandler(void){
     
     readout.lead_angle = driver_state.lead_angle;
     readout.active_pwm = driver_state.active_pwm;
-    readout.target = driver_state.target;
-    readout.seek_integral = driver_state.seek_angle.error_integral;
+    readout.target = driver_state.current_target;
+    readout.seek_integral = driver_state.seek_integral;
 
     readout.u_resistance = current_calibration.u_resistance;
     readout.v_resistance = current_calibration.v_resistance;

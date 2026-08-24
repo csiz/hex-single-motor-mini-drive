@@ -59,17 +59,11 @@ enum struct DriverMode : uint16_t {
     DRIVE_BATTERY_POWER,
     // Drive the motor using a fast, integral only, PID loop to control the speed of the motor.
     DRIVE_SPEED,
-    // Drive the motor to a specific angle. Uses a secondary PID loop to control the power consumed 
-    // by the motor to achieve the target angle.
-    SEEK_ANGLE_POWER,
-    // Drive the motor to a specific angle. Uses a secondary PID loop to control the torque produced
-    // by the motor to achieve the target angle. Without the integral or derivative term this drive
-    // mode will make the motor behave like a spring.
-    SEEK_ANGLE_TORQUE,
+    // Drive the motor with maximum target torque or maximum speed whichever is achieved first.
+    DRIVE_TORQUE_SPEED,
+    // Drive the motor to a specific angle using a secondary PID loop to control torque relative to position errors.
+    SEEK_ANGLE,
     // Drive the motor to a specific angle. Uses a secondary PID loop to control the speed of the motor.
-    SEEK_ANGLE_SPEED,
-    // Drive the motor phases with a pyramid waveform at each phase angle to measure the current
-    // response and determine the resistance of the motor windings.
     RESISTANCE_CALIBRATION,
     // Drive the motor phases with large steps at opposite poles to measure the current response
     // and determine the inductance of the motor windings.
@@ -148,10 +142,6 @@ struct SeekAngle {
     int32_t target_angle;
     // The target rotation index we want the motor to drive towards.
     int32_t target_rotation;
-    // The maximum control value (torque, power or speed) used to drive the motor to the target angle.
-    float max_target;
-    // The high resolution integral error for the PID control loop.
-    float error_integral;
 };
 
 struct TestParameters {
@@ -179,10 +169,18 @@ struct DriverState {
     // The lead angle value used to adjust the angle of the driven phase
     // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
     int32_t lead_angle;
+
+    // Integral term for the PWM control via PID.
+    float pwm_integral;
+
+    float current_target;
+    
+    float speed_target;
     
     // The target we are aiming for with the command.
     float target;
-
+    
+    float seek_integral;
 
     // The additional data depends on the driver mode.
     union {

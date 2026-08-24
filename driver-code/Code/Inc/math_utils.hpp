@@ -42,16 +42,12 @@ static inline constexpr float clip_to(float const& low, float const& high, float
 }
 
 // Sign of x or 0 if x is 0.
-static inline constexpr int32_t sign(int32_t const& x){
-    return (x > 0) - (x < 0);
-}
-
-static inline constexpr int16_t sign(int16_t const& x){
-    return (x > 0) - (x < 0);
-}
-
-static inline constexpr float sign(float const& x){
-    return (x > 0.f) - (x < 0.f);
+static inline constexpr int32_t sign(float const& x){
+    const uint32_t ux = std::bit_cast<uint32_t>(x);
+    const int32_t is_neg = static_cast<int32_t>(ux >> 31);
+    const int32_t is_non_zero = static_cast<int32_t>(ux != 0);
+    return is_non_zero | (-is_neg);
+    // return (x > 0.f) - (x < 0.f);
 }
 
 // Divide x by y and round to the nearest integer.

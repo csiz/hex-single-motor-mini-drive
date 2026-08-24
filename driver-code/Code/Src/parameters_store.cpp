@@ -21,7 +21,7 @@ uint8_t user_data[user_data_size];
 uint8_t page_buffer[FLASH_PAGE_SIZE] = {0};
 
 const size_t current_calibration_offset = 0x00;
-const size_t control_parameters_offset = 0xF0;
+const size_t control_parameters_offset = 0xA0;
 
 const uint8_t * const current_calibration_address = user_data + current_calibration_offset;
 const uint8_t * const control_parameters_address = user_data + control_parameters_offset;

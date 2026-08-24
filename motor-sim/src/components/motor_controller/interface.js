@@ -74,12 +74,13 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
 
   const current_angle_offset = normalize_radians(current_angle - predicted_angle);
 
+  const angle_fix = bare_readout.angle_fix;
+  
   const {
     hall_state,
     emf_detected,
     emf_fix,
     current_detected,
-    angle_fix,
     incorrect_rotor_angle,
     rotor_direction_flip_imminent,
   } = parse_state_flags(state_flags);

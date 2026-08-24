@@ -104,15 +104,12 @@ message_codes:
   SET_STATE_DRIVE_SPEED:
     message_code: 0x4033
     type: SetStateDriveSpeed
-  SET_STATE_SEEK_ANGLE_WITH_POWER:
+  SET_STATE_DRIVE_TORQUE_SPEED:
     message_code: 0x4034
-    type: SetStateSeekAngleWithPower
-  SET_STATE_SEEK_ANGLE_WITH_TORQUE:
+    type: SetStateDriveTorqueSpeed
+  SET_STATE_SEEK_ANGLE:
     message_code: 0x4035
-    type: SetStateSeekAngleWithTorque
-  SET_STATE_SEEK_ANGLE_WITH_SPEED:
-    message_code: 0x4036
-    type: SetStateSeekAngleWithSpeed
+    type: SetStateSeekAngle
 
   CURRENT_CALIBRATION:
     message_code: 0x4040
@@ -237,9 +234,13 @@ definitions:
         type: uint16
         doc: Readout number; used to identify the readout in the history.
 
+      angle_fix:
+        type: uint8
+        doc: Whether we have an angle fix and how confident it is.
+
       state_flags:
-        type: uint16
-        doc: Driver state flags; packed into a single 16-bit value.
+        type: uint8
+        doc: Driver state flags; packed into a single 8-bit value.
         
       ref_readout:
         type: int16
@@ -559,22 +560,19 @@ definitions:
         type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
 
-  SetStateSeekAngleWithPower:
+  SetStateDriveTorqueSpeed:
     struct:
-      target_rotation:
-        type: int32
-        doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
-      target_angle:
-        type: int32
-        doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+      target_current:
+        type: float32
+        doc: Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+      target_speed:
+        type: float32
+        doc: Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
       timeout:
         type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
-      max_drive_power:
-        type: float32
-        doc: Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
 
-  SetStateSeekAngleWithTorque:
+  SetStateSeekAngle:
     struct:
       target_rotation:
         type: int32
@@ -582,27 +580,16 @@ definitions:
       target_angle:
         type: int32
         doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
+      target_current:
+        type: float32
+        doc: Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+      target_speed:
+        type: float32
+        doc: Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
       timeout:
         type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
-      max_drive_current:
-        type: float32
-        doc: Maximum current to use for driving the motor; used to prevent overheating and overcurrent.
 
-  SetStateSeekAngleWithSpeed:
-    struct:
-      target_rotation:
-        type: int32
-        doc: Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
-      target_angle:
-        type: int32
-        doc: Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
-      timeout:
-        type: uint32
-        doc: Time in pwm periods to drive the motor before stopping.
-      max_drive_speed:
-        type: float32
-        doc: Maximum speed to use for driving the motor; used to prevent overheating and overcurrent.
 
   CurrentCalibration:
     doc: |
@@ -701,21 +688,33 @@ definitions:
         type: float32
         doc: Torque control gain.
 
+      torque_control_kff:
+        type: float32
+        doc: Torque control feedforward gain.
+
       battery_power_control_ki:
         type: float32
         doc: Battery power control gain.
+
+      battery_power_control_kff:
+        type: float32
+        doc: Battery power control feedforward gain.
 
       speed_control_ki:
         type: float32
         doc: Speed control gain.
 
+      speed_control_kff:
+        type: float32
+        doc: Speed control feedforward gain.
+
       probing_angular_speed:
         type: float32
         doc: Probing angular speed for initial EMF detection.
 
-      max_pwm_difference:
+      max_hold_pwm:
         type: float32
-        doc: Maximum PWM difference from motor PWM required to compensate back EMF.
+        doc: Maximum PWM at which we use holding commands (or probing).
 
       min_emf_for_motor_constant:
         type: float32
@@ -729,10 +728,6 @@ definitions:
         type: float32
         doc: Resistive power long duration average observer gain.
 
-      max_angular_speed:
-        type: float32
-        doc: Maximum angular speed of the motor.
-
       max_power_draw:
         type: float32
         doc: Maximum power draw from the battery (proxy for maximum current).
@@ -740,58 +735,22 @@ definitions:
       power_draw_ki:
         type: float32
         doc: Power draw long duration average observer gain.
-
-      max_pwm:
-        type: float32
-        doc: Maximum PWM value for the motor outputs.
       
-      seek_via_torque_k_prediction:
+      seek_kff:
         type: float32
-        doc: Seek via torque, prediction duration factor for integral error.
+        doc: Seek feed forward gain for torque.
 
-      seek_via_torque_ki:
+      seek_ki:
         type: float32
-        doc: Seek via torque, integral gain for the PID control.
+        doc: Seek integral gain for the PID control.
 
-      seek_via_torque_kp:
+      seek_kp:
         type: float32
-        doc: Seek via torque, proportional gain for the PID control.
+        doc: Seek proportional gain for the PID control.
 
-      seek_via_torque_kd:
+      seek_kd:
         type: float32
-        doc: Seek via torque, derivative gain for the PID control.
-
-      seek_via_power_k_prediction:
-        type: float32
-        doc: Seek via power, prediction duration factor for integral error.
-
-      seek_via_power_ki:
-        type: float32
-        doc: Seek via power, integral gain for the PID control.
-
-      seek_via_power_kp:
-        type: float32
-        doc: Seek via power, proportional gain for the PID control.
-
-      seek_via_power_kd:
-        type: float32
-        doc: Seek via power, derivative gain for the PID control.
-
-      seek_via_speed_k_prediction:
-        type: float32
-        doc: Seek via speed, prediction duration factor for integral error.
-
-      seek_via_speed_ki:
-        type: float32
-        doc: Seek via speed, integral gain for the PID control.
-
-      seek_via_speed_kp:
-        type: float32
-        doc: Seek via speed, proportional gain for the PID control.
-
-      seek_via_speed_kd:
-        type: float32
-        doc: Seek via speed, derivative gain for the PID control.
+        doc: Seek derivative gain for the PID control.
 
       phase_resistance_ki:
         type: float32

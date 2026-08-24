@@ -82,20 +82,18 @@ export function rotations_per_millisecond_squared_to_acceleration_units(accelera
 // Bit handling constants
 // ----------------------
 export const hall_state_bit_offset = 0;
-export const emf_detected_bit_offset = 11;
-export const emf_fix_bit_offset = 10;
-export const current_detected_bit_offset = 9;
-export const angle_fix_bit_offset = 8;
+export const current_detected_bit_offset = 4;
+export const emf_fix_bit_offset = 5;
+export const emf_detected_bit_offset = 6;
 
 export const hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
 export function parse_state_flags(state_flags){
   return {
     hall_state: (state_flags & hall_state_bit_mask) >> hall_state_bit_offset,
-    emf_detected: (state_flags >> emf_detected_bit_offset) & 0b1,
-    emf_fix: (state_flags >> emf_fix_bit_offset) & 0b1,
     current_detected: (state_flags >> current_detected_bit_offset) & 0b1,
-    angle_fix: (state_flags >> angle_fix_bit_offset) & 0b1,
+    emf_fix: (state_flags >> emf_fix_bit_offset) & 0b1,
+    emf_detected: (state_flags >> emf_detected_bit_offset) & 0b1,
   };
 }
 

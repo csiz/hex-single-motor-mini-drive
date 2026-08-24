@@ -304,40 +304,25 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    case SET_STATE_SEEK_ANGLE_WITH_POWER: {
+    case SET_STATE_DRIVE_TORQUE_SPEED: {
       set_motor_command(DriverState{
-        .mode = DriverMode::SEEK_ANGLE_POWER, 
-        .duration = std::get<SetStateSeekAngleWithPower>(message.message_data).timeout,
-        .seek_angle = SeekAngle{
-          .target_angle = std::get<SetStateSeekAngleWithPower>(message.message_data).target_angle * control_parameters.motor_direction,
-          .target_rotation = std::get<SetStateSeekAngleWithPower>(message.message_data).target_rotation * control_parameters.motor_direction,
-          .max_target = std::get<SetStateSeekAngleWithPower>(message.message_data).max_drive_power,
-        }
+        .mode = DriverMode::DRIVE_TORQUE_SPEED, 
+        .duration = std::get<SetStateDriveTorqueSpeed>(message.message_data).timeout,
+        .current_target = std::get<SetStateDriveTorqueSpeed>(message.message_data).target_current * control_parameters.motor_direction,
+        .speed_target = std::get<SetStateDriveTorqueSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
       });
       return;
     }
 
-    case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
+    case SET_STATE_SEEK_ANGLE: {
       set_motor_command(DriverState{
-        .mode = DriverMode::SEEK_ANGLE_TORQUE, 
-        .duration = std::get<SetStateSeekAngleWithTorque>(message.message_data).timeout,
+        .mode = DriverMode::SEEK_ANGLE, 
+        .duration = std::get<SetStateSeekAngle>(message.message_data).timeout,
+        .speed_target = std::get<SetStateSeekAngle>(message.message_data).target_speed * control_parameters.motor_direction,
+        .target = std::get<SetStateSeekAngle>(message.message_data).target_current * control_parameters.motor_direction,
         .seek_angle = SeekAngle{
-          .target_angle = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_angle * control_parameters.motor_direction,
-          .target_rotation = std::get<SetStateSeekAngleWithTorque>(message.message_data).target_rotation * control_parameters.motor_direction,
-          .max_target = std::get<SetStateSeekAngleWithTorque>(message.message_data).max_drive_current,
-        }
-      });
-      return;
-    }
-
-    case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
-      set_motor_command(DriverState{
-        .mode = DriverMode::SEEK_ANGLE_SPEED, 
-        .duration = std::get<SetStateSeekAngleWithSpeed>(message.message_data).timeout,
-        .seek_angle = SeekAngle{
-          .target_angle = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_angle * control_parameters.motor_direction,
-          .target_rotation = std::get<SetStateSeekAngleWithSpeed>(message.message_data).target_rotation * control_parameters.motor_direction,
-          .max_target = std::get<SetStateSeekAngleWithSpeed>(message.message_data).max_drive_speed,
+          .target_angle = std::get<SetStateSeekAngle>(message.message_data).target_angle * control_parameters.motor_direction,
+          .target_rotation = std::get<SetStateSeekAngle>(message.message_data).target_rotation * control_parameters.motor_direction,
         }
       });
       return;
@@ -735,14 +720,13 @@ void app_tick() {
   // 
   // The penalty should normally be negative indicating we can increase the PWM.
   // TODO: redo penalty calculations.
-  const int pwm_penalty = max(
+  const int pwm_penalty = max(max(
     vcc_mosfet_driver_undervoltage - readout.vcc_voltage,
-    resistive_power_observer - control_parameters.max_resistive_power,
-    total_power_observer - control_parameters.max_power_draw,
-    faster_abs(readout.angular_speed) - control_parameters.max_angular_speed
+    resistive_power_observer - control_parameters.max_resistive_power),
+    total_power_observer - control_parameters.max_power_draw
   );
 
-  const int live_max_pwm = clip_to(0, control_parameters.max_pwm, readout.live_max_pwm - pwm_penalty);
+  const int live_max_pwm = clip_to(0, pwm_max, readout.live_max_pwm - pwm_penalty);
 
 
   
@@ -761,10 +745,8 @@ void app_tick() {
 
   const float predicted_emf_voltage = abs_angular_speed * readout.motor_constant * emf_motor_constant_conversion;
 
-  const bool angle_fix = readout.state_flags & angle_fix_bit_mask;
-
   // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
-  const bool compute_motor_constant = angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
+  const bool compute_motor_constant = readout.angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
 
   // Get the error (gradient) for the motor constant observer.
   const float motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);

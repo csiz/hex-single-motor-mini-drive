@@ -77,7 +77,9 @@ export class Readout {
   w_drive_voltage;
   // Readout number; used to identify the readout in the history.
   readout_number;
-  // Driver state flags; packed into a single 16-bit value.
+  // Whether we have an angle fix and how confident it is.
+  angle_fix;
+  // Driver state flags; packed into a single 8-bit value.
   state_flags;
   // Raw reference readout (ADC value); this is the reference voltage for the current 
   // readouts as seen by the amplifier. The phase readouts are relative to this voltage
@@ -134,8 +136,10 @@ function write_Readout(value) {
   offset += 4;
   view.setUint16(offset, value.readout_number)
   offset += 2;
-  view.setUint16(offset, value.state_flags)
-  offset += 2;
+  view.setUint8(offset, value.angle_fix)
+  offset += 1;
+  view.setUint8(offset, value.state_flags)
+  offset += 1;
   view.setInt16(offset, value.ref_readout)
   offset += 2;
   view.setFloat32(offset, value.u_current)
@@ -183,8 +187,10 @@ function read_Readout(view, offset = 0) {
   offset += 4;
   result.readout_number = view.getUint16(offset);
   offset += 2;
-  result.state_flags = view.getUint16(offset);
-  offset += 2;
+  result.angle_fix = view.getUint8(offset);
+  offset += 1;
+  result.state_flags = view.getUint8(offset);
+  offset += 1;
   result.ref_readout = view.getInt16(offset);
   offset += 2;
   result.u_current = view.getFloat32(offset);
@@ -705,123 +711,83 @@ function read_SetStateDriveSpeed(view, offset = 0) {
   offset += 4;
   return result;
 }
-export class SetStateSeekAngleWithPower {
-  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
-  target_rotation;
-  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
-  target_angle;
+export class SetStateDriveTorqueSpeed {
+  // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+  target_current;
+  // Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
+  target_speed;
   // Time in pwm periods to drive the motor before stopping.
   timeout;
-  // Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
-  max_drive_power;
   
   constructor(init) {Object.assign(this, init);}
 }
 
-function write_SetStateSeekAngleWithPower(value) {
-  const buffer = new Uint8Array(16);
+function write_SetStateDriveTorqueSpeed(value) {
+  const buffer = new Uint8Array(12);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setInt32(offset, value.target_rotation)
+  view.setFloat32(offset, value.target_current)
   offset += 4;
-  view.setInt32(offset, value.target_angle)
+  view.setFloat32(offset, value.target_speed)
   offset += 4;
   view.setUint32(offset, value.timeout)
   offset += 4;
-  view.setFloat32(offset, value.max_drive_power)
-  offset += 4;
   return buffer;
 }
-function read_SetStateSeekAngleWithPower(view, offset = 0) {
-  let result = new SetStateSeekAngleWithPower();
+function read_SetStateDriveTorqueSpeed(view, offset = 0) {
+  let result = new SetStateDriveTorqueSpeed();
   
-  result.target_rotation = view.getInt32(offset);
+  result.target_current = view.getFloat32(offset);
   offset += 4;
-  result.target_angle = view.getInt32(offset);
+  result.target_speed = view.getFloat32(offset);
   offset += 4;
   result.timeout = view.getUint32(offset);
-  offset += 4;
-  result.max_drive_power = view.getFloat32(offset);
   offset += 4;
   return result;
 }
-export class SetStateSeekAngleWithTorque {
+export class SetStateSeekAngle {
   // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
   target_rotation;
   // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
   target_angle;
+  // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+  target_current;
+  // Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
+  target_speed;
   // Time in pwm periods to drive the motor before stopping.
   timeout;
-  // Maximum current to use for driving the motor; used to prevent overheating and overcurrent.
-  max_drive_current;
   
   constructor(init) {Object.assign(this, init);}
 }
 
-function write_SetStateSeekAngleWithTorque(value) {
-  const buffer = new Uint8Array(16);
+function write_SetStateSeekAngle(value) {
+  const buffer = new Uint8Array(20);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setInt32(offset, value.target_rotation)
   offset += 4;
   view.setInt32(offset, value.target_angle)
   offset += 4;
-  view.setUint32(offset, value.timeout)
+  view.setFloat32(offset, value.target_current)
   offset += 4;
-  view.setFloat32(offset, value.max_drive_current)
+  view.setFloat32(offset, value.target_speed)
+  offset += 4;
+  view.setUint32(offset, value.timeout)
   offset += 4;
   return buffer;
 }
-function read_SetStateSeekAngleWithTorque(view, offset = 0) {
-  let result = new SetStateSeekAngleWithTorque();
+function read_SetStateSeekAngle(view, offset = 0) {
+  let result = new SetStateSeekAngle();
   
   result.target_rotation = view.getInt32(offset);
   offset += 4;
   result.target_angle = view.getInt32(offset);
   offset += 4;
-  result.timeout = view.getUint32(offset);
+  result.target_current = view.getFloat32(offset);
   offset += 4;
-  result.max_drive_current = view.getFloat32(offset);
-  offset += 4;
-  return result;
-}
-export class SetStateSeekAngleWithSpeed {
-  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
-  target_rotation;
-  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
-  target_angle;
-  // Time in pwm periods to drive the motor before stopping.
-  timeout;
-  // Maximum speed to use for driving the motor; used to prevent overheating and overcurrent.
-  max_drive_speed;
-  
-  constructor(init) {Object.assign(this, init);}
-}
-
-function write_SetStateSeekAngleWithSpeed(value) {
-  const buffer = new Uint8Array(16);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  view.setInt32(offset, value.target_rotation)
-  offset += 4;
-  view.setInt32(offset, value.target_angle)
-  offset += 4;
-  view.setUint32(offset, value.timeout)
-  offset += 4;
-  view.setFloat32(offset, value.max_drive_speed)
-  offset += 4;
-  return buffer;
-}
-function read_SetStateSeekAngleWithSpeed(view, offset = 0) {
-  let result = new SetStateSeekAngleWithSpeed();
-  
-  result.target_rotation = view.getInt32(offset);
-  offset += 4;
-  result.target_angle = view.getInt32(offset);
+  result.target_speed = view.getFloat32(offset);
   offset += 4;
   result.timeout = view.getUint32(offset);
-  offset += 4;
-  result.max_drive_speed = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -924,52 +890,38 @@ export class ControlParameters {
   lead_angle_control_ki;
   // Torque control gain.
   torque_control_ki;
+  // Torque control feedforward gain.
+  torque_control_kff;
   // Battery power control gain.
   battery_power_control_ki;
+  // Battery power control feedforward gain.
+  battery_power_control_kff;
   // Speed control gain.
   speed_control_ki;
+  // Speed control feedforward gain.
+  speed_control_kff;
   // Probing angular speed for initial EMF detection.
   probing_angular_speed;
-  // Maximum PWM difference from motor PWM required to compensate back EMF.
-  max_pwm_difference;
+  // Maximum PWM at which we use holding commands (or probing).
+  max_hold_pwm;
   // Minium EMF voltage to compute the motor constant.
   min_emf_for_motor_constant;
   // Maximum resistive power that can be dissipated in the motor coils.
   max_resistive_power;
   // Resistive power long duration average observer gain.
   resistive_power_ki;
-  // Maximum angular speed of the motor.
-  max_angular_speed;
   // Maximum power draw from the battery (proxy for maximum current).
   max_power_draw;
   // Power draw long duration average observer gain.
   power_draw_ki;
-  // Maximum PWM value for the motor outputs.
-  max_pwm;
-  // Seek via torque, prediction duration factor for integral error.
-  seek_via_torque_k_prediction;
-  // Seek via torque, integral gain for the PID control.
-  seek_via_torque_ki;
-  // Seek via torque, proportional gain for the PID control.
-  seek_via_torque_kp;
-  // Seek via torque, derivative gain for the PID control.
-  seek_via_torque_kd;
-  // Seek via power, prediction duration factor for integral error.
-  seek_via_power_k_prediction;
-  // Seek via power, integral gain for the PID control.
-  seek_via_power_ki;
-  // Seek via power, proportional gain for the PID control.
-  seek_via_power_kp;
-  // Seek via power, derivative gain for the PID control.
-  seek_via_power_kd;
-  // Seek via speed, prediction duration factor for integral error.
-  seek_via_speed_k_prediction;
-  // Seek via speed, integral gain for the PID control.
-  seek_via_speed_ki;
-  // Seek via speed, proportional gain for the PID control.
-  seek_via_speed_kp;
-  // Seek via speed, derivative gain for the PID control.
-  seek_via_speed_kd;
+  // Seek feed forward gain for torque.
+  seek_kff;
+  // Seek integral gain for the PID control.
+  seek_ki;
+  // Seek proportional gain for the PID control.
+  seek_kp;
+  // Seek derivative gain for the PID control.
+  seek_kd;
   // Integral gain for the phase resistance observer.
   phase_resistance_ki;
   // Integral gain for the phase inductance observer.
@@ -989,7 +941,7 @@ export class ControlParameters {
 }
 
 function write_ControlParameters(value) {
-  const buffer = new Uint8Array(164);
+  const buffer = new Uint8Array(136);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.min_emf_speed)
@@ -1016,13 +968,19 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.torque_control_ki)
   offset += 4;
+  view.setFloat32(offset, value.torque_control_kff)
+  offset += 4;
   view.setFloat32(offset, value.battery_power_control_ki)
+  offset += 4;
+  view.setFloat32(offset, value.battery_power_control_kff)
   offset += 4;
   view.setFloat32(offset, value.speed_control_ki)
   offset += 4;
+  view.setFloat32(offset, value.speed_control_kff)
+  offset += 4;
   view.setFloat32(offset, value.probing_angular_speed)
   offset += 4;
-  view.setFloat32(offset, value.max_pwm_difference)
+  view.setFloat32(offset, value.max_hold_pwm)
   offset += 4;
   view.setFloat32(offset, value.min_emf_for_motor_constant)
   offset += 4;
@@ -1030,37 +988,17 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.resistive_power_ki)
   offset += 4;
-  view.setFloat32(offset, value.max_angular_speed)
-  offset += 4;
   view.setFloat32(offset, value.max_power_draw)
   offset += 4;
   view.setFloat32(offset, value.power_draw_ki)
   offset += 4;
-  view.setFloat32(offset, value.max_pwm)
+  view.setFloat32(offset, value.seek_kff)
   offset += 4;
-  view.setFloat32(offset, value.seek_via_torque_k_prediction)
+  view.setFloat32(offset, value.seek_ki)
   offset += 4;
-  view.setFloat32(offset, value.seek_via_torque_ki)
+  view.setFloat32(offset, value.seek_kp)
   offset += 4;
-  view.setFloat32(offset, value.seek_via_torque_kp)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_torque_kd)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_power_k_prediction)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_power_ki)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_power_kp)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_power_kd)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_speed_k_prediction)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_speed_ki)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_speed_kp)
-  offset += 4;
-  view.setFloat32(offset, value.seek_via_speed_kd)
+  view.setFloat32(offset, value.seek_kd)
   offset += 4;
   view.setFloat32(offset, value.phase_resistance_ki)
   offset += 4;
@@ -1105,13 +1043,19 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.torque_control_ki = view.getFloat32(offset);
   offset += 4;
+  result.torque_control_kff = view.getFloat32(offset);
+  offset += 4;
   result.battery_power_control_ki = view.getFloat32(offset);
+  offset += 4;
+  result.battery_power_control_kff = view.getFloat32(offset);
   offset += 4;
   result.speed_control_ki = view.getFloat32(offset);
   offset += 4;
+  result.speed_control_kff = view.getFloat32(offset);
+  offset += 4;
   result.probing_angular_speed = view.getFloat32(offset);
   offset += 4;
-  result.max_pwm_difference = view.getFloat32(offset);
+  result.max_hold_pwm = view.getFloat32(offset);
   offset += 4;
   result.min_emf_for_motor_constant = view.getFloat32(offset);
   offset += 4;
@@ -1119,37 +1063,17 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.resistive_power_ki = view.getFloat32(offset);
   offset += 4;
-  result.max_angular_speed = view.getFloat32(offset);
-  offset += 4;
   result.max_power_draw = view.getFloat32(offset);
   offset += 4;
   result.power_draw_ki = view.getFloat32(offset);
   offset += 4;
-  result.max_pwm = view.getFloat32(offset);
+  result.seek_kff = view.getFloat32(offset);
   offset += 4;
-  result.seek_via_torque_k_prediction = view.getFloat32(offset);
+  result.seek_ki = view.getFloat32(offset);
   offset += 4;
-  result.seek_via_torque_ki = view.getFloat32(offset);
+  result.seek_kp = view.getFloat32(offset);
   offset += 4;
-  result.seek_via_torque_kp = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_torque_kd = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_power_k_prediction = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_power_ki = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_power_kp = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_power_kd = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_speed_k_prediction = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_speed_ki = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_speed_kp = view.getFloat32(offset);
-  offset += 4;
-  result.seek_via_speed_kd = view.getFloat32(offset);
+  result.seek_kd = view.getFloat32(offset);
   offset += 4;
   result.phase_resistance_ki = view.getFloat32(offset);
   offset += 4;
@@ -1219,9 +1143,8 @@ const SET_STATE_DRIVE_SMOOTH = 16432;
 const SET_STATE_DRIVE_TORQUE = 16433;
 const SET_STATE_DRIVE_BATTERY_POWER = 16434;
 const SET_STATE_DRIVE_SPEED = 16435;
-const SET_STATE_SEEK_ANGLE_WITH_POWER = 16436;
-const SET_STATE_SEEK_ANGLE_WITH_TORQUE = 16437;
-const SET_STATE_SEEK_ANGLE_WITH_SPEED = 16438;
+const SET_STATE_DRIVE_TORQUE_SPEED = 16436;
+const SET_STATE_SEEK_ANGLE = 16437;
 const CURRENT_CALIBRATION = 16448;
 const GET_CURRENT_CALIBRATION = 16449;
 const SET_CURRENT_CALIBRATION = 16450;
@@ -1268,9 +1191,8 @@ export const MessageCode = {
   SET_STATE_DRIVE_TORQUE,
   SET_STATE_DRIVE_BATTERY_POWER,
   SET_STATE_DRIVE_SPEED,
-  SET_STATE_SEEK_ANGLE_WITH_POWER,
-  SET_STATE_SEEK_ANGLE_WITH_TORQUE,
-  SET_STATE_SEEK_ANGLE_WITH_SPEED,
+  SET_STATE_DRIVE_TORQUE_SPEED,
+  SET_STATE_SEEK_ANGLE,
   CURRENT_CALIBRATION,
   GET_CURRENT_CALIBRATION,
   SET_CURRENT_CALIBRATION,
@@ -1515,24 +1437,16 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_SEEK_ANGLE_WITH_POWER: {
-      const message_buffer = write_SetStateSeekAngleWithPower(message);
+    case SET_STATE_DRIVE_TORQUE_SPEED: {
+      const message_buffer = write_SetStateDriveTorqueSpeed(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
-      const message_buffer = write_SetStateSeekAngleWithTorque(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
-      const message_buffer = write_SetStateSeekAngleWithSpeed(message);
+    case SET_STATE_SEEK_ANGLE: {
+      const message_buffer = write_SetStateSeekAngle(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1824,22 +1738,16 @@ export function read_message(buffer) {
       message.message_code = SET_STATE_DRIVE_SPEED;
       return message;
     }
-    case SET_STATE_SEEK_ANGLE_WITH_POWER: {
-      if (buffer.length !== 2 + 16) return null;
-      let message = read_SetStateSeekAngleWithPower(view, 2);
-      message.message_code = SET_STATE_SEEK_ANGLE_WITH_POWER;
+    case SET_STATE_DRIVE_TORQUE_SPEED: {
+      if (buffer.length !== 2 + 12) return null;
+      let message = read_SetStateDriveTorqueSpeed(view, 2);
+      message.message_code = SET_STATE_DRIVE_TORQUE_SPEED;
       return message;
     }
-    case SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
-      if (buffer.length !== 2 + 16) return null;
-      let message = read_SetStateSeekAngleWithTorque(view, 2);
-      message.message_code = SET_STATE_SEEK_ANGLE_WITH_TORQUE;
-      return message;
-    }
-    case SET_STATE_SEEK_ANGLE_WITH_SPEED: {
-      if (buffer.length !== 2 + 16) return null;
-      let message = read_SetStateSeekAngleWithSpeed(view, 2);
-      message.message_code = SET_STATE_SEEK_ANGLE_WITH_SPEED;
+    case SET_STATE_SEEK_ANGLE: {
+      if (buffer.length !== 2 + 20) return null;
+      let message = read_SetStateSeekAngle(view, 2);
+      message.message_code = SET_STATE_SEEK_ANGLE;
       return message;
     }
     case CURRENT_CALIBRATION: {
@@ -1863,13 +1771,13 @@ export function read_message(buffer) {
       return {message_code};
     }
     case CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 164) return null;
+      if (buffer.length !== 2 + 136) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = CONTROL_PARAMETERS;
       return message;
     }
     case SET_CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 164) return null;
+      if (buffer.length !== 2 + 136) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = SET_CONTROL_PARAMETERS;
       return message;

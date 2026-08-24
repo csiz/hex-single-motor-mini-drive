@@ -157,8 +157,10 @@ struct Readout {
   float w_drive_voltage;
   // Readout number; used to identify the readout in the history.
   uint16_t readout_number;
-  // Driver state flags; packed into a single 16-bit value.
-  uint16_t state_flags;
+  // Whether we have an angle fix and how confident it is.
+  uint8_t angle_fix;
+  // Driver state flags; packed into a single 8-bit value.
+  uint8_t state_flags;
   // Raw reference readout (ADC value); this is the reference voltage for the current 
   // readouts as seen by the amplifier. The phase readouts are relative to this voltage
   // so if this is quite noisy then the phases will also be noisy. We must track it!
@@ -210,8 +212,10 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_uint16(buffer + offset, value.readout_number);;
   offset += 2;
-  write_uint16(buffer + offset, value.state_flags);;
-  offset += 2;
+  write_uint8(buffer + offset, value.angle_fix);;
+  offset += 1;
+  write_uint8(buffer + offset, value.state_flags);;
+  offset += 1;
   write_int16(buffer + offset, value.ref_readout);;
   offset += 2;
   write_float32(buffer + offset, value.u_current);;
@@ -260,8 +264,10 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.readout_number = read_uint16(buffer + offset);
   offset += 2;
-  result.state_flags = read_uint16(buffer + offset);
-  offset += 2;
+  result.angle_fix = read_uint8(buffer + offset);
+  offset += 1;
+  result.state_flags = read_uint8(buffer + offset);
+  offset += 1;
   result.ref_readout = read_int16(buffer + offset);
   offset += 2;
   result.u_current = read_float32(buffer + offset);
@@ -749,114 +755,77 @@ static inline SetStateDriveSpeed read_SetStateDriveSpeed(uint8_t const* buffer) 
   offset += 4;
   return result;
 }
-struct SetStateSeekAngleWithPower {
-  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
-  int32_t target_rotation;
-  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
-  int32_t target_angle;
+struct SetStateDriveTorqueSpeed {
+  // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+  float target_current;
+  // Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
+  float target_speed;
   // Time in pwm periods to drive the motor before stopping.
   uint32_t timeout;
-  // Maximum power to use for driving the motor; used to prevent overheating and overcurrent.
-  float max_drive_power;
 };
 
-static inline void write_SetStateSeekAngleWithPower(uint8_t * buffer, SetStateSeekAngleWithPower const& value) {
+static inline void write_SetStateDriveTorqueSpeed(uint8_t * buffer, SetStateDriveTorqueSpeed const& value) {
   size_t offset = 0;
-  write_int32(buffer + offset, value.target_rotation);;
+  write_float32(buffer + offset, value.target_current);;
   offset += 4;
-  write_int32(buffer + offset, value.target_angle);;
+  write_float32(buffer + offset, value.target_speed);;
   offset += 4;
   write_uint32(buffer + offset, value.timeout);;
   offset += 4;
-  write_float32(buffer + offset, value.max_drive_power);;
-  offset += 4;
 }
-static inline SetStateSeekAngleWithPower read_SetStateSeekAngleWithPower(uint8_t const* buffer) {
+static inline SetStateDriveTorqueSpeed read_SetStateDriveTorqueSpeed(uint8_t const* buffer) {
   size_t offset = 0;
   
-  SetStateSeekAngleWithPower result;
+  SetStateDriveTorqueSpeed result;
   
-  result.target_rotation = read_int32(buffer + offset);
+  result.target_current = read_float32(buffer + offset);
   offset += 4;
-  result.target_angle = read_int32(buffer + offset);
+  result.target_speed = read_float32(buffer + offset);
   offset += 4;
   result.timeout = read_uint32(buffer + offset);
-  offset += 4;
-  result.max_drive_power = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
-struct SetStateSeekAngleWithTorque {
+struct SetStateSeekAngle {
   // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
   int32_t target_rotation;
   // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
   int32_t target_angle;
+  // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
+  float target_current;
+  // Target angular speed for the motor; the driver will try to achieve this speed by adjusting the PWM commands.
+  float target_speed;
   // Time in pwm periods to drive the motor before stopping.
   uint32_t timeout;
-  // Maximum current to use for driving the motor; used to prevent overheating and overcurrent.
-  float max_drive_current;
 };
 
-static inline void write_SetStateSeekAngleWithTorque(uint8_t * buffer, SetStateSeekAngleWithTorque const& value) {
+static inline void write_SetStateSeekAngle(uint8_t * buffer, SetStateSeekAngle const& value) {
   size_t offset = 0;
   write_int32(buffer + offset, value.target_rotation);;
   offset += 4;
   write_int32(buffer + offset, value.target_angle);;
   offset += 4;
+  write_float32(buffer + offset, value.target_current);;
+  offset += 4;
+  write_float32(buffer + offset, value.target_speed);;
+  offset += 4;
   write_uint32(buffer + offset, value.timeout);;
   offset += 4;
-  write_float32(buffer + offset, value.max_drive_current);;
-  offset += 4;
 }
-static inline SetStateSeekAngleWithTorque read_SetStateSeekAngleWithTorque(uint8_t const* buffer) {
+static inline SetStateSeekAngle read_SetStateSeekAngle(uint8_t const* buffer) {
   size_t offset = 0;
   
-  SetStateSeekAngleWithTorque result;
+  SetStateSeekAngle result;
   
   result.target_rotation = read_int32(buffer + offset);
   offset += 4;
   result.target_angle = read_int32(buffer + offset);
   offset += 4;
-  result.timeout = read_uint32(buffer + offset);
+  result.target_current = read_float32(buffer + offset);
   offset += 4;
-  result.max_drive_current = read_float32(buffer + offset);
-  offset += 4;
-  return result;
-}
-struct SetStateSeekAngleWithSpeed {
-  // Target rotation for the motor; the driver will try to achieve this rotation by adjusting the PWM commands.
-  int32_t target_rotation;
-  // Target angle for the motor; the driver will try to achieve this angle by adjusting the PWM commands.
-  int32_t target_angle;
-  // Time in pwm periods to drive the motor before stopping.
-  uint32_t timeout;
-  // Maximum speed to use for driving the motor; used to prevent overheating and overcurrent.
-  float max_drive_speed;
-};
-
-static inline void write_SetStateSeekAngleWithSpeed(uint8_t * buffer, SetStateSeekAngleWithSpeed const& value) {
-  size_t offset = 0;
-  write_int32(buffer + offset, value.target_rotation);;
-  offset += 4;
-  write_int32(buffer + offset, value.target_angle);;
-  offset += 4;
-  write_uint32(buffer + offset, value.timeout);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_drive_speed);;
-  offset += 4;
-}
-static inline SetStateSeekAngleWithSpeed read_SetStateSeekAngleWithSpeed(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetStateSeekAngleWithSpeed result;
-  
-  result.target_rotation = read_int32(buffer + offset);
-  offset += 4;
-  result.target_angle = read_int32(buffer + offset);
+  result.target_speed = read_float32(buffer + offset);
   offset += 4;
   result.timeout = read_uint32(buffer + offset);
-  offset += 4;
-  result.max_drive_speed = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -956,52 +925,38 @@ struct ControlParameters {
   float lead_angle_control_ki;
   // Torque control gain.
   float torque_control_ki;
+  // Torque control feedforward gain.
+  float torque_control_kff;
   // Battery power control gain.
   float battery_power_control_ki;
+  // Battery power control feedforward gain.
+  float battery_power_control_kff;
   // Speed control gain.
   float speed_control_ki;
+  // Speed control feedforward gain.
+  float speed_control_kff;
   // Probing angular speed for initial EMF detection.
   float probing_angular_speed;
-  // Maximum PWM difference from motor PWM required to compensate back EMF.
-  float max_pwm_difference;
+  // Maximum PWM at which we use holding commands (or probing).
+  float max_hold_pwm;
   // Minium EMF voltage to compute the motor constant.
   float min_emf_for_motor_constant;
   // Maximum resistive power that can be dissipated in the motor coils.
   float max_resistive_power;
   // Resistive power long duration average observer gain.
   float resistive_power_ki;
-  // Maximum angular speed of the motor.
-  float max_angular_speed;
   // Maximum power draw from the battery (proxy for maximum current).
   float max_power_draw;
   // Power draw long duration average observer gain.
   float power_draw_ki;
-  // Maximum PWM value for the motor outputs.
-  float max_pwm;
-  // Seek via torque, prediction duration factor for integral error.
-  float seek_via_torque_k_prediction;
-  // Seek via torque, integral gain for the PID control.
-  float seek_via_torque_ki;
-  // Seek via torque, proportional gain for the PID control.
-  float seek_via_torque_kp;
-  // Seek via torque, derivative gain for the PID control.
-  float seek_via_torque_kd;
-  // Seek via power, prediction duration factor for integral error.
-  float seek_via_power_k_prediction;
-  // Seek via power, integral gain for the PID control.
-  float seek_via_power_ki;
-  // Seek via power, proportional gain for the PID control.
-  float seek_via_power_kp;
-  // Seek via power, derivative gain for the PID control.
-  float seek_via_power_kd;
-  // Seek via speed, prediction duration factor for integral error.
-  float seek_via_speed_k_prediction;
-  // Seek via speed, integral gain for the PID control.
-  float seek_via_speed_ki;
-  // Seek via speed, proportional gain for the PID control.
-  float seek_via_speed_kp;
-  // Seek via speed, derivative gain for the PID control.
-  float seek_via_speed_kd;
+  // Seek feed forward gain for torque.
+  float seek_kff;
+  // Seek integral gain for the PID control.
+  float seek_ki;
+  // Seek proportional gain for the PID control.
+  float seek_kp;
+  // Seek derivative gain for the PID control.
+  float seek_kd;
   // Integral gain for the phase resistance observer.
   float phase_resistance_ki;
   // Integral gain for the phase inductance observer.
@@ -1044,13 +999,19 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.torque_control_ki);;
   offset += 4;
+  write_float32(buffer + offset, value.torque_control_kff);;
+  offset += 4;
   write_float32(buffer + offset, value.battery_power_control_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.battery_power_control_kff);;
   offset += 4;
   write_float32(buffer + offset, value.speed_control_ki);;
   offset += 4;
+  write_float32(buffer + offset, value.speed_control_kff);;
+  offset += 4;
   write_float32(buffer + offset, value.probing_angular_speed);;
   offset += 4;
-  write_float32(buffer + offset, value.max_pwm_difference);;
+  write_float32(buffer + offset, value.max_hold_pwm);;
   offset += 4;
   write_float32(buffer + offset, value.min_emf_for_motor_constant);;
   offset += 4;
@@ -1058,37 +1019,17 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.resistive_power_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.max_angular_speed);;
-  offset += 4;
   write_float32(buffer + offset, value.max_power_draw);;
   offset += 4;
   write_float32(buffer + offset, value.power_draw_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.max_pwm);;
+  write_float32(buffer + offset, value.seek_kff);;
   offset += 4;
-  write_float32(buffer + offset, value.seek_via_torque_k_prediction);;
+  write_float32(buffer + offset, value.seek_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.seek_via_torque_ki);;
+  write_float32(buffer + offset, value.seek_kp);;
   offset += 4;
-  write_float32(buffer + offset, value.seek_via_torque_kp);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_torque_kd);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_power_k_prediction);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_power_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_power_kp);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_power_kd);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_speed_k_prediction);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_speed_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_speed_kp);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_via_speed_kd);;
+  write_float32(buffer + offset, value.seek_kd);;
   offset += 4;
   write_float32(buffer + offset, value.phase_resistance_ki);;
   offset += 4;
@@ -1134,13 +1075,19 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.torque_control_ki = read_float32(buffer + offset);
   offset += 4;
+  result.torque_control_kff = read_float32(buffer + offset);
+  offset += 4;
   result.battery_power_control_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.battery_power_control_kff = read_float32(buffer + offset);
   offset += 4;
   result.speed_control_ki = read_float32(buffer + offset);
   offset += 4;
+  result.speed_control_kff = read_float32(buffer + offset);
+  offset += 4;
   result.probing_angular_speed = read_float32(buffer + offset);
   offset += 4;
-  result.max_pwm_difference = read_float32(buffer + offset);
+  result.max_hold_pwm = read_float32(buffer + offset);
   offset += 4;
   result.min_emf_for_motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -1148,37 +1095,17 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.resistive_power_ki = read_float32(buffer + offset);
   offset += 4;
-  result.max_angular_speed = read_float32(buffer + offset);
-  offset += 4;
   result.max_power_draw = read_float32(buffer + offset);
   offset += 4;
   result.power_draw_ki = read_float32(buffer + offset);
   offset += 4;
-  result.max_pwm = read_float32(buffer + offset);
+  result.seek_kff = read_float32(buffer + offset);
   offset += 4;
-  result.seek_via_torque_k_prediction = read_float32(buffer + offset);
+  result.seek_ki = read_float32(buffer + offset);
   offset += 4;
-  result.seek_via_torque_ki = read_float32(buffer + offset);
+  result.seek_kp = read_float32(buffer + offset);
   offset += 4;
-  result.seek_via_torque_kp = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_torque_kd = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_power_k_prediction = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_power_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_power_kp = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_power_kd = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_speed_k_prediction = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_speed_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_speed_kp = read_float32(buffer + offset);
-  offset += 4;
-  result.seek_via_speed_kd = read_float32(buffer + offset);
+  result.seek_kd = read_float32(buffer + offset);
   offset += 4;
   result.phase_resistance_ki = read_float32(buffer + offset);
   offset += 4;
@@ -1246,9 +1173,8 @@ enum MessageCode : uint16_t {
   SET_STATE_DRIVE_TORQUE = 16433,
   SET_STATE_DRIVE_BATTERY_POWER = 16434,
   SET_STATE_DRIVE_SPEED = 16435,
-  SET_STATE_SEEK_ANGLE_WITH_POWER = 16436,
-  SET_STATE_SEEK_ANGLE_WITH_TORQUE = 16437,
-  SET_STATE_SEEK_ANGLE_WITH_SPEED = 16438,
+  SET_STATE_DRIVE_TORQUE_SPEED = 16436,
+  SET_STATE_SEEK_ANGLE = 16437,
   CURRENT_CALIBRATION = 16448,
   GET_CURRENT_CALIBRATION = 16449,
   SET_CURRENT_CALIBRATION = 16450,
@@ -1282,9 +1208,8 @@ struct Message {
     SetStateDriveTorque,
     SetStateDriveBatteryPower,
     SetStateDriveSpeed,
-    SetStateSeekAngleWithPower,
-    SetStateSeekAngleWithTorque,
-    SetStateSeekAngleWithSpeed,
+    SetStateDriveTorqueSpeed,
+    SetStateSeekAngle,
     CurrentCalibration,
     ControlParameters,
     SetAngle,
@@ -1324,15 +1249,14 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_DRIVE_TORQUE: return 10;
     case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 10;
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER: return 18;
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_TORQUE: return 18;
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_SPEED: return 18;
+    case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: return 14;
+    case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
     case MessageCode::CURRENT_CALIBRATION: return 38;
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
     case MessageCode::SET_CURRENT_CALIBRATION: return 38;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 166;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 166;
+    case MessageCode::CONTROL_PARAMETERS: return 138;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 138;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
@@ -1516,23 +1440,17 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_SetStateDriveSpeed(buffer + 2, std::get<SetStateDriveSpeed>(message.message_data));
       return 10;
     }
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER));
-      if (max_size < 2 + 16) return 0;
-      write_SetStateSeekAngleWithPower(buffer + 2, std::get<SetStateSeekAngleWithPower>(message.message_data));
-      return 18;
+    case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_TORQUE_SPEED));
+      if (max_size < 2 + 12) return 0;
+      write_SetStateDriveTorqueSpeed(buffer + 2, std::get<SetStateDriveTorqueSpeed>(message.message_data));
+      return 14;
     }
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE_WITH_TORQUE));
-      if (max_size < 2 + 16) return 0;
-      write_SetStateSeekAngleWithTorque(buffer + 2, std::get<SetStateSeekAngleWithTorque>(message.message_data));
-      return 18;
-    }
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_SPEED: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE_WITH_SPEED));
-      if (max_size < 2 + 16) return 0;
-      write_SetStateSeekAngleWithSpeed(buffer + 2, std::get<SetStateSeekAngleWithSpeed>(message.message_data));
-      return 18;
+    case MessageCode::SET_STATE_SEEK_ANGLE: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE));
+      if (max_size < 2 + 20) return 0;
+      write_SetStateSeekAngle(buffer + 2, std::get<SetStateSeekAngle>(message.message_data));
+      return 22;
     }
     case MessageCode::CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CURRENT_CALIBRATION));
@@ -1556,15 +1474,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 164) return 0;
+      if (max_size < 2 + 136) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 166;
+      return 138;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 164) return 0;
+      if (max_size < 2 + 136) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 166;
+      return 138;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1771,19 +1689,14 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       message.message_data = read_SetStateDriveSpeed(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_POWER: {
-      if (size != 2 + 16) return false;
-      message.message_data = read_SetStateSeekAngleWithPower(buffer + 2);
+    case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: {
+      if (size != 2 + 12) return false;
+      message.message_data = read_SetStateDriveTorqueSpeed(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_TORQUE: {
-      if (size != 2 + 16) return false;
-      message.message_data = read_SetStateSeekAngleWithTorque(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_SEEK_ANGLE_WITH_SPEED: {
-      if (size != 2 + 16) return false;
-      message.message_data = read_SetStateSeekAngleWithSpeed(buffer + 2);
+    case MessageCode::SET_STATE_SEEK_ANGLE: {
+      if (size != 2 + 20) return false;
+      message.message_data = read_SetStateSeekAngle(buffer + 2);
       return true;
     }
     case MessageCode::CURRENT_CALIBRATION: {
@@ -1807,12 +1720,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 164) return false;
+      if (size != 2 + 136) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 164) return false;
+      if (size != 2 + 136) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
