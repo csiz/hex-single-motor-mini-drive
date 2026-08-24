@@ -140,6 +140,7 @@ Flash Data Storage
 <div class="card tight">
   <p>Commit the uploaded calibration data to flash memory.</p>
   <div>${flash_buttons}</div>
+  <pre>${flash_status}</pre>
 </div>
 
 
@@ -1689,6 +1690,7 @@ let control_parameters_buttons = !motor_controller ? html`<p>Motor controller no
       const control_parameters = Object.fromEntries(Object.entries(control_parameters_input).map(([key, input]) => [key, input.value]));
       await motor_controller.upload_control_parameters(control_parameters);
       show_active_control_parameters();
+      unsaved_changes();
       return value;
     })],
     ["Reload from Driver", wait_previous(async function(value){
@@ -1699,6 +1701,7 @@ let control_parameters_buttons = !motor_controller ? html`<p>Motor controller no
     ["Reset to Defaults", wait_previous(async function(value){
       await motor_controller.reset_control_parameters();
       show_active_control_parameters();
+      unsaved_changes();
       return value;
     })],
   ],
@@ -1711,10 +1714,23 @@ let control_parameters_buttons = !motor_controller ? html`<p>Motor controller no
 ```
 
 ```js
+const flash_status = Mutable(`...`);
+
+function unsaved_changes(){
+  if (!motor_controller) return false;
+  flash_status.value = `Unsaved changes.`;
+}
+
 const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
     ["Commit to Flash", async function(){
-      await motor_controller.send_command({message_code: MessageCode.SAVE_SETTINGS_TO_FLASH});
+      await motor_controller.send_command_and_await_reply({
+        message: {message_code: MessageCode.SAVE_SETTINGS_TO_FLASH},
+        expected_messages: 1,
+        expected_code: MessageCode.SETTINGS_SAVED_TO_FLASH,
+      });
+
+      flash_status.value = `Settings saved to flash memory.`;
     }],
   ],
   {

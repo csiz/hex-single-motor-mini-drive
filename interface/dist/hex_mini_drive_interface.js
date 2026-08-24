@@ -1155,6 +1155,7 @@ const GET_CONTROL_PARAMETERS = 16459;
 const RESET_CONTROL_PARAMETERS = 16460;
 const SET_ANGLE = 16464;
 const SAVE_SETTINGS_TO_FLASH = 16512;
+const SETTINGS_SAVED_TO_FLASH = 16513;
 const UNIT_TEST_OUTPUT = 20544;
 const SET_STATE_RESISTANCE_CALIBRATION = 20549;
 const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
@@ -1203,6 +1204,7 @@ export const MessageCode = {
   RESET_CONTROL_PARAMETERS,
   SET_ANGLE,
   SAVE_SETTINGS_TO_FLASH,
+  SETTINGS_SAVED_TO_FLASH,
   UNIT_TEST_OUTPUT,
   SET_STATE_RESISTANCE_CALIBRATION,
   SET_STATE_INDUCTANCE_CALIBRATION,
@@ -1523,6 +1525,12 @@ export function write_message(message) {
       view.setUint16(0, message.message_code);
       return buffer;
     }
+    case SETTINGS_SAVED_TO_FLASH: {
+      const buffer = new Uint8Array(2);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      return buffer;
+    }
     case UNIT_TEST_OUTPUT: {
       const message_buffer = write_UnitTestOutput(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
@@ -1797,6 +1805,10 @@ export function read_message(buffer) {
       return message;
     }
     case SAVE_SETTINGS_TO_FLASH: {
+      if (buffer.length !== 2) return null;
+      return {message_code};
+    }
+    case SETTINGS_SAVED_TO_FLASH: {
       if (buffer.length !== 2) return null;
       return {message_code};
     }

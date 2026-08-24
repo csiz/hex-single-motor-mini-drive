@@ -1185,6 +1185,7 @@ enum MessageCode : uint16_t {
   RESET_CONTROL_PARAMETERS = 16460,
   SET_ANGLE = 16464,
   SAVE_SETTINGS_TO_FLASH = 16512,
+  SETTINGS_SAVED_TO_FLASH = 16513,
   UNIT_TEST_OUTPUT = 20544,
   SET_STATE_RESISTANCE_CALIBRATION = 20549,
   SET_STATE_INDUCTANCE_CALIBRATION = 20550,
@@ -1261,6 +1262,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
+    case MessageCode::SETTINGS_SAVED_TO_FLASH: return 2;
     case MessageCode::UNIT_TEST_OUTPUT: return 250;
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 18;
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 18;
@@ -1500,6 +1502,10 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SAVE_SETTINGS_TO_FLASH: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SAVE_SETTINGS_TO_FLASH));
+      return 2;
+    }
+    case MessageCode::SETTINGS_SAVED_TO_FLASH: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SETTINGS_SAVED_TO_FLASH));
       return 2;
     }
     case MessageCode::UNIT_TEST_OUTPUT: {
@@ -1745,6 +1751,11 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SAVE_SETTINGS_TO_FLASH: {
+      if (size != 2) return false;
+      message.message_data = std::monostate{};
+      return true;
+    }
+    case MessageCode::SETTINGS_SAVED_TO_FLASH: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;

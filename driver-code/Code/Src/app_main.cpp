@@ -69,6 +69,7 @@ size_t readouts_sent = 0;
 bool reply_current_factors = false;
 bool reply_control_parameters = false;
 bool reply_unit_test = false;
+bool reply_saved_to_flash = false;
 
 UnitTestFunction unit_test_function = nullptr;
 
@@ -444,10 +445,12 @@ void handle_message(hex_mini_drive::Message const& message) {
         current_calibration = get_current_calibration();
         control_parameters = get_control_parameters();
         
+        reply_saved_to_flash = true;
         return;
       }
 
     // We shouldn't receive these messages; the driver only sends them.
+    case SETTINGS_SAVED_TO_FLASH:
     case CURRENT_CALIBRATION:
     case CONTROL_PARAMETERS:
     case READOUT:
@@ -617,6 +620,14 @@ void queue_response(hex_mini_drive::FullReadout const& readout) {
       .message_data = current_calibration
     });
     reply_current_factors = false;
+    return;
+  }
+
+  if (reply_saved_to_flash) {
+    serialize_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::SETTINGS_SAVED_TO_FLASH,
+    });
+    reply_saved_to_flash = false;
     return;
   }
 }

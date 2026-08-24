@@ -144,6 +144,9 @@ message_codes:
     type: SetAngle
   SAVE_SETTINGS_TO_FLASH:
     message_code: 0x4080  
+  SETTINGS_SAVED_TO_FLASH:
+    message_code: 0x4081
+  
   UNIT_TEST_OUTPUT:
     message_code: 0x5040
     type: UnitTestOutput
