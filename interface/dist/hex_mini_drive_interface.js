@@ -277,8 +277,12 @@ export class FullReadout extends Readout {
   quadrature_emf_voltage;
   // Total power used/given to VCC line (the battery usually).
   total_power;
+  // Long duration average of the total power; used to limit the maximum power draw.
+  total_power_average;
   // Resistive power; the power dissipated in the phase resistances.
   resistive_power;
+  // Long duration average of the resistive power; used to limit the maximum resistive power.
+  resistive_power_average;
   // EMF power; the power used to drive the motor (which is reflected to the 
   // inductors as back EMF).
   emf_power;
@@ -297,7 +301,7 @@ export class FullReadout extends Readout {
   active_pwm;
   // Target for the advanced control algorithms.
   target;
-  // Spare debug output.
+  // Value of the integral term for the seek position algorithm.
   seek_integral;
   // Estimated resistance of the U phase coil.
   u_resistance;
@@ -327,7 +331,7 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(198);
+  const buffer = new Uint8Array(206);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   const base_buffer = new Uint8Array(view.buffer, offset, 82).set(write_Readout(value), 0);
@@ -355,7 +359,11 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.total_power)
   offset += 4;
+  view.setFloat32(offset, value.total_power_average)
+  offset += 4;
   view.setFloat32(offset, value.resistive_power)
+  offset += 4;
+  view.setFloat32(offset, value.resistive_power_average)
   offset += 4;
   view.setFloat32(offset, value.emf_power)
   offset += 4;
@@ -423,7 +431,11 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.total_power = view.getFloat32(offset);
   offset += 4;
+  result.total_power_average = view.getFloat32(offset);
+  offset += 4;
   result.resistive_power = view.getFloat32(offset);
+  offset += 4;
+  result.resistive_power_average = view.getFloat32(offset);
   offset += 4;
   result.emf_power = view.getFloat32(offset);
   offset += 4;
@@ -870,16 +882,35 @@ export class ControlParameters {
   min_emf_speed;
   // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
   emf_probing_interval;
+  // Probing angular speed for initial EMF detection.
+  probing_angular_speed;
+  // Maximum PWM at which we use holding commands (or probing).
+  max_hold_pwm;
+  // Minium EMF voltage to compute the motor constant.
+  min_emf_for_motor_constant;
+  // Sign of the motor direction (positive by default, negative to reverse turning direction).
+  motor_direction;
+  // Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
+  // conversely if we cannot determine the correct angle we decrease the certainty by 1. This is
+  // the maximum value of certainty we can reach, we will lose the angle fix when we decay from max.
+  angle_fix_max_certainty;
+  // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
+  // also set this as the minimum battery voltage to not damage the Li-ion battery pack.
+  vcc_undervoltage;
+  // Maximum resistive power that can be dissipated in the motor coils.
+  max_resistive_power;
+  // Maximum power draw from the battery (proxy for maximum current).
+  max_power_draw;
+  // Resistive power long duration average observer gain.
+  resistive_power_ki;
+  // Power draw long duration average observer gain.
+  power_draw_ki;
   // Magnet position integral gain.
   rotor_angle_ki;
   // Magnet angular speed integral gain.
   rotor_angular_speed_ki;
   // Averaging gain for the acceleration of the rotor.
   rotor_acceleration_ki;
-  // Sign of the motor direction (positive by default, negative to reverse turning direction).
-  motor_direction;
-  // Number of incorrect direction detections before we flip our motor angle.
-  incorrect_direction_threshold;
   // Integral gain for the EMF angle adjustment.
   emf_angle_ki;
   // Integral gain for the EMF angular speed adjustment.
@@ -900,20 +931,6 @@ export class ControlParameters {
   speed_control_ki;
   // Speed control feedforward gain.
   speed_control_kff;
-  // Probing angular speed for initial EMF detection.
-  probing_angular_speed;
-  // Maximum PWM at which we use holding commands (or probing).
-  max_hold_pwm;
-  // Minium EMF voltage to compute the motor constant.
-  min_emf_for_motor_constant;
-  // Maximum resistive power that can be dissipated in the motor coils.
-  max_resistive_power;
-  // Resistive power long duration average observer gain.
-  resistive_power_ki;
-  // Maximum power draw from the battery (proxy for maximum current).
-  max_power_draw;
-  // Power draw long duration average observer gain.
-  power_draw_ki;
   // Seek feed forward gain for torque.
   seek_kff;
   // Seek integral gain for the PID control.
@@ -941,12 +958,32 @@ export class ControlParameters {
 }
 
 function write_ControlParameters(value) {
-  const buffer = new Uint8Array(136);
+  const buffer = new Uint8Array(140);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.min_emf_speed)
   offset += 4;
   view.setUint32(offset, value.emf_probing_interval)
+  offset += 4;
+  view.setFloat32(offset, value.probing_angular_speed)
+  offset += 4;
+  view.setFloat32(offset, value.max_hold_pwm)
+  offset += 4;
+  view.setFloat32(offset, value.min_emf_for_motor_constant)
+  offset += 4;
+  view.setInt16(offset, value.motor_direction)
+  offset += 2;
+  view.setInt16(offset, value.angle_fix_max_certainty)
+  offset += 2;
+  view.setFloat32(offset, value.vcc_undervoltage)
+  offset += 4;
+  view.setFloat32(offset, value.max_resistive_power)
+  offset += 4;
+  view.setFloat32(offset, value.max_power_draw)
+  offset += 4;
+  view.setFloat32(offset, value.resistive_power_ki)
+  offset += 4;
+  view.setFloat32(offset, value.power_draw_ki)
   offset += 4;
   view.setFloat32(offset, value.rotor_angle_ki)
   offset += 4;
@@ -954,10 +991,6 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.rotor_acceleration_ki)
   offset += 4;
-  view.setInt16(offset, value.motor_direction)
-  offset += 2;
-  view.setInt16(offset, value.incorrect_direction_threshold)
-  offset += 2;
   view.setFloat32(offset, value.emf_angle_ki)
   offset += 4;
   view.setFloat32(offset, value.emf_angular_speed_ki)
@@ -977,20 +1010,6 @@ function write_ControlParameters(value) {
   view.setFloat32(offset, value.speed_control_ki)
   offset += 4;
   view.setFloat32(offset, value.speed_control_kff)
-  offset += 4;
-  view.setFloat32(offset, value.probing_angular_speed)
-  offset += 4;
-  view.setFloat32(offset, value.max_hold_pwm)
-  offset += 4;
-  view.setFloat32(offset, value.min_emf_for_motor_constant)
-  offset += 4;
-  view.setFloat32(offset, value.max_resistive_power)
-  offset += 4;
-  view.setFloat32(offset, value.resistive_power_ki)
-  offset += 4;
-  view.setFloat32(offset, value.max_power_draw)
-  offset += 4;
-  view.setFloat32(offset, value.power_draw_ki)
   offset += 4;
   view.setFloat32(offset, value.seek_kff)
   offset += 4;
@@ -1023,16 +1042,32 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.emf_probing_interval = view.getUint32(offset);
   offset += 4;
+  result.probing_angular_speed = view.getFloat32(offset);
+  offset += 4;
+  result.max_hold_pwm = view.getFloat32(offset);
+  offset += 4;
+  result.min_emf_for_motor_constant = view.getFloat32(offset);
+  offset += 4;
+  result.motor_direction = view.getInt16(offset);
+  offset += 2;
+  result.angle_fix_max_certainty = view.getInt16(offset);
+  offset += 2;
+  result.vcc_undervoltage = view.getFloat32(offset);
+  offset += 4;
+  result.max_resistive_power = view.getFloat32(offset);
+  offset += 4;
+  result.max_power_draw = view.getFloat32(offset);
+  offset += 4;
+  result.resistive_power_ki = view.getFloat32(offset);
+  offset += 4;
+  result.power_draw_ki = view.getFloat32(offset);
+  offset += 4;
   result.rotor_angle_ki = view.getFloat32(offset);
   offset += 4;
   result.rotor_angular_speed_ki = view.getFloat32(offset);
   offset += 4;
   result.rotor_acceleration_ki = view.getFloat32(offset);
   offset += 4;
-  result.motor_direction = view.getInt16(offset);
-  offset += 2;
-  result.incorrect_direction_threshold = view.getInt16(offset);
-  offset += 2;
   result.emf_angle_ki = view.getFloat32(offset);
   offset += 4;
   result.emf_angular_speed_ki = view.getFloat32(offset);
@@ -1052,20 +1087,6 @@ function read_ControlParameters(view, offset = 0) {
   result.speed_control_ki = view.getFloat32(offset);
   offset += 4;
   result.speed_control_kff = view.getFloat32(offset);
-  offset += 4;
-  result.probing_angular_speed = view.getFloat32(offset);
-  offset += 4;
-  result.max_hold_pwm = view.getFloat32(offset);
-  offset += 4;
-  result.min_emf_for_motor_constant = view.getFloat32(offset);
-  offset += 4;
-  result.max_resistive_power = view.getFloat32(offset);
-  offset += 4;
-  result.resistive_power_ki = view.getFloat32(offset);
-  offset += 4;
-  result.max_power_draw = view.getFloat32(offset);
-  offset += 4;
-  result.power_draw_ki = view.getFloat32(offset);
   offset += 4;
   result.seek_kff = view.getFloat32(offset);
   offset += 4;
@@ -1633,7 +1654,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 198) return null;
+      if (buffer.length !== 2 + 206) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;
@@ -1811,13 +1832,13 @@ export function read_message(buffer) {
       return {message_code};
     }
     case CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 136) return null;
+      if (buffer.length !== 2 + 140) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = CONTROL_PARAMETERS;
       return message;
     }
     case SET_CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 136) return null;
+      if (buffer.length !== 2 + 140) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = SET_CONTROL_PARAMETERS;
       return message;

@@ -78,7 +78,6 @@ volatile int32_t external_rotations_offset = 0;
 int32_t correct_angle_counter = 0;
 
 const int32_t angle_fix_threshold_count = 16;
-const int32_t angle_fix_max_count = 512;
 
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 ThreePhase previous_half_cycle_drive_voltages = {0, 0, 0};
@@ -1032,7 +1031,7 @@ void ADC1_2_IRQHandler(void){
 
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion + readout.vcc_voltage * 3) * 0.25f;
-
+    
     // Get the motor duties that were set at the mid point of the PWM cycle, between current readings.
     const ThreePhase motor_outputs = {
         driver_state.motor_outputs.u_duty,
@@ -1248,7 +1247,7 @@ void ADC1_2_IRQHandler(void){
 
     // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
     correct_angle_counter = clip_to(
-        0, angle_fix_max_count, 
+        0, control_parameters.angle_fix_max_certainty,
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
         // Our angle is incorrect if we don't have an EMF reading whilst driving the motor.
         correct_angle_counter + ((driver_state.active_pwm and not emf_fix) ? -1 : emf_fix)
@@ -1329,12 +1328,17 @@ void ADC1_2_IRQHandler(void){
     // Calculate slowly varying averages of the resistive power; this represents the energy
     // dissipated in the motor coils which should be proportional to the temperature rise.
     // Update the higher resolution observer.
-    resistive_power_observer += (resistive_power - resistive_power_observer) * control_parameters.resistive_power_ki;
+    const float resistive_power_average = (
+        readout.resistive_power_average + 
+        (resistive_power - readout.resistive_power_average) * control_parameters.resistive_power_ki
+    );
 
     // Calculate slowly varying averages of the total power; this represents the energy
     // drawn from the battery. At constant voltage, this is proportional to the current drawn.
-    total_power_observer += (total_power - total_power_observer) * control_parameters.power_draw_ki;
-
+    const float total_power_average = (
+        readout.total_power_average + 
+        (total_power - readout.total_power_average) * control_parameters.power_draw_ki
+    );
 
     // Reduce the maximum output PWM to keep within safe limits:
     // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
@@ -1343,13 +1347,13 @@ void ADC1_2_IRQHandler(void){
     // 3. The total power is a good proxy for total current consumed from the battery.
     // 
     // The penalty should normally be negative indicating we can increase the PWM.
-    const float pwm_penalty = max(max(
-        vcc_mosfet_driver_undervoltage - readout.vcc_voltage,
-        resistive_power_observer - control_parameters.max_resistive_power),
-        total_power_observer - control_parameters.max_power_draw
+    const bool pwm_penalty = (
+        (readout.vcc_voltage < control_parameters.vcc_undervoltage) or
+        (resistive_power_average > control_parameters.max_resistive_power) or
+        (total_power_average > control_parameters.max_power_draw)
     );
 
-    const float live_max_pwm = clip_to(0, pwm_max, readout.live_max_pwm - pwm_penalty);
+    const float live_max_pwm = clip_to(0, pwm_max, readout.live_max_pwm + 0.1f - 10.f * pwm_penalty);
 
 
     // Write the latest readout data
@@ -1397,7 +1401,9 @@ void ADC1_2_IRQHandler(void){
     readout.quadrature_emf_voltage = quadrature_emf_voltage;
     
     readout.total_power = total_power;
+    readout.total_power_average = total_power_average;
     readout.resistive_power = resistive_power;
+    readout.resistive_power_average = resistive_power_average;
     readout.emf_power = emf_power;
     readout.inductive_power = inductive_power;
     

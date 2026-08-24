@@ -62,10 +62,10 @@ const rotor_revolutions_per_electric = 4;
 const max_rpm = 32000.0 * rotor_revolutions_per_electric;
 
 // Gear ratio of our chosen motor.
-const gear_ratio = 6 * 6 * 6;
+export const gear_ratio = 6 * 6 * 6;
 
 // Total ratio between the electrical angle and the output shaft angle.
-const ratio = rotor_revolutions_per_electric * gear_ratio;
+export const ratio = rotor_revolutions_per_electric * gear_ratio;
 
 // Maximum angular speed that we can command the driver.
 export const max_angular_speed = 1.0 * max_rpm * angle_base / 60.0 / pwm_cycles_per_second;
@@ -81,12 +81,12 @@ export function rotations_per_millisecond_squared_to_acceleration_units(accelera
 
 // Bit handling constants
 // ----------------------
-export const hall_state_bit_offset = 0;
-export const current_detected_bit_offset = 4;
-export const emf_fix_bit_offset = 5;
-export const emf_detected_bit_offset = 6;
+const hall_state_bit_offset = 0;
+const current_detected_bit_offset = 4;
+const emf_fix_bit_offset = 5;
+const emf_detected_bit_offset = 6;
 
-export const hall_state_bit_mask = 0b111 << hall_state_bit_offset;
+const hall_state_bit_mask = 0b111 << hall_state_bit_offset;
 
 export function parse_state_flags(state_flags){
   return {

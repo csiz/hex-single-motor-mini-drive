@@ -968,11 +968,13 @@ const plot_power = plot_lines({
   y_label: "Power (W)",
   channels: [
     {y: "total_power", label: "Total Power", color: colors.sum},
+    {y: "total_power_average", label: "Total Power (on chip average)", color: d3.color(colors.sum).darker(1)},
     {
       y: "total_power_avg", label: "Total Power (2ms average)", color: d3.color(colors.sum).darker(1),
       draw_extra: setup_stdev_95({stdev: (d) => d.total_power_stdev}),
     },
     {y: "resistive_power", label: "Resistive Power", color: colors.web_current_magnitude},
+    {y: "resistive_power_average", label: "Resistive Power (on chip average)", color: d3.color(colors.web_current_magnitude).darker(1)},
     {y: "emf_power", label: "EMF Power", color: colors.angle},
     {
       y: "emf_power_avg", label: "EMF Power (2ms average)", color: d3.color(colors.angle).darker(1),
@@ -1243,6 +1245,9 @@ const plot_readout_flags = plot_lines({
     {y: "emf_fix", label: "EMF position fix", color: colors_categories[4]},
     {y: "current_detected", label: "Current detected", color: colors_categories[6]},
     {y: "angle_fix", label: "Rotor position fix", color: colors_categories[7]},
+    {y: "nominal_vcc_voltage", label: "Nominal VCC Voltage", color: colors_categories[8]},
+    {y: "overpowered", label: "Overpowered", color: colors_categories[9]},
+    {y: "overheating", label: "Overheating", color: colors_categories[10]},
     {y: "hall_u", label: "Hall U", color: colors.u},
     {y: "hall_v", label: "Hall V", color: colors.v},
     {y: "hall_w", label: "Hall W", color: colors.w},
@@ -1534,6 +1539,47 @@ const control_parameters_input = Object.fromEntries(
       label: "EMF Probing Interval",
       description: "Interval for probing the EMF angle when it is too noisy to use. Determines how frequently we check the EMF angle."
     }],
+        ["probing_angular_speed", {
+      label: "Probing Angular Speed",
+      description: `Probing angular speed. We use this default speed to drive a current around the coils in order to
+      move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
+    }],
+    ["max_hold_pwm", {
+      label: "Max Hold PWM",
+      description: `Maximum PWM for holding commands.`
+    }],
+    ["min_emf_for_motor_constant", {
+      label: "Threshold for motor constant",
+      description: "Minimum EMF voltage magnitude required to compute the motor constant. Below this threshold it is too noisy because we divide by voltage."
+    }],
+    ["motor_direction", {
+      label: "Motor direction", 
+      description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."
+    }],
+    ["angle_fix_certainty", {
+      label: "Angle Fix Certainty", 
+      description: "Number of incorrect direction detections before losing the angle fix."
+    }],
+    ["vcc_undervoltage", {
+      label: "VCC Undervoltage Threshold",
+      description: "Threshold for VCC undervoltage detection. Below this voltage we consider the supply to be too low."
+    }],
+    ["max_resistive_power", {
+      label: "Maximum Resistive Power",
+      description: "Maximum resistive power allowed. This is a proxy for the maximum temperature of the motor coils."
+    }],
+    ["max_power_draw", {
+      label: "Max Power Draw",
+      description: "Maximum power draw allowed. This is a proxy for the maximum current draw at constant supply voltage."
+    }],
+    ["resistive_power_ki", {
+      label: "Resistive Power KI",
+      description: "Resistive power integral gain. How fast we average the resistive power to avoid spikes."
+    }],
+    ["power_draw_ki", {
+      label: "Power Draw KI",
+      description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
+    }],
     ["rotor_angle_ki", {
       label: "Rotor Angle KI", 
       description: "Integral gain for the rotor angle observer from the measured EMF angle.",
@@ -1546,14 +1592,6 @@ const control_parameters_input = Object.fromEntries(
     ["rotor_acceleration_ki", {
       label: "Rotor Acceleration KI", 
       description: "Integral gain for the rotor acceleration observer; same as above, more resolution."
-    }],
-    ["motor_direction", {
-      label: "Motor direction", 
-      description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."
-    }],
-    ["incorrect_direction_threshold", {
-      label: "Incorrect Direction Threshold", 
-      description: "Number of incorrect direction detections before flipping the angle."
     }],
     ["emf_angle_ki", {
       label: "EMF Angle KI", 
@@ -1594,35 +1632,6 @@ const control_parameters_input = Object.fromEntries(
     ["speed_control_kff", {
       label: "Speed Control KFF",
       description: "Speed control feedforward gain. Controls how much we drive the PWM based on the desired speed."
-    }],
-    ["probing_angular_speed", {
-      label: "Probing Angular Speed",
-      description: `Probing angular speed. We use this default speed to drive a current around the coils in order to
-      move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
-    }],
-    ["max_hold_pwm", {
-      label: "Max Hold PWM",
-      description: `Maximum PWM for holding commands.`
-    }],
-    ["min_emf_for_motor_constant", {
-      label: "Threshold for motor constant",
-      description: "Minimum EMF voltage magnitude required to compute the motor constant. Below this threshold it is too noisy because we divide by voltage."
-    }],
-    ["max_resistive_power", {
-      label: "Maximum Resistive Power",
-      description: "Maximum resistive power allowed. This is a proxy for the maximum temperature of the motor coils."
-    }],
-    ["resistive_power_ki", {
-      label: "Resistive Power KI",
-      description: "Resistive power integral gain. How fast we average the resistive power to avoid spikes."
-    }],
-    ["max_power_draw", {
-      label: "Max Power Draw",
-      description: "Maximum power draw allowed. This is a proxy for the maximum current draw at constant supply voltage."
-    }],
-    ["power_draw_ki", {
-      label: "Power Draw KI",
-      description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
     }],
     ["seek_kff", {
       label: "Seek prediction factor",

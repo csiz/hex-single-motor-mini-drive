@@ -351,8 +351,12 @@ struct FullReadout : Readout {
   float quadrature_emf_voltage;
   // Total power used/given to VCC line (the battery usually).
   float total_power;
+  // Long duration average of the total power; used to limit the maximum power draw.
+  float total_power_average;
   // Resistive power; the power dissipated in the phase resistances.
   float resistive_power;
+  // Long duration average of the resistive power; used to limit the maximum resistive power.
+  float resistive_power_average;
   // EMF power; the power used to drive the motor (which is reflected to the 
   // inductors as back EMF).
   float emf_power;
@@ -371,7 +375,7 @@ struct FullReadout : Readout {
   float active_pwm;
   // Target for the advanced control algorithms.
   float target;
-  // Spare debug output.
+  // Value of the integral term for the seek position algorithm.
   float seek_integral;
   // Estimated resistance of the U phase coil.
   float u_resistance;
@@ -424,7 +428,11 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.total_power);;
   offset += 4;
+  write_float32(buffer + offset, value.total_power_average);;
+  offset += 4;
   write_float32(buffer + offset, value.resistive_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistive_power_average);;
   offset += 4;
   write_float32(buffer + offset, value.emf_power);;
   offset += 4;
@@ -491,7 +499,11 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.total_power = read_float32(buffer + offset);
   offset += 4;
+  result.total_power_average = read_float32(buffer + offset);
+  offset += 4;
   result.resistive_power = read_float32(buffer + offset);
+  offset += 4;
+  result.resistive_power_average = read_float32(buffer + offset);
   offset += 4;
   result.emf_power = read_float32(buffer + offset);
   offset += 4;
@@ -905,16 +917,35 @@ struct ControlParameters {
   float min_emf_speed;
   // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
   uint32_t emf_probing_interval;
+  // Probing angular speed for initial EMF detection.
+  float probing_angular_speed;
+  // Maximum PWM at which we use holding commands (or probing).
+  float max_hold_pwm;
+  // Minium EMF voltage to compute the motor constant.
+  float min_emf_for_motor_constant;
+  // Sign of the motor direction (positive by default, negative to reverse turning direction).
+  int16_t motor_direction;
+  // Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
+  // conversely if we cannot determine the correct angle we decrease the certainty by 1. This is
+  // the maximum value of certainty we can reach, we will lose the angle fix when we decay from max.
+  int16_t angle_fix_max_certainty;
+  // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
+  // also set this as the minimum battery voltage to not damage the Li-ion battery pack.
+  float vcc_undervoltage;
+  // Maximum resistive power that can be dissipated in the motor coils.
+  float max_resistive_power;
+  // Maximum power draw from the battery (proxy for maximum current).
+  float max_power_draw;
+  // Resistive power long duration average observer gain.
+  float resistive_power_ki;
+  // Power draw long duration average observer gain.
+  float power_draw_ki;
   // Magnet position integral gain.
   float rotor_angle_ki;
   // Magnet angular speed integral gain.
   float rotor_angular_speed_ki;
   // Averaging gain for the acceleration of the rotor.
   float rotor_acceleration_ki;
-  // Sign of the motor direction (positive by default, negative to reverse turning direction).
-  int16_t motor_direction;
-  // Number of incorrect direction detections before we flip our motor angle.
-  int16_t incorrect_direction_threshold;
   // Integral gain for the EMF angle adjustment.
   float emf_angle_ki;
   // Integral gain for the EMF angular speed adjustment.
@@ -935,20 +966,6 @@ struct ControlParameters {
   float speed_control_ki;
   // Speed control feedforward gain.
   float speed_control_kff;
-  // Probing angular speed for initial EMF detection.
-  float probing_angular_speed;
-  // Maximum PWM at which we use holding commands (or probing).
-  float max_hold_pwm;
-  // Minium EMF voltage to compute the motor constant.
-  float min_emf_for_motor_constant;
-  // Maximum resistive power that can be dissipated in the motor coils.
-  float max_resistive_power;
-  // Resistive power long duration average observer gain.
-  float resistive_power_ki;
-  // Maximum power draw from the battery (proxy for maximum current).
-  float max_power_draw;
-  // Power draw long duration average observer gain.
-  float power_draw_ki;
   // Seek feed forward gain for torque.
   float seek_kff;
   // Seek integral gain for the PID control.
@@ -979,16 +996,32 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_uint32(buffer + offset, value.emf_probing_interval);;
   offset += 4;
+  write_float32(buffer + offset, value.probing_angular_speed);;
+  offset += 4;
+  write_float32(buffer + offset, value.max_hold_pwm);;
+  offset += 4;
+  write_float32(buffer + offset, value.min_emf_for_motor_constant);;
+  offset += 4;
+  write_int16(buffer + offset, value.motor_direction);;
+  offset += 2;
+  write_int16(buffer + offset, value.angle_fix_max_certainty);;
+  offset += 2;
+  write_float32(buffer + offset, value.vcc_undervoltage);;
+  offset += 4;
+  write_float32(buffer + offset, value.max_resistive_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.max_power_draw);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistive_power_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.power_draw_ki);;
+  offset += 4;
   write_float32(buffer + offset, value.rotor_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.rotor_angular_speed_ki);;
   offset += 4;
   write_float32(buffer + offset, value.rotor_acceleration_ki);;
   offset += 4;
-  write_int16(buffer + offset, value.motor_direction);;
-  offset += 2;
-  write_int16(buffer + offset, value.incorrect_direction_threshold);;
-  offset += 2;
   write_float32(buffer + offset, value.emf_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.emf_angular_speed_ki);;
@@ -1008,20 +1041,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.speed_control_ki);;
   offset += 4;
   write_float32(buffer + offset, value.speed_control_kff);;
-  offset += 4;
-  write_float32(buffer + offset, value.probing_angular_speed);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_hold_pwm);;
-  offset += 4;
-  write_float32(buffer + offset, value.min_emf_for_motor_constant);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_resistive_power);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistive_power_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_power_draw);;
-  offset += 4;
-  write_float32(buffer + offset, value.power_draw_ki);;
   offset += 4;
   write_float32(buffer + offset, value.seek_kff);;
   offset += 4;
@@ -1055,16 +1074,32 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.emf_probing_interval = read_uint32(buffer + offset);
   offset += 4;
+  result.probing_angular_speed = read_float32(buffer + offset);
+  offset += 4;
+  result.max_hold_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.min_emf_for_motor_constant = read_float32(buffer + offset);
+  offset += 4;
+  result.motor_direction = read_int16(buffer + offset);
+  offset += 2;
+  result.angle_fix_max_certainty = read_int16(buffer + offset);
+  offset += 2;
+  result.vcc_undervoltage = read_float32(buffer + offset);
+  offset += 4;
+  result.max_resistive_power = read_float32(buffer + offset);
+  offset += 4;
+  result.max_power_draw = read_float32(buffer + offset);
+  offset += 4;
+  result.resistive_power_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.power_draw_ki = read_float32(buffer + offset);
+  offset += 4;
   result.rotor_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.rotor_angular_speed_ki = read_float32(buffer + offset);
   offset += 4;
   result.rotor_acceleration_ki = read_float32(buffer + offset);
   offset += 4;
-  result.motor_direction = read_int16(buffer + offset);
-  offset += 2;
-  result.incorrect_direction_threshold = read_int16(buffer + offset);
-  offset += 2;
   result.emf_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.emf_angular_speed_ki = read_float32(buffer + offset);
@@ -1084,20 +1119,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   result.speed_control_ki = read_float32(buffer + offset);
   offset += 4;
   result.speed_control_kff = read_float32(buffer + offset);
-  offset += 4;
-  result.probing_angular_speed = read_float32(buffer + offset);
-  offset += 4;
-  result.max_hold_pwm = read_float32(buffer + offset);
-  offset += 4;
-  result.min_emf_for_motor_constant = read_float32(buffer + offset);
-  offset += 4;
-  result.max_resistive_power = read_float32(buffer + offset);
-  offset += 4;
-  result.resistive_power_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.max_power_draw = read_float32(buffer + offset);
-  offset += 4;
-  result.power_draw_ki = read_float32(buffer + offset);
   offset += 4;
   result.seek_kff = read_float32(buffer + offset);
   offset += 4;
@@ -1246,7 +1267,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::READOUT: return 84;
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 200;
+    case MessageCode::FULL_READOUT: return 208;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 18;
@@ -1277,8 +1298,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
     case MessageCode::SET_CURRENT_CALIBRATION: return 38;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 138;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 138;
+    case MessageCode::CONTROL_PARAMETERS: return 142;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 142;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
@@ -1320,9 +1341,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 198) return 0;
+      if (max_size < 2 + 206) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 200;
+      return 208;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1498,15 +1519,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 136) return 0;
+      if (max_size < 2 + 140) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 138;
+      return 142;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 136) return 0;
+      if (max_size < 2 + 140) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 138;
+      return 142;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1599,7 +1620,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 198) return false;
+      if (size != 2 + 206) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }
@@ -1754,12 +1775,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 136) return false;
+      if (size != 2 + 140) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 136) return false;
+      if (size != 2 + 140) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

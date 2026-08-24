@@ -79,7 +79,6 @@ constexpr size_t angle_to_sin_table_shift = angle_bit_count - sin_tables_bit_cou
 constexpr float angle_base_inverse = 1.0f / angle_base;
 
 
-
 // Readout bit packing
 // -------------------
 
@@ -94,7 +93,6 @@ constexpr uint8_t emf_fix_bit_mask = 0b1 << emf_fix_bit_offset;
 
 constexpr size_t emf_detected_bit_offset = 6;
 constexpr uint8_t emf_detected_bit_mask = 0b1 << emf_detected_bit_offset;
-
 
 // Position constants
 // ------------------
@@ -330,7 +328,18 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .min_emf_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     // Unused for now.
     .emf_probing_interval = pwm_cycles_per_second / 20,
-
+    .probing_angular_speed = 30.f * angle_base / static_cast<float>(pwm_cycles_per_second),
+    .max_hold_pwm = pwm_max / 4,
+    .min_emf_for_motor_constant = 1.0,
+    // Option to flip the motor direction.
+    .motor_direction = +1,
+    // Unused!
+    .angle_fix_max_certainty = 512,
+    .vcc_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
+    .max_resistive_power = 2.0,
+    .max_power_draw = max_drive_power,
+    .resistive_power_ki = std::pow(2, -12),
+    .power_draw_ki = std::pow(2, -12),
     // Rotor control gains.
     .rotor_angle_ki = std::pow(2, -2),
     // Gain for the angular speed, it should be much lower than the angle gain to average out the noise.
@@ -338,10 +347,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     // Gain for the acceleration, it should be even lower than speed. These are all relative to the position error.
     .rotor_acceleration_ki = std::pow(2, -4),
     
-    // Option to flip the motor direction.
-    .motor_direction = +1,
-    // Unused!
-    .incorrect_direction_threshold = 0,
+
     // Gain for the EMF angle, it should be much lower than the rotor angle gain to average out the noise.
     .emf_angle_ki = std::pow(2, -2),
     // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.
@@ -356,18 +362,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .battery_power_control_kff = 0.1f,
     .speed_control_ki = 2.0f,
     .speed_control_kff = 0.1f,
-    .probing_angular_speed = 30.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    .max_hold_pwm = pwm_max / 4,
 
-    .min_emf_for_motor_constant = 1.0,
-    .max_resistive_power = 2.0,
-    .resistive_power_ki = std::pow(2, -12),
-
-    .max_power_draw = max_drive_power,
-    .power_draw_ki = std::pow(2, -12),
 
     .seek_kff = 0.0f,
-    .seek_ki = std::pow(2, -12),
+    .seek_ki = std::pow(2, -16),
     .seek_kp = 1.0f,
     .seek_kd = 0.0f,
 

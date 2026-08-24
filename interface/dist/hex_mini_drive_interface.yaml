@@ -393,9 +393,17 @@ definitions:
         type: float32
         doc: Total power used/given to VCC line (the battery usually).
 
+      total_power_average:
+        type: float32
+        doc: Long duration average of the total power; used to limit the maximum power draw.
+
       resistive_power:
         type: float32
         doc: Resistive power; the power dissipated in the phase resistances.
+
+      resistive_power_average:
+        type: float32
+        doc: Long duration average of the resistive power; used to limit the maximum resistive power.
 
       emf_power:
         type: float32
@@ -435,7 +443,10 @@ definitions:
 
       seek_integral:
         type: float32
-        doc: Spare debug output.
+        doc: Value of the integral term for the seek position algorithm.
+
+
+
 
       u_resistance:
         type: float32
@@ -655,6 +666,51 @@ definitions:
         type: uint32
         doc: Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
 
+      probing_angular_speed:
+        type: float32
+        doc: Probing angular speed for initial EMF detection.
+
+      max_hold_pwm:
+        type: float32
+        doc: Maximum PWM at which we use holding commands (or probing).
+
+      min_emf_for_motor_constant:
+        type: float32
+        doc: Minium EMF voltage to compute the motor constant.
+
+      motor_direction:
+        type: int16
+        doc: Sign of the motor direction (positive by default, negative to reverse turning direction).
+
+      angle_fix_max_certainty:
+        type: int16
+        doc: |
+          Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
+          conversely if we cannot determine the correct angle we decrease the certainty by 1. This is
+          the maximum value of certainty we can reach, we will lose the angle fix when we decay from max.
+
+      vcc_undervoltage:
+        type: float32
+        doc: |
+          Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
+          also set this as the minimum battery voltage to not damage the Li-ion battery pack.
+
+      max_resistive_power:
+        type: float32
+        doc: Maximum resistive power that can be dissipated in the motor coils.
+
+      max_power_draw:
+        type: float32
+        doc: Maximum power draw from the battery (proxy for maximum current).
+      
+      resistive_power_ki:
+        type: float32
+        doc: Resistive power long duration average observer gain.
+
+      power_draw_ki:
+        type: float32
+        doc: Power draw long duration average observer gain.
+      
       rotor_angle_ki:
         type: float32
         doc: Magnet position integral gain.
@@ -666,14 +722,6 @@ definitions:
       rotor_acceleration_ki:
         type: float32
         doc: Averaging gain for the acceleration of the rotor.
-
-      motor_direction:
-        type: int16
-        doc: Sign of the motor direction (positive by default, negative to reverse turning direction).
-
-      incorrect_direction_threshold:
-        type: int16
-        doc: Number of incorrect direction detections before we flip our motor angle.
 
       emf_angle_ki:
         type: float32
@@ -715,34 +763,6 @@ definitions:
         type: float32
         doc: Speed control feedforward gain.
 
-      probing_angular_speed:
-        type: float32
-        doc: Probing angular speed for initial EMF detection.
-
-      max_hold_pwm:
-        type: float32
-        doc: Maximum PWM at which we use holding commands (or probing).
-
-      min_emf_for_motor_constant:
-        type: float32
-        doc: Minium EMF voltage to compute the motor constant.
-
-      max_resistive_power:
-        type: float32
-        doc: Maximum resistive power that can be dissipated in the motor coils.
-
-      resistive_power_ki:
-        type: float32
-        doc: Resistive power long duration average observer gain.
-
-      max_power_draw:
-        type: float32
-        doc: Maximum power draw from the battery (proxy for maximum current).
-
-      power_draw_ki:
-        type: float32
-        doc: Power draw long duration average observer gain.
-      
       seek_kff:
         type: float32
         doc: Seek feed forward gain for torque.

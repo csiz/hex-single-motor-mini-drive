@@ -803,4 +803,13 @@ if (import.meta.main) {
   // And don't forget to copy the interface spec itself.
   writeFileSync(`${output_dir}/hex_mini_drive_interface.yaml`, readFileSync("./interface.yaml"));
   console.log("Copied interface specification:", `${output_dir}/hex_mini_drive_interface.yaml`);
+
+  // Finally we need to load package.json and update the minor version number.
+  const package_json_path = "./package.json";
+  const package_json = JSON.parse(readFileSync(package_json_path, "utf8"));
+  const version_parts = package_json.version.split('.').map(Number);
+  version_parts[1] += 1;
+  version_parts[2] = 0; // Reset patch version to 0
+  package_json.version = version_parts.join('.');
+  writeFileSync(package_json_path, JSON.stringify(package_json, null, 2));
 }

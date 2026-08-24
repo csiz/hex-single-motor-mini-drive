@@ -38,7 +38,7 @@ export function get_hall_sector({hall_u, hall_v, hall_w}){
 }
 
 
-function parse_readout(bare_readout, previous_readout, {current_calibration}) {
+function parse_readout(bare_readout, previous_readout, {current_calibration, control_parameters}) {
   const local_time = Date.now();
 
 
@@ -76,13 +76,13 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
 
   const angle_fix = bare_readout.angle_fix;
   
+  const nominal_vcc_voltage = 1.0 * (vcc_voltage >= (control_parameters.vcc_undervoltage / VOLTAGE_UNITS_PER_VOLT));
+
   const {
     hall_state,
     emf_detected,
     emf_fix,
     current_detected,
-    incorrect_rotor_angle,
-    rotor_direction_flip_imminent,
   } = parse_state_flags(state_flags);
 
   const hall_u = Boolean(hall_state & 0b001) * 1;
@@ -231,8 +231,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
     emf_fix,
     current_detected,
     angle_fix,
-    incorrect_rotor_angle,
-    rotor_direction_flip_imminent,
+    nominal_vcc_voltage,
     // Readouts converted to physical dimensions
     u_current, v_current, w_current, avg_current,
 
@@ -288,8 +287,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration}) {
 
 
 
-function parse_full_readout(bare_full_readout, previous_readout, calibration_data){
-  const readout = parse_readout(bare_full_readout, previous_readout, calibration_data);
+function parse_full_readout(bare_full_readout, previous_readout, motor_controller){
+  const readout = parse_readout(bare_full_readout, previous_readout, motor_controller);
 
   if (!readout) return null;
 
@@ -306,7 +305,9 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
   const quadrature_emf_voltage = bare_full_readout.quadrature_emf_voltage / VOLTAGE_UNITS_PER_VOLT;
 
   const total_power = bare_full_readout.total_power;
+  const total_power_average = bare_full_readout.total_power_average;
   const resistive_power = bare_full_readout.resistive_power;
+  const resistive_power_average = bare_full_readout.resistive_power_average;
   const emf_power = bare_full_readout.emf_power;
   const inductive_power = bare_full_readout.inductive_power;
 
@@ -330,6 +331,9 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
 
   const battery_current = total_power / readout.vcc_voltage;
 
+  const overpowered = 1.0 * (total_power_average > motor_controller.control_parameters.max_power_draw);
+  const overheating = 1.0 * (resistive_power_average > motor_controller.control_parameters.max_resistive_power);
+  
   const exp_stats = exponential_stats(readout.dt, 2.0);
 
   const {average: emf_power_avg, stdev: emf_power_stdev} = exp_stats(
@@ -365,13 +369,17 @@ function parse_full_readout(bare_full_readout, previous_readout, calibration_dat
     
     battery_current,
     total_power,
+    total_power_average,
     total_power_avg, 
     total_power_stdev,
     resistive_power,
+    resistive_power_average,
     emf_power,
     emf_power_avg, 
     emf_power_stdev,
     inductive_power,
+    overpowered,
+    overheating,
     
     emf_angle_error_stdev,
     
