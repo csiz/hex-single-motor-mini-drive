@@ -1142,6 +1142,25 @@ static inline SetAngle read_SetAngle(uint8_t const* buffer) {
   offset += 4;
   return result;
 }
+struct SetRotations {
+  // Set the number of rotations, used to home the motor.
+  int32_t rotations;
+};
+
+static inline void write_SetRotations(uint8_t * buffer, SetRotations const& value) {
+  size_t offset = 0;
+  write_int32(buffer + offset, value.rotations);;
+  offset += 4;
+}
+static inline SetRotations read_SetRotations(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  SetRotations result;
+  
+  result.rotations = read_int32(buffer + offset);
+  offset += 4;
+  return result;
+}
 // Message Codes
 enum MessageCode : uint16_t {
   NULL_MESSAGE_CODE = 0,
@@ -1184,6 +1203,7 @@ enum MessageCode : uint16_t {
   GET_CONTROL_PARAMETERS = 16459,
   RESET_CONTROL_PARAMETERS = 16460,
   SET_ANGLE = 16464,
+  SET_ROTATIONS = 16465,
   SAVE_SETTINGS_TO_FLASH = 16512,
   SETTINGS_SAVED_TO_FLASH = 16513,
   UNIT_TEST_OUTPUT = 20544,
@@ -1214,6 +1234,7 @@ struct Message {
     CurrentCalibration,
     ControlParameters,
     SetAngle,
+    SetRotations,
     UnitTestOutput,
     std::monostate
   > message_data;
@@ -1261,6 +1282,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
+    case MessageCode::SET_ROTATIONS: return 6;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
     case MessageCode::SETTINGS_SAVED_TO_FLASH: return 2;
     case MessageCode::UNIT_TEST_OUTPUT: return 250;
@@ -1498,6 +1520,12 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_ANGLE));
       if (max_size < 2 + 4) return 0;
       write_SetAngle(buffer + 2, std::get<SetAngle>(message.message_data));
+      return 6;
+    }
+    case MessageCode::SET_ROTATIONS: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_ROTATIONS));
+      if (max_size < 2 + 4) return 0;
+      write_SetRotations(buffer + 2, std::get<SetRotations>(message.message_data));
       return 6;
     }
     case MessageCode::SAVE_SETTINGS_TO_FLASH: {
@@ -1748,6 +1776,11 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
     case MessageCode::SET_ANGLE: {
       if (size != 2 + 4) return false;
       message.message_data = read_SetAngle(buffer + 2);
+      return true;
+    }
+    case MessageCode::SET_ROTATIONS: {
+      if (size != 2 + 4) return false;
+      message.message_data = read_SetRotations(buffer + 2);
       return true;
     }
     case MessageCode::SAVE_SETTINGS_TO_FLASH: {

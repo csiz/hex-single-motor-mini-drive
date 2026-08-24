@@ -56,8 +56,10 @@ void set_motor_command(DriverState const& driver_state);
 
 // Set the rotor angle directly, eg. from an external sensor. The angle
 // is set as an offset to the current angle.
-void set_angle_offset(int32_t angle_offset);
+void set_angle(int32_t angle);
 
+// Offset the rotations counter to home the motor.
+void set_rotations(int32_t rotations);
 
 // Position tracking
 // -----------------

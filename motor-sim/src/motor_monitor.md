@@ -359,7 +359,7 @@ const command_angular_speed_slider = inputs_wide_range(
     0.0,
     speed_units_to_rotations_per_millisecond(max_angular_speed)
   ], 
-  {value: 1, step: 0.01, label: "Angular speed value (rotations/ms)"});
+  {value: 0.20, step: 0.01, label: "Angular speed value (rotations/ms)"});
 const command_angular_speed = transformed_input_value(command_angular_speed_slider, rotations_per_millisecond_to_speed_units);
 
 // Choose the target angle for certain commands.
@@ -367,11 +367,11 @@ const command_angle_slider = inputs_wide_range([-Math.PI, Math.PI], {value: 0, s
 const command_angle = transformed_input_value(command_angle_slider, radians_to_angle_units);
 
 // Choose the torque target for torque driving modes.
-const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.200, step: 0.010, label: "Command torque (Amps):"});
+const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.750, step: 0.010, label: "Command torque (Amps):"});
 const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => amps * CURRENT_UNITS_PER_AMP);
 
 // Choose the power target for power driving modes.
-const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 0.200, step: 0.010, label: "Command power (Watts):"});
+const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 1.500, step: 0.010, label: "Command power (Watts):"});
 const command_power = Generators.input(command_power_slider);
 
 // Choose the position for target seeking.
@@ -699,6 +699,12 @@ d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
 
 const seek_drive_buttons = Inputs.button(
   [
+    ["Set Rotations", async function(){
+      await snapshot_if_checked({
+        message_code: MessageCode.SET_ROTATIONS, 
+        rotations: command_seek_rotation,
+      });
+    }],
     ["Seek angle", async function(){
       await snapshot_if_checked({
         message_code: MessageCode.SET_STATE_SEEK_ANGLE,

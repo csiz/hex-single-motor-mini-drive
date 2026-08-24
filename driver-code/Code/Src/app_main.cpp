@@ -432,9 +432,13 @@ void handle_message(hex_mini_drive::Message const& message) {
       reply_control_parameters = true;
       return;
 
-    // TODO: rename to SET_ANGLE_OFFSET
     case SET_ANGLE: {
-      set_angle_offset(std::get<SetAngle>(message.message_data).angle);
+      set_angle(std::get<SetAngle>(message.message_data).angle);
+      return;
+    }
+
+    case SET_ROTATIONS: {
+      set_rotations(std::get<SetRotations>(message.message_data).rotations);
       return;
     }
 

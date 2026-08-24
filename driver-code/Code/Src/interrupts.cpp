@@ -67,6 +67,9 @@ volatile bool readout_history_reset_flag = false;
 // Angle offsetting from the main loop or via commands; it will not influence speed.
 volatile int32_t external_angle_offset = 0;
 
+// Also offset the current rotations counter.
+volatile int32_t external_rotations_offset = 0;
+
 // Additional state
 // ----------------
 
@@ -169,8 +172,12 @@ void set_motor_command(DriverState const& driver_state){
     new_pending_state = true;
 }
 
-void set_angle_offset(int32_t angle_offset) {
-    external_angle_offset = angle_offset;
+void set_angle(int32_t angle) {
+    external_angle_offset = angle - latest_readout.angle;
+}
+
+void set_rotations(int32_t rotations) {
+    external_rotations_offset = rotations - latest_readout.rotations;
 }
 
 // Helper functions
@@ -1086,6 +1093,9 @@ void ADC1_2_IRQHandler(void){
     // calculate all values in the new angle frame; this update is ignored by the speed calculation.
     readout.angle += external_angle_offset;
     external_angle_offset = 0;
+
+    readout.rotations += external_rotations_offset;
+    external_rotations_offset = 0;
 
     // Predict the position; keeping track of fractional angles at the same resolution as
     // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 

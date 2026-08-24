@@ -1113,6 +1113,28 @@ function read_SetAngle(view, offset = 0) {
   offset += 4;
   return result;
 }
+export class SetRotations {
+  // Set the number of rotations, used to home the motor.
+  rotations;
+  
+  constructor(init) {Object.assign(this, init);}
+}
+
+function write_SetRotations(value) {
+  const buffer = new Uint8Array(4);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  view.setInt32(offset, value.rotations)
+  offset += 4;
+  return buffer;
+}
+function read_SetRotations(view, offset = 0) {
+  let result = new SetRotations();
+  
+  result.rotations = view.getInt32(offset);
+  offset += 4;
+  return result;
+}
 // Message Codes
 const NULL_MESSAGE_CODE = 0;
 const READOUT = 8224;
@@ -1154,6 +1176,7 @@ const SET_CONTROL_PARAMETERS = 16458;
 const GET_CONTROL_PARAMETERS = 16459;
 const RESET_CONTROL_PARAMETERS = 16460;
 const SET_ANGLE = 16464;
+const SET_ROTATIONS = 16465;
 const SAVE_SETTINGS_TO_FLASH = 16512;
 const SETTINGS_SAVED_TO_FLASH = 16513;
 const UNIT_TEST_OUTPUT = 20544;
@@ -1203,6 +1226,7 @@ export const MessageCode = {
   GET_CONTROL_PARAMETERS,
   RESET_CONTROL_PARAMETERS,
   SET_ANGLE,
+  SET_ROTATIONS,
   SAVE_SETTINGS_TO_FLASH,
   SETTINGS_SAVED_TO_FLASH,
   UNIT_TEST_OUTPUT,
@@ -1519,6 +1543,14 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
+    case SET_ROTATIONS: {
+      const message_buffer = write_SetRotations(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
     case SAVE_SETTINGS_TO_FLASH: {
       const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
@@ -1802,6 +1834,12 @@ export function read_message(buffer) {
       if (buffer.length !== 2 + 4) return null;
       let message = read_SetAngle(view, 2);
       message.message_code = SET_ANGLE;
+      return message;
+    }
+    case SET_ROTATIONS: {
+      if (buffer.length !== 2 + 4) return null;
+      let message = read_SetRotations(view, 2);
+      message.message_code = SET_ROTATIONS;
       return message;
     }
     case SAVE_SETTINGS_TO_FLASH: {

@@ -142,6 +142,10 @@ message_codes:
   SET_ANGLE:
     message_code: 0x4050
     type: SetAngle
+  SET_ROTATIONS:
+    message_code: 0x4051
+    type: SetRotations
+
   SAVE_SETTINGS_TO_FLASH:
     message_code: 0x4080  
   SETTINGS_SAVED_TO_FLASH:
@@ -789,3 +793,9 @@ definitions:
       angle:
         type: int32
         doc: Set the current angle of the motor; used for initial angle calibration.
+
+  SetRotations:
+    struct:
+      rotations:
+        type: int32
+        doc: Set the number of rotations, used to home the motor.
