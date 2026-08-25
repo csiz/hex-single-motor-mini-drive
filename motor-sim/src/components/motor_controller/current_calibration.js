@@ -9,10 +9,54 @@ import {product_of_normals} from "./stats_utils.js";
 
 import * as d3 from "d3";
 
-const min_inductance = 0.000_001;
-const min_inductance_noise = 0.000_000_1;
-const min_resistance_noise = 0.000_1;
-const min_degree_noise = 1.0;
+
+const rate_increase = 1.2;
+const rate_decrease = 0.5;
+const stability_threshold = 0.000_1;
+const max_iterations = 100;
+
+
+
+function optimizer_init(init) {
+  return Object.fromEntries(Object.entries(init).map(([key, {value, max_learning_rate}]) => {
+    return [key, {
+      value,
+      learning_rate: max_learning_rate,
+      max_learning_rate,
+      gradient_sign: 0.0,
+    }];
+  }));
+}
+
+function optimizer_update(params, gradients) {
+  let is_stable = true;
+
+  for (const [key, gradient] of Object.entries(gradients)) {
+    let parameter = params[key];
+
+    if (parameter === undefined) {
+      throw new Error(`Parameter ${key} not found in optimizer parameters`);
+    }
+
+    const sign = Math.sign(gradient);
+    const prev_sign = parameter.gradient_sign;
+    if (sign === prev_sign) {
+      parameter.learning_rate = Math.min(parameter.learning_rate * rate_increase, parameter.max_learning_rate);
+    } else {
+      parameter.learning_rate = parameter.learning_rate * rate_decrease;
+    }
+
+    parameter.gradient_sign = sign;
+
+    parameter.value -= sign * parameter.learning_rate;
+
+    if (parameter.learning_rate >= (parameter.max_learning_rate * stability_threshold)) {
+      is_stable = false;
+    }
+  }
+
+  return is_stable;
+}
 
 export async function run_current_calibration(motor_controller, message_options) {
   if (!motor_controller.current_calibration) {
@@ -21,6 +65,7 @@ export async function run_current_calibration(motor_controller, message_options)
   }
 
   const current_calibration = {...motor_controller.current_calibration};
+  const control_parameters = motor_controller.control_parameters;
 
   console.info("Current calibration starting");
 
@@ -40,29 +85,40 @@ export async function run_current_calibration(motor_controller, message_options)
     return;
   }
 
-  let {
-    u_resistance, 
-    v_resistance, 
-    w_resistance, 
-    inductance,
-    magnetization_angle,
-    magnetization_factor,
-    predicted_angle,
-  } = current_calibration;
+  let parameters = optimizer_init({
+    u_resistance: {
+      value: current_calibration.u_resistance, 
+      max_learning_rate: control_parameters.phase_resistance_ki,
+    },
+    v_resistance: {
+      value: current_calibration.v_resistance, 
+      max_learning_rate: control_parameters.phase_resistance_ki,
+    },
+    w_resistance: {
+      value: current_calibration.w_resistance, 
+      max_learning_rate: control_parameters.phase_resistance_ki,
+    },
+    inductance: {
+      value: current_calibration.inductance, 
+      max_learning_rate: control_parameters.phase_inductance_ki,
+    },
+    magnetization_angle: {
+      value: current_calibration.magnetization_angle, 
+      max_learning_rate: control_parameters.magnetization_angle_ki,
+    },
+    magnetization_factor: {
+      value: current_calibration.magnetization_factor, 
+      max_learning_rate: control_parameters.magnetization_factor_ki,
+    },
+    predicted_angle: {
+      value: 0.0, 
+      max_learning_rate: control_parameters.magnetization_angle_ki,
+    },
+  });
 
-  const {
-    phase_resistance_ki,
-    phase_inductance_ki,
-    magnetization_angle_ki,
-    magnetization_factor_ki,
-  } = motor_controller.control_parameters;
-
-  predicted_angle = 0.0;
 
   let is_stable = false;
 
-  const max_iterations = 300;
-  const stability_threshold = 0.000_001;
   let iterations = [];
 
   for (let i = 0; !is_stable && (i < max_iterations); i++) {
@@ -80,22 +136,18 @@ export async function run_current_calibration(motor_controller, message_options)
       const v_scaled_current_diff = v_current_diff * pwm_cycles_per_second;
       const w_scaled_current_diff = w_current_diff * pwm_cycles_per_second;
 
-      const u_resistive_voltage = u_current * u_resistance;
-      const v_resistive_voltage = v_current * v_resistance;
-      const w_resistive_voltage = w_current * w_resistance;
+      const u_resistive_voltage = u_current * parameters.u_resistance.value;
+      const v_resistive_voltage = v_current * parameters.v_resistance.value;
+      const w_resistive_voltage = w_current * parameters.w_resistance.value;
 
-      const u_inductance_voltage = u_scaled_current_diff * inductance;
-      const v_inductance_voltage = v_scaled_current_diff * inductance;
-      const w_inductance_voltage = w_scaled_current_diff * inductance;
-
-      const u_inductance_power = u_inductance_voltage * u_current;
-      const v_inductance_power = v_inductance_voltage * v_current;
-      const w_inductance_power = w_inductance_voltage * w_current;
+      const u_inductance_voltage = u_scaled_current_diff * parameters.inductance.value;
+      const v_inductance_voltage = v_scaled_current_diff * parameters.inductance.value;
+      const w_inductance_voltage = w_scaled_current_diff * parameters.inductance.value;
 
       const inductance_power_ish = square(current_magnitude) * Math.abs(current_angular_speed);
-      const inductance_power_emf = magnetization_factor * inductance_power_ish;
+      const inductance_power_emf = parameters.magnetization_factor.value * inductance_power_ish;
 
-      const wtf_angle = 2*current_angle - magnetization_angle;
+      const wtf_angle = 2*current_angle - parameters.magnetization_angle.value;
 
       const u_wtf = inductance_power_emf * Math.cos(wtf_angle);
       const v_wtf = inductance_power_emf * Math.cos(wtf_angle - 2 * Math.PI / 3);
@@ -134,20 +186,20 @@ export async function run_current_calibration(motor_controller, message_options)
 
       const residual_square = square(u_residual) + square(v_residual) + square(w_residual);
       
-      const residual_square_prediction = square(inductance_power_emf * (0.5 + 0.5 * Math.cos(current_angle - predicted_angle)));
+      const residual_square_prediction = square(inductance_power_emf * (0.5 + 0.5 * Math.cos(current_angle - parameters.predicted_angle.value)));
 
       const residual2 = residual_square_prediction - residual_square;
 
       const loss2 = Math.abs(residual2);
 
-      const predicted_angle_gradient = residual2 * square(inductance_power_emf) * Math.sin(current_angle - predicted_angle);
+      const predicted_angle_gradient = residual2 * square(inductance_power_emf) * Math.sin(current_angle - parameters.predicted_angle.value);
 
       const magnet_distortion = 20.0 * Math.PI / 180.0;
       const magnet_distortion_factor = 0.5;
 
-      const u_wtf2 = inductance_power_emf * Math.cos(wtf_angle + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
-      const v_wtf2 = inductance_power_emf * Math.cos(wtf_angle - 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
-      const w_wtf2 = inductance_power_emf * Math.cos(wtf_angle + 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - predicted_angle)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - predicted_angle));
+      const u_wtf2 = inductance_power_emf * Math.cos(wtf_angle + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
+      const v_wtf2 = inductance_power_emf * Math.cos(wtf_angle - 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
+      const w_wtf2 = inductance_power_emf * Math.cos(wtf_angle + 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
 
       return {
         ...readout,
@@ -198,32 +250,33 @@ export async function run_current_calibration(motor_controller, message_options)
     // 
     // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
 
+    is_stable = optimizer_update(parameters, {
+      u_resistance: d3.mean(gradients, (d) => d.u_resistance_gradient),
+      v_resistance: d3.mean(gradients, (d) => d.v_resistance_gradient),
+      w_resistance: d3.mean(gradients, (d) => d.w_resistance_gradient),
+      inductance: d3.mean(gradients, (d) => d.inductance_gradient),
+      magnetization_factor: d3.mean(gradients, (d) => d.magnetization_factor_gradient),
+      magnetization_angle: d3.mean(gradients, (d) => d.magnetization_angle_gradient),
+      predicted_angle: d3.mean(gradients, (d) => d.predicted_angle_gradient),
+    });
 
-    const u_resistance_step = phase_resistance_ki * d3.mean(gradients, (d) => d.u_resistance_gradient);
-    const v_resistance_step = phase_resistance_ki * d3.mean(gradients, (d) => d.v_resistance_gradient);
-    const w_resistance_step = phase_resistance_ki * d3.mean(gradients, (d) => d.w_resistance_gradient);
-
-    const inductance_step = phase_inductance_ki * d3.mean(gradients, (d) => d.inductance_gradient);
-    const magnetization_factor_step = magnetization_factor_ki * d3.mean(gradients, (d) => d.magnetization_factor_gradient);
-    const magnetization_angle_step = magnetization_angle_ki * d3.mean(gradients, (d) => d.magnetization_angle_gradient);
-    const predicted_angle_step = magnetization_angle_ki * d3.mean(gradients, (d) => d.predicted_angle_gradient);
 
     const sqrt_loss2 = Math.sqrt(d3.mean(gradients, (d) => d.loss2)); 
     
-    const angle_diff = normalize_radians(predicted_angle - magnetization_angle);
+    const angle_diff = normalize_radians(parameters.predicted_angle.value - parameters.magnetization_angle.value);
 
 
     iterations.push({
       iteration: i,
       current_calibration: {
         ...current_calibration,
-        u_resistance, 
-        v_resistance, 
-        w_resistance, 
-        inductance,
-        magnetization_angle,
-        magnetization_factor,
-        predicted_angle,
+        u_resistance: parameters.u_resistance.value, 
+        v_resistance: parameters.v_resistance.value,
+        w_resistance: parameters.w_resistance.value,
+        inductance: parameters.inductance.value,
+        magnetization_angle: parameters.magnetization_angle.value,
+        magnetization_factor: parameters.magnetization_factor.value,
+        predicted_angle: parameters.predicted_angle.value,
         angle_diff,
         sqrt_loss,
         sqrt_loss2,
@@ -233,32 +286,13 @@ export async function run_current_calibration(motor_controller, message_options)
     
     // Update calibration values after pushing the iteration data! The iteration should then
     // contain the calibration values that were used to calculate the gradients and other values.
-    u_resistance -= u_resistance_step;
-    v_resistance -= v_resistance_step;
-    w_resistance -= w_resistance_step;
 
-    inductance = Math.max(min_inductance, inductance - inductance_step);
+    parameters.inductance.value = Math.max(0.0, parameters.inductance.value);
     
-    magnetization_factor -= magnetization_factor_step;
-
-    magnetization_angle = normalize_radians(magnetization_angle - magnetization_angle_step);
-
-    predicted_angle = normalize_radians(predicted_angle - predicted_angle_step);
-
-    if (magnetization_factor < 0.0) {
-      magnetization_factor = -magnetization_factor;
-      magnetization_angle = normalize_radians(magnetization_angle + Math.PI);
+    if (parameters.magnetization_factor.value < 0.0) {
+      parameters.magnetization_factor.value = -parameters.magnetization_factor.value;
+      parameters.magnetization_angle.value = normalize_radians(parameters.magnetization_angle.value + Math.PI);
     }
-
-    // Stop iterating if all changes are under the threshold.
-    is_stable = (
-      (Math.abs(u_resistance_step) < stability_threshold) &&
-      (Math.abs(v_resistance_step) < stability_threshold) &&
-      (Math.abs(w_resistance_step) < stability_threshold) &&
-      (Math.abs(inductance_step) < stability_threshold) &&
-      (Math.abs(magnetization_factor_step) < stability_threshold) &&
-      (Math.abs(magnetization_angle_step) < stability_threshold)
-    );
   }
 
   const current_calibration_data = {
@@ -267,13 +301,13 @@ export async function run_current_calibration(motor_controller, message_options)
     iterations,
     current_calibration: {
       ...current_calibration,
-      u_resistance,
-      v_resistance,
-      w_resistance,
-      inductance,
-      magnetization_angle,
-      magnetization_factor,
-      predicted_angle,
+      u_resistance: parameters.u_resistance.value,
+      v_resistance: parameters.v_resistance.value,
+      w_resistance: parameters.w_resistance.value,
+      inductance: parameters.inductance.value,
+      magnetization_angle: parameters.magnetization_angle.value,
+      magnetization_factor: parameters.magnetization_factor.value,
+      predicted_angle: parameters.predicted_angle.value,
     }
   };
 

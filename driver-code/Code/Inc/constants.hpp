@@ -369,10 +369,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_kp = 1.0f,
     .seek_kd = 0.0f,
 
-    .phase_resistance_ki = 0.01f,
-    .phase_inductance_ki = 0.000'000'001f,
-    .magnetization_angle_ki = 10.0f,
-    .magnetization_factor_ki = 0.001'000f,
+    .phase_resistance_ki = 0.1f,
+    .phase_inductance_ki = 0.000'1f,
+    .magnetization_angle_ki = 3.14f,
+    .magnetization_factor_ki = 0.01f,
     .motor_constant_ki = std::pow(2, -11),
 };
 
