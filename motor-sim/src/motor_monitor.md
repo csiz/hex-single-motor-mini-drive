@@ -1503,7 +1503,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
     {y: "u_resistance_gradient", label: "U Resistance Gradient", color: colors.u},
     {y: "v_resistance_gradient", label: "V Resistance Gradient", color: colors.v},
     {y: "w_resistance_gradient", label: "W Resistance Gradient", color: colors.w},
-    {y: (d)=>(d.inductance_base_gradient / pwm_cycles_per_second), label: "Inductance Base Gradient", color: colors_categories[1]},
+    {y: "inductance_gradient", label: "Inductance Gradient", color: colors_categories[1]},
     {y: "saturation_current_gradient", label: "Saturation Current Gradient", color: colors_categories[2]},
     {y: "predicted_angle_gradient", label: "Predicted Angle Gradient", color: colors_categories[3]},
   ],
@@ -1556,8 +1556,8 @@ const control_parameters_input = Object.fromEntries(
       label: "Motor direction", 
       description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."
     }],
-    ["angle_fix_certainty", {
-      label: "Angle Fix Certainty", 
+    ["angle_fix_max_certainty", {
+      label: "Angle Fix Max Certainty", 
       description: "Number of incorrect direction detections before losing the angle fix."
     }],
     ["vcc_undervoltage", {

@@ -50,6 +50,13 @@ export async function run_current_calibration(motor_controller, message_options)
     predicted_angle,
   } = current_calibration;
 
+  const {
+    phase_resistance_ki,
+    phase_inductance_ki,
+    magnetization_angle_ki,
+    magnetization_factor_ki,
+  } = motor_controller.control_parameters;
+
   predicted_angle = 0.0;
 
   let is_stable = false;
@@ -57,25 +64,6 @@ export async function run_current_calibration(motor_controller, message_options)
   const max_iterations = 300;
   const stability_threshold = 0.000_001;
   let iterations = [];
-
-  let u_resistance_rate = 0.01;
-  let v_resistance_rate = 0.01;
-  let w_resistance_rate = 0.01;
-  let inductance_rate = 0.000_01;
-  let magnetization_factor_rate = 0.000_001;
-  let magnetization_angle_rate = 1.0;
-  let predicted_angle_rate = 1.0;
-
-  let u_resistance_sign = 0.0;
-  let v_resistance_sign = 0.0;
-  let w_resistance_sign = 0.0;
-  let inductance_sign = 0.0;
-  let magnetization_factor_sign = 0.0;
-  let magnetization_angle_sign = 0.0;
-  let predicted_angle_sign = 0.0;
-
-  const rate_increase = 1.2;
-  const rate_decrease = 0.5;
 
   for (let i = 0; !is_stable && (i < max_iterations); i++) {
 
@@ -204,36 +192,21 @@ export async function run_current_calibration(motor_controller, message_options)
 
     const sqrt_loss = Math.sqrt(d3.mean(gradients, (d) => d.loss));
 
-    function compute_rate(records, accessor, rate, previous_sign) {
-      const sign = Math.sign(d3.mean(records, accessor));
-      if (sign === previous_sign) {
-        return [rate * rate_increase, sign];
-      } else {
-        return [rate * rate_decrease, sign];
-      }
-    }
 
     // Resilient Backpropagation
     // -------------------------
     // 
     // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
 
-    [u_resistance_rate, u_resistance_sign] = compute_rate(gradients, (d) => d.u_resistance_gradient, u_resistance_rate, u_resistance_sign);
-    [v_resistance_rate, v_resistance_sign] = compute_rate(gradients, (d) => d.v_resistance_gradient, v_resistance_rate, v_resistance_sign);
-    [w_resistance_rate, w_resistance_sign] = compute_rate(gradients, (d) => d.w_resistance_gradient, w_resistance_rate, w_resistance_sign);
-    [inductance_rate, inductance_sign] = compute_rate(gradients, (d) => d.inductance_gradient, inductance_rate, inductance_sign);
-    [magnetization_factor_rate, magnetization_factor_sign] = compute_rate(gradients, (d) => d.magnetization_factor_gradient, magnetization_factor_rate, magnetization_factor_sign);
-    [magnetization_angle_rate, magnetization_angle_sign] = compute_rate(gradients, (d) => d.magnetization_angle_gradient, magnetization_angle_rate, magnetization_angle_sign);
-    [predicted_angle_rate, predicted_angle_sign] = compute_rate(gradients, (d) => d.predicted_angle_gradient, predicted_angle_rate, predicted_angle_sign);
 
-    const u_resistance_step = u_resistance_rate * u_resistance_sign;
-    const v_resistance_step = v_resistance_rate * v_resistance_sign;
-    const w_resistance_step = w_resistance_rate * w_resistance_sign;
+    const u_resistance_step = phase_resistance_ki * d3.mean(gradients, (d) => d.u_resistance_gradient);
+    const v_resistance_step = phase_resistance_ki * d3.mean(gradients, (d) => d.v_resistance_gradient);
+    const w_resistance_step = phase_resistance_ki * d3.mean(gradients, (d) => d.w_resistance_gradient);
 
-    const inductance_step = inductance_rate * inductance_sign;
-    const magnetization_factor_step = magnetization_factor_rate * magnetization_factor_sign;
-    const magnetization_angle_step = magnetization_angle_rate * magnetization_angle_sign;
-    const predicted_angle_step = predicted_angle_rate * predicted_angle_sign;
+    const inductance_step = phase_inductance_ki * d3.mean(gradients, (d) => d.inductance_gradient);
+    const magnetization_factor_step = magnetization_factor_ki * d3.mean(gradients, (d) => d.magnetization_factor_gradient);
+    const magnetization_angle_step = magnetization_angle_ki * d3.mean(gradients, (d) => d.magnetization_angle_gradient);
+    const predicted_angle_step = magnetization_angle_ki * d3.mean(gradients, (d) => d.predicted_angle_gradient);
 
     const sqrt_loss2 = Math.sqrt(d3.mean(gradients, (d) => d.loss2)); 
     
@@ -265,11 +238,17 @@ export async function run_current_calibration(motor_controller, message_options)
     w_resistance -= w_resistance_step;
 
     inductance = Math.max(min_inductance, inductance - inductance_step);
-    magnetization_factor = Math.max(0.000_000_001, magnetization_factor - magnetization_factor_step);
+    
+    magnetization_factor -= magnetization_factor_step;
 
     magnetization_angle = normalize_radians(magnetization_angle - magnetization_angle_step);
 
     predicted_angle = normalize_radians(predicted_angle - predicted_angle_step);
+
+    if (magnetization_factor < 0.0) {
+      magnetization_factor = -magnetization_factor;
+      magnetization_angle = normalize_radians(magnetization_angle + Math.PI);
+    }
 
     // Stop iterating if all changes are under the threshold.
     is_stable = (
