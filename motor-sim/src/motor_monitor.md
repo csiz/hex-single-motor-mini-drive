@@ -34,7 +34,7 @@ monitor page can be found written somewhere in this file.
 
 Motor Commands
 --------------
-
+<div class="card tight">
 <div>${connect_buttons}</div>
 <div>${connection_status}</div>
 <div>${opened_ports_radio}</div>
@@ -61,6 +61,7 @@ Motor Commands
   <span>${seek_drive_buttons}</span>
   <span>${command_seek_rotation_slider}</span>
   <span>${shared_seek_buttons}</span>
+</div>
 </div>
 
 
@@ -96,12 +97,15 @@ Current Calibration Procedures
 
 <div class="card tight">
   <div>${current_calibration_buttons}</div>
+  <p>Active electrical phase properties:</p>
+  <pre>${active_current_calibration_table}</pre>
+  <div>${Object.values(current_calibration_input)}</div>
+</div>
+<div class="card tight">
   <div>${current_calibration_run_buttons}</div>
   <div>${current_calibration_pwm_slider}</div>
   <div>${current_calibration_test_speed_slider}</div>
   <div>${current_calibration_test_duration_slider}</div>
-</div>
-<div class="card tight">
   <h3>Current Calibration Results</h3>
   <div>${current_calibration_optimization_iteration_input}</div>
   <div>
@@ -111,10 +115,7 @@ Current Calibration Procedures
     <div>${current_calibration_angles_plot}</div>
     <div>${current_calibration_optimizing_gradients_plot}</div>
   </div>
-  <div>
-    <p>Active electrical phase properties:</p>
-    <pre>${active_current_calibration_table}</pre>
-  </div>
+
 </div>
 
 
@@ -1327,15 +1328,81 @@ function stringify_active_current_calibration() {
 
 const active_current_calibration_table =  Mutable(stringify_active_current_calibration());
 
+
+const current_calibration_input = Object.fromEntries(
+  [
+    ["u_resistance", {
+      label: "U Resistance", 
+      description: `The resistance of u phase coil.`
+    }],
+    ["v_resistance", {
+      label: "V Resistance", 
+      description: `The resistance of v phase coil.`
+    }],
+    ["w_resistance", {
+      label: "W Resistance", 
+      description: `The resistance of w phase coil.`
+    }],
+    ["inductance", {
+      label: "Phase Inductance", 
+      description: `The inductance of the motor's phases.`
+    }],
+    ["magnetization_angle", {
+      label: "Magnetization Angle", 
+      description: `The angle of the motor's magnetization.`
+    }],
+    ["magnetization_factor", {
+      label: "Magnetization Factor", 
+      description: `The factor of the motor's magnetization.`
+    }],
+    ["predicted_angle", {
+      label: "Predicted Angle", 
+      description: `The predicted angle of the rotor.`
+    }],
+    ["motor_constant", {
+      label: "Motor Constant", 
+      description: `The motor constant, which relates torque and current, or speed and emf.`
+    }],
+    ["friction_torque", {
+      label: "Friction Torque", 
+      description: `The torque required to overcome the motor's friction.`
+    }],
+    ["rotor_mass", {
+      label: "Rotor Mass", 
+      description: `The mass of the rotor.`
+    }],
+  ].map(([key, {label, description}]) => {
+
+    let parameter_input = Inputs.number([], {
+      label,
+      value: motor_controller?.current_calibration?.[key],
+    });
+
+    d3.select(parameter_input).style("width", "100%").style("margin", "1em 0em 1em 0em")
+      .select("div").style("width", "50em")
+        .append("span").text(description).style("margin", "0em 1em 0em 1em").style("width", "100em");
+
+    return [key, parameter_input];
+  })
+);
+
+    
 function show_active_current_calibration() {
   active_current_calibration_table.value = stringify_active_current_calibration();
+  Object.entries(current_calibration_input).forEach(([key, input]) => {
+    input.value = motor_controller?.current_calibration?.[key];
+  });
 }
 
 const current_calibration_data = Mutable(null);
 
 const update_current_calibration_data = (new_value) => {
   current_calibration_data.value = new_value;
-  show_active_current_calibration();
+  if (new_value.is_stable) {
+    Object.entries(current_calibration_input).forEach(([key, input]) => {
+      input.value = new_value.current_calibration[key];
+    });
+  }
 };
 ```
 
@@ -1366,9 +1433,11 @@ d3.select(current_calibration_run_buttons).selectAll("button").style("height", "
 const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
     ["Upload to Driver", async function(){
-      if (!motor_controller || !current_calibration_data || !current_calibration_data.is_stable) return;
-      await motor_controller.upload_current_calibration(current_calibration_data.current_calibration);
+      if (!motor_controller) return;
+      const current_calibration = Object.fromEntries(Object.entries(current_calibration_input).map(([key, input]) => [key, input.value]));
+      await motor_controller.upload_current_calibration(current_calibration);
       show_active_current_calibration();
+      unsaved_changes();
     }],
     ["Reload from Driver", async function(){
       await motor_controller.load_current_calibration();
@@ -1377,6 +1446,7 @@ const current_calibration_buttons = !motor_controller ? html`<p>Not connected to
     ["Reset to Defaults", async function(){
       await motor_controller.reset_current_calibration();
       show_active_current_calibration();
+      unsaved_changes();
     }],
   ],
   {
