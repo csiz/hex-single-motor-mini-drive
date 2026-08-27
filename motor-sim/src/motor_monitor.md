@@ -437,7 +437,13 @@ async function take_readout_snapshot(command_options = {}){
 // Run the test driving commands. The test commands can send a snapshot taken
 // during the test procedure if requested (using the timeout parameter as a flag.)
 async function test_command(message_code){
-  const message = {message_code, pwm_value: command_pwm, take_snapshot: command_snapshot ? 1 : 0};
+  const message = {
+    message_code, 
+    pwm_value: command_pwm, 
+    test_speed: command_angular_speed,
+    test_duration: command_timeout,
+    take_snapshot: command_snapshot ? 1 : 0,
+  };
 
   if (command_snapshot){
     await take_readout_snapshot({
