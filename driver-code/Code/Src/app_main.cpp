@@ -12,11 +12,14 @@
 #include <stm32g4xx_ll_cordic.h>
 
 
+// Keep track of how many readouts we see.
+uint16_t last_readout_number = 0;
+
 // Main loop stats tracking
 // ------------------------
 uint32_t main_loop_number = 0;
-uint32_t last_loop_number = 0;
-uint16_t last_readout_number = 0;
+uint32_t timing_loop_number = 0;
+uint16_t timing_readout_number = 0;
 
 
 const uint32_t min_timing_period_millis = 50;
@@ -691,6 +694,33 @@ void app_tick() {
 
   hex_mini_drive::FullReadout readout = get_readout();
 
+  // Limits
+  // ------
+
+  const uint16_t readouts_since_last_tick = (readout_number_base + readout.readout_number - last_readout_number) % readout_number_base;
+
+  last_readout_number = readout.readout_number;
+  
+  // Reduce the maximum output PWM to keep within safe limits:
+  // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
+  // let the battery recharge our local capacitors.
+  // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
+  // 3. The total power is a good proxy for total current consumed from the battery.
+  // 
+  // The penalty should normally be negative indicating we can increase the PWM.
+  const bool pwm_too_high = (
+      (readout.vcc_voltage < control_parameters.vcc_undervoltage) or
+      (readout.resistive_power_average > control_parameters.max_resistive_power) or
+      (readout.total_power_average > control_parameters.max_power_draw)
+  );
+
+  const float pwm_penalty = (0.1f - 10.f * pwm_too_high) * readouts_since_last_tick;
+
+  set_live_max_pwm(
+    clip_to(0, pwm_max, readout.live_max_pwm + pwm_penalty)
+  );
+
+
   // Timing
   // ------
 
@@ -703,11 +733,11 @@ void app_tick() {
     
     float seconds = duration_since_timing_update / 1000.f;
 
-    main_loop_rate = (main_loop_number - last_loop_number) / seconds;
-    adc_update_rate = ((readout_number_base + readout.readout_number - last_readout_number) % readout_number_base) / seconds;
+    main_loop_rate = (main_loop_number - timing_loop_number) / seconds;
+    adc_update_rate = ((readout_number_base + readout.readout_number - timing_readout_number) % readout_number_base) / seconds;
 
-    last_loop_number = main_loop_number;
-    last_readout_number = readout.readout_number;
+    timing_loop_number = main_loop_number;
+    timing_readout_number = readout.readout_number;
   }
 
   

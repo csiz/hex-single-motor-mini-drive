@@ -70,6 +70,9 @@ volatile int32_t external_angle_offset = 0;
 // Also offset the current rotations counter.
 volatile int32_t external_rotations_offset = 0;
 
+// Compute the max pwm in the main loop to save cycles in the tight loop.
+volatile float live_max_pwm = pwm_max;
+
 // Additional state
 // ----------------
 
@@ -180,6 +183,10 @@ void set_angle(int32_t angle) {
 
 void set_rotations(int32_t rotations) {
     external_rotations_offset = rotations - latest_readout.rotations;
+}
+
+void set_live_max_pwm(float pwm) {
+    live_max_pwm = pwm;
 }
 
 // Helper functions
@@ -1339,21 +1346,6 @@ void ADC1_2_IRQHandler(void){
         readout.total_power_average + 
         (total_power - readout.total_power_average) * control_parameters.power_draw_ki
     );
-
-    // Reduce the maximum output PWM to keep within safe limits:
-    // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
-    // let the battery recharge our local capacitors.
-    // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
-    // 3. The total power is a good proxy for total current consumed from the battery.
-    // 
-    // The penalty should normally be negative indicating we can increase the PWM.
-    const bool pwm_penalty = (
-        (readout.vcc_voltage < control_parameters.vcc_undervoltage) or
-        (resistive_power_average > control_parameters.max_resistive_power) or
-        (total_power_average > control_parameters.max_power_draw)
-    );
-
-    const float live_max_pwm = clip_to(0, pwm_max, readout.live_max_pwm + 0.1f - 10.f * pwm_penalty);
 
 
     // Write the latest readout data

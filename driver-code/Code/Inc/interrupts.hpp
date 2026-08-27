@@ -61,6 +61,9 @@ void set_angle(int32_t angle);
 // Offset the rotations counter to home the motor.
 void set_rotations(int32_t rotations);
 
+// Set the live maximum PWM value for the motor driver.
+void set_live_max_pwm(float live_max_pwm);
+
 // Position tracking
 // -----------------
 
