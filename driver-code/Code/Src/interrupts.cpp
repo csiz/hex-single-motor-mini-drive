@@ -1030,14 +1030,26 @@ void ADC1_2_IRQHandler(void){
 
     // Do the data calculations
     // ------------------------
+    // 
+    // ! It appears the inductor voltages are negligible, even at high speeds (they appear to bias the EMF by just 2 
+    // degrees). However at low speeds the voltages are very noisy due to the current measurements being noisy and
+    // this masks the low speed EMF.
+    // 
+    // We can use an exponential filter on the current diffs and the equations remain invariant as long as we use
+    // the exact same filter for drive_voltages and currents. However this filter introduces a phase lag and that
+    // appears to be more detrimental than just ignoring the current diffs and inductor voltages altogether.
+    // 
+    // I've attempted to use the finite differences approach `diff(x) = ((x[n] - x[n-1]) + (x[n+1] - x[n])) / (2 * dt)`
+    // but it doesn't work as well as exponential filtering. In any case, we have now dropped both adjustments.
+
 
     // Average the temperature readings since we are sampling quicker than the manufacturer indicates.
     // We can't extend the sampling time longer than it is set at the moment (about half the recommendation),
     // so we have to massage the readings for noise. Temperature varies slowly anyway.
-    const float temperature = (adc_readings.temp_readout + readout.temperature * 3) * 0.25f;
+    const float temperature = (adc_readings.temp_readout * 0.25f + readout.temperature * 0.75f);
 
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
-    const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion + readout.vcc_voltage * 3) * 0.25f;
+    const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion * 0.25f + readout.vcc_voltage * 0.75f);
     
     // Get the motor duties that were set at the mid point of the PWM cycle, between current readings.
     const ThreePhase motor_outputs = {
@@ -1073,12 +1085,7 @@ void ADC1_2_IRQHandler(void){
         -(static_cast<float>(adc_readings.w_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units
     });
 
-    // TODO: the below is no longer accurate, let's investigate later, for now keep the more basic calculation.
-    // Get calibrated current divergence (the time unit is defined as 1 per cycle). We average out the
-    // current diffs exactly as we do with the motor outputs; this seems to work best, can't explain why.
-    //
-    // I've attempted to use the finite differences approach `diff(x) = ((x[n] - x[n-1]) + (x[n+1] - x[n])) / (2 * dt)`
-    // but it doesn't work as well as averaging both motor outputs and single step current diff.
+    // Calculate the differential of the currents.
     const ThreePhase currents_diff = currents - get_currents(readout);
 
     // Calculate the voltage drop across the coil inductance.
@@ -1162,7 +1169,7 @@ void ADC1_2_IRQHandler(void){
 
     // Calculate the angle at which the current is running on the motor coils. The angle offset is
     // with respect to the predicted angle as that was the angle used in the park transform.
-    const auto [current_angle_offset, instant_current_magnitude] = get_cordic();
+    const auto [current_angle_offset, current_magnitude] = get_cordic();
 
     // We can queue up the CORDIC engine for the next calculation before we read the first (I think).
     set_cordic(direct_emf_voltage, quadrature_emf_voltage);
@@ -1171,10 +1178,7 @@ void ADC1_2_IRQHandler(void){
     const int32_t current_angle = predicted_angle + current_angle_offset;
     
     // The current measurements have a low noise floor, but it's not 0.
-    const bool current_detected = instant_current_magnitude > current_measurement_minimum;
-    
-    // Average the current magnitude over a short duration to reduce noise.
-    const float current_magnitude = (instant_current_magnitude + readout.current_magnitude * 3) * 0.25f;
+    const bool current_detected = current_magnitude > current_measurement_minimum;
     
     const float current_angular_speed = static_cast<float>(current_angle - readout.current_angle);
 
@@ -1182,7 +1186,7 @@ void ADC1_2_IRQHandler(void){
     // -----------------------
 
     // Get the angle measured from EMF relative to the predicted rotor angle.
-    const auto [emf_voltage_angle_offset, instant_emf_voltage_magnitude] = get_cordic();
+    const auto [emf_voltage_angle_offset, emf_voltage_magnitude] = get_cordic();
 
     // Also calculate the EMF angle for completeness.
     const int32_t instant_emf_voltage_angle = predicted_angle + emf_voltage_angle_offset;
@@ -1208,14 +1212,11 @@ void ADC1_2_IRQHandler(void){
     );
     
     
-    // Average the EMF voltage magnitude over a short duration to reduce noise.
-    const float emf_voltage_magnitude = (instant_emf_voltage_magnitude + readout.emf_voltage_magnitude * 3) * 0.25f;
-    
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
     const float emf_angle_error_variance = (
-        square(emf_angle_error) + 
-        readout.emf_angle_error_variance * 3
-    ) * 0.25f;
+        square(emf_angle_error) * 0.25f + 
+        readout.emf_angle_error_variance * 0.75f
+    );
     
     
     // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and

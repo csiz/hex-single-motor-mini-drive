@@ -210,6 +210,14 @@ static_assert(driver_state_size <= 64, "DriverState size exceeds 64 bytes, try t
 // Three phase helper functions
 // ----------------------------
 
+// Extract the three phase drive voltages from the readout.
+static inline ThreePhase get_drive_voltages(hex_mini_drive::FullReadout const& readout){
+    return ThreePhase{
+        readout.u_drive_voltage,
+        readout.v_drive_voltage,
+        readout.w_drive_voltage
+    };
+}
 
 // Extract the three phase currents from the readout.
 static inline ThreePhase get_currents(hex_mini_drive::FullReadout const& readout) {
