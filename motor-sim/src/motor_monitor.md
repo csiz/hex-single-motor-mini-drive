@@ -1496,31 +1496,15 @@ const current_calibration_optimizing_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: (d)=>(d.u_inductance_voltage * d.u_current), label: "U Inductor Power", color: colors.u},
-    {y: (d)=>(d.v_inductance_voltage * d.v_current), label: "V Inductor Power", color: colors.v},
-    {y: (d)=>(d.w_inductance_voltage * d.w_current), label: "W Inductor Power", color: colors.w},
-
-    {y: "u_wtf", label: "U WTF", color: d3.color(colors.u).darker(1)},
-    {y: "v_wtf", label: "V WTF", color: d3.color(colors.v).darker(1)},
-    {y: "w_wtf", label: "W WTF", color: d3.color(colors.w).darker(1)},
-
-    {y: "u_wtf2", label: "U WTF2", color: d3.color(colors.u).brighter(1)},
-    {y: "v_wtf2", label: "V WTF2", color: d3.color(colors.v).brighter(1)},
-    {y: "w_wtf2", label: "W WTF2", color: d3.color(colors.w).brighter(1)},
-
-    {y: (d) => -(d.u_residual - d.u_wtf), label: "U Residual - WTF", color: d3.color(colors.u).darker(2)},
-    {y: (d) => -(d.v_residual - d.v_wtf), label: "V Residual - WTF", color: d3.color(colors.v).darker(2)},
-    {y: (d) => -(d.w_residual - d.w_wtf), label: "W Residual - WTF", color: d3.color(colors.w).darker(2)},
-
-    {y: (d) => d.u_residual - d.u_wtf + d.u_wtf2, label: "U Residual - WTF + WTF2", color: d3.color(colors.u).darker(3)},
-    {y: (d) => d.v_residual - d.v_wtf + d.v_wtf2, label: "V Residual - WTF + WTF2", color: d3.color(colors.v).darker(3)},
-    {y: (d) => d.w_residual - d.w_wtf + d.w_wtf2, label: "W Residual - WTF + WTF2", color: d3.color(colors.w).darker(3)},
+    {y: "u_drive_voltage", label: "U Drive Voltage", color: d3.color(colors.u).brighter(1)},
+    {y: "v_drive_voltage", label: "V Drive Voltage", color: d3.color(colors.v).brighter(1)},
+    {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).brighter(1)},
 
     {y: (d)=>Math.sqrt(d.loss2), label: "Sqrt Loss2", color: d3.color(colors_categories[0]).darker(1)},
-    {y: "residual_square_prediction", label: "Predicted Residual Square", color: colors_categories[0]},
+    {y: "residual2_square_prediction", label: "Predicted Residual Square", color: colors_categories[0]},
 
-    {y: "residual_square", label: "Residual Square", color: colors_categories[1]},
-    {y: (d)=>Math.sqrt(d.loss), label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
+    {y: "residual2_square", label: "Residual Square", color: colors_categories[1]},
+    {y: (d)=>Math.sqrt(d.loss1), label: "Sqrt Loss1", color: d3.color(colors_categories[2]).darker(1)},
 
     {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
     {y: "v_resistive_voltage", label: "V Resistance Drop", color: colors.v},
@@ -1530,13 +1514,25 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: "v_inductance_voltage", label: "V Inductance Drop", color: d3.color(colors.v).darker(1)},
     {y: "w_inductance_voltage", label: "W Inductance Drop", color: d3.color(colors.w).darker(1)},
 
-    {y: "u_residual", label: "U Residual", color: d3.color(colors.u).darker(2)},
-    {y: "v_residual", label: "V Residual", color: d3.color(colors.v).darker(2)},
-    {y: "w_residual", label: "W Residual", color: d3.color(colors.w).darker(2)},
+    {y: "u_residual1", label: "U Residual 1", color: d3.color(colors.u).darker(2)},
+    {y: "v_residual1", label: "V Residual 1", color: d3.color(colors.v).darker(2)},
+    {y: "w_residual1", label: "W Residual 1", color: d3.color(colors.w).darker(2)},
 
-    {y: "u_drive_voltage", label: "U Drive Voltage", color: d3.color(colors.u).brighter(1)},
-    {y: "v_drive_voltage", label: "V Drive Voltage", color: d3.color(colors.v).brighter(1)},
-    {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).brighter(1)},
+    {y: (d)=>(d.u_inductance_voltage * d.u_current), label: "U Inductor Power", color: colors.u},
+    {y: (d)=>(d.v_inductance_voltage * d.v_current), label: "V Inductor Power", color: colors.v},
+    {y: (d)=>(d.w_inductance_voltage * d.w_current), label: "W Inductor Power", color: colors.w},
+    
+    {y: "u_magnetization_voltage", label: "U Magnetization Voltage", color: d3.color(colors.u).darker(1)},
+    {y: "v_magnetization_voltage", label: "V Magnetization Voltage", color: d3.color(colors.v).darker(1)},
+    {y: "w_magnetization_voltage", label: "W Magnetization Voltage", color: d3.color(colors.w).darker(1)},
+
+    {y: "u_magnetization_voltage3", label: "U Magnetization Voltage 3", color: d3.color(colors.u).brighter(1)},
+    {y: "v_magnetization_voltage3", label: "V Magnetization Voltage 3", color: d3.color(colors.v).brighter(1)},
+    {y: "w_magnetization_voltage3", label: "W Magnetization Voltage 3", color: d3.color(colors.w).brighter(1)},
+
+    {y: "u_residual2", label: "U Residual 2", color: d3.color(colors.u).darker(2)},
+    {y: "v_residual2", label: "V Residual 2", color: d3.color(colors.v).darker(2)},
+    {y: "w_residual2", label: "W Residual 2", color: d3.color(colors.w).darker(2)},
   ],
   curve,
 });

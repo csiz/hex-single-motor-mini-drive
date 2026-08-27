@@ -86,28 +86,28 @@ export async function run_current_calibration(motor_controller, message_options)
   }
 
   let parameters = optimizer_init({
-    u_resistance: {
-      value: current_calibration.u_resistance, 
+    resistance: {
+      value: 0.0, 
       max_learning_rate: control_parameters.phase_resistance_ki,
     },
-    v_resistance: {
-      value: current_calibration.v_resistance, 
+    resistance_bias: {
+      value: 0.0, 
       max_learning_rate: control_parameters.phase_resistance_ki,
     },
-    w_resistance: {
-      value: current_calibration.w_resistance, 
-      max_learning_rate: control_parameters.phase_resistance_ki,
+    resistance_bias_angle: {
+      value: 0.0, 
+      max_learning_rate: control_parameters.magnetization_angle_ki,
     },
     inductance: {
-      value: current_calibration.inductance, 
+      value: 0.0, 
       max_learning_rate: control_parameters.phase_inductance_ki,
     },
     magnetization_angle: {
-      value: current_calibration.magnetization_angle, 
+      value: 0.0, 
       max_learning_rate: control_parameters.magnetization_angle_ki,
     },
     magnetization_factor: {
-      value: current_calibration.magnetization_factor, 
+      value: 0.0,
       max_learning_rate: control_parameters.magnetization_factor_ki,
     },
     predicted_angle: {
@@ -132,13 +132,22 @@ export async function run_current_calibration(motor_controller, message_options)
         drive_voltage_angle,
       } = readout;
 
+      // Recalculate the electrical equations based on the updated calibration parameters.
+      // Compute the gradients of the parameters to minimize the residual error.
+
       const u_scaled_current_diff = u_current_diff * pwm_cycles_per_second;
       const v_scaled_current_diff = v_current_diff * pwm_cycles_per_second;
       const w_scaled_current_diff = w_current_diff * pwm_cycles_per_second;
 
-      const u_resistive_voltage = u_current * parameters.u_resistance.value;
-      const v_resistive_voltage = v_current * parameters.v_resistance.value;
-      const w_resistive_voltage = w_current * parameters.w_resistance.value;
+      const resistance_bias_offset = current_angle - parameters.resistance_bias_angle.value;
+
+      const u_resistance = parameters.resistance.value + parameters.resistance_bias.value * Math.cos(resistance_bias_offset);
+      const v_resistance = parameters.resistance.value + parameters.resistance_bias.value * Math.cos(resistance_bias_offset - 2 * Math.PI / 3);
+      const w_resistance = parameters.resistance.value + parameters.resistance_bias.value * Math.cos(resistance_bias_offset + 2 * Math.PI / 3);
+
+      const u_resistive_voltage = u_current * u_resistance;
+      const v_resistive_voltage = v_current * v_resistance;
+      const w_resistive_voltage = w_current * w_resistance;
 
       const u_inductance_voltage = u_scaled_current_diff * parameters.inductance.value;
       const v_inductance_voltage = v_scaled_current_diff * parameters.inductance.value;
@@ -147,91 +156,119 @@ export async function run_current_calibration(motor_controller, message_options)
       const inductance_power_ish = square(current_magnitude) * Math.abs(current_angular_speed);
       const inductance_power_emf = parameters.magnetization_factor.value * inductance_power_ish;
 
-      const wtf_angle = 2*current_angle - parameters.magnetization_angle.value;
+      
+      const u_residual1 = u_resistive_voltage + u_inductance_voltage - u_drive_voltage;
+      const v_residual1 = v_resistive_voltage + v_inductance_voltage - v_drive_voltage;
+      const w_residual1 = w_resistive_voltage + w_inductance_voltage - w_drive_voltage;
+      
+      const loss1 = square(u_residual1) + square(v_residual1) + square(w_residual1);
+      
+      const resistance_gradient = (
+        u_residual1 * u_current +
+        v_residual1 * v_current +
+        w_residual1 * w_current
+      );
 
-      const u_wtf = inductance_power_emf * Math.cos(wtf_angle);
-      const v_wtf = inductance_power_emf * Math.cos(wtf_angle - 2 * Math.PI / 3);
-      const w_wtf = inductance_power_emf * Math.cos(wtf_angle + 2 * Math.PI / 3);
+      const resistance_bias_gradient = (
+        u_residual1 * u_current * Math.cos(resistance_bias_offset) +
+        v_residual1 * v_current * Math.cos(resistance_bias_offset - 2 * Math.PI / 3) +
+        w_residual1 * w_current * Math.cos(resistance_bias_offset + 2 * Math.PI / 3)
+      );
 
-      const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage + u_wtf;
-      const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage + v_wtf;
-      const w_residual = w_resistive_voltage + w_inductance_voltage - w_drive_voltage + w_wtf;
+      const resistance_bias_angle_gradient = (
+        u_residual1 * u_current * parameters.resistance_bias.value * Math.sin(resistance_bias_offset) +
+        v_residual1 * v_current * parameters.resistance_bias.value * Math.sin(resistance_bias_offset - 2 * Math.PI / 3) +
+        w_residual1 * w_current * parameters.resistance_bias.value * Math.sin(resistance_bias_offset + 2 * Math.PI / 3)
+      );
+
+      const inductance_gradient = (
+        u_residual1 * u_scaled_current_diff +
+        v_residual1 * v_scaled_current_diff +
+        w_residual1 * w_scaled_current_diff
+      );
+
+
+      const magnetization_offset = 2*current_angle - parameters.magnetization_angle.value;
+
+      const u_magnetization_voltage = inductance_power_emf * Math.cos(magnetization_offset);
+      const v_magnetization_voltage = inductance_power_emf * Math.cos(magnetization_offset - 2 * Math.PI / 3);
+      const w_magnetization_voltage = inductance_power_emf * Math.cos(magnetization_offset + 2 * Math.PI / 3);
+
+      const u_residual2 = u_residual1 + u_magnetization_voltage;
+      const v_residual2 = v_residual1 + v_magnetization_voltage;
+      const w_residual2 = w_residual1 + w_magnetization_voltage;
 
       // We define the loss as the sum of the squares of the unexplained residual voltages. We assume
       // during the calibration that EMF is negligible, and therefore we calibrate the resistance against
-      const loss = square(u_residual) + square(v_residual) + square(w_residual);
-
-      const u_resistance_gradient = u_residual * u_current;
-      const v_resistance_gradient = v_residual * v_current;
-      const w_resistance_gradient = w_residual * w_current;
-
-      const inductance_gradient = (
-        u_residual * u_scaled_current_diff +
-        v_residual * v_scaled_current_diff +
-        w_residual * w_scaled_current_diff
-      );
+      const loss2 = square(u_residual2) + square(v_residual2) + square(w_residual2);
 
 
       const magnetization_factor_gradient = (
-        u_residual * inductance_power_ish * Math.cos(wtf_angle) +
-        v_residual * inductance_power_ish * Math.cos(wtf_angle - 2 * Math.PI / 3) +
-        w_residual * inductance_power_ish * Math.cos(wtf_angle + 2 * Math.PI / 3)
+        u_residual2 * inductance_power_ish * Math.cos(magnetization_offset) +
+        v_residual2 * inductance_power_ish * Math.cos(magnetization_offset - 2 * Math.PI / 3) +
+        w_residual2 * inductance_power_ish * Math.cos(magnetization_offset + 2 * Math.PI / 3)
       );
 
       const magnetization_angle_gradient = (
-        u_residual * inductance_power_emf * Math.sin(wtf_angle) +
-        v_residual * inductance_power_emf * Math.sin(wtf_angle - 2 * Math.PI / 3) +
-        w_residual * inductance_power_emf * Math.sin(wtf_angle + 2 * Math.PI / 3)
+        u_residual2 * inductance_power_emf * Math.sin(magnetization_offset) +
+        v_residual2 * inductance_power_emf * Math.sin(magnetization_offset - 2 * Math.PI / 3) +
+        w_residual2 * inductance_power_emf * Math.sin(magnetization_offset + 2 * Math.PI / 3)
       );
 
-      const residual_square = square(u_residual) + square(v_residual) + square(w_residual);
+      const residual2_square = square(u_residual2) + square(v_residual2) + square(w_residual2);
       
-      const residual_square_prediction = square(inductance_power_emf * (0.5 + 0.5 * Math.cos(current_angle - parameters.predicted_angle.value)));
+      const residual2_square_prediction = square(inductance_power_emf * (0.5 + 0.5 * Math.cos(current_angle - parameters.predicted_angle.value)));
 
-      const residual2 = residual_square_prediction - residual_square;
+      const residual3 = residual2_square_prediction - residual2_square;
 
-      const loss2 = Math.abs(residual2);
+      const loss3 = Math.abs(residual3);
 
-      const predicted_angle_gradient = residual2 * square(inductance_power_emf) * Math.sin(current_angle - parameters.predicted_angle.value);
+      const predicted_angle_gradient = residual3 * square(inductance_power_emf) * Math.sin(current_angle - parameters.predicted_angle.value);
 
       const magnet_distortion = 20.0 * Math.PI / 180.0;
       const magnet_distortion_factor = 0.5;
 
-      const u_wtf2 = inductance_power_emf * Math.cos(wtf_angle + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
-      const v_wtf2 = inductance_power_emf * Math.cos(wtf_angle - 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
-      const w_wtf2 = inductance_power_emf * Math.cos(wtf_angle + 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
+      const u_magnetization_voltage3 = inductance_power_emf * Math.cos(magnetization_offset + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
+      const v_magnetization_voltage3 = inductance_power_emf * Math.cos(magnetization_offset - 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
+      const w_magnetization_voltage3 = inductance_power_emf * Math.cos(magnetization_offset + 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
 
       return {
         ...readout,
-        loss,
-
+        
         u_resistive_voltage,
         v_resistive_voltage,
         w_resistive_voltage,
-
+        
         u_inductance_voltage,
         v_inductance_voltage,
         w_inductance_voltage,
-
-        u_wtf,
-        v_wtf,
-        w_wtf,
-
-        u_wtf2,
-        v_wtf2,
-        w_wtf2,
         
-        u_residual,
-        v_residual,
-        w_residual,
+        loss1,
+        u_residual1,
+        v_residual1,
+        w_residual1,
 
-        residual_square,
-        residual_square_prediction,
         loss2,
+        u_residual2,
+        v_residual2,
+        w_residual2,
+        
+        u_magnetization_voltage,
+        v_magnetization_voltage,
+        w_magnetization_voltage,
+        
+        residual2_square,
+        residual2_square_prediction,
+        
+        loss3,
 
-        u_resistance_gradient,
-        v_resistance_gradient,
-        w_resistance_gradient,
+        u_magnetization_voltage3,
+        v_magnetization_voltage3,
+        w_magnetization_voltage3,
+
+        resistance_gradient,
+        resistance_bias_gradient,
+        resistance_bias_angle_gradient,
         inductance_gradient,
         magnetization_factor_gradient,
         magnetization_angle_gradient,
@@ -242,26 +279,11 @@ export async function run_current_calibration(motor_controller, message_options)
       };
     });
 
-    const sqrt_loss = Math.sqrt(d3.mean(gradients, (d) => d.loss));
+    const sqrt_loss1 = Math.sqrt(d3.mean(gradients, (d) => d.loss1));
 
-
-    // Resilient Backpropagation
-    // -------------------------
-    // 
-    // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
-
-    is_stable = optimizer_update(parameters, {
-      u_resistance: d3.mean(gradients, (d) => d.u_resistance_gradient),
-      v_resistance: d3.mean(gradients, (d) => d.v_resistance_gradient),
-      w_resistance: d3.mean(gradients, (d) => d.w_resistance_gradient),
-      inductance: d3.mean(gradients, (d) => d.inductance_gradient),
-      magnetization_factor: d3.mean(gradients, (d) => d.magnetization_factor_gradient),
-      magnetization_angle: d3.mean(gradients, (d) => d.magnetization_angle_gradient),
-      predicted_angle: d3.mean(gradients, (d) => d.predicted_angle_gradient),
-    });
-
-
-    const sqrt_loss2 = Math.sqrt(d3.mean(gradients, (d) => d.loss2)); 
+    const sqrt_loss2 = Math.sqrt(d3.mean(gradients, (d) => d.loss2));
+    
+    const sqrt_loss3 = Math.sqrt(d3.mean(gradients, (d) => d.loss3));
     
     const angle_diff = normalize_radians(parameters.predicted_angle.value - parameters.magnetization_angle.value);
 
@@ -269,20 +291,36 @@ export async function run_current_calibration(motor_controller, message_options)
     iterations.push({
       iteration: i,
       current_calibration: {
-        ...current_calibration,
-        u_resistance: parameters.u_resistance.value, 
-        v_resistance: parameters.v_resistance.value,
-        w_resistance: parameters.w_resistance.value,
+        resistance: parameters.resistance.value,
+        resistance_bias: parameters.resistance_bias.value,
+        resistance_bias_angle: parameters.resistance_bias_angle.value,
         inductance: parameters.inductance.value,
         magnetization_angle: parameters.magnetization_angle.value,
         magnetization_factor: parameters.magnetization_factor.value,
         predicted_angle: parameters.predicted_angle.value,
         angle_diff,
-        sqrt_loss,
+        sqrt_loss1,
         sqrt_loss2,
+        sqrt_loss3,
       },
       gradients,
     });
+
+    // Resilient Backpropagation
+    // -------------------------
+    // 
+    // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
+
+    is_stable = optimizer_update(parameters, {
+      resistance: d3.mean(gradients, (d) => d.resistance_gradient),
+      resistance_bias: d3.mean(gradients, (d) => d.resistance_bias_gradient),
+      resistance_bias_angle: d3.mean(gradients, (d) => d.resistance_bias_angle_gradient),
+      inductance: d3.mean(gradients, (d) => d.inductance_gradient),
+      magnetization_factor: d3.mean(gradients, (d) => d.magnetization_factor_gradient),
+      magnetization_angle: d3.mean(gradients, (d) => d.magnetization_angle_gradient),
+      predicted_angle: d3.mean(gradients, (d) => d.predicted_angle_gradient),
+    });
+
     
     // Update calibration values after pushing the iteration data! The iteration should then
     // contain the calibration values that were used to calculate the gradients and other values.
@@ -291,7 +329,20 @@ export async function run_current_calibration(motor_controller, message_options)
     
     if (parameters.magnetization_factor.value < 0.0) {
       parameters.magnetization_factor.value = -parameters.magnetization_factor.value;
+      parameters.magnetization_factor.learning_rate *= rate_decrease;
       parameters.magnetization_angle.value = normalize_radians(parameters.magnetization_angle.value + Math.PI);
+    } else {
+      parameters.magnetization_angle.value = normalize_radians(parameters.magnetization_angle.value);
+    }
+
+    parameters.predicted_angle.value = normalize_radians(parameters.predicted_angle.value);
+
+    if (parameters.resistance_bias.value < 0.0) {
+      parameters.resistance_bias.value = -parameters.resistance_bias.value;
+      parameters.resistance_bias.learning_rate *= rate_decrease;
+      parameters.resistance_bias_angle.value = normalize_radians(parameters.resistance_bias_angle.value + Math.PI);
+    } else {
+      parameters.resistance_bias_angle.value = normalize_radians(parameters.resistance_bias_angle.value);
     }
   }
 
@@ -300,10 +351,9 @@ export async function run_current_calibration(motor_controller, message_options)
     is_stable,
     iterations,
     current_calibration: {
-      ...current_calibration,
-      u_resistance: parameters.u_resistance.value,
-      v_resistance: parameters.v_resistance.value,
-      w_resistance: parameters.w_resistance.value,
+      resistance: parameters.resistance.value,
+      resistance_bias: parameters.resistance_bias.value,
+      resistance_bias_angle: parameters.resistance_bias_angle.value,
       inductance: parameters.inductance.value,
       magnetization_angle: parameters.magnetization_angle.value,
       magnetization_factor: parameters.magnetization_factor.value,
