@@ -1340,17 +1340,29 @@ const active_current_calibration_table =  Mutable(stringify_active_current_calib
 
 const current_calibration_input = Object.fromEntries(
   [
-    ["u_resistance", {
-      label: "U Resistance", 
-      description: `The resistance of u phase coil.`
+    ["u_current_zero", {
+      label: "U Current Zero", 
+      description: `The zero-current offset for the U phase.`
     }],
-    ["v_resistance", {
-      label: "V Resistance", 
-      description: `The resistance of v phase coil.`
+    ["v_current_zero", {
+      label: "V Current Zero", 
+      description: `The zero-current offset for the V phase.`
     }],
-    ["w_resistance", {
-      label: "W Resistance", 
-      description: `The resistance of w phase coil.`
+    ["w_current_zero", {
+      label: "W Current Zero", 
+      description: `The zero-current offset for the W phase.`
+    }],
+    ["resistance", {
+      label: "Resistance", 
+      description: `The resistance of average phase coil.`
+    }],
+    ["resistance_bias", {
+      label: "Resistance Bias", 
+      description: `The bias resistance of the average phase coil, due to magnetic hysteresis.`
+    }],
+    ["resistance_bias_angle", {
+      label: "Resistance Bias Angle", 
+      description: `The angle of the resistance bias.`
     }],
     ["inductance", {
       label: "Phase Inductance", 

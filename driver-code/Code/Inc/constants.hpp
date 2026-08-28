@@ -312,12 +312,12 @@ const float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_thre
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::CurrentCalibration default_current_calibration = {
-    .u_resistance = 1.3,
-    .v_resistance = 1.3,
-    .w_resistance = 1.3,
+    .resistance = 1.3f,
+    .resistance_bias = 0.0f,
+    .resistance_bias_angle = 0,
     .inductance = 0.000'145f,
     .magnetization_angle = 0,
-    .magnetization_factor = 0.0
+    .magnetization_factor = 0.0f
 };
 
 // The default control parameters should be set to reasonable values for any motor.

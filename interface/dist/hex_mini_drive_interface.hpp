@@ -375,12 +375,12 @@ struct FullReadout : Readout {
   float target;
   // Value of the integral term for the seek position algorithm.
   float seek_integral;
-  // Estimated resistance of the U phase coil.
-  float u_resistance;
-  // Estimated resistance of the V phase coil.
-  float v_resistance;
-  // Estimated resistance of the W phase coil.
-  float w_resistance;
+  // Estimated average resistance of the phase coils.
+  float resistance;
+  // Estimated resistance bias due to magnetization and eddy currents.
+  float resistance_bias;
+  // Estimated angle of the resistance bias due to magnetization and eddy currents.
+  int32_t resistance_bias_angle;
   // Estimated baseline inductance of the motor coils.
   float inductance;
   // The estimated angle of the magnetization pattern.
@@ -448,11 +448,11 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.seek_integral);;
   offset += 4;
-  write_float32(buffer + offset, value.u_resistance);;
+  write_float32(buffer + offset, value.resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.v_resistance);;
+  write_float32(buffer + offset, value.resistance_bias);;
   offset += 4;
-  write_float32(buffer + offset, value.w_resistance);;
+  write_int32(buffer + offset, value.resistance_bias_angle);;
   offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
@@ -517,11 +517,11 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.seek_integral = read_float32(buffer + offset);
   offset += 4;
-  result.u_resistance = read_float32(buffer + offset);
+  result.resistance = read_float32(buffer + offset);
   offset += 4;
-  result.v_resistance = read_float32(buffer + offset);
+  result.resistance_bias = read_float32(buffer + offset);
   offset += 4;
-  result.w_resistance = read_float32(buffer + offset);
+  result.resistance_bias_angle = read_int32(buffer + offset);
   offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
@@ -837,12 +837,18 @@ static inline SetStateSeekAngle read_SetStateSeekAngle(uint8_t const* buffer) {
 }
 // Estimate resistance and inductance values for the motor coils.
 struct CurrentCalibration {
-  // Estimated resistance of the U phase coil.
-  float u_resistance;
-  // Estimated resistance of the V phase coil.
-  float v_resistance;
-  // Estimated resistance of the W phase coil.
-  float w_resistance;
+  // Estimated zero-current offset for the U phase.
+  float u_current_zero;
+  // Estimated zero-current offset for the V phase.
+  float v_current_zero;
+  // Estimated zero-current offset for the W phase.
+  float w_current_zero;
+  // Estimated baseline resistance of the motor coils.
+  float resistance;
+  // Estimated resistance bias due to magnetization and eddy currents.
+  float resistance_bias;
+  // Estimated angle of the resistance bias due to magnetization and eddy currents.
+  int32_t resistance_bias_angle;
   // Estimated baseline inductance of the motor coils.
   float inductance;
   // The estimated angle of the phase inductance variation.
@@ -859,11 +865,17 @@ struct CurrentCalibration {
 
 static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration const& value) {
   size_t offset = 0;
-  write_float32(buffer + offset, value.u_resistance);;
+  write_float32(buffer + offset, value.u_current_zero);;
   offset += 4;
-  write_float32(buffer + offset, value.v_resistance);;
+  write_float32(buffer + offset, value.v_current_zero);;
   offset += 4;
-  write_float32(buffer + offset, value.w_resistance);;
+  write_float32(buffer + offset, value.w_current_zero);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_bias);;
+  offset += 4;
+  write_int32(buffer + offset, value.resistance_bias_angle);;
   offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
@@ -883,11 +895,17 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   
   CurrentCalibration result;
   
-  result.u_resistance = read_float32(buffer + offset);
+  result.u_current_zero = read_float32(buffer + offset);
   offset += 4;
-  result.v_resistance = read_float32(buffer + offset);
+  result.v_current_zero = read_float32(buffer + offset);
   offset += 4;
-  result.w_resistance = read_float32(buffer + offset);
+  result.w_current_zero = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_bias = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_bias_angle = read_int32(buffer + offset);
   offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
@@ -1288,9 +1306,9 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
     case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: return 14;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CURRENT_CALIBRATION: return 38;
+    case MessageCode::CURRENT_CALIBRATION: return 50;
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::SET_CURRENT_CALIBRATION: return 38;
+    case MessageCode::SET_CURRENT_CALIBRATION: return 50;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 142;
     case MessageCode::SET_CONTROL_PARAMETERS: return 142;
@@ -1493,9 +1511,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CURRENT_CALIBRATION));
-      if (max_size < 2 + 36) return 0;
+      if (max_size < 2 + 48) return 0;
       write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 38;
+      return 50;
     }
     case MessageCode::GET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CURRENT_CALIBRATION));
@@ -1503,9 +1521,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CURRENT_CALIBRATION));
-      if (max_size < 2 + 36) return 0;
+      if (max_size < 2 + 48) return 0;
       write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 38;
+      return 50;
     }
     case MessageCode::RESET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CURRENT_CALIBRATION));
@@ -1749,7 +1767,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CURRENT_CALIBRATION: {
-      if (size != 2 + 36) return false;
+      if (size != 2 + 48) return false;
       message.message_data = read_CurrentCalibration(buffer + 2);
       return true;
     }
@@ -1759,7 +1777,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_CURRENT_CALIBRATION: {
-      if (size != 2 + 36) return false;
+      if (size != 2 + 48) return false;
       message.message_data = read_CurrentCalibration(buffer + 2);
       return true;
     }

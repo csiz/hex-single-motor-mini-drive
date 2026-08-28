@@ -442,20 +442,17 @@ definitions:
         type: float32
         doc: Value of the integral term for the seek position algorithm.
 
-
-
-
-      u_resistance:
+      resistance:
         type: float32
-        doc: Estimated resistance of the U phase coil.
+        doc: Estimated average resistance of the phase coils.
 
-      v_resistance:
+      resistance_bias:
         type: float32
-        doc: Estimated resistance of the V phase coil.
+        doc: Estimated resistance bias due to magnetization and eddy currents.
 
-      w_resistance:
-        type: float32
-        doc: Estimated resistance of the W phase coil.
+      resistance_bias_angle:
+        type: int32
+        doc: Estimated angle of the resistance bias due to magnetization and eddy currents.
       
       inductance:
         type: float32
@@ -611,17 +608,28 @@ definitions:
       Estimate resistance and inductance values for the motor coils.
 
     struct:
-      u_resistance:
-        type: float32
-        doc: Estimated resistance of the U phase coil.
 
-      v_resistance:
+      u_current_zero:
         type: float32
-        doc: Estimated resistance of the V phase coil.
+        doc: Estimated zero-current offset for the U phase.
+      v_current_zero:
+        type: float32
+        doc: Estimated zero-current offset for the V phase.
+      w_current_zero:
+        type: float32
+        doc: Estimated zero-current offset for the W phase.
 
-      w_resistance:
+      resistance:
         type: float32
-        doc: Estimated resistance of the W phase coil.
+        doc: Estimated baseline resistance of the motor coils.
+
+      resistance_bias:
+        type: float32
+        doc: Estimated resistance bias due to magnetization and eddy currents.
+
+      resistance_bias_angle:
+        type: int32
+        doc: Estimated angle of the resistance bias due to magnetization and eddy currents.
       
       inductance:
         type: float32

@@ -814,7 +814,7 @@ void app_tick() {
       const ThreePhase inductor_voltages = current_diffs_prescaled * current_calibration.inductance;
 
       // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-      const ThreePhase resistive_voltages = currents_prescaled * get_phase_resistances(current_calibration);
+      const ThreePhase resistive_voltages = currents_prescaled * current_calibration.resistance;
 
       // In the running loop we allocate all residual voltages to the EMF response, but in the calibration
       // modes we expect the motor to be nearly stationary so we can neglect the EMF and instead the diff

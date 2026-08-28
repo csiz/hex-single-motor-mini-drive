@@ -85,6 +85,39 @@ export async function run_current_calibration(motor_controller, message_options)
     return;
   }
 
+  // Test if we've had nominal VCC voltage throughout the calibration run.
+  const all_nominal_vcc_voltage = sample.every(({nominal_vcc_voltage}) => nominal_vcc_voltage);
+
+  if (!all_nominal_vcc_voltage) {
+    console.warn("Nominal VCC voltage was not maintained during the calibration run, we can't trust the drive voltage.");
+    return {
+      sample,
+      is_stable: false,
+    }
+  }
+
+  // Test if the voltage was always 0.
+  const all_zero_drive_voltage = sample.every(({u_drive_voltage, v_drive_voltage, w_drive_voltage}) => 
+    u_drive_voltage === 0 && v_drive_voltage === 0 && w_drive_voltage === 0
+  );
+
+  // For all 0 voltages we calibrate the baseline offset of the currents.
+  if (all_zero_drive_voltage) {
+    const u_current_zero = sample.reduce((sum, {u_current}) => sum + u_current, 0) / sample.length + current_calibration?.u_current_zero;
+    const v_current_zero = sample.reduce((sum, {v_current}) => sum + v_current, 0) / sample.length + current_calibration?.v_current_zero;
+    const w_current_zero = sample.reduce((sum, {w_current}) => sum + w_current, 0) / sample.length + current_calibration?.w_current_zero; 
+  
+    return {
+      sample,
+      is_stable: true,
+      current_calibration: {
+        u_current_zero,
+        v_current_zero,
+        w_current_zero,
+      }
+    }
+  }
+
   let parameters = optimizer_init({
     resistance: {
       value: 0.0, 

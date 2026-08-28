@@ -1078,7 +1078,7 @@ void ADC1_2_IRQHandler(void){
         -(static_cast<float>(adc_readings.u_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units,
         -(static_cast<float>(adc_readings.v_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units,
         -(static_cast<float>(adc_readings.w_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units
-    });
+    } - get_current_zeroes(current_calibration));
 
     // Calculate the differential of the currents.
     const ThreePhase currents_diff = currents - get_currents(readout);
@@ -1091,8 +1091,9 @@ void ADC1_2_IRQHandler(void){
     );
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const ThreePhase resistive_voltages = currents * get_phase_resistances(current_calibration) * current_to_voltage_units;
+    const ThreePhase resistive_voltages = currents * (current_calibration.resistance * current_to_voltage_units);
 
+    // TODO: add the resistance bias?
 
     // Infer the back EMF voltages for each phase.
     // 
@@ -1418,9 +1419,10 @@ void ADC1_2_IRQHandler(void){
     readout.target = driver_state.current_target;
     readout.seek_integral = driver_state.seek_integral;
 
-    readout.u_resistance = current_calibration.u_resistance;
-    readout.v_resistance = current_calibration.v_resistance;
-    readout.w_resistance = current_calibration.w_resistance;
+    // TODO: maybe remove these and keep them in the current_calibration after we're done implementing.
+    readout.resistance = current_calibration.resistance;
+    readout.resistance_bias = current_calibration.resistance_bias;
+    readout.resistance_bias_angle = current_calibration.resistance_bias_angle;
     readout.inductance = current_calibration.inductance;
     readout.magnetization_angle = current_calibration.magnetization_angle;
     readout.magnetization_factor = current_calibration.magnetization_factor;

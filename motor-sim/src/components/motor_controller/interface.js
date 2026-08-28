@@ -125,9 +125,9 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const web_current_angle = normalize_radians(predicted_angle + Math.atan2(web_quadrature_current, web_direct_current));
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
   
-  const u_resistance = (current_calibration?.u_resistance ?? 1.0);
-  const v_resistance = (current_calibration?.v_resistance ?? 1.0);
-  const w_resistance = (current_calibration?.w_resistance ?? 1.0);
+  const u_resistance = (current_calibration?.resistance ?? 1.0);
+  const v_resistance = (current_calibration?.resistance ?? 1.0);
+  const w_resistance = (current_calibration?.resistance ?? 1.0);
 
   const u_R_voltage = u_resistance * u_current;
   const v_R_voltage = v_resistance * v_current;
@@ -427,9 +427,12 @@ function parse_unit_test_output(bare_unit_test) {
 
 function parse_current_calibration(bare_calibration) {
   return {
-    u_resistance: bare_calibration.u_resistance,
-    v_resistance: bare_calibration.v_resistance,
-    w_resistance: bare_calibration.w_resistance,
+    u_current_zero: bare_calibration.u_current_zero / CURRENT_UNITS_PER_AMP,
+    v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
+    w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
+    resistance: bare_calibration.resistance,
+    resistance_bias: bare_calibration.resistance_bias,
+    resistance_bias_angle: angle_units_to_radians(bare_calibration.resistance_bias_angle),
     inductance: bare_calibration.inductance,
     magnetization_angle: angle_units_to_radians(bare_calibration.magnetization_angle),
     magnetization_factor: bare_calibration.magnetization_factor,
@@ -441,9 +444,12 @@ function parse_current_calibration(bare_calibration) {
 
 export function make_current_calibration(current_calibration){
   return {
-    u_resistance: current_calibration.u_resistance,
-    v_resistance: current_calibration.v_resistance,
-    w_resistance: current_calibration.w_resistance,
+    u_current_zero: current_calibration.u_current_zero * CURRENT_UNITS_PER_AMP,
+    v_current_zero: current_calibration.v_current_zero * CURRENT_UNITS_PER_AMP,
+    w_current_zero: current_calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
+    resistance: current_calibration.resistance,
+    resistance_bias: current_calibration.resistance_bias,
+    resistance_bias_angle: radians_to_angle_units(current_calibration.resistance_bias_angle),
     inductance: current_calibration.inductance,
     magnetization_angle: radians_to_angle_units(current_calibration.magnetization_angle),
     magnetization_factor: current_calibration.magnetization_factor,

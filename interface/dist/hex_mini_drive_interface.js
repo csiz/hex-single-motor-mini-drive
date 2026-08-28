@@ -301,12 +301,12 @@ export class FullReadout extends Readout {
   target;
   // Value of the integral term for the seek position algorithm.
   seek_integral;
-  // Estimated resistance of the U phase coil.
-  u_resistance;
-  // Estimated resistance of the V phase coil.
-  v_resistance;
-  // Estimated resistance of the W phase coil.
-  w_resistance;
+  // Estimated average resistance of the phase coils.
+  resistance;
+  // Estimated resistance bias due to magnetization and eddy currents.
+  resistance_bias;
+  // Estimated angle of the resistance bias due to magnetization and eddy currents.
+  resistance_bias_angle;
   // Estimated baseline inductance of the motor coils.
   inductance;
   // The estimated angle of the magnetization pattern.
@@ -379,11 +379,11 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.seek_integral)
   offset += 4;
-  view.setFloat32(offset, value.u_resistance)
+  view.setFloat32(offset, value.resistance)
   offset += 4;
-  view.setFloat32(offset, value.v_resistance)
+  view.setFloat32(offset, value.resistance_bias)
   offset += 4;
-  view.setFloat32(offset, value.w_resistance)
+  view.setInt32(offset, value.resistance_bias_angle)
   offset += 4;
   view.setFloat32(offset, value.inductance)
   offset += 4;
@@ -449,11 +449,11 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.seek_integral = view.getFloat32(offset);
   offset += 4;
-  result.u_resistance = view.getFloat32(offset);
+  result.resistance = view.getFloat32(offset);
   offset += 4;
-  result.v_resistance = view.getFloat32(offset);
+  result.resistance_bias = view.getFloat32(offset);
   offset += 4;
-  result.w_resistance = view.getFloat32(offset);
+  result.resistance_bias_angle = view.getInt32(offset);
   offset += 4;
   result.inductance = view.getFloat32(offset);
   offset += 4;
@@ -799,12 +799,18 @@ function read_SetStateSeekAngle(view, offset = 0) {
 }
 // Estimate resistance and inductance values for the motor coils.
 export class CurrentCalibration {
-  // Estimated resistance of the U phase coil.
-  u_resistance;
-  // Estimated resistance of the V phase coil.
-  v_resistance;
-  // Estimated resistance of the W phase coil.
-  w_resistance;
+  // Estimated zero-current offset for the U phase.
+  u_current_zero;
+  // Estimated zero-current offset for the V phase.
+  v_current_zero;
+  // Estimated zero-current offset for the W phase.
+  w_current_zero;
+  // Estimated baseline resistance of the motor coils.
+  resistance;
+  // Estimated resistance bias due to magnetization and eddy currents.
+  resistance_bias;
+  // Estimated angle of the resistance bias due to magnetization and eddy currents.
+  resistance_bias_angle;
   // Estimated baseline inductance of the motor coils.
   inductance;
   // The estimated angle of the phase inductance variation.
@@ -822,14 +828,20 @@ export class CurrentCalibration {
 }
 
 function write_CurrentCalibration(value) {
-  const buffer = new Uint8Array(36);
+  const buffer = new Uint8Array(48);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.u_resistance)
+  view.setFloat32(offset, value.u_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.v_resistance)
+  view.setFloat32(offset, value.v_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.w_resistance)
+  view.setFloat32(offset, value.w_current_zero)
+  offset += 4;
+  view.setFloat32(offset, value.resistance)
+  offset += 4;
+  view.setFloat32(offset, value.resistance_bias)
+  offset += 4;
+  view.setInt32(offset, value.resistance_bias_angle)
   offset += 4;
   view.setFloat32(offset, value.inductance)
   offset += 4;
@@ -848,11 +860,17 @@ function write_CurrentCalibration(value) {
 function read_CurrentCalibration(view, offset = 0) {
   let result = new CurrentCalibration();
   
-  result.u_resistance = view.getFloat32(offset);
+  result.u_current_zero = view.getFloat32(offset);
   offset += 4;
-  result.v_resistance = view.getFloat32(offset);
+  result.v_current_zero = view.getFloat32(offset);
   offset += 4;
-  result.w_resistance = view.getFloat32(offset);
+  result.w_current_zero = view.getFloat32(offset);
+  offset += 4;
+  result.resistance = view.getFloat32(offset);
+  offset += 4;
+  result.resistance_bias = view.getFloat32(offset);
+  offset += 4;
+  result.resistance_bias_angle = view.getInt32(offset);
   offset += 4;
   result.inductance = view.getFloat32(offset);
   offset += 4;
@@ -1806,7 +1824,7 @@ export function read_message(buffer) {
       return message;
     }
     case CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 36) return null;
+      if (buffer.length !== 2 + 48) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = CURRENT_CALIBRATION;
       return message;
@@ -1816,7 +1834,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 36) return null;
+      if (buffer.length !== 2 + 48) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = SET_CURRENT_CALIBRATION;
       return message;
