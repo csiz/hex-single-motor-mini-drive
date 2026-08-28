@@ -1443,7 +1443,10 @@ const current_calibration_buttons = !motor_controller ? html`<p>Not connected to
   [
     ["Upload to Driver", async function(){
       if (!motor_controller) return;
-      const current_calibration = Object.fromEntries(Object.entries(current_calibration_input).map(([key, input]) => [key, input.value]));
+      const current_calibration = {
+        ...motor_controller.current_calibration,
+        ...Object.fromEntries(Object.entries(current_calibration_input).map(([key, input]) => [key, input.value])),
+      };
       await motor_controller.upload_current_calibration(current_calibration);
       show_active_current_calibration();
       unsaved_changes();
