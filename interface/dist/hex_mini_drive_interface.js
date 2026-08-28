@@ -286,8 +286,6 @@ export class FullReadout extends Readout {
   // EMF power; the power used to drive the motor (which is reflected to the 
   // inductors as back EMF).
   emf_power;
-  // Inductive power; the power pushed into the inductor magnetic fields.
-  inductive_power;
   // The measured acceleration of the rotor.
   rotor_acceleration;
   // Integrated number of EMF deduced rotor angle rotations since startup.
@@ -331,7 +329,7 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(206);
+  const buffer = new Uint8Array(202);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   const base_buffer = new Uint8Array(view.buffer, offset, 82).set(write_Readout(value), 0);
@@ -366,8 +364,6 @@ function write_FullReadout(value) {
   view.setFloat32(offset, value.resistive_power_average)
   offset += 4;
   view.setFloat32(offset, value.emf_power)
-  offset += 4;
-  view.setFloat32(offset, value.inductive_power)
   offset += 4;
   view.setFloat32(offset, value.rotor_acceleration)
   offset += 4;
@@ -438,8 +434,6 @@ function read_FullReadout(view, offset = 0) {
   result.resistive_power_average = view.getFloat32(offset);
   offset += 4;
   result.emf_power = view.getFloat32(offset);
-  offset += 4;
-  result.inductive_power = view.getFloat32(offset);
   offset += 4;
   result.rotor_acceleration = view.getFloat32(offset);
   offset += 4;
@@ -1654,7 +1648,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 206) return null;
+      if (buffer.length !== 2 + 202) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;

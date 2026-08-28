@@ -411,9 +411,6 @@ definitions:
           EMF power; the power used to drive the motor (which is reflected to the 
           inductors as back EMF).
 
-      inductive_power:
-        type: float32
-        doc: Inductive power; the power pushed into the inductor magnetic fields.
 
       rotor_acceleration:
         type: float32

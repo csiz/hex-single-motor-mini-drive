@@ -1031,16 +1031,17 @@ void ADC1_2_IRQHandler(void){
     // Do the data calculations
     // ------------------------
     // 
-    // ! It appears the inductor voltages are negligible, even at high speeds (they appear to bias the EMF by just 2 
-    // degrees). However at low speeds the voltages are very noisy due to the current measurements being noisy and
-    // this masks the low speed EMF.
+    // !!! The inductor voltages cannot be neglected despite being very noisy... curses... They also cannot be 
+    // filtered as it introduces additional phase lag and it's detrimental to add the lag to all the signals to
+    // keep the math consistent. They can't even be filtered conceptually because some short-term variations are
+    // real and similar to the fake jumps from noise. The noise can be determined in retrospect, but not live.
     // 
     // We can use an exponential filter on the current diffs and the equations remain invariant as long as we use
     // the exact same filter for drive_voltages and currents. However this filter introduces a phase lag and that
     // appears to be more detrimental than just ignoring the current diffs and inductor voltages altogether.
     // 
     // I've attempted to use the finite differences approach `diff(x) = ((x[n] - x[n-1]) + (x[n+1] - x[n])) / (2 * dt)`
-    // but it doesn't work as well as exponential filtering. In any case, we have now dropped both adjustments.
+    // but it doesn't work as well as exponential filtering.
 
 
     // Average the temperature readings since we are sampling quicker than the manufacturer indicates.
@@ -1315,9 +1316,6 @@ void ADC1_2_IRQHandler(void){
     // Resistive power is the power dissipated in the motor coils and MOSFETs.
     const float resistive_power = dot(currents, resistive_voltages) * voltage_mul_current_to_power;
 
-    // Inductive power is the power transfered to the motor inductors.
-    const float inductive_power = dot(currents, inductor_voltages) * voltage_mul_current_to_power;
-
     // EMF power is the power transferred into the rotor movement, driving the motor.
     const float emf_power = -dot(currents, emf_voltages) * voltage_mul_current_to_power;
 
@@ -1328,7 +1326,8 @@ void ADC1_2_IRQHandler(void){
     // The balance of all powers must be zero assuming no other source or sink of power. Thus
     // we can compute the total power from the others; mostly determined by EMF. The resistive
     // power is quite reliable and inductive_power is very small.
-    const float total_power = resistive_power + inductive_power + emf_power;
+    const float total_power = resistive_power + emf_power;
+
 
     // Limits!
     // -------
@@ -1398,11 +1397,12 @@ void ADC1_2_IRQHandler(void){
     readout.resistive_power = resistive_power;
     readout.resistive_power_average = resistive_power_average;
     readout.emf_power = emf_power;
-    readout.inductive_power = inductive_power;
     
+
     readout.emf_voltage_angle = emf_voltage_angle;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
+    
     readout.current_angle = current_angle;
     readout.current_magnitude = current_magnitude;
     readout.current_angular_speed = current_angular_speed;

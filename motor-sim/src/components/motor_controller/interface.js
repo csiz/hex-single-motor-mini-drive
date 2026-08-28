@@ -125,13 +125,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const web_current_angle = normalize_radians(predicted_angle + Math.atan2(web_quadrature_current, web_direct_current));
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
   
-  const inductance = (current_calibration?.inductance ?? 1);
-  
-  // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_current_diff * inductance * pwm_cycles_per_second;
-  const v_L_voltage = v_current_diff * inductance * pwm_cycles_per_second;
-  const w_L_voltage = w_current_diff * inductance * pwm_cycles_per_second;
-  
   const u_resistance = (current_calibration?.u_resistance ?? 1.0);
   const v_resistance = (current_calibration?.v_resistance ?? 1.0);
   const w_resistance = (current_calibration?.w_resistance ?? 1.0);
@@ -140,9 +133,22 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const v_R_voltage = v_resistance * v_current;
   const w_R_voltage = w_resistance * w_current;
 
+  const inductance = (current_calibration?.inductance ?? 0.0);
+  
+  // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
+  const u_L_voltage = u_current_diff * inductance * pwm_cycles_per_second;
+  const v_L_voltage = v_current_diff * inductance * pwm_cycles_per_second;
+  const w_L_voltage = w_current_diff * inductance * pwm_cycles_per_second;
+
+  // We cannot ignore the inductance voltage, it's crucial for the startup sequence to work correctly.
   const u_emf_voltage =  u_L_voltage + u_R_voltage - u_drive_voltage;
   const v_emf_voltage =  v_L_voltage + v_R_voltage - v_drive_voltage;
   const w_emf_voltage =  w_L_voltage + w_R_voltage - w_drive_voltage;
+  
+  // Check the effect of the inductor voltage on the EMF calculation; we invert to compare with the inductor voltage.
+  const u_partial_voltage = -(u_R_voltage - u_drive_voltage);
+  const v_partial_voltage = -(v_R_voltage - v_drive_voltage);
+  const w_partial_voltage = -(w_R_voltage - w_drive_voltage);
 
   const [web_direct_emf_voltage, web_quadrature_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, predicted_angle);
 
@@ -252,6 +258,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     drive_voltage_magnitude,
     steady_state_drive_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,
+    u_partial_voltage, v_partial_voltage, w_partial_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,
     hall_u_as_angle,
@@ -309,7 +316,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const resistive_power = bare_full_readout.resistive_power;
   const resistive_power_average = bare_full_readout.resistive_power_average;
   const emf_power = bare_full_readout.emf_power;
-  const inductive_power = bare_full_readout.inductive_power;
 
   const rotor_acceleration = acceleration_units_to_rotations_per_millisecond_squared(bare_full_readout.rotor_acceleration);
   const rotations = bare_full_readout.rotations;
@@ -377,7 +383,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     emf_power,
     emf_power_avg, 
     emf_power_stdev,
-    inductive_power,
     overpowered,
     overheating,
     

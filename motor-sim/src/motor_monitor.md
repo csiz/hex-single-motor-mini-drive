@@ -1093,7 +1093,7 @@ const plot_speed = plot_lines({
 
 
 const plot_measured_voltage = plot_lines({
-  subtitle: "Measured Voltage",
+  subtitle: "VCC Voltage",
   description: "Measured voltage values for VCC.",
   width: 1200, height: 150,
   x: "time",
@@ -1107,7 +1107,7 @@ const plot_measured_voltage = plot_lines({
 });
 
 const plot_measured_temperature = plot_lines({
-  subtitle: "Measured Temperature",
+  subtitle: "Temperature",
   description: "Measured temperature values for the MCU.",
   width: 1200, height: 150,
   x: "time",
@@ -1121,7 +1121,7 @@ const plot_measured_temperature = plot_lines({
 });
 
 const plot_measured_current = plot_lines({
-  subtitle: "Measured Current",
+  subtitle: "Currents",
   description: "Measured current values for each phase.",
   width: 1200, height: 400,
   x: "time",
@@ -1171,6 +1171,9 @@ const plot_inferred_voltages = plot_lines({
     {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
     {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
     {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
+    {y: "u_partial_voltage", label: "Partial Voltage U", color: d3.color(colors.u).darker(1)},
+    {y: "v_partial_voltage", label: "Partial Voltage V", color: d3.color(colors.v).darker(1)},
+    {y: "w_partial_voltage", label: "Partial Voltage W", color: d3.color(colors.w).darker(1)},
   ],
   curve,
 });

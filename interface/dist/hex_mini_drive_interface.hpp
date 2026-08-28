@@ -360,8 +360,6 @@ struct FullReadout : Readout {
   // EMF power; the power used to drive the motor (which is reflected to the 
   // inductors as back EMF).
   float emf_power;
-  // Inductive power; the power pushed into the inductor magnetic fields.
-  float inductive_power;
   // The measured acceleration of the rotor.
   float rotor_acceleration;
   // Integrated number of EMF deduced rotor angle rotations since startup.
@@ -436,8 +434,6 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.emf_power);;
   offset += 4;
-  write_float32(buffer + offset, value.inductive_power);;
-  offset += 4;
   write_float32(buffer + offset, value.rotor_acceleration);;
   offset += 4;
   write_int32(buffer + offset, value.rotations);;
@@ -506,8 +502,6 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   result.resistive_power_average = read_float32(buffer + offset);
   offset += 4;
   result.emf_power = read_float32(buffer + offset);
-  offset += 4;
-  result.inductive_power = read_float32(buffer + offset);
   offset += 4;
   result.rotor_acceleration = read_float32(buffer + offset);
   offset += 4;
@@ -1267,7 +1261,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::READOUT: return 84;
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 208;
+    case MessageCode::FULL_READOUT: return 204;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 18;
@@ -1341,9 +1335,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 206) return 0;
+      if (max_size < 2 + 202) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 208;
+      return 204;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1620,7 +1614,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 206) return false;
+      if (size != 2 + 202) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }
