@@ -1090,7 +1090,11 @@ void ADC1_2_IRQHandler(void){
     const ThreePhase currents_diff = currents - get_currents(readout);
 
     // Calculate the voltage drop across the coil inductance.
-    const ThreePhase inductor_voltages = currents_diff * (current_calibration.inductance * current_diff_to_voltage_units);
+    // 
+    // Because it's so noisy, we zero it out when we're not actively driving the motor so we can pick up smaller EMF signals.
+    const ThreePhase inductor_voltages = currents_diff * (
+        (driver_state.active_pwm != 0) * current_calibration.inductance * current_diff_to_voltage_units
+    );
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const ThreePhase resistive_voltages = currents * get_phase_resistances(current_calibration) * current_to_voltage_units;
