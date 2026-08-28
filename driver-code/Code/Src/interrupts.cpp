@@ -506,21 +506,15 @@ static inline MotorOutputs update_motor_torque(
 
 // Drive motor using up to a target battery power consumption.
 // 
-// The sign of the target power determines the direction of driving. When motor breaking, we
-// try to absorb the target power instead and use it to charge the battery.
+// The sign of the target power determines the direction of driving.
+// 
+// This mode will also control power absorption during breaking.
 static inline MotorOutputs update_motor_battery_power(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
-    // Note that total power will be 0 when not driving; in that case we want to
-    // counter the EMF voltage to minimize phase resistance heating, but we don't
-    // want to absorb more power than the target setting.
-    const bool total_power_dominates = faster_abs(readout.total_power) > faster_abs(readout.emf_power);
 
-    const float measured_power = (total_power_dominates ? 
-        sign(driver_state.active_pwm) * readout.total_power :
-        -sign(readout.quadrature_emf_voltage) * readout.emf_power
-    );
+    const float measured_power = sign(readout.angular_speed) * readout.total_power;
 
     const float control_error = (driver_state.target - measured_power) * max_drive_power_inverse;
 
@@ -1330,7 +1324,7 @@ void ADC1_2_IRQHandler(void){
     // The balance of all powers must be zero assuming no other source or sink of power. Thus
     // we can compute the total power from the others; mostly determined by EMF. The resistive
     // power is quite reliable and inductive_power is very small.
-    const float total_power = resistive_power + emf_power;
+    const float total_power = dot(currents, drive_voltages) * voltage_mul_current_to_power;
 
 
     // Limits!
@@ -1400,6 +1394,8 @@ void ADC1_2_IRQHandler(void){
     readout.total_power_average = total_power_average;
     readout.resistive_power = resistive_power;
     readout.resistive_power_average = resistive_power_average;
+
+    // We could drop the emf power calculation but it only costs 10 ticks.
     readout.emf_power = emf_power;
     
 
