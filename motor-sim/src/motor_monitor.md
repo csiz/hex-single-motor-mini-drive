@@ -1312,7 +1312,7 @@ autosave_inputs(monitoring_plots);
 // Current calibration
 // -------------------
 
-const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.3, step: 1.0, label: "Calibration max PWM:"});
+const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.04, step: 1.0, label: "Calibration max PWM:"});
 
 const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
 
