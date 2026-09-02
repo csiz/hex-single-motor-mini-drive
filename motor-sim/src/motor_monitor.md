@@ -1576,7 +1576,7 @@ async function run_current_calibration(motor_controller, message_options) {
 
   for (let i = 0; !is_stable && (i < max_iterations); i++) {
 
-    const gradients = sample.map((readout) => {
+    const sample_with_gradients = sample.map((readout) => {
       const {
         u_current, v_current, w_current, 
         current_angle, current_magnitude, current_angular_speed,
@@ -1585,106 +1585,59 @@ async function run_current_calibration(motor_controller, message_options) {
         drive_voltage_angle, drive_voltage_magnitude,
       } = readout;
 
-      // Recalculate the electrical equations based on the updated calibration parameters.
-      // Compute the gradients of the parameters to minimize the residual error.
+      const u_di_dt = u_current_diff * pwm_cycles_per_second;
+      const v_di_dt = v_current_diff * pwm_cycles_per_second;
+      const w_di_dt = w_current_diff * pwm_cycles_per_second;
 
-      const u_scaled_current_diff = u_current_diff * pwm_cycles_per_second;
-      const v_scaled_current_diff = v_current_diff * pwm_cycles_per_second;
-      const w_scaled_current_diff = w_current_diff * pwm_cycles_per_second;
+      const R = parameters.resistance.value;
 
-      const u_resistance = parameters.resistance.value;
-      const v_resistance = parameters.resistance.value;
-      const w_resistance = parameters.resistance.value;
+      const u_resistive_voltage = u_current * R;
+      const v_resistive_voltage = v_current * R;
+      const w_resistive_voltage = w_current * R;
 
-      const u_resistive_voltage = u_current * u_resistance;
-      const v_resistive_voltage = v_current * v_resistance;
-      const w_resistive_voltage = w_current * w_resistance;
+      const L_0 = parameters.inductance.value;
+      const L_bias = parameters.inductance_bias.value;
+      const L_bias_angle = parameters.inductance_bias_angle.value;
 
-      const u_inductance = parameters.inductance.value + parameters.inductance_bias.value * Math.cos(parameters.inductance_bias_angle.value);
-      const v_inductance = parameters.inductance.value + parameters.inductance_bias.value * Math.cos(parameters.inductance_bias_angle.value - 2 * Math.PI / 3);
-      const w_inductance = parameters.inductance.value + parameters.inductance_bias.value * Math.cos(parameters.inductance_bias_angle.value + 2 * Math.PI / 3);
+      const u_inductance = L_0 + L_bias * Math.cos(L_bias_angle);
+      const v_inductance = L_0 + L_bias * Math.cos(L_bias_angle - 2 * Math.PI / 3);
+      const w_inductance = L_0 + L_bias * Math.cos(L_bias_angle + 2 * Math.PI / 3);
 
-      const u_inductance_voltage = u_scaled_current_diff * u_inductance;
-      const v_inductance_voltage = v_scaled_current_diff * v_inductance;
-      const w_inductance_voltage = w_scaled_current_diff * w_inductance;
+      const u_inductance_voltage = u_di_dt * u_inductance;
+      const v_inductance_voltage = v_di_dt * v_inductance;
+      const w_inductance_voltage = w_di_dt * w_inductance;
 
-      const inductance_power_ish = square(current_magnitude) * Math.abs(current_angular_speed);
-      const inductance_power_emf = parameters.magnetization_factor.value * inductance_power_ish;
-
+      const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage;
+      const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage;
+      const w_residual = w_resistive_voltage + w_inductance_voltage - w_drive_voltage;
       
-      const u_residual1 = u_resistive_voltage + u_inductance_voltage - u_drive_voltage;
-      const v_residual1 = v_resistive_voltage + v_inductance_voltage - v_drive_voltage;
-      const w_residual1 = w_resistive_voltage + w_inductance_voltage - w_drive_voltage;
-      
-      const loss1 = square(u_residual1) + square(v_residual1) + square(w_residual1);
+      const loss = square(u_residual) + square(v_residual) + square(w_residual);
+
+      const sqrt_loss = Math.sqrt(loss);
       
       const resistance_gradient = (
-        u_residual1 * u_current +
-        v_residual1 * v_current +
-        w_residual1 * w_current
+        u_residual * u_current +
+        v_residual * v_current +
+        w_residual * w_current
       );
 
       const inductance_gradient = (
-        u_residual1 * u_scaled_current_diff +
-        v_residual1 * v_scaled_current_diff +
-        w_residual1 * w_scaled_current_diff
+        u_residual * u_di_dt +
+        v_residual * v_di_dt +
+        w_residual * w_di_dt
       );
 
       const inductance_bias_gradient = (
-        u_residual1 * u_scaled_current_diff * Math.cos(parameters.inductance_bias_angle.value) +
-        v_residual1 * v_scaled_current_diff * Math.cos(parameters.inductance_bias_angle.value - 2 * Math.PI / 3) +
-        w_residual1 * w_scaled_current_diff * Math.cos(parameters.inductance_bias_angle.value + 2 * Math.PI / 3)
+        u_residual * u_di_dt * Math.cos(L_bias_angle) +
+        v_residual * v_di_dt * Math.cos(L_bias_angle - 2 * Math.PI / 3) +
+        w_residual * w_di_dt * Math.cos(L_bias_angle + 2 * Math.PI / 3)
       );
 
       const inductance_bias_angle_gradient = -(
-        u_residual1 * u_scaled_current_diff * parameters.inductance_bias.value * Math.sin(parameters.inductance_bias_angle.value) +
-        v_residual1 * v_scaled_current_diff * parameters.inductance_bias.value * Math.sin(parameters.inductance_bias_angle.value - 2 * Math.PI / 3) +
-        w_residual1 * w_scaled_current_diff * parameters.inductance_bias.value * Math.sin(parameters.inductance_bias_angle.value + 2 * Math.PI / 3)
+        u_residual * u_di_dt * L_bias * Math.sin(L_bias_angle) +
+        v_residual * v_di_dt * L_bias * Math.sin(L_bias_angle - 2 * Math.PI / 3) +
+        w_residual * w_di_dt * L_bias * Math.sin(L_bias_angle + 2 * Math.PI / 3)
       );
-
-      const magnetization_offset = 2*current_angle - parameters.magnetization_angle.value;
-
-      const u_magnetization_voltage = inductance_power_emf * Math.cos(magnetization_offset);
-      const v_magnetization_voltage = inductance_power_emf * Math.cos(magnetization_offset - 2 * Math.PI / 3);
-      const w_magnetization_voltage = inductance_power_emf * Math.cos(magnetization_offset + 2 * Math.PI / 3);
-
-      const u_residual2 = u_residual1 + u_magnetization_voltage;
-      const v_residual2 = v_residual1 + v_magnetization_voltage;
-      const w_residual2 = w_residual1 + w_magnetization_voltage;
-
-      // We define the loss as the sum of the squares of the unexplained residual voltages. We assume
-      // during the calibration that EMF is negligible, and therefore we calibrate the resistance against
-      const loss2 = square(u_residual2) + square(v_residual2) + square(w_residual2);
-
-
-      const magnetization_factor_gradient = (
-        u_residual2 * inductance_power_ish * Math.cos(magnetization_offset) +
-        v_residual2 * inductance_power_ish * Math.cos(magnetization_offset - 2 * Math.PI / 3) +
-        w_residual2 * inductance_power_ish * Math.cos(magnetization_offset + 2 * Math.PI / 3)
-      );
-
-      const magnetization_angle_gradient = (
-        u_residual2 * inductance_power_emf * Math.sin(magnetization_offset) +
-        v_residual2 * inductance_power_emf * Math.sin(magnetization_offset - 2 * Math.PI / 3) +
-        w_residual2 * inductance_power_emf * Math.sin(magnetization_offset + 2 * Math.PI / 3)
-      );
-
-      const residual2_square = square(u_residual2) + square(v_residual2) + square(w_residual2);
-      
-      const residual2_square_prediction = square(inductance_power_emf * (0.5 + 0.5 * Math.cos(current_angle - parameters.predicted_angle.value)));
-
-      const residual3 = residual2_square_prediction - residual2_square;
-
-      const loss3 = Math.abs(residual3);
-
-      const predicted_angle_gradient = residual3 * square(inductance_power_emf) * Math.sin(current_angle - parameters.predicted_angle.value);
-
-      const magnet_distortion = 20.0 * Math.PI / 180.0;
-      const magnet_distortion_factor = 0.5;
-
-      const u_magnetization_voltage3 = inductance_power_emf * Math.cos(magnetization_offset + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
-      const v_magnetization_voltage3 = inductance_power_emf * Math.cos(magnetization_offset - 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
-      const w_magnetization_voltage3 = inductance_power_emf * Math.cos(magnetization_offset + 2 * Math.PI / 3 + magnet_distortion * Math.sin(current_angle - parameters.predicted_angle.value)) * (1.0 + magnet_distortion_factor + magnet_distortion_factor * Math.cos(current_angle - parameters.predicted_angle.value));
 
       return {
         ...readout,
@@ -1697,50 +1650,21 @@ async function run_current_calibration(motor_controller, message_options) {
         v_inductance_voltage,
         w_inductance_voltage,
         
-        loss1,
-        u_residual1,
-        v_residual1,
-        w_residual1,
-
-        loss2,
-        u_residual2,
-        v_residual2,
-        w_residual2,
-
-        u_magnetization_voltage,
-        v_magnetization_voltage,
-        w_magnetization_voltage,
-        
-        residual2_square,
-        residual2_square_prediction,
-        
-        loss3,
-
-        u_magnetization_voltage3,
-        v_magnetization_voltage3,
-        w_magnetization_voltage3,
+        loss,
+        sqrt_loss,
+        u_residual,
+        v_residual,
+        w_residual,
 
         resistance_gradient,
         inductance_gradient,
         inductance_bias_gradient,
         inductance_bias_angle_gradient,
-        magnetization_factor_gradient,
-        magnetization_angle_gradient,
-        predicted_angle_gradient,
 
         current_angle,
         drive_voltage_angle,
       };
     });
-
-    const sqrt_loss1 = Math.sqrt(d3.mean(gradients, (d) => d.loss1));
-
-    const sqrt_loss2 = Math.sqrt(d3.mean(gradients, (d) => d.loss2));
-    
-    const sqrt_loss3 = Math.sqrt(d3.mean(gradients, (d) => d.loss3));
-    
-    const angle_diff = normalize_radians(parameters.predicted_angle.value - parameters.magnetization_angle.value);
-
 
     iterations.push({
       iteration: i,
@@ -1749,15 +1673,9 @@ async function run_current_calibration(motor_controller, message_options) {
         inductance: parameters.inductance.value,
         inductance_bias: parameters.inductance_bias.value,
         inductance_bias_angle: parameters.inductance_bias_angle.value,
-        magnetization_angle: parameters.magnetization_angle.value,
-        magnetization_factor: parameters.magnetization_factor.value,
-        predicted_angle: parameters.predicted_angle.value,
-        angle_diff,
-        sqrt_loss1,
-        sqrt_loss2,
-        sqrt_loss3,
+        sqrt_loss: d3.mean(sample_with_gradients, (d) => d.sqrt_loss),
       },
-      gradients,
+      sample_with_gradients,
     });
 
     // Resilient Backpropagation
@@ -1766,28 +1684,15 @@ async function run_current_calibration(motor_controller, message_options) {
     // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
 
     is_stable = optimizer_update(parameters, {
-      resistance: d3.mean(gradients, (d) => d.resistance_gradient),
-      inductance: d3.mean(gradients, (d) => d.inductance_gradient),
-      inductance_bias: d3.mean(gradients, (d) => d.inductance_bias_gradient),
-      inductance_bias_angle: d3.mean(gradients, (d) => d.inductance_bias_angle_gradient),
-      magnetization_factor: d3.mean(gradients, (d) => d.magnetization_factor_gradient),
-      magnetization_angle: d3.mean(gradients, (d) => d.magnetization_angle_gradient),
-      predicted_angle: d3.mean(gradients, (d) => d.predicted_angle_gradient),
+      resistance: d3.mean(sample_with_gradients, (d) => d.resistance_gradient),
+      inductance: d3.mean(sample_with_gradients, (d) => d.inductance_gradient),
+      inductance_bias: d3.mean(sample_with_gradients, (d) => d.inductance_bias_gradient),
+      inductance_bias_angle: d3.mean(sample_with_gradients, (d) => d.inductance_bias_angle_gradient),
     });
 
     
     // Update calibration values after pushing the iteration data! The iteration should then
     // contain the calibration values that were used to calculate the gradients and other values.
-
-    if (parameters.magnetization_factor.value < 0.0) {
-      parameters.magnetization_factor.value = -parameters.magnetization_factor.value;
-      parameters.magnetization_factor.learning_rate *= rate_decrease;
-      parameters.magnetization_angle.value = normalize_radians(parameters.magnetization_angle.value + Math.PI);
-    } else {
-      parameters.magnetization_angle.value = normalize_radians(parameters.magnetization_angle.value);
-    }
-
-    parameters.predicted_angle.value = normalize_radians(parameters.predicted_angle.value);
 
     parameters.inductance.value = Math.max(0.0, parameters.inductance.value);
     
@@ -1809,9 +1714,6 @@ async function run_current_calibration(motor_controller, message_options) {
       inductance: parameters.inductance.value,
       inductance_bias: parameters.inductance_bias.value,
       inductance_bias_angle: parameters.inductance_bias_angle.value,
-      magnetization_angle: parameters.magnetization_angle.value,
-      magnetization_factor: parameters.magnetization_factor.value,
-      predicted_angle: parameters.predicted_angle.value,
     }
   };
 
@@ -1894,7 +1796,7 @@ set_input_value(current_calibration_optimization_iteration_input, current_calibr
 ```js
 
 const current_calibration_iteration = current_calibration_iterations[current_calibration_optimization_iteration];
-const current_calibration_gradients = current_calibration_iteration?.gradients ?? [];
+const current_calibration_gradients = current_calibration_iteration?.sample_with_gradients ?? [];
 
 // Write out the current calibration results in copyable format.
 const current_calibration_iteration_table = `current_calibration = ${JSON.stringify(current_calibration_iterations[current_calibration_optimization_iteration]?.current_calibration, null, 2)}`;
@@ -1913,12 +1815,6 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: "v_drive_voltage", label: "V Drive Voltage", color: d3.color(colors.v).brighter(1)},
     {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).brighter(1)},
 
-    {y: (d)=>Math.sqrt(d.loss2), label: "Sqrt Loss2", color: d3.color(colors_categories[0]).darker(1)},
-    {y: "residual2_square_prediction", label: "Predicted Residual Square", color: colors_categories[0]},
-
-    {y: "residual2_square", label: "Residual Square", color: colors_categories[1]},
-    {y: (d)=>Math.sqrt(d.loss1), label: "Sqrt Loss1", color: d3.color(colors_categories[2]).darker(1)},
-
     {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
     {y: "v_resistive_voltage", label: "V Resistance Drop", color: colors.v},
     {y: "w_resistive_voltage", label: "W Resistance Drop", color: colors.w},
@@ -1927,25 +1823,11 @@ const current_calibration_optimizing_plot = plot_lines({
     {y: "v_inductance_voltage", label: "V Inductance Drop", color: d3.color(colors.v).darker(1)},
     {y: "w_inductance_voltage", label: "W Inductance Drop", color: d3.color(colors.w).darker(1)},
 
-    {y: "u_residual1", label: "U Residual 1", color: d3.color(colors.u).darker(2)},
-    {y: "v_residual1", label: "V Residual 1", color: d3.color(colors.v).darker(2)},
-    {y: "w_residual1", label: "W Residual 1", color: d3.color(colors.w).darker(2)},
+    {y: "u_residual", label: "U Residual", color: d3.color(colors.u).darker(2)},
+    {y: "v_residual", label: "V Residual", color: d3.color(colors.v).darker(2)},
+    {y: "w_residual", label: "W Residual", color: d3.color(colors.w).darker(2)},
+    {y: "sqrt_loss", label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
 
-    {y: (d)=>(d.u_inductance_voltage * d.u_current), label: "U Inductor Power", color: colors.u},
-    {y: (d)=>(d.v_inductance_voltage * d.v_current), label: "V Inductor Power", color: colors.v},
-    {y: (d)=>(d.w_inductance_voltage * d.w_current), label: "W Inductor Power", color: colors.w},
-    
-    {y: "u_magnetization_voltage", label: "U Magnetization Voltage", color: d3.color(colors.u).darker(1)},
-    {y: "v_magnetization_voltage", label: "V Magnetization Voltage", color: d3.color(colors.v).darker(1)},
-    {y: "w_magnetization_voltage", label: "W Magnetization Voltage", color: d3.color(colors.w).darker(1)},
-
-    {y: "u_magnetization_voltage3", label: "U Magnetization Voltage 3", color: d3.color(colors.u).brighter(1)},
-    {y: "v_magnetization_voltage3", label: "V Magnetization Voltage 3", color: d3.color(colors.v).brighter(1)},
-    {y: "w_magnetization_voltage3", label: "W Magnetization Voltage 3", color: d3.color(colors.w).brighter(1)},
-
-    {y: "u_residual2", label: "U Residual 2", color: d3.color(colors.u).darker(2)},
-    {y: "v_residual2", label: "V Residual 2", color: d3.color(colors.v).darker(2)},
-    {y: "w_residual2", label: "W Residual 2", color: d3.color(colors.w).darker(2)},
   ],
   curve,
 });
