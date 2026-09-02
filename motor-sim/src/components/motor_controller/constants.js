@@ -31,10 +31,16 @@ export const cycles_per_millisecond = pwm_cycles_per_second / 1000.0;
 // Millisecond (fractions) per PWM motor cycle.
 export const millis_per_cycle = 1.0/cycles_per_millisecond;
 
-// Angle units
-// -----------
+export const max_frequency = pwm_cycles_per_second / 11.9;
+
+// Angle & speed units
+// -------------------
 
 export const angle_base = 2**32;
+
+// Maximum angular speed that we can command the driver.
+export const max_angular_speed = 1.0 * max_frequency * angle_base / pwm_cycles_per_second;
+
 
 // Convert degrees to angle units.
 export function radians_to_angle_units(radians){
@@ -45,9 +51,6 @@ export function angle_units_to_radians(angle){
   return normalize_radians(angle * 2 * Math.PI / angle_base);
 }
 
-// Speed units
-// -----------
-
 export function speed_units_to_rotations_per_millisecond(speed){
   return speed * cycles_per_millisecond / angle_base;
 }
@@ -56,20 +59,6 @@ export function rotations_per_millisecond_to_speed_units(speed){
   return angle_base * speed / cycles_per_millisecond;
 }
 
-// Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
-const rotor_revolutions_per_electric = 4;
-
-const max_rpm = 32000.0 * rotor_revolutions_per_electric;
-
-// Gear ratio of our chosen motor.
-export const gear_ratio = 6 * 6 * 6;
-
-// Total ratio between the electrical angle and the output shaft angle.
-export const ratio = rotor_revolutions_per_electric * gear_ratio;
-
-// Maximum angular speed that we can command the driver.
-export const max_angular_speed = 1.0 * max_rpm * angle_base / 60.0 / pwm_cycles_per_second;
-
 export function acceleration_units_to_rotations_per_millisecond_squared(acceleration){
   return speed_units_to_rotations_per_millisecond(acceleration) * cycles_per_millisecond;
 }
@@ -77,6 +66,7 @@ export function acceleration_units_to_rotations_per_millisecond_squared(accelera
 export function rotations_per_millisecond_squared_to_acceleration_units(acceleration){
   return rotations_per_millisecond_to_speed_units(acceleration / cycles_per_millisecond);
 }
+
 
 
 // Bit handling constants

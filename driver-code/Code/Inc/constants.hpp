@@ -26,11 +26,6 @@ constexpr float max_drive_power = 12.0;
 // Inverse for fast math.
 constexpr float max_drive_power_inverse = 1.f / max_drive_power;
 
-// Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
-constexpr float rotor_revolutions_per_electric = 4;
-
-// Maximum speed achievable by the motor; in electric revolutions per minute (RPM).
-constexpr float max_rpm = 32'000 * rotor_revolutions_per_electric;
 
 // Angle base is the max uint32_t + 1, so we need to express it as float: std::pow(2, angle_bit_count).
 constexpr float angle_base = 4294967296.f;
@@ -41,8 +36,19 @@ constexpr int32_t pwm_period = 2 * hex_mini_drive::PWM_BASE;
 // Number of PWM cycles per second.
 constexpr int32_t pwm_cycles_per_second = hex_mini_drive::CLOCK_FREQUENCY / pwm_period;
 
+// We define the maximum drive/measurable electrical rotation frequency as slightly less than
+// 12 x the sampling rate. At this speed we move 30degrees around the circle per PWM cycle,
+// but not exactly 30degrees so we can sample all angles.
+constexpr float max_frequency = pwm_cycles_per_second / 11.9f;
+
+// Number of electrical revolutions per mechanical revolution. This is pole pairs times the number of slot triplets.
+constexpr float rotor_revolutions_per_electric = 4;
+
+// Maximum speed that we can drive at our PWM cycle/sampling frequency. In motor rotations per minute (RPM).
+constexpr float max_rpm = max_frequency * 60.f / rotor_revolutions_per_electric;
+
 // Maximum angular speed we can achieve in our angle units per PWM cycle.
-constexpr float max_angular_speed = 1.f * max_rpm * angle_base / 60.0 / static_cast<float>(pwm_cycles_per_second);
+constexpr float max_angular_speed = 1.f * angle_base * max_frequency / static_cast<float>(pwm_cycles_per_second);
 
 // Inverse of the maximum angular speed so we can convert to floating point values without doing a division.
 constexpr float max_angular_speed_inverse = 1.f / max_angular_speed;

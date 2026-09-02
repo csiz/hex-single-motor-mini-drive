@@ -1323,7 +1323,7 @@ const current_calibration_test_speed_slider = inputs_wide_range(
     -speed_units_to_rotations_per_millisecond(max_angular_speed), 
     +speed_units_to_rotations_per_millisecond(max_angular_speed)
   ], 
-  {value: 1.0, step: 0.01, label: "Calibration test speed (rotations/ms):"});
+  {value: 1.0, label: "Calibration test speed (rotations/ms):"});
 
 const current_calibration_test_speed = transformed_input_value(current_calibration_test_speed_slider, rotations_per_millisecond_to_speed_units);
 
@@ -1593,7 +1593,7 @@ const current_calibration_angles_scatter = plot_lines({
   channels: [
     {y: "current_magnitude", label: "Current Magnitude", color: colors_categories[4]},
     {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
-    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle) / Math.max(d.current_angular_speed, 0.5), label: "Drive-Current Angle Diff / Angular Speed", color: colors_categories[6]}
+    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle) / d.current_angular_speed, label: "Drive-Current Angle Diff / Angular Speed", color: colors_categories[6]}
   ],
   curve: horizontal_step,
 });
