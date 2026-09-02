@@ -113,6 +113,7 @@ Current Calibration Procedures
     <pre>${current_calibration_iteration_table}</pre>
     <div>${current_calibration_optimizing_plot}</div>
     <div>${current_calibration_angles_plot}</div>
+    <div>${current_calibration_angles_scatter}</div>
     <div>${current_calibration_optimizing_gradients_plot}</div>
   </div>
 
@@ -1580,6 +1581,23 @@ const current_calibration_angles_plot = plot_lines({
   curve,
 });
 
+const current_calibration_angles_scatter = plot_lines({
+  data: current_calibration_gradients.slice(24).sort((a, b) => a.drive_voltage_angle - b.drive_voltage_angle),
+  subtitle: "Current Calibration - Angle Scatter",
+  description: "Scatter plot of current calibration angles.",
+  width: 1200, height: 300,
+  x_domain: [-Math.PI, Math.PI],
+  x: "drive_voltage_angle",
+  x_label: "Drive Voltage Angle (radians)",
+  y_label: "Drive-Current Angle Diff (radians)",
+  channels: [
+    {y: "current_magnitude", label: "Current Magnitude", color: colors_categories[4]},
+    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
+    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle) / Math.max(d.current_angular_speed, 0.5), label: "Drive-Current Angle Diff / Angular Speed", color: colors_categories[6]}
+  ],
+  curve: horizontal_step,
+});
+
 const current_calibration_optimizing_gradients_plot = plot_lines({
   data: current_calibration_gradients,
   subtitle: "Current Calibration - resistance & inductance gradients",
@@ -1603,6 +1621,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
 autosave_inputs({
   current_calibration_optimizing_plot,
   current_calibration_optimizing_gradients_plot,
+  current_calibration_angles_scatter,
   current_calibration_angles_plot,
 });
 ```

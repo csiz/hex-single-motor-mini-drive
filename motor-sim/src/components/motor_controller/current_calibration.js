@@ -123,14 +123,6 @@ export async function run_current_calibration(motor_controller, message_options)
       value: 0.0, 
       max_learning_rate: control_parameters.phase_resistance_ki,
     },
-    resistance_bias: {
-      value: 0.0, 
-      max_learning_rate: control_parameters.phase_resistance_ki,
-    },
-    resistance_bias_angle: {
-      value: 0.0, 
-      max_learning_rate: control_parameters.magnetization_angle_ki,
-    },
     inductance: {
       value: 0.0, 
       max_learning_rate: control_parameters.phase_inductance_ki,
@@ -180,9 +172,9 @@ export async function run_current_calibration(motor_controller, message_options)
       const v_scaled_current_diff = v_current_diff * pwm_cycles_per_second;
       const w_scaled_current_diff = w_current_diff * pwm_cycles_per_second;
 
-      const u_resistance = parameters.resistance.value + parameters.resistance_bias.value * Math.cos(parameters.resistance_bias_angle.value);
-      const v_resistance = parameters.resistance.value + parameters.resistance_bias.value * Math.cos(parameters.resistance_bias_angle.value - 2 * Math.PI / 3);
-      const w_resistance = parameters.resistance.value + parameters.resistance_bias.value * Math.cos(parameters.resistance_bias_angle.value + 2 * Math.PI / 3);
+      const u_resistance = parameters.resistance.value;
+      const v_resistance = parameters.resistance.value;
+      const w_resistance = parameters.resistance.value;
 
       const u_resistive_voltage = u_current * u_resistance;
       const v_resistive_voltage = v_current * v_resistance;
@@ -210,18 +202,6 @@ export async function run_current_calibration(motor_controller, message_options)
         u_residual1 * u_current +
         v_residual1 * v_current +
         w_residual1 * w_current
-      );
-
-      const resistance_bias_gradient = (
-        u_residual1 * u_current * Math.cos(parameters.resistance_bias_angle.value) +
-        v_residual1 * v_current * Math.cos(parameters.resistance_bias_angle.value - 2 * Math.PI / 3) +
-        w_residual1 * w_current * Math.cos(parameters.resistance_bias_angle.value + 2 * Math.PI / 3)
-      );
-
-      const resistance_bias_angle_gradient = -(
-        u_residual1 * u_current * parameters.resistance_bias.value * Math.sin(parameters.resistance_bias_angle.value) +
-        v_residual1 * v_current * parameters.resistance_bias.value * Math.sin(parameters.resistance_bias_angle.value - 2 * Math.PI / 3) +
-        w_residual1 * w_current * parameters.resistance_bias.value * Math.sin(parameters.resistance_bias_angle.value + 2 * Math.PI / 3)
       );
 
       const inductance_gradient = (
@@ -321,8 +301,6 @@ export async function run_current_calibration(motor_controller, message_options)
         w_magnetization_voltage3,
 
         resistance_gradient,
-        resistance_bias_gradient,
-        resistance_bias_angle_gradient,
         inductance_gradient,
         inductance_bias_gradient,
         inductance_bias_angle_gradient,
@@ -348,12 +326,9 @@ export async function run_current_calibration(motor_controller, message_options)
       iteration: i,
       current_calibration: {
         resistance: parameters.resistance.value,
-        resistance_bias: parameters.resistance_bias.value,
-        resistance_bias_angle: parameters.resistance_bias_angle.value,
         inductance: parameters.inductance.value,
         inductance_bias: parameters.inductance_bias.value,
         inductance_bias_angle: parameters.inductance_bias_angle.value,
-        inductance_bias_angle_m_resistance_bias_angle: normalize_radians(parameters.inductance_bias_angle.value - parameters.resistance_bias_angle.value),
         magnetization_angle: parameters.magnetization_angle.value,
         magnetization_factor: parameters.magnetization_factor.value,
         predicted_angle: parameters.predicted_angle.value,
@@ -372,8 +347,6 @@ export async function run_current_calibration(motor_controller, message_options)
 
     is_stable = optimizer_update(parameters, {
       resistance: d3.mean(gradients, (d) => d.resistance_gradient),
-      resistance_bias: d3.mean(gradients, (d) => d.resistance_bias_gradient),
-      resistance_bias_angle: d3.mean(gradients, (d) => d.resistance_bias_angle_gradient),
       inductance: d3.mean(gradients, (d) => d.inductance_gradient),
       inductance_bias: d3.mean(gradients, (d) => d.inductance_bias_gradient),
       inductance_bias_angle: d3.mean(gradients, (d) => d.inductance_bias_angle_gradient),
@@ -396,15 +369,6 @@ export async function run_current_calibration(motor_controller, message_options)
 
     parameters.predicted_angle.value = normalize_radians(parameters.predicted_angle.value);
 
-    if (parameters.resistance_bias.value < 0.0) {
-      parameters.resistance_bias.value = -parameters.resistance_bias.value;
-      parameters.resistance_bias.learning_rate *= rate_decrease;
-      parameters.resistance_bias_angle.value = normalize_radians(parameters.resistance_bias_angle.value + Math.PI);
-    } else {
-      parameters.resistance_bias_angle.value = normalize_radians(parameters.resistance_bias_angle.value);
-    }
-
-
     parameters.inductance.value = Math.max(0.0, parameters.inductance.value);
     
     if (parameters.inductance_bias.value < 0.0) {
@@ -422,8 +386,6 @@ export async function run_current_calibration(motor_controller, message_options)
     iterations,
     current_calibration: {
       resistance: parameters.resistance.value,
-      resistance_bias: parameters.resistance_bias.value,
-      resistance_bias_angle: parameters.resistance_bias_angle.value,
       inductance: parameters.inductance.value,
       inductance_bias: parameters.inductance_bias.value,
       inductance_bias_angle: parameters.inductance_bias_angle.value,
