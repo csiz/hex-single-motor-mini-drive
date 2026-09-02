@@ -1585,8 +1585,6 @@ async function run_current_calibration(motor_controller, message_options) {
       const v_di_dt = v_current_diff * pwm_cycles_per_second;
       const w_di_dt = w_current_diff * pwm_cycles_per_second;
 
-      const i_omega = current_angular_speed;
-
       const R = parameters.resistance.value;
 
       const u_resistive_voltage = u_current * R;
@@ -1604,29 +1602,20 @@ async function run_current_calibration(motor_controller, message_options) {
       const u_inductance_voltage = (
         u_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle)) +
         v_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3)) +
-        w_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)) +
-        - 2 * i_omega * L_bias * u_current * Math.sin(2 * L_bias_angle) +
-        - 2 * i_omega * L_bias * v_current * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3) +
-        - 2 * i_omega * L_bias * w_current * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3)
+        w_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3))
       );
 
 
       const v_inductance_voltage = (
         u_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3)) +
         v_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)) +
-        w_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle)) +
-        - 2 * i_omega * L_bias * u_current * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3) +
-        - 2 * i_omega * L_bias * v_current * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3) +
-        - 2 * i_omega * L_bias * w_current * Math.sin(2 * L_bias_angle)
+        w_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle))
       );
 
       const w_inductance_voltage = (
         u_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)) +
         v_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle)) +
-        w_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3)) +
-        - 2 * i_omega * L_bias * u_current * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3) +
-        - 2 * i_omega * L_bias * v_current * Math.sin(2 * L_bias_angle) +
-        - 2 * i_omega * L_bias * w_current * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3)
+        w_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3))
       );
 
       const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage;
@@ -1653,26 +1642,17 @@ async function run_current_calibration(motor_controller, message_options) {
         u_residual * (
           u_di_dt * Math.cos(2 * L_bias_angle) +
           v_di_dt * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
-          w_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3) +
-          - 2 * i_omega * u_current * Math.sin(2 * L_bias_angle) +
-          - 2 * i_omega * v_current * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3) +
-          - 2 * i_omega * w_current * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3)
+          w_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)
         ) +
         v_residual * (
           u_di_dt * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
           v_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3) +
-          w_di_dt * Math.cos(2 * L_bias_angle) +
-          - 2 * i_omega * u_current * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3) +
-          - 2 * i_omega * v_current * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3) +
-          - 2 * i_omega * w_current * Math.sin(2 * L_bias_angle)
+          w_di_dt * Math.cos(2 * L_bias_angle)
         ) +
         w_residual * (
           u_di_dt * Math.cos(2 * L_bias_angle) +
           v_di_dt * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
-          w_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3) +
-          - 2 * i_omega * u_current * Math.sin(2 * L_bias_angle) +
-          - 2 * i_omega * v_current * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3) +
-          - 2 * i_omega * w_current * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3)
+          w_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)
         )
       );
 
@@ -1691,21 +1671,6 @@ async function run_current_calibration(motor_controller, message_options) {
           u_di_dt * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3) +
           v_di_dt * Math.sin(2 * L_bias_angle) +
           w_di_dt * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3)
-        ) +
-        u_residual * 4 * i_omega * L_bias * (
-          u_current * Math.cos(2 * L_bias_angle) +
-          v_current * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
-          w_current * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)
-        ) +
-        v_residual * 4 * i_omega * L_bias * (
-          u_current * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
-          v_current * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3) +
-          w_current * Math.cos(2 * L_bias_angle)
-        ) +
-        w_residual * 4 * i_omega * L_bias * (
-          u_current * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3) +
-          v_current * Math.cos(2 * L_bias_angle) +
-          w_current * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3)
         )
       );
           
