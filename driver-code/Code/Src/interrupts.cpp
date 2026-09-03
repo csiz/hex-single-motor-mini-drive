@@ -1129,20 +1129,25 @@ void ADC1_2_IRQHandler(void){
     const float direct_current_diff = direct_current - readout.direct_current;
     const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
 
+
+    const float max_inductance = current_calibration.inductance + current_calibration.inductance_bias;
+    const float min_inductance = current_calibration.inductance - current_calibration.inductance_bias;
+
     // Calculate the voltage drop across the coil inductance.
     // 
     // Because it's so noisy, we zero it out when we're not actively driving the motor so we can pick up smaller EMF signals.
-    const float current_diff_to_inductor_voltage = (driver_state.active_pwm != 0) * current_calibration.inductance * current_diff_to_voltage_units;
-    const float omega_current_to_inductor_voltage = readout.angular_speed * current_calibration.inductance  * speed_units_to_radians_per_second * current_to_voltage_units;
+    const float current_diff_to_voltage = (driver_state.active_pwm != 0) * current_diff_to_voltage_units;
+    
+    const float omega_current_to_voltage = readout.angular_speed * speed_units_to_radians_per_second * current_to_voltage_units;
 
     const float direct_inductor_voltage = (
-        direct_current_diff * current_diff_to_inductor_voltage +
-        -omega_current_to_inductor_voltage * quadrature_current
+        direct_current_diff * current_diff_to_voltage * max_inductance +
+        -omega_current_to_voltage * min_inductance * quadrature_current
     );
     
     const float quadrature_inductor_voltage = (
-        quadrature_current_diff * current_diff_to_inductor_voltage +
-        omega_current_to_inductor_voltage * direct_current
+        quadrature_current_diff * current_diff_to_voltage * min_inductance +
+        omega_current_to_voltage * max_inductance * direct_current
     );
 
     // Infer the back EMF voltages for each phase.
