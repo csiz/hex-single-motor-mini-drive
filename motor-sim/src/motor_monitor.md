@@ -1431,51 +1431,7 @@ const update_current_calibration_data = (new_value) => {
 
 
 
-const rate_increase = 1.2;
-const rate_decrease = 0.5;
-const stability_threshold = 0.000_1;
 const max_iterations = 100;
-
-function optimizer_init(init) {
-  return Object.fromEntries(Object.entries(init).map(([key, {value, max_learning_rate}]) => {
-    return [key, {
-      value,
-      learning_rate: max_learning_rate,
-      max_learning_rate,
-      gradient_sign: 0.0,
-    }];
-  }));
-}
-
-function optimizer_update(params, gradients) {
-  let is_stable = true;
-
-  for (const [key, gradient] of Object.entries(gradients)) {
-    let parameter = params[key];
-
-    if (parameter === undefined) {
-      throw new Error(`Parameter ${key} not found in optimizer parameters`);
-    }
-
-    const sign = Math.sign(gradient);
-    const prev_sign = parameter.gradient_sign;
-    if (sign === prev_sign) {
-      parameter.learning_rate = Math.min(parameter.learning_rate * rate_increase, parameter.max_learning_rate);
-    } else {
-      parameter.learning_rate = parameter.learning_rate * rate_decrease;
-    }
-
-    parameter.gradient_sign = sign;
-
-    parameter.value -= sign * parameter.learning_rate;
-
-    if (parameter.learning_rate >= (parameter.max_learning_rate * stability_threshold)) {
-      is_stable = false;
-    }
-  }
-
-  return is_stable;
-}
 
 async function run_current_calibration(motor_controller, message_options) {
   if (!motor_controller.current_calibration) {
@@ -1537,32 +1493,38 @@ async function run_current_calibration(motor_controller, message_options) {
     }
   }
 
-  let parameters = optimizer_init({
+  const beta1 = 0.9;
+  let momentum_correction = 0.0;
+  const beta2 = 0.99;
+  let variance_correction = 0.0;
+  const epsilon = 1e-12;
+
+  let parameters = {
     resistance: {
-      value: 0.0, 
-      max_learning_rate: control_parameters.phase_resistance_ki,
+      value: current_calibration?.resistance ?? 0.01,
+      momentum: 0.0,
+      variance: 0.0,
+      learning_rate: 0.01,
     },
     inductance: {
-      value: 0.0, 
-      max_learning_rate: control_parameters.phase_inductance_ki,
+      value: current_calibration?.inductance ?? 0.00001, 
+      momentum: 0.0,
+      variance: 0.0,
+      learning_rate: 0.00001,
     },
     inductance_bias: {
-      value: 0.0, 
-      max_learning_rate: control_parameters.phase_inductance_ki,
+      value: current_calibration?.inductance_bias ?? 0.00001, 
+      momentum: 0.0,
+      variance: 0.0,
+      learning_rate: 0.00001,
     },
     inductance_bias_angle: {
-      value: 0.0, 
-      max_learning_rate: control_parameters.inductance_bias_angle_ki,
+      value: current_calibration?.inductance_bias_angle ?? 0.0,
+      momentum: 0.0,
+      variance: 0.0,
+      learning_rate: 0.01,
     },
-    saturation_angle: {
-      value: 0.0, 
-      max_learning_rate: control_parameters.inductance_bias_angle_ki,
-    },
-    saturation_factor: {
-      value: 0.0,
-      max_learning_rate: control_parameters.saturation_factor_ki,
-    },
-  });
+  };
 
 
   let is_stable = false;
@@ -1687,11 +1649,11 @@ async function run_current_calibration(motor_controller, message_options) {
         inductance_bias_angle: parameters.inductance_bias_angle.value,
         sqrt_loss: Math.sqrt(d3.mean(sample_with_gradients, (d) => d.loss)),
         inductance_bias_angle_p_pi: normalize_radians(parameters.inductance_bias_angle.value + Math.PI),
-        
-        resistance_learning_rate: parameters.resistance.learning_rate,
-        inductance_learning_rate: parameters.inductance.learning_rate,
-        inductance_bias_learning_rate: parameters.inductance_bias.learning_rate,
-        inductance_bias_angle_learning_rate: parameters.inductance_bias_angle.learning_rate,
+
+        resistance_momentum: parameters.resistance.momentum,
+        inductance_momentum: parameters.inductance.momentum,
+        inductance_bias_momentum: parameters.inductance_bias.momentum,
+        inductance_bias_angle_momentum: parameters.inductance_bias_angle.momentum,
       },
       sample_with_gradients,
     });
@@ -1701,13 +1663,29 @@ async function run_current_calibration(motor_controller, message_options) {
     // 
     // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
 
-    is_stable = optimizer_update(parameters, {
+
+
+    is_stable = false;
+
+    const gradients = {
       resistance: d3.mean(sample_with_gradients, (d) => d.resistance_gradient),
       inductance: d3.mean(sample_with_gradients, (d) => d.inductance_gradient),
       inductance_bias: d3.mean(sample_with_gradients, (d) => d.inductance_bias_gradient),
-      inductance_bias_angle: d3.mean(sample_with_gradients, (d) => d.inductance_bias_angle_gradient),
-    });
+      inductance_bias_angle: d3.mean(sample_with_gradients, (d) => d.inductance_bias_angle_gradient)
+    }
 
+    momentum_correction = beta1 * momentum_correction + (1.0 - beta1);
+    variance_correction = beta2 * variance_correction + (1.0 - beta2);
+
+    for (const [key, gradient] of Object.entries(gradients)) {
+      parameters[key].momentum = beta1 * parameters[key].momentum + (1 - beta1) * gradient;
+      parameters[key].variance = beta2 * parameters[key].variance + (1 - beta2) * gradient * gradient;
+
+      const corrected_momentum = parameters[key].momentum / momentum_correction;
+      const corrected_variance = parameters[key].variance / variance_correction;
+      
+      parameters[key].value -= parameters[key].learning_rate * corrected_momentum / (Math.sqrt(corrected_variance) + epsilon);
+    }
     
     // Update calibration values after pushing the iteration data! The iteration should then
     // contain the calibration values that were used to calculate the gradients and other values.
@@ -1716,7 +1694,6 @@ async function run_current_calibration(motor_controller, message_options) {
 
     if (parameters.inductance_bias.value < 0.0) {
       parameters.inductance_bias.value = -parameters.inductance_bias.value;
-      parameters.inductance_bias.learning_rate *= rate_decrease;
       parameters.inductance_bias_angle.value = normalize_radians(parameters.inductance_bias_angle.value + Math.PI/2);
     } else {
       parameters.inductance_bias_angle.value = normalize_radians(parameters.inductance_bias_angle.value);
