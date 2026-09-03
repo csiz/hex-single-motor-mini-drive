@@ -177,6 +177,8 @@ struct Readout {
   int32_t angle;
   // Error of the angle measured from EMF to the rotor angle prediction.
   int32_t angle_adjustment;
+  // Rotor magnetic angle that was used to calculate the previous readout.
+  int32_t previous_predicted_angle;
   // Best estimate for the rotor magnetic angular speed.
   float angular_speed;
   // Instantaneous VCC voltage readout (ADC value); from resistance divider.
@@ -220,6 +222,8 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_int32(buffer + offset, value.angle_adjustment);;
   offset += 4;
+  write_int32(buffer + offset, value.previous_predicted_angle);;
+  offset += 4;
   write_float32(buffer + offset, value.angular_speed);;
   offset += 4;
   write_float32(buffer + offset, value.vcc_voltage);;
@@ -261,6 +265,8 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   result.angle = read_int32(buffer + offset);
   offset += 4;
   result.angle_adjustment = read_int32(buffer + offset);
+  offset += 4;
+  result.previous_predicted_angle = read_int32(buffer + offset);
   offset += 4;
   result.angular_speed = read_float32(buffer + offset);
   offset += 4;
@@ -375,7 +381,7 @@ struct FullReadout : Readout {
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
   size_t offset = 0;
   write_Readout(buffer + offset, value);;
-  offset += 62;
+  offset += 66;
   write_float32(buffer + offset, value.main_loop_rate);;
   offset += 4;
   write_float32(buffer + offset, value.adc_update_rate);;
@@ -445,7 +451,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   size_t offset = 0;
   
   FullReadout result {read_Readout(buffer + offset)};
-  offset += 62;
+  offset += 66;
   
   result.main_loop_rate = read_float32(buffer + offset);
   offset += 4;
@@ -1252,10 +1258,10 @@ struct Message {
 constexpr size_t message_size(MessageCode code) {
   switch (code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
-    case MessageCode::READOUT: return 64;
+    case MessageCode::READOUT: return 68;
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
-    case MessageCode::FULL_READOUT: return 188;
+    case MessageCode::FULL_READOUT: return 192;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 18;
@@ -1313,9 +1319,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 62) return 0;
+      if (max_size < 2 + 66) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 64;
+      return 68;
     }
     case MessageCode::STREAM_FULL_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_FULL_READOUTS));
@@ -1329,9 +1335,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::FULL_READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 186) return 0;
+      if (max_size < 2 + 190) return 0;
       write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 188;
+      return 192;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1593,7 +1599,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 62) return false;
+      if (size != 2 + 66) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1608,7 +1614,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::FULL_READOUT: {
-      if (size != 2 + 186) return false;
+      if (size != 2 + 190) return false;
       message.message_data = read_FullReadout(buffer + 2);
       return true;
     }

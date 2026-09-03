@@ -59,6 +59,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   // Get electric angle data. Angle 0 means the rotor North is aligned when holding positive current on the U phase.
   const angle = angle_units_to_radians(bare_readout.angle);
   const angle_adjustment = angle_units_to_radians(bare_readout.angle_adjustment);
+  const previous_predicted_angle = angle_units_to_radians(bare_readout.previous_predicted_angle);
   const angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.angular_speed);
   const vcc_voltage = bare_readout.vcc_voltage / VOLTAGE_UNITS_PER_VOLT;
 
@@ -134,8 +135,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   
   const web_current_angle = normalize_radians(predicted_angle + Math.atan2(web_quadrature_current, web_direct_current));
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
-  const web_prev_current_angle = normalize_radians(predicted_angle + Math.atan2(prev_quadrature_current, prev_direct_current));
-  const web_current_angular_speed = speed_units_to_rotations_per_millisecond(radians_to_angle_units(normalize_radians(web_current_angle - web_prev_current_angle)));
+  const web_previous_current_angle = normalize_radians(previous_predicted_angle + Math.atan2(prev_quadrature_current, prev_direct_current));
+  const web_current_angular_speed = speed_units_to_rotations_per_millisecond(radians_to_angle_units(normalize_radians(web_current_angle - web_previous_current_angle)));
 
 
   const resistance = (current_calibration?.resistance ?? 1.0);

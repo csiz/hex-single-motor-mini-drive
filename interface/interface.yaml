@@ -282,6 +282,10 @@ definitions:
         type: int32
         doc: Error of the angle measured from EMF to the rotor angle prediction.
 
+      previous_predicted_angle:
+        type: int32
+        doc: Rotor magnetic angle that was used to calculate the previous readout.
+
       angular_speed:
         type: float32
         doc: Best estimate for the rotor magnetic angular speed.

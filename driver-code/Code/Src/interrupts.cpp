@@ -1069,17 +1069,6 @@ void ADC1_2_IRQHandler(void){
     previous_half_cycle_drive_voltages = half_cycle_drive_voltage;
 
 
-    // Position Update
-    // ---------------
-
-    // Add the external offset directly to the readout angle before the update. The update will
-    // calculate all values in the new angle frame; this update is ignored by the speed calculation.
-    readout.angle += external_angle_offset;
-    external_angle_offset = 0;
-
-    readout.rotations += external_rotations_offset;
-    external_rotations_offset = 0;
-
     // Predict the position; keeping track of fractional angles at the same resolution as
     // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
     // the rotor is exactly the angular speed.
@@ -1279,25 +1268,30 @@ void ADC1_2_IRQHandler(void){
     // Declare the angle to be correct after a threshold certainty.
     const bool angle_fix = correct_angle_counter >= angle_fix_threshold_count;
     
-    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki;
+    // Add the external angle offset to the angle adjustment.
+    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki + external_angle_offset;
+    external_angle_offset = 0;
 
     // Calculate the new angle based on the angle adjustment.
     const int32_t angle = predicted_angle + angle_adjustment;
 
     // Get the total angle change for the current cycle including adjustment and speed.
     const int32_t angle_diff = angle - readout.angle;
+
+    // Compute and remember the previous predicted angle where we calculated the previous dq0 values.
+    const int32_t previous_predicted_angle = readout.angle - readout.angle_adjustment;
     
     // Check if the angle overflowed and count rotations. Note, we need to flag the compiler to treat
     // integer overflow as well defined behaviour!
-    const int32_t rotations_increment = (
-        angle_diff > 0 ? (angle < readout.angle ? +1 : 0) :
-        angle_diff < 0 ? (angle > readout.angle ? -1 : 0) :
-        0
+    const int32_t rotations_increment = (angle_diff > 0 ? 
+        (angle < readout.angle ? +1 : 0) :
+        (angle > readout.angle ? -1 : 0)
     );
 
     // Calculate the new rotation index.
-    const int32_t rotations = readout.rotations + rotations_increment;
-
+    const int32_t rotations = readout.rotations + rotations_increment + external_rotations_offset;
+    external_rotations_offset = 0;
+    
     // Calculate speed and acceleration
     // --------------------------------
 
@@ -1390,8 +1384,8 @@ void ADC1_2_IRQHandler(void){
     readout.quadrature_current_diff = quadrature_current_diff;
 
     readout.angle = angle;
-
     readout.angle_adjustment = angle_adjustment;
+    readout.previous_predicted_angle = previous_predicted_angle;
     readout.angular_speed = angular_speed;
     readout.vcc_voltage = vcc_voltage;
 

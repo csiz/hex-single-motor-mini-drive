@@ -97,6 +97,8 @@ export class Readout {
   angle;
   // Error of the angle measured from EMF to the rotor angle prediction.
   angle_adjustment;
+  // Rotor magnetic angle that was used to calculate the previous readout.
+  previous_predicted_angle;
   // Best estimate for the rotor magnetic angular speed.
   angular_speed;
   // Instantaneous VCC voltage readout (ADC value); from resistance divider.
@@ -115,7 +117,7 @@ export class Readout {
 }
 
 function write_Readout(value) {
-  const buffer = new Uint8Array(62);
+  const buffer = new Uint8Array(66);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setUint16(offset, value.readout_number)
@@ -143,6 +145,8 @@ function write_Readout(value) {
   view.setInt32(offset, value.angle)
   offset += 4;
   view.setInt32(offset, value.angle_adjustment)
+  offset += 4;
+  view.setInt32(offset, value.previous_predicted_angle)
   offset += 4;
   view.setFloat32(offset, value.angular_speed)
   offset += 4;
@@ -184,6 +188,8 @@ function read_Readout(view, offset = 0) {
   result.angle = view.getInt32(offset);
   offset += 4;
   result.angle_adjustment = view.getInt32(offset);
+  offset += 4;
+  result.previous_predicted_angle = view.getInt32(offset);
   offset += 4;
   result.angular_speed = view.getFloat32(offset);
   offset += 4;
@@ -301,12 +307,12 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(186);
+  const buffer = new Uint8Array(190);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = new Uint8Array(view.buffer, offset, 62).set(write_Readout(value), 0);
+  const base_buffer = new Uint8Array(view.buffer, offset, 66).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
-  offset += 62;
+  offset += 66;
   view.setFloat32(offset, value.main_loop_rate)
   offset += 4;
   view.setFloat32(offset, value.adc_update_rate)
@@ -377,7 +383,7 @@ function read_FullReadout(view, offset = 0) {
   let result = new FullReadout();
   
   Object.assign(result, read_Readout(view, offset));
-  offset += 62;
+  offset += 66;
   
   result.main_loop_rate = view.getFloat32(offset);
   offset += 4;
@@ -1626,7 +1632,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case READOUT: {
-      if (buffer.length !== 2 + 62) return null;
+      if (buffer.length !== 2 + 66) return null;
       let message = read_Readout(view, 2);
       message.message_code = READOUT;
       return message;
@@ -1642,7 +1648,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 186) return null;
+      if (buffer.length !== 2 + 190) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;
