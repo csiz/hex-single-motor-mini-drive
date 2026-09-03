@@ -227,16 +227,6 @@ definitions:
       into a history buffer after a commanded event.
 
     struct:
-      u_drive_voltage: 
-        type: float32
-        doc: The PWM voltage for the U phase output.
-      v_drive_voltage: 
-        type: float32
-        doc: The PWM voltage for the V phase output.
-      w_drive_voltage: 
-        type: float32
-        doc: The PWM voltage for the W phase output.
-
       readout_number:
         type: uint16
         doc: Readout number; used to identify the readout in the history.
@@ -256,29 +246,33 @@ definitions:
           readouts as seen by the amplifier. The phase readouts are relative to this voltage
           so if this is quite noisy then the phases will also be noisy. We must track it!
 
-      u_current:
+      direct_drive_voltage:
         type: float32
-        doc: Phase U current readout (ADC value).
+        doc: The PWM voltage on the direct axis.
 
-      v_current:
+      quadrature_drive_voltage:
         type: float32
-        doc: Phase V current readout (ADC value).
+        doc: The PWM voltage for the quadrature drive output.
 
-      w_current:
+      direct_current:
         type: float32
-        doc: Phase W current readout (ADC value).
+        doc: Current in DQ0 coordinates; aligned with the rotor angle.
 
-      u_current_diff:
+      quadrature_current:
         type: float32
-        doc: Phase U current readout difference to previous readout.
+        doc: Current in DQ0 coordinates; crossed with the rotor angle.
 
-      v_current_diff:
+      zero_current:
         type: float32
-        doc: Phase V current readout difference to previous readout.
+        doc: The current common mode in the DQ0 transform.
 
-      w_current_diff:
+      direct_current_diff:
         type: float32
-        doc: Phase W current readout difference to previous readout.
+        doc: Difference in direct current compared to the previous readout.
+
+      quadrature_current_diff:
+        type: float32
+        doc: Difference in quadrature current compared to the previous readout.
 
       angle:
         type: int32
@@ -311,18 +305,6 @@ definitions:
       emf_voltage_angular_speed:
         type: float32
         doc: Angular speed of the EMF voltage vector.
-        
-      current_angle:
-        type: int32
-        doc: Angle of the current vector.
-
-      current_magnitude:
-        type: float32
-        doc: Magnitude of the current vector.  
-
-      current_angular_speed:
-        type: float32
-        doc: Angular speed of the current vector.
 
 
   StreamFullReadouts:
@@ -372,14 +354,18 @@ definitions:
         doc: |
           PWM counter value at the end of the control update. Should occur immediately 
           before the halfway point.
+      
+      current_angle:
+        type: int32
+        doc: Angle of the current vector.
 
-      direct_current:
+      current_magnitude:
         type: float32
-        doc: Current in DQ0 coordinates; aligned with the rotor angle.
+        doc: Magnitude of the current vector.  
 
-      quadrature_current:
+      current_angular_speed:
         type: float32
-        doc: Current in DQ0 coordinates; crossed with the rotor angle.
+        doc: Angular speed of the current vector.
 
       direct_emf_voltage:
         type: float32
@@ -446,20 +432,19 @@ definitions:
         type: float32
         doc: Estimated average resistance of the phase coils.
 
-      resistance_bias:
-        type: float32
-        doc: Estimated resistance bias due to magnetization and eddy currents.
-
-      resistance_bias_angle:
-        type: int32
-        doc: Estimated angle of the resistance bias due to magnetization and eddy currents.
-      
       inductance:
         type: float32
-        doc: | 
-          Estimated baseline inductance of the motor coils.
+        doc: Estimated baseline inductance of the motor coils.
 
-      magnetization_angle:
+      inductance_bias:
+        type: float32
+        doc: Estimated bias of the inductance due to magnetic saliency.
+
+      inductance_bias_angle:
+        type: float32
+        doc: Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
+
+      saturation_angle:
         type: int32
         doc: |
           The estimated angle of the magnetization pattern.
@@ -469,7 +454,7 @@ definitions:
           as fast as the current angle. The offset of the magnetization pattern
           seems to depend on the angle of the rotor.
 
-      magnetization_factor:
+      saturation_factor:
         type: float32
         doc: The magnitude of the voltage variation due to the magnetization pattern.
 
@@ -623,25 +608,25 @@ definitions:
         type: float32
         doc: Estimated baseline resistance of the motor coils.
 
-      resistance_bias:
-        type: float32
-        doc: Estimated resistance bias due to magnetization and eddy currents.
-
-      resistance_bias_angle:
-        type: int32
-        doc: Estimated angle of the resistance bias due to magnetization and eddy currents.
-      
       inductance:
         type: float32
         doc: Estimated baseline inductance of the motor coils.
 
-      magnetization_angle:
+      inductance_bias:
+        type: float32
+        doc: Estimated bias of the inductance due to magnetic saliency.
+      
+      inductance_bias_angle:
+        type: float32
+        doc: Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
+
+      saturation_angle:
         type: int32
         doc: The estimated angle of the phase inductance variation.
 
-      magnetization_factor:
+      saturation_factor:
         type: float32
-        doc: The factor of the voltage variation due to the magnetization pattern.
+        doc: The factor of the voltage variation due to the saturation pattern.
 
       motor_constant:
         type: float32
@@ -792,13 +777,13 @@ definitions:
         type: float32
         doc: Integral gain for the phase inductance observer.
 
-      magnetization_angle_ki:
+      inductance_bias_angle_ki:
         type: float32
-        doc: Integral gain for the magnetization angle observer.
+        doc: Integral gain for the inductance bias angle observer.
       
-      magnetization_factor_ki:
+      saturation_factor_ki:
         type: float32
-        doc: Integral gain for the magnetization factor observer.
+        doc: Integral gain for the saturation factor observer.
 
       motor_constant_ki:
         type: float32

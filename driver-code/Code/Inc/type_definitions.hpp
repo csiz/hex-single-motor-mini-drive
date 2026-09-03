@@ -17,12 +17,12 @@ using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 // ------------
 
 struct ADCReadings {
-    uint16_t u_readout;
-    uint16_t v_readout;
-    uint16_t w_readout;
-    uint16_t ref_readout;
-    uint16_t temp_readout;
-    uint16_t vcc_readout;
+    int16_t u_readout;
+    int16_t v_readout;
+    int16_t w_readout;
+    int16_t ref_readout;
+    int16_t temp_readout;
+    int16_t vcc_readout;
 };
 
 
@@ -210,43 +210,7 @@ static_assert(driver_state_size <= 64, "DriverState size exceeds 64 bytes, try t
 // Three phase helper functions
 // ----------------------------
 
-// Extract the three phase drive voltages from the readout.
-static inline ThreePhase get_drive_voltages(hex_mini_drive::FullReadout const& readout){
-    return ThreePhase{
-        readout.u_drive_voltage,
-        readout.v_drive_voltage,
-        readout.w_drive_voltage
-    };
-}
-
-// Extract the three phase currents from the readout.
-static inline ThreePhase get_currents(hex_mini_drive::FullReadout const& readout) {
-    return ThreePhase{
-        readout.u_current,
-        readout.v_current,
-        readout.w_current
-    };
-}
-
-// Extract the three phase currents differences from the readout.
-static inline ThreePhase get_currents_diff(hex_mini_drive::FullReadout const& readout) {
-    return ThreePhase{
-        readout.u_current_diff,
-        readout.v_current_diff,
-        readout.w_current_diff
-    };
-}
-
-// Extract the 0 current offsets.
-static inline ThreePhase get_current_zeroes(hex_mini_drive::CurrentCalibration const& calibration) {
-    return ThreePhase{
-        calibration.u_current_zero,
-        calibration.v_current_zero,
-        calibration.w_current_zero
-    };
-}
-
-const float three_inverse = 1.0 / 3.0;
+constexpr float three_inverse = 1.0 / 3.0;
 
 // Adjust the three-phase values so that their sum is zero.
 static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {

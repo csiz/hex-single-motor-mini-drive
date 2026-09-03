@@ -69,12 +69,6 @@ function read_UnitTestOutput(view, offset = 0) {
 // Basic readout of the motor driver internal state; can be recorded contiguously
 // into a history buffer after a commanded event.
 export class Readout {
-  // The PWM voltage for the U phase output.
-  u_drive_voltage;
-  // The PWM voltage for the V phase output.
-  v_drive_voltage;
-  // The PWM voltage for the W phase output.
-  w_drive_voltage;
   // Readout number; used to identify the readout in the history.
   readout_number;
   // Whether we have an angle fix and how confident it is.
@@ -85,18 +79,20 @@ export class Readout {
   // readouts as seen by the amplifier. The phase readouts are relative to this voltage
   // so if this is quite noisy then the phases will also be noisy. We must track it!
   ref_readout;
-  // Phase U current readout (ADC value).
-  u_current;
-  // Phase V current readout (ADC value).
-  v_current;
-  // Phase W current readout (ADC value).
-  w_current;
-  // Phase U current readout difference to previous readout.
-  u_current_diff;
-  // Phase V current readout difference to previous readout.
-  v_current_diff;
-  // Phase W current readout difference to previous readout.
-  w_current_diff;
+  // The PWM voltage on the direct axis.
+  direct_drive_voltage;
+  // The PWM voltage for the quadrature drive output.
+  quadrature_drive_voltage;
+  // Current in DQ0 coordinates; aligned with the rotor angle.
+  direct_current;
+  // Current in DQ0 coordinates; crossed with the rotor angle.
+  quadrature_current;
+  // The current common mode in the DQ0 transform.
+  zero_current;
+  // Difference in direct current compared to the previous readout.
+  direct_current_diff;
+  // Difference in quadrature current compared to the previous readout.
+  quadrature_current_diff;
   // Best estimate for the rotor magnetic angle.
   angle;
   // Error of the angle measured from EMF to the rotor angle prediction.
@@ -114,26 +110,14 @@ export class Readout {
   emf_voltage_magnitude;
   // Angular speed of the EMF voltage vector.
   emf_voltage_angular_speed;
-  // Angle of the current vector.
-  current_angle;
-  // Magnitude of the current vector.
-  current_magnitude;
-  // Angular speed of the current vector.
-  current_angular_speed;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_Readout(value) {
-  const buffer = new Uint8Array(82);
+  const buffer = new Uint8Array(62);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.u_drive_voltage)
-  offset += 4;
-  view.setFloat32(offset, value.v_drive_voltage)
-  offset += 4;
-  view.setFloat32(offset, value.w_drive_voltage)
-  offset += 4;
   view.setUint16(offset, value.readout_number)
   offset += 2;
   view.setUint8(offset, value.angle_fix)
@@ -142,17 +126,19 @@ function write_Readout(value) {
   offset += 1;
   view.setInt16(offset, value.ref_readout)
   offset += 2;
-  view.setFloat32(offset, value.u_current)
+  view.setFloat32(offset, value.direct_drive_voltage)
   offset += 4;
-  view.setFloat32(offset, value.v_current)
+  view.setFloat32(offset, value.quadrature_drive_voltage)
   offset += 4;
-  view.setFloat32(offset, value.w_current)
+  view.setFloat32(offset, value.direct_current)
   offset += 4;
-  view.setFloat32(offset, value.u_current_diff)
+  view.setFloat32(offset, value.quadrature_current)
   offset += 4;
-  view.setFloat32(offset, value.v_current_diff)
+  view.setFloat32(offset, value.zero_current)
   offset += 4;
-  view.setFloat32(offset, value.w_current_diff)
+  view.setFloat32(offset, value.direct_current_diff)
+  offset += 4;
+  view.setFloat32(offset, value.quadrature_current_diff)
   offset += 4;
   view.setInt32(offset, value.angle)
   offset += 4;
@@ -168,23 +154,11 @@ function write_Readout(value) {
   offset += 4;
   view.setFloat32(offset, value.emf_voltage_angular_speed)
   offset += 4;
-  view.setInt32(offset, value.current_angle)
-  offset += 4;
-  view.setFloat32(offset, value.current_magnitude)
-  offset += 4;
-  view.setFloat32(offset, value.current_angular_speed)
-  offset += 4;
   return buffer;
 }
 function read_Readout(view, offset = 0) {
   let result = new Readout();
   
-  result.u_drive_voltage = view.getFloat32(offset);
-  offset += 4;
-  result.v_drive_voltage = view.getFloat32(offset);
-  offset += 4;
-  result.w_drive_voltage = view.getFloat32(offset);
-  offset += 4;
   result.readout_number = view.getUint16(offset);
   offset += 2;
   result.angle_fix = view.getUint8(offset);
@@ -193,17 +167,19 @@ function read_Readout(view, offset = 0) {
   offset += 1;
   result.ref_readout = view.getInt16(offset);
   offset += 2;
-  result.u_current = view.getFloat32(offset);
+  result.direct_drive_voltage = view.getFloat32(offset);
   offset += 4;
-  result.v_current = view.getFloat32(offset);
+  result.quadrature_drive_voltage = view.getFloat32(offset);
   offset += 4;
-  result.w_current = view.getFloat32(offset);
+  result.direct_current = view.getFloat32(offset);
   offset += 4;
-  result.u_current_diff = view.getFloat32(offset);
+  result.quadrature_current = view.getFloat32(offset);
   offset += 4;
-  result.v_current_diff = view.getFloat32(offset);
+  result.zero_current = view.getFloat32(offset);
   offset += 4;
-  result.w_current_diff = view.getFloat32(offset);
+  result.direct_current_diff = view.getFloat32(offset);
+  offset += 4;
+  result.quadrature_current_diff = view.getFloat32(offset);
   offset += 4;
   result.angle = view.getInt32(offset);
   offset += 4;
@@ -218,12 +194,6 @@ function read_Readout(view, offset = 0) {
   result.emf_voltage_magnitude = view.getFloat32(offset);
   offset += 4;
   result.emf_voltage_angular_speed = view.getFloat32(offset);
-  offset += 4;
-  result.current_angle = view.getInt32(offset);
-  offset += 4;
-  result.current_magnitude = view.getFloat32(offset);
-  offset += 4;
-  result.current_angular_speed = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -267,10 +237,12 @@ export class FullReadout extends Readout {
   // PWM counter value at the end of the control update. Should occur immediately 
   // before the halfway point.
   cycle_end_tick;
-  // Current in DQ0 coordinates; aligned with the rotor angle.
-  direct_current;
-  // Current in DQ0 coordinates; crossed with the rotor angle.
-  quadrature_current;
+  // Angle of the current vector.
+  current_angle;
+  // Magnitude of the current vector.
+  current_magnitude;
+  // Angular speed of the current vector.
+  current_angular_speed;
   // EMF voltage in DQ0 coordinates; aligned with the rotor angle.
   direct_emf_voltage;
   // EMF voltage in DQ0 coordinates; crossed with the rotor angle.
@@ -303,21 +275,21 @@ export class FullReadout extends Readout {
   seek_integral;
   // Estimated average resistance of the phase coils.
   resistance;
-  // Estimated resistance bias due to magnetization and eddy currents.
-  resistance_bias;
-  // Estimated angle of the resistance bias due to magnetization and eddy currents.
-  resistance_bias_angle;
   // Estimated baseline inductance of the motor coils.
   inductance;
+  // Estimated bias of the inductance due to magnetic saliency.
+  inductance_bias;
+  // Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
+  inductance_bias_angle;
   // The estimated angle of the magnetization pattern.
   // 
   // Not sure what exactly is this (maybe magnetic hysterisis) but it is proportional
   // to the power transmitted to the inductor coils and is periodic, spinning twice
   // as fast as the current angle. The offset of the magnetization pattern
   // seems to depend on the angle of the rotor.
-  magnetization_angle;
+  saturation_angle;
   // The magnitude of the voltage variation due to the magnetization pattern.
-  magnetization_factor;
+  saturation_factor;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   motor_constant;
   // The estimated friction torque of the motor; used to know the minimum torque required to move the motor.
@@ -329,12 +301,12 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(202);
+  const buffer = new Uint8Array(186);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = new Uint8Array(view.buffer, offset, 82).set(write_Readout(value), 0);
+  const base_buffer = new Uint8Array(view.buffer, offset, 62).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
-  offset += 82;
+  offset += 62;
   view.setFloat32(offset, value.main_loop_rate)
   offset += 4;
   view.setFloat32(offset, value.adc_update_rate)
@@ -347,9 +319,11 @@ function write_FullReadout(value) {
   offset += 2;
   view.setInt16(offset, value.cycle_end_tick)
   offset += 2;
-  view.setFloat32(offset, value.direct_current)
+  view.setInt32(offset, value.current_angle)
   offset += 4;
-  view.setFloat32(offset, value.quadrature_current)
+  view.setFloat32(offset, value.current_magnitude)
+  offset += 4;
+  view.setFloat32(offset, value.current_angular_speed)
   offset += 4;
   view.setFloat32(offset, value.direct_emf_voltage)
   offset += 4;
@@ -381,15 +355,15 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.resistance)
   offset += 4;
-  view.setFloat32(offset, value.resistance_bias)
-  offset += 4;
-  view.setInt32(offset, value.resistance_bias_angle)
-  offset += 4;
   view.setFloat32(offset, value.inductance)
   offset += 4;
-  view.setInt32(offset, value.magnetization_angle)
+  view.setFloat32(offset, value.inductance_bias)
   offset += 4;
-  view.setFloat32(offset, value.magnetization_factor)
+  view.setFloat32(offset, value.inductance_bias_angle)
+  offset += 4;
+  view.setInt32(offset, value.saturation_angle)
+  offset += 4;
+  view.setFloat32(offset, value.saturation_factor)
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
   offset += 4;
@@ -403,7 +377,7 @@ function read_FullReadout(view, offset = 0) {
   let result = new FullReadout();
   
   Object.assign(result, read_Readout(view, offset));
-  offset += 82;
+  offset += 62;
   
   result.main_loop_rate = view.getFloat32(offset);
   offset += 4;
@@ -417,9 +391,11 @@ function read_FullReadout(view, offset = 0) {
   offset += 2;
   result.cycle_end_tick = view.getInt16(offset);
   offset += 2;
-  result.direct_current = view.getFloat32(offset);
+  result.current_angle = view.getInt32(offset);
   offset += 4;
-  result.quadrature_current = view.getFloat32(offset);
+  result.current_magnitude = view.getFloat32(offset);
+  offset += 4;
+  result.current_angular_speed = view.getFloat32(offset);
   offset += 4;
   result.direct_emf_voltage = view.getFloat32(offset);
   offset += 4;
@@ -451,15 +427,15 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.resistance = view.getFloat32(offset);
   offset += 4;
-  result.resistance_bias = view.getFloat32(offset);
-  offset += 4;
-  result.resistance_bias_angle = view.getInt32(offset);
-  offset += 4;
   result.inductance = view.getFloat32(offset);
   offset += 4;
-  result.magnetization_angle = view.getInt32(offset);
+  result.inductance_bias = view.getFloat32(offset);
   offset += 4;
-  result.magnetization_factor = view.getFloat32(offset);
+  result.inductance_bias_angle = view.getFloat32(offset);
+  offset += 4;
+  result.saturation_angle = view.getInt32(offset);
+  offset += 4;
+  result.saturation_factor = view.getFloat32(offset);
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
   offset += 4;
@@ -807,16 +783,16 @@ export class CurrentCalibration {
   w_current_zero;
   // Estimated baseline resistance of the motor coils.
   resistance;
-  // Estimated resistance bias due to magnetization and eddy currents.
-  resistance_bias;
-  // Estimated angle of the resistance bias due to magnetization and eddy currents.
-  resistance_bias_angle;
   // Estimated baseline inductance of the motor coils.
   inductance;
+  // Estimated bias of the inductance due to magnetic saliency.
+  inductance_bias;
+  // Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
+  inductance_bias_angle;
   // The estimated angle of the phase inductance variation.
-  magnetization_angle;
-  // The factor of the voltage variation due to the magnetization pattern.
-  magnetization_factor;
+  saturation_angle;
+  // The factor of the voltage variation due to the saturation pattern.
+  saturation_factor;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   motor_constant;
   // The estimated friction torque of the motor; used to know the minimum torque required to move the motor.
@@ -839,15 +815,15 @@ function write_CurrentCalibration(value) {
   offset += 4;
   view.setFloat32(offset, value.resistance)
   offset += 4;
-  view.setFloat32(offset, value.resistance_bias)
-  offset += 4;
-  view.setInt32(offset, value.resistance_bias_angle)
-  offset += 4;
   view.setFloat32(offset, value.inductance)
   offset += 4;
-  view.setInt32(offset, value.magnetization_angle)
+  view.setFloat32(offset, value.inductance_bias)
   offset += 4;
-  view.setFloat32(offset, value.magnetization_factor)
+  view.setFloat32(offset, value.inductance_bias_angle)
+  offset += 4;
+  view.setInt32(offset, value.saturation_angle)
+  offset += 4;
+  view.setFloat32(offset, value.saturation_factor)
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
   offset += 4;
@@ -868,15 +844,15 @@ function read_CurrentCalibration(view, offset = 0) {
   offset += 4;
   result.resistance = view.getFloat32(offset);
   offset += 4;
-  result.resistance_bias = view.getFloat32(offset);
-  offset += 4;
-  result.resistance_bias_angle = view.getInt32(offset);
-  offset += 4;
   result.inductance = view.getFloat32(offset);
   offset += 4;
-  result.magnetization_angle = view.getInt32(offset);
+  result.inductance_bias = view.getFloat32(offset);
   offset += 4;
-  result.magnetization_factor = view.getFloat32(offset);
+  result.inductance_bias_angle = view.getFloat32(offset);
+  offset += 4;
+  result.saturation_angle = view.getInt32(offset);
+  offset += 4;
+  result.saturation_factor = view.getFloat32(offset);
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
   offset += 4;
@@ -955,10 +931,10 @@ export class ControlParameters {
   phase_resistance_ki;
   // Integral gain for the phase inductance observer.
   phase_inductance_ki;
-  // Integral gain for the magnetization angle observer.
-  magnetization_angle_ki;
-  // Integral gain for the magnetization factor observer.
-  magnetization_factor_ki;
+  // Integral gain for the inductance bias angle observer.
+  inductance_bias_angle_ki;
+  // Integral gain for the saturation factor observer.
+  saturation_factor_ki;
   // Motor constant integral gain.
   motor_constant_ki;
   // Integral gain for the friction torque observer.
@@ -1035,9 +1011,9 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.phase_inductance_ki)
   offset += 4;
-  view.setFloat32(offset, value.magnetization_angle_ki)
+  view.setFloat32(offset, value.inductance_bias_angle_ki)
   offset += 4;
-  view.setFloat32(offset, value.magnetization_factor_ki)
+  view.setFloat32(offset, value.saturation_factor_ki)
   offset += 4;
   view.setFloat32(offset, value.motor_constant_ki)
   offset += 4;
@@ -1112,9 +1088,9 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.phase_inductance_ki = view.getFloat32(offset);
   offset += 4;
-  result.magnetization_angle_ki = view.getFloat32(offset);
+  result.inductance_bias_angle_ki = view.getFloat32(offset);
   offset += 4;
-  result.magnetization_factor_ki = view.getFloat32(offset);
+  result.saturation_factor_ki = view.getFloat32(offset);
   offset += 4;
   result.motor_constant_ki = view.getFloat32(offset);
   offset += 4;
@@ -1650,7 +1626,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case READOUT: {
-      if (buffer.length !== 2 + 82) return null;
+      if (buffer.length !== 2 + 62) return null;
       let message = read_Readout(view, 2);
       message.message_code = READOUT;
       return message;
@@ -1666,7 +1642,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 202) return null;
+      if (buffer.length !== 2 + 186) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;

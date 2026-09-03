@@ -182,8 +182,8 @@ constexpr float vcc_mosfet_driver_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_U
 // Directly convert voltage * current to power in Watts.
 constexpr float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * hex_mini_drive::CURRENT_UNITS_PER_AMP);
 
-// Our dq0 transformation lead to a factor of 3/2 overestimation for the current and therefore power.
-constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 2.0 / 3.0;
+// Our dq0 transformation is the power variant form which needs to be corrected by a factor of 3/2.
+constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 3.0 / 2.0;
 
 
 
@@ -271,27 +271,29 @@ const float motor_sector_driving_negative[6][3] = {
 
 
 // Half a circle (pi) aka 180 degrees.
-const int32_t half_circle = -angle_base / 2;
+constexpr int32_t half_circle = -angle_base / 2;
 
-const int32_t most_positive_angle = 0x7FFFFFFF;
+constexpr int32_t most_positive_angle = 0x7FFFFFFF;
 
-const int32_t most_negative_angle = 0x80000000;
+constexpr int32_t most_negative_angle = 0x80000000;
 
 // 1/3 of a circle (pi/3) aka 120 degrees.
-const int32_t third_circle = angle_base / 3;
+constexpr int32_t third_circle = angle_base / 3;
 
 // 2/3 of a circle (2pi/3) aka 240 degrees.
-const int32_t neg_third_circle = -third_circle;
+constexpr int32_t neg_third_circle = -third_circle;
 
 // 1/4 of a circle (pi/4) aka 90 degrees.
-const int32_t quarter_circle = angle_base / 4;
+constexpr int32_t quarter_circle = angle_base / 4;
+
+// Conversion factor between radians and angle units.
+constexpr float radians_to_angle_units = angle_base / (2*3.14159265f);
 
 // Conversion factor between angle units and radians.
-const float half_circle_div_pi = half_circle / 3.14159265;
-
+constexpr float angle_units_to_radians = 1.f / radians_to_angle_units;
 
 // The angle units per hall sector; 60 degrees.
-const int32_t hall_sector_span = angle_base / hall_sector_base;
+constexpr int32_t hall_sector_span = angle_base / hall_sector_base;
 
 
 // Speed and acceleration constants
@@ -300,16 +302,19 @@ const int32_t hall_sector_span = angle_base / hall_sector_base;
 // Note speed values written in degrees per ms and converted to speed units.
 
 
-const float friction_speed = 0.01f * angle_base / static_cast<float>(pwm_cycles_per_second);
+constexpr float friction_speed = 0.01f * angle_base / static_cast<float>(pwm_cycles_per_second);
 
 // Conversion factor between our speed units and radians per second.
-const float radians_per_sec_div_angle_base = static_cast<float>(pwm_cycles_per_second) / half_circle_div_pi;
+constexpr float speed_units_to_radians_per_second = angle_units_to_radians * static_cast<float>(pwm_cycles_per_second);
+
+// Conversion factor between radians per second and our speed units.
+constexpr float radians_per_second_to_speed_units = 1.f / speed_units_to_radians_per_second;
 
 // Maximum variance of the EMF angle before we start computing EMF angular speed.
-const float emf_angle_variance_threshold = square(30.f * angle_base / 360.f);
+constexpr float emf_angle_variance_threshold = square(30.f * angle_base / 360.f);
 
 // Inverse of the EMF angle variance threshold to avoid divisions in the fast loop.
-const float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_threshold;
+constexpr float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_threshold;
 
 
 // Calibration and Control Parameters
@@ -319,11 +324,11 @@ const float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_thre
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::CurrentCalibration default_current_calibration = {
     .resistance = 1.3f,
-    .resistance_bias = 0.0f,
-    .resistance_bias_angle = 0,
     .inductance = 0.000'145f,
-    .magnetization_angle = 0,
-    .magnetization_factor = 0.0f
+    .inductance_bias = 0.0f,
+    .inductance_bias_angle = 0,
+    .saturation_angle = 0,
+    .saturation_factor = 0.0f
 };
 
 // The default control parameters should be set to reasonable values for any motor.
@@ -377,8 +382,8 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 
     .phase_resistance_ki = 0.1f,
     .phase_inductance_ki = 0.000'1f,
-    .magnetization_angle_ki = 3.14f,
-    .magnetization_factor_ki = 0.01f,
+    .inductance_bias_angle_ki = 3.14f,
+    .saturation_factor_ki = 0.01f,
     .motor_constant_ki = std::pow(2, -11),
 };
 
@@ -414,7 +419,7 @@ const float current_diff_to_voltage_units = pwm_cycles_per_second *
     hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
 // Conversion factor between the motor constant and our speed/voltage units.
-const float emf_motor_constant_conversion = radians_per_sec_div_angle_base / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+const float emf_motor_constant_conversion = radians_per_second_to_speed_units / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 
 // Waveform and Trigonometric tables

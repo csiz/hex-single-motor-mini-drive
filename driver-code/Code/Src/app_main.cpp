@@ -783,10 +783,6 @@ void app_tick() {
     // The calibration starts after the reset flag is cleared, and ends when the motor returns to
     // a safe state.
 
-
-    ThreePhase resistance_gradient_step_sum = {0.0f, 0.0f, 0.0f};
-    ThreePhase inductance_gradient_step_sum = {0.0f, 0.0f, 0.0f};
-
     const float learning_rate = 0.0f;
 
     // Get data from history and compute gradients and the mean of the samples.
@@ -795,74 +791,10 @@ void app_tick() {
     const size_t history_size = get_readout_history_size();
     for (size_t i = 0; i < history_size; ++i) {
       hex_mini_drive::Readout const& readout = readout_history[i];
-
-      const ThreePhase drive_voltages = {readout.u_drive_voltage, readout.v_drive_voltage, readout.w_drive_voltage};
       
-      const ThreePhase currents_prescaled = ThreePhase{
-        readout.u_current,
-        readout.v_current,
-        readout.w_current
-      } * current_to_voltage_units;
-
-      const ThreePhase current_diffs_prescaled = ThreePhase{
-        readout.u_current_diff,
-        readout.v_current_diff,
-        readout.w_current_diff
-      } * current_diff_to_voltage_units;
-
-      // Calculate the voltage drop across the coil inductance.
-      const ThreePhase inductor_voltages = current_diffs_prescaled * current_calibration.inductance;
-
-      // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-      const ThreePhase resistive_voltages = currents_prescaled * current_calibration.resistance;
-
-      // In the running loop we allocate all residual voltages to the EMF response, but in the calibration
-      // modes we expect the motor to be nearly stationary so we can neglect the EMF and instead the diff
-      // is the error residual due to our miscalibrated resistance and inductance values.
-      const ThreePhase residual_voltages = inductor_voltages + resistive_voltages - drive_voltages;
-
-      // Now that we have recalculated the values, we can calculate the gradients.
-
-      const ThreePhase resistance_gradients = /* 2 * */residual_voltages * currents_prescaled;
-      const ThreePhase inductance_gradients = /* 2 * */residual_voltages * current_diffs_prescaled;
-
-      const ThreePhase resistance_2nd_gradients = /* 2 * */currents_prescaled * currents_prescaled;
-      const ThreePhase inductance_2nd_gradients = /* 2 * */current_diffs_prescaled * current_diffs_prescaled;
-
-      static const float current_measurement_variance_prescaled = current_measurement_variance * current_to_voltage_units;
-      static const float current_diff_measurement_variance_prescaled = current_diff_measurement_variance * current_diff_to_voltage_units;
-
-      const ThreePhase resistance_gradient_step = resistance_gradients / (resistance_2nd_gradients + three_same(current_measurement_variance_prescaled));
-      const ThreePhase inductance_gradient_step = inductance_gradients / (inductance_2nd_gradients + three_same(current_diff_measurement_variance_prescaled));
-
-      resistance_gradient_step_sum = resistance_gradient_step_sum + resistance_gradient_step;
-      inductance_gradient_step_sum = inductance_gradient_step_sum + inductance_gradient_step;
-    }
-
-    static const float inverse_history_size = 1.0f / static_cast<float>(history_size);
-
-    const ThreePhase resistance_gradient_step_mean = resistance_gradient_step_sum * inverse_history_size;
-    const ThreePhase inductance_gradient_step_mean = inductance_gradient_step_sum * inverse_history_size;
-
-    // Update the calibration values using gradient descent.
-    static float dummy = 0.0f;
-
-    dummy += learning_rate + std::get<0>(resistance_gradient_step_mean) + std::get<0>(inductance_gradient_step_mean);
-
-    if (calibration_mode == CalibrationMode::RESISTANCE) {
-      // current_calibration.u_resistance -= learning_rate * std::get<0>(resistance_gradient_step_mean);
-      // current_calibration.v_resistance -= learning_rate * std::get<1>(resistance_gradient_step_mean);
-      // current_calibration.w_resistance -= learning_rate * std::get<2>(resistance_gradient_step_mean);
-    } else if (calibration_mode == CalibrationMode::INDUCTANCE) {
-      // current_calibration.inductance -= learning_rate * (
-      //   std::get<0>(inductance_gradient_step_mean) +
-      //   std::get<1>(inductance_gradient_step_mean) +
-      //   std::get<2>(inductance_gradient_step_mean)
-      // ) * 0.333333f; // Average the inductance gradients across the three phases.
-    } else if (calibration_mode == CalibrationMode::POSITION_CHIRP) {
-      // TODO: implement position chirp calibration.
-    } else if (calibration_mode == CalibrationMode::POSITION_EMF) {
-      // TODO: implement position EMF calibration.
+      // Tag unused variables.
+      (void)readout; // Tag unused variable.
+      (void)learning_rate; // Tag unused variable.
     }
 
     // Done an iteration of the calibration (it should take about 10 for a good value and 90 to stabilise).

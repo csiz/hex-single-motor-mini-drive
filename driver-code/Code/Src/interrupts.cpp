@@ -992,6 +992,8 @@ static inline void update_motor_control(
 // ADC readings and calculation loop
 // ---------------------------------
 
+constexpr float two_thirds = 2.f / 3.f;
+
 // Process ADC readings for phase currents when the injected conversion is done.
 void ADC1_2_IRQHandler(void){
     // Note: a single float assignment will cost us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
@@ -1067,41 +1069,6 @@ void ADC1_2_IRQHandler(void){
     previous_half_cycle_drive_voltages = half_cycle_drive_voltage;
 
 
-    // Calculate calibrated currents.
-    // 
-    // We need to flip the sign of the current readings. Our convention is to have settle on positive
-    // current when we apply a positive PWM duty cycle to each respective phase.
-    // 
-    // Note that the reference voltage is only connected to the current sense amplifier, not the
-    // microcontroller. The ADC reference voltage is 3.3V.
-    const ThreePhase currents = adjust_to_sum_zero(ThreePhase{
-        -(static_cast<float>(adc_readings.u_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units,
-        -(static_cast<float>(adc_readings.v_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units,
-        -(static_cast<float>(adc_readings.w_readout) - static_cast<float>(adc_readings.ref_readout)) * adc_to_current_units
-    } - get_current_zeroes(current_calibration));
-
-    // Calculate the differential of the currents.
-    const ThreePhase currents_diff = currents - get_currents(readout);
-
-    // Calculate the voltage drop across the coil inductance.
-    // 
-    // Because it's so noisy, we zero it out when we're not actively driving the motor so we can pick up smaller EMF signals.
-    const ThreePhase inductor_voltages = currents_diff * (
-        (driver_state.active_pwm != 0) * current_calibration.inductance * current_diff_to_voltage_units
-    );
-
-    // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const ThreePhase resistive_voltages = currents * (current_calibration.resistance * current_to_voltage_units);
-
-    // TODO: add the resistance bias?
-
-    // Infer the back EMF voltages for each phase.
-    // 
-    // Calculate the EMF voltage as the remainder after subtracting the electric circuit voltages.
-    // By Kirchoffs laws the total voltage of all of our components must sum to 0.
-    const ThreePhase emf_voltages = inductor_voltages + resistive_voltages - drive_voltages;
-
-
     // Position Update
     // ---------------
 
@@ -1118,17 +1085,16 @@ void ADC1_2_IRQHandler(void){
     // the rotor is exactly the angular speed.
     const int32_t predicted_angle = readout.angle + static_cast<int32_t>(readout.angular_speed);
 
-
     // Switching to DQ0 Frame
     // ----------------------
     // 
-    // Calculate the park transformed currents and voltages
+    // Calculate the park transformed currents and voltages: https://en.wikipedia.org/wiki/Direct-quadrature-zero_transformation
     // 
-    // Use gradient descent to estimate the inductor current angle. We don't have compute to
-    // calculate the angle with atan2, so we treat it as an optimization problem over multiple
-    // cycles. With cycles at 23KHz, we converge quickly, especially at high current values.
-
-    
+    // We can rotate our frame of reference to align ourselves with the rotor magnetic field. We then 
+    // measure the current and EMF voltage projected on this line (direct) or perpendicular to it (quadrature).
+    // 
+    // The back EMF generated is always along the quadrature axis. The current direction is mostly under our control,
+    // if we want to drive the motor efficiently we must also align the current along the quadrature axis.
     // First alias the trig functions based on the predicted rotor angle.
 
     // Cosines of the predicted angle with respect to each phase.
@@ -1136,27 +1102,68 @@ void ADC1_2_IRQHandler(void){
 
     // Sines of the predicted angle with respect to each phase.
     const ThreePhase three_phase_sin = get_three_phase_sin(predicted_angle);
+
+    // Use the trig pack to quickly calculate the DQ0 transform into the predicted_angle frame.
+    const float direct_drive_voltage = dot(drive_voltages, three_phase_cos) * two_thirds;
+    const float quadrature_drive_voltage = -dot(drive_voltages, three_phase_sin) * two_thirds;
+
+
+    // Calculate calibrated currents.
+    // 
+    // We need to flip the sign of the current readings. Our convention is to have settle on positive
+    // current when we apply a positive PWM duty cycle to each respective phase.
+    // 
+    // Note that the reference voltage is only connected to the current sense amplifier, not the
+    // microcontroller. The ADC reference voltage is 3.3V.
+    const float u_current = -static_cast<float>(adc_readings.u_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.u_current_zero;
+    const float v_current = -static_cast<float>(adc_readings.v_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.v_current_zero;
+    const float w_current = -static_cast<float>(adc_readings.w_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.w_current_zero;
+
+    // Get the common mode current. It should be 0 in theory, but of course it is not in practice...
+    const float zero_current = (u_current + v_current + w_current) * three_inverse;
     
-    // Park transform the currents and voltages: https://en.wikipedia.org/wiki/Direct-quadrature-zero_transformation
-    // 
-    // We assume the currents and emf voltages sum to 0 (eeeeh, they're close usually, works better if not adjusted).
-    // 
-    // In that case we can rotate our frame of reference to align ourselves with the rotor magnetic field. We then 
-    // measure the current and EMF voltage projected on this line (direct) or perpendicular to it (quadrature).
-    // 
-    // The back EMF generated is always along the quadrature axis. The current direction is mostly under our control,
-    // if we want to drive the motor efficiently we must also align the current along the quadrature axis.
+    // Adjust the currents so they sum to 0.
+    const ThreePhase currents = {u_current - zero_current, v_current - zero_current, w_current - zero_current};
 
-    const float direct_current = dot(currents, three_phase_cos);
-
-    const float quadrature_current = -dot(currents, three_phase_sin);
+    const float direct_current = dot(currents, three_phase_cos) * two_thirds;
+    const float quadrature_current = -dot(currents, three_phase_sin) * two_thirds;
 
     // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
     set_cordic(direct_current, quadrature_current);
 
-    const float direct_emf_voltage = dot(emf_voltages, three_phase_cos);
+    // Calculate the resistive voltage drop across the coil and MOSFET resistance.
+    const float current_to_resistance_voltage = current_calibration.resistance * current_to_voltage_units;
+    const float direct_resistive_voltage = direct_current * current_to_resistance_voltage;
+    const float quadrature_resistive_voltage = quadrature_current * current_to_resistance_voltage;
 
-    const float quadrature_emf_voltage = -dot(emf_voltages, three_phase_sin);
+    // Calculate the differential of the currents.
+    const float direct_current_diff = direct_current - readout.direct_current;
+    const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
+
+    // Calculate the voltage drop across the coil inductance.
+    // 
+    // Because it's so noisy, we zero it out when we're not actively driving the motor so we can pick up smaller EMF signals.
+    const float current_diff_to_inductor_voltage = (driver_state.active_pwm != 0) * current_calibration.inductance * current_diff_to_voltage_units;
+    const float omega_current_to_inductor_voltage = readout.angular_speed * current_calibration.inductance  * speed_units_to_radians_per_second * current_to_voltage_units;
+
+    const float direct_inductor_voltage = (
+        direct_current_diff * current_diff_to_inductor_voltage +
+        -omega_current_to_inductor_voltage * quadrature_current
+    );
+    
+    const float quadrature_inductor_voltage = (
+        quadrature_current_diff * current_diff_to_inductor_voltage +
+        omega_current_to_inductor_voltage * direct_current
+    );
+
+    // Infer the back EMF voltages for each phase.
+    // 
+    // Calculate the EMF voltage as the remainder after subtracting the electric circuit voltages.
+    // By Kirchoffs laws the total voltage of all of our components must sum to 0.
+
+    const float direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
+
+    const float quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;
 
 
     // Current angle calculation
@@ -1170,8 +1177,9 @@ void ADC1_2_IRQHandler(void){
     // Calculate the angle at which the current is running on the motor coils. The angle offset is
     // with respect to the predicted angle as that was the angle used in the park transform.
     const auto [current_angle_offset, current_magnitude] = get_cordic();
-
-    // We can queue up the CORDIC engine for the next calculation before we read the first (I think).
+    
+    // Note: we can queue up the CORDIC engine for the next calculation before we read the first (I think).
+    // Prepare the cordic for the next calculation.
     set_cordic(direct_emf_voltage, quadrature_emf_voltage);
 
     // Current angle in the stator frame of reference.
@@ -1181,6 +1189,7 @@ void ADC1_2_IRQHandler(void){
     const bool current_detected = current_magnitude > current_measurement_minimum;
     
     const float current_angular_speed = static_cast<float>(current_angle - readout.current_angle);
+
 
     // Back EMF angle observer
     // -----------------------
@@ -1313,10 +1322,16 @@ void ADC1_2_IRQHandler(void){
     // -----------------------
 
     // Resistive power is the power dissipated in the motor coils and MOSFETs.
-    const float resistive_power = dot(currents, resistive_voltages) * voltage_mul_current_to_power;
+    const float resistive_power = (
+        direct_resistive_voltage * direct_current + 
+        quadrature_resistive_voltage * quadrature_current
+    ) * dq0_voltage_mul_current_to_power;
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
-    const float emf_power = -dot(currents, emf_voltages) * voltage_mul_current_to_power;
+    const float emf_power = -(
+        direct_emf_voltage * direct_current + 
+        quadrature_emf_voltage * quadrature_current
+    ) * dq0_voltage_mul_current_to_power;
 
     // The total power is the power used from the battery. It will be positive when driving
     // the motor, meaning that we drain the battery. If this is negative it means we are charging
@@ -1363,19 +1378,16 @@ void ADC1_2_IRQHandler(void){
         (emf_detected << emf_detected_bit_offset)
     );
 
-    readout.u_drive_voltage = std::get<0>(drive_voltages);
-    readout.v_drive_voltage = std::get<1>(drive_voltages);
-    readout.w_drive_voltage = std::get<2>(drive_voltages);
-    
-    readout.u_current = std::get<0>(currents);
-    readout.v_current = std::get<1>(currents);
-    readout.w_current = std::get<2>(currents);
+    readout.direct_drive_voltage = direct_drive_voltage;
+    readout.quadrature_drive_voltage = quadrature_drive_voltage;
+
+    readout.direct_current = direct_current;
+    readout.quadrature_current = quadrature_current;
 
     readout.ref_readout = adc_readings.ref_readout;
     
-    readout.u_current_diff = std::get<0>(currents_diff);
-    readout.v_current_diff = std::get<1>(currents_diff);
-    readout.w_current_diff = std::get<2>(currents_diff);
+    readout.direct_current_diff = direct_current_diff;
+    readout.quadrature_current_diff = quadrature_current_diff;
 
     readout.angle = angle;
 
@@ -1388,6 +1400,7 @@ void ADC1_2_IRQHandler(void){
 
     readout.direct_current = direct_current;
     readout.quadrature_current = quadrature_current;
+    readout.zero_current = zero_current;
     readout.direct_emf_voltage = direct_emf_voltage;
     readout.quadrature_emf_voltage = quadrature_emf_voltage;
     
@@ -1404,6 +1417,8 @@ void ADC1_2_IRQHandler(void){
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
     
+    // TODO: do we need to send these angles, it turns out we don't use them in the
+    // equations...
     readout.current_angle = current_angle;
     readout.current_magnitude = current_magnitude;
     readout.current_angular_speed = current_angular_speed;
@@ -1419,13 +1434,12 @@ void ADC1_2_IRQHandler(void){
     readout.target = driver_state.current_target;
     readout.seek_integral = driver_state.seek_integral;
 
-    // TODO: maybe remove these and keep them in the current_calibration after we're done implementing.
     readout.resistance = current_calibration.resistance;
-    readout.resistance_bias = current_calibration.resistance_bias;
-    readout.resistance_bias_angle = current_calibration.resistance_bias_angle;
     readout.inductance = current_calibration.inductance;
-    readout.magnetization_angle = current_calibration.magnetization_angle;
-    readout.magnetization_factor = current_calibration.magnetization_factor;
+    readout.inductance_bias = current_calibration.inductance_bias;
+    readout.inductance_bias_angle = current_calibration.inductance_bias_angle;
+    readout.saturation_angle = current_calibration.saturation_angle;
+    readout.saturation_factor = current_calibration.saturation_factor;
 
     // Calculate and set motor outputs!!
     // ---------------------------------

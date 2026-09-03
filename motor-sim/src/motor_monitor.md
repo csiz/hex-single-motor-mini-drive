@@ -1132,8 +1132,11 @@ const plot_measured_current = plot_lines({
     {y: "u_current", label: "Current U", color: colors.u},
     {y: "v_current", label: "Current V", color: colors.v},
     {y: "w_current", label: "Current W", color: colors.w},
+    {y: "u_current_diff", label: "Current U diff", color: d3.color(colors.u).darker(1)},
+    {y: "v_current_diff", label: "Current V diff", color: d3.color(colors.v).darker(1)},
+    {y: "w_current_diff", label: "Current W diff", color: d3.color(colors.w).darker(1)},
     {y: "battery_current", label: "Battery Current", color: colors.other},
-    {y: (d) => d.avg_current * 3, label: "Sum", color: colors.sum},
+    {y: "zero_current", label: "Current Sum/3", color: colors.sum},
     {y: "ref_readout", label: "Reference value", color: colors.ref_readout},
   ],
   curve,
@@ -1357,29 +1360,25 @@ const current_calibration_input = Object.fromEntries(
       label: "Resistance", 
       description: `The resistance of average phase coil.`
     }],
-    ["resistance_bias", {
-      label: "Resistance Bias", 
-      description: `The bias resistance of the average phase coil, due to magnetic hysteresis.`
-    }],
-    ["resistance_bias_angle", {
-      label: "Resistance Bias Angle", 
-      description: `The angle of the resistance bias.`
-    }],
     ["inductance", {
       label: "Phase Inductance", 
       description: `The inductance of the motor's phases.`
     }],
-    ["magnetization_angle", {
-      label: "Magnetization Angle", 
-      description: `The angle of the motor's magnetization.`
+    ["inductance_bias", {
+      label: "Inductance Bias", 
+      description: `The bias of the motor's phase inductance.`
     }],
-    ["magnetization_factor", {
-      label: "Magnetization Factor", 
-      description: `The factor of the motor's magnetization.`
+    ["inductance_bias_angle", {
+      label: "Inductance Bias Angle", 
+      description: `The angle of the inductance bias.`
     }],
-    ["predicted_angle", {
-      label: "Predicted Angle", 
-      description: `The predicted angle of the rotor.`
+    ["saturation_angle", {
+      label: "Saturation Angle", 
+      description: `The angle of the motor's saturation.`
+    }],
+    ["saturation_factor", {
+      label: "Saturation Factor", 
+      description: `The factor of the motor's saturation.`
     }],
     ["motor_constant", {
       label: "Motor Constant", 
@@ -1553,15 +1552,15 @@ async function run_current_calibration(motor_controller, message_options) {
     },
     inductance_bias_angle: {
       value: 0.0, 
-      max_learning_rate: control_parameters.magnetization_angle_ki,
+      max_learning_rate: control_parameters.inductance_bias_angle_ki,
     },
-    magnetization_angle: {
+    saturation_angle: {
       value: 0.0, 
-      max_learning_rate: control_parameters.magnetization_angle_ki,
+      max_learning_rate: control_parameters.inductance_bias_angle_ki,
     },
-    magnetization_factor: {
+    saturation_factor: {
       value: 0.0,
-      max_learning_rate: control_parameters.magnetization_factor_ki,
+      max_learning_rate: control_parameters.saturation_factor_ki,
     },
   });
 
@@ -1575,10 +1574,8 @@ async function run_current_calibration(motor_controller, message_options) {
     const sample_with_gradients = sample.map((readout) => {
       const {
         u_current, v_current, w_current, 
-        current_angle, current_magnitude, current_angular_speed,
         u_current_diff, v_current_diff, w_current_diff, 
         u_drive_voltage, v_drive_voltage, w_drive_voltage,
-        drive_voltage_angle, drive_voltage_magnitude,
       } = readout;
 
       const u_di_dt = u_current_diff * pwm_cycles_per_second;
@@ -1696,9 +1693,6 @@ async function run_current_calibration(motor_controller, message_options) {
         inductance_gradient,
         inductance_bias_gradient,
         inductance_bias_angle_gradient,
-
-        current_angle,
-        drive_voltage_angle,
       };
     });
 
@@ -1880,10 +1874,10 @@ const current_calibration_angles_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (radians)",
   channels: [
-    {y: "current_angle", label: "Current Angle", color: colors_categories[0]},
-    {y: "current_angular_speed", label: "Current Angular Speed", color: colors_categories[1]},
+    {y: "web_current_angle", label: "Current Angle", color: colors_categories[0]},
+    {y: "web_current_angular_speed", label: "Current Angular Speed", color: colors_categories[1]},
     {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
-    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
+    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.web_current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
   ],
   curve,
 });
@@ -1898,9 +1892,9 @@ const current_calibration_angles_scatter = plot_lines({
   x_label: "Drive Voltage Angle (radians)",
   y_label: "Drive-Current Angle Diff (radians)",
   channels: [
-    {y: "current_magnitude", label: "Current Magnitude", color: colors_categories[4]},
-    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
-    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.current_angle) / d.current_angular_speed, label: "Drive-Current Angle Diff / Angular Speed", color: colors_categories[6]}
+    {y: "web_current_magnitude", label: "Current Magnitude", color: colors_categories[4]},
+    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.web_current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
+    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.web_current_angle) / d.web_current_angular_speed, label: "Drive-Current Angle Diff / Angular Speed", color: colors_categories[6]}
   ],
   curve: horizontal_step,
 });
@@ -2071,13 +2065,13 @@ const control_parameters_input = Object.fromEntries(
       label: "Phase Inductance KI",
       description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
     }],
-    ["magnetization_angle_ki", {
-      label: "Magnetization Angle KI",
-      description: "Integral gain for magnetization angle estimation. To be explained later..."
+    ["inductance_bias_angle_ki", {
+      label: "Inductance Bias Angle KI",
+      description: "Integral gain for inductance bias angle estimation. To be explained later..."
     }],
-    ["magnetization_factor_ki", {
-      label: "Magnetization Factor KI",
-      description: "Integral gain for magnetization factor. To be explained later..."
+    ["saturation_factor_ki", {
+      label: "Saturation Factor KI",
+      description: "Integral gain for saturation factor. To be explained later..."
     }],
     ["motor_constant_ki", {
       label: "Motor Constant KI", 
