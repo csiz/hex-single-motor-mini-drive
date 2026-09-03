@@ -1605,7 +1605,7 @@ async function run_current_calibration(motor_controller, message_options) {
       const inductance_bias_angle_gradient = (
         2 * L_bias * direct_residual * (
           -d_di_dt * Math.sin(2 * L_bias_angle) +
-          -q_di_dt * Math.cos(2 * L_bias_angle) +
+          q_di_dt * Math.cos(2 * L_bias_angle) +
           -omega * direct_current * Math.cos(2 * L_bias_angle) +
           -omega * quadrature_current * Math.sin(2 * L_bias_angle)
         ) +
