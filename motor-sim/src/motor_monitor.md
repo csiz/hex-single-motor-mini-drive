@@ -1573,101 +1573,85 @@ async function run_current_calibration(motor_controller, message_options) {
 
     const sample_with_gradients = sample.map((readout) => {
       const {
-        u_current, v_current, w_current, 
-        u_current_diff, v_current_diff, w_current_diff, 
-        u_drive_voltage, v_drive_voltage, w_drive_voltage,
+        direct_current, quadrature_current,
+        direct_current_diff, quadrature_current_diff,
+        direct_drive_voltage, quadrature_drive_voltage,
+        angular_speed,
       } = readout;
 
-      const u_di_dt = u_current_diff * pwm_cycles_per_second;
-      const v_di_dt = v_current_diff * pwm_cycles_per_second;
-      const w_di_dt = w_current_diff * pwm_cycles_per_second;
+      const d_di_dt = direct_current_diff * pwm_cycles_per_second;
+      const q_di_dt = quadrature_current_diff * pwm_cycles_per_second;
 
       const R = parameters.resistance.value;
 
-      const u_resistive_voltage = u_current * R;
-      const v_resistive_voltage = v_current * R;
-      const w_resistive_voltage = w_current * R;
+      const direct_resistive_voltage = direct_current * R;
+      const quadrature_resistive_voltage = quadrature_current * R;
 
       const L_0 = parameters.inductance.value;
       const L_bias = parameters.inductance_bias.value;
       const L_bias_angle = parameters.inductance_bias_angle.value;
 
-      const u_inductance = L_0 + L_bias * Math.cos(L_bias_angle);
-      const v_inductance = L_0 + L_bias * Math.cos(L_bias_angle - 2 * Math.PI / 3);
-      const w_inductance = L_0 + L_bias * Math.cos(L_bias_angle + 2 * Math.PI / 3);
+      // Convert rotations per millisecond to radians per second.
+      const omega = angular_speed * 1000.0 * 2 * Math.PI;
 
-      const u_inductance_voltage = (
-        u_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle)) +
-        v_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3)) +
-        w_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3))
+      const direct_inductance_voltage = (
+        d_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle)) +
+        q_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
+        - omega * (L_0 - L_bias * Math.cos(2 * L_bias_angle)) * quadrature_current +
+        - omega * (L_bias * Math.sin(2 * L_bias_angle)) * direct_current
       );
 
-
-      const v_inductance_voltage = (
-        u_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3)) +
-        v_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)) +
-        w_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle))
+      const quadrature_inductance_voltage = (
+        d_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
+        q_di_dt * (L_0 - L_bias * Math.cos(2 * L_bias_angle)) +
+        omega * (L_0 + L_bias * Math.cos(2 * L_bias_angle)) * direct_current +
+        omega * (L_bias * Math.sin(2 * L_bias_angle)) * quadrature_current
       );
 
-      const w_inductance_voltage = (
-        u_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)) +
-        v_di_dt * (-0.5 * L_0 + L_bias * Math.cos(2 * L_bias_angle)) +
-        w_di_dt * (L_0 + L_bias * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3))
-      );
+      const direct_residual = direct_resistive_voltage + direct_inductance_voltage - direct_drive_voltage;
+      const quadrature_residual = quadrature_resistive_voltage + quadrature_inductance_voltage - quadrature_drive_voltage;
 
-      const u_residual = u_resistive_voltage + u_inductance_voltage - u_drive_voltage;
-      const v_residual = v_resistive_voltage + v_inductance_voltage - v_drive_voltage;
-      const w_residual = w_resistive_voltage + w_inductance_voltage - w_drive_voltage;
-      
-      const loss = square(u_residual) + square(v_residual) + square(w_residual);
+      const loss = square(direct_residual) + square(quadrature_residual);
 
       const sqrt_loss = Math.sqrt(loss);
       
       const resistance_gradient = (
-        u_residual * u_current +
-        v_residual * v_current +
-        w_residual * w_current
+        direct_residual * direct_current +
+        quadrature_residual * quadrature_current
       );
 
       const inductance_gradient = (
-        u_residual * (u_di_dt - 0.5 * v_di_dt - 0.5 * w_di_dt) +
-        v_residual * (v_di_dt - 0.5 * u_di_dt - 0.5 * w_di_dt) +
-        w_residual * (w_di_dt - 0.5 * u_di_dt - 0.5 * v_di_dt)
+        direct_residual * (d_di_dt - omega * quadrature_current) +
+        quadrature_residual * (q_di_dt + omega * direct_current)
       );
 
       const inductance_bias_gradient = (
-        u_residual * (
-          u_di_dt * Math.cos(2 * L_bias_angle) +
-          v_di_dt * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
-          w_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)
+        direct_residual * (
+          d_di_dt * Math.cos(2 * L_bias_angle) +
+          q_di_dt * Math.sin(2 * L_bias_angle) +
+          omega * direct_current * Math.sin(2 * L_bias_angle) +
+          omega * quadrature_current * Math.cos(2 * L_bias_angle)
         ) +
-        v_residual * (
-          u_di_dt * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
-          v_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3) +
-          w_di_dt * Math.cos(2 * L_bias_angle)
-        ) +
-        w_residual * (
-          u_di_dt * Math.cos(2 * L_bias_angle) +
-          v_di_dt * Math.cos(2 * L_bias_angle - 2 * Math.PI / 3) +
-          w_di_dt * Math.cos(2 * L_bias_angle + 2 * Math.PI / 3)
+        quadrature_residual * (
+          d_di_dt * Math.sin(2 * L_bias_angle) +
+          -q_di_dt * Math.cos(2 * L_bias_angle) +
+          omega * direct_current * Math.cos(2 * L_bias_angle) +
+          omega * quadrature_current * Math.sin(2 * L_bias_angle)
         )
       );
 
-      const inductance_bias_angle_gradient = -(
-        u_residual * 2 * L_bias * (
-          u_di_dt * Math.sin(2 * L_bias_angle) +
-          v_di_dt * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3) +
-          w_di_dt * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3)
+      const inductance_bias_angle_gradient = (
+        2 * L_bias * direct_residual * (
+          -d_di_dt * Math.sin(2 * L_bias_angle) +
+          -q_di_dt * Math.cos(2 * L_bias_angle) +
+          -omega * direct_current * Math.cos(2 * L_bias_angle) +
+          -omega * quadrature_current * Math.sin(2 * L_bias_angle)
         ) +
-        v_residual * 2 * L_bias * (
-          u_di_dt * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3) +
-          v_di_dt * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3) +
-          w_di_dt * Math.sin(2 * L_bias_angle)
-        ) +
-        w_residual * 2 * L_bias * (
-          u_di_dt * Math.sin(2 * L_bias_angle + 2 * Math.PI / 3) +
-          v_di_dt * Math.sin(2 * L_bias_angle) +
-          w_di_dt * Math.sin(2 * L_bias_angle - 2 * Math.PI / 3)
+        2 * L_bias * quadrature_residual * (
+          d_di_dt * Math.cos(2 * L_bias_angle) +
+          q_di_dt * Math.sin(2 * L_bias_angle) +
+          -omega * direct_current * Math.sin(2 * L_bias_angle) +
+          omega * quadrature_current * Math.cos(2 * L_bias_angle)
         )
       );
           
@@ -1675,19 +1659,17 @@ async function run_current_calibration(motor_controller, message_options) {
       return {
         ...readout,
         
-        u_resistive_voltage,
-        v_resistive_voltage,
-        w_resistive_voltage,
-        
-        u_inductance_voltage,
-        v_inductance_voltage,
-        w_inductance_voltage,
-        
+        direct_resistive_voltage,
+        quadrature_resistive_voltage,
+
+        direct_inductance_voltage,
+        quadrature_inductance_voltage,
+
         loss,
         sqrt_loss,
-        u_residual,
-        v_residual,
-        w_residual,
+        
+        direct_residual,
+        quadrature_residual,
 
         resistance_gradient,
         inductance_gradient,
@@ -1705,6 +1687,11 @@ async function run_current_calibration(motor_controller, message_options) {
         inductance_bias_angle: parameters.inductance_bias_angle.value,
         sqrt_loss: Math.sqrt(d3.mean(sample_with_gradients, (d) => d.loss)),
         inductance_bias_angle_p_pi: normalize_radians(parameters.inductance_bias_angle.value + Math.PI),
+        
+        resistance_learning_rate: parameters.resistance.learning_rate,
+        inductance_learning_rate: parameters.inductance.learning_rate,
+        inductance_bias_learning_rate: parameters.inductance_bias.learning_rate,
+        inductance_bias_angle_learning_rate: parameters.inductance_bias_angle.learning_rate,
       },
       sample_with_gradients,
     });
@@ -1726,11 +1713,11 @@ async function run_current_calibration(motor_controller, message_options) {
     // contain the calibration values that were used to calculate the gradients and other values.
 
     parameters.inductance.value = Math.max(0.0, parameters.inductance.value);
-    
+
     if (parameters.inductance_bias.value < 0.0) {
       parameters.inductance_bias.value = -parameters.inductance_bias.value;
       parameters.inductance_bias.learning_rate *= rate_decrease;
-      parameters.inductance_bias_angle.value = normalize_radians(parameters.inductance_bias_angle.value + Math.PI);
+      parameters.inductance_bias_angle.value = normalize_radians(parameters.inductance_bias_angle.value + Math.PI/2);
     } else {
       parameters.inductance_bias_angle.value = normalize_radians(parameters.inductance_bias_angle.value);
     }
@@ -1842,21 +1829,18 @@ const current_calibration_optimizing_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
-    {y: "u_drive_voltage", label: "U Drive Voltage", color: d3.color(colors.u).brighter(1)},
-    {y: "v_drive_voltage", label: "V Drive Voltage", color: d3.color(colors.v).brighter(1)},
-    {y: "w_drive_voltage", label: "W Drive Voltage", color: d3.color(colors.w).brighter(1)},
+    {y: "direct_drive_voltage", label: "Direct Drive Voltage", color: d3.color(colors.u).brighter(1)},
+    {y: "quadrature_drive_voltage", label: "Quadrature Drive Voltage", color: d3.color(colors.v).brighter(1)},
 
-    {y: "u_resistive_voltage", label: "U Resistance Drop", color: colors.u},
-    {y: "v_resistive_voltage", label: "V Resistance Drop", color: colors.v},
-    {y: "w_resistive_voltage", label: "W Resistance Drop", color: colors.w},
+    {y: "direct_resistive_voltage", label: "Direct Resistance Drop", color: colors.u},
+    {y: "quadrature_resistive_voltage", label: "Quadrature Resistance Drop", color: colors.v},
 
-    {y: "u_inductance_voltage", label: "U Inductance Drop", color: d3.color(colors.u).darker(1)},
-    {y: "v_inductance_voltage", label: "V Inductance Drop", color: d3.color(colors.v).darker(1)},
-    {y: "w_inductance_voltage", label: "W Inductance Drop", color: d3.color(colors.w).darker(1)},
+    {y: "direct_inductance_voltage", label: "Direct Inductance Drop", color: d3.color(colors.u).darker(1)},
+    {y: "quadrature_inductance_voltage", label: "Quadrature Inductance Drop", color: d3.color(colors.v).darker(1)},
 
-    {y: "u_residual", label: "U Residual", color: d3.color(colors.u).darker(2)},
-    {y: "v_residual", label: "V Residual", color: d3.color(colors.v).darker(2)},
-    {y: "w_residual", label: "W Residual", color: d3.color(colors.w).darker(2)},
+    {y: "direct_residual", label: "Direct Residual", color: d3.color(colors.u).darker(2)},
+    {y: "quadrature_residual", label: "Quadrature Residual", color: d3.color(colors.v).darker(2)},
+
     {y: "sqrt_loss", label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
 
   ],
@@ -1947,7 +1931,7 @@ const control_parameters_input = Object.fromEntries(
       label: "EMF Probing Interval",
       description: "Interval for probing the EMF angle when it is too noisy to use. Determines how frequently we check the EMF angle."
     }],
-        ["probing_angular_speed", {
+    ["probing_angular_speed", {
       label: "Probing Angular Speed",
       description: `Probing angular speed. We use this default speed to drive a current around the coils in order to
       move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
