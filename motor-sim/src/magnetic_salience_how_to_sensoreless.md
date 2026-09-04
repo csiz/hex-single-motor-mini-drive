@@ -80,3 +80,23 @@ And the derivatives:
 $$\begin{aligned} \frac{\partial \text{loss}}{\partial R} = \ & 2 \, r_d I_d \\ & + 2 \, r_q I_q \\ \\ \frac{\partial \text{loss}}{\partial L_0} = \ & 2 \, r_d \left( \frac{dI_d}{dt} - \omega_i I_q \right) \\ & + 2 \, r_q \left( \frac{dI_q}{dt} + \omega_i I_d \right) \\ \\ \frac{\partial \text{loss}}{\partial L_{bias}} = \ & 2 \, r_d \cos(2\delta)\frac{dI_d}{dt} \\ & + 2 \, r_d \sin(2\delta)\frac{dI_q}{dt} \\ & - 2 \omega_i \, r_d \sin(2\delta)I_d \\ & + 2 \omega_i \, r_d \cos(2\delta)I_q \\ & + 2 \, r_q \sin(2\delta)\frac{dI_d}{dt} \\ & - 2 \, r_q \cos(2\delta)\frac{dI_q}{dt} \\ & + 2 \omega_i \, r_q \cos(2\delta)I_d \\ & + 2 \omega_i \, r_q \sin(2\delta)I_q \\ \\ \frac{\partial \text{loss}}{\partial \delta} = \ & -4 L_{bias} \, r_d \sin(2\delta)\frac{dI_d}{dt} \\ & + 4 L_{bias} \, r_d \cos(2\delta)\frac{dI_q}{dt} \\ & - 4 \omega_i L_{bias} \, r_d \cos(2\delta)I_d \\ & - 4 \omega_i L_{bias} \, r_d \sin(2\delta)I_q \\ & - 2 \omega_m K_e \, r_d \cos(\delta) \\ & + 4 L_{bias} \, r_q \cos(2\delta)\frac{dI_d}{dt} \\ & + 4 L_{bias} \, r_q \sin(2\delta)\frac{dI_q}{dt} \\ & - 4 \omega_i L_{bias} \, r_q \sin(2\delta)I_d \\ & + 4 \omega_i L_{bias} \, r_q \cos(2\delta)I_q \\ & - 2 \omega_m K_e \, r_q \sin(\delta) \end{aligned}$$ 
 Would you like me to generate a C code template or Python script to test these explicit tracking gradients in your simulator?
 
+Last, we need to match saturation effects somehow. We're using a simplified model to just kinda match the angle of the observed residual as we probe with HFI. It seems to be fixed relative to 2 times the current angle, hence we need to depend on current x d_current_dt products to capture this behavior. The formulas I used are:
+
+To handle $K_{sat}$ as a slow, steady motor constant and $\theta_{sat}$ as a fast, dynamic position tracking state, we must keep them as separate explicit variables.
+When your arbitrary software frame is misaligned from the true physical saturation axis, the $2\times$ current vector modulation passes through a spatial phase shift of $\theta_{sat}$. By expanding the trigonometric relationships directly, your microcontroller can track the true magnetic core position online while holding the motor's saturation coefficient constant.
+To keep the math tight and fast for your processor, we define your two raw current-velocity vector components as single variables:
+$$A = I_d \frac{dI_d}{dt} - I_q \frac{dI_q}{dt}$$ 
+$$B = I_q \frac{dI_d}{dt} + I_d \frac{dI_q}{dt}$$ 
+------------------------------
+## 1. Explicit Angle-Compensated Voltage Equations
+Inserting $K_{sat}$ and $\theta_{sat}$ directly, the model predictions for your software frame feedforward voltages are:
+$$V_{d,\text{model}} = V_{d,\text{linear}} + K_{sat} \left[ A\cos(\theta_{sat}) - B\sin(\theta_{sat}) \right]$$ 
+$$V_{q,\text{model}} = V_{q,\text{linear}} + K_{sat} \left[ A\sin(\theta_{sat}) + B\cos(\theta_{sat}) \right]$$ 
+------------------------------
+## 2. Explicit Parameter Gradient Equations
+Using your software frame voltage residuals $r_d = V_d - V_{drive,d}$ and $r_q = V_q - V_{drive,q}$, your optimizer updates the steady motor constant and the fast-moving position state using these two separate gradients:
+## For the Constant Motor Saturation Magnitude ($K_{sat}$):
+$$\mathbf{\frac{\partial \text{loss}}{\partial K_{sat}}} = 2 \, r_d \left[ A\cos(\theta_{sat}) - B\sin(\theta_{sat}) \right] + 2 \, r_q \left[ A\sin(\theta_{sat}) + B\cos(\theta_{sat}) \right]$$ 
+## For the Dynamic Saturation Phase Angle ($\theta_{sat}$):
+$$\mathbf{\frac{\partial \text{loss}}{\partial \theta_{sat}}} = 2 K_{sat} \, r_d \left[ -A\sin(\theta_{sat}) - B\cos(\theta_{sat}) \right] + 2 K_{sat} \, r_q \left[ A\cos(\theta_{sat}) - B\sin(\theta_{sat}) \right]$$ 
+------------------------------
