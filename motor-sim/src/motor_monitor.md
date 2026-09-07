@@ -1593,15 +1593,15 @@ async function run_current_calibration(motor_controller, message_options) {
       const K_saturation = parameters.saturation_factor.value;
 
       // Convert rotations per millisecond to radians per second.
-      // const omega = 0.0 * angular_speed * 1000.0 * 2 * Math.PI;
-
+      const omega = 0.0 * angular_speed * 1000.0 * 2 * Math.PI;
+      
       const direct_inductance_bias_voltage = (
         d_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
         q_di_dt * L_bias * Math.sin(2 * L_bias_angle)
       );
 
       const quadrature_inductance_bias_voltage = (
-        q_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
+        d_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
         q_di_dt * -L_bias * Math.cos(2 * L_bias_angle)
       );
 
@@ -1704,6 +1704,9 @@ async function run_current_calibration(motor_controller, message_options) {
           -B_saturation * Math.sin(L_saturation_angle)
         )
       );
+
+
+
 
       return {
         ...readout,
