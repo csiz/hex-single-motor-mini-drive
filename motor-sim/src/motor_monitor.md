@@ -1446,10 +1446,6 @@ const update_current_calibration_data = (new_value) => {
 
 ```js
 
-
-
-const max_iterations = 1000;
-
 async function run_current_calibration(motor_controller, message_options) {
   if (!motor_controller.current_calibration) {
     console.error("We didn't load the active calibration data from the driver, we can't proceed without it.");
@@ -1513,49 +1509,53 @@ async function run_current_calibration(motor_controller, message_options) {
     }
   }
 
-  const beta1 = 0.9;
-  let momentum_correction = 0.0;
-  const beta2 = 0.99;
-  let variance_correction = 0.0;
-  const epsilon = 1e-12;
+  const max_iterations = 1000;
+  const relative_stability = 0.001;
+  const relative_min = relative_stability / 10;
+  const relative_max = 10;
+  const relative_increase = 1.2;
+  const relative_decrease = 0.5;
+
+  class Parameter {
+    constructor({value, initial_learning_rate}) {
+      this.value = value;
+      this.initial_learning_rate = initial_learning_rate;
+      this.learning_rate = initial_learning_rate;
+      this.sign = 0;
+    }
+
+    reset(value) {
+      this.value = value;
+      this.learning_rate = this.initial_learning_rate;
+      this.sign = 0;
+    }
+  }
 
   let parameters = {
-    resistance: {
+    resistance: new Parameter({
       value: current_calibration?.resistance ?? 0.01,
-      momentum: 0.0,
-      variance: 0.0,
-      learning_rate: 0.01,
-    },
-    inductance: {
+      initial_learning_rate: 0.01,
+    }),
+    inductance: new Parameter({
       value: current_calibration?.inductance ?? 0.00001, 
-      momentum: 0.0,
-      variance: 0.0,
-      learning_rate: 0.00001,
-    },
-    inductance_bias: {
+      initial_learning_rate: 0.000_001,
+    }),
+    inductance_bias: new Parameter({
       value: current_calibration?.inductance_bias ?? 0.0,
-      momentum: 0.0,
-      variance: 0.0,
-      learning_rate: 0.000001,
-    },
-    inductance_bias_angle: {
+      initial_learning_rate: 0.000_001,
+    }),
+    inductance_bias_angle: new Parameter({
       value: current_calibration?.inductance_bias_angle ?? 0.0,
-      momentum: 0.0,
-      variance: 0.0,
-      learning_rate: 0.01,
-    },
-    saturation_factor: {
+      initial_learning_rate: Math.PI / 4 / relative_max,
+    }),
+    saturation_factor: new Parameter({
       value: current_calibration?.saturation_factor ?? 0.0,
-      momentum: 0.0,
-      variance: 0.0,
-      learning_rate: 0.0000001,
-    },
-    saturation_angle: {
+      initial_learning_rate: 0.000_001,
+    }),
+    saturation_angle: new Parameter({
       value: current_calibration?.saturation_angle ?? 0.0,
-      momentum: 0.0,
-      variance: 0.0,
-      learning_rate: 0.01,
-    }
+      initial_learning_rate: Math.PI / 4 / relative_max,
+    }),
   };
 
 
@@ -1752,12 +1752,12 @@ async function run_current_calibration(motor_controller, message_options) {
         saturation_angle: parameters.saturation_angle.value,
         saturation_angle_p_half_pi: normalize_radians(parameters.saturation_angle.value + Math.PI / 2),
 
-        resistance_momentum: parameters.resistance.momentum,
-        inductance_momentum: parameters.inductance.momentum,
-        inductance_bias_momentum: parameters.inductance_bias.momentum,
-        inductance_bias_angle_momentum: parameters.inductance_bias_angle.momentum,
-        saturation_factor_momentum: parameters.saturation_factor.momentum,
-        saturation_angle_momentum: parameters.saturation_angle.momentum,
+        resistance_learning_rate: parameters.resistance.learning_rate,
+        inductance_learning_rate: parameters.inductance.learning_rate,
+        inductance_bias_learning_rate: parameters.inductance_bias.learning_rate,
+        inductance_bias_angle_learning_rate: parameters.inductance_bias_angle.learning_rate,
+        saturation_factor_learning_rate: parameters.saturation_factor.learning_rate,
+        saturation_angle_learning_rate: parameters.saturation_angle.learning_rate,
       },
       sample_with_gradients,
     });
@@ -1769,7 +1769,7 @@ async function run_current_calibration(motor_controller, message_options) {
 
 
 
-    is_stable = false;
+    is_stable = true;
 
     const gradients = {
       resistance: d3.mean(sample_with_gradients, (d) => d.resistance_gradient),
@@ -1780,35 +1780,38 @@ async function run_current_calibration(motor_controller, message_options) {
       saturation_angle: d3.mean(sample_with_gradients, (d) => d.saturation_angle_gradient),
     }
 
-    momentum_correction = beta1 * momentum_correction + (1.0 - beta1);
-    variance_correction = beta2 * variance_correction + (1.0 - beta2);
-
     for (const [key, gradient] of Object.entries(gradients)) {
       if (!enabled_parameters[key]) continue;
 
-      parameters[key].momentum = beta1 * parameters[key].momentum + (1 - beta1) * gradient;
-      parameters[key].variance = beta2 * parameters[key].variance + (1 - beta2) * gradient * gradient;
+      const new_sign = Math.sign(gradient);
+      if ((new_sign == 0.0) || (new_sign != parameters[key].sign)) {
+        parameters[key].learning_rate = Math.max(relative_min * parameters[key].initial_learning_rate, parameters[key].learning_rate * relative_decrease);
+      } else {
+        parameters[key].learning_rate = Math.min(relative_max * parameters[key].initial_learning_rate, parameters[key].learning_rate * relative_increase);
+      }
 
-      const corrected_momentum = parameters[key].momentum / momentum_correction;
-      const corrected_variance = parameters[key].variance / variance_correction;
-      
-      parameters[key].value -= parameters[key].learning_rate * corrected_momentum / (Math.sqrt(corrected_variance) + epsilon);
+      parameters[key].value -= parameters[key].learning_rate * new_sign;
+      parameters[key].sign = new_sign;
+
+      if (parameters[key].learning_rate > (parameters[key].initial_learning_rate * relative_stability)) {
+        is_stable = false;
+      }
     }
     
     // Update calibration values after pushing the iteration data! The iteration should then
     // contain the calibration values that were used to calculate the gradients and other values.
 
-    parameters.inductance.value = Math.max(0.0, parameters.inductance.value);
+    if (parameters.resistance.value < 0.0) parameters.resistance.reset(0.0);
+    if (parameters.inductance.value < 0.0) parameters.inductance.reset(0.0);
 
     if (parameters.inductance_bias.value < 0.0) {
-      parameters.inductance_bias.value = -parameters.inductance_bias.value;
-      parameters.inductance_bias.momentum = 0;
-      parameters.inductance_bias_angle.value = parameters.inductance_bias_angle.value + Math.PI/2;
+      parameters.inductance_bias.reset(0.0);
+      parameters.inductance_bias_angle.value = parameters.inductance_bias_angle.value + Math.PI/12;
     }
 
     if (parameters.saturation_factor.value < 0.0) {
-      parameters.saturation_factor.value = - 0.5 * parameters.saturation_factor.value;
-      parameters.saturation_factor.momentum = 0;
+      parameters.saturation_factor.reset(- 0.5 * parameters.saturation_factor.value);
+      parameters.saturation_angle.value = parameters.saturation_angle.value + Math.PI/12;
     }
 
     parameters.inductance_bias_angle.value = normalize_radians(parameters.inductance_bias_angle.value);
@@ -1817,7 +1820,7 @@ async function run_current_calibration(motor_controller, message_options) {
 
   const current_calibration_data = {
     sample,
-    is_stable: true,
+    is_stable,
     iterations,
     current_calibration: {
       resistance: parameters.resistance.value,
