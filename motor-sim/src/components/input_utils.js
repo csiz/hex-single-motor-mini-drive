@@ -26,8 +26,8 @@ export async function * transformed_input_value(input, transform) {
   }
 }
 
-export function enabled_checkbox(data, {...options}){
-  return Inputs.checkbox(data, {value: data, ...options});
+export function enabled_checkbox(data, options){
+  return Inputs.checkbox(data, {value: data, ...(options ? options : {})});
 }
 
 export async function * any_checked_input(checkbox_input){

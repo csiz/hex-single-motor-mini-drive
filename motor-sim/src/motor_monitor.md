@@ -107,6 +107,7 @@ Current Calibration Procedures
   <div>${current_calibration_test_speed_slider}</div>
   <div>${current_calibration_test_duration_slider}</div>
   <div>${current_calibration_angle_slider}</div>
+  <div>${current_calibration_checkboxes}</div>
   <h3>Current Calibration Results</h3>
   <div>${current_calibration_optimization_iteration_input}</div>
   <div>
@@ -1347,58 +1348,60 @@ function stringify_active_current_calibration() {
 const active_current_calibration_table =  Mutable(stringify_active_current_calibration());
 
 
-const current_calibration_input = Object.fromEntries(
-  [
-    ["u_current_zero", {
-      label: "U Current Zero", 
-      description: `The zero-current offset for the U phase.`
-    }],
-    ["v_current_zero", {
-      label: "V Current Zero", 
-      description: `The zero-current offset for the V phase.`
-    }],
-    ["w_current_zero", {
-      label: "W Current Zero", 
-      description: `The zero-current offset for the W phase.`
-    }],
-    ["resistance", {
-      label: "Resistance", 
-      description: `The resistance of average phase coil.`
-    }],
-    ["inductance", {
-      label: "Phase Inductance", 
-      description: `The inductance of the motor's phases.`
-    }],
-    ["inductance_bias", {
-      label: "Inductance Bias", 
-      description: `The bias of the motor's phase inductance.`
-    }],
-    ["inductance_bias_angle", {
-      label: "Inductance Bias Angle", 
-      description: `The angle of the inductance bias.`
-    }],
-    ["saturation_angle", {
-      label: "Saturation Angle", 
-      description: `The angle of the motor's saturation.`
-    }],
-    ["saturation_factor", {
-      label: "Saturation Factor", 
-      description: `The factor of the motor's saturation.`
-    }],
-    ["motor_constant", {
-      label: "Motor Constant", 
-      description: `The motor constant, which relates torque and current, or speed and emf.`
-    }],
-    ["friction_torque", {
-      label: "Friction Torque", 
-      description: `The torque required to overcome the motor's friction.`
-    }],
-    ["rotor_mass", {
-      label: "Rotor Mass", 
-      description: `The mass of the rotor.`
-    }],
-  ].map(([key, {label, description}]) => {
+const calibration_parameters = {
+  u_current_zero: {
+    label: "U Current Zero", 
+    description: `The zero-current offset for the U phase.`
+  },
+  v_current_zero: {
+    label: "V Current Zero", 
+    description: `The zero-current offset for the V phase.`
+  },
+  w_current_zero: {
+    label: "W Current Zero", 
+    description: `The zero-current offset for the W phase.`
+  },
+  resistance: {
+    label: "Resistance", 
+    description: `The resistance of average phase coil.`
+  },
+  inductance: {
+    label: "Phase Inductance", 
+    description: `The inductance of the motor's phases.`
+  },
+  inductance_bias: {
+    label: "Inductance Bias", 
+    description: `The bias of the motor's phase inductance.`
+  },
+  inductance_bias_angle: {
+    label: "Inductance Bias Angle", 
+    description: `The angle of the inductance bias.`
+  },
+  saturation_angle: {
+    label: "Saturation Angle", 
+    description: `The angle of the motor's saturation.`
+  },
+  saturation_factor: {
+    label: "Saturation Factor", 
+    description: `The factor of the motor's saturation.`
+  },
+  motor_constant: {
+    label: "Motor Constant", 
+    description: `The motor constant, which relates torque and current, or speed and emf.`
+  },
+  friction_torque: {
+    label: "Friction Torque", 
+    description: `The torque required to overcome the motor's friction.`
+  },
+  rotor_mass: {
+    label: "Rotor Mass", 
+    description: `The mass of the rotor.`
+  },
+}
 
+const current_calibration_input = Object.fromEntries(
+  Object.entries(calibration_parameters).map(([key, {label, description}]) => {
+    
     let parameter_input = Inputs.number([], {
       label,
       value: motor_controller?.current_calibration?.[key],
@@ -1412,7 +1415,16 @@ const current_calibration_input = Object.fromEntries(
   })
 );
 
-    
+const current_calibration_checkboxes = enabled_checkbox(Object.entries(calibration_parameters).map(([key, {label, description}]) => label));
+  
+function get_checked_parameters(){
+  return Object.fromEntries(
+    Object.entries(calibration_parameters).map(([key, {label}]) => {
+      return [key, current_calibration_checkboxes.value.includes(label)];
+    })
+  );
+}
+
 function show_active_current_calibration() {
   active_current_calibration_table.value = stringify_active_current_calibration();
   Object.entries(current_calibration_input).forEach(([key, input]) => {
@@ -1476,6 +1488,9 @@ async function run_current_calibration(motor_controller, message_options) {
     }
   }
 
+  const enabled_parameters = get_checked_parameters();
+
+
   // Test if the voltage was always 0.
   const all_zero_drive_voltage = sample.every(({u_drive_voltage, v_drive_voltage, w_drive_voltage}) => 
     u_drive_voltage === 0 && v_drive_voltage === 0 && w_drive_voltage === 0
@@ -1518,25 +1533,25 @@ async function run_current_calibration(motor_controller, message_options) {
       learning_rate: 0.00001,
     },
     inductance_bias: {
-      value: 0.0, 
+      value: current_calibration?.inductance_bias ?? 0.0,
       momentum: 0.0,
       variance: 0.0,
-      learning_rate: 0.00001,
+      learning_rate: 0.000001,
     },
     inductance_bias_angle: {
-      value: 0.0,
+      value: current_calibration?.inductance_bias_angle ?? 0.0,
       momentum: 0.0,
       variance: 0.0,
       learning_rate: 0.01,
     },
     saturation_factor: {
-      value: 0.0,
+      value: current_calibration?.saturation_factor ?? 0.0,
       momentum: 0.0,
       variance: 0.0,
       learning_rate: 0.0000001,
     },
     saturation_angle: {
-      value: 0.0,
+      value: current_calibration?.saturation_angle ?? 0.0,
       momentum: 0.0,
       variance: 0.0,
       learning_rate: 0.01,
@@ -1766,6 +1781,8 @@ async function run_current_calibration(motor_controller, message_options) {
     variance_correction = beta2 * variance_correction + (1.0 - beta2);
 
     for (const [key, gradient] of Object.entries(gradients)) {
+      if (!enabled_parameters[key]) continue;
+
       parameters[key].momentum = beta1 * parameters[key].momentum + (1 - beta1) * gradient;
       parameters[key].variance = beta2 * parameters[key].variance + (1 - beta2) * gradient * gradient;
 
@@ -1797,7 +1814,7 @@ async function run_current_calibration(motor_controller, message_options) {
 
   const current_calibration_data = {
     sample,
-    is_stable,
+    is_stable: true,
     iterations,
     current_calibration: {
       resistance: parameters.resistance.value,
@@ -1990,6 +2007,7 @@ autosave_inputs({
   current_calibration_optimizing_gradients_plot,
   current_calibration_angles_scatter,
   current_calibration_angles_plot,
+  current_calibration_checkboxes,
 });
 ```
 
