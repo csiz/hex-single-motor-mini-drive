@@ -225,10 +225,12 @@ constexpr float seconds_per_pwm_cycle = 1.0f / static_cast<float>(pwm_cycles_per
 // bootstrap capacitor to charge so it has enough voltage to turn high side MOSFET on.
 constexpr int32_t minimum_bootstrap_duty = 30; // 30/144MHz = 208ns
 
+constexpr uint16_t pwm_min = 16;
+
 // Maximum duty cycle for the high side mosfet. We need to allow some off time for the 
 // bootstrap capacitor to charge so it has enough voltage to turn mosfet on. And also
 // enough time to connect all low side mosfets to ground in order to sample phase currents.
-constexpr float pwm_max = hex_mini_drive::PWM_BASE - max(sample_reserve_time, minimum_bootstrap_duty);
+constexpr float pwm_max = hex_mini_drive::PWM_BASE - max(sample_reserve_time, minimum_bootstrap_duty) - static_cast<float>(pwm_min);
 
 // Maximum time (in pwm cycles) while a command is in effect.
 constexpr int32_t max_timeout = 0xFFFF;
