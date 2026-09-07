@@ -553,6 +553,8 @@ struct TestCommand {
   float test_speed;
   // Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
   uint32_t test_duration;
+  // Starting angle for the test.
+  int32_t test_angle;
 };
 
 static inline void write_TestCommand(uint8_t * buffer, TestCommand const& value) {
@@ -564,6 +566,8 @@ static inline void write_TestCommand(uint8_t * buffer, TestCommand const& value)
   write_float32(buffer + offset, value.test_speed);;
   offset += 4;
   write_uint32(buffer + offset, value.test_duration);;
+  offset += 4;
+  write_int32(buffer + offset, value.test_angle);;
   offset += 4;
 }
 static inline TestCommand read_TestCommand(uint8_t const* buffer) {
@@ -578,6 +582,8 @@ static inline TestCommand read_TestCommand(uint8_t const* buffer) {
   result.test_speed = read_float32(buffer + offset);
   offset += 4;
   result.test_duration = read_uint32(buffer + offset);
+  offset += 4;
+  result.test_angle = read_int32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1224,8 +1230,8 @@ enum MessageCode : uint16_t {
   UNIT_TEST_OUTPUT = 20544,
   SET_STATE_RESISTANCE_CALIBRATION = 20549,
   SET_STATE_INDUCTANCE_CALIBRATION = 20550,
-  SET_STATE_POSITION_CALIBRATION_CHIRP = 20551,
-  SET_STATE_POSITION_CALIBRATION_EMF = 20552,
+  SET_STATE_ROTATING_CALIBRATION_CHIRP = 20551,
+  SET_STATE_FIXED_CALIBRATION_CHIRP = 20552,
 };
 
 // Generic Message Structure
@@ -1264,17 +1270,17 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::FULL_READOUT: return 192;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 10;
-    case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 18;
+    case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 22;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
-    case MessageCode::SET_STATE_TEST_GROUND_SHORT: return 18;
-    case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: return 18;
-    case MessageCode::SET_STATE_TEST_U_DIRECTIONS: return 18;
-    case MessageCode::SET_STATE_TEST_U_INCREASING: return 18;
-    case MessageCode::SET_STATE_TEST_U_DECREASING: return 18;
-    case MessageCode::SET_STATE_TEST_V_INCREASING: return 18;
-    case MessageCode::SET_STATE_TEST_V_DECREASING: return 18;
-    case MessageCode::SET_STATE_TEST_W_INCREASING: return 18;
-    case MessageCode::SET_STATE_TEST_W_DECREASING: return 18;
+    case MessageCode::SET_STATE_TEST_GROUND_SHORT: return 22;
+    case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: return 22;
+    case MessageCode::SET_STATE_TEST_U_DIRECTIONS: return 22;
+    case MessageCode::SET_STATE_TEST_U_INCREASING: return 22;
+    case MessageCode::SET_STATE_TEST_U_DECREASING: return 22;
+    case MessageCode::SET_STATE_TEST_V_INCREASING: return 22;
+    case MessageCode::SET_STATE_TEST_V_DECREASING: return 22;
+    case MessageCode::SET_STATE_TEST_W_INCREASING: return 22;
+    case MessageCode::SET_STATE_TEST_W_DECREASING: return 22;
     case MessageCode::SET_STATE_HOLD_U_POSITIVE: return 10;
     case MessageCode::SET_STATE_HOLD_V_POSITIVE: return 10;
     case MessageCode::SET_STATE_HOLD_W_POSITIVE: return 10;
@@ -1301,10 +1307,10 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
     case MessageCode::SETTINGS_SAVED_TO_FLASH: return 2;
     case MessageCode::UNIT_TEST_OUTPUT: return 250;
-    case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 18;
-    case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 18;
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP: return 18;
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_EMF: return 18;
+    case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 22;
+    case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 22;
+    case MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP: return 22;
+    case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: return 22;
   }
   return 0; // Unknown message code
 }
@@ -1351,9 +1357,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_FREEWHEEL: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_FREEWHEEL));
@@ -1361,57 +1367,57 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_TEST_GROUND_SHORT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_GROUND_SHORT));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_POSITIVE_SHORT));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_U_DIRECTIONS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_DIRECTIONS));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_U_INCREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_INCREASING));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_U_DECREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_DECREASING));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_V_INCREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_V_INCREASING));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_V_DECREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_V_DECREASING));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_W_INCREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_W_INCREASING));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_TEST_W_DECREASING: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_W_DECREASING));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_HOLD_U_POSITIVE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_U_POSITIVE));
@@ -1559,27 +1565,27 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_RESISTANCE_CALIBRATION));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_INDUCTANCE_CALIBRATION));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP));
-      if (max_size < 2 + 16) return 0;
+    case MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP));
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_EMF: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_POSITION_CALIBRATION_EMF));
-      if (max_size < 2 + 16) return 0;
+    case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP));
+      if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 18;
+      return 22;
     }
   }
   return 0;
@@ -1629,7 +1635,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
@@ -1639,47 +1645,47 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_TEST_GROUND_SHORT: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_U_DIRECTIONS: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_U_INCREASING: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_U_DECREASING: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_V_INCREASING: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_V_DECREASING: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_W_INCREASING: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_TEST_W_DECREASING: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
@@ -1814,22 +1820,22 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_CHIRP: {
-      if (size != 2 + 16) return false;
+    case MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP: {
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_POSITION_CALIBRATION_EMF: {
-      if (size != 2 + 16) return false;
+    case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: {
+      if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }

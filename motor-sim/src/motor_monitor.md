@@ -106,6 +106,7 @@ Current Calibration Procedures
   <div>${current_calibration_pwm_slider}</div>
   <div>${current_calibration_test_speed_slider}</div>
   <div>${current_calibration_test_duration_slider}</div>
+  <div>${current_calibration_angle_slider}</div>
   <h3>Current Calibration Results</h3>
   <div>${current_calibration_optimization_iteration_input}</div>
   <div>
@@ -536,10 +537,10 @@ const test_buttons_to_code = [
   ["Test V decreasing", MessageCode.SET_STATE_TEST_V_DECREASING],
   ["Test W increasing", MessageCode.SET_STATE_TEST_W_INCREASING],
   ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
-  ["Run resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
-  ["Run inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
-  ["Run chirp calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_CHIRP],
-  ["Run EMF calibration", MessageCode.SET_STATE_POSITION_CALIBRATION_EMF],
+  ["Resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
+  ["Inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
+  ["Rotating chirp calibration", MessageCode.SET_STATE_ROTATING_CALIBRATION_CHIRP],
+  ["Fixed chirp calibration", MessageCode.SET_STATE_FIXED_CALIBRATION_CHIRP],
 ];
 
 const test_buttons = Inputs.button(
@@ -1334,6 +1335,10 @@ const current_calibration_test_duration_slider = inputs_wide_range([0, 16*HISTOR
 
 const current_calibration_duration = Generators.input(current_calibration_test_duration_slider);
 
+// Choose the target angle for certain commands.
+const current_calibration_angle_slider = inputs_wide_range([-Math.PI, Math.PI], {value: 0, step: 0.01, label: "Command angle (radians):"});
+const current_calibration_angle = transformed_input_value(current_calibration_angle_slider, radians_to_angle_units);
+
 
 function stringify_active_current_calibration() {
   return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
@@ -1816,6 +1821,7 @@ async function run_current_calibration_by_code(message_code) {
       pwm_value: current_calibration_pwm,
       test_speed: current_calibration_test_speed,
       test_duration: current_calibration_duration,
+      test_angle: current_calibration_angle,
     }
   );
   update_current_calibration_data(calibration_data);

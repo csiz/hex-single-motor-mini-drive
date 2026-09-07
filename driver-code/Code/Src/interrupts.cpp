@@ -381,7 +381,7 @@ static inline MotorOutputs update_motor_inductance_calibration(
 // we can measure the residual voltage terms after accounting for resistance and inductance
 // to isolate the response of the iron core of the coils. We can use this to determine the
 // rotor position.
-static inline MotorOutputs update_motor_position_calibration_chirp(
+static inline MotorOutputs update_motor_rotating_calibration_chirp(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
@@ -397,28 +397,22 @@ static inline MotorOutputs update_motor_position_calibration_chirp(
     }
 }
 
-// For the EMF test we spin the motor using start_speed and start_rotations, then we
-// short the motor and start recording the EMF voltage.
-static inline MotorOutputs update_motor_position_calibration_emf(
+// In this test we chirp the motor in amplitude along the active_angle axis.
+static inline MotorOutputs update_motor_fixed_calibration_chirp(
     DriverState & driver_state,
     hex_mini_drive::FullReadout const& readout
 ){
 
-    if (driver_state.duration > hex_mini_drive::HISTORY_SIZE) {
-        // Keep marking history for reset until we have finished spinning up the motor.
-        readout_history_reset_flag = true;
+    if (driver_state.test_parameters.test_duration > 0) {
+        driver_state.test_parameters.test_duration -= 1;
 
-        const int32_t elapsed = hex_mini_drive::HISTORY_SIZE + driver_state.test_parameters.test_duration - driver_state.duration;
+        // Reuse test_angle for the amplitude oscilation angle.
+        driver_state.test_parameters.test_angle += static_cast<int32_t>(driver_state.test_parameters.test_speed);
 
-        // Linearly ramp up the speed from 0 to test_speed over the duration of test_duration.
-        const float speed = static_cast<float>(driver_state.test_parameters.test_speed) * static_cast<float>(elapsed) / static_cast<float>(driver_state.test_parameters.test_duration);
+        // Drive at a sinusoidal PWM amplitude along the active_angle axis until the test is done.
+        driver_state.active_pwm = faster_abs(driver_state.target) * get_sin(driver_state.test_parameters.test_angle);
 
-
-        // Spin up phase, spin the motor at start_speed and start_rotations.
-        driver_state.active_angle += static_cast<int32_t>(speed);
-        driver_state.active_pwm = faster_abs(driver_state.target);
         return update_motor_at_angle(driver_state, readout);
-
     } else {
         // Record the shorted outputs.
         return breaking_motor_outputs;
@@ -834,9 +828,9 @@ static inline DriverState setup_driver_state(
                 .target = clip_to(0.0f, pwm_max, pending_state.target),
             };
 
-        case DriverMode::POSITION_CALIBRATION_CHIRP:
+        case DriverMode::ROTATING_CALIBRATION_CHIRP:
             return DriverState{
-                .mode = DriverMode::POSITION_CALIBRATION_CHIRP,
+                .mode = DriverMode::ROTATING_CALIBRATION_CHIRP,
                 .duration = hex_mini_drive::HISTORY_SIZE,
                 .target = clip_to(-pwm_max, pwm_max, pending_state.target),
                 .test_parameters = TestParameters{
@@ -846,14 +840,16 @@ static inline DriverState setup_driver_state(
                 },
             };
 
-        case DriverMode::POSITION_CALIBRATION_EMF:
+        case DriverMode::FIXED_CALIBRATION_CHIRP:
             return DriverState{
-                .mode = DriverMode::POSITION_CALIBRATION_EMF,
-                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .mode = DriverMode::FIXED_CALIBRATION_CHIRP,
+                .duration = hex_mini_drive::HISTORY_SIZE,
+                .active_angle = pending_state.test_parameters.test_angle,
                 .target = clip_to(-pwm_max, pwm_max, pending_state.target),
                 .test_parameters = TestParameters{
                     .test_speed = clip_to(-max_angular_speed, max_angular_speed, pending_state.test_parameters.test_speed),
                     .test_duration = pending_state.test_parameters.test_duration,
+                    .test_angle = 0
                 },
             };
     }
@@ -969,18 +965,18 @@ static inline void update_motor_control(
             driver_state.motor_outputs = update_motor_inductance_calibration(driver_state, readout);
             return;
 
-        case DriverMode::POSITION_CALIBRATION_CHIRP:
+        case DriverMode::ROTATING_CALIBRATION_CHIRP:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
-            // Update the motor outputs for the position calibration.
-            driver_state.motor_outputs = update_motor_position_calibration_chirp(driver_state, readout);
+            // Update the motor outputs for the rotating calibration chirp.
+            driver_state.motor_outputs = update_motor_rotating_calibration_chirp(driver_state, readout);
             return;
 
-        case DriverMode::POSITION_CALIBRATION_EMF:
+        case DriverMode::FIXED_CALIBRATION_CHIRP:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
-            // Update the motor outputs for the position calibration.
-            driver_state.motor_outputs = update_motor_position_calibration_emf(driver_state, readout);
+            // Update the motor outputs for the fixed calibration chirp.
+            driver_state.motor_outputs = update_motor_fixed_calibration_chirp(driver_state, readout);
             return;
     }
 

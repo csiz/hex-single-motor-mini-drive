@@ -37,8 +37,8 @@ enum struct CalibrationMode {
   NONE,
   RESISTANCE,
   INDUCTANCE,
-  POSITION_CHIRP,
-  POSITION_EMF
+  ROTATING_CHIRP,
+  FIXED_CHIRP
 };
 
 CalibrationMode calibration_mode = CalibrationMode::NONE;
@@ -496,15 +496,15 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    case SET_STATE_POSITION_CALIBRATION_CHIRP: {
-      calibration_mode = CalibrationMode::POSITION_CHIRP;
+    case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
+      calibration_mode = CalibrationMode::ROTATING_CHIRP;
       // Clear the readouts buffer of old data.
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
       readouts_sent = 0;
 
       set_motor_command(DriverState{
-        .mode = DriverMode::POSITION_CALIBRATION_CHIRP,
+        .mode = DriverMode::ROTATING_CALIBRATION_CHIRP,
         .duration = hex_mini_drive::HISTORY_SIZE,
         .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
         .test_parameters = TestParameters{
@@ -514,8 +514,8 @@ void handle_message(hex_mini_drive::Message const& message) {
       });
       return;
     }
-    case SET_STATE_POSITION_CALIBRATION_EMF: {
-      calibration_mode = CalibrationMode::POSITION_EMF;
+    case SET_STATE_FIXED_CALIBRATION_CHIRP: {
+      calibration_mode = CalibrationMode::FIXED_CHIRP;
       
       readout_history_mark_reset();
       readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
@@ -523,12 +523,14 @@ void handle_message(hex_mini_drive::Message const& message) {
 
 
       set_motor_command(DriverState{
-        .mode = DriverMode::POSITION_CALIBRATION_EMF,
-        .duration = hex_mini_drive::HISTORY_SIZE + std::get<TestCommand>(message.message_data).test_duration,
+        .mode = DriverMode::FIXED_CALIBRATION_CHIRP,
+        .duration = hex_mini_drive::HISTORY_SIZE,
+        .active_angle = 0,
         .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
         .test_parameters = TestParameters{
           .test_speed = std::get<TestCommand>(message.message_data).test_speed,
           .test_duration = std::get<TestCommand>(message.message_data).test_duration,
+          .test_angle = std::get<TestCommand>(message.message_data).test_angle
         },
       });
       return;

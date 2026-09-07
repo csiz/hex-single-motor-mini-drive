@@ -161,10 +161,10 @@ message_codes:
   SET_STATE_INDUCTANCE_CALIBRATION:
     message_code: 0x5046
     type: TestCommand
-  SET_STATE_POSITION_CALIBRATION_CHIRP:
+  SET_STATE_ROTATING_CALIBRATION_CHIRP:
     message_code: 0x5047
     type: TestCommand
-  SET_STATE_POSITION_CALIBRATION_EMF:
+  SET_STATE_FIXED_CALIBRATION_CHIRP:
     message_code: 0x5048
     type: TestCommand
 
@@ -498,7 +498,9 @@ definitions:
       test_duration:
         type: uint32
         doc: Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
-
+      test_angle:
+        type: int32
+        doc: Starting angle for the test.
 
   HoldCommand:
     struct:

@@ -488,12 +488,14 @@ export class TestCommand {
   test_speed;
   // Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
   test_duration;
+  // Starting angle for the test.
+  test_angle;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_TestCommand(value) {
-  const buffer = new Uint8Array(16);
+  const buffer = new Uint8Array(20);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.pwm_value)
@@ -503,6 +505,8 @@ function write_TestCommand(value) {
   view.setFloat32(offset, value.test_speed)
   offset += 4;
   view.setUint32(offset, value.test_duration)
+  offset += 4;
+  view.setInt32(offset, value.test_angle)
   offset += 4;
   return buffer;
 }
@@ -516,6 +520,8 @@ function read_TestCommand(view, offset = 0) {
   result.test_speed = view.getFloat32(offset);
   offset += 4;
   result.test_duration = view.getUint32(offset);
+  offset += 4;
+  result.test_angle = view.getInt32(offset);
   offset += 4;
   return result;
 }
@@ -1197,8 +1203,8 @@ const SETTINGS_SAVED_TO_FLASH = 16513;
 const UNIT_TEST_OUTPUT = 20544;
 const SET_STATE_RESISTANCE_CALIBRATION = 20549;
 const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
-const SET_STATE_POSITION_CALIBRATION_CHIRP = 20551;
-const SET_STATE_POSITION_CALIBRATION_EMF = 20552;
+const SET_STATE_ROTATING_CALIBRATION_CHIRP = 20551;
+const SET_STATE_FIXED_CALIBRATION_CHIRP = 20552;
 
 export const MessageCode = {
   NULL_MESSAGE_CODE,
@@ -1247,8 +1253,8 @@ export const MessageCode = {
   UNIT_TEST_OUTPUT,
   SET_STATE_RESISTANCE_CALIBRATION,
   SET_STATE_INDUCTANCE_CALIBRATION,
-  SET_STATE_POSITION_CALIBRATION_CHIRP,
-  SET_STATE_POSITION_CALIBRATION_EMF,
+  SET_STATE_ROTATING_CALIBRATION_CHIRP,
+  SET_STATE_FIXED_CALIBRATION_CHIRP,
 };
 
 // Generic Serialize Function
@@ -1602,7 +1608,7 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_POSITION_CALIBRATION_CHIRP: {
+    case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
       const message_buffer = write_TestCommand(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
@@ -1610,7 +1616,7 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_POSITION_CALIBRATION_EMF: {
+    case SET_STATE_FIXED_CALIBRATION_CHIRP: {
       const message_buffer = write_TestCommand(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
@@ -1664,7 +1670,7 @@ export function read_message(buffer) {
       return message;
     }
     case SET_STATE_TEST_ALL_PERMUTATIONS: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_ALL_PERMUTATIONS;
       return message;
@@ -1674,55 +1680,55 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_STATE_TEST_GROUND_SHORT: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_GROUND_SHORT;
       return message;
     }
     case SET_STATE_TEST_POSITIVE_SHORT: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_POSITIVE_SHORT;
       return message;
     }
     case SET_STATE_TEST_U_DIRECTIONS: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_U_DIRECTIONS;
       return message;
     }
     case SET_STATE_TEST_U_INCREASING: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_U_INCREASING;
       return message;
     }
     case SET_STATE_TEST_U_DECREASING: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_U_DECREASING;
       return message;
     }
     case SET_STATE_TEST_V_INCREASING: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_V_INCREASING;
       return message;
     }
     case SET_STATE_TEST_V_DECREASING: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_V_DECREASING;
       return message;
     }
     case SET_STATE_TEST_W_INCREASING: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_W_INCREASING;
       return message;
     }
     case SET_STATE_TEST_W_DECREASING: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_TEST_W_DECREASING;
       return message;
@@ -1872,27 +1878,27 @@ export function read_message(buffer) {
       return message;
     }
     case SET_STATE_RESISTANCE_CALIBRATION: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_RESISTANCE_CALIBRATION;
       return message;
     }
     case SET_STATE_INDUCTANCE_CALIBRATION: {
-      if (buffer.length !== 2 + 16) return null;
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_INDUCTANCE_CALIBRATION;
       return message;
     }
-    case SET_STATE_POSITION_CALIBRATION_CHIRP: {
-      if (buffer.length !== 2 + 16) return null;
+    case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_POSITION_CALIBRATION_CHIRP;
+      message.message_code = SET_STATE_ROTATING_CALIBRATION_CHIRP;
       return message;
     }
-    case SET_STATE_POSITION_CALIBRATION_EMF: {
-      if (buffer.length !== 2 + 16) return null;
+    case SET_STATE_FIXED_CALIBRATION_CHIRP: {
+      if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_POSITION_CALIBRATION_EMF;
+      message.message_code = SET_STATE_FIXED_CALIBRATION_CHIRP;
       return message;
     }
   }

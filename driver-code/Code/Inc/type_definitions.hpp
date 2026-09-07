@@ -69,9 +69,9 @@ enum struct DriverMode : uint16_t {
     // and determine the inductance of the motor windings.
     INDUCTANCE_CALIBRATION,
     // Drive the motor around a few full rotations to measure inductance bias, and estimate rotor position.
-    POSITION_CALIBRATION_CHIRP,
-    // Drive the motor ahead of recording EMF while shorting the motor phases. Also chirp at end.
-    POSITION_CALIBRATION_EMF
+    ROTATING_CALIBRATION_CHIRP,
+    // Drive the motor on a fixed angle with a varying pwm value.
+    FIXED_CALIBRATION_CHIRP
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -147,6 +147,7 @@ struct SeekAngle {
 struct TestParameters {
     float test_speed;
     uint32_t test_duration;
+    int32_t test_angle;
 };
 
 // The complete driver state, these values control the motor behaviour.
