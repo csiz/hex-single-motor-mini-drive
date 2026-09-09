@@ -68,9 +68,10 @@ static inline void disable_motor_outputs(){
 
 // Set all motor outputs according to the MotorOutputs struct.
 static inline void set_motor_outputs(MotorOutputs const & outputs){
-    LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty);
-    LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty);
-    LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty);
+    // TODO: need to calibrate the turn on time for the motor PWM settings.
+    LL_TIM_OC_SetCompareCH1(TIM1, outputs.u_duty + 14);
+    LL_TIM_OC_SetCompareCH2(TIM1, outputs.v_duty + 14);
+    LL_TIM_OC_SetCompareCH3(TIM1, outputs.w_duty + 12);
     switch(outputs.enable_flags) {
         case 0b000:
             disable_motor_outputs();

@@ -270,9 +270,9 @@ static inline MotorOutputs update_motor_at_angle(
 
     return MotorOutputs{
         .enable_flags = enable_flags_all,
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm) + pwm_min,
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm) + pwm_min,
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm) + pwm_min
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
     };
 }
 
