@@ -125,9 +125,9 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const w_pwm = (w_drive_voltage - min_drive_voltage) / vcc_voltage * PWM_BASE;
 
 
-  const [drive_voltage_direct, drive_voltage_quadrature] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
-  const drive_voltage_angle = Math.atan2(drive_voltage_quadrature, drive_voltage_direct);
-  const drive_voltage_magnitude = Math.sqrt(drive_voltage_direct * drive_voltage_direct + drive_voltage_quadrature * drive_voltage_quadrature);
+  const [web_direct_drive_voltage, web_quadrature_drive_voltage] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
+  const drive_voltage_angle = Math.atan2(web_quadrature_drive_voltage, web_direct_drive_voltage);
+  const drive_voltage_magnitude = Math.sqrt(web_direct_drive_voltage * web_direct_drive_voltage + web_quadrature_drive_voltage * web_quadrature_drive_voltage);
   const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
 
 
@@ -272,8 +272,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
     direct_drive_voltage,
     quadrature_drive_voltage,
-    drive_voltage_direct,
-    drive_voltage_quadrature,
+    web_direct_drive_voltage,
+    web_quadrature_drive_voltage,
     drive_voltage_angle, 
     drive_voltage_angle_offset,
     drive_voltage_magnitude,

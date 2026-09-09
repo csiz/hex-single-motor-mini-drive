@@ -109,9 +109,11 @@ export function clarke_transform(u, v, w){
   return matrix_multiply(power_invariant_simplified_clarke_matrix, [u, v, w]);
 }
 
+const two_thirds = 2.0/3.0;
+
 export function dq0_transform(u, v, w, angle){
   return [
-    +Math.cos(angle) * u + Math.cos(angle - 2 * Math.PI / 3) * v + Math.cos(angle + 2 * Math.PI / 3) * w,
-    -Math.sin(angle) * u - Math.sin(angle - 2 * Math.PI / 3) * v - Math.sin(angle + 2 * Math.PI / 3) * w,
+    (+Math.cos(angle) * u + Math.cos(angle - 2 * Math.PI / 3) * v + Math.cos(angle + 2 * Math.PI / 3) * w) * two_thirds,
+    (-Math.sin(angle) * u - Math.sin(angle - 2 * Math.PI / 3) * v - Math.sin(angle + 2 * Math.PI / 3) * w) * two_thirds,
   ]
 }

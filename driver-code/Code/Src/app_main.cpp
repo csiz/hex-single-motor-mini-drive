@@ -810,6 +810,13 @@ void app_tick() {
   
   readout.main_loop_rate = main_loop_rate;
   readout.adc_update_rate = adc_update_rate;
+  
+  readout.resistance = current_calibration.resistance;
+  readout.inductance = current_calibration.inductance;
+  readout.inductance_bias = current_calibration.inductance_bias;
+  readout.inductance_bias_angle = current_calibration.inductance_bias_angle;
+  readout.saturation_angle = current_calibration.saturation_angle;
+  readout.saturation_factor = current_calibration.saturation_factor;
   readout.motor_constant = motor_constant;
 
   // Adjust direction

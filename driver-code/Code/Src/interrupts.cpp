@@ -1125,25 +1125,19 @@ void ADC1_2_IRQHandler(void){
     const float direct_current_diff = direct_current - readout.direct_current;
     const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
 
-
-    const float max_inductance = current_calibration.inductance + current_calibration.inductance_bias;
-    const float min_inductance = current_calibration.inductance - current_calibration.inductance_bias;
-
     // Calculate the voltage drop across the coil inductance.
     // 
     // Because it's so noisy, we zero it out when we're not actively driving the motor so we can pick up smaller EMF signals.
     const float current_diff_to_voltage = (driver_state.active_pwm != 0) * current_diff_to_voltage_units;
     
-    const float omega_current_to_voltage = readout.angular_speed * speed_units_to_radians_per_second * current_to_voltage_units;
+    // const float omega_current_to_voltage = readout.angular_speed * speed_units_to_radians_per_second * current_to_voltage_units;
 
     const float direct_inductor_voltage = (
-        direct_current_diff * current_diff_to_voltage * max_inductance +
-        -omega_current_to_voltage * min_inductance * quadrature_current
+        direct_current_diff * current_diff_to_voltage * current_calibration.inductance
     );
     
     const float quadrature_inductor_voltage = (
-        quadrature_current_diff * current_diff_to_voltage * min_inductance +
-        omega_current_to_voltage * max_inductance * direct_current
+        quadrature_current_diff * current_diff_to_voltage * current_calibration.inductance
     );
 
     // Infer the back EMF voltages for each phase.
@@ -1429,12 +1423,6 @@ void ADC1_2_IRQHandler(void){
     readout.target = driver_state.current_target;
     readout.seek_integral = driver_state.seek_integral;
 
-    readout.resistance = current_calibration.resistance;
-    readout.inductance = current_calibration.inductance;
-    readout.inductance_bias = current_calibration.inductance_bias;
-    readout.inductance_bias_angle = current_calibration.inductance_bias_angle;
-    readout.saturation_angle = current_calibration.saturation_angle;
-    readout.saturation_factor = current_calibration.saturation_factor;
 
     // Calculate and set motor outputs!!
     // ---------------------------------
