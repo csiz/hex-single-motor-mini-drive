@@ -1455,14 +1455,14 @@ async function run_current_calibration(motor_controller, message_options) {
   const current_calibration = {...motor_controller.current_calibration};
   const control_parameters = motor_controller.control_parameters;
 
-  console.info("Starting motor spin...");
-  await motor_controller.send_command({
-    message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-    timeout: Math.floor(2000 * cycles_per_millisecond),
-    pwm_value: +command_pwm,
-  });
+  // console.info("Starting motor spin...");
+  // await motor_controller.send_command({
+  //   message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
+  //   timeout: Math.floor(2000 * cycles_per_millisecond),
+  //   pwm_value: +command_pwm,
+  // });
 
-  await wait(500);
+  // await wait(500);
 
   console.info("Current calibration starting");
 
@@ -1781,7 +1781,7 @@ async function run_current_calibration(motor_controller, message_options) {
       };
     });
 
-    let rotor_axis_prediction = normalize_radians(2*(parameters.inductance_bias_angle.value + sample.slice(-1)[0].predicted_angle))/2;
+    let rotor_axis_prediction = normalize_radians(2*(parameters.inductance_bias_angle.value + sample.slice(-1)[0].predicted_angle + Math.PI/2));
     
 
     iterations.push({
