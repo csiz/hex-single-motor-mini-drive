@@ -44,7 +44,7 @@ export const max_angular_speed = 1.0 * max_frequency * angle_base / pwm_cycles_p
 
 // Convert degrees to angle units.
 export function radians_to_angle_units(radians){
-  return Math.round(positive_radians(radians) * angle_base / (2 * Math.PI));
+  return Math.round(radians * angle_base / (2 * Math.PI));
 }
 
 export function angle_units_to_radians(angle){

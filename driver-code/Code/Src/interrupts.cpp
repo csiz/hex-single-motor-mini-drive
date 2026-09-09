@@ -1121,16 +1121,24 @@ void ADC1_2_IRQHandler(void){
     const float direct_resistive_voltage = direct_current * current_to_resistance_voltage;
     const float quadrature_resistive_voltage = quadrature_current * current_to_resistance_voltage;
 
+    const int32_t delta_angle = predicted_angle - readout.previous_predicted_angle;
+
+    const float cos_delta = get_cos(delta_angle);
+    const float sin_delta = get_sin(delta_angle);
+
+    // Rotate the previous currents into the current reference frame using the change in angle.
+    const float previous_direct_current = readout.direct_current * cos_delta + readout.quadrature_current * sin_delta;
+    const float previous_quadrature_current = -readout.direct_current * sin_delta + readout.quadrature_current * cos_delta;
+
     // Calculate the differential of the currents.
-    const float direct_current_diff = direct_current - readout.direct_current;
-    const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
+    const float direct_current_diff = direct_current - previous_direct_current;
+    const float quadrature_current_diff = quadrature_current - previous_quadrature_current;
 
     // Calculate the voltage drop across the coil inductance.
     // 
     // Because it's so noisy, we zero it out when we're not actively driving the motor so we can pick up smaller EMF signals.
     const float current_diff_to_voltage = (driver_state.active_pwm != 0) * current_diff_to_voltage_units;
     
-    // const float omega_current_to_voltage = readout.angular_speed * speed_units_to_radians_per_second * current_to_voltage_units;
 
     const float direct_inductor_voltage = (
         direct_current_diff * current_diff_to_voltage * current_calibration.inductance

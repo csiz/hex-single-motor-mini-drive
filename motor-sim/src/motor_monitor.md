@@ -1462,7 +1462,7 @@ async function run_current_calibration(motor_controller, message_options) {
   //   pwm_value: +command_pwm,
   // });
 
-  // await wait(500);
+  // await wait(1000);
 
   console.info("Current calibration starting");
 
@@ -1627,16 +1627,12 @@ async function run_current_calibration(motor_controller, message_options) {
       
       const direct_inductance_bias_voltage = (
         d_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
-        q_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
-        -omega * L_bias * Math.sin(2 * L_bias_angle) * direct_current +
-        omega * L_bias * Math.cos(2 * L_bias_angle) * quadrature_current
+        q_di_dt * L_bias * Math.sin(2 * L_bias_angle)
       );
 
       const quadrature_inductance_bias_voltage = (
         d_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
-        -q_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
-        omega * L_bias * Math.cos(2 * L_bias_angle) * direct_current +
-        omega * L_bias * Math.sin(2 * L_bias_angle) * quadrature_current
+        -q_di_dt * L_bias * Math.cos(2 * L_bias_angle)
       );
 
       const direct_inductance_saturation_voltage = (
@@ -1652,15 +1648,13 @@ async function run_current_calibration(motor_controller, message_options) {
       const direct_inductance_voltage = (
         d_di_dt * L_0 + 
         direct_inductance_bias_voltage +
-        direct_inductance_saturation_voltage +
-        -omega * L_0 * quadrature_current
+        direct_inductance_saturation_voltage
       );
 
       const quadrature_inductance_voltage = (
         q_di_dt * L_0 +
         quadrature_inductance_bias_voltage +
-        quadrature_inductance_saturation_voltage +
-        + omega * L_0 * direct_current
+        quadrature_inductance_saturation_voltage
       );
 
       const direct_emf_voltage = 0;
@@ -1684,37 +1678,29 @@ async function run_current_calibration(motor_controller, message_options) {
       );
 
       const inductance_gradient = (
-        direct_residual * (d_di_dt - omega * quadrature_current) +
-        quadrature_residual * (q_di_dt + omega * direct_current)
+        direct_residual * d_di_dt +
+        quadrature_residual * q_di_dt
       );
 
       const inductance_bias_gradient = (
         direct_residual * (
           d_di_dt * Math.cos(2 * L_bias_angle) +
-          q_di_dt * Math.sin(2 * L_bias_angle) +
-          -omega * direct_current * Math.sin(2 * L_bias_angle) +
-          omega * quadrature_current * Math.cos(2 * L_bias_angle)
+          q_di_dt * Math.sin(2 * L_bias_angle)
         ) +
         quadrature_residual * (
           d_di_dt * Math.sin(2 * L_bias_angle) +
-          -q_di_dt * Math.cos(2 * L_bias_angle) +
-          omega * direct_current * Math.cos(2 * L_bias_angle) +
-          omega * quadrature_current * Math.sin(2 * L_bias_angle)
+          -q_di_dt * Math.cos(2 * L_bias_angle)
         )
       );
 
       const inductance_bias_angle_gradient = (
         2 * L_bias * direct_residual * (
           -d_di_dt * Math.sin(2 * L_bias_angle) +
-          +q_di_dt * Math.cos(2 * L_bias_angle) +
-          -omega * direct_current * Math.cos(2 * L_bias_angle) +
-          -omega * quadrature_current * Math.sin(2 * L_bias_angle)
+          +q_di_dt * Math.cos(2 * L_bias_angle)
         ) +
         2 * L_bias * quadrature_residual * (
           d_di_dt * Math.cos(2 * L_bias_angle) +
-          q_di_dt * Math.sin(2 * L_bias_angle) +
-          -omega * direct_current * Math.sin(2 * L_bias_angle) +
-          omega * quadrature_current * Math.cos(2 * L_bias_angle)
+          q_di_dt * Math.sin(2 * L_bias_angle)
         )
       );
 
