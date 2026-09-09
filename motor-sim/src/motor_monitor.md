@@ -350,8 +350,8 @@ const command_snapshot_delay_slider = inputs_wide_range([0, 1000], {value: 500, 
 const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
 
 // Slider to choose the command specific PWM setting.
-const command_pwm_slider = inputs_wide_range([0, 1.0], {value: 0.05, step: 0.001, label: "Command value:"});
-const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.round(value * PWM_BASE));
+const command_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.05, step: 1, label: "Command value:"});
+const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.floor(value));
 
 // Timeout duration for each command. For safety, the motor runs each drive command for a short period until commanded again.
 const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
@@ -1478,7 +1478,7 @@ async function run_current_calibration(motor_controller, message_options) {
   
   // Check all calibration data is complete.
   if (sample.length !== HISTORY_SIZE) {
-    console.error("U positive calibration data incomplete", sample);
+    console.error("Calibration data incomplete", sample);
     return;
   }
 
@@ -1496,13 +1496,14 @@ async function run_current_calibration(motor_controller, message_options) {
   const enabled_parameters = get_checked_parameters();
 
 
-  // Test if the voltage was always 0.
-  const all_zero_drive_voltage = sample.every(({u_drive_voltage, v_drive_voltage, w_drive_voltage}) => 
-    u_drive_voltage === 0 && v_drive_voltage === 0 && w_drive_voltage === 0
-  );
+  // Test if the voltage was mostly 0.
+  const count_zero_drive_voltage = sample.filter(({u_drive_voltage, v_drive_voltage, w_drive_voltage}) => 
+    Math.abs(u_drive_voltage) < 0.001 && Math.abs(v_drive_voltage) < 0.001 && Math.abs(w_drive_voltage) < 0.001
+  ).length;
 
   // For all 0 voltages we calibrate the baseline offset of the currents.
-  if (all_zero_drive_voltage) {
+  if (count_zero_drive_voltage === sample.length) {
+    console.info("All drive voltages are zero, calibrating current baseline offsets.");
     const u_current_zero = sample.reduce((sum, {u_current}) => sum + u_current, 0) / sample.length + current_calibration?.u_current_zero;
     const v_current_zero = sample.reduce((sum, {v_current}) => sum + v_current, 0) / sample.length + current_calibration?.v_current_zero;
     const w_current_zero = sample.reduce((sum, {w_current}) => sum + w_current, 0) / sample.length + current_calibration?.w_current_zero; 
@@ -1510,6 +1511,17 @@ async function run_current_calibration(motor_controller, message_options) {
     return {
       sample,
       is_stable: true,
+      iterations: [
+        {
+          iteration: 0,
+          current_calibration: {
+            u_current_zero,
+            v_current_zero,
+            w_current_zero,
+          },
+          sample
+        }
+      ],
       current_calibration: {
         u_current_zero,
         v_current_zero,
@@ -1597,8 +1609,8 @@ async function run_current_calibration(motor_controller, message_options) {
 
       const L_0 = parameters.inductance.value;
       const L_bias = parameters.inductance_bias.value;
-      const L_bias_angle = normalize_radians(predicted_angle + parameters.inductance_bias_angle.value);
-      const L_saturation_angle = normalize_radians(predicted_angle + parameters.saturation_angle.value);
+      const L_bias_angle = normalize_radians(parameters.inductance_bias_angle.value - predicted_angle);
+      const L_saturation_angle = normalize_radians(parameters.saturation_angle.value - predicted_angle);
 
       const A_saturation = direct_current * d_di_dt - quadrature_current * q_di_dt;
       const B_saturation = quadrature_current * d_di_dt + direct_current * q_di_dt;
@@ -1613,15 +1625,15 @@ async function run_current_calibration(motor_controller, message_options) {
       const direct_inductance_bias_voltage = (
         d_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
         q_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
-        omega * L_bias * Math.sin(2 * L_bias_angle) * direct_current +
+        -omega * L_bias * Math.sin(2 * L_bias_angle) * direct_current +
         omega * L_bias * Math.cos(2 * L_bias_angle) * quadrature_current
       );
 
       const quadrature_inductance_bias_voltage = (
         d_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
-        q_di_dt * -L_bias * Math.cos(2 * L_bias_angle) +
-        + omega * L_bias * Math.cos(2 * L_bias_angle) * direct_current +
-        + omega * L_bias * Math.sin(2 * L_bias_angle) * quadrature_current
+        -q_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
+        omega * L_bias * Math.cos(2 * L_bias_angle) * direct_current +
+        omega * L_bias * Math.sin(2 * L_bias_angle) * quadrature_current
       );
 
       const direct_inductance_saturation_voltage = (
@@ -1676,7 +1688,7 @@ async function run_current_calibration(motor_controller, message_options) {
         direct_residual * (
           d_di_dt * Math.cos(2 * L_bias_angle) +
           q_di_dt * Math.sin(2 * L_bias_angle) +
-          omega * direct_current * Math.sin(2 * L_bias_angle) +
+          -omega * direct_current * Math.sin(2 * L_bias_angle) +
           omega * quadrature_current * Math.cos(2 * L_bias_angle)
         ) +
         quadrature_residual * (
@@ -1691,7 +1703,7 @@ async function run_current_calibration(motor_controller, message_options) {
         2 * L_bias * direct_residual * (
           -d_di_dt * Math.sin(2 * L_bias_angle) +
           +q_di_dt * Math.cos(2 * L_bias_angle) +
-          omega * direct_current * Math.cos(2 * L_bias_angle) +
+          -omega * direct_current * Math.cos(2 * L_bias_angle) +
           -omega * quadrature_current * Math.sin(2 * L_bias_angle)
         ) +
         2 * L_bias * quadrature_residual * (
@@ -1784,7 +1796,7 @@ async function run_current_calibration(motor_controller, message_options) {
         saturation_angle_learning_rate: parameters.saturation_angle.learning_rate,
         motor_constant_learning_rate: parameters.motor_constant.learning_rate,
       },
-      sample_with_gradients,
+      sample: sample_with_gradients,
     });
 
     // Resilient Backpropagation
@@ -1796,14 +1808,17 @@ async function run_current_calibration(motor_controller, message_options) {
 
     is_stable = true;
 
+    // Ignore the first 12 datapoints
+    const truncated_sample = sample_with_gradients.slice(12);
+
     const gradients = {
-      resistance: d3.mean(sample_with_gradients, (d) => d.resistance_gradient),
-      inductance: d3.mean(sample_with_gradients, (d) => d.inductance_gradient),
-      inductance_bias: d3.mean(sample_with_gradients, (d) => d.inductance_bias_gradient),
-      inductance_bias_angle: d3.mean(sample_with_gradients, (d) => d.inductance_bias_angle_gradient),
-      saturation_factor: d3.mean(sample_with_gradients, (d) => d.saturation_factor_gradient),
-      saturation_angle: d3.mean(sample_with_gradients, (d) => d.saturation_angle_gradient),
-      motor_constant: d3.mean(sample_with_gradients, (d) => d.motor_constant_gradient),
+      resistance: d3.mean(truncated_sample, (d) => d.resistance_gradient),
+      inductance: d3.mean(truncated_sample, (d) => d.inductance_gradient),
+      inductance_bias: d3.mean(truncated_sample, (d) => d.inductance_bias_gradient),
+      inductance_bias_angle: d3.mean(truncated_sample, (d) => d.inductance_bias_angle_gradient),
+      saturation_factor: d3.mean(truncated_sample, (d) => d.saturation_factor_gradient),
+      saturation_angle: d3.mean(truncated_sample, (d) => d.saturation_angle_gradient),
+      motor_constant: d3.mean(truncated_sample, (d) => d.motor_constant_gradient),
     }
 
     for (const [key, gradient] of Object.entries(gradients)) {
@@ -1941,7 +1956,7 @@ set_input_value(current_calibration_optimization_iteration_input, current_calibr
 ```js
 
 const current_calibration_iteration = current_calibration_iterations[current_calibration_optimization_iteration];
-const current_calibration_gradients = current_calibration_iteration?.sample_with_gradients ?? [];
+const current_calibration_gradients = current_calibration_iteration?.sample ?? [];
 
 // Write out the current calibration results in copyable format.
 const current_calibration_iteration_table = `current_calibration = ${JSON.stringify(current_calibration_iterations[current_calibration_optimization_iteration]?.current_calibration, null, 2)}`;
@@ -2033,6 +2048,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
     {y: "inductance_bias_angle_gradient", label: "Inductance Bias Angle Gradient", color: colors_categories[3]},
     {y: "saturation_angle_gradient", label: "Saturation Angle Gradient", color: colors_categories[4]},
     {y: "saturation_factor_gradient", label: "Saturation Factor Gradient", color: colors_categories[5]},
+    {y: "motor_constant_gradient", label: "Motor Constant Gradient", color: colors_categories[6]},
   ],
   curve,
 });
