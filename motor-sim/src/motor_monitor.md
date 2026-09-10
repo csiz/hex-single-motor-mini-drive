@@ -1536,21 +1536,21 @@ async function run_current_calibration(motor_controller, message_options) {
   const max_iterations = 1000;
   const relative_stability = 0.001;
   const relative_min = relative_stability / 10;
-  const relative_max = 10;
+  const relative_initial = 0.1;
   const relative_increase = 1.2;
   const relative_decrease = 0.5;
 
   class Parameter {
-    constructor({value, initial_learning_rate}) {
+    constructor({value, max_learning_rate}) {
       this.value = value;
-      this.initial_learning_rate = initial_learning_rate;
-      this.learning_rate = initial_learning_rate;
+      this.max_learning_rate = max_learning_rate;
+      this.learning_rate = max_learning_rate * relative_initial;
       this.sign = 0;
     }
 
     reset(value) {
       this.value = value;
-      this.learning_rate = this.initial_learning_rate;
+      this.learning_rate = this.max_learning_rate * relative_initial;
       this.sign = 0;
     }
   }
@@ -1558,31 +1558,31 @@ async function run_current_calibration(motor_controller, message_options) {
   let parameters = {
     resistance: new Parameter({
       value: current_calibration?.resistance ?? 0.01,
-      initial_learning_rate: 0.01,
+      max_learning_rate: 0.1,
     }),
     inductance: new Parameter({
       value: current_calibration?.inductance ?? 0.00001, 
-      initial_learning_rate: 0.000_001,
+      max_learning_rate: 0.000_01,
     }),
     inductance_bias: new Parameter({
       value: current_calibration?.inductance_bias ?? 0.0,
-      initial_learning_rate: 0.000_001,
+      max_learning_rate: 0.000_01,
     }),
     inductance_bias_angle: new Parameter({
       value: current_calibration?.inductance_bias_angle ?? 0.0,
-      initial_learning_rate: Math.PI / 4 / relative_max,
+      max_learning_rate: Math.PI / 4,
     }),
     saturation_factor: new Parameter({
       value: current_calibration?.saturation_factor ?? 0.0,
-      initial_learning_rate: 0.000_001,
+      max_learning_rate: 0.000_01,
     }),
     saturation_angle: new Parameter({
       value: current_calibration?.saturation_angle ?? 0.0,
-      initial_learning_rate: Math.PI / 4 / relative_max,
+      max_learning_rate: Math.PI / 4,
     }),
     motor_constant: new Parameter({
       value: current_calibration?.motor_constant ?? 0.0,
-      initial_learning_rate: 0.000_001,
+      max_learning_rate: 0.000_01,
     }),
   };
 
@@ -1593,7 +1593,18 @@ async function run_current_calibration(motor_controller, message_options) {
 
   for (let i = 0; !is_stable && (i < max_iterations); i++) {
 
-    const sample_with_gradients = sample.map((readout) => {
+    const {
+      resistance,
+      inductance,
+      inductance_bias,
+      inductance_bias_angle,
+      saturation_factor,
+      saturation_angle,
+      motor_constant,
+    } = Object.fromEntries(Object.entries(parameters).map(([key, param]) => [key, param.value]));
+
+
+    const sample_forward_pass = sample.map((readout) => {
       const {
         direct_current, quadrature_current,
         direct_current_diff, quadrature_current_diff,
@@ -1605,15 +1616,8 @@ async function run_current_calibration(motor_controller, message_options) {
       const d_di_dt = direct_current_diff * pwm_cycles_per_second;
       const q_di_dt = quadrature_current_diff * pwm_cycles_per_second;
 
-      const R = parameters.resistance.value;
-
-      const direct_resistive_voltage = direct_current * R;
-      const quadrature_resistive_voltage = quadrature_current * R;
-
-      const L_0 = parameters.inductance.value;
-      const L_bias = parameters.inductance_bias.value;
-      const L_bias_angle = parameters.inductance_bias_angle.value;
-      const L_saturation_angle = parameters.saturation_angle.value;
+      const direct_resistive_voltage = direct_current * resistance;
+      const quadrature_resistive_voltage = quadrature_current * resistance;
 
       const A_saturation = direct_current * d_di_dt - quadrature_current * q_di_dt;
       const B_saturation = quadrature_current * d_di_dt + direct_current * q_di_dt;
@@ -1626,33 +1630,33 @@ async function run_current_calibration(motor_controller, message_options) {
       const omega = emf_voltage_angular_speed * 1000.0 * 2 * Math.PI;
       
       const direct_inductance_bias_voltage = (
-        -d_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
-        -q_di_dt * L_bias * Math.sin(2 * L_bias_angle)
+        -d_di_dt * inductance_bias * Math.cos(2 * inductance_bias_angle) +
+        -q_di_dt * inductance_bias * Math.sin(2 * inductance_bias_angle)
       );
 
       const quadrature_inductance_bias_voltage = (
-        -d_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
-        +q_di_dt * L_bias * Math.cos(2 * L_bias_angle)
+        -d_di_dt * inductance_bias * Math.sin(2 * inductance_bias_angle) +
+        +q_di_dt * inductance_bias * Math.cos(2 * inductance_bias_angle)
       );
 
       const direct_inductance_saturation_voltage = (
-        K_saturation * A_saturation * Math.cos(L_saturation_angle) +
-        -K_saturation * B_saturation * Math.sin(L_saturation_angle)
+        K_saturation * A_saturation * Math.cos(saturation_angle) +
+        -K_saturation * B_saturation * Math.sin(saturation_angle)
       );
 
       const quadrature_inductance_saturation_voltage = (
-        K_saturation * A_saturation * Math.sin(L_saturation_angle) +
-        K_saturation * B_saturation * Math.cos(L_saturation_angle)
+        K_saturation * A_saturation * Math.sin(saturation_angle) +
+        K_saturation * B_saturation * Math.cos(saturation_angle)
       );
 
       const direct_inductance_voltage = (
-        d_di_dt * L_0 + 
+        d_di_dt * inductance + 
         direct_inductance_bias_voltage +
         direct_inductance_saturation_voltage
       );
 
       const quadrature_inductance_voltage = (
-        q_di_dt * L_0 +
+        q_di_dt * inductance +
         quadrature_inductance_bias_voltage +
         quadrature_inductance_saturation_voltage
       );
@@ -1672,65 +1676,6 @@ async function run_current_calibration(motor_controller, message_options) {
 
       const sqrt_loss = Math.sqrt(loss);
       
-      const resistance_gradient = (
-        direct_residual * direct_current +
-        quadrature_residual * quadrature_current
-      );
-
-      const inductance_gradient = (
-        direct_residual * d_di_dt +
-        quadrature_residual * q_di_dt
-      );
-
-      const inductance_bias_gradient = (
-        direct_residual * (
-          -d_di_dt * Math.cos(2 * L_bias_angle) +
-          -q_di_dt * Math.sin(2 * L_bias_angle)
-        ) +
-        quadrature_residual * (
-          -d_di_dt * Math.sin(2 * L_bias_angle) +
-          +q_di_dt * Math.cos(2 * L_bias_angle)
-        )
-      );
-
-      const inductance_bias_angle_gradient = (
-        2 * L_bias * direct_residual * (
-          +d_di_dt * Math.sin(2 * L_bias_angle) +
-          -q_di_dt * Math.cos(2 * L_bias_angle)
-        ) +
-        2 * L_bias * quadrature_residual * (
-          -d_di_dt * Math.cos(2 * L_bias_angle) +
-          -q_di_dt * Math.sin(2 * L_bias_angle)
-        )
-      );
-
-      const saturation_factor_gradient = (
-        2 * direct_residual * (
-          A_saturation * Math.cos(L_saturation_angle) +
-          -B_saturation * Math.sin(L_saturation_angle)
-        ) + 
-        2 * quadrature_residual * (
-          A_saturation * Math.sin(L_saturation_angle) +
-          B_saturation * Math.cos(L_saturation_angle)
-        )
-      );
-
-      const saturation_angle_gradient = (
-        2 * K_saturation * direct_residual * (
-          -A_saturation * Math.sin(L_saturation_angle) +
-          -B_saturation * Math.cos(L_saturation_angle)
-        ) +
-        2 * K_saturation * quadrature_residual * (
-          A_saturation * Math.cos(L_saturation_angle) +
-          -B_saturation * Math.sin(L_saturation_angle)
-        )
-      );
-
-      // Is this the correct sign? add an explicit + or -:
-      const motor_constant_gradient = (
-        quadrature_residual * omega
-      );
-
 
       return {
         ...readout,
@@ -1747,6 +1692,12 @@ async function run_current_calibration(motor_controller, message_options) {
         quadrature_inductance_voltage,
         direct_emf_voltage,
         quadrature_emf_voltage,
+
+        d_di_dt,
+        q_di_dt,
+        A_saturation,
+        B_saturation,
+        K_saturation,
         omega,
 
         loss,
@@ -1756,7 +1707,84 @@ async function run_current_calibration(motor_controller, message_options) {
         quadrature_residual,
         residual_angle,
         two_current_angle,
+      };
+    });
 
+    const sample_gradients = sample_forward_pass.map((readout) => {
+      const {
+        direct_residual,
+        quadrature_residual,
+        direct_current,
+        quadrature_current,
+        d_di_dt,
+        q_di_dt,
+        A_saturation,
+        B_saturation,
+        K_saturation,
+        omega,
+      } = readout;
+      
+      const resistance_gradient = (
+        direct_residual * direct_current +
+        quadrature_residual * quadrature_current
+      );
+
+      const inductance_gradient = (
+        direct_residual * d_di_dt +
+        quadrature_residual * q_di_dt
+      );
+
+      const inductance_bias_gradient = (
+        direct_residual * (
+          -d_di_dt * Math.cos(2 * inductance_bias_angle) +
+          -q_di_dt * Math.sin(2 * inductance_bias_angle)
+        ) +
+        quadrature_residual * (
+          -d_di_dt * Math.sin(2 * inductance_bias_angle) +
+          +q_di_dt * Math.cos(2 * inductance_bias_angle)
+        )
+      );
+
+      const inductance_bias_angle_gradient = (
+        2 * inductance_bias * direct_residual * (
+          +d_di_dt * Math.sin(2 * inductance_bias_angle) +
+          -q_di_dt * Math.cos(2 * inductance_bias_angle)
+        ) +
+        2 * inductance_bias * quadrature_residual * (
+          -d_di_dt * Math.cos(2 * inductance_bias_angle) +
+          -q_di_dt * Math.sin(2 * inductance_bias_angle)
+        )
+      );
+
+      const saturation_factor_gradient = (
+        2 * direct_residual * (
+          A_saturation * Math.cos(saturation_angle) +
+          -B_saturation * Math.sin(saturation_angle)
+        ) + 
+        2 * quadrature_residual * (
+          A_saturation * Math.sin(saturation_angle) +
+          B_saturation * Math.cos(saturation_angle)
+        )
+      );
+
+      const saturation_angle_gradient = (
+        2 * K_saturation * direct_residual * (
+          -A_saturation * Math.sin(saturation_angle) +
+          -B_saturation * Math.cos(saturation_angle)
+        ) +
+        2 * K_saturation * quadrature_residual * (
+          A_saturation * Math.cos(saturation_angle) +
+          -B_saturation * Math.sin(saturation_angle)
+        )
+      );
+
+      // Is this the correct sign? add an explicit + or -:
+      const motor_constant_gradient = (
+        quadrature_residual * omega
+      );
+
+      return {
+        ...readout,
         resistance_gradient,
         inductance_gradient,
         inductance_bias_gradient,
@@ -1767,13 +1795,14 @@ async function run_current_calibration(motor_controller, message_options) {
       };
     });
 
+
     let rotor_axis_prediction = normalize_radians(2*(parameters.inductance_bias_angle.value + sample.slice(-1)[0].predicted_angle));
     
 
     iterations.push({
       iteration: i,
       current_calibration: {
-        sqrt_loss: Math.sqrt(d3.mean(sample_with_gradients, (d) => d.loss)),
+        sqrt_loss: Math.sqrt(d3.mean(sample_gradients, (d) => d.loss)),
         resistance: parameters.resistance.value,
         inductance: parameters.inductance.value,
         inductance_bias: parameters.inductance_bias.value,
@@ -1792,7 +1821,7 @@ async function run_current_calibration(motor_controller, message_options) {
         saturation_angle_learning_rate: parameters.saturation_angle.learning_rate,
         motor_constant_learning_rate: parameters.motor_constant.learning_rate,
       },
-      sample: sample_with_gradients,
+      sample: sample_gradients,
     });
 
     // Resilient Backpropagation
@@ -1805,13 +1834,13 @@ async function run_current_calibration(motor_controller, message_options) {
     is_stable = true;
 
     const gradients = {
-      resistance: d3.mean(sample_with_gradients, (d) => d.resistance_gradient),
-      inductance: d3.mean(sample_with_gradients, (d) => d.inductance_gradient),
-      inductance_bias: d3.mean(sample_with_gradients, (d) => d.inductance_bias_gradient),
-      inductance_bias_angle: d3.mean(sample_with_gradients, (d) => d.inductance_bias_angle_gradient),
-      saturation_factor: d3.mean(sample_with_gradients, (d) => d.saturation_factor_gradient),
-      saturation_angle: d3.mean(sample_with_gradients, (d) => d.saturation_angle_gradient),
-      motor_constant: d3.mean(sample_with_gradients, (d) => d.motor_constant_gradient),
+      resistance: d3.mean(sample_gradients, (d) => d.resistance_gradient),
+      inductance: d3.mean(sample_gradients, (d) => d.inductance_gradient),
+      inductance_bias: d3.mean(sample_gradients, (d) => d.inductance_bias_gradient),
+      inductance_bias_angle: d3.mean(sample_gradients, (d) => d.inductance_bias_angle_gradient),
+      saturation_factor: d3.mean(sample_gradients, (d) => d.saturation_factor_gradient),
+      saturation_angle: d3.mean(sample_gradients, (d) => d.saturation_angle_gradient),
+      motor_constant: d3.mean(sample_gradients, (d) => d.motor_constant_gradient),
     }
 
     for (const [key, gradient] of Object.entries(gradients)) {
@@ -1819,15 +1848,15 @@ async function run_current_calibration(motor_controller, message_options) {
 
       const new_sign = Math.sign(gradient);
       if ((new_sign == 0.0) || (new_sign != parameters[key].sign)) {
-        parameters[key].learning_rate = Math.max(relative_min * parameters[key].initial_learning_rate, parameters[key].learning_rate * relative_decrease);
+        parameters[key].learning_rate = Math.max(relative_min * parameters[key].max_learning_rate, parameters[key].learning_rate * relative_decrease);
       } else {
-        parameters[key].learning_rate = Math.min(relative_max * parameters[key].initial_learning_rate, parameters[key].learning_rate * relative_increase);
+        parameters[key].learning_rate = Math.min(parameters[key].max_learning_rate, parameters[key].learning_rate * relative_increase);
       }
 
       parameters[key].value -= parameters[key].learning_rate * new_sign;
       parameters[key].sign = new_sign;
 
-      if (parameters[key].learning_rate > (parameters[key].initial_learning_rate * relative_stability)) {
+      if (parameters[key].learning_rate > (parameters[key].max_learning_rate * relative_stability)) {
         is_stable = false;
       }
     }
