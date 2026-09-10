@@ -1626,13 +1626,13 @@ async function run_current_calibration(motor_controller, message_options) {
       const omega = emf_voltage_angular_speed * 1000.0 * 2 * Math.PI;
       
       const direct_inductance_bias_voltage = (
-        d_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
-        q_di_dt * L_bias * Math.sin(2 * L_bias_angle)
+        -d_di_dt * L_bias * Math.cos(2 * L_bias_angle) +
+        -q_di_dt * L_bias * Math.sin(2 * L_bias_angle)
       );
 
       const quadrature_inductance_bias_voltage = (
-        d_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
-        -q_di_dt * L_bias * Math.cos(2 * L_bias_angle)
+        -d_di_dt * L_bias * Math.sin(2 * L_bias_angle) +
+        +q_di_dt * L_bias * Math.cos(2 * L_bias_angle)
       );
 
       const direct_inductance_saturation_voltage = (
@@ -1684,23 +1684,23 @@ async function run_current_calibration(motor_controller, message_options) {
 
       const inductance_bias_gradient = (
         direct_residual * (
-          d_di_dt * Math.cos(2 * L_bias_angle) +
-          q_di_dt * Math.sin(2 * L_bias_angle)
+          -d_di_dt * Math.cos(2 * L_bias_angle) +
+          -q_di_dt * Math.sin(2 * L_bias_angle)
         ) +
         quadrature_residual * (
-          d_di_dt * Math.sin(2 * L_bias_angle) +
-          -q_di_dt * Math.cos(2 * L_bias_angle)
+          -d_di_dt * Math.sin(2 * L_bias_angle) +
+          +q_di_dt * Math.cos(2 * L_bias_angle)
         )
       );
 
       const inductance_bias_angle_gradient = (
         2 * L_bias * direct_residual * (
-          -d_di_dt * Math.sin(2 * L_bias_angle) +
-          +q_di_dt * Math.cos(2 * L_bias_angle)
+          +d_di_dt * Math.sin(2 * L_bias_angle) +
+          -q_di_dt * Math.cos(2 * L_bias_angle)
         ) +
         2 * L_bias * quadrature_residual * (
-          d_di_dt * Math.cos(2 * L_bias_angle) +
-          q_di_dt * Math.sin(2 * L_bias_angle)
+          -d_di_dt * Math.cos(2 * L_bias_angle) +
+          -q_di_dt * Math.sin(2 * L_bias_angle)
         )
       );
 
@@ -1767,7 +1767,7 @@ async function run_current_calibration(motor_controller, message_options) {
       };
     });
 
-    let rotor_axis_prediction = normalize_radians(2*(parameters.inductance_bias_angle.value + sample.slice(-1)[0].predicted_angle + Math.PI/2));
+    let rotor_axis_prediction = normalize_radians(2*(parameters.inductance_bias_angle.value + sample.slice(-1)[0].predicted_angle));
     
 
     iterations.push({
