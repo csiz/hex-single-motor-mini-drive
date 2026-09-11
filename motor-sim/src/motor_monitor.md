@@ -1397,6 +1397,10 @@ const calibration_parameters = {
     label: "Rotor Mass", 
     description: `The mass of the rotor.`
   },
+  angle_delta: {
+    label: "Angle Delta", 
+    description: `The true angle of the motor's rotor.`
+  },
 }
 
 const current_calibration_input = Object.fromEntries(
@@ -1455,14 +1459,14 @@ async function run_current_calibration(motor_controller, message_options) {
   const current_calibration = {...motor_controller.current_calibration};
   const control_parameters = motor_controller.control_parameters;
 
-  // console.info("Starting motor spin...");
-  // await motor_controller.send_command({
-  //   message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-  //   timeout: Math.floor(2000 * cycles_per_millisecond),
-  //   pwm_value: +command_pwm,
-  // });
+  console.info("Starting motor spin...");
+  await motor_controller.send_command({
+    message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
+    timeout: Math.floor(1000 * cycles_per_millisecond),
+    pwm_value: +command_pwm,
+  });
 
-  // await wait(1000);
+  await wait(1000);
 
   console.info("Current calibration starting");
 
@@ -1482,9 +1486,6 @@ async function run_current_calibration(motor_controller, message_options) {
     return;
   }
 
-  // Ignore first 12 datapoints.
-  sample = sample.slice(12);
-
   // Test if we've had nominal VCC voltage throughout the calibration run.
   const all_nominal_vcc_voltage = sample.every(({nominal_vcc_voltage}) => nominal_vcc_voltage);
 
@@ -1500,12 +1501,15 @@ async function run_current_calibration(motor_controller, message_options) {
 
 
   // Test if the voltage was mostly 0.
-  const count_zero_drive_voltage = sample.filter(({u_drive_voltage, v_drive_voltage, w_drive_voltage}) => 
-    Math.abs(u_drive_voltage) < 0.001 && Math.abs(v_drive_voltage) < 0.001 && Math.abs(w_drive_voltage) < 0.001
+  const count_idle = sample.filter(({u_drive_voltage, v_drive_voltage, w_drive_voltage, angular_speed}) => 
+    Math.abs(u_drive_voltage) < 0.001 && 
+    Math.abs(v_drive_voltage) < 0.001 && 
+    Math.abs(w_drive_voltage) < 0.001 &&
+    Math.abs(angular_speed) == 0.0
   ).length;
 
   // For all 0 voltages we calibrate the baseline offset of the currents.
-  if (count_zero_drive_voltage === sample.length) {
+  if (count_idle === sample.length) {
     console.info("All drive voltages are zero, calibrating current baseline offsets.");
     const u_current_zero = sample.reduce((sum, {u_current}) => sum + u_current, 0) / sample.length + current_calibration?.u_current_zero;
     const v_current_zero = sample.reduce((sum, {v_current}) => sum + v_current, 0) / sample.length + current_calibration?.v_current_zero;
@@ -1581,10 +1585,15 @@ async function run_current_calibration(motor_controller, message_options) {
       max_learning_rate: Math.PI / 4,
     }),
     motor_constant: new Parameter({
-      value: current_calibration?.motor_constant ?? 0.0,
+      value: 0.001, //current_calibration?.motor_constant ?? 0.0,
       max_learning_rate: 0.000_01,
     }),
   };
+
+  const angle_deltas = sample.map((d) => new Parameter({
+    value: 0.0,
+    max_learning_rate: Math.PI / 96,
+  }));
 
 
   let is_stable = false;
@@ -1604,7 +1613,7 @@ async function run_current_calibration(motor_controller, message_options) {
     } = Object.fromEntries(Object.entries(parameters).map(([key, param]) => [key, param.value]));
 
 
-    const sample_forward_pass = sample.map((readout) => {
+    const sample_forward_pass = sample.map((readout, i) => {
       const {
         direct_current, quadrature_current,
         direct_current_diff, quadrature_current_diff,
@@ -1612,6 +1621,9 @@ async function run_current_calibration(motor_controller, message_options) {
 
         angular_speed, predicted_angle, emf_voltage_angular_speed,
       } = readout;
+
+      const angle_delta = angle_deltas[i].value;
+      const true_angle = normalize_radians(predicted_angle + angle_delta);
 
       const d_di_dt = direct_current_diff * pwm_cycles_per_second;
       const q_di_dt = quadrature_current_diff * pwm_cycles_per_second;
@@ -1626,9 +1638,17 @@ async function run_current_calibration(motor_controller, message_options) {
 
       const K_motor = parameters.motor_constant.value;
 
-      // Convert rotations per millisecond to radians per second.
-      const omega = emf_voltage_angular_speed * 1000.0 * 2 * Math.PI;
-      
+      // Convert to radians per second.
+      const omega = normalize_radians(
+        i > 0 ? (
+          normalize_radians(predicted_angle + angle_delta) -
+          normalize_radians(sample[i - 1].predicted_angle + angle_deltas[i - 1].value)
+        ) : (
+          normalize_radians(sample[i + 1].predicted_angle + angle_deltas[i + 1].value) -
+          normalize_radians(predicted_angle + angle_delta)
+        )
+      ) * pwm_cycles_per_second;
+
       const direct_inductance_bias_voltage = (
         -d_di_dt * inductance_bias * Math.cos(2 * inductance_bias_angle) +
         -q_di_dt * inductance_bias * Math.sin(2 * inductance_bias_angle)
@@ -1661,8 +1681,8 @@ async function run_current_calibration(motor_controller, message_options) {
         quadrature_inductance_saturation_voltage
       );
 
-      const direct_emf_voltage = 0;
-      const quadrature_emf_voltage = - K_motor * omega;
+      const direct_emf_voltage = K_motor * omega * Math.sin(angle_delta);
+      const quadrature_emf_voltage = - K_motor * omega * Math.cos(angle_delta);
 
       const direct_residual = direct_resistive_voltage + direct_inductance_voltage - direct_drive_voltage - direct_emf_voltage;
       const quadrature_residual = quadrature_resistive_voltage + quadrature_inductance_voltage - quadrature_drive_voltage - quadrature_emf_voltage;
@@ -1693,6 +1713,8 @@ async function run_current_calibration(motor_controller, message_options) {
         direct_emf_voltage,
         quadrature_emf_voltage,
 
+        angle_delta,
+        true_angle,
         d_di_dt,
         q_di_dt,
         A_saturation,
@@ -1710,12 +1732,14 @@ async function run_current_calibration(motor_controller, message_options) {
       };
     });
 
-    const sample_gradients = sample_forward_pass.map((readout) => {
+    const sample_gradients = sample_forward_pass.map((readout, i) => {
       const {
         direct_residual,
         quadrature_residual,
         direct_current,
         quadrature_current,
+        
+        angle_delta,
         d_di_dt,
         q_di_dt,
         A_saturation,
@@ -1778,9 +1802,24 @@ async function run_current_calibration(motor_controller, message_options) {
         )
       );
 
-      // Is this the correct sign? add an explicit + or -:
       const motor_constant_gradient = (
-        quadrature_residual * omega
+        -direct_residual * omega * Math.sin(angle_delta) +
+        quadrature_residual * omega * Math.cos(angle_delta)
+      );
+
+      const angle_delta_gradient_position = (
+        -direct_residual * omega * Math.cos(angle_delta) +
+        -quadrature_residual * omega * Math.sin(angle_delta)
+      );
+
+      const angle_delta_gradient_speed = (
+        -direct_residual * motor_constant * Math.sin(angle_delta) * pwm_cycles_per_second +
+        quadrature_residual * motor_constant * Math.cos(angle_delta) * pwm_cycles_per_second
+      );
+
+      const angle_delta_gradient = (
+        angle_delta_gradient_speed + 
+        angle_delta_gradient_position
       );
 
       return {
@@ -1792,6 +1831,9 @@ async function run_current_calibration(motor_controller, message_options) {
         saturation_factor_gradient,
         saturation_angle_gradient,
         motor_constant_gradient,
+        angle_delta_gradient,
+        angle_delta_gradient_speed,
+        angle_delta_gradient_position,
       };
     });
 
@@ -1843,22 +1885,34 @@ async function run_current_calibration(motor_controller, message_options) {
       motor_constant: d3.mean(sample_gradients, (d) => d.motor_constant_gradient),
     }
 
+    function resilient_update(parameter, gradient) {
+      const new_sign = Math.sign(gradient);
+      if ((new_sign == 0.0) || (new_sign != parameter.sign)) {
+        parameter.learning_rate = Math.max(relative_min * parameter.max_learning_rate, parameter.learning_rate * relative_decrease);
+      } else {
+        parameter.learning_rate = Math.min(parameter.max_learning_rate, parameter.learning_rate * relative_increase);
+      }
+
+      parameter.value -= parameter.learning_rate * new_sign;
+      parameter.sign = new_sign;
+
+      return parameter.learning_rate < (parameter.max_learning_rate * relative_stability);
+    }
+
     for (const [key, gradient] of Object.entries(gradients)) {
       if (!enabled_parameters[key]) continue;
 
-      const new_sign = Math.sign(gradient);
-      if ((new_sign == 0.0) || (new_sign != parameters[key].sign)) {
-        parameters[key].learning_rate = Math.max(relative_min * parameters[key].max_learning_rate, parameters[key].learning_rate * relative_decrease);
-      } else {
-        parameters[key].learning_rate = Math.min(parameters[key].max_learning_rate, parameters[key].learning_rate * relative_increase);
-      }
-
-      parameters[key].value -= parameters[key].learning_rate * new_sign;
-      parameters[key].sign = new_sign;
-
-      if (parameters[key].learning_rate > (parameters[key].max_learning_rate * relative_stability)) {
+      if (!resilient_update(parameters[key], gradient)) {
         is_stable = false;
       }
+    }
+
+    if (enabled_parameters.angle_delta) {
+      angle_deltas.forEach((angle_delta_parameter, i) => {
+        if (!resilient_update(angle_delta_parameter, sample_gradients[i].angle_delta_gradient)) {
+          is_stable = false;
+        }
+      });
     }
     
     // Update calibration values after pushing the iteration data! The iteration should then
@@ -2032,6 +2086,9 @@ const current_calibration_angles_plot = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (radians)",
   channels: [
+    {y: "predicted_angle", label: "Predicted Angle", color: colors_categories[1]},
+    {y: "true_angle", label: "True Angle", color: colors_categories[2]},
+    {y: "angle_delta", label: "Angle Delta", color: colors_categories[3]},
     {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
     {y: "web_current_angle", label: "Current Angle", color: colors_categories[0]},
     {y: "two_current_angle", label: "2 x Current Angle", color: colors_categories[5]},
@@ -2076,6 +2133,9 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
     {y: "saturation_angle_gradient", label: "Saturation Angle Gradient", color: colors_categories[4]},
     {y: "saturation_factor_gradient", label: "Saturation Factor Gradient", color: colors_categories[5]},
     {y: "motor_constant_gradient", label: "Motor Constant Gradient", color: colors_categories[6]},
+    {y: "angle_delta_gradient_speed", label: "Angle Delta Gradient Speed", color: colors_categories[7]},
+    {y: "angle_delta_gradient_position", label: "Angle Delta Gradient Position", color: colors_categories[8]},
+    {y: "angle_delta_gradient", label: "Angle Delta Gradient", color: colors_categories[9]},
   ],
   curve,
 });
@@ -2481,7 +2541,7 @@ function displayable_connection_error(error){
   } else if (error.name === "NetworkError") {
     return html`<pre style="color: red">Transmission error to usb device.</pre>`;
   } else {
-    console.log("Motor connection error:", error);
+    console.warn("Motor connection error:", error);
     return html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`;
   }
 }
