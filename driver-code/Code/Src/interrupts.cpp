@@ -1121,7 +1121,10 @@ void ADC1_2_IRQHandler(void){
     const float direct_resistive_voltage = direct_current * current_to_resistance_voltage;
     const float quadrature_resistive_voltage = quadrature_current * current_to_resistance_voltage;
 
-    const int32_t delta_angle = predicted_angle - readout.previous_predicted_angle;
+    // Compute and remember the previous predicted angle where we calculated the previous dq0 values.
+    const int32_t previous_predicted_angle = readout.angle - readout.angle_adjustment;
+    
+    const int32_t delta_angle = predicted_angle - previous_predicted_angle;
 
     const float cos_delta = get_cos(delta_angle);
     const float sin_delta = get_sin(delta_angle);
@@ -1281,9 +1284,6 @@ void ADC1_2_IRQHandler(void){
     // Get the total angle change for the current cycle including adjustment and speed.
     const int32_t angle_diff = angle - readout.angle;
 
-    // Compute and remember the previous predicted angle where we calculated the previous dq0 values.
-    const int32_t previous_predicted_angle = readout.angle - readout.angle_adjustment;
-    
     // Check if the angle overflowed and count rotations. Note, we need to flag the compiler to treat
     // integer overflow as well defined behaviour!
     const int32_t rotations_increment = (angle_diff > 0 ? 
