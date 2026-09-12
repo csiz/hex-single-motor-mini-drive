@@ -1218,8 +1218,8 @@ void ADC1_2_IRQHandler(void){
     
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
     const float emf_angle_error_variance = (
-        square(emf_angle_error) * 0.25f + 
-        readout.emf_angle_error_variance * 0.75f
+        0.9f * readout.emf_angle_error_variance +
+        0.1f * square(emf_angle_error)
     );
     
     

@@ -59,6 +59,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   // Get electric angle data. Angle 0 means the rotor North is aligned when holding positive current on the U phase.
   const angle = angle_units_to_radians(bare_readout.angle);
   const angle_adjustment = angle_units_to_radians(bare_readout.angle_adjustment);
+  const emf_angle_error = angle_adjustment / control_parameters?.rotor_angle_ki;
+
   const previous_predicted_angle = angle_units_to_radians(bare_readout.previous_predicted_angle);
   const angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.angular_speed);
   const vcc_voltage = bare_readout.vcc_voltage / VOLTAGE_UNITS_PER_VOLT;
@@ -75,6 +77,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
 
   const prev_direct_current = direct_current - direct_current_diff;
   const prev_quadrature_current = quadrature_current - quadrature_current_diff;
+  const prev_current_magnitude = Math.sqrt(square(prev_direct_current) + square(prev_quadrature_current));
 
   const prev_u_current = prev_direct_current * Math.cos(predicted_angle) - prev_quadrature_current * Math.sin(predicted_angle);
   const prev_v_current = prev_direct_current * Math.cos(predicted_angle - 2 * Math.PI / 3) - prev_quadrature_current * Math.sin(predicted_angle - 2 * Math.PI / 3);
@@ -266,7 +269,12 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     web_current_angular_speed,
     // Reference readouts in adc units
     ref_readout,
-
+    prev_u_current,
+    prev_v_current,
+    prev_w_current,
+    prev_direct_current,
+    prev_quadrature_current,
+    prev_current_magnitude,
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
@@ -287,7 +295,9 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     hall_w_as_angle,
     angle,
     predicted_angle,
+    previous_predicted_angle,
     angle_adjustment,
+    emf_angle_error,
     angular_speed,
     vcc_voltage,
     emf_voltage_angle, emf_voltage_magnitude, emf_voltage_angular_speed,

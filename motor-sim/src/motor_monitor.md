@@ -1045,6 +1045,8 @@ const plot_electric_position = plot_lines({
   y_domain: [-Math.PI, Math.PI],
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
+    {y: "predicted_angle", label: "Predicted Angle", color: d3.color(colors.angle).darker(1)},
+    {y: "previous_predicted_angle", label: "Previous Predicted Angle", color: d3.color(colors.angle).darker(2)},
     {y: (d) => d.current_detected ? d.current_angle : null, label: "Current Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
@@ -1071,6 +1073,7 @@ const plot_electric_offsets = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
     },
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
+    {y: "emf_angle_error", label: "EMF Angle Error", color: d3.color(colors.angle).brighter(1)},
     {y: "emf_angle_error_stdev", label: "EMF Angle Error (stdev)", color: d3.color(colors.voltage_angle).darker(1)},
     {y: "lead_angle", label: "Lead Angle", color: colors.v},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle_offset : null, label: "Drive Voltage Angle Offset", color: colors_categories[2]},
@@ -1134,6 +1137,9 @@ const plot_measured_current = plot_lines({
     {y: "u_current", label: "Current U", color: colors.u},
     {y: "v_current", label: "Current V", color: colors.v},
     {y: "w_current", label: "Current W", color: colors.w},
+    {y: "prev_u_current", label: "Previous Current U", color: d3.color(colors.u).darker(1)},
+    {y: "prev_v_current", label: "Previous Current V", color: d3.color(colors.v).darker(1)},
+    {y: "prev_w_current", label: "Previous Current W", color: d3.color(colors.w).darker(1)},
     {y: "u_current_diff", label: "Current U diff", color: d3.color(colors.u).darker(1)},
     {y: "v_current_diff", label: "Current V diff", color: d3.color(colors.v).darker(1)},
     {y: "w_current_diff", label: "Current W diff", color: d3.color(colors.w).darker(1)},
@@ -1195,6 +1201,9 @@ const plot_dq0_currents = plot_lines({
   channels: [
     {y: "direct_current", label: "Current on Direct axis", color: colors.direct_current},
     {y: "quadrature_current", label: "Current on Quadrature", color: colors.quadrature_current},
+    {y: "prev_direct_current", label: "Previous Current on Direct axis", color: d3.color(colors.direct_current).darker(1)},
+    {y: "prev_quadrature_current", label: "Previous Current on Quadrature axis", color: d3.color(colors.quadrature_current).darker(1)},
+    {y: "prev_current_magnitude", label: "Previous Current Magnitude", color: d3.color(colors_categories[2]).darker(1)},
     {y: "current_magnitude", label: "Current Magnitude", color: colors_categories[2]},
     {y: "web_direct_current", label: "Current on Direct axis (computed online)", color: d3.color(colors.direct_current).brighter(1)},
     {y: "web_quadrature_current", label: "Current on Quadrature (computed online)", color: d3.color(colors.quadrature_current).brighter(1)},
@@ -1585,7 +1594,7 @@ async function run_current_calibration(motor_controller, message_options) {
       max_learning_rate: Math.PI / 4,
     }),
     motor_constant: new Parameter({
-      value: 0.001, //current_calibration?.motor_constant ?? 0.0,
+      value: current_calibration?.motor_constant ?? 0.0,
       max_learning_rate: 0.000_01,
     }),
   };

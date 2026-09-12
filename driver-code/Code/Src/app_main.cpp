@@ -716,7 +716,7 @@ void app_tick() {
       (readout.total_power_average > control_parameters.max_power_draw)
   );
 
-  const float pwm_penalty = (0.1f - 10.f * pwm_too_high) * readouts_since_last_tick;
+  const float pwm_penalty = (0.1f - 1.f * pwm_too_high) * readouts_since_last_tick;
 
   set_live_max_pwm(
     clip_to(0, pwm_max, readout.live_max_pwm + pwm_penalty)
