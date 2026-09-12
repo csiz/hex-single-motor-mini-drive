@@ -434,33 +434,27 @@ static inline MotorOutputs update_motor_smooth(
     // Base the direction on the sign of the target PWM.
     const int32_t active_pwm_sign = sign(driver_state.active_pwm);
 
-    if (readout.angle_fix) {
-        // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
-        // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
-        // 
-        // Of course, the inductors take a while to charge and the rotor is producing an EMF
-        // which all interacts with the current. However, the current that we end up measuring
-        // should be as close to the 90 degrees as possible for maximum torque per current use.
-        const int32_t ideal_angle = readout.angle + quarter_circle;
-    
-        // Get the error between the measured current and the ideal current angle.
-        const int32_t lead_angle_error = current_detected * (ideal_angle - readout.current_angle);
+    // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
+    // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+    // 
+    // Of course, the inductors take a while to charge and the rotor is producing an EMF
+    // which all interacts with the current. However, the current that we end up measuring
+    // should be as close to the 90 degrees as possible for maximum torque per current use.
+    const int32_t ideal_angle = readout.angle + quarter_circle;
 
-        // Adjust the target angle to keep the alpha current small; reset if the motor is not moving.
-        driver_state.lead_angle = clip_to(
-            -max_lead_angle_control,
-            +max_lead_angle_control,
-            driver_state.lead_angle + static_cast<int32_t>(control_parameters.lead_angle_control_ki * lead_angle_error)
-        );
+    // Get the error between the measured current and the ideal current angle.
+    const int32_t lead_angle_error = current_detected * (ideal_angle - readout.current_angle);
 
-        // Drive the motor to produce current perpendicular to the magnetic angle.
-        driver_state.active_angle = ideal_angle + active_pwm_sign * driver_state.lead_angle;
-    } else {
-        // If we don't have an accurate position, we need drive the motor open loop until we get an EMF fix.
+    // Adjust the lead angle to keep the current orthogonal to the rotor magnetic pole.
+    driver_state.lead_angle += static_cast<int32_t>(readout.angle_fix ? 
+        control_parameters.lead_angle_control_ki * lead_angle_error :
+        // But drive the motor open loop if we don't have an accurate position.
+        control_parameters.probing_angular_speed
+    );
 
-        // Use the probing speed.
-        driver_state.active_angle += active_pwm_sign * static_cast<int32_t>(control_parameters.probing_angular_speed);
-    }
+
+    // Drive the motor to produce current perpendicular to the magnetic angle.
+    driver_state.active_angle = ideal_angle + active_pwm_sign * driver_state.lead_angle;
 
     return update_motor_at_angle(driver_state, readout);
 }
