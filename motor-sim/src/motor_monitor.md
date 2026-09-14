@@ -1468,14 +1468,14 @@ async function run_current_calibration(motor_controller, message_options) {
   const current_calibration = {...motor_controller.current_calibration};
   const control_parameters = motor_controller.control_parameters;
 
-  console.info("Starting motor spin...");
-  await motor_controller.send_command({
-    message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-    timeout: Math.floor(1000 * cycles_per_millisecond),
-    pwm_value: +command_pwm,
-  });
+  // console.info("Starting motor spin...");
+  // await motor_controller.send_command({
+  //   message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
+  //   timeout: Math.floor(1000 * cycles_per_millisecond),
+  //   pwm_value: +command_pwm,
+  // });
 
-  await wait(1000);
+  // await wait(1000);
 
   console.info("Current calibration starting");
 
@@ -1508,13 +1508,14 @@ async function run_current_calibration(motor_controller, message_options) {
 
   const enabled_parameters = get_checked_parameters();
 
+  const min_speed = speed_units_to_rotations_per_millisecond(control_parameters?.min_emf_speed);
 
   // Test if the voltage was mostly 0.
   const count_idle = sample.filter(({u_drive_voltage, v_drive_voltage, w_drive_voltage, angular_speed}) => 
     Math.abs(u_drive_voltage) < 0.001 && 
     Math.abs(v_drive_voltage) < 0.001 && 
     Math.abs(w_drive_voltage) < 0.001 &&
-    Math.abs(angular_speed) == 0.0
+    Math.abs(angular_speed) < min_speed
   ).length;
 
   // For all 0 voltages we calibrate the baseline offset of the currents.
