@@ -1294,7 +1294,7 @@ const plot_motor_values = plot_lines({
     {y: "target", label: "Target", color: colors_categories[2]},
     {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
     {y: "resistance", label: "Phase Resistance", color: colors.u},
-    {y: "inductance_inverse", label: "Phase Inductance Inverse", color: colors.v},
+    {y: "inductance", label: "Phase Inductance", color: colors.v},
     {y: "inductance_bias", label: "Inductance Bias", color: colors_categories[4]},
     {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
@@ -1376,9 +1376,9 @@ const calibration_parameters = {
     label: "Resistance", 
     description: `The resistance of average phase coil.`
   },
-  inductance_inverse: {
-    label: "Inverse Phase Inductance", 
-    description: `The inverse of the inductance of the motor's phases.`
+  inductance: {
+    label: "Phase Inductance", 
+    description: `The inductance of the motor's phases.`
   },
   inductance_bias: {
     label: "Inductance Bias", 

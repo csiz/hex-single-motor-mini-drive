@@ -438,11 +438,9 @@ definitions:
         type: float32
         doc: Estimated average resistance of the phase coils.
 
-      inductance_inverse:
+      inductance:
         type: float32
-        doc: |
-          Estimated baseline inductance of the motor coils. Written as a 
-          conductance for efficient math: `conductance = delta_t/L`.
+        doc: Estimated baseline inductance of the motor coils.
 
       inductance_bias:
         type: float32
@@ -596,7 +594,7 @@ definitions:
         type: float32
         doc: Estimated baseline resistance of the motor coils.
 
-      inductance_inverse:
+      inductance:
         type: float32
         doc: |
           Estimated baseline inductance of the motor coils. Written as a conductance

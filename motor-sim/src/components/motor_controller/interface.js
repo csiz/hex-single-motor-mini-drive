@@ -136,10 +136,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const v_R_voltage = resistance * v_current;
   const w_R_voltage = resistance * w_current;
 
-  const inductance_inverse = current_calibration?.inductance_inverse ?? 0.0;
+  const inductance = current_calibration?.inductance ?? 0.0;
   
-  const inductance = 1.0 / inductance_inverse / pwm_cycles_per_second;
-
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
   const u_L_voltage = u_current_diff * inductance * pwm_cycles_per_second;
   const v_L_voltage = v_current_diff * inductance * pwm_cycles_per_second;
@@ -343,11 +341,11 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const target = bare_full_readout.target;
   const seek_integral = bare_full_readout.seek_integral;
   
-  const u_current_zero = bare_full_readout.u_current_zero;
-  const v_current_zero = bare_full_readout.v_current_zero;
-  const w_current_zero = bare_full_readout.w_current_zero;
+  const u_current_zero = bare_full_readout.u_current_zero / CURRENT_UNITS_PER_AMP;
+  const v_current_zero = bare_full_readout.v_current_zero / CURRENT_UNITS_PER_AMP;
+  const w_current_zero = bare_full_readout.w_current_zero / CURRENT_UNITS_PER_AMP;
   const resistance = bare_full_readout.resistance;
-  const inductance_inverse = bare_full_readout.inductance_inverse;
+  const inductance = bare_full_readout.inductance;
   const inductance_bias = bare_full_readout.inductance_bias;
   const saliency_angle = angle_units_to_radians(bare_full_readout.saliency_angle);
   const motor_constant = bare_full_readout.motor_constant;
@@ -418,7 +416,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     v_current_zero,
     w_current_zero,
     resistance,
-    inductance_inverse,
+    inductance,
     inductance_bias,
     saliency_angle,
     motor_constant,
@@ -448,8 +446,7 @@ function parse_current_calibration(bare_calibration) {
     v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
     w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
     resistance: bare_calibration.resistance,
-    inductance_inverse: bare_calibration.inductance_inverse,
-    inductance: 1.0 / bare_calibration.inductance_inverse / pwm_cycles_per_second,
+    inductance: bare_calibration.inductance,
     inductance_bias: bare_calibration.inductance_bias,
     saliency_angle: angle_units_to_radians(bare_calibration.saliency_angle),
     motor_constant: bare_calibration.motor_constant,
@@ -464,7 +461,7 @@ export function make_current_calibration(current_calibration){
     resistance: current_calibration.resistance,
     inductance_bias: current_calibration.inductance_bias,
     saliency_angle: radians_to_angle_units(current_calibration.saliency_angle),
-    inductance_inverse: current_calibration.inductance_inverse,
+    inductance: current_calibration.inductance,
     motor_constant: current_calibration.motor_constant,
   };
 }

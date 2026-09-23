@@ -189,18 +189,7 @@ constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power 
 
 constexpr float square_amps_per_current_units = square(amps_per_current_units);
 
-// Optimization constants
-// ----------------------
-
-const float min_inductance = 0.000'000'1f;
-const float max_inductance_inverse = 1.f / pwm_cycles_per_second / min_inductance;
-
-const float max_inductance = 0.001f;
-const float min_inductance_inverse = 1.f / pwm_cycles_per_second / max_inductance;
-
-const float min_inductor_voltage_square = square(0.030f);
-
-
+constexpr float min_inductor_voltage_square = square(0.150f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT);
 
 // Timing and PWM constants
 // ------------------------
@@ -346,8 +335,8 @@ const hex_mini_drive::CurrentCalibration default_current_calibration = {
     .w_current_zero = 0.0f,
     // Underestimate resistance.
     .resistance = 0.1f,
-    // Overestimate inductance.
-    .inductance_inverse = 1.f / 0.001f / static_cast<float>(pwm_cycles_per_second),
+    // Underestimate inductance.
+    .inductance = 0.000'001f,
     .inductance_bias = 0.0f,
     .saliency_angle = 0,
 };
@@ -367,10 +356,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .rotor_angular_speed_ki = std::pow(2, -3),
     // Gain for the acceleration, it should be even lower than speed. These are all relative to the position error.
     .rotor_acceleration_ki = std::pow(2, -4),
-    .current_angle_ki = std::pow(2, 32-4),
+    .current_angle_ki = std::pow(2, -2),
     .current_magnitude_ki = std::pow(2, -2),
     // Gain for the EMF angle, it should be much lower than the rotor angle gain to average out the noise.
-    .emf_angle_ki = std::pow(2, 32-0),
+    .emf_angle_ki = std::pow(2, -4),
     // Gain for the EMF magnitude.
     .emf_magnitude_ki = std::pow(2, -4),
     // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.

@@ -353,9 +353,8 @@ struct FullReadout : Readout {
   float w_current_zero;
   // Estimated average resistance of the phase coils.
   float resistance;
-  // Estimated baseline inductance of the motor coils. Written as a 
-  // conductance for efficient math: `conductance = delta_t/L`.
-  float inductance_inverse;
+  // Estimated baseline inductance of the motor coils.
+  float inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   float inductance_bias;
   // Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
@@ -420,7 +419,7 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_inverse);;
+  write_float32(buffer + offset, value.inductance);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_bias);;
   offset += 4;
@@ -487,7 +486,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.resistance = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_inverse = read_float32(buffer + offset);
+  result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_bias = read_float32(buffer + offset);
   offset += 4;
@@ -813,7 +812,7 @@ struct CurrentCalibration {
   float resistance;
   // Estimated baseline inductance of the motor coils. Written as a conductance
   // for efficient math: `conductance = delta_t/L`.
-  float inductance_inverse;
+  float inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   float inductance_bias;
   // Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
@@ -832,7 +831,7 @@ static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration
   offset += 4;
   write_float32(buffer + offset, value.resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_inverse);;
+  write_float32(buffer + offset, value.inductance);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_bias);;
   offset += 4;
@@ -854,7 +853,7 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   offset += 4;
   result.resistance = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_inverse = read_float32(buffer + offset);
+  result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_bias = read_float32(buffer + offset);
   offset += 4;

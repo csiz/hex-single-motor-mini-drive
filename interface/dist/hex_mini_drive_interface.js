@@ -279,9 +279,8 @@ export class FullReadout extends Readout {
   w_current_zero;
   // Estimated average resistance of the phase coils.
   resistance;
-  // Estimated baseline inductance of the motor coils. Written as a 
-  // conductance for efficient math: `conductance = delta_t/L`.
-  inductance_inverse;
+  // Estimated baseline inductance of the motor coils.
+  inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   inductance_bias;
   // Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
@@ -351,7 +350,7 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.resistance)
   offset += 4;
-  view.setFloat32(offset, value.inductance_inverse)
+  view.setFloat32(offset, value.inductance)
   offset += 4;
   view.setFloat32(offset, value.inductance_bias)
   offset += 4;
@@ -419,7 +418,7 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.resistance = view.getFloat32(offset);
   offset += 4;
-  result.inductance_inverse = view.getFloat32(offset);
+  result.inductance = view.getFloat32(offset);
   offset += 4;
   result.inductance_bias = view.getFloat32(offset);
   offset += 4;
@@ -775,7 +774,7 @@ export class CurrentCalibration {
   resistance;
   // Estimated baseline inductance of the motor coils. Written as a conductance
   // for efficient math: `conductance = delta_t/L`.
-  inductance_inverse;
+  inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   inductance_bias;
   // Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
@@ -798,7 +797,7 @@ function write_CurrentCalibration(value) {
   offset += 4;
   view.setFloat32(offset, value.resistance)
   offset += 4;
-  view.setFloat32(offset, value.inductance_inverse)
+  view.setFloat32(offset, value.inductance)
   offset += 4;
   view.setFloat32(offset, value.inductance_bias)
   offset += 4;
@@ -819,7 +818,7 @@ function read_CurrentCalibration(view, offset = 0) {
   offset += 4;
   result.resistance = view.getFloat32(offset);
   offset += 4;
-  result.inductance_inverse = view.getFloat32(offset);
+  result.inductance = view.getFloat32(offset);
   offset += 4;
   result.inductance_bias = view.getFloat32(offset);
   offset += 4;

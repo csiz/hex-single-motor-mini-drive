@@ -57,7 +57,7 @@ hex_mini_drive::FullReadout readout = {
     .v_current_zero = current_calibration.v_current_zero,
     .w_current_zero = current_calibration.w_current_zero,
     .resistance = current_calibration.resistance,
-    .inductance_inverse = current_calibration.inductance_inverse,
+    .inductance = current_calibration.inductance,
 };
 
 // Latest readout we have copied from the shared_readout in the main loop.
@@ -1139,197 +1139,178 @@ void ADC1_2_IRQHandler(void){
     const float direct_current_diff = direct_current - readout.direct_current;
     const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
 
+    const float direct_inductor_voltage = direct_current_diff * readout.inductance * current_diff_to_voltage_units;
+    const float quadrature_inductor_voltage = quadrature_current_diff * readout.inductance * current_diff_to_voltage_units;
 
-    // Current prediction observer
-    // ---------------------------
+    const float measured_direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
+    const float measured_quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;
 
-    // Compute part of the inductor voltages except emf.
-    const float direct_partial_voltage = direct_drive_voltage - direct_resistive_voltage;
-    const float quadrature_partial_voltage = quadrature_drive_voltage - quadrature_resistive_voltage;
-
-    // Calculate the predicted EMF angle.
-    int32_t predicted_emf_voltage_angle = readout.emf_voltage_angle + static_cast<int32_t>(readout.emf_voltage_angular_speed);
-
-    // Get the sin and cos for the emf angle.
-    float cos_emf = get_cos(predicted_emf_voltage_angle);
-    float sin_emf = get_sin(predicted_emf_voltage_angle);
-
-    // Compute the predicted EMF voltage based on the running estimate at constant emf.
-    float direct_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
-    float quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
-
-    // Compute the inductor voltage according to our model, the driving voltages less the resistive drop must
-    // represent the voltage across the inductor and therefore give us a prediction of the current change.
-    float direct_inductor_voltage = direct_partial_voltage + direct_emf_voltage;
-    float quadrature_inductor_voltage = quadrature_partial_voltage + quadrature_emf_voltage;
-
-    // Make our prediction of the current diffs. We're predicting the inductance drop across the motor windings
-    // because that depends on all our tracking variables and current change is a measurement we can observe.
-    // 
-    // Now compute the error between our prediction and reality. Reality is very noisy because 4 least-significant-bit
-    // of change in the current measurement is actually quite a lot of voltage on typical motor inductances if it wasn't
-    // smoothed out. The reason we're going through all this trouble is because we can't smooth out the inductor response
-    // without introducing significant lag. We must model the inductor response to get a fast tracking estimate.
-    float direct_current_diff_error = readout.inductance_inverse * direct_inductor_voltage - direct_current_diff;
-    float quadrature_current_diff_error = readout.inductance_inverse * quadrature_inductor_voltage - quadrature_current_diff;
-
-    float square_current_error = square(direct_current_diff_error) + square(quadrature_current_diff_error);
-
-    // Compute the mirrored EMF current error.
-    const float mirror_direct_inductor_voltage = direct_partial_voltage - direct_emf_voltage;
-    const float mirror_quadrature_inductor_voltage = quadrature_partial_voltage - quadrature_emf_voltage;
-
-    const float mirror_direct_current_diff_error = readout.inductance_inverse * mirror_direct_inductor_voltage - direct_current_diff;
-    const float mirror_quadrature_current_diff_error = readout.inductance_inverse * mirror_quadrature_inductor_voltage - quadrature_current_diff;
-
-    const float mirror_square_current_error = square(mirror_direct_current_diff_error) + square(mirror_quadrature_current_diff_error);
-
-    if (mirror_square_current_error < square_current_error) {
-        predicted_emf_voltage_angle = predicted_emf_voltage_angle + half_circle;
-        cos_emf = -cos_emf;
-        sin_emf = -sin_emf;
-        direct_emf_voltage = -direct_emf_voltage;
-        quadrature_emf_voltage = -quadrature_emf_voltage;
-        direct_inductor_voltage = mirror_direct_inductor_voltage;
-        quadrature_inductor_voltage = mirror_quadrature_inductor_voltage;
-        direct_current_diff_error = mirror_direct_current_diff_error;
-        quadrature_current_diff_error = mirror_quadrature_current_diff_error;
-        square_current_error = mirror_square_current_error;
-    }
+    // Send the emf values to the CORDIC asap.
+    set_cordic(measured_direct_emf_voltage, measured_quadrature_emf_voltage);
 
     // Get the magnitude of the inductor voltage so we can determine whether the inductance is significant.
     const float inductor_voltage_square = square(direct_inductor_voltage) + square(quadrature_inductor_voltage);
+    
+    // Back EMF angle observer
+    // -----------------------
+    
+    // Calculate the predicted EMF angle.
+    const int32_t predicted_emf_voltage_angle = readout.emf_voltage_angle + static_cast<int32_t>(readout.emf_voltage_angular_speed);
+
+    // Get the angle measured from EMF relative to the predicted rotor angle.
+    const auto [measured_emf_voltage_angle, measured_emf_voltage_magnitude] = get_cordic();
+
+    const int32_t emf_angle_error = measured_emf_voltage_angle - predicted_emf_voltage_angle;
+
+    const int32_t emf_angle_error_plus_quarter = emf_angle_error + quarter_circle;
+
+
+    // Compute the angle error to the emf axis.
+    // 
+    // Branching if statements are easier to understand, but they do take 40 cycles extra, so we end up doing
+    // it the bit bang "clever" way. Anyway, the point is we divide the angle space in 2 by and-ing the maximum
+    // positive angle and then we center it on 0 by subtracting a quarter circle.
+    const int32_t emf_angle_adjustment = (emf_angle_error_plus_quarter & most_positive_angle) - quarter_circle;
+
+    // Update the new emf_voltage_angle. If the emf changes sign, we will also immediately change sign.
+    // But we slowly trace to the new angle by integrating the error over time using the control parameter.
+    const int32_t emf_voltage_angle = (
+        predicted_emf_voltage_angle + (emf_angle_error_plus_quarter & most_negative_angle) +
+        static_cast<int32_t>(emf_angle_adjustment * control_parameters.emf_angle_ki)
+    );
+    
+    
+    // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
+    const float emf_angle_error_variance = (
+        0.9f * readout.emf_angle_error_variance +
+        0.1f * square(emf_angle_error)
+    );
+
+    const float emf_voltage_magnitude = (
+        readout.emf_voltage_magnitude + 
+        (measured_emf_voltage_magnitude - readout.emf_voltage_magnitude) * control_parameters.emf_magnitude_ki
+    );
+    
+    
+    // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
+    // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
+    // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
+    const bool emf_detected = emf_angle_error_variance < emf_angle_variance_threshold;
+    
+    // TODO: we probably wanna use the above, in that case check if we need the parameter
+    // // Use the previous emf estimate as the flag for whether we detected any motor movement.
+    // // const bool emf_detected = readout.emf_voltage_magnitude > control_parameters.min_emf_magnitude;
 
     
+    // Use the angle variance to scale the speed adjustment, it's a simplified version of combining gaussians
+    // but we use a fixed variance inverse as the normalizing factor. We're basically saying the current speed
+    // is a gaussian with a variance of threshold - measured variance, the sum of the variances being fixed to
+    // the emf_angle_variance_threshold. This allows us to use a precomputed inverse to avoid division.
+    const float emf_variance_factor = (emf_angle_variance_threshold - emf_angle_error_variance) * emf_angle_variance_threshold_inverse;
+
+    // Reset the emf speed to 0 if we don't have an emf detection.
+    // ! Very important to use emf_detected so that the emf_variance_factor above is positive.
+    const float emf_voltage_angular_speed = emf_detected * (
+        readout.emf_voltage_angular_speed + 
+        emf_angle_adjustment * emf_variance_factor * control_parameters.emf_angular_speed_ki
+    );
+
+    // We only get EMF when rotating, so let's get the rotation direction.
+    const float emf_sign = sign(emf_voltage_angular_speed);
+
+    // Use the rotation direction to get the absolute EMF voltage.
+    const float emf_voltage_abs_angular_speed = emf_sign * emf_voltage_angular_speed;
+    
+    // Declare that we have an EMF reading if our speed is greater than the control parameter threshold.
+    const bool emf_fix = emf_voltage_abs_angular_speed > control_parameters.min_emf_speed;
+
+    // Get the target angle from our EMF observer.
+    const int32_t angle_from_emf = emf_voltage_angle + static_cast<int32_t>(emf_sign) * quarter_circle;
+
+
 
     // Variable Tracking Update
     // ------------------------
 
-    // Now we track the emf_voltage_angle, emf_voltage_magnitude, resistance and inductance_inverse using some form
-    // of gradient descent.
+    // Now, it's a bit of a cheat, but we'll use the new emf_voltage angle because we've computed whether to flip it
+    // to minimize the error. The new angle and magnitude are already partially updated with the error so if we use
+    // these we'll be left with less error by construction. Still the ki terms for the emf should be small and therefore
+    // the difference is minimal. It is important that we use the flipped angle though.
+
+    // Get the sin and cos for the emf angle.
+    const float cos_emf = get_cos(emf_voltage_angle);
+    const float sin_emf = get_sin(emf_voltage_angle);
+
+    // Compute the predicted EMF voltage based on the running estimate at constant emf.
+    const float direct_emf_voltage = emf_voltage_magnitude * cos_emf;
+    const float quadrature_emf_voltage = emf_voltage_magnitude * sin_emf;
+
+
+    // Now we track the resistance and inductance using some form of gradient descent. The equation that we want to solve is:
+    // 
+    //     0 ~ error = resistance_voltage + inductance_voltage - drive_voltage - emf_voltage
+    // 
+    // Where we've already defined the "measured" emf voltage as if the error were zero. Ie.
+    // 
+    //     measured_emf_voltage = resistance_voltage + inductance_voltage - drive_voltage
+    // 
+    // The error can also be due to either resistance or inductance, so despite naming it measured emf voltage, it's actually 
+    // all the errors combined. We can use this value and optimize it by gradient descent to calbirate all parameters live.
+    const float direct_voltage_error = measured_direct_emf_voltage - direct_emf_voltage;
+    const float quadrature_voltage_error = measured_quadrature_emf_voltage - quadrature_emf_voltage;
+
+    const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
 
     // Defining the loss as the square(direct_current_diff_error) + square(quadrature_current_diff_error) we get the derivative gradients with 
     // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
     // there isn't enough energy in the error to warrant an update.
 
-    const bool error_detected = square_current_error > control_parameters.current_measurement_variance;
+    // TODO: rename to voltage variance.
+    const bool error_detected = square_voltage_error > control_parameters.current_measurement_variance;
 
     // Compute the gradients of the loss with respect to each of the tracked parameters.
 
-    const float emf_voltage_angle_gradient = (
-        -direct_current_diff_error * sin_emf + 
-        +quadrature_current_diff_error * cos_emf
-    ) * amps_per_current_units;
-
-    const float emf_voltage_magnitude_gradient = (
-        +direct_current_diff_error * cos_emf + 
-        +quadrature_current_diff_error * sin_emf
-    );
     const float resistance_gradient = (
-        -direct_current_diff_error * direct_current +
-        -quadrature_current_diff_error * quadrature_current
-    ) * square_amps_per_current_units;
+        -direct_voltage_error * direct_current +
+        -quadrature_voltage_error * quadrature_current
+    ) * voltage_mul_current_to_power;
 
-    const float inductance_inverse_gradient = (
-        direct_current_diff_error * direct_inductor_voltage + 
-        quadrature_current_diff_error * quadrature_inductor_voltage
+    const float inductance_gradient = (
+        direct_voltage_error * direct_inductor_voltage + 
+        quadrature_voltage_error * quadrature_inductor_voltage
     ) * voltage_mul_current_to_power;
 
 
-    // Use the previous emf estimate as the flag for whether we detected any motor movement.
-    const bool emf_detected = readout.emf_voltage_magnitude > control_parameters.min_emf_magnitude;
-
-    
-    // Although the update is only valid when we have nominal_vcc_voltage we still need to do our best
-    // to update the motor position in case it is already spinning.
-    if (error_detected or emf_detected) {
-
-        // Update the tracking variables, we especially need the EMF estimate in order to track the motor position accurately.
-        readout.emf_voltage_magnitude -= emf_voltage_magnitude_gradient * control_parameters.emf_magnitude_ki;
-        
-        // Ensure the EMF magnitude is a positive number, we will instantly flip the angle by 180 degrees to maintain
-        // a positive sign. The position axis is 90 degrees relative to the EMF axis and it is ambigous which way it
-        // should point anyway, therefore it is invariant to the flip of the EMF vector.
-        if (readout.emf_voltage_magnitude < 0.f) {
-
-            readout.emf_voltage_magnitude = 0.f;
-
-            // Instantly set to 0, we only flip magnitude if it crossed into negative and that only happens when the motor switches
-            // direction, so for an instant, it will be at 0 speed. 
-            readout.emf_voltage_angular_speed = 0.f;
-
-        } else {
-            const float angle_delta = emf_voltage_angle_gradient * control_parameters.emf_angle_ki;
-            const float square_angle_delta = square(angle_delta);
+    // Only update calibration when we have nominal_vcc_voltage.
+    if (nominal_vcc_voltage) {
+        if (error_detected) {
+            // Only update the resistance if we have sufficient current to make the measurement meaningful.
+            // TODO: this might need to be a parameter.
+            const bool sufficient_current =  current_magnitude > resistance_current_minimum;
+            readout.resistance -= sufficient_current * resistance_gradient * control_parameters.resistance_ki;
             
-            readout.emf_voltage_angle = predicted_emf_voltage_angle - static_cast<int32_t>(angle_delta);
-            readout.emf_angle_error_variance = readout.emf_angle_error_variance * 0.95f + square_angle_delta * 0.05f;
+            // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
+            // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
+            // TODO: this definitely needs to be a parameter.
+            const bool inductor_excited = inductor_voltage_square > min_inductor_voltage_square;
+            readout.inductance -= inductor_excited * inductance_gradient * control_parameters.inductance_ki;
+        } else {
+            const bool current_is_idling = current_magnitude < current_offset_maximum;
 
-            const float instant_variance = max(square_angle_delta, readout.emf_angle_error_variance);
-
-            // Use the angle variance to scale the speed adjustment, it's a simplified version of combining gaussians
-            // but we use a fixed variance inverse as the normalizing factor. We're basically saying the current speed
-            // is a gaussian with a variance of threshold - measured variance, the sum of the variances being fixed to
-            // the emf_angle_variance_threshold. This allows us to use a precomputed inverse to avoid division.
-            const float emf_variance_factor = (emf_angle_variance_threshold - instant_variance) * emf_angle_variance_threshold_inverse;
-
-            if (instant_variance < emf_angle_variance_threshold) {
-                readout.emf_voltage_angular_speed -= angle_delta * emf_variance_factor * control_parameters.emf_angular_speed_ki;
-            } else {
-                // Decay the angular speed to 0.
-                readout.emf_voltage_angular_speed -= readout.emf_voltage_angular_speed * control_parameters.emf_angular_speed_ki;
+            if (current_is_idling) {
+                // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
+                readout.u_current_zero = clip_to(
+                    -current_offset_maximum, current_offset_maximum, 
+                    readout.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
+                readout.v_current_zero = clip_to(
+                    -current_offset_maximum, current_offset_maximum, 
+                    readout.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
+                readout.w_current_zero = clip_to(
+                    -current_offset_maximum, current_offset_maximum, 
+                    readout.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
             }
         }
-
-        // Only update the resistance if we have sufficient current to make the measurement meaningful.
-        const bool sufficient_current =  current_magnitude > resistance_current_minimum;
-        readout.resistance -= sufficient_current * resistance_gradient * control_parameters.resistance_ki;
-        
-        // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
-        // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
-        const bool inductor_excited = inductor_voltage_square > min_inductor_voltage_square;
-        readout.inductance_inverse -= inductor_excited * inductance_inverse_gradient * control_parameters.inductance_ki;
-
-    } else {
-        const bool current_is_idling = current_magnitude < current_offset_maximum;
-
-        if (nominal_vcc_voltage and current_is_idling) {
-            // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
-            readout.u_current_zero = clip_to(
-                -current_offset_maximum, current_offset_maximum, 
-                readout.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
-            readout.v_current_zero = clip_to(
-                -current_offset_maximum, current_offset_maximum, 
-                readout.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
-            readout.w_current_zero = clip_to(
-                -current_offset_maximum, current_offset_maximum, 
-                readout.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
-                
-            // Decay the angular speed to 0.
-            readout.emf_voltage_angular_speed = 0.f;
-        } else {
-            // We don't update anything when we don't have any error signal; carry on and wait for the next round.
-        }
-
-        readout.emf_voltage_angle = predicted_emf_voltage_angle;
-        readout.emf_angle_error_variance = readout.emf_angle_error_variance * 0.95f + emf_angle_variance_max * 0.05f;
     }
-
-    // We only get EMF when rotating, so let's get the rotation direction.
-    const float emf_sign = sign(readout.emf_voltage_angular_speed);
-
-    // Use the rotation direction to get the absolute EMF voltage.
-    const float emf_voltage_abs_angular_speed = emf_sign * readout.emf_voltage_angular_speed;
-    
-    // Declare that we have an EMF reading if our speed is greater than the control parameter threshold.
-    // 
-    // Note that the inverse of the minimum speed is the duration it takes to rotate at said minimum speed.
-    // Therefore we can only move so far during the period of time. The minimum speed also governs how
-    // how often we need to probe for the real angle while stationary.
-    const bool emf_fix = emf_voltage_abs_angular_speed > control_parameters.min_emf_speed;
-
-    // Get the target angle from our EMF observer.
-    const int32_t angle_from_emf = readout.emf_voltage_angle + static_cast<int32_t>(emf_sign) * quarter_circle;
 
     // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
     correct_angle_counter = clip_to(
@@ -1400,9 +1381,10 @@ void ADC1_2_IRQHandler(void){
     ) * dq0_voltage_mul_current_to_power;
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
+    // TODO: switch to estimates
     const float emf_power = -(
-        direct_emf_voltage * direct_current + 
-        quadrature_emf_voltage * quadrature_current
+        measured_direct_emf_voltage * direct_current + 
+        measured_quadrature_emf_voltage * quadrature_current
     ) * dq0_voltage_mul_current_to_power;
 
     // The total power is the power used from the battery. It will be positive when driving
@@ -1462,6 +1444,7 @@ void ADC1_2_IRQHandler(void){
     readout.direct_current_diff = direct_current_diff;
     readout.quadrature_current_diff = quadrature_current_diff;
 
+    // TODO: switch to estimates? or do we need to send this at all?
     readout.direct_emf_voltage = direct_emf_voltage;
     readout.quadrature_emf_voltage = quadrature_emf_voltage;
     
@@ -1473,6 +1456,10 @@ void ADC1_2_IRQHandler(void){
 
     readout.current_angle = current_angle;
     readout.current_magnitude = current_magnitude;
+    readout.emf_voltage_angle = emf_voltage_angle;
+    readout.emf_voltage_magnitude = emf_voltage_magnitude;
+    readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
+    readout.emf_angle_error_variance = emf_angle_error_variance;
 
     readout.vcc_voltage = vcc_voltage;
     readout.temperature = temperature;
@@ -1543,7 +1530,7 @@ void ADC1_2_IRQHandler(void){
         readout.v_current_zero = current_calibration.v_current_zero;
         readout.w_current_zero = current_calibration.w_current_zero;
         readout.resistance = current_calibration.resistance;
-        readout.inductance_inverse = current_calibration.inductance_inverse;
+        readout.inductance = current_calibration.inductance;
         // Reset the voltage magnitude in case it nan'ed out.
         readout.emf_voltage_magnitude = 0.f;
         // We don't need to `readout.emf_voltage_angle = 0;` because any integer is a valid angle and 
