@@ -117,3 +117,11 @@ export function dq0_transform(u, v, w, angle){
     (-Math.sin(angle) * u - Math.sin(angle - 2 * Math.PI / 3) * v - Math.sin(angle + 2 * Math.PI / 3) * w) * two_thirds,
   ]
 }
+
+export function abc_transform(d, q, angle){
+  return [
+    Math.cos(angle) * d - Math.sin(angle) * q,
+    Math.cos(angle - 2 * Math.PI / 3) * d - Math.sin(angle - 2 * Math.PI / 3) * q,
+    Math.cos(angle + 2 * Math.PI / 3) * d - Math.sin(angle + 2 * Math.PI / 3) * q,
+  ];
+}

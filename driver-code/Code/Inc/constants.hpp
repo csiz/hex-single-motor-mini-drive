@@ -61,6 +61,9 @@ constexpr float max_angular_speed_inverse = 1.f / max_angular_speed;
 // Inverse of the PWM base so we can convert to floating point values without doing a division.
 constexpr float pwm_base_inverse = 1.0f / static_cast<float>(hex_mini_drive::PWM_BASE);
 
+// We need to compute and average of the PWM outputs, so this is useful.
+constexpr float half_pwm_base_inverse = 0.5f * pwm_base_inverse;
+
 // The ADC has a 12-bit resolution.
 constexpr uint16_t adc_max_value = 0xFFF; // 2^12 - 1 == 4095 == 0xFFF.
 
@@ -137,16 +140,18 @@ constexpr float amplifier_gain = 20.0f;
 constexpr float adc_to_current_units = hex_mini_drive::CURRENT_UNITS_PER_AMP * adc_voltage_reference / (adc_max_value * current_shunt_resistance * amplifier_gain);
 
 // Noise level of the current measurements, in current units.
-constexpr float current_measurement_noise = 5 * adc_to_current_units;
+constexpr float current_measurement_noise = 8 * adc_to_current_units;
 
 // Minimum threshold for current detections, note it must be int32_t because it is compared to the cordic result.
 constexpr int32_t current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f); 
+// Maximum offset for the idle current offset measurments.
+constexpr float current_offset_maximum = 12 * adc_to_current_units;
 
-// Baseline noise for the current measurements.
-constexpr float current_measurement_variance = square(current_measurement_noise);
+// Square of the offset maximum for the idle current measurements.
+constexpr float current_offset_maximum_square = square(current_offset_maximum);
 
-// Noise for the difference between two consecutive current measurements.
-constexpr float current_diff_measurement_variance = square(2 * current_measurement_noise);
+// Minimum current value to begin calibrating resistance.
+constexpr float resistance_current_minimum_square = square(4.f * current_measurement_noise);
 
 // Maximum current we can measure per phase using our setup. This is less than
 // the total adc resolution span because the amplifier is referenced to half 3.3V while
@@ -170,14 +175,14 @@ constexpr float vcc_divider = 10.0/110.0;
 // Conversion factor for the voltage readout from the ADC.
 constexpr float voltage_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * adc_voltage_reference / (adc_max_value * vcc_divider);
 
+// Current conversion back to amps.
+constexpr float amps_per_current_units = 1.0 / hex_mini_drive::CURRENT_UNITS_PER_AMP;
+
 // Voltage conversion back to volts.
 constexpr float volts_per_voltage_units = 1.0 / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 // Conversion factor between current and phase resistance voltage.
 constexpr float current_to_voltage_units = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
-
-// The drivers need over 8V to power the MOSFETs.
-constexpr float vcc_mosfet_driver_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 // Directly convert voltage * current to power in Watts.
 constexpr float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * hex_mini_drive::CURRENT_UNITS_PER_AMP);
@@ -185,6 +190,18 @@ constexpr float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UN
 // Our dq0 transformation is the power variant form which needs to be corrected by a factor of 3/2.
 constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 3.0 / 2.0;
 
+constexpr float square_amps_per_current_units = square(amps_per_current_units);
+
+// Optimization constants
+// ----------------------
+
+const float min_inductance = 0.000'000'1f;
+const float max_inductance_inverse = 1.f / pwm_cycles_per_second / min_inductance;
+
+const float max_inductance = 0.001f;
+const float min_inductance_inverse = 1.f / pwm_cycles_per_second / max_inductance;
+
+const float min_inductor_voltage_square = square(0.030f);
 
 
 
@@ -313,7 +330,9 @@ constexpr float speed_units_to_radians_per_second = angle_units_to_radians * sta
 constexpr float radians_per_second_to_speed_units = 1.f / speed_units_to_radians_per_second;
 
 // Maximum variance of the EMF angle before we start computing EMF angular speed.
-constexpr float emf_angle_variance_threshold = square(30.f * angle_base / 360.f);
+constexpr float emf_angle_variance_threshold = square(15.f * angle_base / 360.f);
+
+constexpr float emf_angle_variance_max = square(90.f * angle_base / 360.f);
 
 // Inverse of the EMF angle variance threshold to avoid divisions in the fast loop.
 constexpr float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_threshold;
@@ -325,49 +344,65 @@ constexpr float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::CurrentCalibration default_current_calibration = {
-    .resistance = 1.3f,
-    .inductance = 0.000'145f,
+    .u_current_zero = 0.0f,
+    .v_current_zero = 0.0f,
+    .w_current_zero = 0.0f,
+    // Underestimate resistance.
+    .resistance = 0.1f,
+    // Overestimate inductance.
+    .inductance_inverse = 1.f / 0.001f / static_cast<float>(pwm_cycles_per_second),
     .inductance_bias = 0.0f,
-    .inductance_bias_angle = 0,
-    .saturation_angle = 0,
-    .saturation_factor = 0.0f
+    .saliency_angle = 0,
 };
 
 // The default control parameters should be set to reasonable values for any motor.
 // 
 // The reset button will reload these values.
 const hex_mini_drive::ControlParameters default_control_parameters = {
-    // Minimum emf speed to be confident in the rotation direction.
-    .min_emf_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    // Unused for now.
-    .emf_probing_interval = pwm_cycles_per_second / 20,
-    .probing_angular_speed = 30.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    .max_hold_pwm = pwm_max / 4,
-    .min_emf_for_motor_constant = 1.0,
     // Option to flip the motor direction.
     .motor_direction = +1,
-    // Unused!
     .angle_fix_max_certainty = 512,
-    .vcc_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
-    .max_resistive_power = 2.0,
-    .max_power_draw = max_drive_power,
-    .resistive_power_ki = std::pow(2, -12),
-    .power_draw_ki = std::pow(2, -12),
+    .angle_fix_threshold_count = 16,
+    .emf_direction_threshold_count = 32,
     // Rotor control gains.
     .rotor_angle_ki = std::pow(2, -2),
     // Gain for the angular speed, it should be much lower than the angle gain to average out the noise.
     .rotor_angular_speed_ki = std::pow(2, -3),
     // Gain for the acceleration, it should be even lower than speed. These are all relative to the position error.
     .rotor_acceleration_ki = std::pow(2, -4),
-    
-
+    .current_angle_ki = std::pow(2, 32-4),
+    .current_magnitude_ki = std::pow(2, -2),
     // Gain for the EMF angle, it should be much lower than the rotor angle gain to average out the noise.
-    .emf_angle_ki = std::pow(2, -2),
+    .emf_angle_ki = std::pow(2, 32-0),
+    // Gain for the EMF magnitude.
+    .emf_magnitude_ki = std::pow(2, -4),
     // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.
     .emf_angular_speed_ki = std::pow(2, -8),
 
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
+
+    .zero_current_ki = std::pow(2, -18),
+    .resistance_ki = std::pow(2, -16),
+    .inductance_ki = std::pow(2, -14),
+    .saliency_angle_ki = 3.14f,
+    .motor_constant_ki = std::pow(2, -11),
+    // Minimum EMF voltage to consider anything detected.
+    .min_emf_magnitude = 0.050,
+    // Minimum emf speed to be confident in the rotation direction.
+    .min_emf_speed = 5.f * angle_base / static_cast<float>(pwm_cycles_per_second),
+    .current_measurement_variance = square(current_measurement_noise),
+    // Unused for now.
+    .emf_probing_interval = pwm_cycles_per_second / 20,
+    .probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
+    .max_hold_pwm = pwm_max / 4,
+    .min_emf_for_motor_constant = 1.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
+    .vcc_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
+    .max_resistive_power = 8.0,
+    .max_power_draw = max_drive_power,
+    .resistive_power_ki = std::pow(2, -12),
+    .power_draw_ki = std::pow(2, -12),
+
     .torque_control_ki = 1.0f,
     .torque_control_kff = 0.1f,
 
@@ -382,11 +417,6 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_kp = 1.0f,
     .seek_kd = 0.0f,
 
-    .phase_resistance_ki = 0.1f,
-    .phase_inductance_ki = 0.000'1f,
-    .inductance_bias_angle_ki = 3.14f,
-    .saturation_factor_ki = 0.01f,
-    .motor_constant_ki = std::pow(2, -11),
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.
@@ -961,21 +991,7 @@ static inline float get_sin(const int32_t angle) {
     return sin_lookup[std::bit_cast<uint32_t>(angle) >> angle_to_sin_table_shift];
 }
 
-// Get the sine value for the angle and the 120 degrees phase shifts on either side.
-static inline ThreePhase get_three_phase_sin(int32_t angle) {
-    return {
-        sin_lookup[std::bit_cast<uint32_t>(angle) >> angle_to_sin_table_shift],
-        sin_lookup[std::bit_cast<uint32_t>(angle + neg_third_circle) >> angle_to_sin_table_shift],
-        sin_lookup[std::bit_cast<uint32_t>(angle + third_circle) >> angle_to_sin_table_shift]
-    };
-}
-
 // For cos lookup we can use the sin lookup table + 90 degrees (quarter_circle).
 static inline float get_cos(const int32_t angle) {
     return get_sin(angle + quarter_circle);
-}
-
-// Get the cosine value for the angle and the 120 degrees phase shifts on either side.
-static inline ThreePhase get_three_phase_cos(int32_t angle) {
-    return get_three_phase_sin(angle + quarter_circle);
 }

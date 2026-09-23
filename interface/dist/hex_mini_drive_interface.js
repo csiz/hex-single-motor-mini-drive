@@ -73,7 +73,7 @@ export class Readout {
   readout_number;
   // Whether we have an angle fix and how confident it is.
   angle_fix;
-  // Driver state flags; packed into a single 8-bit value.
+  // Driver state flags; packed into a 16-bit value.
   state_flags;
   // Raw reference readout (ADC value); this is the reference voltage for the current 
   // readouts as seen by the amplifier. The phase readouts are relative to this voltage
@@ -95,10 +95,8 @@ export class Readout {
   quadrature_current_diff;
   // Best estimate for the rotor magnetic angle.
   angle;
-  // Error of the angle measured from EMF to the rotor angle prediction.
-  angle_adjustment;
-  // Rotor magnetic angle that was used to calculate the previous readout.
-  previous_predicted_angle;
+  // Rotor magnetic angle that was used to calculate the readout.
+  predicted_angle;
   // Best estimate for the rotor magnetic angular speed.
   angular_speed;
   // Instantaneous VCC voltage readout (ADC value); from resistance divider.
@@ -117,15 +115,15 @@ export class Readout {
 }
 
 function write_Readout(value) {
-  const buffer = new Uint8Array(66);
+  const buffer = new Uint8Array(64);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setUint16(offset, value.readout_number)
   offset += 2;
-  view.setUint8(offset, value.angle_fix)
-  offset += 1;
-  view.setUint8(offset, value.state_flags)
-  offset += 1;
+  view.setUint16(offset, value.angle_fix)
+  offset += 2;
+  view.setUint16(offset, value.state_flags)
+  offset += 2;
   view.setInt16(offset, value.ref_readout)
   offset += 2;
   view.setFloat32(offset, value.direct_drive_voltage)
@@ -144,9 +142,7 @@ function write_Readout(value) {
   offset += 4;
   view.setInt32(offset, value.angle)
   offset += 4;
-  view.setInt32(offset, value.angle_adjustment)
-  offset += 4;
-  view.setInt32(offset, value.previous_predicted_angle)
+  view.setInt32(offset, value.predicted_angle)
   offset += 4;
   view.setFloat32(offset, value.angular_speed)
   offset += 4;
@@ -165,10 +161,10 @@ function read_Readout(view, offset = 0) {
   
   result.readout_number = view.getUint16(offset);
   offset += 2;
-  result.angle_fix = view.getUint8(offset);
-  offset += 1;
-  result.state_flags = view.getUint8(offset);
-  offset += 1;
+  result.angle_fix = view.getUint16(offset);
+  offset += 2;
+  result.state_flags = view.getUint16(offset);
+  offset += 2;
   result.ref_readout = view.getInt16(offset);
   offset += 2;
   result.direct_drive_voltage = view.getFloat32(offset);
@@ -187,9 +183,7 @@ function read_Readout(view, offset = 0) {
   offset += 4;
   result.angle = view.getInt32(offset);
   offset += 4;
-  result.angle_adjustment = view.getInt32(offset);
-  offset += 4;
-  result.previous_predicted_angle = view.getInt32(offset);
+  result.predicted_angle = view.getInt32(offset);
   offset += 4;
   result.angular_speed = view.getFloat32(offset);
   offset += 4;
@@ -247,8 +241,6 @@ export class FullReadout extends Readout {
   current_angle;
   // Magnitude of the current vector.
   current_magnitude;
-  // Angular speed of the current vector.
-  current_angular_speed;
   // EMF voltage in DQ0 coordinates; aligned with the rotor angle.
   direct_emf_voltage;
   // EMF voltage in DQ0 coordinates; crossed with the rotor angle.
@@ -279,40 +271,34 @@ export class FullReadout extends Readout {
   target;
   // Value of the integral term for the seek position algorithm.
   seek_integral;
+  // Estimated zero-current offset for the U phase.
+  u_current_zero;
+  // Estimated zero-current offset for the V phase.
+  v_current_zero;
+  // Estimated zero-current offset for the W phase.
+  w_current_zero;
   // Estimated average resistance of the phase coils.
   resistance;
-  // Estimated baseline inductance of the motor coils.
-  inductance;
+  // Estimated baseline inductance of the motor coils. Written as a 
+  // conductance for efficient math: `conductance = delta_t/L`.
+  inductance_inverse;
   // Estimated bias of the inductance due to magnetic saliency.
   inductance_bias;
   // Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
-  inductance_bias_angle;
-  // The estimated angle of the magnetization pattern.
-  // 
-  // Not sure what exactly is this (maybe magnetic hysterisis) but it is proportional
-  // to the power transmitted to the inductor coils and is periodic, spinning twice
-  // as fast as the current angle. The offset of the magnetization pattern
-  // seems to depend on the angle of the rotor.
-  saturation_angle;
-  // The magnitude of the voltage variation due to the magnetization pattern.
-  saturation_factor;
+  saliency_angle;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   motor_constant;
-  // The estimated friction torque of the motor; used to know the minimum torque required to move the motor.
-  friction_torque;
-  // The estimated inertial mass of the rotor, how fast it accelerates relative to applied torque.
-  rotor_mass;
   
   constructor(init) {super(init);Object.assign(this, init);}
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(190);
+  const buffer = new Uint8Array(180);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = new Uint8Array(view.buffer, offset, 66).set(write_Readout(value), 0);
+  const base_buffer = new Uint8Array(view.buffer, offset, 64).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
-  offset += 66;
+  offset += 64;
   view.setFloat32(offset, value.main_loop_rate)
   offset += 4;
   view.setFloat32(offset, value.adc_update_rate)
@@ -328,8 +314,6 @@ function write_FullReadout(value) {
   view.setInt32(offset, value.current_angle)
   offset += 4;
   view.setFloat32(offset, value.current_magnitude)
-  offset += 4;
-  view.setFloat32(offset, value.current_angular_speed)
   offset += 4;
   view.setFloat32(offset, value.direct_emf_voltage)
   offset += 4;
@@ -359,23 +343,21 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.seek_integral)
   offset += 4;
+  view.setFloat32(offset, value.u_current_zero)
+  offset += 4;
+  view.setFloat32(offset, value.v_current_zero)
+  offset += 4;
+  view.setFloat32(offset, value.w_current_zero)
+  offset += 4;
   view.setFloat32(offset, value.resistance)
   offset += 4;
-  view.setFloat32(offset, value.inductance)
+  view.setFloat32(offset, value.inductance_inverse)
   offset += 4;
   view.setFloat32(offset, value.inductance_bias)
   offset += 4;
-  view.setFloat32(offset, value.inductance_bias_angle)
-  offset += 4;
-  view.setInt32(offset, value.saturation_angle)
-  offset += 4;
-  view.setFloat32(offset, value.saturation_factor)
+  view.setFloat32(offset, value.saliency_angle)
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
-  offset += 4;
-  view.setFloat32(offset, value.friction_torque)
-  offset += 4;
-  view.setFloat32(offset, value.rotor_mass)
   offset += 4;
   return buffer;
 }
@@ -383,7 +365,7 @@ function read_FullReadout(view, offset = 0) {
   let result = new FullReadout();
   
   Object.assign(result, read_Readout(view, offset));
-  offset += 66;
+  offset += 64;
   
   result.main_loop_rate = view.getFloat32(offset);
   offset += 4;
@@ -400,8 +382,6 @@ function read_FullReadout(view, offset = 0) {
   result.current_angle = view.getInt32(offset);
   offset += 4;
   result.current_magnitude = view.getFloat32(offset);
-  offset += 4;
-  result.current_angular_speed = view.getFloat32(offset);
   offset += 4;
   result.direct_emf_voltage = view.getFloat32(offset);
   offset += 4;
@@ -431,23 +411,21 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.seek_integral = view.getFloat32(offset);
   offset += 4;
+  result.u_current_zero = view.getFloat32(offset);
+  offset += 4;
+  result.v_current_zero = view.getFloat32(offset);
+  offset += 4;
+  result.w_current_zero = view.getFloat32(offset);
+  offset += 4;
   result.resistance = view.getFloat32(offset);
   offset += 4;
-  result.inductance = view.getFloat32(offset);
+  result.inductance_inverse = view.getFloat32(offset);
   offset += 4;
   result.inductance_bias = view.getFloat32(offset);
   offset += 4;
-  result.inductance_bias_angle = view.getFloat32(offset);
-  offset += 4;
-  result.saturation_angle = view.getInt32(offset);
-  offset += 4;
-  result.saturation_factor = view.getFloat32(offset);
+  result.saliency_angle = view.getFloat32(offset);
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
-  offset += 4;
-  result.friction_torque = view.getFloat32(offset);
-  offset += 4;
-  result.rotor_mass = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -795,28 +773,21 @@ export class CurrentCalibration {
   w_current_zero;
   // Estimated baseline resistance of the motor coils.
   resistance;
-  // Estimated baseline inductance of the motor coils.
-  inductance;
+  // Estimated baseline inductance of the motor coils. Written as a conductance
+  // for efficient math: `conductance = delta_t/L`.
+  inductance_inverse;
   // Estimated bias of the inductance due to magnetic saliency.
   inductance_bias;
   // Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
-  inductance_bias_angle;
-  // The estimated angle of the phase inductance variation.
-  saturation_angle;
-  // The factor of the voltage variation due to the saturation pattern.
-  saturation_factor;
+  saliency_angle;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   motor_constant;
-  // The estimated friction torque of the motor; used to know the minimum torque required to move the motor.
-  friction_torque;
-  // The estimated inertial mass of the rotor, how fast it accelerates relative to applied torque.
-  rotor_mass;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_CurrentCalibration(value) {
-  const buffer = new Uint8Array(48);
+  const buffer = new Uint8Array(32);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.u_current_zero)
@@ -827,21 +798,13 @@ function write_CurrentCalibration(value) {
   offset += 4;
   view.setFloat32(offset, value.resistance)
   offset += 4;
-  view.setFloat32(offset, value.inductance)
+  view.setFloat32(offset, value.inductance_inverse)
   offset += 4;
   view.setFloat32(offset, value.inductance_bias)
   offset += 4;
-  view.setFloat32(offset, value.inductance_bias_angle)
-  offset += 4;
-  view.setInt32(offset, value.saturation_angle)
-  offset += 4;
-  view.setFloat32(offset, value.saturation_factor)
+  view.setInt32(offset, value.saliency_angle)
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
-  offset += 4;
-  view.setFloat32(offset, value.friction_torque)
-  offset += 4;
-  view.setFloat32(offset, value.rotor_mass)
   offset += 4;
   return buffer;
 }
@@ -856,21 +819,13 @@ function read_CurrentCalibration(view, offset = 0) {
   offset += 4;
   result.resistance = view.getFloat32(offset);
   offset += 4;
-  result.inductance = view.getFloat32(offset);
+  result.inductance_inverse = view.getFloat32(offset);
   offset += 4;
   result.inductance_bias = view.getFloat32(offset);
   offset += 4;
-  result.inductance_bias_angle = view.getFloat32(offset);
-  offset += 4;
-  result.saturation_angle = view.getInt32(offset);
-  offset += 4;
-  result.saturation_factor = view.getFloat32(offset);
+  result.saliency_angle = view.getInt32(offset);
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
-  offset += 4;
-  result.friction_torque = view.getFloat32(offset);
-  offset += 4;
-  result.rotor_mass = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -878,8 +833,52 @@ function read_CurrentCalibration(view, offset = 0) {
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
 export class ControlParameters {
+  // Sign of the motor direction (positive by default, negative to reverse turning direction).
+  motor_direction;
+  // Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
+  // conversely if we cannot determine the correct angle we decrease the certainty by 1. This is
+  // the maximum value of certainty we can reach, we will lose the angle fix when we decay from max.
+  angle_fix_max_certainty;
+  // Threshold count for determining when to establish the rotor angle.
+  angle_fix_threshold_count;
+  // Threshold count for determining when to establish the EMF direction.
+  emf_direction_threshold_count;
+  // Magnet position integral gain.
+  rotor_angle_ki;
+  // Magnet angular speed integral gain.
+  rotor_angular_speed_ki;
+  // Averaging gain for the acceleration of the rotor.
+  rotor_acceleration_ki;
+  // Integral gain for the current angle adjustment.
+  current_angle_ki;
+  // Integral gain for the current magnitude adjustment.
+  current_magnitude_ki;
+  // Integral gain for the EMF angle adjustment.
+  emf_angle_ki;
+  // Integral gain for the EMF magnitude adjustment.
+  emf_magnitude_ki;
+  // Integral gain for the EMF angular speed adjustment.
+  emf_angular_speed_ki;
+  // Integral gain for the hall angle adjustment (0 to ignore).
+  hall_angle_ki;
+  // Lead angle integral gain for efficient driving.
+  lead_angle_control_ki;
+  // Integral gain for the zero current adjustment.
+  zero_current_ki;
+  // Integral gain for the phase resistance observer.
+  resistance_ki;
+  // Integral gain for the phase inductance observer.
+  inductance_ki;
+  // Integral gain for the inductance bias angle observer.
+  saliency_angle_ki;
+  // Motor constant integral gain.
+  motor_constant_ki;
+  // Minimum EMF magnitude to consider EMF detected.
+  min_emf_magnitude;
   // Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
   min_emf_speed;
+  // Variance of the current measurement noise.
+  current_measurement_variance;
   // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
   emf_probing_interval;
   // Probing angular speed for initial EMF detection.
@@ -888,12 +887,6 @@ export class ControlParameters {
   max_hold_pwm;
   // Minium EMF voltage to compute the motor constant.
   min_emf_for_motor_constant;
-  // Sign of the motor direction (positive by default, negative to reverse turning direction).
-  motor_direction;
-  // Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
-  // conversely if we cannot determine the correct angle we decrease the certainty by 1. This is
-  // the maximum value of certainty we can reach, we will lose the angle fix when we decay from max.
-  angle_fix_max_certainty;
   // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
   // also set this as the minimum battery voltage to not damage the Li-ion battery pack.
   vcc_undervoltage;
@@ -905,20 +898,6 @@ export class ControlParameters {
   resistive_power_ki;
   // Power draw long duration average observer gain.
   power_draw_ki;
-  // Magnet position integral gain.
-  rotor_angle_ki;
-  // Magnet angular speed integral gain.
-  rotor_angular_speed_ki;
-  // Averaging gain for the acceleration of the rotor.
-  rotor_acceleration_ki;
-  // Integral gain for the EMF angle adjustment.
-  emf_angle_ki;
-  // Integral gain for the EMF angular speed adjustment.
-  emf_angular_speed_ki;
-  // Integral gain for the hall angle adjustment (0 to ignore).
-  hall_angle_ki;
-  // Lead angle integral gain for efficient driving.
-  lead_angle_control_ki;
   // Torque control gain.
   torque_control_ki;
   // Torque control feedforward gain.
@@ -939,29 +918,57 @@ export class ControlParameters {
   seek_kp;
   // Seek derivative gain for the PID control.
   seek_kd;
-  // Integral gain for the phase resistance observer.
-  phase_resistance_ki;
-  // Integral gain for the phase inductance observer.
-  phase_inductance_ki;
-  // Integral gain for the inductance bias angle observer.
-  inductance_bias_angle_ki;
-  // Integral gain for the saturation factor observer.
-  saturation_factor_ki;
-  // Motor constant integral gain.
-  motor_constant_ki;
-  // Integral gain for the friction torque observer.
-  friction_torque_ki;
-  // Integral gain for the rotor mass observer.
-  rotor_mass_ki;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_ControlParameters(value) {
-  const buffer = new Uint8Array(140);
+  const buffer = new Uint8Array(156);
   const view = new DataView(buffer.buffer);
   let offset = 0;
+  view.setInt16(offset, value.motor_direction)
+  offset += 2;
+  view.setInt16(offset, value.angle_fix_max_certainty)
+  offset += 2;
+  view.setInt16(offset, value.angle_fix_threshold_count)
+  offset += 2;
+  view.setInt16(offset, value.emf_direction_threshold_count)
+  offset += 2;
+  view.setFloat32(offset, value.rotor_angle_ki)
+  offset += 4;
+  view.setFloat32(offset, value.rotor_angular_speed_ki)
+  offset += 4;
+  view.setFloat32(offset, value.rotor_acceleration_ki)
+  offset += 4;
+  view.setFloat32(offset, value.current_angle_ki)
+  offset += 4;
+  view.setFloat32(offset, value.current_magnitude_ki)
+  offset += 4;
+  view.setFloat32(offset, value.emf_angle_ki)
+  offset += 4;
+  view.setFloat32(offset, value.emf_magnitude_ki)
+  offset += 4;
+  view.setFloat32(offset, value.emf_angular_speed_ki)
+  offset += 4;
+  view.setFloat32(offset, value.hall_angle_ki)
+  offset += 4;
+  view.setFloat32(offset, value.lead_angle_control_ki)
+  offset += 4;
+  view.setFloat32(offset, value.zero_current_ki)
+  offset += 4;
+  view.setFloat32(offset, value.resistance_ki)
+  offset += 4;
+  view.setFloat32(offset, value.inductance_ki)
+  offset += 4;
+  view.setFloat32(offset, value.saliency_angle_ki)
+  offset += 4;
+  view.setFloat32(offset, value.motor_constant_ki)
+  offset += 4;
+  view.setFloat32(offset, value.min_emf_magnitude)
+  offset += 4;
   view.setFloat32(offset, value.min_emf_speed)
+  offset += 4;
+  view.setFloat32(offset, value.current_measurement_variance)
   offset += 4;
   view.setUint32(offset, value.emf_probing_interval)
   offset += 4;
@@ -971,10 +978,6 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.min_emf_for_motor_constant)
   offset += 4;
-  view.setInt16(offset, value.motor_direction)
-  offset += 2;
-  view.setInt16(offset, value.angle_fix_max_certainty)
-  offset += 2;
   view.setFloat32(offset, value.vcc_undervoltage)
   offset += 4;
   view.setFloat32(offset, value.max_resistive_power)
@@ -984,20 +987,6 @@ function write_ControlParameters(value) {
   view.setFloat32(offset, value.resistive_power_ki)
   offset += 4;
   view.setFloat32(offset, value.power_draw_ki)
-  offset += 4;
-  view.setFloat32(offset, value.rotor_angle_ki)
-  offset += 4;
-  view.setFloat32(offset, value.rotor_angular_speed_ki)
-  offset += 4;
-  view.setFloat32(offset, value.rotor_acceleration_ki)
-  offset += 4;
-  view.setFloat32(offset, value.emf_angle_ki)
-  offset += 4;
-  view.setFloat32(offset, value.emf_angular_speed_ki)
-  offset += 4;
-  view.setFloat32(offset, value.hall_angle_ki)
-  offset += 4;
-  view.setFloat32(offset, value.lead_angle_control_ki)
   offset += 4;
   view.setFloat32(offset, value.torque_control_ki)
   offset += 4;
@@ -1019,26 +1008,54 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.seek_kd)
   offset += 4;
-  view.setFloat32(offset, value.phase_resistance_ki)
-  offset += 4;
-  view.setFloat32(offset, value.phase_inductance_ki)
-  offset += 4;
-  view.setFloat32(offset, value.inductance_bias_angle_ki)
-  offset += 4;
-  view.setFloat32(offset, value.saturation_factor_ki)
-  offset += 4;
-  view.setFloat32(offset, value.motor_constant_ki)
-  offset += 4;
-  view.setFloat32(offset, value.friction_torque_ki)
-  offset += 4;
-  view.setFloat32(offset, value.rotor_mass_ki)
-  offset += 4;
   return buffer;
 }
 function read_ControlParameters(view, offset = 0) {
   let result = new ControlParameters();
   
+  result.motor_direction = view.getInt16(offset);
+  offset += 2;
+  result.angle_fix_max_certainty = view.getInt16(offset);
+  offset += 2;
+  result.angle_fix_threshold_count = view.getInt16(offset);
+  offset += 2;
+  result.emf_direction_threshold_count = view.getInt16(offset);
+  offset += 2;
+  result.rotor_angle_ki = view.getFloat32(offset);
+  offset += 4;
+  result.rotor_angular_speed_ki = view.getFloat32(offset);
+  offset += 4;
+  result.rotor_acceleration_ki = view.getFloat32(offset);
+  offset += 4;
+  result.current_angle_ki = view.getFloat32(offset);
+  offset += 4;
+  result.current_magnitude_ki = view.getFloat32(offset);
+  offset += 4;
+  result.emf_angle_ki = view.getFloat32(offset);
+  offset += 4;
+  result.emf_magnitude_ki = view.getFloat32(offset);
+  offset += 4;
+  result.emf_angular_speed_ki = view.getFloat32(offset);
+  offset += 4;
+  result.hall_angle_ki = view.getFloat32(offset);
+  offset += 4;
+  result.lead_angle_control_ki = view.getFloat32(offset);
+  offset += 4;
+  result.zero_current_ki = view.getFloat32(offset);
+  offset += 4;
+  result.resistance_ki = view.getFloat32(offset);
+  offset += 4;
+  result.inductance_ki = view.getFloat32(offset);
+  offset += 4;
+  result.saliency_angle_ki = view.getFloat32(offset);
+  offset += 4;
+  result.motor_constant_ki = view.getFloat32(offset);
+  offset += 4;
+  result.min_emf_magnitude = view.getFloat32(offset);
+  offset += 4;
   result.min_emf_speed = view.getFloat32(offset);
+  offset += 4;
+  result.current_measurement_variance = view.getFloat32(offset);
   offset += 4;
   result.emf_probing_interval = view.getUint32(offset);
   offset += 4;
@@ -1048,10 +1065,6 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.min_emf_for_motor_constant = view.getFloat32(offset);
   offset += 4;
-  result.motor_direction = view.getInt16(offset);
-  offset += 2;
-  result.angle_fix_max_certainty = view.getInt16(offset);
-  offset += 2;
   result.vcc_undervoltage = view.getFloat32(offset);
   offset += 4;
   result.max_resistive_power = view.getFloat32(offset);
@@ -1061,20 +1074,6 @@ function read_ControlParameters(view, offset = 0) {
   result.resistive_power_ki = view.getFloat32(offset);
   offset += 4;
   result.power_draw_ki = view.getFloat32(offset);
-  offset += 4;
-  result.rotor_angle_ki = view.getFloat32(offset);
-  offset += 4;
-  result.rotor_angular_speed_ki = view.getFloat32(offset);
-  offset += 4;
-  result.rotor_acceleration_ki = view.getFloat32(offset);
-  offset += 4;
-  result.emf_angle_ki = view.getFloat32(offset);
-  offset += 4;
-  result.emf_angular_speed_ki = view.getFloat32(offset);
-  offset += 4;
-  result.hall_angle_ki = view.getFloat32(offset);
-  offset += 4;
-  result.lead_angle_control_ki = view.getFloat32(offset);
   offset += 4;
   result.torque_control_ki = view.getFloat32(offset);
   offset += 4;
@@ -1095,20 +1094,6 @@ function read_ControlParameters(view, offset = 0) {
   result.seek_kp = view.getFloat32(offset);
   offset += 4;
   result.seek_kd = view.getFloat32(offset);
-  offset += 4;
-  result.phase_resistance_ki = view.getFloat32(offset);
-  offset += 4;
-  result.phase_inductance_ki = view.getFloat32(offset);
-  offset += 4;
-  result.inductance_bias_angle_ki = view.getFloat32(offset);
-  offset += 4;
-  result.saturation_factor_ki = view.getFloat32(offset);
-  offset += 4;
-  result.motor_constant_ki = view.getFloat32(offset);
-  offset += 4;
-  result.friction_torque_ki = view.getFloat32(offset);
-  offset += 4;
-  result.rotor_mass_ki = view.getFloat32(offset);
   offset += 4;
   return result;
 }
@@ -1638,7 +1623,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case READOUT: {
-      if (buffer.length !== 2 + 66) return null;
+      if (buffer.length !== 2 + 64) return null;
       let message = read_Readout(view, 2);
       message.message_code = READOUT;
       return message;
@@ -1654,7 +1639,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 190) return null;
+      if (buffer.length !== 2 + 180) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;
@@ -1812,7 +1797,7 @@ export function read_message(buffer) {
       return message;
     }
     case CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 48) return null;
+      if (buffer.length !== 2 + 32) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = CURRENT_CALIBRATION;
       return message;
@@ -1822,7 +1807,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 48) return null;
+      if (buffer.length !== 2 + 32) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = SET_CURRENT_CALIBRATION;
       return message;
@@ -1832,13 +1817,13 @@ export function read_message(buffer) {
       return {message_code};
     }
     case CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 140) return null;
+      if (buffer.length !== 2 + 156) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = CONTROL_PARAMETERS;
       return message;
     }
     case SET_CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 140) return null;
+      if (buffer.length !== 2 + 156) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = SET_CONTROL_PARAMETERS;
       return message;

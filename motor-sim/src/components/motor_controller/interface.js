@@ -14,11 +14,10 @@ import {
 } from './constants.js';
 
 import {normalize_radians} from './angular_math.js';
-import {square, dq0_transform, exponential_stats} from './math_utils.js';
+import {square, dq0_transform, abc_transform, exponential_stats} from './math_utils.js';
 import {accumulate_position_from_hall} from './position_kalman_filter.js';
 
 import { MessageCode, UNIT_TEST_OUTPUT_SIZE } from 'hex-mini-drive-interface';
-import { normalize } from '@observablehq/plot';
 
 
 // Maximum time between readouts to consider them part of the same series.
@@ -58,10 +57,9 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
 
   // Get electric angle data. Angle 0 means the rotor North is aligned when holding positive current on the U phase.
   const angle = angle_units_to_radians(bare_readout.angle);
-  const angle_adjustment = angle_units_to_radians(bare_readout.angle_adjustment);
+  const predicted_angle = angle_units_to_radians(bare_readout.predicted_angle);
+  const angle_adjustment = normalize_radians(angle - predicted_angle);
   const emf_angle_error = angle_adjustment / control_parameters?.rotor_angle_ki;
-
-  const previous_predicted_angle = angle_units_to_radians(bare_readout.previous_predicted_angle);
   const angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.angular_speed);
   const vcc_voltage = bare_readout.vcc_voltage / VOLTAGE_UNITS_PER_VOLT;
 
@@ -69,20 +67,13 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const emf_voltage_magnitude = bare_readout.emf_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
 
-  const predicted_angle = normalize_radians(angle - angle_adjustment);
-    
-  const u_current = direct_current * Math.cos(predicted_angle) - quadrature_current * Math.sin(predicted_angle);
-  const v_current = direct_current * Math.cos(predicted_angle - 2 * Math.PI / 3) - quadrature_current * Math.sin(predicted_angle - 2 * Math.PI / 3);
-  const w_current = direct_current * Math.cos(predicted_angle + 2 * Math.PI / 3) - quadrature_current * Math.sin(predicted_angle + 2 * Math.PI / 3);
+  const [u_current, v_current, w_current] = abc_transform(direct_current, quadrature_current, 0);
 
   const prev_direct_current = direct_current - direct_current_diff;
   const prev_quadrature_current = quadrature_current - quadrature_current_diff;
   const prev_current_magnitude = Math.sqrt(square(prev_direct_current) + square(prev_quadrature_current));
 
-  const prev_u_current = prev_direct_current * Math.cos(predicted_angle) - prev_quadrature_current * Math.sin(predicted_angle);
-  const prev_v_current = prev_direct_current * Math.cos(predicted_angle - 2 * Math.PI / 3) - prev_quadrature_current * Math.sin(predicted_angle - 2 * Math.PI / 3);
-  const prev_w_current = prev_direct_current * Math.cos(predicted_angle + 2 * Math.PI / 3) - prev_quadrature_current * Math.sin(predicted_angle + 2 * Math.PI / 3);
-
+  const [prev_u_current, prev_v_current, prev_w_current] = abc_transform(prev_direct_current, prev_quadrature_current, 0);
   
   const u_current_diff = u_current - prev_u_current;
   const v_current_diff = v_current - prev_v_current;
@@ -116,10 +107,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const quadrature_drive_voltage = bare_readout.quadrature_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
 
   // Get the PWM voltage commands.
-  const u_drive_voltage = direct_drive_voltage * Math.cos(predicted_angle) - quadrature_drive_voltage * Math.sin(predicted_angle);
-  const v_drive_voltage = direct_drive_voltage * Math.cos(predicted_angle - 2 * Math.PI / 3) - quadrature_drive_voltage * Math.sin(predicted_angle - 2 * Math.PI / 3);
-  const w_drive_voltage = direct_drive_voltage * Math.cos(predicted_angle + 2 * Math.PI / 3) - quadrature_drive_voltage * Math.sin(predicted_angle + 2 * Math.PI / 3);
-  
+  const [u_drive_voltage, v_drive_voltage, w_drive_voltage] = abc_transform(direct_drive_voltage, quadrature_drive_voltage, 0);
+
   // Derive the PWM duty cycles given the VCC voltage. (Done this way to avoid duplicating calculations
   // on the microcontroller.)
   const min_drive_voltage = Math.min(u_drive_voltage, v_drive_voltage, w_drive_voltage);
@@ -133,25 +122,24 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const drive_voltage_magnitude = Math.sqrt(web_direct_drive_voltage * web_direct_drive_voltage + web_quadrature_drive_voltage * web_quadrature_drive_voltage);
   const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
 
-
-  const [web_direct_current, web_quadrature_current] = dq0_transform(u_current, v_current, w_current, predicted_angle);
+  const [web_direct_current, web_quadrature_current] = dq0_transform(u_current, v_current, w_current, 0);
   
-  const web_current_angle = normalize_radians(predicted_angle + Math.atan2(web_quadrature_current, web_direct_current));
+  const web_current_angle = Math.atan2(web_quadrature_current, web_direct_current);
   const web_current_magnitude = Math.sqrt(web_direct_current * web_direct_current + web_quadrature_current * web_quadrature_current);
-  const web_previous_current_angle = normalize_radians(predicted_angle + Math.atan2(prev_quadrature_current, prev_direct_current));
+  const web_previous_current_angle = Math.atan2(prev_quadrature_current, prev_direct_current);
   const web_current_angular_speed = speed_units_to_rotations_per_millisecond(radians_to_angle_units(normalize_radians(web_current_angle - web_previous_current_angle)));
 
 
-  const resistance = (current_calibration?.resistance ?? 1.0);
+  const resistance = current_calibration?.resistance ?? 1.0;
 
   const u_R_voltage = resistance * u_current;
   const v_R_voltage = resistance * v_current;
   const w_R_voltage = resistance * w_current;
 
-  const any_pwm = 1.0 * (drive_voltage_magnitude > 0);
-
-  const inductance = (current_calibration?.inductance ?? 0.0) * any_pwm;
+  const inductance_inverse = current_calibration?.inductance_inverse ?? 0.0;
   
+  const inductance = 1.0 / inductance_inverse / pwm_cycles_per_second;
+
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
   const u_L_voltage = u_current_diff * inductance * pwm_cycles_per_second;
   const v_L_voltage = v_current_diff * inductance * pwm_cycles_per_second;
@@ -167,10 +155,10 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const v_partial_voltage = -(v_R_voltage - v_drive_voltage);
   const w_partial_voltage = -(w_R_voltage - w_drive_voltage);
 
-  const [web_direct_emf_voltage, web_quadrature_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, predicted_angle);
+  const [web_direct_emf_voltage, web_quadrature_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, 0);
 
-  const emf_voltage_angle_offset = Math.atan2(web_quadrature_emf_voltage, web_direct_emf_voltage);
-  const web_emf_voltage_angle = normalize_radians(predicted_angle + emf_voltage_angle_offset);
+  const web_emf_voltage_angle = Math.atan2(web_quadrature_emf_voltage, web_direct_emf_voltage);
+  const emf_voltage_angle_offset = normalize_radians(web_emf_voltage_angle - predicted_angle);
   const web_emf_voltage_magnitude = Math.sqrt(web_direct_emf_voltage * web_direct_emf_voltage + web_quadrature_emf_voltage * web_quadrature_emf_voltage);
 
   const web_total_power = (u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
@@ -295,7 +283,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     hall_w_as_angle,
     angle,
     predicted_angle,
-    previous_predicted_angle,
     angle_adjustment,
     emf_angle_error,
     angular_speed,
@@ -336,7 +323,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
 
   const current_angle = angle_units_to_radians(bare_full_readout.current_angle);
   const current_magnitude = bare_full_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
-  const current_angular_speed = speed_units_to_rotations_per_millisecond(bare_full_readout.current_angular_speed);
   const current_angle_offset = normalize_radians(current_angle - readout.predicted_angle);
 
 
@@ -357,15 +343,15 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const target = bare_full_readout.target;
   const seek_integral = bare_full_readout.seek_integral;
   
+  const u_current_zero = bare_full_readout.u_current_zero;
+  const v_current_zero = bare_full_readout.v_current_zero;
+  const w_current_zero = bare_full_readout.w_current_zero;
   const resistance = bare_full_readout.resistance;
-  const inductance = bare_full_readout.inductance;
+  const inductance_inverse = bare_full_readout.inductance_inverse;
   const inductance_bias = bare_full_readout.inductance_bias;
-  const inductance_bias_angle = angle_units_to_radians(bare_full_readout.inductance_bias_angle);
-  const saturation_angle = angle_units_to_radians(bare_full_readout.saturation_angle);
-  const saturation_factor = bare_full_readout.saturation_factor;
+  const saliency_angle = angle_units_to_radians(bare_full_readout.saliency_angle);
   const motor_constant = bare_full_readout.motor_constant;
-  const friction_torque = bare_full_readout.friction_torque;
-  const rotor_mass = bare_full_readout.rotor_mass;
+
 
   const battery_current = total_power / readout.vcc_voltage;
 
@@ -402,7 +388,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     
     current_angle, current_magnitude,
     current_angle_offset,
-    current_angular_speed,
     direct_emf_voltage,
     quadrature_emf_voltage,
     
@@ -429,15 +414,14 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     target,
     seek_integral,
     
+    u_current_zero,
+    v_current_zero,
+    w_current_zero,
     resistance,
-    inductance,
+    inductance_inverse,
     inductance_bias,
-    inductance_bias_angle,
-    saturation_angle,
-    saturation_factor,
+    saliency_angle,
     motor_constant,
-    friction_torque,
-    rotor_mass,
   };
 
 }
@@ -464,14 +448,11 @@ function parse_current_calibration(bare_calibration) {
     v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
     w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
     resistance: bare_calibration.resistance,
-    inductance: bare_calibration.inductance,
+    inductance_inverse: bare_calibration.inductance_inverse,
+    inductance: 1.0 / bare_calibration.inductance_inverse / pwm_cycles_per_second,
     inductance_bias: bare_calibration.inductance_bias,
-    inductance_bias_angle: angle_units_to_radians(bare_calibration.inductance_bias_angle),
-    saturation_angle: angle_units_to_radians(bare_calibration.saturation_angle),
-    saturation_factor: bare_calibration.saturation_factor,
+    saliency_angle: angle_units_to_radians(bare_calibration.saliency_angle),
     motor_constant: bare_calibration.motor_constant,
-    friction_torque: bare_calibration.friction_torque,
-    rotor_mass: bare_calibration.rotor_mass,
   };
 } 
 
@@ -482,13 +463,9 @@ export function make_current_calibration(current_calibration){
     w_current_zero: current_calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
     resistance: current_calibration.resistance,
     inductance_bias: current_calibration.inductance_bias,
-    inductance_bias_angle: radians_to_angle_units(current_calibration.inductance_bias_angle),
-    inductance: current_calibration.inductance,
-    saturation_angle: radians_to_angle_units(current_calibration.saturation_angle),
-    saturation_factor: current_calibration.saturation_factor,
+    saliency_angle: radians_to_angle_units(current_calibration.saliency_angle),
+    inductance_inverse: current_calibration.inductance_inverse,
     motor_constant: current_calibration.motor_constant,
-    friction_torque: current_calibration.friction_torque,
-    rotor_mass: current_calibration.rotor_mass,
   };
 }
 

@@ -64,6 +64,9 @@ void set_rotations(int32_t rotations);
 // Set the live maximum PWM value for the motor driver.
 void set_live_max_pwm(float live_max_pwm);
 
+// Reset the active calibration variables from the stored current calibration snapshot.
+void reset_calibration_variables();
+
 // Position tracking
 // -----------------
 

@@ -10,6 +10,30 @@ import {valid_number} from "./utils.js";
 const stdev_95_z_score = 1.959964; // 95% confidence interval for normal distribution
 const stdev_99_z_score = 2.575829; // 99% confidence interval for normal distribution
 
+function valid_min(data, accessor) {
+  if (!data || data.length === 0) return undefined;
+  let min = +Infinity;
+  for (let i = 0; i < data.length; i++) {
+    const value = accessor(data[i], i, data);
+    if (valid_number(value) && value < min) {
+      min = value;
+    }
+  }
+  return (min === +Infinity ? 0 : min);
+}
+
+function valid_max(data, accessor) {
+  if (!data || data.length === 0) return undefined;
+  let max = -Infinity;
+  for (let i = 0; i < data.length; i++) {
+    const value = accessor(data[i], i, data);
+    if (valid_number(value) && value > max) {
+      max = value;
+    }
+  }
+  return (max === -Infinity ? 0 : max);
+}
+
 export function plot_lines({
   data = [],
   x_domain = undefined,
@@ -90,17 +114,16 @@ export function plot_lines({
     if (x_domain) {
       x_scale.domain(x_domain);
     } else {
-      x_scale.domain(d3.extent(x_values)).nice();
+      x_scale.domain([valid_min(x_values, v => v), valid_max(x_values, v => v)]).nice();
     }
 
     if (y_domain) {
       y_scale.domain(y_domain);
     } else {
-      const min_y_value = d3.min(shown_channels, ({y}) => d3.min(data, (d, i, data) => pick_value(y, d, i, data)));
-      const max_y_value = d3.max(shown_channels, ({y}) => d3.max(data, (d, i, data) => pick_value(y, d, i, data)));
+      const min_y_value = valid_min(shown_channels, ({y}) => valid_min(data, (d, i, data) => pick_value(y, d, i, data)));
+      const max_y_value = valid_max(shown_channels, ({y}) => valid_max(data, (d, i, data) => pick_value(y, d, i, data)));
       y_scale.domain([min_y_value, max_y_value]).nice();
     }
-
 
     horizontal_axis.call(d3.axisBottom(x_scale).ticks(width / 80).tickSizeOuter(0));
     vertical_axis.call(d3.axisLeft(y_scale).ticks(height / 40).tickSizeOuter(0)).call(g => g.select(".domain").remove());
@@ -507,7 +530,7 @@ export function draw_line({data, x, y, x_scale, y_scale, curve, color}) {
     .x((d, i, data) => x_scale(pick_value(x, d, i, data)))
     .y((d, i, data) => y_scale(pick_value(y, d, i, data)))
     .curve(curve)
-    .defined((d, i, data) => d != null && valid_number(pick_value(y, d, i, data)));
+    .defined((d, i, data) => (d != null) && valid_number(pick_value(y, d, i, data)));
 
   return d3.select(this).append("path")
     .style("stroke", color)
@@ -520,7 +543,7 @@ export function draw_area({data, x, y0, y1, x_scale, y_scale, curve, color}) {
     .y0((d, i, data) => y_scale(pick_value(y0, d, i, data)))
     .y1((d, i, data) => y_scale(pick_value(y1, d, i, data)))
     .curve(curve)
-    .defined((d, i, data) => d != null && valid_number(pick_value(y0, d, i, data)) && valid_number(pick_value(y1, d, i, data)));
+    .defined((d, i, data) => (d != null) && valid_number(pick_value(y0, d, i, data)) && valid_number(pick_value(y1, d, i, data)));
 
   return d3.select(this).append("path")
     .style("fill", color)

@@ -1046,14 +1046,13 @@ const plot_electric_position = plot_lines({
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: "predicted_angle", label: "Predicted Angle", color: d3.color(colors.angle).darker(1)},
-    {y: "previous_predicted_angle", label: "Previous Predicted Angle", color: d3.color(colors.angle).darker(2)},
-    {y: (d) => d.current_detected ? d.current_angle : null, label: "Current Angle", color: colors.web_angle},
+    {y: (d) => /* d.current_detected ?  */d.current_angle/*  : null */, label: "Current Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
-    {y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
     {
-      y: (d) => d.web_emf_voltage_angle, label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle,
+      y: (d) => d.emf_voltage_angle, label: "EMF Voltage Angle", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
     },
+    {y: "web_emf_voltage_angle", label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
   ],
   curve,
@@ -1137,12 +1136,15 @@ const plot_measured_current = plot_lines({
     {y: "u_current", label: "Current U", color: colors.u},
     {y: "v_current", label: "Current V", color: colors.v},
     {y: "w_current", label: "Current W", color: colors.w},
-    {y: "prev_u_current", label: "Previous Current U", color: d3.color(colors.u).darker(1)},
-    {y: "prev_v_current", label: "Previous Current V", color: d3.color(colors.v).darker(1)},
-    {y: "prev_w_current", label: "Previous Current W", color: d3.color(colors.w).darker(1)},
+    
     {y: "u_current_diff", label: "Current U diff", color: d3.color(colors.u).darker(1)},
     {y: "v_current_diff", label: "Current V diff", color: d3.color(colors.v).darker(1)},
     {y: "w_current_diff", label: "Current W diff", color: d3.color(colors.w).darker(1)},
+
+    {y: "u_current_zero", label: "Current U 0 offset", color: d3.color(colors.u).brighter(1)},
+    {y: "v_current_zero", label: "Current V 0 offset", color: d3.color(colors.v).brighter(1)},
+    {y: "w_current_zero", label: "Current W 0 offset", color: d3.color(colors.w).brighter(1)},
+
     {y: "battery_current", label: "Battery Current", color: colors.other},
     {y: "zero_current", label: "Current Sum/3", color: colors.sum},
     {y: "ref_readout", label: "Reference value", color: colors.ref_readout},
@@ -1288,14 +1290,14 @@ const plot_motor_values = plot_lines({
   x_label: "Time (ms)",
   y_label: "Value",
   channels: [
-    {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
     {y: "target", label: "Target", color: colors_categories[2]},
     {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
-    {y: "u_resistance", label: "Phase U Resistance", color: colors.u},
-    {y: "v_resistance", label: "Phase V Resistance", color: colors.v},
-    {y: "w_resistance", label: "Phase W Resistance", color: colors.w},
-    {y: "phase_inductance_base", label: "Phase Inductance Baseline", color: colors_categories[4]},
+    {y: "resistance", label: "Phase Resistance", color: colors.u},
+    {y: "inductance_inverse", label: "Phase Inductance Inverse", color: colors.v},
+    {y: "inductance_bias", label: "Inductance Bias", color: colors_categories[4]},
+    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
+    {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
   ],
   curve,
 });
@@ -1374,17 +1376,17 @@ const calibration_parameters = {
     label: "Resistance", 
     description: `The resistance of average phase coil.`
   },
-  inductance: {
-    label: "Phase Inductance", 
-    description: `The inductance of the motor's phases.`
+  inductance_inverse: {
+    label: "Inverse Phase Inductance", 
+    description: `The inverse of the inductance of the motor's phases.`
   },
   inductance_bias: {
     label: "Inductance Bias", 
     description: `The bias of the motor's phase inductance.`
   },
-  inductance_bias_angle: {
-    label: "Inductance Bias Angle", 
-    description: `The angle of the inductance bias.`
+  saliency_angle: {
+    label: "Saliency Angle", 
+    description: `The angle of the motor's saliency.`
   },
   saturation_angle: {
     label: "Saturation Angle", 
@@ -1397,14 +1399,6 @@ const calibration_parameters = {
   motor_constant: {
     label: "Motor Constant", 
     description: `The motor constant, which relates torque and current, or speed and emf.`
-  },
-  friction_torque: {
-    label: "Friction Torque", 
-    description: `The torque required to overcome the motor's friction.`
-  },
-  rotor_mass: {
-    label: "Rotor Mass", 
-    description: `The mass of the rotor.`
   },
   angle_delta: {
     label: "Angle Delta", 
@@ -1582,8 +1576,8 @@ async function run_current_calibration(motor_controller, message_options) {
       value: current_calibration?.inductance_bias ?? 0.0,
       max_learning_rate: 0.000_01,
     }),
-    inductance_bias_angle: new Parameter({
-      value: current_calibration?.inductance_bias_angle ?? 0.0,
+    saliency_angle: new Parameter({
+      value: current_calibration?.saliency_angle ?? 0.0,
       max_learning_rate: Math.PI / 4,
     }),
     saturation_factor: new Parameter({
@@ -1616,7 +1610,7 @@ async function run_current_calibration(motor_controller, message_options) {
       resistance,
       inductance,
       inductance_bias,
-      inductance_bias_angle,
+      saliency_angle,
       saturation_factor,
       saturation_angle,
       motor_constant,
@@ -1629,11 +1623,11 @@ async function run_current_calibration(motor_controller, message_options) {
         direct_current_diff, quadrature_current_diff,
         direct_drive_voltage, quadrature_drive_voltage,
 
-        angular_speed, predicted_angle, emf_voltage_angular_speed,
+        angular_speed, angle, emf_voltage_angular_speed,
       } = readout;
 
       const angle_delta = angle_deltas[i].value;
-      const true_angle = normalize_radians(predicted_angle + angle_delta);
+      const true_angle = normalize_radians(angle + angle_delta);
 
       const d_di_dt = direct_current_diff * pwm_cycles_per_second;
       const q_di_dt = quadrature_current_diff * pwm_cycles_per_second;
@@ -1651,22 +1645,22 @@ async function run_current_calibration(motor_controller, message_options) {
       // Convert to radians per second.
       const omega = normalize_radians(
         i > 0 ? (
-          normalize_radians(predicted_angle + angle_delta) -
-          normalize_radians(sample[i - 1].predicted_angle + angle_deltas[i - 1].value)
+          normalize_radians(angle + angle_delta) -
+          normalize_radians(sample[i - 1].angle + angle_deltas[i - 1].value)
         ) : (
-          normalize_radians(sample[i + 1].predicted_angle + angle_deltas[i + 1].value) -
-          normalize_radians(predicted_angle + angle_delta)
+          normalize_radians(sample[i + 1].angle + angle_deltas[i + 1].value) -
+          normalize_radians(angle + angle_delta)
         )
       ) * pwm_cycles_per_second;
 
       const direct_inductance_bias_voltage = (
-        -d_di_dt * inductance_bias * Math.cos(2 * inductance_bias_angle) +
-        -q_di_dt * inductance_bias * Math.sin(2 * inductance_bias_angle)
+        -d_di_dt * inductance_bias * Math.cos(2 * saliency_angle) +
+        -q_di_dt * inductance_bias * Math.sin(2 * saliency_angle)
       );
 
       const quadrature_inductance_bias_voltage = (
-        -d_di_dt * inductance_bias * Math.sin(2 * inductance_bias_angle) +
-        +q_di_dt * inductance_bias * Math.cos(2 * inductance_bias_angle)
+        -d_di_dt * inductance_bias * Math.sin(2 * saliency_angle) +
+        +q_di_dt * inductance_bias * Math.cos(2 * saliency_angle)
       );
 
       const direct_inductance_saturation_voltage = (
@@ -1699,7 +1693,7 @@ async function run_current_calibration(motor_controller, message_options) {
 
       const residual_angle = Math.atan2(quadrature_residual, direct_residual);
 
-      const two_current_angle = normalize_radians(2 * (predicted_angle + Math.atan2(quadrature_current, direct_current)));
+      const two_current_angle = normalize_radians(2 * (angle + Math.atan2(quadrature_current, direct_current)));
 
 
       const loss = square(direct_residual) + square(quadrature_residual);
@@ -1770,23 +1764,23 @@ async function run_current_calibration(motor_controller, message_options) {
 
       const inductance_bias_gradient = (
         direct_residual * (
-          -d_di_dt * Math.cos(2 * inductance_bias_angle) +
-          -q_di_dt * Math.sin(2 * inductance_bias_angle)
+          -d_di_dt * Math.cos(2 * saliency_angle) +
+          -q_di_dt * Math.sin(2 * saliency_angle)
         ) +
         quadrature_residual * (
-          -d_di_dt * Math.sin(2 * inductance_bias_angle) +
-          +q_di_dt * Math.cos(2 * inductance_bias_angle)
+          -d_di_dt * Math.sin(2 * saliency_angle) +
+          +q_di_dt * Math.cos(2 * saliency_angle)
         )
       );
 
-      const inductance_bias_angle_gradient = (
+      const saliency_angle_gradient = (
         2 * inductance_bias * direct_residual * (
-          +d_di_dt * Math.sin(2 * inductance_bias_angle) +
-          -q_di_dt * Math.cos(2 * inductance_bias_angle)
+          +d_di_dt * Math.sin(2 * saliency_angle) +
+          -q_di_dt * Math.cos(2 * saliency_angle)
         ) +
         2 * inductance_bias * quadrature_residual * (
-          -d_di_dt * Math.cos(2 * inductance_bias_angle) +
-          -q_di_dt * Math.sin(2 * inductance_bias_angle)
+          -d_di_dt * Math.cos(2 * saliency_angle) +
+          -q_di_dt * Math.sin(2 * saliency_angle)
         )
       );
 
@@ -1837,7 +1831,7 @@ async function run_current_calibration(motor_controller, message_options) {
         resistance_gradient,
         inductance_gradient,
         inductance_bias_gradient,
-        inductance_bias_angle_gradient,
+        saliency_angle_gradient,
         saturation_factor_gradient,
         saturation_angle_gradient,
         motor_constant_gradient,
@@ -1848,7 +1842,7 @@ async function run_current_calibration(motor_controller, message_options) {
     });
 
 
-    let rotor_axis_prediction = normalize_radians(2*(parameters.inductance_bias_angle.value + sample.slice(-1)[0].predicted_angle));
+    let rotor_axis_prediction = normalize_radians(2*(parameters.saliency_angle.value + sample.slice(-1)[0].angle));
     
 
     iterations.push({
@@ -1858,7 +1852,7 @@ async function run_current_calibration(motor_controller, message_options) {
         resistance: parameters.resistance.value,
         inductance: parameters.inductance.value,
         inductance_bias: parameters.inductance_bias.value,
-        inductance_bias_angle: normalize_radians(2*(parameters.inductance_bias_angle.value))/2,
+        saliency_angle: normalize_radians(2*(parameters.saliency_angle.value))/2,
         saturation_factor: parameters.saturation_factor.value,
         saturation_angle: parameters.saturation_angle.value,
         motor_constant: parameters.motor_constant.value,
@@ -1868,7 +1862,7 @@ async function run_current_calibration(motor_controller, message_options) {
         resistance_learning_rate: parameters.resistance.learning_rate,
         inductance_learning_rate: parameters.inductance.learning_rate,
         inductance_bias_learning_rate: parameters.inductance_bias.learning_rate,
-        inductance_bias_angle_learning_rate: parameters.inductance_bias_angle.learning_rate,
+        saliency_angle_learning_rate: parameters.saliency_angle.learning_rate,
         saturation_factor_learning_rate: parameters.saturation_factor.learning_rate,
         saturation_angle_learning_rate: parameters.saturation_angle.learning_rate,
         motor_constant_learning_rate: parameters.motor_constant.learning_rate,
@@ -1889,7 +1883,7 @@ async function run_current_calibration(motor_controller, message_options) {
       resistance: d3.mean(sample_gradients, (d) => d.resistance_gradient),
       inductance: d3.mean(sample_gradients, (d) => d.inductance_gradient),
       inductance_bias: d3.mean(sample_gradients, (d) => d.inductance_bias_gradient),
-      inductance_bias_angle: d3.mean(sample_gradients, (d) => d.inductance_bias_angle_gradient),
+      saliency_angle: d3.mean(sample_gradients, (d) => d.saliency_angle_gradient),
       saturation_factor: d3.mean(sample_gradients, (d) => d.saturation_factor_gradient),
       saturation_angle: d3.mean(sample_gradients, (d) => d.saturation_angle_gradient),
       motor_constant: d3.mean(sample_gradients, (d) => d.motor_constant_gradient),
@@ -1933,7 +1927,7 @@ async function run_current_calibration(motor_controller, message_options) {
 
     if (parameters.inductance_bias.value < 0.0) {
       parameters.inductance_bias.reset(0.0);
-      parameters.inductance_bias_angle.value = parameters.inductance_bias_angle.value + Math.PI/12;
+      parameters.saliency_angle.value = parameters.saliency_angle.value + Math.PI/12;
     }
 
     if (parameters.saturation_factor.value < 0.0) {
@@ -1941,7 +1935,7 @@ async function run_current_calibration(motor_controller, message_options) {
       parameters.saturation_angle.value = parameters.saturation_angle.value + Math.PI/12;
     }
 
-    parameters.inductance_bias_angle.value = normalize_radians(parameters.inductance_bias_angle.value);
+    parameters.saliency_angle.value = normalize_radians(parameters.saliency_angle.value);
     parameters.saturation_angle.value = normalize_radians(parameters.saturation_angle.value);
     
     if (parameters.motor_constant.value < 0.0) parameters.motor_constant.reset(0.0);
@@ -1955,7 +1949,7 @@ async function run_current_calibration(motor_controller, message_options) {
       resistance: parameters.resistance.value,
       inductance: parameters.inductance.value,
       inductance_bias: parameters.inductance_bias.value,
-      inductance_bias_angle: parameters.inductance_bias_angle.value,
+      saliency_angle: parameters.saliency_angle.value,
       saturation_factor: parameters.saturation_factor.value,
       saturation_angle: parameters.saturation_angle.value,
       motor_constant: parameters.motor_constant.value,
@@ -2139,7 +2133,7 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
     {y: "resistance_gradient", label: "Resistance Gradient", color: colors_categories[0]},
     {y: "inductance_gradient", label: "Inductance Gradient", color: colors_categories[1]},
     {y: "inductance_bias_gradient", label: "Inductance Bias Gradient", color: colors_categories[2]},
-    {y: "inductance_bias_angle_gradient", label: "Inductance Bias Angle Gradient", color: colors_categories[3]},
+    {y: "saliency_angle_gradient", label: "Saliency Angle Gradient", color: colors_categories[3]},
     {y: "saturation_angle_gradient", label: "Saturation Angle Gradient", color: colors_categories[4]},
     {y: "saturation_factor_gradient", label: "Saturation Factor Gradient", color: colors_categories[5]},
     {y: "motor_constant_gradient", label: "Motor Constant Gradient", color: colors_categories[6]},
@@ -2172,10 +2166,95 @@ let active_control_parameters_table =  Mutable(stringify_active_control_paramete
 
 const control_parameters_input = Object.fromEntries(
   [
+    ["motor_direction", {
+      label: "Motor direction", 
+      description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."
+    }],
+    ["angle_fix_max_certainty", {
+      label: "Angle Fix Max Certainty", 
+      description: "Number of incorrect direction detections before losing the angle fix."
+    }],
+    ["angle_fix_threshold_count", {
+      label: "Angle Fix Threshold Count", 
+      description: "Number of consecutive correct direction detections required to regain the angle fix."
+    }],
+    ["emf_direction_threshold_count", {
+      label: "EMF Direction Threshold Count", 
+      description: "Number of consecutive correct EMF direction detections required to regain the EMF direction fix."
+    }],
+    ["rotor_angle_ki", {
+      label: "Rotor Angle KI", 
+      description: "Integral gain for the rotor angle observer from the measured EMF angle.",
+    }],
+    ["rotor_angular_speed_ki", {
+      label: "Rotor Angular Speed KI", 
+      description: `Integral gain for speed of the angle based on the same error used for the EMF angle (an 
+      incorrect angle prediction implies a speed error as well).`
+    }],
+    ["rotor_acceleration_ki", {
+      label: "Rotor Acceleration KI", 
+      description: "Integral gain for the rotor acceleration observer; same as above, more resolution."
+    }],
+    ["current_angle_ki", {
+      label: "Current Angle KI", 
+      description: "Integral gain for the current angle observer from the measured current angle."
+    }],
+    ["current_magnitude_ki", {
+      label: "Current Magnitude KI", 
+      description: "Integral gain for the current magnitude observer from the measured current magnitude."
+    }],
+    ["emf_angle_ki", {
+      label: "EMF Angle KI", 
+      description: "Integral gain for the EMF angle observer from the measured EMF angle."
+    }],
+    ["emf_magnitude_ki", {
+      label: "EMF Magnitude KI", 
+      description: "Integral gain for the EMF magnitude observer from the measured EMF angle."
+    }],
+    ["emf_angular_speed_ki", {
+      label: "EMF Angular Speed KI", 
+      description: "Integral gain for the EMF angular speed observer from the measured EMF angle."
+    }],
+    ["hall_angle_ki", {
+      label: "Position adjustment from hall angle KI", 
+      description: "Integral gain for the angle adjustment based on the hall sensors."
+    }],
+    ["lead_angle_control_ki", {
+      label: "Lead Angle Control KI",
+      description: "Lead angle control gain. The lead angle controls how far ahead we drive the voltage for maximum torque/efficiency."
+    }],
+    ["zero_current_ki", {
+      label: "Zero Current KI", 
+      description: "Integral gain for the zero current observer; helps in accurately estimating the zero current offset for each motor phase."
+    }],
+    ["resistance_ki", {
+      label: "Phase Resistance KI",
+      description: "Integral gain for phase resistance estimation. Helps in accurately estimating the resistance of each motor phase in star configuration."
+    }],
+    ["inductance_ki", {
+      label: "Phase Inductance KI",
+      description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
+    }],
+    ["saliency_angle_ki", {
+      label: "Saliency Angle KI",
+      description: "Integral gain for saliency angle estimation. To be explained later..."
+    }],
+    ["motor_constant_ki", {
+      label: "Motor Constant KI", 
+      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
+    }],
+    ["min_emf_magnitude", {
+      label: "Minimum EMF Magnitude for detection", 
+      description: "Minimum EMF voltage magnitude required to declare EMF detected. There is noise in the EMF measurement, so we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated."
+    }],
     ["min_emf_speed", {
       label: "Minimum EMF Speed for detection", 
       description: `Minimum EMF speed required to declare EMF detected. There is noise in the EMF measurement, so
       we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated.`
+    }],
+    ["current_measurement_variance", {
+      label: "Current Measurement Variance",
+      description: "Variance of the current measurement noise. Helps in filtering and estimating the true current accurately."
     }],
     ["emf_probing_interval", {
       label: "EMF Probing Interval",
@@ -2193,14 +2272,6 @@ const control_parameters_input = Object.fromEntries(
     ["min_emf_for_motor_constant", {
       label: "Threshold for motor constant",
       description: "Minimum EMF voltage magnitude required to compute the motor constant. Below this threshold it is too noisy because we divide by voltage."
-    }],
-    ["motor_direction", {
-      label: "Motor direction", 
-      description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."
-    }],
-    ["angle_fix_max_certainty", {
-      label: "Angle Fix Max Certainty", 
-      description: "Number of incorrect direction detections before losing the angle fix."
     }],
     ["vcc_undervoltage", {
       label: "VCC Undervoltage Threshold",
@@ -2222,35 +2293,7 @@ const control_parameters_input = Object.fromEntries(
       label: "Power Draw KI",
       description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
     }],
-    ["rotor_angle_ki", {
-      label: "Rotor Angle KI", 
-      description: "Integral gain for the rotor angle observer from the measured EMF angle.",
-    }],
-    ["rotor_angular_speed_ki", {
-      label: "Rotor Angular Speed KI", 
-      description: `Integral gain for speed of the angle based on the same error used for the EMF angle (an 
-      incorrect angle prediction implies a speed error as well).`
-    }],
-    ["rotor_acceleration_ki", {
-      label: "Rotor Acceleration KI", 
-      description: "Integral gain for the rotor acceleration observer; same as above, more resolution."
-    }],
-    ["emf_angle_ki", {
-      label: "EMF Angle KI", 
-      description: "Integral gain for the EMF angle observer from the measured EMF angle."
-    }],
-    ["emf_angular_speed_ki", {
-      label: "EMF Angular Speed KI", 
-      description: "Integral gain for the EMF angular speed observer from the measured EMF angle."
-    }],
-    ["hall_angle_ki", {
-      label: "Position adjustment from hall angle KI", 
-      description: "Integral gain for the angle adjustment based on the hall sensors."
-    }],
-    ["lead_angle_control_ki", {
-      label: "Lead Angle Control KI",
-      description: "Lead angle control gain. The lead angle controls how far ahead we drive the voltage for maximum torque/efficiency."
-    }],
+
     ["torque_control_ki", {
       label: "Torque Control KI",
       description: "Torque control gain. Controls how fast we adjust the PWM to achieve the desired torque."
@@ -2291,34 +2334,7 @@ const control_parameters_input = Object.fromEntries(
       label: "Seek KD",
       description: "Seek via torque derivative gain. Dampening factor to lower torque when the error is decreasing quickly."
     }],
-    ["phase_resistance_ki", {
-      label: "Phase Resistance KI",
-      description: "Integral gain for phase resistance estimation. Helps in accurately estimating the resistance of each motor phase in star configuration."
-    }],
-    ["phase_inductance_ki", {
-      label: "Phase Inductance KI",
-      description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
-    }],
-    ["inductance_bias_angle_ki", {
-      label: "Inductance Bias Angle KI",
-      description: "Integral gain for inductance bias angle estimation. To be explained later..."
-    }],
-    ["saturation_factor_ki", {
-      label: "Saturation Factor KI",
-      description: "Integral gain for saturation factor. To be explained later..."
-    }],
-    ["motor_constant_ki", {
-      label: "Motor Constant KI", 
-      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
-    }],
-    ["friction_torque_ki", {
-      label: "Friction Torque KI", 
-      description: "Integral gain for the friction torque observer; the relation between speed and torque required to overcome friction."
-    }],
-    ["rotor_mass_ki", {
-      label: "Rotor Mass KI", 
-      description: "Integral gain for the rotor mass observer; the relation between speed and torque required to accelerate the rotor."
-    }],
+
   ].map(([key, {label, description}]) => {
 
     let parameter_input = Inputs.number([], {

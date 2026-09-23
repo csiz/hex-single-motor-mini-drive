@@ -7,7 +7,10 @@
 
 #include "hex_mini_drive_interface.hpp"
 
-// Most useful datatype for this system, the 3 phase coordinates.
+// Most useful datatype for this system, the 2 phase coordinates.
+using TwoPhase = std::tuple<float, float>;
+
+// Second most useful is the three phase coords.
 using ThreePhase = std::tuple<float, float, float>;
 
 // Function signature for unit tests; the unit test prints text to the buffer.
@@ -208,26 +211,6 @@ const size_t driver_state_size = sizeof(DriverState);
 static_assert(driver_state_size <= 64, "DriverState size exceeds 64 bytes, try to make it smaller!");
 
 
-// Three phase helper functions
-// ----------------------------
-
-constexpr float three_inverse = 1.0 / 3.0;
-
-// Adjust the three-phase values so that their sum is zero.
-static inline ThreePhase adjust_to_sum_zero(ThreePhase const& values) {
-    // Adjust the values so that their sum is zero.
-    const float avg = (std::get<0>(values) + std::get<1>(values) + std::get<2>(values)) * three_inverse;
-    return ThreePhase{
-        std::get<0>(values) - avg,
-        std::get<1>(values) - avg,
-        std::get<2>(values) - avg
-    };
-}
-
-// Create a three phase tuple with the same value for all phases.
-static inline ThreePhase three_same(float value) {
-    return ThreePhase{value, value, value};
-}
 
 // Three phase arithmetic operators
 // --------------------------------
@@ -297,3 +280,25 @@ static inline float dot(ThreePhase const& a, ThreePhase const& b) {
 }
 
 
+// Three phase helper functions
+// ----------------------------
+
+constexpr float one_third = 1.0 / 3.0;
+
+constexpr float two_thirds = 2.0 / 3.0;
+
+// DQ0 transform coefficients to the fixed angle 0.
+
+// D transform row.
+constexpr ThreePhase d_transform = {
+    1.0f * two_thirds,
+    -0.5f * two_thirds,
+    -0.5f * two_thirds
+};
+
+// Q transform row.
+constexpr ThreePhase q_transform = {
+    0.0f * two_thirds,
+    0.86602540378f * two_thirds, // sin(120 degrees)
+    -0.86602540378f * two_thirds // sin(-120 degrees)
+};

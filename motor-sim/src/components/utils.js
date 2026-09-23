@@ -80,5 +80,5 @@ export function clean_id(id) {
 }
 
 export function valid_number(value) {
-  return (typeof value === "number" && !isNaN(value) && isFinite(value));
+  return ((typeof value === "number") && (!isNaN(value)) && isFinite(value));
 }

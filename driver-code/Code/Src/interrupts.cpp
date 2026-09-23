@@ -17,6 +17,7 @@
 // Do not: #include "error_handler.hpp"
 
 
+#include <cmath>
 #include <stm32g4xx_ll_adc.h>
 #include <stm32g4xx_ll_tim.h>
 #include <stm32g4xx_ll_gpio.h>
@@ -40,10 +41,23 @@
 // Interrupt Loop State
 // --------------------
 
+// Initialize the loop control parameters and the calibration data. Either load 
+// them from the flash or use the defaults.
+
+hex_mini_drive::CurrentCalibration current_calibration = get_current_calibration();
+
+hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
+
+
 // Electrical and position state
 hex_mini_drive::FullReadout readout = {
     .live_max_pwm = pwm_max,
-    .emf_angle_error_variance = square(quarter_circle),
+    .emf_angle_error_variance = emf_angle_variance_max,
+    .u_current_zero = current_calibration.u_current_zero,
+    .v_current_zero = current_calibration.v_current_zero,
+    .w_current_zero = current_calibration.w_current_zero,
+    .resistance = current_calibration.resistance,
+    .inductance_inverse = current_calibration.inductance_inverse,
 };
 
 // Latest readout we have copied from the shared_readout in the main loop.
@@ -73,6 +87,8 @@ volatile int32_t external_rotations_offset = 0;
 // Compute the max pwm in the main loop to save cycles in the tight loop.
 volatile float live_max_pwm = pwm_max;
 
+volatile bool reset_calibration_variables_flag = false;
+
 // Additional state
 // ----------------
 
@@ -80,13 +96,9 @@ volatile float live_max_pwm = pwm_max;
 // Track how many times we think our angle is correct.
 int32_t correct_angle_counter = 0;
 
-const int32_t angle_fix_threshold_count = 16;
-
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
-ThreePhase previous_half_cycle_drive_voltages = {0, 0, 0};
+MotorOutputs previous_motor_outputs = {};
 
-float resistive_power_observer = 0.0f;
-float total_power_observer = 0.0f;
 
 // Motor driver state
 // ------------------
@@ -113,13 +125,6 @@ DriverState pending_state = breaking_driver_state;
 
 // Interrupt Data Interface
 // ------------------------
-
-
-// Initialize the loop control parameters and the calibration data. Either load 
-// them from the flash or use the defaults.
-
-hex_mini_drive::CurrentCalibration current_calibration = get_current_calibration();
-hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 
 // Guard the data access by indicating to the ADC interrupt that it shouldn't write data.
 hex_mini_drive::FullReadout get_readout(){
@@ -189,6 +194,10 @@ void set_live_max_pwm(float pwm) {
     live_max_pwm = pwm;
 }
 
+void reset_calibration_variables() {
+    reset_calibration_variables_flag = true;
+}
+
 // Helper functions
 // ----------------
 
@@ -203,6 +212,8 @@ static inline std::pair<int32_t, int32_t> get_cordic(){
         std::bit_cast<int32_t>(LL_CORDIC_ReadData(CORDIC))
     };
 }
+
+
 
 
 // Critical functions!! 23KHz PWM cycle
@@ -982,8 +993,6 @@ static inline void update_motor_control(
 // ADC readings and calculation loop
 // ---------------------------------
 
-constexpr float two_thirds = 2.f / 3.f;
-
 // Process ADC readings for phase currents when the injected conversion is done.
 void ADC1_2_IRQHandler(void){
     // Note: a single float assignment will cost us 5% of the CPU time (on STM32F103C8T6). We can't use floats...
@@ -1037,15 +1046,26 @@ void ADC1_2_IRQHandler(void){
 
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion * 0.25f + readout.vcc_voltage * 0.75f);
+
+    // Check if the driver has enough voltage for reliable PWM driving (mind the voltage of the MOSFET drivers).
+    const bool nominal_vcc_voltage = vcc_voltage >= control_parameters.vcc_undervoltage;
     
-    // Get the motor duties that were set at the mid point of the PWM cycle, between current readings.
-    const ThreePhase motor_outputs = {
-        driver_state.motor_outputs.u_duty,
-        driver_state.motor_outputs.v_duty,
-        driver_state.motor_outputs.w_duty
+    // Calculate calibrated currents.
+    // 
+    // We need to flip the sign of the current readings. Our convention is to have settle on positive
+    // current when we apply a positive PWM duty cycle to each respective phase.
+    // 
+    // Note that the reference voltage is only connected to the current sense amplifier, not the
+    // microcontroller. The ADC reference voltage is 3.3V.
+    const ThreePhase currents{
+        -static_cast<float>(adc_readings.u_readout - adc_readings.ref_readout) * adc_to_current_units - readout.u_current_zero,
+        -static_cast<float>(adc_readings.v_readout - adc_readings.ref_readout) * adc_to_current_units - readout.v_current_zero,
+        -static_cast<float>(adc_readings.w_readout - adc_readings.ref_readout) * adc_to_current_units - readout.w_current_zero
     };
 
-    const ThreePhase half_cycle_drive_voltage = adjust_to_sum_zero(motor_outputs) * (vcc_voltage * pwm_base_inverse);
+
+    // Precompute the conversion coeffiecient for the motor duties.
+    const float half_pwm_to_vcc = vcc_voltage * half_pwm_base_inverse;
 
     // Calculate our outputs on the motor phases. The outputs kick in halfway through the PWM cycle,
     // so we average the previous and current outputs to get the effective output for this cycle.
@@ -1053,10 +1073,14 @@ void ADC1_2_IRQHandler(void){
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
     // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
     // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
-    const ThreePhase drive_voltages = (previous_half_cycle_drive_voltages + half_cycle_drive_voltage) * 0.5f;
+    const ThreePhase drive_voltages = {
+        (driver_state.motor_outputs.u_duty + previous_motor_outputs.u_duty) * half_pwm_to_vcc,
+        (driver_state.motor_outputs.v_duty + previous_motor_outputs.v_duty) * half_pwm_to_vcc,
+        (driver_state.motor_outputs.w_duty + previous_motor_outputs.w_duty) * half_pwm_to_vcc
+    };
 
     // Store the active motor outputs for the next cycle.
-    previous_half_cycle_drive_voltages = half_cycle_drive_voltage;
+    previous_motor_outputs = driver_state.motor_outputs;
 
 
     // Predict the position; keeping track of fractional angles at the same resolution as
@@ -1069,177 +1093,248 @@ void ADC1_2_IRQHandler(void){
     // 
     // Calculate the park transformed currents and voltages: https://en.wikipedia.org/wiki/Direct-quadrature-zero_transformation
     // 
-    // We can rotate our frame of reference to align ourselves with the rotor magnetic field. We then 
-    // measure the current and EMF voltage projected on this line (direct) or perpendicular to it (quadrature).
-    // 
-    // The back EMF generated is always along the quadrature axis. The current direction is mostly under our control,
-    // if we want to drive the motor efficiently we must also align the current along the quadrature axis.
-    // First alias the trig functions based on the predicted rotor angle.
+    // We reduce the number of operations and allow for more uses of constants if we 
+    // immediately transform to the dq0 frame at the fixed angle 0. We can always
+    // rotate the frame afterwards using a 2D rotation matrix with just 4 elements.
 
-    // Cosines of the predicted angle with respect to each phase.
-    const ThreePhase three_phase_cos = get_three_phase_cos(predicted_angle);
-
-    // Sines of the predicted angle with respect to each phase.
-    const ThreePhase three_phase_sin = get_three_phase_sin(predicted_angle);
-
-    // Use the trig pack to quickly calculate the DQ0 transform into the predicted_angle frame.
-    const float direct_drive_voltage = dot(drive_voltages, three_phase_cos) * two_thirds;
-    const float quadrature_drive_voltage = -dot(drive_voltages, three_phase_sin) * two_thirds;
-
-
-    // Calculate calibrated currents.
-    // 
-    // We need to flip the sign of the current readings. Our convention is to have settle on positive
-    // current when we apply a positive PWM duty cycle to each respective phase.
-    // 
-    // Note that the reference voltage is only connected to the current sense amplifier, not the
-    // microcontroller. The ADC reference voltage is 3.3V.
-    const float u_current = -static_cast<float>(adc_readings.u_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.u_current_zero;
-    const float v_current = -static_cast<float>(adc_readings.v_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.v_current_zero;
-    const float w_current = -static_cast<float>(adc_readings.w_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.w_current_zero;
+    // Transform the measured currents into the DQ0 frame at the fixed angle 0.
+    const float direct_current = dot(currents, d_transform);
+    const float quadrature_current = dot(currents, q_transform);
 
     // Get the common mode current. It should be 0 in theory, but of course it is not in practice...
-    const float zero_current = (u_current + v_current + w_current) * three_inverse;
+    const float zero_current = (std::get<0>(currents) + std::get<1>(currents) + std::get<2>(currents)) * one_third;
+
+    // And transform the drive voltages too.
+    const float direct_drive_voltage = dot(drive_voltages, d_transform);
+    const float quadrature_drive_voltage = dot(drive_voltages, q_transform);
+
+    // Using DQ0 coordinates
+    // ---------------------
     
-    // Adjust the currents so they sum to 0.
-    const ThreePhase currents = {u_current - zero_current, v_current - zero_current, w_current - zero_current};
-
-    const float direct_current = dot(currents, three_phase_cos) * two_thirds;
-    const float quadrature_current = -dot(currents, three_phase_sin) * two_thirds;
-
-    // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
-    set_cordic(direct_current, quadrature_current);
-
-    // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const float current_to_resistance_voltage = current_calibration.resistance * current_to_voltage_units;
-    const float direct_resistive_voltage = direct_current * current_to_resistance_voltage;
-    const float quadrature_resistive_voltage = quadrature_current * current_to_resistance_voltage;
-
-    // Compute and remember the previous predicted angle where we calculated the previous dq0 values.
-    const int32_t previous_predicted_angle = readout.angle - readout.angle_adjustment;
-    
-    const int32_t delta_angle = predicted_angle - previous_predicted_angle;
-
-    const float cos_delta = get_cos(delta_angle);
-    const float sin_delta = get_sin(delta_angle);
-
-    // Rotate the previous currents into the current reference frame using the change in angle.
-    const float previous_direct_current = readout.direct_current * cos_delta + readout.quadrature_current * sin_delta;
-    const float previous_quadrature_current = -readout.direct_current * sin_delta + readout.quadrature_current * cos_delta;
-
-    // Calculate the differential of the currents.
-    const float direct_current_diff = direct_current - previous_direct_current;
-    const float quadrature_current_diff = quadrature_current - previous_quadrature_current;
-
-    // Calculate the voltage drop across the coil inductance.
-    // 
-    // Because it's so noisy, we zero it out when we're not actively driving the motor so we can pick up smaller EMF signals.
-    const float current_diff_to_voltage = (driver_state.active_pwm != 0) * current_diff_to_voltage_units;
-    
-
-    const float direct_inductor_voltage = (
-        direct_current_diff * current_diff_to_voltage * current_calibration.inductance
-    );
-    
-    const float quadrature_inductor_voltage = (
-        quadrature_current_diff * current_diff_to_voltage * current_calibration.inductance
-    );
-
-    // Infer the back EMF voltages for each phase.
-    // 
-    // Calculate the EMF voltage as the remainder after subtracting the electric circuit voltages.
-    // By Kirchoffs laws the total voltage of all of our components must sum to 0.
-
-    const float direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
-
-    const float quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;
-
-
-    // Current angle calculation
-    // -------------------------
-    // 
-    // We calculate the angle of the current vector that is running through the motor coils.
-    // 
-    // In our convention the inductors driven with positive current form a south pole that attracts
-    // the north pole of the rotor.
-
-    // Calculate the angle at which the current is running on the motor coils. The angle offset is
-    // with respect to the predicted angle as that was the angle used in the park transform.
-    const auto [current_angle_offset, current_magnitude] = get_cordic();
-    
-    // Note: we can queue up the CORDIC engine for the next calculation before we read the first (I think).
-    // Prepare the cordic for the next calculation.
-    set_cordic(direct_emf_voltage, quadrature_emf_voltage);
-
-    // Current angle in the stator frame of reference.
-    const int32_t current_angle = predicted_angle + current_angle_offset;
+    // Get the magnitude of the current vector, keep it squared for now.
+    const float square_current = square(direct_current) + square(quadrature_current);
     
     // The current measurements have a low noise floor, but it's not 0.
-    const bool current_detected = current_magnitude > current_measurement_minimum;
-    
-    const float current_angular_speed = static_cast<float>(current_angle - readout.current_angle);
+    const bool current_detected = square_current > control_parameters.current_measurement_variance;
+
+    // Calculate the resistive voltage drop across the coil and MOSFET resistance.
+    const float direct_resistive_voltage = direct_current * readout.resistance;
+    const float quadrature_resistive_voltage = quadrature_current * readout.resistance;
+
+    // Calculate the differential of the currents; this will be the real measurement of our model's prediction.
+    const float direct_current_diff = direct_current - readout.direct_current;
+    const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
 
 
-    // Back EMF angle observer
-    // -----------------------
+    // Current prediction observer
+    // ---------------------------
 
-    // Get the angle measured from EMF relative to the predicted rotor angle.
-    const auto [emf_voltage_angle_offset, emf_voltage_magnitude] = get_cordic();
+    // Compute part of the inductor voltages except emf.
+    const float direct_partial_voltage = direct_drive_voltage - direct_resistive_voltage;
+    const float quadrature_partial_voltage = quadrature_drive_voltage - quadrature_resistive_voltage;
 
-    // Also calculate the EMF angle for completeness.
-    const int32_t instant_emf_voltage_angle = predicted_angle + emf_voltage_angle_offset;
+    // Calculate the predicted EMF angle.
+    int32_t predicted_emf_voltage_angle = readout.emf_voltage_angle + static_cast<int32_t>(readout.emf_voltage_angular_speed);
 
-    const int32_t predicted_emf_voltage_angle = readout.emf_voltage_angle + static_cast<int32_t>(readout.emf_voltage_angular_speed);
+    // Get the sin and cos for the emf angle.
+    float cos_emf = get_cos(predicted_emf_voltage_angle);
+    float sin_emf = get_sin(predicted_emf_voltage_angle);
 
-    const int32_t emf_angle_error = instant_emf_voltage_angle - predicted_emf_voltage_angle;
+    // Compute the predicted EMF voltage based on the running estimate at constant emf.
+    float direct_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
+    float quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
 
-    const int32_t emf_angle_error_plus_quarter = emf_angle_error + quarter_circle;
+    // Compute the inductor voltage according to our model, the driving voltages less the resistive drop must
+    // represent the voltage across the inductor and therefore give us a prediction of the current change.
+    float direct_inductor_voltage = direct_partial_voltage + direct_emf_voltage;
+    float quadrature_inductor_voltage = quadrature_partial_voltage + quadrature_emf_voltage;
 
-    // Compute the angle error to the emf axis.
+    // Make our prediction of the current diffs. We're predicting the inductance drop across the motor windings
+    // because that depends on all our tracking variables and current change is a measurement we can observe.
     // 
-    // Branching if statements are easier to understand, but they do take 40 cycles extra, so we end up doing
-    // it the bit bang "clever" way. Anyway, the point is we divide the angle space in 2 by and-ing the maximum
-    // positive angle and then we center it on 0 by subtracting a quarter circle.
-    const int32_t emf_angle_adjustment = (emf_angle_error_plus_quarter & most_positive_angle) - quarter_circle;
+    // Now compute the error between our prediction and reality. Reality is very noisy because 4 least-significant-bit
+    // of change in the current measurement is actually quite a lot of voltage on typical motor inductances if it wasn't
+    // smoothed out. The reason we're going through all this trouble is because we can't smooth out the inductor response
+    // without introducing significant lag. We must model the inductor response to get a fast tracking estimate.
+    float direct_current_diff_error = readout.inductance_inverse * direct_inductor_voltage - direct_current_diff;
+    float quadrature_current_diff_error = readout.inductance_inverse * quadrature_inductor_voltage - quadrature_current_diff;
 
-    // Update the new emf_voltage_angle. If the emf changes sign, we will also immediately change sign.
-    // But we slowly trace to the new angle by integrating the error over time using the control parameter.
-    const int32_t emf_voltage_angle = (
-        predicted_emf_voltage_angle + (emf_angle_error_plus_quarter & most_negative_angle) +
-        static_cast<int32_t>(emf_angle_adjustment * control_parameters.emf_angle_ki)
-    );
-    
-    
-    // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
-    const float emf_angle_error_variance = (
-        0.9f * readout.emf_angle_error_variance +
-        0.1f * square(emf_angle_error)
-    );
-    
-    
-    // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
-    // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
-    // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
-    const bool emf_detected = emf_angle_error_variance < emf_angle_variance_threshold;
-    
-    // Use the angle variance to scale the speed adjustment, it's a simplified version of combining gaussians
-    // but we use a fixed variance inverse as the normalizing factor. We're basically saying the current speed
-    // is a gaussian with a variance of threshold - measured variance, the sum of the variances being fixed to
-    // the emf_angle_variance_threshold. This allows us to use a precomputed inverse to avoid division.
-    const float emf_variance_factor = (emf_angle_variance_threshold - emf_angle_error_variance) * emf_angle_variance_threshold_inverse;
+    float square_current_error = square(direct_current_diff_error) + square(quadrature_current_diff_error);
 
-    // Reset the emf speed to 0 if we don't have an emf detection.
-    // ! Very important to use emf_detected so that the emf_variance_factor above is positive.
-    const float emf_voltage_angular_speed = emf_detected * (
-        readout.emf_voltage_angular_speed + 
-        emf_angle_adjustment * emf_variance_factor * control_parameters.emf_angular_speed_ki
+    // Compute the mirrored EMF current error.
+    const float mirror_direct_inductor_voltage = direct_partial_voltage - direct_emf_voltage;
+    const float mirror_quadrature_inductor_voltage = quadrature_partial_voltage - quadrature_emf_voltage;
+
+    const float mirror_direct_current_diff_error = readout.inductance_inverse * mirror_direct_inductor_voltage - direct_current_diff;
+    const float mirror_quadrature_current_diff_error = readout.inductance_inverse * mirror_quadrature_inductor_voltage - quadrature_current_diff;
+
+    const float mirror_square_current_error = square(mirror_direct_current_diff_error) + square(mirror_quadrature_current_diff_error);
+
+    if (mirror_square_current_error < square_current_error) {
+        predicted_emf_voltage_angle = predicted_emf_voltage_angle + half_circle;
+        cos_emf = -cos_emf;
+        sin_emf = -sin_emf;
+        direct_emf_voltage = -direct_emf_voltage;
+        quadrature_emf_voltage = -quadrature_emf_voltage;
+        direct_inductor_voltage = mirror_direct_inductor_voltage;
+        quadrature_inductor_voltage = mirror_quadrature_inductor_voltage;
+        direct_current_diff_error = mirror_direct_current_diff_error;
+        quadrature_current_diff_error = mirror_quadrature_current_diff_error;
+        square_current_error = mirror_square_current_error;
+    }
+
+    // Get the magnitude of the inductor voltage so we can determine whether the inductance is significant.
+    const float inductor_voltage_square = square(direct_inductor_voltage) + square(quadrature_inductor_voltage);
+
+    
+
+    // Variable Tracking Update
+    // ------------------------
+
+    // Now we track the emf_voltage_angle, emf_voltage_magnitude, resistance and inductance_inverse using some form
+    // of gradient descent.
+
+    // Defining the loss as the square(direct_current_diff_error) + square(quadrature_current_diff_error) we get the derivative gradients with 
+    // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
+    // there isn't enough energy in the error to warrant an update.
+
+    const bool error_detected = square_current_error > control_parameters.current_measurement_variance;
+
+    // Compute the gradients of the loss with respect to each of the tracked parameters.
+
+    const float emf_voltage_angle_gradient = (
+        -direct_current_diff_error * sin_emf + 
+        +quadrature_current_diff_error * cos_emf
+    ) * amps_per_current_units;
+
+    const float emf_voltage_magnitude_gradient = (
+        +direct_current_diff_error * cos_emf + 
+        +quadrature_current_diff_error * sin_emf
     );
+    const float resistance_gradient = (
+        -direct_current_diff_error * direct_current +
+        -quadrature_current_diff_error * quadrature_current
+    ) * square_amps_per_current_units;
+    
+    const float inductance_inverse_gradient = (
+        direct_current_diff_error * direct_inductor_voltage + 
+        quadrature_current_diff_error * quadrature_inductor_voltage
+    ) * voltage_mul_current_to_power;
+
+    // We also need to track the current angle without using the CORDIC, because it's faster. And
+    // since we want a slow tracking average, we don't get much benefit from the instant atan2.
+
+    // We can greatly reduce the tracking delay by predicting the angle moves with the rotor.
+    const int32_t predicted_current_angle = readout.current_angle + static_cast<int32_t>(readout.angular_speed);
+
+    const float cos_current = get_cos(predicted_current_angle);
+    const float sin_current = get_sin(predicted_current_angle);
+
+    const float direct_current_error = readout.current_magnitude * cos_current - direct_current;
+    const float quadrature_current_error = readout.current_magnitude * sin_current - quadrature_current;
+
+    const float current_angle_gradient = (
+        -direct_current_error * sin_current + 
+        +quadrature_current_error * cos_current
+    ) * amps_per_current_units;
+    const float current_magnitude_gradient = (
+        +direct_current_error * cos_current + 
+        +quadrature_current_error * sin_current
+    );
+
+    readout.current_magnitude -= current_magnitude_gradient * control_parameters.current_magnitude_ki;
+    if (readout.current_magnitude < 0) {
+        readout.current_magnitude = 0;
+        // Spin fast while under the measurement noise so we can pickup the true current quickly.
+        readout.current_angle = predicted_current_angle + third_circle;
+    } else {
+        readout.current_angle = predicted_current_angle - static_cast<int32_t>(current_angle_gradient * control_parameters.current_angle_ki);
+    }
+
+    // Use the previous emf estimate as the flag for whether we detected any motor movement.
+    const bool emf_detected = readout.emf_voltage_magnitude > control_parameters.min_emf_magnitude;
+
+    
+    // Although the update is only valid when we have nominal_vcc_voltage we still need to do our best
+    // to update the motor position in case it is already spinning.
+    if (error_detected or emf_detected) {
+
+        // Update the tracking variables, we especially need the EMF estimate in order to track the motor position accurately.
+        readout.emf_voltage_magnitude -= emf_voltage_magnitude_gradient * control_parameters.emf_magnitude_ki;
+        
+        // Ensure the EMF magnitude is a positive number, we will instantly flip the angle by 180 degrees to maintain
+        // a positive sign. The position axis is 90 degrees relative to the EMF axis and it is ambigous which way it
+        // should point anyway, therefore it is invariant to the flip of the EMF vector.
+        if (readout.emf_voltage_magnitude < 0.f) {
+
+            readout.emf_voltage_magnitude = 0.f;
+
+            // Instantly set to 0, we only flip magnitude if it crossed into negative and that only happens when the motor switches
+            // direction, so for an instant, it will be at 0 speed. 
+            readout.emf_voltage_angular_speed = 0.f;
+
+        } else {
+            const float angle_delta = emf_voltage_angle_gradient * control_parameters.emf_angle_ki;
+            const float square_angle_delta = square(angle_delta);
+            
+            readout.emf_voltage_angle = predicted_emf_voltage_angle - static_cast<int32_t>(angle_delta);
+            readout.emf_angle_error_variance = readout.emf_angle_error_variance * 0.95f + square_angle_delta * 0.05f;
+
+            const float instant_variance = max(square_angle_delta, readout.emf_angle_error_variance);
+
+            // Use the angle variance to scale the speed adjustment, it's a simplified version of combining gaussians
+            // but we use a fixed variance inverse as the normalizing factor. We're basically saying the current speed
+            // is a gaussian with a variance of threshold - measured variance, the sum of the variances being fixed to
+            // the emf_angle_variance_threshold. This allows us to use a precomputed inverse to avoid division.
+            const float emf_variance_factor = (emf_angle_variance_threshold - instant_variance) * emf_angle_variance_threshold_inverse;
+
+            if (instant_variance < emf_angle_variance_threshold) {
+                readout.emf_voltage_angular_speed -= angle_delta * emf_variance_factor * control_parameters.emf_angular_speed_ki;
+            } else {
+                // Decay the angular speed to 0.
+                readout.emf_voltage_angular_speed -= readout.emf_voltage_angular_speed * control_parameters.emf_angular_speed_ki;
+            }
+        }
+
+        // Only update the resistance if we have sufficient current to make the measurement meaningful.
+        const bool sufficient_current =  square_current > resistance_current_minimum_square;
+        readout.resistance -= sufficient_current * resistance_gradient * control_parameters.resistance_ki;
+        
+        // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
+        // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
+        const bool inductor_excited = inductor_voltage_square > min_inductor_voltage_square;
+        readout.inductance_inverse -= inductor_excited * inductance_inverse_gradient * control_parameters.inductance_ki;
+
+    } else {
+        const bool current_is_idling = square_current < current_offset_maximum_square;
+
+        if (nominal_vcc_voltage and current_is_idling) {
+            // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
+            readout.u_current_zero = clip_to(
+                -current_offset_maximum, current_offset_maximum, 
+                readout.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
+            readout.v_current_zero = clip_to(
+                -current_offset_maximum, current_offset_maximum, 
+                readout.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
+            readout.w_current_zero = clip_to(
+                -current_offset_maximum, current_offset_maximum, 
+                readout.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
+                
+            // Decay the angular speed to 0.
+            readout.emf_voltage_angular_speed = 0.f;
+        } else {
+            // We don't update anything when we don't have any error signal; carry on and wait for the next round.
+        }
+
+        readout.emf_voltage_angle = predicted_emf_voltage_angle;
+        readout.emf_angle_error_variance = readout.emf_angle_error_variance * 0.95f + emf_angle_variance_max * 0.05f;
+    }
 
     // We only get EMF when rotating, so let's get the rotation direction.
-    const float emf_sign = sign(emf_voltage_angular_speed);
+    const float emf_sign = sign(readout.emf_voltage_angular_speed);
 
     // Use the rotation direction to get the absolute EMF voltage.
-    const float emf_voltage_abs_angular_speed = emf_sign * emf_voltage_angular_speed;
+    const float emf_voltage_abs_angular_speed = emf_sign * readout.emf_voltage_angular_speed;
     
     // Declare that we have an EMF reading if our speed is greater than the control parameter threshold.
     // 
@@ -1249,7 +1344,7 @@ void ADC1_2_IRQHandler(void){
     const bool emf_fix = emf_voltage_abs_angular_speed > control_parameters.min_emf_speed;
 
     // Get the target angle from our EMF observer.
-    const int32_t angle_from_emf = emf_voltage_angle + static_cast<int32_t>(emf_sign) * quarter_circle;
+    const int32_t angle_from_emf = readout.emf_voltage_angle + static_cast<int32_t>(emf_sign) * quarter_circle;
 
     // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
     correct_angle_counter = clip_to(
@@ -1259,14 +1354,15 @@ void ADC1_2_IRQHandler(void){
         correct_angle_counter + ((driver_state.active_pwm and not emf_fix) ? -1 : emf_fix)
     );
 
-    // Integreate the EMF position error only if we're detecting EMF.
+    // Integrate the EMF position error only if we're detecting EMF.
+    // TODO: we can integrate the position error before emf fix, but we have to only use the axis.
     const int32_t prediction_error = emf_fix * (angle_from_emf - predicted_angle);
 
     // Angle update
     // ------------
     
     // Declare the angle to be correct after a threshold certainty.
-    const bool angle_fix = correct_angle_counter >= angle_fix_threshold_count;
+    const bool angle_fix = correct_angle_counter >= control_parameters.angle_fix_threshold_count;
     
     // Add the external angle offset to the angle adjustment.
     const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki + external_angle_offset;
@@ -1293,10 +1389,10 @@ void ADC1_2_IRQHandler(void){
     // --------------------------------
 
     // Calculate the rotor speed as a low pass of the detected emf speed.
-    const float angular_speed_error = emf_voltage_angular_speed - readout.angular_speed;
+    const float angular_speed_error = readout.emf_voltage_angular_speed - readout.angular_speed;
     
     // Use the integral gain, but clamp to 0 on loss of emf.
-    const float angular_speed = emf_detected * (
+    const float angular_speed = /* emf_detected * */ (
         readout.angular_speed + 
         angular_speed_error * control_parameters.rotor_angular_speed_ki
     );
@@ -1374,27 +1470,25 @@ void ADC1_2_IRQHandler(void){
 
     readout.direct_current = direct_current;
     readout.quadrature_current = quadrature_current;
+    readout.zero_current = zero_current;
 
     readout.ref_readout = adc_readings.ref_readout;
     
     readout.direct_current_diff = direct_current_diff;
     readout.quadrature_current_diff = quadrature_current_diff;
 
-    readout.angle = angle;
-    readout.angle_adjustment = angle_adjustment;
-    readout.previous_predicted_angle = previous_predicted_angle;
-    readout.angular_speed = angular_speed;
-    readout.vcc_voltage = vcc_voltage;
-
-    readout.temperature = temperature;
-    readout.live_max_pwm = live_max_pwm;
-
-    readout.direct_current = direct_current;
-    readout.quadrature_current = quadrature_current;
-    readout.zero_current = zero_current;
     readout.direct_emf_voltage = direct_emf_voltage;
     readout.quadrature_emf_voltage = quadrature_emf_voltage;
     
+    readout.angle = angle;
+    readout.predicted_angle = predicted_angle;
+    readout.angular_speed = angular_speed;
+    readout.rotor_acceleration = rotor_acceleration;
+    readout.rotations = rotations;
+
+    readout.vcc_voltage = vcc_voltage;
+    readout.temperature = temperature;
+    readout.live_max_pwm = live_max_pwm;
     readout.total_power = total_power;
     readout.total_power_average = total_power_average;
     readout.resistive_power = resistive_power;
@@ -1402,29 +1496,12 @@ void ADC1_2_IRQHandler(void){
 
     // We could drop the emf power calculation but it only costs 10 ticks.
     readout.emf_power = emf_power;
-    
-
-    readout.emf_voltage_angle = emf_voltage_angle;
-    readout.emf_voltage_magnitude = emf_voltage_magnitude;
-    readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
-    
-    // TODO: do we need to send these angles, it turns out we don't use them in the
-    // equations...
-    readout.current_angle = current_angle;
-    readout.current_magnitude = current_magnitude;
-    readout.current_angular_speed = current_angular_speed;
 
 
-    readout.rotor_acceleration = rotor_acceleration;
-    readout.rotations = rotations;
-
-    readout.emf_angle_error_variance = emf_angle_error_variance;
-    
     readout.lead_angle = driver_state.lead_angle;
     readout.active_pwm = driver_state.active_pwm;
     readout.target = driver_state.current_target;
     readout.seek_integral = driver_state.seek_integral;
-
 
     // Calculate and set motor outputs!!
     // ---------------------------------
@@ -1470,6 +1547,26 @@ void ADC1_2_IRQHandler(void){
     if (new_pending_state) {
         driver_state = setup_driver_state(driver_state, pending_state, readout);
         new_pending_state = false;
+    }
+
+    if (reset_calibration_variables_flag) {
+        // Reset the active calibration variables from the stored current calibration snapshot.
+        readout.u_current_zero = current_calibration.u_current_zero;
+        readout.v_current_zero = current_calibration.v_current_zero;
+        readout.w_current_zero = current_calibration.w_current_zero;
+        readout.resistance = current_calibration.resistance;
+        readout.inductance_inverse = current_calibration.inductance_inverse;
+        // Reset the voltage magnitude in case it nan'ed out.
+        readout.emf_voltage_magnitude = 0.f;
+        // We don't need to `readout.emf_voltage_angle = 0;` because any integer is a valid angle and 
+        // mod 2pi is handled automatically by integer overflows (with the compiler flag -fwrapv turned on).
+
+        // Clear the reset flag.
+        reset_calibration_variables_flag = false;
+    }
+
+    if (std::isnan(readout.emf_voltage_magnitude)) {
+        readout.emf_voltage_magnitude = 0.f;
     }
 
     // Clear the ADC end of conversion flag so we're ready for the next conversion.

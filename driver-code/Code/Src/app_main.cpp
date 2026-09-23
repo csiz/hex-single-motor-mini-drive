@@ -67,7 +67,7 @@ uint16_t stream_state = 0;
 uint16_t stream_last_sent = 0;
 size_t readouts_to_send = 0;
 size_t readouts_sent = 0;
-bool reply_current_factors = false;
+bool reply_current_calibration = false;
 bool reply_control_parameters = false;
 bool reply_unit_test = false;
 bool reply_saved_to_flash = false;
@@ -406,13 +406,15 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
     case SET_CURRENT_CALIBRATION:
       current_calibration = std::get<CurrentCalibration>(message.message_data);
-      reply_current_factors = true;
+      reset_calibration_variables();
+      reply_current_calibration = true;
       return;
         
     case RESET_CURRENT_CALIBRATION:
       // Reset the current factors to the default values.
       current_calibration = default_current_calibration;
-      reply_current_factors = true;
+      reset_calibration_variables();
+      reply_current_calibration = true;
       return;
 
     case SET_CONTROL_PARAMETERS:
@@ -426,7 +428,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
 
     case GET_CURRENT_CALIBRATION:
-      reply_current_factors = true;
+      reply_current_calibration = true;
       return;
 
     case GET_CONTROL_PARAMETERS:
@@ -621,12 +623,12 @@ void queue_response(hex_mini_drive::FullReadout const& readout) {
   }
 
   // Send current factors if requested.
-  if (reply_current_factors) {
+  if (reply_current_calibration) {
     serialize_message(hex_mini_drive::Message{
       .message_code = hex_mini_drive::MessageCode::CURRENT_CALIBRATION,
       .message_data = current_calibration
     });
-    reply_current_factors = false;
+    reply_current_calibration = false;
     return;
   }
 
@@ -811,19 +813,19 @@ void app_tick() {
   readout.main_loop_rate = main_loop_rate;
   readout.adc_update_rate = adc_update_rate;
   
-  readout.resistance = current_calibration.resistance;
-  readout.inductance = current_calibration.inductance;
-  readout.inductance_bias = current_calibration.inductance_bias;
-  readout.inductance_bias_angle = current_calibration.inductance_bias_angle;
-  readout.saturation_angle = current_calibration.saturation_angle;
-  readout.saturation_factor = current_calibration.saturation_factor;
+  // TODO: make sure these are updated in the interrupts.
+  // readout.resistance = current_calibration.resistance;
+  // readout.inductance_inverse = current_calibration.inductance_inverse;
+  // readout.inductance_bias = current_calibration.inductance_bias;
+  // readout.inductance_bias_angle = current_calibration.inductance_bias_angle;
+  // readout.saturation_angle = current_calibration.saturation_angle;
+  // readout.saturation_factor = current_calibration.saturation_factor;
   readout.motor_constant = motor_constant;
 
   // Adjust direction
   // ----------------
 
   readout.angle = control_parameters.motor_direction * readout.angle;
-  readout.angle_adjustment = control_parameters.motor_direction * readout.angle_adjustment;
   readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
 
   readout.rotations = control_parameters.motor_direction * readout.rotations;
