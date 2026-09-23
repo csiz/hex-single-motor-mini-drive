@@ -1101,6 +1101,9 @@ void ADC1_2_IRQHandler(void){
     const float direct_current = dot(currents, d_transform);
     const float quadrature_current = dot(currents, q_transform);
 
+    // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
+    set_cordic(direct_current, quadrature_current);
+
     // Get the common mode current. It should be 0 in theory, but of course it is not in practice...
     const float zero_current = (std::get<0>(currents) + std::get<1>(currents) + std::get<2>(currents)) * one_third;
 
@@ -1108,15 +1111,26 @@ void ADC1_2_IRQHandler(void){
     const float direct_drive_voltage = dot(drive_voltages, d_transform);
     const float quadrature_drive_voltage = dot(drive_voltages, q_transform);
 
+    // Current angle calculation
+    // -------------------------
+    // 
+    // We calculate the angle of the current vector that is running through the motor coils.
+    // 
+    // In our convention the inductors driven with positive current form a south pole that attracts
+    // the north pole of the rotor.
+
+    // Calculate the angle at which the current is running on the motor coils. The angle offset is
+    // with respect to the predicted angle as that was the angle used in the park transform.
+    const auto [current_angle, current_magnitude] = get_cordic();
+    
+    // The current measurements have a low noise floor, but it's not 0.
+    // TODO: fix the parameter if we don't need it to be squared
+    const bool current_detected = current_magnitude > current_measurement_minimum;// control_parameters.current_measurement_variance;
+
+
     // Using DQ0 coordinates
     // ---------------------
     
-    // Get the magnitude of the current vector, keep it squared for now.
-    const float square_current = square(direct_current) + square(quadrature_current);
-    
-    // The current measurements have a low noise floor, but it's not 0.
-    const bool current_detected = square_current > control_parameters.current_measurement_variance;
-
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const float direct_resistive_voltage = direct_current * readout.resistance;
     const float quadrature_resistive_voltage = quadrature_current * readout.resistance;
@@ -1215,41 +1229,12 @@ void ADC1_2_IRQHandler(void){
         -direct_current_diff_error * direct_current +
         -quadrature_current_diff_error * quadrature_current
     ) * square_amps_per_current_units;
-    
+
     const float inductance_inverse_gradient = (
         direct_current_diff_error * direct_inductor_voltage + 
         quadrature_current_diff_error * quadrature_inductor_voltage
     ) * voltage_mul_current_to_power;
 
-    // We also need to track the current angle without using the CORDIC, because it's faster. And
-    // since we want a slow tracking average, we don't get much benefit from the instant atan2.
-
-    // We can greatly reduce the tracking delay by predicting the angle moves with the rotor.
-    const int32_t predicted_current_angle = readout.current_angle + static_cast<int32_t>(readout.angular_speed);
-
-    const float cos_current = get_cos(predicted_current_angle);
-    const float sin_current = get_sin(predicted_current_angle);
-
-    const float direct_current_error = readout.current_magnitude * cos_current - direct_current;
-    const float quadrature_current_error = readout.current_magnitude * sin_current - quadrature_current;
-
-    const float current_angle_gradient = (
-        -direct_current_error * sin_current + 
-        +quadrature_current_error * cos_current
-    ) * amps_per_current_units;
-    const float current_magnitude_gradient = (
-        +direct_current_error * cos_current + 
-        +quadrature_current_error * sin_current
-    );
-
-    readout.current_magnitude -= current_magnitude_gradient * control_parameters.current_magnitude_ki;
-    if (readout.current_magnitude < 0) {
-        readout.current_magnitude = 0;
-        // Spin fast while under the measurement noise so we can pickup the true current quickly.
-        readout.current_angle = predicted_current_angle + third_circle;
-    } else {
-        readout.current_angle = predicted_current_angle - static_cast<int32_t>(current_angle_gradient * control_parameters.current_angle_ki);
-    }
 
     // Use the previous emf estimate as the flag for whether we detected any motor movement.
     const bool emf_detected = readout.emf_voltage_magnitude > control_parameters.min_emf_magnitude;
@@ -1297,7 +1282,7 @@ void ADC1_2_IRQHandler(void){
         }
 
         // Only update the resistance if we have sufficient current to make the measurement meaningful.
-        const bool sufficient_current =  square_current > resistance_current_minimum_square;
+        const bool sufficient_current =  current_magnitude > resistance_current_minimum;
         readout.resistance -= sufficient_current * resistance_gradient * control_parameters.resistance_ki;
         
         // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
@@ -1306,7 +1291,7 @@ void ADC1_2_IRQHandler(void){
         readout.inductance_inverse -= inductor_excited * inductance_inverse_gradient * control_parameters.inductance_ki;
 
     } else {
-        const bool current_is_idling = square_current < current_offset_maximum_square;
+        const bool current_is_idling = current_magnitude < current_offset_maximum;
 
         if (nominal_vcc_voltage and current_is_idling) {
             // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
@@ -1485,6 +1470,9 @@ void ADC1_2_IRQHandler(void){
     readout.angular_speed = angular_speed;
     readout.rotor_acceleration = rotor_acceleration;
     readout.rotations = rotations;
+
+    readout.current_angle = current_angle;
+    readout.current_magnitude = current_magnitude;
 
     readout.vcc_voltage = vcc_voltage;
     readout.temperature = temperature;

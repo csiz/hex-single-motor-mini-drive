@@ -147,12 +147,9 @@ constexpr int32_t current_measurement_minimum = static_cast<int32_t>(current_mea
 // Maximum offset for the idle current offset measurments.
 constexpr float current_offset_maximum = 12 * adc_to_current_units;
 
-// Square of the offset maximum for the idle current measurements.
-constexpr float current_offset_maximum_square = square(current_offset_maximum);
-
 // Minimum current value to begin calibrating resistance.
-constexpr float resistance_current_minimum_square = square(4.f * current_measurement_noise);
-
+constexpr float resistance_current_minimum = 4.f * current_measurement_noise;
+    
 // Maximum current we can measure per phase using our setup. This is less than
 // the total adc resolution span because the amplifier is referenced to half 3.3V while
 // the adc of the chip is referenced to its internal 2.9V voltage reference. And can
