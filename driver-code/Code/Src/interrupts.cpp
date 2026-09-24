@@ -1139,15 +1139,21 @@ void ADC1_2_IRQHandler(void){
     const float direct_diff = direct_current_diff * current_diff_to_voltage_units;
     const float quadrature_diff = quadrature_current_diff * current_diff_to_voltage_units;
 
-    const float cos_saliency = get_cos(readout.saliency_angle);
-    const float sin_saliency = get_sin(readout.saliency_angle);
+    // TODO: we probably need to advance the salincy angle at 2x the rotor angular speed. Or make 
+    // it track the rotor angle at high speed when we have EMF feedback.
+    const int32_t saliency_angle = readout.saliency_angle;
 
-    const float direct_cos_plus_quadrature_sin_saliency = direct_diff * cos_saliency + quadrature_diff * sin_saliency;
-    const float direct_sin_minus_quadrature_cos_saliency = direct_diff * sin_saliency - quadrature_diff * cos_saliency;
+    const float cos_saliency = get_cos(saliency_angle);
+    const float sin_saliency = get_sin(saliency_angle);
 
-    const float direct_inductance_bias_voltage = -direct_cos_plus_quadrature_sin_saliency * readout.inductance_bias;
-
-    const float quadrature_inductance_bias_voltage = -direct_sin_minus_quadrature_cos_saliency * readout.inductance_bias;
+    const float direct_inductance_bias_voltage = readout.inductance_bias * (
+        -direct_diff * cos_saliency 
+        -quadrature_diff * sin_saliency
+    );
+    const float quadrature_inductance_bias_voltage = readout.inductance_bias * (
+        -direct_diff * sin_saliency
+        +quadrature_diff * cos_saliency
+    );
 
     const float direct_inductor_voltage = direct_diff * readout.inductance + direct_inductance_bias_voltage;
     const float quadrature_inductor_voltage = quadrature_diff * readout.inductance + quadrature_inductance_bias_voltage;
