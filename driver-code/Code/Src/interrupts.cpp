@@ -1155,8 +1155,11 @@ void ADC1_2_IRQHandler(void){
         +quadrature_diff * cos_saliency
     );
 
-    const float direct_inductor_voltage = direct_diff * readout.inductance + direct_inductance_bias_voltage;
-    const float quadrature_inductor_voltage = quadrature_diff * readout.inductance + quadrature_inductance_bias_voltage;
+    const float direct_inductance_base_voltage = direct_diff * readout.inductance;
+    const float quadrature_inductance_base_voltage = quadrature_diff * readout.inductance;
+
+    const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
+    const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
 
     const float measured_direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
     const float measured_quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;
@@ -1303,23 +1306,23 @@ void ADC1_2_IRQHandler(void){
         // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
         if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
             const float inductance_gradient = (
-                direct_voltage_error * direct_inductor_voltage + 
-                quadrature_voltage_error * quadrature_inductor_voltage
-            ) * voltage_mul_current_to_power;
+                direct_voltage_error * direct_inductance_base_voltage + 
+                quadrature_voltage_error * quadrature_inductance_base_voltage
+            ) * volts_per_voltage_units_square;
 
             readout.inductance -= inductance_gradient * control_parameters.inductance_ki;
 
             const float inductance_bias_gradient = (
                 direct_voltage_error * direct_inductance_bias_voltage +
                 quadrature_voltage_error * quadrature_inductance_bias_voltage
-            ) * voltage_mul_current_to_power;
+            ) * volts_per_voltage_units_square;
             
             readout.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
 
             const float saliency_angle_gradient = (
                 direct_voltage_error * (-quadrature_inductance_bias_voltage) +
                 quadrature_voltage_error * direct_inductance_bias_voltage
-            ) * voltage_mul_current_to_power;
+            ) * volts_per_voltage_units_square;
 
             readout.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
         }

@@ -172,6 +172,8 @@ constexpr float amps_per_current_units_square = square(amps_per_current_units);
 // Voltage conversion back to volts.
 constexpr float volts_per_voltage_units = 1.0 / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
+constexpr float volts_per_voltage_units_square = square(volts_per_voltage_units);
+
 // Conversion factor between current and phase resistance voltage.
 constexpr float current_to_voltage_units = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
