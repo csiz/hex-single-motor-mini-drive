@@ -448,7 +448,6 @@ function parse_current_calibration(bare_calibration) {
     resistance: bare_calibration.resistance,
     inductance: bare_calibration.inductance,
     inductance_bias: bare_calibration.inductance_bias,
-    saliency_angle: angle_units_to_radians(bare_calibration.saliency_angle),
     motor_constant: bare_calibration.motor_constant,
   };
 } 
@@ -459,9 +458,8 @@ export function make_current_calibration(current_calibration){
     v_current_zero: current_calibration.v_current_zero * CURRENT_UNITS_PER_AMP,
     w_current_zero: current_calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
     resistance: current_calibration.resistance,
-    inductance_bias: current_calibration.inductance_bias,
-    saliency_angle: radians_to_angle_units(current_calibration.saliency_angle),
     inductance: current_calibration.inductance,
+    inductance_bias: current_calibration.inductance_bias,
     motor_constant: current_calibration.motor_constant,
   };
 }

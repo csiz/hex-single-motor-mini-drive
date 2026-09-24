@@ -447,7 +447,7 @@ definitions:
         doc: Estimated bias of the inductance due to magnetic saliency.
 
       saliency_angle:
-        type: float32
+        type: int32
         doc: Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
 
       motor_constant:
@@ -604,10 +604,6 @@ definitions:
         type: float32
         doc: Estimated bias of the inductance due to magnetic saliency.
       
-      saliency_angle:
-        type: int32
-        doc: Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
-
       motor_constant:
         type: float32
         doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
@@ -690,6 +686,10 @@ definitions:
         type: float32
         doc: Integral gain for the phase inductance observer.
 
+      inductance_bias_ki:
+        type: float32
+        doc: Integral gain for the inductance bias observer.
+
       saliency_angle_ki:
         type: float32
         doc: Integral gain for the inductance bias angle observer.
@@ -706,9 +706,25 @@ definitions:
         type: float32
         doc: Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
 
-      current_measurement_variance:
+      current_measurement_minimum:
+        type: int32
+        doc: The measurement noise for the current sensing, values under this threshold are likely 0.
+
+      voltage_measurement_variance:
         type: float32
-        doc: Variance of the current measurement noise.
+        doc: We want our measurement error to be above this noise variance to count as a signal.
+
+      resistance_current_minimum:
+        type: int32
+        doc: The measurement noise for the resistance current sensing, values under this threshold are likely 0.
+
+      inductance_excitation_minimum_square:
+        type: float32
+        doc: Minimum square of the inductance excitation to consider it significant.
+
+      current_offset_maximum:
+        type: float32
+        doc: Maximum allowable current offset to adjust the current sensing bias from 0.
 
       emf_probing_interval:
         type: uint32

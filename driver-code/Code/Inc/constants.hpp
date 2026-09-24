@@ -142,14 +142,6 @@ constexpr float adc_to_current_units = hex_mini_drive::CURRENT_UNITS_PER_AMP * a
 // Noise level of the current measurements, in current units.
 constexpr float current_measurement_noise = 8 * adc_to_current_units;
 
-// Minimum threshold for current detections, note it must be int32_t because it is compared to the cordic result.
-constexpr int32_t current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f); 
-// Maximum offset for the idle current offset measurments.
-constexpr float current_offset_maximum = 12 * adc_to_current_units;
-
-// Minimum current value to begin calibrating resistance.
-constexpr float resistance_current_minimum = 4.f * current_measurement_noise;
-    
 // Maximum current we can measure per phase using our setup. This is less than
 // the total adc resolution span because the amplifier is referenced to half 3.3V while
 // the adc of the chip is referenced to its internal 2.9V voltage reference. And can
@@ -175,6 +167,8 @@ constexpr float voltage_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * ad
 // Current conversion back to amps.
 constexpr float amps_per_current_units = 1.0 / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
+constexpr float amps_per_current_units_square = square(amps_per_current_units);
+
 // Voltage conversion back to volts.
 constexpr float volts_per_voltage_units = 1.0 / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
@@ -187,9 +181,6 @@ constexpr float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UN
 // Our dq0 transformation is the power variant form which needs to be corrected by a factor of 3/2.
 constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 3.0 / 2.0;
 
-constexpr float square_amps_per_current_units = square(amps_per_current_units);
-
-constexpr float min_inductor_voltage_square = square(0.150f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT);
 
 // Timing and PWM constants
 // ------------------------
@@ -338,7 +329,6 @@ const hex_mini_drive::CurrentCalibration default_current_calibration = {
     // Underestimate inductance.
     .inductance = 0.000'001f,
     .inductance_bias = 0.0f,
-    .saliency_angle = 0,
 };
 
 // The default control parameters should be set to reasonable values for any motor.
@@ -369,15 +359,20 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -11),
 
     .zero_current_ki = std::pow(2, -18),
-    .resistance_ki = std::pow(2, -16),
-    .inductance_ki = std::pow(2, -14),
-    .saliency_angle_ki = 3.14f,
+    .resistance_ki = std::pow(2, -14),
+    .inductance_ki = std::pow(2, -18),
+    .inductance_bias_ki = std::pow(2, -16),
+    .saliency_angle_ki = std::pow(2, 32+2),
     .motor_constant_ki = std::pow(2, -11),
     // Minimum EMF voltage to consider anything detected.
-    .min_emf_magnitude = 0.050,
+    .min_emf_magnitude = 0.050 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     // Minimum emf speed to be confident in the rotation direction.
     .min_emf_speed = 5.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    .current_measurement_variance = square(current_measurement_noise),
+    .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),
+    .voltage_measurement_variance = square(current_measurement_noise * current_to_voltage_units),
+    .resistance_current_minimum = 4.f * current_measurement_noise,
+    .inductance_excitation_minimum_square = square(0.150f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT),
+    .current_offset_maximum = 12 * adc_to_current_units,
     // Unused for now.
     .emf_probing_interval = pwm_cycles_per_second / 20,
     .probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),

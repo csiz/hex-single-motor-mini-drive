@@ -354,7 +354,7 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.inductance_bias)
   offset += 4;
-  view.setFloat32(offset, value.saliency_angle)
+  view.setInt32(offset, value.saliency_angle)
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
   offset += 4;
@@ -422,7 +422,7 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.inductance_bias = view.getFloat32(offset);
   offset += 4;
-  result.saliency_angle = view.getFloat32(offset);
+  result.saliency_angle = view.getInt32(offset);
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
   offset += 4;
@@ -777,8 +777,6 @@ export class CurrentCalibration {
   inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   inductance_bias;
-  // Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
-  saliency_angle;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   motor_constant;
   
@@ -786,7 +784,7 @@ export class CurrentCalibration {
 }
 
 function write_CurrentCalibration(value) {
-  const buffer = new Uint8Array(32);
+  const buffer = new Uint8Array(28);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setFloat32(offset, value.u_current_zero)
@@ -800,8 +798,6 @@ function write_CurrentCalibration(value) {
   view.setFloat32(offset, value.inductance)
   offset += 4;
   view.setFloat32(offset, value.inductance_bias)
-  offset += 4;
-  view.setInt32(offset, value.saliency_angle)
   offset += 4;
   view.setFloat32(offset, value.motor_constant)
   offset += 4;
@@ -821,8 +817,6 @@ function read_CurrentCalibration(view, offset = 0) {
   result.inductance = view.getFloat32(offset);
   offset += 4;
   result.inductance_bias = view.getFloat32(offset);
-  offset += 4;
-  result.saliency_angle = view.getInt32(offset);
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
   offset += 4;
@@ -868,6 +862,8 @@ export class ControlParameters {
   resistance_ki;
   // Integral gain for the phase inductance observer.
   inductance_ki;
+  // Integral gain for the inductance bias observer.
+  inductance_bias_ki;
   // Integral gain for the inductance bias angle observer.
   saliency_angle_ki;
   // Motor constant integral gain.
@@ -876,8 +872,16 @@ export class ControlParameters {
   min_emf_magnitude;
   // Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
   min_emf_speed;
-  // Variance of the current measurement noise.
-  current_measurement_variance;
+  // The measurement noise for the current sensing, values under this threshold are likely 0.
+  current_measurement_minimum;
+  // We want our measurement error to be above this noise variance to count as a signal.
+  voltage_measurement_variance;
+  // The measurement noise for the resistance current sensing, values under this threshold are likely 0.
+  resistance_current_minimum;
+  // Minimum square of the inductance excitation to consider it significant.
+  inductance_excitation_minimum_square;
+  // Maximum allowable current offset to adjust the current sensing bias from 0.
+  current_offset_maximum;
   // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
   emf_probing_interval;
   // Probing angular speed for initial EMF detection.
@@ -922,7 +926,7 @@ export class ControlParameters {
 }
 
 function write_ControlParameters(value) {
-  const buffer = new Uint8Array(156);
+  const buffer = new Uint8Array(176);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setInt16(offset, value.motor_direction)
@@ -959,6 +963,8 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.inductance_ki)
   offset += 4;
+  view.setFloat32(offset, value.inductance_bias_ki)
+  offset += 4;
   view.setFloat32(offset, value.saliency_angle_ki)
   offset += 4;
   view.setFloat32(offset, value.motor_constant_ki)
@@ -967,7 +973,15 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.min_emf_speed)
   offset += 4;
-  view.setFloat32(offset, value.current_measurement_variance)
+  view.setInt32(offset, value.current_measurement_minimum)
+  offset += 4;
+  view.setFloat32(offset, value.voltage_measurement_variance)
+  offset += 4;
+  view.setInt32(offset, value.resistance_current_minimum)
+  offset += 4;
+  view.setFloat32(offset, value.inductance_excitation_minimum_square)
+  offset += 4;
+  view.setFloat32(offset, value.current_offset_maximum)
   offset += 4;
   view.setUint32(offset, value.emf_probing_interval)
   offset += 4;
@@ -1046,6 +1060,8 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.inductance_ki = view.getFloat32(offset);
   offset += 4;
+  result.inductance_bias_ki = view.getFloat32(offset);
+  offset += 4;
   result.saliency_angle_ki = view.getFloat32(offset);
   offset += 4;
   result.motor_constant_ki = view.getFloat32(offset);
@@ -1054,7 +1070,15 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.min_emf_speed = view.getFloat32(offset);
   offset += 4;
-  result.current_measurement_variance = view.getFloat32(offset);
+  result.current_measurement_minimum = view.getInt32(offset);
+  offset += 4;
+  result.voltage_measurement_variance = view.getFloat32(offset);
+  offset += 4;
+  result.resistance_current_minimum = view.getInt32(offset);
+  offset += 4;
+  result.inductance_excitation_minimum_square = view.getFloat32(offset);
+  offset += 4;
+  result.current_offset_maximum = view.getFloat32(offset);
   offset += 4;
   result.emf_probing_interval = view.getUint32(offset);
   offset += 4;
@@ -1796,7 +1820,7 @@ export function read_message(buffer) {
       return message;
     }
     case CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 32) return null;
+      if (buffer.length !== 2 + 28) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = CURRENT_CALIBRATION;
       return message;
@@ -1806,7 +1830,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_CURRENT_CALIBRATION: {
-      if (buffer.length !== 2 + 32) return null;
+      if (buffer.length !== 2 + 28) return null;
       let message = read_CurrentCalibration(view, 2);
       message.message_code = SET_CURRENT_CALIBRATION;
       return message;
@@ -1816,13 +1840,13 @@ export function read_message(buffer) {
       return {message_code};
     }
     case CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 156) return null;
+      if (buffer.length !== 2 + 176) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = CONTROL_PARAMETERS;
       return message;
     }
     case SET_CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 156) return null;
+      if (buffer.length !== 2 + 176) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = SET_CONTROL_PARAMETERS;
       return message;

@@ -358,7 +358,7 @@ struct FullReadout : Readout {
   // Estimated bias of the inductance due to magnetic saliency.
   float inductance_bias;
   // Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
-  float saliency_angle;
+  int32_t saliency_angle;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
 };
@@ -423,7 +423,7 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.inductance_bias);;
   offset += 4;
-  write_float32(buffer + offset, value.saliency_angle);;
+  write_int32(buffer + offset, value.saliency_angle);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
@@ -490,7 +490,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.inductance_bias = read_float32(buffer + offset);
   offset += 4;
-  result.saliency_angle = read_float32(buffer + offset);
+  result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -815,8 +815,6 @@ struct CurrentCalibration {
   float inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   float inductance_bias;
-  // Estimated angle in stator coordinates of the inductance bias (Ld vs Lq).
-  int32_t saliency_angle;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
 };
@@ -834,8 +832,6 @@ static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_bias);;
-  offset += 4;
-  write_int32(buffer + offset, value.saliency_angle);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
@@ -856,8 +852,6 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_bias = read_float32(buffer + offset);
-  offset += 4;
-  result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -903,6 +897,8 @@ struct ControlParameters {
   float resistance_ki;
   // Integral gain for the phase inductance observer.
   float inductance_ki;
+  // Integral gain for the inductance bias observer.
+  float inductance_bias_ki;
   // Integral gain for the inductance bias angle observer.
   float saliency_angle_ki;
   // Motor constant integral gain.
@@ -911,8 +907,16 @@ struct ControlParameters {
   float min_emf_magnitude;
   // Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
   float min_emf_speed;
-  // Variance of the current measurement noise.
-  float current_measurement_variance;
+  // The measurement noise for the current sensing, values under this threshold are likely 0.
+  int32_t current_measurement_minimum;
+  // We want our measurement error to be above this noise variance to count as a signal.
+  float voltage_measurement_variance;
+  // The measurement noise for the resistance current sensing, values under this threshold are likely 0.
+  int32_t resistance_current_minimum;
+  // Minimum square of the inductance excitation to consider it significant.
+  float inductance_excitation_minimum_square;
+  // Maximum allowable current offset to adjust the current sensing bias from 0.
+  float current_offset_maximum;
   // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
   uint32_t emf_probing_interval;
   // Probing angular speed for initial EMF detection.
@@ -990,6 +994,8 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.inductance_ki);;
   offset += 4;
+  write_float32(buffer + offset, value.inductance_bias_ki);;
+  offset += 4;
   write_float32(buffer + offset, value.saliency_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant_ki);;
@@ -998,7 +1004,15 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.min_emf_speed);;
   offset += 4;
-  write_float32(buffer + offset, value.current_measurement_variance);;
+  write_int32(buffer + offset, value.current_measurement_minimum);;
+  offset += 4;
+  write_float32(buffer + offset, value.voltage_measurement_variance);;
+  offset += 4;
+  write_int32(buffer + offset, value.resistance_current_minimum);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_excitation_minimum_square);;
+  offset += 4;
+  write_float32(buffer + offset, value.current_offset_maximum);;
   offset += 4;
   write_uint32(buffer + offset, value.emf_probing_interval);;
   offset += 4;
@@ -1078,6 +1092,8 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.inductance_ki = read_float32(buffer + offset);
   offset += 4;
+  result.inductance_bias_ki = read_float32(buffer + offset);
+  offset += 4;
   result.saliency_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.motor_constant_ki = read_float32(buffer + offset);
@@ -1086,7 +1102,15 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.min_emf_speed = read_float32(buffer + offset);
   offset += 4;
-  result.current_measurement_variance = read_float32(buffer + offset);
+  result.current_measurement_minimum = read_int32(buffer + offset);
+  offset += 4;
+  result.voltage_measurement_variance = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_current_minimum = read_int32(buffer + offset);
+  offset += 4;
+  result.inductance_excitation_minimum_square = read_float32(buffer + offset);
+  offset += 4;
+  result.current_offset_maximum = read_float32(buffer + offset);
   offset += 4;
   result.emf_probing_interval = read_uint32(buffer + offset);
   offset += 4;
@@ -1278,12 +1302,12 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
     case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: return 14;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CURRENT_CALIBRATION: return 34;
+    case MessageCode::CURRENT_CALIBRATION: return 30;
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::SET_CURRENT_CALIBRATION: return 34;
+    case MessageCode::SET_CURRENT_CALIBRATION: return 30;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 158;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 158;
+    case MessageCode::CONTROL_PARAMETERS: return 178;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 178;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
@@ -1483,9 +1507,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CURRENT_CALIBRATION));
-      if (max_size < 2 + 32) return 0;
+      if (max_size < 2 + 28) return 0;
       write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 34;
+      return 30;
     }
     case MessageCode::GET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CURRENT_CALIBRATION));
@@ -1493,9 +1517,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CURRENT_CALIBRATION));
-      if (max_size < 2 + 32) return 0;
+      if (max_size < 2 + 28) return 0;
       write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 34;
+      return 30;
     }
     case MessageCode::RESET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CURRENT_CALIBRATION));
@@ -1503,15 +1527,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 156) return 0;
+      if (max_size < 2 + 176) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 158;
+      return 178;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 156) return 0;
+      if (max_size < 2 + 176) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 158;
+      return 178;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1739,7 +1763,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CURRENT_CALIBRATION: {
-      if (size != 2 + 32) return false;
+      if (size != 2 + 28) return false;
       message.message_data = read_CurrentCalibration(buffer + 2);
       return true;
     }
@@ -1749,7 +1773,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_CURRENT_CALIBRATION: {
-      if (size != 2 + 32) return false;
+      if (size != 2 + 28) return false;
       message.message_data = read_CurrentCalibration(buffer + 2);
       return true;
     }
@@ -1759,12 +1783,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 156) return false;
+      if (size != 2 + 176) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 156) return false;
+      if (size != 2 + 176) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

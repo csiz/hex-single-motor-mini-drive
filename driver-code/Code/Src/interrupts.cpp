@@ -58,6 +58,7 @@ hex_mini_drive::FullReadout readout = {
     .w_current_zero = current_calibration.w_current_zero,
     .resistance = current_calibration.resistance,
     .inductance = current_calibration.inductance,
+    .inductance_bias = current_calibration.inductance_bias,
 };
 
 // Latest readout we have copied from the shared_readout in the main loop.
@@ -1124,8 +1125,7 @@ void ADC1_2_IRQHandler(void){
     const auto [current_angle, current_magnitude] = get_cordic();
     
     // The current measurements have a low noise floor, but it's not 0.
-    // TODO: fix the parameter if we don't need it to be squared
-    const bool current_detected = current_magnitude > current_measurement_minimum;// control_parameters.current_measurement_variance;
+    const bool current_detected = current_magnitude > control_parameters.current_measurement_minimum;
 
 
     // Using DQ0 coordinates
@@ -1139,8 +1139,21 @@ void ADC1_2_IRQHandler(void){
     const float direct_current_diff = direct_current - readout.direct_current;
     const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
 
-    const float direct_inductor_voltage = direct_current_diff * readout.inductance * current_diff_to_voltage_units;
-    const float quadrature_inductor_voltage = quadrature_current_diff * readout.inductance * current_diff_to_voltage_units;
+    const float direct_diff = direct_current_diff * current_diff_to_voltage_units;
+    const float quadrature_diff = quadrature_current_diff * current_diff_to_voltage_units;
+
+    const float cos_saliency = get_cos(readout.saliency_angle);
+    const float sin_saliency = get_sin(readout.saliency_angle);
+
+    const float direct_cos_plus_quadrature_sin_saliency = direct_diff * cos_saliency + quadrature_diff * sin_saliency;
+    const float direct_sin_minus_quadrature_cos_saliency = direct_diff * sin_saliency - quadrature_diff * cos_saliency;
+
+    const float direct_inductance_bias_voltage = -direct_cos_plus_quadrature_sin_saliency * readout.inductance_bias;
+
+    const float quadrature_inductance_bias_voltage = -direct_sin_minus_quadrature_cos_saliency * readout.inductance_bias;
+
+    const float direct_inductor_voltage = direct_diff * readout.inductance + direct_inductance_bias_voltage;
+    const float quadrature_inductor_voltage = quadrature_diff * readout.inductance + quadrature_inductance_bias_voltage;
 
     const float measured_direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
     const float measured_quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;
@@ -1148,9 +1161,7 @@ void ADC1_2_IRQHandler(void){
     // Send the emf values to the CORDIC asap.
     set_cordic(measured_direct_emf_voltage, measured_quadrature_emf_voltage);
 
-    // Get the magnitude of the inductor voltage so we can determine whether the inductance is significant.
-    const float inductor_voltage_square = square(direct_inductor_voltage) + square(quadrature_inductor_voltage);
-    
+
     // Back EMF angle observer
     // -----------------------
     
@@ -1197,7 +1208,7 @@ void ADC1_2_IRQHandler(void){
     // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
     const bool emf_detected = emf_angle_error_variance < emf_angle_variance_threshold;
     
-    // TODO: we probably wanna use the above, in that case check if we need the parameter
+    // TODO: maybe we want to use both checks?
     // // Use the previous emf estimate as the flag for whether we detected any motor movement.
     // // const bool emf_detected = readout.emf_voltage_magnitude > control_parameters.min_emf_magnitude;
 
@@ -1248,65 +1259,89 @@ void ADC1_2_IRQHandler(void){
 
     // Now we track the resistance and inductance using some form of gradient descent. The equation that we want to solve is:
     // 
-    //     0 ~ error = resistance_voltage + inductance_voltage - drive_voltage - emf_voltage
+    //     0 ~ voltage_error = resistance_voltage + inductor_voltage - drive_voltage - emf_voltage
     // 
     // Where we've already defined the "measured" emf voltage as if the error were zero. Ie.
     // 
-    //     measured_emf_voltage = resistance_voltage + inductance_voltage - drive_voltage
+    //     measured_emf_voltage = resistance_voltage + inductor_voltage - drive_voltage
     // 
     // The error can also be due to either resistance or inductance, so despite naming it measured emf voltage, it's actually 
-    // all the errors combined. We can use this value and optimize it by gradient descent to calbirate all parameters live.
+    // all the errors combined. We can use this value and calibrate all parameters live by gradient descent.
     const float direct_voltage_error = measured_direct_emf_voltage - direct_emf_voltage;
     const float quadrature_voltage_error = measured_quadrature_emf_voltage - quadrature_emf_voltage;
 
+    // Following the formulas above, but this time we will try to estimate the inductor voltage given our other
+    // masurements.
+    const float direct_inductor_excitation = direct_inductor_voltage - direct_voltage_error;
+    const float quadrature_inductor_excitation = quadrature_inductor_voltage - quadrature_voltage_error;
+
     const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
+
+    // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
+    const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
 
     // Defining the loss as the square(direct_current_diff_error) + square(quadrature_current_diff_error) we get the derivative gradients with 
     // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
     // there isn't enough energy in the error to warrant an update.
 
-    // TODO: rename to voltage variance.
-    const bool error_detected = square_voltage_error > control_parameters.current_measurement_variance;
+    const bool error_detected = square_voltage_error > control_parameters.voltage_measurement_variance;
 
-    // Compute the gradients of the loss with respect to each of the tracked parameters.
-
-    const float resistance_gradient = (
-        -direct_voltage_error * direct_current +
-        -quadrature_voltage_error * quadrature_current
-    ) * voltage_mul_current_to_power;
-
-    const float inductance_gradient = (
-        direct_voltage_error * direct_inductor_voltage + 
-        quadrature_voltage_error * quadrature_inductor_voltage
-    ) * voltage_mul_current_to_power;
 
 
     // Only update calibration when we have nominal_vcc_voltage.
     if (nominal_vcc_voltage) {
         if (error_detected) {
+
+            // Compute the gradients of the loss with respect to each of the tracked parameters.
+
+            const float resistance_gradient = (
+                direct_voltage_error * direct_current +
+                quadrature_voltage_error * quadrature_current
+            ) * voltage_mul_current_to_power;
+
+
             // Only update the resistance if we have sufficient current to make the measurement meaningful.
-            // TODO: this might need to be a parameter.
-            const bool sufficient_current =  current_magnitude > resistance_current_minimum;
-            readout.resistance -= sufficient_current * resistance_gradient * control_parameters.resistance_ki;
-            
+            if(current_magnitude > control_parameters.resistance_current_minimum) {
+                readout.resistance -= resistance_gradient * control_parameters.resistance_ki;
+            }
+
             // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
             // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
-            // TODO: this definitely needs to be a parameter.
-            const bool inductor_excited = inductor_voltage_square > min_inductor_voltage_square;
-            readout.inductance -= inductor_excited * inductance_gradient * control_parameters.inductance_ki;
+            if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
+                const float inductance_gradient = (
+                    direct_voltage_error * direct_inductor_voltage + 
+                    quadrature_voltage_error * quadrature_inductor_voltage
+                ) * voltage_mul_current_to_power;
+
+                readout.inductance -= inductance_gradient * control_parameters.inductance_ki;
+
+                const float inductance_bias_gradient = (
+                    direct_voltage_error * direct_inductance_bias_voltage +
+                    quadrature_voltage_error * quadrature_inductance_bias_voltage
+                ) * voltage_mul_current_to_power;
+                
+                readout.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
+
+                const float saliency_angle_gradient = (
+                    direct_voltage_error * (-quadrature_inductance_bias_voltage) +
+                    quadrature_voltage_error * direct_inductance_bias_voltage
+                ) * voltage_mul_current_to_power;
+
+                readout.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
+            }
         } else {
-            const bool current_is_idling = current_magnitude < current_offset_maximum;
+            const bool current_is_idling = current_magnitude < control_parameters.current_offset_maximum;
 
             if (current_is_idling) {
                 // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
                 readout.u_current_zero = clip_to(
-                    -current_offset_maximum, current_offset_maximum, 
+                    -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
                     readout.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
                 readout.v_current_zero = clip_to(
-                    -current_offset_maximum, current_offset_maximum, 
+                    -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
                     readout.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
                 readout.w_current_zero = clip_to(
-                    -current_offset_maximum, current_offset_maximum, 
+                    -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
                     readout.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
             }
         }
@@ -1444,7 +1479,6 @@ void ADC1_2_IRQHandler(void){
     readout.direct_current_diff = direct_current_diff;
     readout.quadrature_current_diff = quadrature_current_diff;
 
-    // TODO: switch to estimates? or do we need to send this at all?
     readout.direct_emf_voltage = direct_emf_voltage;
     readout.quadrature_emf_voltage = quadrature_emf_voltage;
     

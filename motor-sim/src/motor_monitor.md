@@ -1046,6 +1046,7 @@ const plot_electric_position = plot_lines({
   channels: [
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: "predicted_angle", label: "Predicted Angle", color: d3.color(colors.angle).darker(1)},
+    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
     {y: (d) => /* d.current_detected ?  */d.current_angle/*  : null */, label: "Current Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {
@@ -1296,7 +1297,6 @@ const plot_motor_values = plot_lines({
     {y: "resistance", label: "Phase Resistance", color: colors.u},
     {y: "inductance", label: "Phase Inductance", color: colors.v},
     {y: "inductance_bias", label: "Inductance Bias", color: colors_categories[4]},
-    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
   ],
   curve,
@@ -1384,14 +1384,6 @@ const calibration_parameters = {
     label: "Inductance Bias", 
     description: `The bias of the motor's phase inductance.`
   },
-  saliency_angle: {
-    label: "Saliency Angle", 
-    description: `The angle of the motor's saliency.`
-  },
-  saturation_angle: {
-    label: "Saturation Angle", 
-    description: `The angle of the motor's saturation.`
-  },
   saturation_factor: {
     label: "Saturation Factor", 
     description: `The factor of the motor's saturation.`
@@ -1399,10 +1391,6 @@ const calibration_parameters = {
   motor_constant: {
     label: "Motor Constant", 
     description: `The motor constant, which relates torque and current, or speed and emf.`
-  },
-  angle_delta: {
-    label: "Angle Delta", 
-    description: `The true angle of the motor's rotor.`
   },
 }
 
@@ -1577,7 +1565,7 @@ async function run_current_calibration(motor_controller, message_options) {
       max_learning_rate: 0.000_01,
     }),
     saliency_angle: new Parameter({
-      value: current_calibration?.saliency_angle ?? 0.0,
+      value: 0.0,
       max_learning_rate: Math.PI / 4,
     }),
     saturation_factor: new Parameter({
@@ -1585,7 +1573,7 @@ async function run_current_calibration(motor_controller, message_options) {
       max_learning_rate: 0.000_01,
     }),
     saturation_angle: new Parameter({
-      value: current_calibration?.saturation_angle ?? 0.0,
+      value: 0.0,
       max_learning_rate: Math.PI / 4,
     }),
     motor_constant: new Parameter({
@@ -2235,6 +2223,10 @@ const control_parameters_input = Object.fromEntries(
       label: "Phase Inductance KI",
       description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
     }],
+    ["inductance_bias_ki", {
+      label: "Inductance Bias KI",
+      description: "Integral gain for the inductance bias observer; helps in accurately estimating the bias in the inductance measurement."
+    }],
     ["saliency_angle_ki", {
       label: "Saliency Angle KI",
       description: "Integral gain for saliency angle estimation. To be explained later..."
@@ -2252,9 +2244,25 @@ const control_parameters_input = Object.fromEntries(
       description: `Minimum EMF speed required to declare EMF detected. There is noise in the EMF measurement, so
       we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated.`
     }],
-    ["current_measurement_variance", {
-      label: "Current Measurement Variance",
-      description: "Variance of the current measurement noise. Helps in filtering and estimating the true current accurately."
+    ["current_measurement_minimum", {
+      label: "Current Measurement Minimum",
+      description: "Minimum current measurement value. Helps in filtering out spurious low current readings."
+    }],
+    ["voltage_measurement_variance", {
+      label: "Voltage Measurement Variance",
+      description: "Variance of the voltage measurement noise. Helps in filtering and estimating the true voltage accurately."
+    }],
+    ["resistance_current_minimum", {
+      label: "Resistance Current Minimum",
+      description: "Minimum current for resistance measurement. Helps in ensuring accurate resistance estimation."
+    }],
+    ["inductance_excitation_minimum_square", {
+      label: "Inductance Excitation Minimum Square",
+      description: "Minimum squared excitation current for inductance measurement. Ensures accurate inductance estimation."
+    }],
+    ["current_offset_maximum", {
+      label: "Current Offset Maximum",
+      description: "Maximum allowable current offset. Helps in filtering out systematic measurement errors."
     }],
     ["emf_probing_interval", {
       label: "EMF Probing Interval",
