@@ -1048,9 +1048,6 @@ void ADC1_2_IRQHandler(void){
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion * 0.25f + readout.vcc_voltage * 0.75f);
 
-    // Check if the driver has enough voltage for reliable PWM driving (mind the voltage of the MOSFET drivers).
-    const bool nominal_vcc_voltage = vcc_voltage >= control_parameters.vcc_undervoltage;
-    
     // Calculate calibrated currents.
     // 
     // We need to flip the sign of the current readings. Our convention is to have settle on positive
@@ -1289,61 +1286,59 @@ void ADC1_2_IRQHandler(void){
 
 
     // Only update calibration when we have nominal_vcc_voltage.
-    if (nominal_vcc_voltage) {
-        if (error_detected) {
+    if (error_detected) {
 
-            // Compute the gradients of the loss with respect to each of the tracked parameters.
+        // Compute the gradients of the loss with respect to each of the tracked parameters.
 
-            const float resistance_gradient = (
-                direct_voltage_error * direct_current +
-                quadrature_voltage_error * quadrature_current
+        const float resistance_gradient = (
+            direct_voltage_error * direct_current +
+            quadrature_voltage_error * quadrature_current
+        ) * voltage_mul_current_to_power;
+
+
+        // Only update the resistance if we have sufficient current to make the measurement meaningful.
+        if(current_magnitude > control_parameters.resistance_current_minimum) {
+            readout.resistance -= resistance_gradient * control_parameters.resistance_ki;
+        }
+
+        // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
+        // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
+        if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
+            const float inductance_gradient = (
+                direct_voltage_error * direct_inductor_voltage + 
+                quadrature_voltage_error * quadrature_inductor_voltage
             ) * voltage_mul_current_to_power;
 
+            readout.inductance -= inductance_gradient * control_parameters.inductance_ki;
 
-            // Only update the resistance if we have sufficient current to make the measurement meaningful.
-            if(current_magnitude > control_parameters.resistance_current_minimum) {
-                readout.resistance -= resistance_gradient * control_parameters.resistance_ki;
-            }
+            const float inductance_bias_gradient = (
+                direct_voltage_error * direct_inductance_bias_voltage +
+                quadrature_voltage_error * quadrature_inductance_bias_voltage
+            ) * voltage_mul_current_to_power;
+            
+            readout.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
 
-            // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
-            // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
-            if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
-                const float inductance_gradient = (
-                    direct_voltage_error * direct_inductor_voltage + 
-                    quadrature_voltage_error * quadrature_inductor_voltage
-                ) * voltage_mul_current_to_power;
+            const float saliency_angle_gradient = (
+                direct_voltage_error * (-quadrature_inductance_bias_voltage) +
+                quadrature_voltage_error * direct_inductance_bias_voltage
+            ) * voltage_mul_current_to_power;
 
-                readout.inductance -= inductance_gradient * control_parameters.inductance_ki;
+            readout.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
+        }
+    } else {
+        const bool current_is_idling = current_magnitude < control_parameters.current_offset_maximum;
 
-                const float inductance_bias_gradient = (
-                    direct_voltage_error * direct_inductance_bias_voltage +
-                    quadrature_voltage_error * quadrature_inductance_bias_voltage
-                ) * voltage_mul_current_to_power;
-                
-                readout.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
-
-                const float saliency_angle_gradient = (
-                    direct_voltage_error * (-quadrature_inductance_bias_voltage) +
-                    quadrature_voltage_error * direct_inductance_bias_voltage
-                ) * voltage_mul_current_to_power;
-
-                readout.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
-            }
-        } else {
-            const bool current_is_idling = current_magnitude < control_parameters.current_offset_maximum;
-
-            if (current_is_idling) {
-                // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
-                readout.u_current_zero = clip_to(
-                    -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                    readout.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
-                readout.v_current_zero = clip_to(
-                    -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                    readout.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
-                readout.w_current_zero = clip_to(
-                    -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                    readout.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
-            }
+        if (current_is_idling) {
+            // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
+            readout.u_current_zero = clip_to(
+                -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
+                readout.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
+            readout.v_current_zero = clip_to(
+                -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
+                readout.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
+            readout.w_current_zero = clip_to(
+                -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
+                readout.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
         }
     }
 

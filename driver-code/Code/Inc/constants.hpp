@@ -358,7 +358,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
 
-    .zero_current_ki = std::pow(2, -18),
+    .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -14),
     .inductance_ki = std::pow(2, -18),
     .inductance_bias_ki = std::pow(2, -16),
@@ -372,7 +372,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .voltage_measurement_variance = square(current_measurement_noise * current_to_voltage_units),
     .resistance_current_minimum = 4.f * current_measurement_noise,
     .inductance_excitation_minimum_square = square(0.150f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT),
-    .current_offset_maximum = 12 * adc_to_current_units,
+    .current_offset_maximum = 16 * adc_to_current_units,
     // Unused for now.
     .emf_probing_interval = pwm_cycles_per_second / 20,
     .probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
