@@ -1205,11 +1205,6 @@ void ADC1_2_IRQHandler(void){
     // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
     const bool emf_detected = emf_angle_error_variance < emf_angle_variance_threshold;
     
-    // TODO: maybe we want to use both checks?
-    // // Use the previous emf estimate as the flag for whether we detected any motor movement.
-    // // const bool emf_detected = readout.emf_voltage_magnitude > control_parameters.min_emf_magnitude;
-
-    
     // Use the angle variance to scale the speed adjustment, it's a simplified version of combining gaussians
     // but we use a fixed variance inverse as the normalizing factor. We're basically saying the current speed
     // is a gaussian with a variance of threshold - measured variance, the sum of the variances being fixed to

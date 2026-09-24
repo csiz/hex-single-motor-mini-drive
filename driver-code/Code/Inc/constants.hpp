@@ -359,12 +359,12 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -11),
 
     .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -14),
-    .inductance_ki = std::pow(2, -18),
-    .inductance_bias_ki = std::pow(2, -16),
+    .resistance_ki = std::pow(2, -12),
+    .inductance_ki = std::pow(2, -20),
+    .inductance_bias_ki = std::pow(2, -20),
     .saliency_angle_ki = std::pow(2, 32+2),
     .motor_constant_ki = std::pow(2, -11),
-    // Minimum EMF voltage to consider anything detected.
+    // Currently unused!
     .min_emf_magnitude = 0.050 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     // Minimum emf speed to be confident in the rotation direction.
     .min_emf_speed = 5.f * angle_base / static_cast<float>(pwm_cycles_per_second),
