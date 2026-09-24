@@ -1274,32 +1274,29 @@ void ADC1_2_IRQHandler(void){
 
     const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
 
-    // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
-    const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
-
-    // Defining the loss as the square(direct_current_diff_error) + square(quadrature_current_diff_error) we get the derivative gradients with 
+    // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
     // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
     // there isn't enough energy in the error to warrant an update.
 
     const bool error_detected = square_voltage_error > control_parameters.voltage_measurement_variance;
 
-
-
-    // Only update calibration when we have nominal_vcc_voltage.
+    // Run calibration when there's error or back EMF is detected.
     if (error_detected) {
 
         // Compute the gradients of the loss with respect to each of the tracked parameters.
 
-        const float resistance_gradient = (
-            direct_voltage_error * direct_current +
-            quadrature_voltage_error * quadrature_current
-        ) * voltage_mul_current_to_power;
-
-
         // Only update the resistance if we have sufficient current to make the measurement meaningful.
         if(current_magnitude > control_parameters.resistance_current_minimum) {
+            const float resistance_gradient = (
+                direct_voltage_error * direct_current +
+                quadrature_voltage_error * quadrature_current
+            ) * voltage_mul_current_to_power;
+
             readout.resistance -= resistance_gradient * control_parameters.resistance_ki;
         }
+
+        // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
+        const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
 
         // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
         // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
@@ -1326,9 +1323,8 @@ void ADC1_2_IRQHandler(void){
             readout.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
         }
     } else {
-        const bool current_is_idling = current_magnitude < control_parameters.current_offset_maximum;
-
-        if (current_is_idling) {
+        // Only track the zero offset while there is no noticeable current being measured.
+        if (current_magnitude < control_parameters.current_offset_maximum) {
             // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
             readout.u_current_zero = clip_to(
                 -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
@@ -1411,10 +1407,9 @@ void ADC1_2_IRQHandler(void){
     ) * dq0_voltage_mul_current_to_power;
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
-    // TODO: switch to estimates
     const float emf_power = -(
-        measured_direct_emf_voltage * direct_current + 
-        measured_quadrature_emf_voltage * quadrature_current
+        direct_emf_voltage * direct_current + 
+        quadrature_emf_voltage * quadrature_current
     ) * dq0_voltage_mul_current_to_power;
 
     // The total power is the power used from the battery. It will be positive when driving
@@ -1423,8 +1418,9 @@ void ADC1_2_IRQHandler(void){
     // 
     // The balance of all powers must be zero assuming no other source or sink of power. Thus
     // we can compute the total power from the others; mostly determined by EMF. The resistive
-    // power is quite reliable and inductive_power is very small.
-    const float total_power = dot(currents, drive_voltages) * voltage_mul_current_to_power;
+    // power is quite reliable and inductive_power is usually small (and sums to 0) but is 
+    // very noisy so we will omit it.
+    const float total_power = resistive_power + emf_power;
 
 
     // Limits!
