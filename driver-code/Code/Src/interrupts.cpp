@@ -430,7 +430,51 @@ static inline MotorOutputs update_motor_fixed_calibration_chirp(
         return breaking_motor_outputs;
     }
 }
-    
+
+constexpr int16_t hfi_duration = 8;
+constexpr int16_t hfi_skips = (5 /* milliseconds */ * pwm_cycles_per_second / 1000) / hfi_duration;
+
+static inline MotorOutputs update_motor_hfi_saliency_pulses(
+    DriverState & driver_state,
+    hex_mini_drive::FullReadout const& readout
+){
+    // Our puleses will be angled 45 degrees to the saliency angle div 2, the pulses will
+    // each be exactly 2 pwm cycles long, and in this order:
+    // 1. Negative pulse at 45 degrees
+    // 2. Positive pulse at 45 degrees
+    // 3. Positive pulse at -45 degrees
+    // 4. Negative pulse at -45 degrees
+    // So they take 8 pwm cycles.
+    //
+    // We'll also then sleep for n*8 pwm cycles until the next set of pulses.
+    const int32_t angle_from_saliency = readout.saliency_angle / 2;
+
+    if (readout.readout_number / hfi_duration % hfi_skips == 0) {
+        // Get the step within the pulse sequence.
+        const int32_t step = (readout.readout_number % hfi_duration) / 2;
+        switch (step) {
+            case 0:
+                driver_state.active_pwm = -driver_state.target;
+                driver_state.active_angle = angle_from_saliency + quarter_circle/2;
+                break;
+            case 1:
+                driver_state.active_pwm = +driver_state.target;
+                driver_state.active_angle = angle_from_saliency + quarter_circle/2;
+                break;
+            case 2:
+                driver_state.active_pwm = +driver_state.target;
+                driver_state.active_angle = angle_from_saliency - quarter_circle/2;
+                break;
+            case 3:
+                driver_state.active_pwm = -driver_state.target;
+                driver_state.active_angle = angle_from_saliency - quarter_circle/2;
+                break;
+        }
+    } else {
+        driver_state.active_pwm = 0;
+    }
+    return update_motor_at_angle(driver_state, readout);
+}
 
 
 // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
@@ -858,6 +902,13 @@ static inline DriverState setup_driver_state(
                     .test_angle = 0
                 },
             };
+
+        case DriverMode::HFI_SALIENCY_PULSES:
+            return DriverState{
+                .mode = DriverMode::HFI_SALIENCY_PULSES,
+                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                .target = clip_to(0, pwm_max, pending_state.target),
+            };
     }
 
     return breaking_driver_state;
@@ -983,6 +1034,13 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the fixed calibration chirp.
             driver_state.motor_outputs = update_motor_fixed_calibration_chirp(driver_state, readout);
+            return;
+        
+        case DriverMode::HFI_SALIENCY_PULSES:
+            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
+
+            // Update the motor outputs for the high frequency injection saliency detection.
+            driver_state.motor_outputs = update_motor_hfi_saliency_pulses(driver_state, readout);
             return;
     }
 

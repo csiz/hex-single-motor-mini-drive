@@ -199,11 +199,17 @@ void handle_message(hex_mini_drive::Message const& message) {
       );
       return;
     case SET_STATE_TEST_U_DIRECTIONS:
-      motor_start_test(
-        test_u_directions,
-        std::get<TestCommand>(message.message_data).pwm_value,
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
+      // motor_start_test(
+      //   test_u_directions,
+      //   std::get<TestCommand>(message.message_data).pwm_value,
+      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
+      // );
+      set_motor_command(DriverState{
+        .mode = DriverMode::HFI_SALIENCY_PULSES,
+        .duration = std::get<TestCommand>(message.message_data).test_duration,
+        .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
+      });
+
       return;
 
     case SET_STATE_TEST_U_INCREASING:

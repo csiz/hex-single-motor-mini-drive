@@ -74,7 +74,9 @@ enum struct DriverMode : uint16_t {
     // Drive the motor around a few full rotations to measure inductance bias, and estimate rotor position.
     ROTATING_CALIBRATION_CHIRP,
     // Drive the motor on a fixed angle with a varying pwm value.
-    FIXED_CALIBRATION_CHIRP
+    FIXED_CALIBRATION_CHIRP,
+    // Drive the motor using high frequency injection to detect saliency.
+    HFI_SALIENCY_PULSES
 };
 
 // Motor duty cycle (compare register values and enable settings).

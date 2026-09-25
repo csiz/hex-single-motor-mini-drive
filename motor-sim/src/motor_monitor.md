@@ -354,7 +354,7 @@ const command_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0
 const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.floor(value));
 
 // Timeout duration for each command. For safety, the motor runs each drive command for a short period until commanded again.
-const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 5, label: "Command timeout (ms):"});
+const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 1, label: "Command timeout (ms):"});
 const command_timeout = transformed_input_value(command_timeout_slider, (millis) => Math.floor(millis * cycles_per_millisecond));
 
 // Choose the angular speed target for certain commands.
@@ -1047,6 +1047,7 @@ const plot_electric_position = plot_lines({
     {y: "angle", label: "Magnet Angle", color: colors.angle},
     {y: "predicted_angle", label: "Predicted Angle", color: d3.color(colors.angle).darker(1)},
     {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
+    {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
     {y: (d) => /* d.current_detected ?  */d.current_angle/*  : null */, label: "Current Angle", color: colors.web_angle},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {
@@ -1960,7 +1961,7 @@ async function run_current_calibration_by_code(message_code) {
     }
   );
   update_current_calibration_data(calibration_data);
-  set_readout_series(calibration_data.sample, active_port);
+  // set_readout_series(calibration_data.sample, active_port);
 }
 
 const current_calibration_run_buttons = Inputs.button(
