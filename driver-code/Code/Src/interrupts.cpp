@@ -1254,11 +1254,12 @@ void ADC1_2_IRQHandler(void){
         static_cast<int32_t>(emf_angle_adjustment * control_parameters.emf_angle_ki)
     );
     
+    const float instant_emf_angle_error_variance = square(emf_angle_error);
     
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
     const float emf_angle_error_variance = (
-        0.9f * readout.emf_angle_error_variance +
-        0.1f * square(emf_angle_error)
+        0.875f * readout.emf_angle_error_variance +
+        0.125f * instant_emf_angle_error_variance
     );
 
     const float emf_voltage_magnitude = (
@@ -1266,23 +1267,26 @@ void ADC1_2_IRQHandler(void){
         (measured_emf_voltage_magnitude - readout.emf_voltage_magnitude) * control_parameters.emf_magnitude_ki
     );
     
+    const float max_angle_error_variance = max(instant_emf_angle_error_variance, emf_angle_error_variance);
     
     // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
     // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
     // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
-    const bool emf_detected = emf_angle_error_variance < emf_angle_variance_threshold;
+    const bool emf_detected = max_angle_error_variance < emf_angle_variance_threshold;
     
     // Use the angle variance to scale the speed adjustment, it's a simplified version of combining gaussians
     // but we use a fixed variance inverse as the normalizing factor. We're basically saying the current speed
     // is a gaussian with a variance of threshold - measured variance, the sum of the variances being fixed to
     // the emf_angle_variance_threshold. This allows us to use a precomputed inverse to avoid division.
-    const float emf_variance_factor = (emf_angle_variance_threshold - emf_angle_error_variance) * emf_angle_variance_threshold_inverse;
+    const float emf_variance_factor = (emf_angle_variance_threshold - max_angle_error_variance) * emf_angle_variance_threshold_inverse;
 
     // Reset the emf speed to 0 if we don't have an emf detection.
     // ! Very important to use emf_detected so that the emf_variance_factor above is positive.
-    const float emf_voltage_angular_speed = emf_detected * (
+    const float emf_voltage_angular_speed = (
         readout.emf_voltage_angular_speed + 
-        emf_angle_adjustment * emf_variance_factor * control_parameters.emf_angular_speed_ki
+        (emf_detected ? 
+            emf_angle_adjustment * emf_variance_factor * control_parameters.emf_angular_speed_ki : 
+            - readout.emf_voltage_angular_speed * control_parameters.emf_angular_speed_ki)
     );
 
     // We only get EMF when rotating, so let's get the rotation direction.

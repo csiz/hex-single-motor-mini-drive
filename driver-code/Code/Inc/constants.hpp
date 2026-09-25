@@ -309,9 +309,9 @@ constexpr float speed_units_to_radians_per_second = angle_units_to_radians * sta
 constexpr float radians_per_second_to_speed_units = 1.f / speed_units_to_radians_per_second;
 
 // Maximum variance of the EMF angle before we start computing EMF angular speed.
-constexpr float emf_angle_variance_threshold = square(15.f * angle_base / 360.f);
+constexpr float emf_angle_variance_threshold = square(30.f * angle_base / 360.f);
 
-constexpr float emf_angle_variance_max = square(90.f * angle_base / 360.f);
+constexpr float emf_angle_variance_max = square(180.f * angle_base / 360.f);
 
 // Inverse of the EMF angle variance threshold to avoid divisions in the fast loop.
 constexpr float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_threshold;
@@ -351,11 +351,11 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .current_angle_ki = std::pow(2, -2),
     .current_magnitude_ki = std::pow(2, -2),
     // Gain for the EMF angle, it should be much lower than the rotor angle gain to average out the noise.
-    .emf_angle_ki = std::pow(2, -4),
+    .emf_angle_ki = std::pow(2, -2),
     // Gain for the EMF magnitude.
     .emf_magnitude_ki = std::pow(2, -4),
     // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.
-    .emf_angular_speed_ki = std::pow(2, -8),
+    .emf_angular_speed_ki = std::pow(2, -9),
 
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
