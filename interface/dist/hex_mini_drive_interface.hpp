@@ -330,12 +330,12 @@ struct FullReadout : Readout {
   // EMF power; the power used to drive the motor (which is reflected to the 
   // inductors as back EMF).
   float emf_power;
-  // The measured acceleration of the rotor.
-  float rotor_acceleration;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   int32_t rotations;
   // Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
   float emf_angle_error_variance;
+  // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
+  float emf_angular_speed_variance;
   // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
   // motor efficiently.
   int32_t lead_angle;
@@ -397,11 +397,11 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.emf_power);;
   offset += 4;
-  write_float32(buffer + offset, value.rotor_acceleration);;
-  offset += 4;
   write_int32(buffer + offset, value.rotations);;
   offset += 4;
   write_float32(buffer + offset, value.emf_angle_error_variance);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_angular_speed_variance);;
   offset += 4;
   write_int32(buffer + offset, value.lead_angle);;
   offset += 4;
@@ -464,11 +464,11 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.emf_power = read_float32(buffer + offset);
   offset += 4;
-  result.rotor_acceleration = read_float32(buffer + offset);
-  offset += 4;
   result.rotations = read_int32(buffer + offset);
   offset += 4;
   result.emf_angle_error_variance = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_angular_speed_variance = read_float32(buffer + offset);
   offset += 4;
   result.lead_angle = read_int32(buffer + offset);
   offset += 4;
@@ -869,14 +869,12 @@ struct ControlParameters {
   int16_t angle_fix_max_certainty;
   // Threshold count for determining when to establish the rotor angle.
   int16_t angle_fix_threshold_count;
-  // Threshold count for determining when to establish the EMF direction.
-  int16_t emf_direction_threshold_count;
+  // Time interval in pwm periods to probe the saliency angle when it's too noisy to update the angle from emf.
+  uint16_t angle_probing_interval;
   // Magnet position integral gain.
   float rotor_angle_ki;
   // Magnet angular speed integral gain.
   float rotor_angular_speed_ki;
-  // Averaging gain for the acceleration of the rotor.
-  float rotor_acceleration_ki;
   // Integral gain for the current angle adjustment.
   float current_angle_ki;
   // Integral gain for the current magnitude adjustment.
@@ -903,10 +901,6 @@ struct ControlParameters {
   float saliency_angle_ki;
   // Motor constant integral gain.
   float motor_constant_ki;
-  // Minimum EMF magnitude to consider EMF detected.
-  float min_emf_magnitude;
-  // Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
-  float min_emf_speed;
   // The measurement noise for the current sensing, values under this threshold are likely 0.
   int32_t current_measurement_minimum;
   // We want our measurement error to be above this noise variance to count as a signal.
@@ -917,8 +911,6 @@ struct ControlParameters {
   float inductance_excitation_minimum_square;
   // Maximum allowable current offset to adjust the current sensing bias from 0.
   float current_offset_maximum;
-  // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
-  uint32_t emf_probing_interval;
   // Probing angular speed for initial EMF detection.
   float probing_angular_speed;
   // Maximum PWM at which we use holding commands (or probing).
@@ -966,13 +958,11 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 2;
   write_int16(buffer + offset, value.angle_fix_threshold_count);;
   offset += 2;
-  write_int16(buffer + offset, value.emf_direction_threshold_count);;
+  write_uint16(buffer + offset, value.angle_probing_interval);;
   offset += 2;
   write_float32(buffer + offset, value.rotor_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.rotor_angular_speed_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.rotor_acceleration_ki);;
   offset += 4;
   write_float32(buffer + offset, value.current_angle_ki);;
   offset += 4;
@@ -1000,10 +990,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.motor_constant_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.min_emf_magnitude);;
-  offset += 4;
-  write_float32(buffer + offset, value.min_emf_speed);;
-  offset += 4;
   write_int32(buffer + offset, value.current_measurement_minimum);;
   offset += 4;
   write_float32(buffer + offset, value.voltage_measurement_variance);;
@@ -1013,8 +999,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.inductance_excitation_minimum_square);;
   offset += 4;
   write_float32(buffer + offset, value.current_offset_maximum);;
-  offset += 4;
-  write_uint32(buffer + offset, value.emf_probing_interval);;
   offset += 4;
   write_float32(buffer + offset, value.probing_angular_speed);;
   offset += 4;
@@ -1064,13 +1048,11 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 2;
   result.angle_fix_threshold_count = read_int16(buffer + offset);
   offset += 2;
-  result.emf_direction_threshold_count = read_int16(buffer + offset);
+  result.angle_probing_interval = read_uint16(buffer + offset);
   offset += 2;
   result.rotor_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.rotor_angular_speed_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.rotor_acceleration_ki = read_float32(buffer + offset);
   offset += 4;
   result.current_angle_ki = read_float32(buffer + offset);
   offset += 4;
@@ -1098,10 +1080,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.motor_constant_ki = read_float32(buffer + offset);
   offset += 4;
-  result.min_emf_magnitude = read_float32(buffer + offset);
-  offset += 4;
-  result.min_emf_speed = read_float32(buffer + offset);
-  offset += 4;
   result.current_measurement_minimum = read_int32(buffer + offset);
   offset += 4;
   result.voltage_measurement_variance = read_float32(buffer + offset);
@@ -1111,8 +1089,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   result.inductance_excitation_minimum_square = read_float32(buffer + offset);
   offset += 4;
   result.current_offset_maximum = read_float32(buffer + offset);
-  offset += 4;
-  result.emf_probing_interval = read_uint32(buffer + offset);
   offset += 4;
   result.probing_angular_speed = read_float32(buffer + offset);
   offset += 4;
@@ -1306,8 +1282,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
     case MessageCode::SET_CURRENT_CALIBRATION: return 30;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 178;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 178;
+    case MessageCode::CONTROL_PARAMETERS: return 162;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 162;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
@@ -1527,15 +1503,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 176) return 0;
+      if (max_size < 2 + 160) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 178;
+      return 162;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 176) return 0;
+      if (max_size < 2 + 160) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 178;
+      return 162;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1783,12 +1759,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 176) return false;
+      if (size != 2 + 160) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 176) return false;
+      if (size != 2 + 160) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

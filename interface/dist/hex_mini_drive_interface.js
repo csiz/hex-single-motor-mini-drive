@@ -256,12 +256,12 @@ export class FullReadout extends Readout {
   // EMF power; the power used to drive the motor (which is reflected to the 
   // inductors as back EMF).
   emf_power;
-  // The measured acceleration of the rotor.
-  rotor_acceleration;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   rotations;
   // Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
   emf_angle_error_variance;
+  // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
+  emf_angular_speed_variance;
   // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
   // motor efficiently.
   lead_angle;
@@ -328,11 +328,11 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.emf_power)
   offset += 4;
-  view.setFloat32(offset, value.rotor_acceleration)
-  offset += 4;
   view.setInt32(offset, value.rotations)
   offset += 4;
   view.setFloat32(offset, value.emf_angle_error_variance)
+  offset += 4;
+  view.setFloat32(offset, value.emf_angular_speed_variance)
   offset += 4;
   view.setInt32(offset, value.lead_angle)
   offset += 4;
@@ -396,11 +396,11 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.emf_power = view.getFloat32(offset);
   offset += 4;
-  result.rotor_acceleration = view.getFloat32(offset);
-  offset += 4;
   result.rotations = view.getInt32(offset);
   offset += 4;
   result.emf_angle_error_variance = view.getFloat32(offset);
+  offset += 4;
+  result.emf_angular_speed_variance = view.getFloat32(offset);
   offset += 4;
   result.lead_angle = view.getInt32(offset);
   offset += 4;
@@ -834,14 +834,12 @@ export class ControlParameters {
   angle_fix_max_certainty;
   // Threshold count for determining when to establish the rotor angle.
   angle_fix_threshold_count;
-  // Threshold count for determining when to establish the EMF direction.
-  emf_direction_threshold_count;
+  // Time interval in pwm periods to probe the saliency angle when it's too noisy to update the angle from emf.
+  angle_probing_interval;
   // Magnet position integral gain.
   rotor_angle_ki;
   // Magnet angular speed integral gain.
   rotor_angular_speed_ki;
-  // Averaging gain for the acceleration of the rotor.
-  rotor_acceleration_ki;
   // Integral gain for the current angle adjustment.
   current_angle_ki;
   // Integral gain for the current magnitude adjustment.
@@ -868,10 +866,6 @@ export class ControlParameters {
   saliency_angle_ki;
   // Motor constant integral gain.
   motor_constant_ki;
-  // Minimum EMF magnitude to consider EMF detected.
-  min_emf_magnitude;
-  // Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
-  min_emf_speed;
   // The measurement noise for the current sensing, values under this threshold are likely 0.
   current_measurement_minimum;
   // We want our measurement error to be above this noise variance to count as a signal.
@@ -882,8 +876,6 @@ export class ControlParameters {
   inductance_excitation_minimum_square;
   // Maximum allowable current offset to adjust the current sensing bias from 0.
   current_offset_maximum;
-  // Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
-  emf_probing_interval;
   // Probing angular speed for initial EMF detection.
   probing_angular_speed;
   // Maximum PWM at which we use holding commands (or probing).
@@ -926,7 +918,7 @@ export class ControlParameters {
 }
 
 function write_ControlParameters(value) {
-  const buffer = new Uint8Array(176);
+  const buffer = new Uint8Array(160);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setInt16(offset, value.motor_direction)
@@ -935,13 +927,11 @@ function write_ControlParameters(value) {
   offset += 2;
   view.setInt16(offset, value.angle_fix_threshold_count)
   offset += 2;
-  view.setInt16(offset, value.emf_direction_threshold_count)
+  view.setUint16(offset, value.angle_probing_interval)
   offset += 2;
   view.setFloat32(offset, value.rotor_angle_ki)
   offset += 4;
   view.setFloat32(offset, value.rotor_angular_speed_ki)
-  offset += 4;
-  view.setFloat32(offset, value.rotor_acceleration_ki)
   offset += 4;
   view.setFloat32(offset, value.current_angle_ki)
   offset += 4;
@@ -969,10 +959,6 @@ function write_ControlParameters(value) {
   offset += 4;
   view.setFloat32(offset, value.motor_constant_ki)
   offset += 4;
-  view.setFloat32(offset, value.min_emf_magnitude)
-  offset += 4;
-  view.setFloat32(offset, value.min_emf_speed)
-  offset += 4;
   view.setInt32(offset, value.current_measurement_minimum)
   offset += 4;
   view.setFloat32(offset, value.voltage_measurement_variance)
@@ -982,8 +968,6 @@ function write_ControlParameters(value) {
   view.setFloat32(offset, value.inductance_excitation_minimum_square)
   offset += 4;
   view.setFloat32(offset, value.current_offset_maximum)
-  offset += 4;
-  view.setUint32(offset, value.emf_probing_interval)
   offset += 4;
   view.setFloat32(offset, value.probing_angular_speed)
   offset += 4;
@@ -1032,13 +1016,11 @@ function read_ControlParameters(view, offset = 0) {
   offset += 2;
   result.angle_fix_threshold_count = view.getInt16(offset);
   offset += 2;
-  result.emf_direction_threshold_count = view.getInt16(offset);
+  result.angle_probing_interval = view.getUint16(offset);
   offset += 2;
   result.rotor_angle_ki = view.getFloat32(offset);
   offset += 4;
   result.rotor_angular_speed_ki = view.getFloat32(offset);
-  offset += 4;
-  result.rotor_acceleration_ki = view.getFloat32(offset);
   offset += 4;
   result.current_angle_ki = view.getFloat32(offset);
   offset += 4;
@@ -1066,10 +1048,6 @@ function read_ControlParameters(view, offset = 0) {
   offset += 4;
   result.motor_constant_ki = view.getFloat32(offset);
   offset += 4;
-  result.min_emf_magnitude = view.getFloat32(offset);
-  offset += 4;
-  result.min_emf_speed = view.getFloat32(offset);
-  offset += 4;
   result.current_measurement_minimum = view.getInt32(offset);
   offset += 4;
   result.voltage_measurement_variance = view.getFloat32(offset);
@@ -1079,8 +1057,6 @@ function read_ControlParameters(view, offset = 0) {
   result.inductance_excitation_minimum_square = view.getFloat32(offset);
   offset += 4;
   result.current_offset_maximum = view.getFloat32(offset);
-  offset += 4;
-  result.emf_probing_interval = view.getUint32(offset);
   offset += 4;
   result.probing_angular_speed = view.getFloat32(offset);
   offset += 4;
@@ -1840,13 +1816,13 @@ export function read_message(buffer) {
       return {message_code};
     }
     case CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 176) return null;
+      if (buffer.length !== 2 + 160) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = CONTROL_PARAMETERS;
       return message;
     }
     case SET_CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 176) return null;
+      if (buffer.length !== 2 + 160) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = SET_CONTROL_PARAMETERS;
       return message;

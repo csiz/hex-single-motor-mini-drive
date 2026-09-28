@@ -309,13 +309,14 @@ constexpr float speed_units_to_radians_per_second = angle_units_to_radians * sta
 constexpr float radians_per_second_to_speed_units = 1.f / speed_units_to_radians_per_second;
 
 // Maximum variance of the EMF angle before we start computing EMF angular speed.
-constexpr float emf_angle_variance_threshold = square(30.f * angle_base / 360.f);
+constexpr float emf_angle_variance_threshold = square(20.f * angle_base / 360.f);
 
-constexpr float emf_angle_variance_max = square(180.f * angle_base / 360.f);
+constexpr float emf_angle_variance_max = square(90.f * angle_base / 360.f);
 
 // Inverse of the EMF angle variance threshold to avoid divisions in the fast loop.
 constexpr float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_threshold;
 
+constexpr float emf_angle_variance_max_inverse = 1.f / emf_angle_variance_max;
 
 // Calibration and Control Parameters
 // ----------------------------------
@@ -341,21 +342,19 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .motor_direction = +1,
     .angle_fix_max_certainty = 512,
     .angle_fix_threshold_count = 16,
-    .emf_direction_threshold_count = 32,
+    .angle_probing_interval = pwm_cycles_per_second / 20,
     // Rotor control gains.
     .rotor_angle_ki = std::pow(2, -2),
     // Gain for the angular speed, it should be much lower than the angle gain to average out the noise.
     .rotor_angular_speed_ki = std::pow(2, -3),
-    // Gain for the acceleration, it should be even lower than speed. These are all relative to the position error.
-    .rotor_acceleration_ki = std::pow(2, -4),
     .current_angle_ki = std::pow(2, -2),
     .current_magnitude_ki = std::pow(2, -2),
     // Gain for the EMF angle, it should be much lower than the rotor angle gain to average out the noise.
-    .emf_angle_ki = std::pow(2, -2),
+    .emf_angle_ki = std::pow(2, -5),
     // Gain for the EMF magnitude.
-    .emf_magnitude_ki = std::pow(2, -4),
+    .emf_magnitude_ki = std::pow(2, -5),
     // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.
-    .emf_angular_speed_ki = std::pow(2, -6),
+    .emf_angular_speed_ki = std::pow(2, -5),
 
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
@@ -366,17 +365,11 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .inductance_bias_ki = std::pow(2, -20),
     .saliency_angle_ki = std::pow(2, 32+4),
     .motor_constant_ki = std::pow(2, -11),
-    // Currently unused!
-    .min_emf_magnitude = 0.050 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
-    // Minimum emf speed to be confident in the rotation direction.
-    .min_emf_speed = 5.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),
     .voltage_measurement_variance = square(current_measurement_noise * current_to_voltage_units),
     .resistance_current_minimum = 4.f * current_measurement_noise,
     .inductance_excitation_minimum_square = square(0.050f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT),
     .current_offset_maximum = 16 * adc_to_current_units,
-    // Unused for now.
-    .emf_probing_interval = pwm_cycles_per_second / 20,
     .probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .max_hold_pwm = pwm_max / 4,
     .min_emf_for_motor_constant = 1.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,

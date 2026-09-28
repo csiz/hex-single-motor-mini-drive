@@ -394,10 +394,6 @@ definitions:
           inductors as back EMF).
 
 
-      rotor_acceleration:
-        type: float32
-        doc: The measured acceleration of the rotor.
-
       rotations:
         type: int32
         doc: Integrated number of EMF deduced rotor angle rotations since startup.
@@ -405,6 +401,10 @@ definitions:
       emf_angle_error_variance:
         type: float32
         doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
+
+      emf_angular_speed_variance:
+        type: float32
+        doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
 
       lead_angle:
         type: int32
@@ -630,9 +630,9 @@ definitions:
         type: int16
         doc: Threshold count for determining when to establish the rotor angle.
       
-      emf_direction_threshold_count:
-        type: int16
-        doc: Threshold count for determining when to establish the EMF direction.
+      angle_probing_interval:
+        type: uint16
+        doc: Time interval in pwm periods to probe the saliency angle when it's too noisy to update the angle from emf.
 
       rotor_angle_ki:
         type: float32
@@ -641,10 +641,6 @@ definitions:
       rotor_angular_speed_ki:
         type: float32
         doc: Magnet angular speed integral gain.
-
-      rotor_acceleration_ki:
-        type: float32
-        doc: Averaging gain for the acceleration of the rotor.
 
       current_angle_ki:
         type: float32
@@ -698,14 +694,6 @@ definitions:
         type: float32
         doc: Motor constant integral gain.
 
-      min_emf_magnitude:
-        type: float32
-        doc: Minimum EMF magnitude to consider EMF detected.
-
-      min_emf_speed:
-        type: float32
-        doc: Minimum EMF speed to consider EMF detected, above the noise level, and with a determinate sign.
-
       current_measurement_minimum:
         type: int32
         doc: The measurement noise for the current sensing, values under this threshold are likely 0.
@@ -725,10 +713,6 @@ definitions:
       current_offset_maximum:
         type: float32
         doc: Maximum allowable current offset to adjust the current sensing bias from 0.
-
-      emf_probing_interval:
-        type: uint32
-        doc: Time interval in pwm periods to probe the EMF angle when it's too noisy to update the angle.
 
       probing_angular_speed:
         type: float32

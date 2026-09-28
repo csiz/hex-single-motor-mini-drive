@@ -1054,6 +1054,7 @@ const plot_electric_position = plot_lines({
       y: (d) => d.emf_voltage_angle, label: "EMF Voltage Angle", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
     },
+    {y: (d) => normalize_radians(2*d.emf_voltage_angle)*0.5, label: "EMF Voltage Axis", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: "web_emf_voltage_angle", label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
   ],
@@ -1092,8 +1093,8 @@ const plot_speed = plot_lines({
   y_label: "Angular Speed (rotations/ms)",
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
-    {y: (d) => d.rotor_acceleration * 10, label: "Rotor Acceleration (10ms speed diff)", color: colors.angle_driven},
     {y: "emf_voltage_angular_speed", label: "EMF Voltage Angular Speed", color: colors.voltage_angle},
+    {y: "emf_angular_speed_stdev", label: "EMF Angular Speed stdev", color: colors.angle_driven},
   ],
   curve,
 });
@@ -1271,7 +1272,7 @@ const plot_readout_flags = plot_lines({
   y_label: "Flag setting",
   channels: [
     {y: "emf_detected", label: "EMF detected", color: colors_categories[3]},
-    {y: "emf_fix", label: "EMF position fix", color: colors_categories[4]},
+    {y: "emf_fix", label: "EMF speed fix", color: colors_categories[4]},
     {y: "current_detected", label: "Current detected", color: colors_categories[6]},
     {y: "angle_fix", label: "Rotor position fix", color: colors_categories[7]},
     {y: "nominal_vcc_voltage", label: "Nominal VCC Voltage", color: colors_categories[8]},
@@ -2167,9 +2168,9 @@ const control_parameters_input = Object.fromEntries(
       label: "Angle Fix Threshold Count", 
       description: "Number of consecutive correct direction detections required to regain the angle fix."
     }],
-    ["emf_direction_threshold_count", {
-      label: "EMF Direction Threshold Count", 
-      description: "Number of consecutive correct EMF direction detections required to regain the EMF direction fix."
+    ["angle_probing_interval", {
+      label: "Angle Probing Interval",
+      description: "Interval at which we do the saliency angle probing (when we don't have EMF).",
     }],
     ["rotor_angle_ki", {
       label: "Rotor Angle KI", 
@@ -2179,10 +2180,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Rotor Angular Speed KI", 
       description: `Integral gain for speed of the angle based on the same error used for the EMF angle (an 
       incorrect angle prediction implies a speed error as well).`
-    }],
-    ["rotor_acceleration_ki", {
-      label: "Rotor Acceleration KI", 
-      description: "Integral gain for the rotor acceleration observer; same as above, more resolution."
     }],
     ["current_angle_ki", {
       label: "Current Angle KI", 
@@ -2236,15 +2233,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Motor Constant KI", 
       description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
     }],
-    ["min_emf_magnitude", {
-      label: "Minimum EMF Magnitude for detection", 
-      description: "Minimum EMF voltage magnitude required to declare EMF detected. There is noise in the EMF measurement, so we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated."
-    }],
-    ["min_emf_speed", {
-      label: "Minimum EMF Speed for detection", 
-      description: `Minimum EMF speed required to declare EMF detected. There is noise in the EMF measurement, so
-      we want a threshold just slightly above the noise floor; some spurious EMF readings are tolerated.`
-    }],
     ["current_measurement_minimum", {
       label: "Current Measurement Minimum",
       description: "Minimum current measurement value. Helps in filtering out spurious low current readings."
@@ -2264,10 +2252,6 @@ const control_parameters_input = Object.fromEntries(
     ["current_offset_maximum", {
       label: "Current Offset Maximum",
       description: "Maximum allowable current offset. Helps in filtering out systematic measurement errors."
-    }],
-    ["emf_probing_interval", {
-      label: "EMF Probing Interval",
-      description: "Interval for probing the EMF angle when it is too noisy to use. Determines how frequently we check the EMF angle."
     }],
     ["probing_angular_speed", {
       label: "Probing Angular Speed",

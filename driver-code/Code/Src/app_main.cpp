@@ -833,10 +833,7 @@ void app_tick() {
 
   readout.angle = control_parameters.motor_direction * readout.angle;
   readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
-
   readout.rotations = control_parameters.motor_direction * readout.rotations;
-  readout.rotor_acceleration = control_parameters.motor_direction * readout.rotor_acceleration;
-
 
   // Comms update
   comms_update(readout);

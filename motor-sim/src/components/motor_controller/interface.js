@@ -333,7 +333,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const resistive_power_average = bare_full_readout.resistive_power_average;
   const emf_power = bare_full_readout.emf_power;
 
-  const rotor_acceleration = acceleration_units_to_rotations_per_millisecond_squared(bare_full_readout.rotor_acceleration);
+  const emf_angular_speed_stdev = speed_units_to_rotations_per_millisecond(Math.sqrt(bare_full_readout.emf_angular_speed_variance));
   const rotations = bare_full_readout.rotations;
   const emf_angle_error_stdev = angle_units_to_radians(Math.sqrt(bare_full_readout.emf_angle_error_variance));
   const lead_angle = angle_units_to_radians(bare_full_readout.lead_angle);
@@ -403,8 +403,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     overheating,
     
     emf_angle_error_stdev,
-    
-    rotor_acceleration,
+    emf_angular_speed_stdev,
     rotations,
     
     lead_angle,
