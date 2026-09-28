@@ -355,7 +355,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     // Gain for the EMF magnitude.
     .emf_magnitude_ki = std::pow(2, -4),
     // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.
-    .emf_angular_speed_ki = std::pow(2, -9),
+    .emf_angular_speed_ki = std::pow(2, -6),
 
     .hall_angle_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -11),
