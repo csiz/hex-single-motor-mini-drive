@@ -151,6 +151,12 @@ static inline UnitTestOutput read_UnitTestOutput(uint8_t const* buffer) {
 struct Readout {
   // Readout number; used to identify the readout in the history.
   uint16_t readout_number;
+  // PWM counter value at the start of the control update. Should occur immediately 
+  // after the halfway point.
+  int16_t cycle_start_tick;
+  // PWM counter value at the end of the control update. Should occur immediately 
+  // before the halfway point.
+  int16_t cycle_end_tick;
   // Whether we have an angle fix and how confident it is.
   uint16_t angle_fix;
   // Driver state flags; packed into a 16-bit value.
@@ -183,6 +189,8 @@ struct Readout {
   float vcc_voltage;
   // Angle of the EMF voltage vector.
   int32_t emf_voltage_angle;
+  // Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
+  float emf_angle_variance;
   // EMF voltage magnitude. The EMF is always along the beta direction, but we can have 
   // errors in the measurements and the rotor position and thus we see alpha component 
   // as well. We can rotate the EMF voltage vector fully to the beta direction and get 
@@ -190,11 +198,17 @@ struct Readout {
   float emf_voltage_magnitude;
   // Angular speed of the EMF voltage vector.
   float emf_voltage_angular_speed;
+  // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
+  float emf_angular_speed_variance;
 };
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   size_t offset = 0;
   write_uint16(buffer + offset, value.readout_number);;
+  offset += 2;
+  write_int16(buffer + offset, value.cycle_start_tick);;
+  offset += 2;
+  write_int16(buffer + offset, value.cycle_end_tick);;
   offset += 2;
   write_uint16(buffer + offset, value.angle_fix);;
   offset += 2;
@@ -226,9 +240,13 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_int32(buffer + offset, value.emf_voltage_angle);;
   offset += 4;
+  write_float32(buffer + offset, value.emf_angle_variance);;
+  offset += 4;
   write_float32(buffer + offset, value.emf_voltage_magnitude);;
   offset += 4;
   write_float32(buffer + offset, value.emf_voltage_angular_speed);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_angular_speed_variance);;
   offset += 4;
 }
 static inline Readout read_Readout(uint8_t const* buffer) {
@@ -237,6 +255,10 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   Readout result;
   
   result.readout_number = read_uint16(buffer + offset);
+  offset += 2;
+  result.cycle_start_tick = read_int16(buffer + offset);
+  offset += 2;
+  result.cycle_end_tick = read_int16(buffer + offset);
   offset += 2;
   result.angle_fix = read_uint16(buffer + offset);
   offset += 2;
@@ -268,9 +290,13 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.emf_voltage_angle = read_int32(buffer + offset);
   offset += 4;
+  result.emf_angle_variance = read_float32(buffer + offset);
+  offset += 4;
   result.emf_voltage_magnitude = read_float32(buffer + offset);
   offset += 4;
   result.emf_voltage_angular_speed = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_angular_speed_variance = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -305,12 +331,6 @@ struct FullReadout : Readout {
   float temperature;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
-  // PWM counter value at the start of the control update. Should occur immediately 
-  // after the halfway point.
-  int16_t cycle_start_tick;
-  // PWM counter value at the end of the control update. Should occur immediately 
-  // before the halfway point.
-  int16_t cycle_end_tick;
   // Angle of the current vector.
   int32_t current_angle;
   // Magnitude of the current vector.
@@ -332,10 +352,6 @@ struct FullReadout : Readout {
   float emf_power;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   int32_t rotations;
-  // Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
-  float emf_angle_error_variance;
-  // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
-  float emf_angular_speed_variance;
   // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
   // motor efficiently.
   int32_t lead_angle;
@@ -366,7 +382,7 @@ struct FullReadout : Readout {
 static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
   size_t offset = 0;
   write_Readout(buffer + offset, value);;
-  offset += 64;
+  offset += 76;
   write_float32(buffer + offset, value.main_loop_rate);;
   offset += 4;
   write_float32(buffer + offset, value.adc_update_rate);;
@@ -375,10 +391,6 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
-  write_int16(buffer + offset, value.cycle_start_tick);;
-  offset += 2;
-  write_int16(buffer + offset, value.cycle_end_tick);;
-  offset += 2;
   write_int32(buffer + offset, value.current_angle);;
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
@@ -398,10 +410,6 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   write_float32(buffer + offset, value.emf_power);;
   offset += 4;
   write_int32(buffer + offset, value.rotations);;
-  offset += 4;
-  write_float32(buffer + offset, value.emf_angle_error_variance);;
-  offset += 4;
-  write_float32(buffer + offset, value.emf_angular_speed_variance);;
   offset += 4;
   write_int32(buffer + offset, value.lead_angle);;
   offset += 4;
@@ -432,7 +440,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   size_t offset = 0;
   
   FullReadout result {read_Readout(buffer + offset)};
-  offset += 64;
+  offset += 76;
   
   result.main_loop_rate = read_float32(buffer + offset);
   offset += 4;
@@ -442,10 +450,6 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
-  result.cycle_start_tick = read_int16(buffer + offset);
-  offset += 2;
-  result.cycle_end_tick = read_int16(buffer + offset);
-  offset += 2;
   result.current_angle = read_int32(buffer + offset);
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
@@ -465,10 +469,6 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   result.emf_power = read_float32(buffer + offset);
   offset += 4;
   result.rotations = read_int32(buffer + offset);
-  offset += 4;
-  result.emf_angle_error_variance = read_float32(buffer + offset);
-  offset += 4;
-  result.emf_angular_speed_variance = read_float32(buffer + offset);
   offset += 4;
   result.lead_angle = read_int32(buffer + offset);
   offset += 4;
@@ -915,6 +915,8 @@ struct ControlParameters {
   float probing_angular_speed;
   // Maximum PWM at which we use holding commands (or probing).
   float max_hold_pwm;
+  // Maximum allowable change in the PWM magnitude between control updates.
+  float max_pwm_change;
   // Minium EMF voltage to compute the motor constant.
   float min_emf_for_motor_constant;
   // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
@@ -1003,6 +1005,8 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.probing_angular_speed);;
   offset += 4;
   write_float32(buffer + offset, value.max_hold_pwm);;
+  offset += 4;
+  write_float32(buffer + offset, value.max_pwm_change);;
   offset += 4;
   write_float32(buffer + offset, value.min_emf_for_motor_constant);;
   offset += 4;
@@ -1093,6 +1097,8 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   result.probing_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.max_hold_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.max_pwm_change = read_float32(buffer + offset);
   offset += 4;
   result.min_emf_for_motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -1248,7 +1254,7 @@ struct Message {
 constexpr size_t message_size(MessageCode code) {
   switch (code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
-    case MessageCode::READOUT: return 66;
+    case MessageCode::READOUT: return 78;
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 2;
     case MessageCode::FULL_READOUT: return 182;
@@ -1282,8 +1288,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
     case MessageCode::SET_CURRENT_CALIBRATION: return 30;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 162;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 162;
+    case MessageCode::CONTROL_PARAMETERS: return 166;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 166;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
@@ -1309,9 +1315,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 64) return 0;
+      if (max_size < 2 + 76) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 66;
+      return 78;
     }
     case MessageCode::STREAM_FULL_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_FULL_READOUTS));
@@ -1503,15 +1509,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 160) return 0;
+      if (max_size < 2 + 164) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 162;
+      return 166;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 160) return 0;
+      if (max_size < 2 + 164) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 162;
+      return 166;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1589,7 +1595,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 64) return false;
+      if (size != 2 + 76) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1759,12 +1765,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 160) return false;
+      if (size != 2 + 164) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 160) return false;
+      if (size != 2 + 164) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

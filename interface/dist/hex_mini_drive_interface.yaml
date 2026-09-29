@@ -230,6 +230,18 @@ definitions:
       readout_number:
         type: uint16
         doc: Readout number; used to identify the readout in the history.
+      
+      cycle_start_tick:
+        type: int16
+        doc: |
+          PWM counter value at the start of the control update. Should occur immediately 
+          after the halfway point.
+
+      cycle_end_tick:
+        type: int16
+        doc: |
+          PWM counter value at the end of the control update. Should occur immediately 
+          before the halfway point.
 
       angle_fix:
         type: uint16
@@ -294,6 +306,10 @@ definitions:
         type: int32
         doc: Angle of the EMF voltage vector.
 
+      emf_angle_variance:
+        type: float32
+        doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
+
       emf_voltage_magnitude:
         type: float32
         doc: |
@@ -305,6 +321,10 @@ definitions:
       emf_voltage_angular_speed:
         type: float32
         doc: Angular speed of the EMF voltage vector.
+
+      emf_angular_speed_variance:
+        type: float32
+        doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
 
 
   StreamFullReadouts:
@@ -342,18 +362,6 @@ definitions:
       live_max_pwm:
         type: float32
         doc: Current maximum PWM allowed by the driver.
-
-      cycle_start_tick:
-        type: int16
-        doc: |
-          PWM counter value at the start of the control update. Should occur immediately 
-          after the halfway point.
-
-      cycle_end_tick:
-        type: int16
-        doc: |
-          PWM counter value at the end of the control update. Should occur immediately 
-          before the halfway point.
       
       current_angle:
         type: int32
@@ -397,14 +405,6 @@ definitions:
       rotations:
         type: int32
         doc: Integrated number of EMF deduced rotor angle rotations since startup.
-
-      emf_angle_error_variance:
-        type: float32
-        doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
-
-      emf_angular_speed_variance:
-        type: float32
-        doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
 
       lead_angle:
         type: int32
@@ -626,6 +626,7 @@ definitions:
           Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
           conversely if we cannot determine the correct angle we decrease the certainty by 1. This is
           the maximum value of certainty we can reach, we will lose the angle fix when we decay from max.
+
       angle_fix_threshold_count:
         type: int16
         doc: Threshold count for determining when to establish the rotor angle.
@@ -722,10 +723,13 @@ definitions:
         type: float32
         doc: Maximum PWM at which we use holding commands (or probing).
 
+      max_pwm_change:
+        type: float32
+        doc: Maximum allowable change in the PWM magnitude between control updates.
+
       min_emf_for_motor_constant:
         type: float32
         doc: Minium EMF voltage to compute the motor constant.
-
 
       vcc_undervoltage:
         type: float32

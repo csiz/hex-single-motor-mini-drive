@@ -45,6 +45,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   // Get the readout number, a counter that increments with each readout & PWM cycle.
   const readout_number = bare_readout.readout_number;
   const state_flags = bare_readout.state_flags;
+  const cycle_start_tick = bare_readout.cycle_start_tick;
+  const cycle_end_tick = bare_readout.cycle_end_tick;
   const ref_readout = bare_readout.ref_readout;
 
   // Get the raw readout values.
@@ -64,8 +66,11 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const vcc_voltage = bare_readout.vcc_voltage / VOLTAGE_UNITS_PER_VOLT;
 
   const emf_voltage_angle = angle_units_to_radians(bare_readout.emf_voltage_angle);
+  const emf_angle_stdev = angle_units_to_radians(Math.sqrt(bare_readout.emf_angle_variance));
+  
   const emf_voltage_magnitude = bare_readout.emf_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
+  const emf_angular_speed_stdev = speed_units_to_rotations_per_millisecond(Math.sqrt(bare_readout.emf_angular_speed_variance));
 
   const [u_current, v_current, w_current] = abc_transform(direct_current, quadrature_current, 0);
 
@@ -230,6 +235,9 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     readout_index,
     time,
     dt,
+    cycle_start_tick,
+    cycle_end_tick,
+    
     // State flags
     hall_u,
     hall_v,
@@ -285,7 +293,11 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     emf_angle_error,
     angular_speed,
     vcc_voltage,
-    emf_voltage_angle, emf_voltage_magnitude, emf_voltage_angular_speed,
+    emf_voltage_angle, 
+    emf_voltage_magnitude, 
+    emf_voltage_angular_speed,
+    emf_angle_stdev,
+    emf_angular_speed_stdev,
     web_direct_emf_voltage, web_quadrature_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 
@@ -316,8 +328,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const adc_update_rate = bare_full_readout.adc_update_rate;
   const temperature = calculate_temperature(bare_full_readout.temperature);
   const live_max_pwm = bare_full_readout.live_max_pwm;
-  const cycle_start_tick = bare_full_readout.cycle_start_tick;
-  const cycle_end_tick = bare_full_readout.cycle_end_tick;
+
 
   const current_angle = angle_units_to_radians(bare_full_readout.current_angle);
   const current_magnitude = bare_full_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
@@ -333,9 +344,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const resistive_power_average = bare_full_readout.resistive_power_average;
   const emf_power = bare_full_readout.emf_power;
 
-  const emf_angular_speed_stdev = speed_units_to_rotations_per_millisecond(Math.sqrt(bare_full_readout.emf_angular_speed_variance));
   const rotations = bare_full_readout.rotations;
-  const emf_angle_error_stdev = angle_units_to_radians(Math.sqrt(bare_full_readout.emf_angle_error_variance));
   const lead_angle = angle_units_to_radians(bare_full_readout.lead_angle);
   const active_pwm = bare_full_readout.active_pwm;
   const target = bare_full_readout.target;
@@ -380,10 +389,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     adc_update_rate,
     temperature,
     live_max_pwm,
-    
-    cycle_start_tick,
-    cycle_end_tick,
-    
+
     current_angle, current_magnitude,
     current_angle_offset,
     direct_emf_voltage,
@@ -401,9 +407,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     emf_power_stdev,
     overpowered,
     overheating,
-    
-    emf_angle_error_stdev,
-    emf_angular_speed_stdev,
+
     rotations,
     
     lead_angle,

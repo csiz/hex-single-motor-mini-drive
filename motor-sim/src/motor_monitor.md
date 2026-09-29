@@ -1052,7 +1052,7 @@ const plot_electric_position = plot_lines({
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {
       y: (d) => d.emf_voltage_angle, label: "EMF Voltage Angle", color: colors.voltage_angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
     {y: (d) => normalize_radians(2*d.emf_voltage_angle)*0.5, label: "EMF Voltage Axis", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: "web_emf_voltage_angle", label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
@@ -1072,11 +1072,11 @@ const plot_electric_offsets = plot_lines({
     {y: (d) => d.current_detected ? d.current_angle_offset : null, label: "Current Angle Offset", color: colors.current_angle},
     {
       y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset", color: colors.voltage_angle,
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_error_stdev}),
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
     {y: "emf_angle_error", label: "EMF Angle Error", color: d3.color(colors.angle).brighter(1)},
-    {y: "emf_angle_error_stdev", label: "EMF Angle Error (stdev)", color: d3.color(colors.voltage_angle).darker(1)},
+    {y: "emf_angle_stdev", label: "EMF Angle stdev", color: d3.color(colors.voltage_angle).darker(1)},
     {y: "lead_angle", label: "Lead Angle", color: colors.v},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle_offset : null, label: "Drive Voltage Angle Offset", color: colors_categories[2]},
   ],
@@ -1233,7 +1233,7 @@ const plot_dq0_voltages = plot_lines({
     {y: "direct_emf_voltage", label: "EMF Voltage on Direct axis", color: colors.direct_current},
     {y: "quadrature_emf_voltage", label: "EMF Voltage on Quadrature", color: colors.quadrature_current},
     {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude},
-    {y: "emf_angle_error_stdev", label: "EMF Voltage Stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
+    {y: "emf_angle_stdev", label: "EMF Voltage Stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
     {y: "web_direct_emf_voltage", label: "Voltage on Direct axis (computed online)", color: d3.color(colors.direct_current).brighter(1)},
     {y: "web_quadrature_emf_voltage", label: "Voltage on Quadrature (computed online)", color: d3.color(colors.quadrature_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
@@ -2261,6 +2261,10 @@ const control_parameters_input = Object.fromEntries(
     ["max_hold_pwm", {
       label: "Max Hold PWM",
       description: `Maximum PWM for holding commands.`
+    }],
+    ["max_pwm_change", {
+      label: "Max PWM Change",
+      description: "Maximum allowed change in PWM between control cycles."
     }],
     ["min_emf_for_motor_constant", {
       label: "Threshold for motor constant",

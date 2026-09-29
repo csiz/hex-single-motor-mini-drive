@@ -375,6 +375,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .current_offset_maximum = 16 * adc_to_current_units,
     .probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .max_hold_pwm = pwm_max / 4,
+    .max_pwm_change = pwm_max / 256,
     .min_emf_for_motor_constant = 1.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     .vcc_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     .max_resistive_power = 8.0,

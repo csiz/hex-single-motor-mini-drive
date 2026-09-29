@@ -52,7 +52,6 @@ hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 // Electrical and position state
 hex_mini_drive::FullReadout readout = {
     .live_max_pwm = pwm_max,
-    .emf_angle_error_variance = emf_angle_variance_max,
     .u_current_zero = current_calibration.u_current_zero,
     .v_current_zero = current_calibration.v_current_zero,
     .w_current_zero = current_calibration.w_current_zero,
@@ -1244,12 +1243,12 @@ void ADC1_2_IRQHandler(void){
         emf_angle_adjustment
     );
     
-    const float instant_emf_angle_error_variance = square(emf_axis_error);
+    const float instant_emf_angle_variance = square(emf_axis_error);
     
     // Measure the noise of the angle error. We can't rely on the measured error above the configured noise threshold.
-    const float emf_angle_error_variance = (
-        readout.emf_angle_error_variance +
-        (instant_emf_angle_error_variance - readout.emf_angle_error_variance) * control_parameters.emf_angle_ki
+    const float emf_angle_variance = (
+        readout.emf_angle_variance +
+        (instant_emf_angle_variance - readout.emf_angle_variance) * control_parameters.emf_angle_ki
     );
 
     const float emf_voltage_magnitude = (
@@ -1257,7 +1256,7 @@ void ADC1_2_IRQHandler(void){
         (measured_emf_voltage_magnitude - readout.emf_voltage_magnitude) * control_parameters.emf_magnitude_ki
     );
     
-    const float max_angle_error_variance = max(instant_emf_angle_error_variance, emf_angle_error_variance);
+    const float max_angle_error_variance = max(instant_emf_angle_variance, emf_angle_variance);
     
     // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
     // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
@@ -1532,7 +1531,7 @@ void ADC1_2_IRQHandler(void){
     readout.emf_voltage_angle = emf_voltage_angle;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
-    readout.emf_angle_error_variance = emf_angle_error_variance;
+    readout.emf_angle_variance = emf_angle_variance;
     readout.emf_angular_speed_variance = emf_angular_speed_variance;
 
     readout.vcc_voltage = vcc_voltage;
