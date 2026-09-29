@@ -1315,8 +1315,8 @@ void ADC1_2_IRQHandler(void){
     // Integrate the EMF position error only if we're detecting EMF.
     const int32_t prediction_error = emf_detected * (emf_fix ? 
         // Aim to the axis corrected angle if we have certainty in the emf speed sign.
-        (emf_voltage_angle + sign(emf_voltage_angular_speed) * quarter_circle - predicted_angle) :
-        // Otherwise adjust only to the axis of the emf angle observer.
+        (emf_voltage_angle + (emf_voltage_angular_speed > 0 ? quarter_circle : neg_quarter_circle) - predicted_angle) :
+        // Otherwise adjust only towards the axis of the emf angle observer.
         (((emf_voltage_angle - predicted_angle) & most_positive_angle) - quarter_circle)
     );
     

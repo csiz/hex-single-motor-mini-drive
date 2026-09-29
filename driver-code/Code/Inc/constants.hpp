@@ -284,6 +284,9 @@ constexpr int32_t neg_third_circle = -third_circle;
 // 1/4 of a circle (pi/4) aka 90 degrees.
 constexpr int32_t quarter_circle = angle_base / 4;
 
+// Negative quarter of a circle (-pi/4) aka -90 degrees.
+constexpr int32_t neg_quarter_circle = -quarter_circle;
+
 // Conversion factor between radians and angle units.
 constexpr float radians_to_angle_units = angle_base / (2*3.14159265f);
 
