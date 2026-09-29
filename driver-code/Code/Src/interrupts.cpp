@@ -522,13 +522,8 @@ static inline MotorOutputs update_motor_torque(
     // Squash very low currents to 0 to avoid noise.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
     
-    // Use the quadrature current when we have an angle fix because we know the smooth mode is trying
-    // to drive current orthogonal to the rotor angle. However without an angle fix the target changes
-    // during probing periods so we need to base the sign on the active PWM to cap the max current.
-    const float current_sign = readout.angle_fix ? sign(readout.quadrature_current) : sign(driver_state.active_pwm);
-
     // Get the signed current magnitude to compare against the target.
-    const float measured_current = current_detected * readout.current_magnitude * current_sign;
+    const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle - readout.angle);
 
     // Calculate the difference between the target and measured current.
     const float control_error = (driver_state.target - measured_current) * max_drive_current_inverse;
@@ -594,14 +589,9 @@ static inline MotorOutputs update_motor_torque_speed(
     // Squash very low currents to 0 to avoid noise.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
     
-    // Use the quadrature current when we have an angle fix because we know the smooth mode is trying
-    // to drive current orthogonal to the rotor angle. However without an angle fix the target changes
-    // during probing periods so we need to base the sign on the active PWM to cap the max current.
-    const float current_sign = readout.angle_fix ? sign(readout.quadrature_current) : sign(driver_state.active_pwm);
-
     // Get the signed current magnitude to compare against the target.
-    const float measured_current = current_detected * readout.current_magnitude * current_sign;
-
+    const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle - readout.angle);
+    
     // Calculate the difference between the target and measured current.
     const float current_error = (driver_state.current_target - measured_current) * 
         max_drive_current_inverse * control_parameters.torque_control_ki;
