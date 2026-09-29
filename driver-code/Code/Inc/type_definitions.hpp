@@ -172,6 +172,9 @@ struct DriverState {
     // PWM value actively used to drive the motor.
     float active_pwm;
 
+    // PWM value that we're aiming for in the tight loop with smooth control.
+    float target_pwm;
+
     // The lead angle value used to adjust the angle of the driven phase
     // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
     int32_t lead_angle;

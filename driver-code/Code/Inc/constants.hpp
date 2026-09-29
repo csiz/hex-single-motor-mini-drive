@@ -363,9 +363,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -11),
 
     .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -12),
-    .inductance_ki = std::pow(2, -20),
-    .inductance_bias_ki = std::pow(2, -20),
+    // TODO: re-enable once moved to main loop
+    .resistance_ki = 0.f, // std::pow(2, -12),
+    .inductance_ki = 0.f, // std::pow(2, -20),
+    .inductance_bias_ki = 0.f, // std::pow(2, -20),
     .saliency_angle_ki = std::pow(2, 32+4),
     .motor_constant_ki = std::pow(2, -11),
     .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),
@@ -375,7 +376,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .current_offset_maximum = 16 * adc_to_current_units,
     .probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .max_hold_pwm = pwm_max / 4,
-    .max_pwm_change = pwm_max / 256,
+    .max_pwm_change = pwm_max / 512,
     .min_emf_for_motor_constant = 1.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     .vcc_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     .max_resistive_power = 8.0,

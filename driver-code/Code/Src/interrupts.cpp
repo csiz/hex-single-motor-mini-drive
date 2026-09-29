@@ -486,6 +486,12 @@ static inline MotorOutputs update_motor_smooth(
     // Check if we have an accurate readout angle.
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
+    driver_state.active_pwm += clip_to(
+        -control_parameters.max_pwm_change,
+        +control_parameters.max_pwm_change,
+        driver_state.target_pwm - driver_state.active_pwm
+    );
+
     // Base the direction on the sign of the target PWM.
     const int32_t active_pwm_sign = sign(driver_state.active_pwm);
 
@@ -528,7 +534,7 @@ static inline MotorOutputs update_motor_torque(
     const float control_error = (driver_state.target - measured_current) * max_drive_current_inverse;
 
     // Update the PID control for the torque.
-    driver_state.active_pwm = clip_to(
+    driver_state.target_pwm = clip_to(
         -pwm_max,
         +pwm_max,
         driver_state.active_pwm + control_error * control_parameters.torque_control_ki
@@ -552,7 +558,7 @@ static inline MotorOutputs update_motor_battery_power(
     const float control_error = (driver_state.target - measured_power) * max_drive_power_inverse;
 
     // Update the PID control for the torque.
-    driver_state.active_pwm = clip_to(
+    driver_state.target_pwm = clip_to(
         -pwm_max,
         +pwm_max,
         driver_state.active_pwm + control_error * control_parameters.battery_power_control_ki
@@ -570,7 +576,7 @@ static inline MotorOutputs update_motor_speed(
     const float control_error = (driver_state.target - readout.angular_speed) * max_angular_speed_inverse;
 
     // Update the PID control for the torque.
-    driver_state.active_pwm = clip_to(
+    driver_state.target_pwm = clip_to(
         -pwm_max,
         +pwm_max,
         driver_state.active_pwm + control_error * control_parameters.speed_control_ki
@@ -607,7 +613,7 @@ static inline MotorOutputs update_motor_torque_speed(
     );
 
     // Update the PID control for the torque.
-    driver_state.active_pwm = clip_to(
+    driver_state.target_pwm = clip_to(
         -pwm_max,
         +pwm_max,
         driver_state.active_pwm + control_error
@@ -785,7 +791,8 @@ static inline DriverState setup_driver_state(
                 .mode = DriverMode::DRIVE_SMOOTH,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
-                .active_pwm = clip_to(-pwm_max, +pwm_max, pending_state.active_pwm),
+                .active_pwm = driver_state.active_pwm,
+                .target_pwm = clip_to(-pwm_max, +pwm_max, pending_state.target_pwm),
                 .lead_angle = driver_state.lead_angle,
             };
             

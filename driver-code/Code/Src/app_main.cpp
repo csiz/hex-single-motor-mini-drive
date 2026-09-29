@@ -280,7 +280,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{
         .mode = DriverMode::DRIVE_SMOOTH, 
         .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout,
-        .active_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
+        .target_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
       });
       return;
     }
