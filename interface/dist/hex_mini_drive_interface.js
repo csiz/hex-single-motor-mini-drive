@@ -120,12 +120,14 @@ export class Readout {
   emf_voltage_angular_speed;
   // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
   emf_angular_speed_variance;
+  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
+  saliency_angle_offset;
   
   constructor(init) {Object.assign(this, init);}
 }
 
 function write_Readout(value) {
-  const buffer = new Uint8Array(76);
+  const buffer = new Uint8Array(80);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setUint16(offset, value.readout_number)
@@ -171,6 +173,8 @@ function write_Readout(value) {
   view.setFloat32(offset, value.emf_voltage_angular_speed)
   offset += 4;
   view.setFloat32(offset, value.emf_angular_speed_variance)
+  offset += 4;
+  view.setInt32(offset, value.saliency_angle_offset)
   offset += 4;
   return buffer;
 }
@@ -221,6 +225,8 @@ function read_Readout(view, offset = 0) {
   offset += 4;
   result.emf_angular_speed_variance = view.getFloat32(offset);
   offset += 4;
+  result.saliency_angle_offset = view.getInt32(offset);
+  offset += 4;
   return result;
 }
 // Continuously send full readouts of the motor driver internal state.
@@ -261,10 +267,6 @@ export class FullReadout extends Readout {
   current_angle;
   // Magnitude of the current vector.
   current_magnitude;
-  // EMF voltage in DQ0 coordinates; aligned with the rotor angle.
-  direct_emf_voltage;
-  // EMF voltage in DQ0 coordinates; crossed with the rotor angle.
-  quadrature_emf_voltage;
   // Total power used/given to VCC line (the battery usually).
   total_power;
   // Long duration average of the total power; used to limit the maximum power draw.
@@ -299,8 +301,6 @@ export class FullReadout extends Readout {
   inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   inductance_bias;
-  // Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
-  saliency_angle;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   motor_constant;
   
@@ -308,12 +308,12 @@ export class FullReadout extends Readout {
 }
 
 function write_FullReadout(value) {
-  const buffer = new Uint8Array(180);
+  const buffer = new Uint8Array(172);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  const base_buffer = new Uint8Array(view.buffer, offset, 76).set(write_Readout(value), 0);
+  const base_buffer = new Uint8Array(view.buffer, offset, 80).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
-  offset += 76;
+  offset += 80;
   view.setFloat32(offset, value.main_loop_rate)
   offset += 4;
   view.setFloat32(offset, value.adc_update_rate)
@@ -325,10 +325,6 @@ function write_FullReadout(value) {
   view.setInt32(offset, value.current_angle)
   offset += 4;
   view.setFloat32(offset, value.current_magnitude)
-  offset += 4;
-  view.setFloat32(offset, value.direct_emf_voltage)
-  offset += 4;
-  view.setFloat32(offset, value.quadrature_emf_voltage)
   offset += 4;
   view.setFloat32(offset, value.total_power)
   offset += 4;
@@ -362,8 +358,6 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.inductance_bias)
   offset += 4;
-  view.setInt32(offset, value.saliency_angle)
-  offset += 4;
   view.setFloat32(offset, value.motor_constant)
   offset += 4;
   return buffer;
@@ -372,7 +366,7 @@ function read_FullReadout(view, offset = 0) {
   let result = new FullReadout();
   
   Object.assign(result, read_Readout(view, offset));
-  offset += 76;
+  offset += 80;
   
   result.main_loop_rate = view.getFloat32(offset);
   offset += 4;
@@ -385,10 +379,6 @@ function read_FullReadout(view, offset = 0) {
   result.current_angle = view.getInt32(offset);
   offset += 4;
   result.current_magnitude = view.getFloat32(offset);
-  offset += 4;
-  result.direct_emf_voltage = view.getFloat32(offset);
-  offset += 4;
-  result.quadrature_emf_voltage = view.getFloat32(offset);
   offset += 4;
   result.total_power = view.getFloat32(offset);
   offset += 4;
@@ -421,8 +411,6 @@ function read_FullReadout(view, offset = 0) {
   result.inductance = view.getFloat32(offset);
   offset += 4;
   result.inductance_bias = view.getFloat32(offset);
-  offset += 4;
-  result.saliency_angle = view.getInt32(offset);
   offset += 4;
   result.motor_constant = view.getFloat32(offset);
   offset += 4;
@@ -1628,7 +1616,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case READOUT: {
-      if (buffer.length !== 2 + 76) return null;
+      if (buffer.length !== 2 + 80) return null;
       let message = read_Readout(view, 2);
       message.message_code = READOUT;
       return message;
@@ -1644,7 +1632,7 @@ export function read_message(buffer) {
       return {message_code};
     }
     case FULL_READOUT: {
-      if (buffer.length !== 2 + 180) return null;
+      if (buffer.length !== 2 + 172) return null;
       let message = read_FullReadout(view, 2);
       message.message_code = FULL_READOUT;
       return message;

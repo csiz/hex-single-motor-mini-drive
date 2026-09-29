@@ -326,6 +326,9 @@ definitions:
         type: float32
         doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
 
+      saliency_angle_offset:
+        type: int32
+        doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
 
   StreamFullReadouts:
     doc: |
@@ -370,14 +373,6 @@ definitions:
       current_magnitude:
         type: float32
         doc: Magnitude of the current vector.  
-
-      direct_emf_voltage:
-        type: float32
-        doc: EMF voltage in DQ0 coordinates; aligned with the rotor angle.
-
-      quadrature_emf_voltage:
-        type: float32
-        doc: EMF voltage in DQ0 coordinates; crossed with the rotor angle.
 
       total_power:
         type: float32
@@ -445,10 +440,6 @@ definitions:
       inductance_bias:
         type: float32
         doc: Estimated bias of the inductance due to magnetic saliency.
-
-      saliency_angle:
-        type: int32
-        doc: Estimated angle in stator coordinates of the inductance bias angle (Ld vs Lq).
 
       motor_constant:
         type: float32

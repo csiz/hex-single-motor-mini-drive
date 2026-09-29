@@ -72,6 +72,9 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
   const emf_angular_speed_stdev = speed_units_to_rotations_per_millisecond(Math.sqrt(bare_readout.emf_angular_speed_variance));
 
+  const saliency_angle_offset = angle_units_to_radians(bare_readout.saliency_angle_offset);
+  const saliency_angle = normalize_radians(2*predicted_angle + saliency_angle_offset);
+
   const [u_current, v_current, w_current] = abc_transform(direct_current, quadrature_current, 0);
 
   const prev_direct_current = direct_current - direct_current_diff;
@@ -108,6 +111,10 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
   const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
 
+
+  const direct_emf_voltage = emf_voltage_magnitude * Math.cos(emf_voltage_angle);
+  const quadrature_emf_voltage = emf_voltage_magnitude * Math.sin(emf_voltage_angle);
+  
   const direct_drive_voltage = bare_readout.direct_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
   const quadrature_drive_voltage = bare_readout.quadrature_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
 
@@ -298,6 +305,10 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     emf_voltage_angular_speed,
     emf_angle_stdev,
     emf_angular_speed_stdev,
+    direct_emf_voltage,
+    quadrature_emf_voltage,
+    saliency_angle,
+    saliency_angle_offset,
     web_direct_emf_voltage, web_quadrature_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 
@@ -335,9 +346,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const current_angle_offset = normalize_radians(current_angle - readout.predicted_angle);
 
 
-  const direct_emf_voltage = bare_full_readout.direct_emf_voltage / VOLTAGE_UNITS_PER_VOLT;
-  const quadrature_emf_voltage = bare_full_readout.quadrature_emf_voltage / VOLTAGE_UNITS_PER_VOLT;
-
   const total_power = bare_full_readout.total_power;
   const total_power_average = bare_full_readout.total_power_average;
   const resistive_power = bare_full_readout.resistive_power;
@@ -356,7 +364,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const resistance = bare_full_readout.resistance;
   const inductance = bare_full_readout.inductance;
   const inductance_bias = bare_full_readout.inductance_bias;
-  const saliency_angle = angle_units_to_radians(bare_full_readout.saliency_angle);
   const motor_constant = bare_full_readout.motor_constant;
 
 
@@ -392,8 +399,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
 
     current_angle, current_magnitude,
     current_angle_offset,
-    direct_emf_voltage,
-    quadrature_emf_voltage,
     
     battery_current,
     total_power,
@@ -421,7 +426,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     resistance,
     inductance,
     inductance_bias,
-    saliency_angle,
     motor_constant,
   };
 

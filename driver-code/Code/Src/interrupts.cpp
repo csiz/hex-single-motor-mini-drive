@@ -446,7 +446,7 @@ static inline MotorOutputs update_motor_hfi_saliency_pulses(
     // So they take 8 pwm cycles.
     //
     // We'll also then sleep for n*8 pwm cycles until the next set of pulses.
-    const int32_t angle_from_saliency = readout.saliency_angle / 2;
+    const int32_t angle_from_saliency = readout.angle + readout.saliency_angle_offset / 2;
 
     if (readout.readout_number / hfi_duration % hfi_skips == 0) {
         // Get the step within the pulse sequence.
@@ -1188,9 +1188,10 @@ void ADC1_2_IRQHandler(void){
     const float direct_diff = direct_current_diff * current_diff_to_voltage_units;
     const float quadrature_diff = quadrature_current_diff * current_diff_to_voltage_units;
 
-    // TODO: we probably need to advance the salincy angle at 2x the rotor angular speed. Or make 
-    // it track the rotor angle at high speed when we have EMF feedback.
-    const int32_t saliency_angle = readout.saliency_angle;
+    // The saliency effect is due to the iron between magnets so it occurs twice per 
+    // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
+    // For simplicity's sake we keep the saliency_angle_offset as already doubled.
+    const int32_t saliency_angle = 2*predicted_angle + readout.saliency_angle_offset;
 
     const float cos_saliency = get_cos(saliency_angle);
     const float sin_saliency = get_sin(saliency_angle);
@@ -1434,7 +1435,7 @@ void ADC1_2_IRQHandler(void){
                 quadrature_voltage_error * direct_inductance_bias_voltage
             ) * volts_per_voltage_units_square;
 
-            readout.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
+            readout.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
         }
     } else {
         // Only track the zero offset while there is no noticeable current being measured.
@@ -1463,8 +1464,9 @@ void ADC1_2_IRQHandler(void){
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
     const float emf_power = -(
-        direct_emf_voltage * direct_current + 
-        quadrature_emf_voltage * quadrature_current
+        emf_voltage_magnitude * 
+        current_magnitude * 
+        get_cos(emf_voltage_angle - current_angle)
     ) * dq0_voltage_mul_current_to_power;
 
     // The total power is the power used from the battery. It will be positive when driving
@@ -1524,9 +1526,6 @@ void ADC1_2_IRQHandler(void){
     
     readout.direct_current_diff = direct_current_diff;
     readout.quadrature_current_diff = quadrature_current_diff;
-
-    readout.direct_emf_voltage = direct_emf_voltage;
-    readout.quadrature_emf_voltage = quadrature_emf_voltage;
     
     readout.angle = angle;
     readout.predicted_angle = predicted_angle;
@@ -1548,11 +1547,7 @@ void ADC1_2_IRQHandler(void){
     readout.total_power_average = total_power_average;
     readout.resistive_power = resistive_power;
     readout.resistive_power_average = resistive_power_average;
-
-    // We could drop the emf power calculation but it only costs 10 ticks.
     readout.emf_power = emf_power;
-
-
     readout.lead_angle = driver_state.lead_angle;
     readout.active_pwm = driver_state.active_pwm;
     readout.target = driver_state.current_target;
