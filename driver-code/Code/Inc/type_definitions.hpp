@@ -33,7 +33,7 @@ struct ADCReadings {
 // ------------
 
 // Driving modes for the motor control loop.
-enum struct DriverMode : uint8_t {
+enum struct DriverMode : uint16_t {
     // All motor outputs are set to 0, the coils are all connected to ground slowing down the motor.
     OFF,
     // Motor outputs are tri-state / floating. The motor coils are not connected to the driver and the
@@ -41,12 +41,6 @@ enum struct DriverMode : uint8_t {
     // overcome the MOSFETs body diodes and effectively turn the MOSFETs on. At that point the motor
     // will break, behaving as in the OFF mode. The only way to prevent it is to disconnect the cable.
     FREEWHEEL,
-    // Continue previous command, used to ping the interrupt loop.
-    CONTINUE,
-    // Hold the commanded duty cycle for each phase.
-    HOLD,
-    // Drive the motor using a time indexed schedule with a sequence of hold commands.
-    SCHEDULE,
     // Drive the motor using 6 sector driving. This is the usual drive mode for BLDC motor speed controllers (which are not FOC).
     DRIVE_6_SECTOR,
     // Drive the motor with an open loop periodic excitation of the motor coils. The phases are
@@ -56,27 +50,6 @@ enum struct DriverMode : uint8_t {
     // varied smoothly and target a current that is as close to 90 degrees ahead of the magnetic angle so
     // that we maximize the driving efficiency.
     DRIVE_SMOOTH,
-    // Drive the motor using a fast, integral only, PID loop to control the torque (coil current) produced by the motor.
-    DRIVE_TORQUE,
-    // Drive the motor using a fast, integral only, PID loop to control the battery power (battery current) consumed by the motor.
-    DRIVE_BATTERY_POWER,
-    // Drive the motor using a fast, integral only, PID loop to control the speed of the motor.
-    DRIVE_SPEED,
-    // Drive the motor with maximum target torque or maximum speed whichever is achieved first.
-    DRIVE_TORQUE_SPEED,
-    // Drive the motor to a specific angle using a secondary PID loop to control torque relative to position errors.
-    SEEK_ANGLE,
-    // Drive the motor to a specific angle. Uses a secondary PID loop to control the speed of the motor.
-    RESISTANCE_CALIBRATION,
-    // Drive the motor phases with large steps at opposite poles to measure the current response
-    // and determine the inductance of the motor windings.
-    INDUCTANCE_CALIBRATION,
-    // Drive the motor around a few full rotations to measure inductance bias, and estimate rotor position.
-    ROTATING_CALIBRATION_CHIRP,
-    // Drive the motor on a fixed angle with a varying pwm value.
-    FIXED_CALIBRATION_CHIRP,
-    // Drive the motor using high frequency injection to detect saliency.
-    HFI_SALIENCY_PULSES
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -89,15 +62,15 @@ struct MotorOutputs {
 };
 
 // Enable all motor outputs (U, V, W).
-const uint8_t enable_flags_all = 0b0111;
+const uint16_t enable_flags_all = 0b0111;
 // Enable U phase outputs.
-const uint8_t enable_flags_u = 0b0001;
+const uint16_t enable_flags_u = 0b0001;
 // Enable V phase outputs.
-const uint8_t enable_flags_v = 0b0010;
+const uint16_t enable_flags_v = 0b0010;
 // Enable W phase outputs.
-const uint8_t enable_flags_w = 0b0100;
+const uint16_t enable_flags_w = 0b0100;
 // Disable all motor outputs.
-const uint8_t enable_flags_none = 0b0000;
+const uint16_t enable_flags_none = 0b0000;
 
 // Zeroed motor outputs, used to short circuit break the motor outputs.
 const MotorOutputs breaking_motor_outputs = {
@@ -147,12 +120,31 @@ struct TestParameters {
     int32_t test_angle;
 };
 
+struct DriverCommand {
+    // Duration for the command in PWM cycles.
+    uint16_t duration;
+    // Start the command when the readout_number equals this value.
+    uint16_t start_number;
+    // Control flags for the command.
+    uint16_t motor_flags;
+    // The mode of the driver for this command.
+    DriverMode mode;
+    // Start angle for the command.
+    int32_t angle;
+    // The angular speed for the command.
+    float angular_speed;
+    // Start value for the PWM drive.
+    float pwm_value;
+    // Incremental change for the PWM drive.
+    float pwm_change;
+};
+
 // The complete driver state, these values control the motor behaviour.
 struct DriverState {
     // Settings for the 3 phase MOSFET PWM drivers.
     MotorOutputs motor_outputs = breaking_motor_outputs;
 
-    uint8_t motor_enable_flags = enable_flags_all;
+    uint16_t motor_enable_flags = enable_flags_all;
 
     // Motor driving mode (defaults to short circuit breaking).
     DriverMode mode;
@@ -164,7 +156,7 @@ struct DriverState {
     int32_t active_angle;
     
     // The angular speed of the driving wave.
-    float active_speed;
+    float active_angular_speed;
 
     // PWM value actively used to drive the motor.
     float active_pwm;
@@ -175,30 +167,6 @@ struct DriverState {
     // The lead angle value used to adjust the angle of the driven phase
     // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
     int32_t lead_angle;
-
-    // Integral term for the PWM control via PID.
-    float pwm_integral;
-
-    float current_target;
-    
-    float speed_target;
-    
-    // The target we are aiming for with the command.
-    float target;
-    
-    float seek_integral;
-
-    // The additional data depends on the driver mode.
-    union {
-        // Drive the motor using a fixed PWM schedule.
-        DriveSchedule schedule;
-
-        // Drive the motor to a specific angle.
-        SeekAngle seek_angle;
-
-        // Run a test chirp to calibrate/test the motor.
-        TestParameters test_parameters;
-    };
 };
 
 // Driver state for safely breaking the motor.
