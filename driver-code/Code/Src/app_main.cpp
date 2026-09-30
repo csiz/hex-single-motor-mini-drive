@@ -3,7 +3,6 @@
 #include "interrupts.hpp"
 #include "io.hpp"
 #include "usb_com.hpp"
-#include "test_schedules.hpp"
 #include "parameters_store.hpp"
 #include "math_utils.hpp"
 #include "constants.hpp"
@@ -151,7 +150,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       // Continuously stream data if timeout > 0.
       stream_state = std::get<StreamFullReadouts>(message.message_data).stream_state;
       // Also stop the motor if we stop the stream.
-      if (not stream_state) set_motor_command(DriverState{.mode = DriverMode::OFF});
+      if (not stream_state) set_motor_command(DriverState{.mode = DriverMode::GROUND_SHORT});
       return;
     }
     case GET_READOUTS_SNAPSHOT: {
@@ -168,47 +167,47 @@ void handle_message(hex_mini_drive::Message const& message) {
     // Turn off the motor driver.
     case SET_STATE_OFF: {
       // Repeat command, with the interrupt guards.
-      set_motor_command(DriverState{.mode = DriverMode::OFF});
+      set_motor_command(DriverState{.mode = DriverMode::GROUND_SHORT});
       return;
     }
         
     // Measure the motor phase currents.
     
     case SET_STATE_TEST_ALL_PERMUTATIONS:
-      motor_start_test(
-        test_all_permutations, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
+      // motor_start_test(
+      //   test_all_permutations, 
+      //   std::get<TestCommand>(message.message_data).pwm_value, 
+      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
+      // );
       return;
     case SET_STATE_TEST_GROUND_SHORT:
-      motor_start_test(
-        test_ground_short, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
+      // motor_start_test(
+      //   test_ground_short, 
+      //   std::get<TestCommand>(message.message_data).pwm_value, 
+      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
+      // );
       return;
     case SET_STATE_TEST_POSITIVE_SHORT:
-      motor_start_test(
-        test_positive_short, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
+      // motor_start_test(
+      //   test_positive_short, 
+      //   std::get<TestCommand>(message.message_data).pwm_value, 
+      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
+      // );
       return;
 
     // Drive the motor.
     case SET_STATE_DRIVE_6_SECTOR: {
-      set_motor_command(DriverState{ 
-        .mode = DriverMode::DRIVE_6_SECTOR, 
-        .duration = std::get<BasicDriveCommand>(message.message_data).timeout, 
-        .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
-      });
+      // set_motor_command(DriverState{ 
+      //   .mode = DriverMode::DRIVE_6_SECTOR, 
+      //   .duration = std::get<BasicDriveCommand>(message.message_data).timeout, 
+      //   .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
+      // });
       return;
     }
 
     case SET_STATE_DRIVE_PERIODIC: {
       set_motor_command(DriverState{
-        .mode = DriverMode::DRIVE_PERIODIC, 
+        .mode = DriverMode::DRIVE_FIXED_COORDINATES, 
         .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
         .active_angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
         .active_angular_speed = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
@@ -219,7 +218,7 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     case SET_STATE_DRIVE_SMOOTH: {
       set_motor_command(DriverState{
-        .mode = DriverMode::DRIVE_SMOOTH, 
+        .mode = DriverMode::DRIVE_RELATIVE_COORDINATES, 
         .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout,
         .target_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
       });
@@ -279,7 +278,7 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     // Freewheel the motor.
     case SET_STATE_FREEWHEEL:
-      set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
+      // set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
       return;
 
     case SET_CURRENT_CALIBRATION:
@@ -432,7 +431,7 @@ void handle_message(hex_mini_drive::Message const& message) {
 }
 
 void reset_buffers(){
-  set_motor_command(DriverState{.mode = DriverMode::OFF});
+  set_motor_command(DriverState{.mode = DriverMode::GROUND_SHORT});
 
   encoding_buffer.encode_reset();
   encoding_buffer.decode_reset();
@@ -784,6 +783,83 @@ void app_tick() {
 // };
 
 
+
+// // Update the motor outputs using simple 6 sector driving based on the hall sensors.
+// static inline MotorOutputs update_motor_6_sector(
+//     DriverState const& driver_state,
+//     hex_mini_drive::FullReadout const& readout
+// ){
+
+//     // Update the sector variable.
+//     const uint8_t hall_sector = get_hall_sector(readout.state_flags & hall_state_bit_mask);
+
+//     // Check if the magnet is present.
+//     const bool angle_valid = hall_sector < hall_sector_base;
+
+//     if (not angle_valid) return breaking_motor_outputs;
+
+//     auto const& motor_sector_driving_table = driver_state.active_pwm >= 0 ? 
+//         motor_sector_driving_positive : 
+//         motor_sector_driving_negative;
+
+//     // Get the voltage for the three phases from the table.
+
+//     const float voltage_phase_u = motor_sector_driving_table[hall_sector][0];
+//     const float voltage_phase_v = motor_sector_driving_table[hall_sector][1];
+//     const float voltage_phase_w = motor_sector_driving_table[hall_sector][2];
+
+//     const float abs_pwm = min(
+//         readout.live_max_pwm,
+//         faster_abs(driver_state.active_pwm)
+//     );
+
+//     return MotorOutputs{
+//         .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
+//         .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
+//         .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
+//     };
+// }
+
+// // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
+// // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
+// // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
+// static inline MotorOutputs update_motor_smooth(
+//     DriverState & driver_state,
+//     hex_mini_drive::FullReadout const& readout
+// ){
+//     // Check if we have an accurate readout angle.
+//     const bool current_detected = readout.state_flags & current_detected_bit_mask;
+
+//     driver_state.active_pwm += clip_to(
+//         -control_parameters.max_pwm_change,
+//         +control_parameters.max_pwm_change,
+//         driver_state.target_pwm - driver_state.active_pwm
+//     );
+
+//     // Base the direction on the sign of the target PWM.
+//     const int32_t active_pwm_sign = sign(driver_state.active_pwm);
+
+//     // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
+//     // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+//     // 
+//     // Of course, the inductors take a while to charge and the rotor is producing an EMF
+//     // which all interacts with the current. However, the current that we end up measuring
+//     // should be as close to the 90 degrees as possible for maximum torque per current use.
+//     const int32_t ideal_angle = readout.angle + quarter_circle;
+
+//     // TODO: recalculate this based directly on the current_angle_offset and with a parametrized target angle instead of the fixed quarter circle.
+//     const int32_t current_angle = readout.angle + readout.current_angle_offset;
+//     // Get the error between the measured current and the ideal current angle.
+//     const int32_t lead_angle_error = current_detected * (ideal_angle - current_angle);
+
+//     // Adjust the lead angle to keep the current orthogonal to the rotor magnetic pole.
+//     driver_state.lead_angle += control_parameters.lead_angle_control_ki * lead_angle_error;
+
+//     // Drive the motor to produce current perpendicular to the magnetic angle.
+//     driver_state.active_angle = ideal_angle + active_pwm_sign * driver_state.lead_angle;
+
+//     return update_motor_at_angle(driver_state, readout);
+// }
 // // Drive the motor with the desired output current (note the DQ0 current is 3/2 phase current).
 // // This mode also uses the smooth driving algorithm to drive using field oriented control, thus
 // // keeping the current as close to 90 degrees ahead of the magnetic angle as possible. Allowing

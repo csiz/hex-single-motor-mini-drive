@@ -168,7 +168,7 @@ static inline void readout_history_reset() {
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
-    return (driver_state.mode == DriverMode::OFF) || (driver_state.mode == DriverMode::FREEWHEEL);
+    return (driver_state.mode == DriverMode::GROUND_SHORT);
 }
 
 void set_motor_command(DriverState const& driver_state){
@@ -221,43 +221,6 @@ static inline std::pair<int32_t, int32_t> get_cordic(){
 
 // Motor control functions
 // -----------------------
-
-
-// Update the motor outputs using simple 6 sector driving based on the hall sensors.
-static inline MotorOutputs update_motor_6_sector(
-    DriverState const& driver_state,
-    hex_mini_drive::FullReadout const& readout
-){
-
-    // Update the sector variable.
-    const uint8_t hall_sector = get_hall_sector(readout.state_flags & hall_state_bit_mask);
-
-    // Check if the magnet is present.
-    const bool angle_valid = hall_sector < hall_sector_base;
-
-    if (not angle_valid) return breaking_motor_outputs;
-
-    auto const& motor_sector_driving_table = driver_state.active_pwm >= 0 ? 
-        motor_sector_driving_positive : 
-        motor_sector_driving_negative;
-
-    // Get the voltage for the three phases from the table.
-
-    const float voltage_phase_u = motor_sector_driving_table[hall_sector][0];
-    const float voltage_phase_v = motor_sector_driving_table[hall_sector][1];
-    const float voltage_phase_w = motor_sector_driving_table[hall_sector][2];
-
-    const float abs_pwm = min(
-        readout.live_max_pwm,
-        faster_abs(driver_state.active_pwm)
-    );
-
-    return MotorOutputs{
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
-    };
-}
 
 // Set the motor outputs to the specified active_pwm and active_angle.
 static inline MotorOutputs update_motor_at_angle(
@@ -352,40 +315,36 @@ static inline DriverState setup_driver_state(
     hex_mini_drive::FullReadout const& readout
 ){
     switch(pending_state.mode){
-        case DriverMode::OFF:
+        case DriverMode::GROUND_SHORT:
             return DriverState{
                 .motor_outputs = breaking_motor_outputs,
-                .motor_enable_flags = enable_flags_none,
-                .mode = DriverMode::OFF
+                .motor_enable_flags = enable_flags_all,
+                .mode = DriverMode::GROUND_SHORT
+            };
+        case DriverMode::POSITIVE_SHORT:
+            return DriverState{
+                .motor_outputs = MotorOutputs{
+                    .u_duty = pwm_max,
+                    .v_duty = pwm_max,
+                    .w_duty = pwm_max,
+                },
+                .motor_enable_flags = enable_flags_all,
+                .mode = DriverMode::POSITIVE_SHORT
             };
 
-        case DriverMode::FREEWHEEL:
+        case DriverMode::DRIVE_FIXED_COORDINATES:
             return DriverState{
-                .motor_outputs = breaking_motor_outputs,
-                .motor_enable_flags = enable_flags_none,
-                .mode = DriverMode::FREEWHEEL
-            };
-        
-        case DriverMode::DRIVE_6_SECTOR:
-            return DriverState{
-                .mode = DriverMode::DRIVE_6_SECTOR,
-                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_pwm = clip_to(-pwm_max, pwm_max, pending_state.active_pwm),
-            };
-
-        case DriverMode::DRIVE_PERIODIC:
-            return DriverState{
-                .mode = DriverMode::DRIVE_PERIODIC,
+                .mode = DriverMode::DRIVE_FIXED_COORDINATES,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0),
                 .active_angular_speed = clip_to(-max_angular_speed, max_angular_speed, pending_state.active_angular_speed),
                 .active_pwm = min(pwm_max, faster_abs(pending_state.active_pwm)),
             };
 
-        case DriverMode::DRIVE_SMOOTH:
+        case DriverMode::DRIVE_RELATIVE_COORDINATES:
             // Maintain a some of the previous state so we can smoothly transition to the new state.
             return DriverState{
-                .mode = DriverMode::DRIVE_SMOOTH,
+                .mode = DriverMode::DRIVE_RELATIVE_COORDINATES,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
                 .active_pwm = driver_state.active_pwm,
@@ -405,27 +364,23 @@ static inline void update_motor_control(
     // Update based on the active mode.
     switch (driver_state.mode) {
         
-        case DriverMode::OFF:
+        case DriverMode::GROUND_SHORT:
             // Continously reset the motor outputs to breaking state.
             driver_state.motor_outputs = breaking_motor_outputs;
             driver_state.motor_enable_flags = enable_flags_all;
             return;
 
-        case DriverMode::FREEWHEEL:
-            // Continuously reset the motor outputs to freewheel state.
-            driver_state.motor_outputs = breaking_motor_outputs;
-            driver_state.motor_enable_flags = enable_flags_none;
-            return;
-
-        case DriverMode::DRIVE_6_SECTOR:
-            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
-
-            // Update motor outputs for the 6 sector driving.
-            driver_state.motor_outputs = update_motor_6_sector(driver_state, readout);
+        case DriverMode::POSITIVE_SHORT:
+            // Continously set the motor outputs to maximum.
+            driver_state.motor_outputs = MotorOutputs{
+                .u_duty = pwm_max,
+                .v_duty = pwm_max,
+                .w_duty = pwm_max,
+            };
             driver_state.motor_enable_flags = enable_flags_all;
             return;
 
-        case DriverMode::DRIVE_PERIODIC:
+        case DriverMode::DRIVE_FIXED_COORDINATES:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
             driver_state.motor_outputs = update_motor_periodic(driver_state, readout);
@@ -433,7 +388,7 @@ static inline void update_motor_control(
             return;
                 
 
-        case DriverMode::DRIVE_SMOOTH:
+        case DriverMode::DRIVE_RELATIVE_COORDINATES:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
             // Update the motor outputs for the smooth driving.
@@ -1030,6 +985,7 @@ void ADC1_2_IRQHandler(void){
         reset_calibration_variables_flag = false;
     }
 
+    // TODO: we need complete nan checks; preferably in the main loop.
     if (std::isnan(readout.emf_voltage_magnitude)) {
         readout.emf_voltage_magnitude = 0.f;
     }

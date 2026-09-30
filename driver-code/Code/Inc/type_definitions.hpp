@@ -33,23 +33,17 @@ struct ADCReadings {
 // ------------
 
 // Driving modes for the motor control loop.
-enum struct DriverMode : uint16_t {
+enum struct DriverMode : uint8_t {
     // All motor outputs are set to 0, the coils are all connected to ground slowing down the motor.
-    OFF,
-    // Motor outputs are tri-state / floating. The motor coils are not connected to the driver and the
-    // motor is free to spin. Note that at large speeds the motor will generate a back EMF that can
-    // overcome the MOSFETs body diodes and effectively turn the MOSFETs on. At that point the motor
-    // will break, behaving as in the OFF mode. The only way to prevent it is to disconnect the cable.
-    FREEWHEEL,
-    // Drive the motor using 6 sector driving. This is the usual drive mode for BLDC motor speed controllers (which are not FOC).
-    DRIVE_6_SECTOR,
+    GROUND_SHORT,
+    // Set all motor outputs to maximum, the coils will still be connected together but through the high side switches.
+    POSITIVE_SHORT,
     // Drive the motor with an open loop periodic excitation of the motor coils. The phases are
     // driven around a circle at the specified PWM and speed.
-    DRIVE_PERIODIC,
-    // Drive the motor using FOC targeting a PWM value. The active driving PWM and the active angle are
-    // varied smoothly and target a current that is as close to 90 degrees ahead of the magnetic angle so
-    // that we maximize the driving efficiency.
-    DRIVE_SMOOTH,
+    DRIVE_FIXED_COORDINATES,
+    // Drive the motor using FOC targeting a PWM value. This is the closed loop driving mode where
+    // we aim to induce a current at the specified angle relative to the rotor position.
+    DRIVE_RELATIVE_COORDINATES,
 };
 
 // Motor duty cycle (compare register values and enable settings).
@@ -62,15 +56,15 @@ struct MotorOutputs {
 };
 
 // Enable all motor outputs (U, V, W).
-const uint16_t enable_flags_all = 0b0111;
+const uint8_t enable_flags_all = 0b0111;
 // Enable U phase outputs.
-const uint16_t enable_flags_u = 0b0001;
+const uint8_t enable_flags_u = 0b0001;
 // Enable V phase outputs.
-const uint16_t enable_flags_v = 0b0010;
+const uint8_t enable_flags_v = 0b0010;
 // Enable W phase outputs.
-const uint16_t enable_flags_w = 0b0100;
+const uint8_t enable_flags_w = 0b0100;
 // Disable all motor outputs.
-const uint16_t enable_flags_none = 0b0000;
+const uint8_t enable_flags_none = 0b0000;
 
 // Zeroed motor outputs, used to short circuit break the motor outputs.
 const MotorOutputs breaking_motor_outputs = {
@@ -123,10 +117,8 @@ struct TestParameters {
 struct DriverCommand {
     // Duration for the command in PWM cycles.
     uint16_t duration;
-    // Start the command when the readout_number equals this value.
-    uint16_t start_number;
     // Control flags for the command.
-    uint16_t motor_flags;
+    uint8_t motor_flags;
     // The mode of the driver for this command.
     DriverMode mode;
     // Start angle for the command.
@@ -144,7 +136,7 @@ struct DriverState {
     // Settings for the 3 phase MOSFET PWM drivers.
     MotorOutputs motor_outputs = breaking_motor_outputs;
 
-    uint16_t motor_enable_flags = enable_flags_all;
+    uint8_t motor_enable_flags = enable_flags_all;
 
     // Motor driving mode (defaults to short circuit breaking).
     DriverMode mode;
@@ -172,7 +164,7 @@ struct DriverState {
 // Driver state for safely breaking the motor.
 const DriverState breaking_driver_state = {
     .motor_outputs = breaking_motor_outputs,
-    .mode = DriverMode::OFF
+    .mode = DriverMode::GROUND_SHORT
 };
 
 // Size of the DriverState structure (we want to keep it small for performance).
