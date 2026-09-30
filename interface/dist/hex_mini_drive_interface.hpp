@@ -337,8 +337,8 @@ struct FullReadout : Readout {
   float temperature;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
-  // Angle of the current vector.
-  int32_t current_angle;
+  // Angle of the current vector relative to the rotor angle.
+  int32_t current_angle_offset;
   // Magnitude of the current vector.
   float current_magnitude;
   // Total power used/given to VCC line (the battery usually).
@@ -391,7 +391,7 @@ static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value)
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
-  write_int32(buffer + offset, value.current_angle);;
+  write_int32(buffer + offset, value.current_angle_offset);;
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
   offset += 4;
@@ -444,7 +444,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
-  result.current_angle = read_int32(buffer + offset);
+  result.current_angle_offset = read_int32(buffer + offset);
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
   offset += 4;
@@ -901,8 +901,6 @@ struct ControlParameters {
   float current_offset_maximum;
   // Probing angular speed for initial EMF detection.
   float probing_angular_speed;
-  // Maximum PWM at which we use holding commands (or probing).
-  float max_hold_pwm;
   // Maximum allowable change in the PWM magnitude between control updates.
   float max_pwm_change;
   // Minium EMF voltage to compute the motor constant.
@@ -991,8 +989,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.current_offset_maximum);;
   offset += 4;
   write_float32(buffer + offset, value.probing_angular_speed);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_hold_pwm);;
   offset += 4;
   write_float32(buffer + offset, value.max_pwm_change);;
   offset += 4;
@@ -1084,8 +1080,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.probing_angular_speed = read_float32(buffer + offset);
   offset += 4;
-  result.max_hold_pwm = read_float32(buffer + offset);
-  offset += 4;
   result.max_pwm_change = read_float32(buffer + offset);
   offset += 4;
   result.min_emf_for_motor_constant = read_float32(buffer + offset);
@@ -1173,19 +1167,6 @@ enum MessageCode : uint16_t {
   SET_STATE_FREEWHEEL = 8244,
   SET_STATE_TEST_GROUND_SHORT = 8246,
   SET_STATE_TEST_POSITIVE_SHORT = 8247,
-  SET_STATE_TEST_U_DIRECTIONS = 8249,
-  SET_STATE_TEST_U_INCREASING = 8250,
-  SET_STATE_TEST_U_DECREASING = 8251,
-  SET_STATE_TEST_V_INCREASING = 8252,
-  SET_STATE_TEST_V_DECREASING = 8253,
-  SET_STATE_TEST_W_INCREASING = 8254,
-  SET_STATE_TEST_W_DECREASING = 8255,
-  SET_STATE_HOLD_U_POSITIVE = 12320,
-  SET_STATE_HOLD_V_POSITIVE = 12321,
-  SET_STATE_HOLD_W_POSITIVE = 12322,
-  SET_STATE_HOLD_U_NEGATIVE = 12323,
-  SET_STATE_HOLD_V_NEGATIVE = 12324,
-  SET_STATE_HOLD_W_NEGATIVE = 12325,
   SET_STATE_DRIVE_PERIODIC = 12352,
   SET_STATE_DRIVE_SMOOTH = 16432,
   SET_STATE_DRIVE_TORQUE = 16433,
@@ -1210,6 +1191,7 @@ enum MessageCode : uint16_t {
   SET_STATE_INDUCTANCE_CALIBRATION = 20550,
   SET_STATE_ROTATING_CALIBRATION_CHIRP = 20551,
   SET_STATE_FIXED_CALIBRATION_CHIRP = 20552,
+  SET_STATE_HFI_SALIENCY_PULSES = 20553,
 };
 
 // Generic Message Structure
@@ -1222,7 +1204,6 @@ struct Message {
     FullReadout,
     BasicDriveCommand,
     TestCommand,
-    HoldCommand,
     SetStateDrivePeriodic,
     SetStateDriveSmooth,
     SetStateDriveTorque,
@@ -1252,19 +1233,6 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
     case MessageCode::SET_STATE_TEST_GROUND_SHORT: return 22;
     case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: return 22;
-    case MessageCode::SET_STATE_TEST_U_DIRECTIONS: return 22;
-    case MessageCode::SET_STATE_TEST_U_INCREASING: return 22;
-    case MessageCode::SET_STATE_TEST_U_DECREASING: return 22;
-    case MessageCode::SET_STATE_TEST_V_INCREASING: return 22;
-    case MessageCode::SET_STATE_TEST_V_DECREASING: return 22;
-    case MessageCode::SET_STATE_TEST_W_INCREASING: return 22;
-    case MessageCode::SET_STATE_TEST_W_DECREASING: return 22;
-    case MessageCode::SET_STATE_HOLD_U_POSITIVE: return 10;
-    case MessageCode::SET_STATE_HOLD_V_POSITIVE: return 10;
-    case MessageCode::SET_STATE_HOLD_W_POSITIVE: return 10;
-    case MessageCode::SET_STATE_HOLD_U_NEGATIVE: return 10;
-    case MessageCode::SET_STATE_HOLD_V_NEGATIVE: return 10;
-    case MessageCode::SET_STATE_HOLD_W_NEGATIVE: return 10;
     case MessageCode::SET_STATE_DRIVE_PERIODIC: return 18;
     case MessageCode::SET_STATE_DRIVE_SMOOTH: return 10;
     case MessageCode::SET_STATE_DRIVE_TORQUE: return 10;
@@ -1276,8 +1244,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
     case MessageCode::SET_CURRENT_CALIBRATION: return 30;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 166;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 166;
+    case MessageCode::CONTROL_PARAMETERS: return 162;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 162;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SET_ANGLE: return 6;
@@ -1289,6 +1257,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 22;
     case MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP: return 22;
     case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: return 22;
+    case MessageCode::SET_STATE_HFI_SALIENCY_PULSES: return 22;
   }
   return 0; // Unknown message code
 }
@@ -1355,84 +1324,6 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
       return 22;
     }
-    case MessageCode::SET_STATE_TEST_U_DIRECTIONS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_DIRECTIONS));
-      if (max_size < 2 + 20) return 0;
-      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_TEST_U_INCREASING: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_INCREASING));
-      if (max_size < 2 + 20) return 0;
-      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_TEST_U_DECREASING: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_U_DECREASING));
-      if (max_size < 2 + 20) return 0;
-      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_TEST_V_INCREASING: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_V_INCREASING));
-      if (max_size < 2 + 20) return 0;
-      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_TEST_V_DECREASING: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_V_DECREASING));
-      if (max_size < 2 + 20) return 0;
-      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_TEST_W_INCREASING: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_W_INCREASING));
-      if (max_size < 2 + 20) return 0;
-      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_TEST_W_DECREASING: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_W_DECREASING));
-      if (max_size < 2 + 20) return 0;
-      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_HOLD_U_POSITIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_U_POSITIVE));
-      if (max_size < 2 + 8) return 0;
-      write_HoldCommand(buffer + 2, std::get<HoldCommand>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_HOLD_V_POSITIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_V_POSITIVE));
-      if (max_size < 2 + 8) return 0;
-      write_HoldCommand(buffer + 2, std::get<HoldCommand>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_HOLD_W_POSITIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_W_POSITIVE));
-      if (max_size < 2 + 8) return 0;
-      write_HoldCommand(buffer + 2, std::get<HoldCommand>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_HOLD_U_NEGATIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_U_NEGATIVE));
-      if (max_size < 2 + 8) return 0;
-      write_HoldCommand(buffer + 2, std::get<HoldCommand>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_HOLD_V_NEGATIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_V_NEGATIVE));
-      if (max_size < 2 + 8) return 0;
-      write_HoldCommand(buffer + 2, std::get<HoldCommand>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_HOLD_W_NEGATIVE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HOLD_W_NEGATIVE));
-      if (max_size < 2 + 8) return 0;
-      write_HoldCommand(buffer + 2, std::get<HoldCommand>(message.message_data));
-      return 10;
-    }
     case MessageCode::SET_STATE_DRIVE_PERIODIC: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_PERIODIC));
       if (max_size < 2 + 16) return 0;
@@ -1497,15 +1388,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 164) return 0;
+      if (max_size < 2 + 160) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 166;
+      return 162;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 164) return 0;
+      if (max_size < 2 + 160) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 166;
+      return 162;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1561,6 +1452,12 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP));
+      if (max_size < 2 + 20) return 0;
+      write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
+      return 22;
+    }
+    case MessageCode::SET_STATE_HFI_SALIENCY_PULSES: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HFI_SALIENCY_PULSES));
       if (max_size < 2 + 20) return 0;
       write_TestCommand(buffer + 2, std::get<TestCommand>(message.message_data));
       return 22;
@@ -1632,71 +1529,6 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       message.message_data = read_TestCommand(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_TEST_U_DIRECTIONS: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_TestCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_TEST_U_INCREASING: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_TestCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_TEST_U_DECREASING: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_TestCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_TEST_V_INCREASING: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_TestCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_TEST_V_DECREASING: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_TestCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_TEST_W_INCREASING: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_TestCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_TEST_W_DECREASING: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_TestCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_HOLD_U_POSITIVE: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_HoldCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_HOLD_V_POSITIVE: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_HoldCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_HOLD_W_POSITIVE: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_HoldCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_HOLD_U_NEGATIVE: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_HoldCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_HOLD_V_NEGATIVE: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_HoldCommand(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_HOLD_W_NEGATIVE: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_HoldCommand(buffer + 2);
-      return true;
-    }
     case MessageCode::SET_STATE_DRIVE_PERIODIC: {
       if (size != 2 + 16) return false;
       message.message_data = read_SetStateDrivePeriodic(buffer + 2);
@@ -1753,12 +1585,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 164) return false;
+      if (size != 2 + 160) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 164) return false;
+      if (size != 2 + 160) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
@@ -1813,6 +1645,11 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: {
+      if (size != 2 + 20) return false;
+      message.message_data = read_TestCommand(buffer + 2);
+      return true;
+    }
+    case MessageCode::SET_STATE_HFI_SALIENCY_PULSES: {
       if (size != 2 + 20) return false;
       message.message_data = read_TestCommand(buffer + 2);
       return true;

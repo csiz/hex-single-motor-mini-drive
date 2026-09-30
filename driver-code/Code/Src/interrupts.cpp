@@ -253,7 +253,6 @@ static inline MotorOutputs update_motor_6_sector(
     );
 
     return MotorOutputs{
-        .enable_flags = enable_flags_all,
         .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
         .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
         .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
@@ -280,7 +279,6 @@ static inline MotorOutputs update_motor_at_angle(
     const float voltage_phase_w = get_phase_pwm(angle - neg_third_circle);
 
     return MotorOutputs{
-        .enable_flags = enable_flags_all,
         .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
         .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
         .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
@@ -503,8 +501,10 @@ static inline MotorOutputs update_motor_smooth(
     // should be as close to the 90 degrees as possible for maximum torque per current use.
     const int32_t ideal_angle = readout.angle + quarter_circle;
 
+    // TODO: recalculate this based directly on the current_angle_offset and with a parametrized target angle instead of the fixed quarter circle.
+    const int32_t current_angle = readout.angle + readout.current_angle_offset;
     // Get the error between the measured current and the ideal current angle.
-    const int32_t lead_angle_error = current_detected * (ideal_angle - readout.current_angle);
+    const int32_t lead_angle_error = current_detected * (ideal_angle - current_angle);
 
     // Adjust the lead angle to keep the current orthogonal to the rotor magnetic pole.
     driver_state.lead_angle += control_parameters.lead_angle_control_ki * lead_angle_error;
@@ -528,7 +528,7 @@ static inline MotorOutputs update_motor_torque(
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
     
     // Get the signed current magnitude to compare against the target.
-    const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle - readout.angle);
+    const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle_offset);
 
     // Calculate the difference between the target and measured current.
     const float control_error = (driver_state.target - measured_current) * max_drive_current_inverse;
@@ -595,7 +595,7 @@ static inline MotorOutputs update_motor_torque_speed(
     const bool current_detected = readout.state_flags & current_detected_bit_mask;
     
     // Get the signed current magnitude to compare against the target.
-    const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle - readout.angle);
+    const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle_offset);
     
     // Calculate the difference between the target and measured current.
     const float current_error = (driver_state.current_target - measured_current) * 
@@ -706,7 +706,6 @@ static inline MotorOutputs update_motor_schedule(
     }
     
     return MotorOutputs{
-        .enable_flags = enable_flags_all,
         .u_duty = static_cast<uint16_t>(schedule_stage.u_duty * driver_state.target),
         .v_duty = static_cast<uint16_t>(schedule_stage.v_duty * driver_state.target),
         .w_duty = static_cast<uint16_t>(schedule_stage.w_duty * driver_state.target)
@@ -732,12 +731,14 @@ static inline DriverState setup_driver_state(
         case DriverMode::OFF:
             return DriverState{
                 .motor_outputs = breaking_motor_outputs,
+                .motor_enable_flags = enable_flags_none,
                 .mode = DriverMode::OFF
             };
 
         case DriverMode::FREEWHEEL:
             return DriverState{
-                .motor_outputs = MotorOutputs{.enable_flags = enable_flags_none},
+                .motor_outputs = breaking_motor_outputs,
+                .motor_enable_flags = enable_flags_none,
                 .mode = DriverMode::FREEWHEEL
             };
 
@@ -747,11 +748,11 @@ static inline DriverState setup_driver_state(
         case DriverMode::HOLD:
             return DriverState{
                 .motor_outputs = MotorOutputs {
-                    .enable_flags = pending_state.motor_outputs.enable_flags,
-                    .u_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_hold_pwm, pending_state.motor_outputs.u_duty)),
-                    .v_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_hold_pwm, pending_state.motor_outputs.v_duty)),
-                    .w_duty = static_cast<uint16_t>(clip_to(0, control_parameters.max_hold_pwm, pending_state.motor_outputs.w_duty))
+                    .u_duty = static_cast<uint16_t>(clip_to(0, pwm_max, pending_state.motor_outputs.u_duty)),
+                    .v_duty = static_cast<uint16_t>(clip_to(0, pwm_max, pending_state.motor_outputs.v_duty)),
+                    .w_duty = static_cast<uint16_t>(clip_to(0, pwm_max, pending_state.motor_outputs.w_duty))
                 },
+                .motor_enable_flags = pending_state.motor_enable_flags,
                 .mode = DriverMode::HOLD,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
             };
@@ -781,7 +782,7 @@ static inline DriverState setup_driver_state(
                 .mode = DriverMode::DRIVE_PERIODIC,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .active_angle = pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0),
-                .active_pwm = min(control_parameters.max_hold_pwm, faster_abs(pending_state.active_pwm)),
+                .active_pwm = min(pwm_max, faster_abs(pending_state.active_pwm)),
                 .target = clip_to(-max_angular_speed, max_angular_speed, pending_state.target),
             };
 
@@ -894,12 +895,15 @@ static inline DriverState setup_driver_state(
                 },
             };
 
-        case DriverMode::HFI_SALIENCY_PULSES:
+        case DriverMode::HFI_SALIENCY_PULSES: {
+
             return DriverState{
                 .mode = DriverMode::HFI_SALIENCY_PULSES,
                 .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
                 .target = clip_to(0, pwm_max, pending_state.target),
             };
+        }
+            
     }
 
     return breaking_driver_state;
@@ -916,11 +920,13 @@ static inline void update_motor_control(
         case DriverMode::OFF:
             // Continously reset the motor outputs to breaking state.
             driver_state.motor_outputs = breaking_motor_outputs;
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::FREEWHEEL:
             // Continuously reset the motor outputs to freewheel state.
-            driver_state.motor_outputs = freewheel_motor_outputs;
+            driver_state.motor_outputs = breaking_motor_outputs;
+            driver_state.motor_enable_flags = enable_flags_none;
             return;
 
         case DriverMode::CONTINUE:
@@ -942,6 +948,7 @@ static inline void update_motor_control(
             }
 
             driver_state.motor_outputs = update_motor_schedule(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::DRIVE_6_SECTOR:
@@ -949,12 +956,14 @@ static inline void update_motor_control(
 
             // Update motor outputs for the 6 sector driving.
             driver_state.motor_outputs = update_motor_6_sector(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::DRIVE_PERIODIC:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
             driver_state.motor_outputs = update_motor_periodic(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
                 
 
@@ -963,6 +972,7 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the smooth driving.
             driver_state.motor_outputs = update_motor_smooth(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
 
@@ -971,24 +981,28 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the torque driving.
             driver_state.motor_outputs = update_motor_torque(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::DRIVE_BATTERY_POWER:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
             
             driver_state.motor_outputs = update_motor_battery_power(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::DRIVE_SPEED:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
             
             driver_state.motor_outputs = update_motor_speed(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::DRIVE_TORQUE_SPEED:
             if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
 
             driver_state.motor_outputs = update_motor_torque_speed(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::SEEK_ANGLE:
@@ -996,6 +1010,7 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the seek angle driving using torque control.
             driver_state.motor_outputs = update_motor_seek_angle(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
         
 
@@ -1004,6 +1019,7 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the resistance calibration.
             driver_state.motor_outputs = update_motor_resistance_calibration(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::INDUCTANCE_CALIBRATION:
@@ -1011,6 +1027,7 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the inductance calibration.
             driver_state.motor_outputs = update_motor_inductance_calibration(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
 
         case DriverMode::ROTATING_CALIBRATION_CHIRP:
@@ -1018,6 +1035,7 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the rotating calibration chirp.
             driver_state.motor_outputs = update_motor_rotating_calibration_chirp(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all; 
             return;
 
         case DriverMode::FIXED_CALIBRATION_CHIRP:
@@ -1025,6 +1043,7 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the fixed calibration chirp.
             driver_state.motor_outputs = update_motor_fixed_calibration_chirp(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
         
         case DriverMode::HFI_SALIENCY_PULSES:
@@ -1032,6 +1051,7 @@ static inline void update_motor_control(
 
             // Update the motor outputs for the high frequency injection saliency detection.
             driver_state.motor_outputs = update_motor_hfi_saliency_pulses(driver_state, readout);
+            driver_state.motor_enable_flags = enable_flags_all;
             return;
     }
 
@@ -1168,12 +1188,21 @@ void ADC1_2_IRQHandler(void){
 
     // Calculate the angle at which the current is running on the motor coils. The angle offset is
     // with respect to the predicted angle as that was the angle used in the park transform.
-    const auto [current_angle, current_magnitude] = get_cordic();
+    const auto [instant_current_angle, instant_current_magnitude] = get_cordic();
     
     // The current measurements have a low noise floor, but it's not 0.
-    const bool current_detected = current_magnitude > control_parameters.current_measurement_minimum;
+    const bool current_detected = instant_current_magnitude > control_parameters.current_measurement_minimum;
 
+    const int32_t predicted_current_angle = predicted_angle + readout.current_angle_offset;
 
+    const int32_t current_angle_error = instant_current_angle - predicted_current_angle;
+
+    const int32_t current_angle = predicted_current_angle + static_cast<int32_t>(current_angle_error * control_parameters.current_angle_ki);
+
+    const int32_t current_angle_offset = current_angle - predicted_angle;
+
+    const float current_magnitude = readout.current_magnitude + (instant_current_magnitude - readout.current_magnitude) * control_parameters.current_magnitude_ki;
+    
     // Using DQ0 coordinates
     // ---------------------
     
@@ -1532,7 +1561,7 @@ void ADC1_2_IRQHandler(void){
     readout.angular_speed = angular_speed;
     readout.rotations = rotations;
     
-    readout.current_angle = current_angle;
+    readout.current_angle_offset = current_angle_offset;
     readout.current_magnitude = current_magnitude;
     readout.emf_voltage_angle = emf_voltage_angle;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
@@ -1566,6 +1595,7 @@ void ADC1_2_IRQHandler(void){
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if
     // we set the output registers too late in the cycle.
     set_motor_outputs(driver_state.motor_outputs);
+    set_motor_status(driver_state.motor_enable_flags);
 
     // Re-enable the update for the control registers now that we've written all 3.
     LL_TIM_EnableUpdateEvent(TIM1);

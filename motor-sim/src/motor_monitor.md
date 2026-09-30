@@ -531,17 +531,17 @@ const test_buttons_to_code = [
   ["Test all permutation", MessageCode.SET_STATE_TEST_ALL_PERMUTATIONS],
   ["Test ground short", MessageCode.SET_STATE_TEST_GROUND_SHORT],
   ["Test positive short", MessageCode.SET_STATE_TEST_POSITIVE_SHORT],
-  ["Test U directions", MessageCode.SET_STATE_TEST_U_DIRECTIONS],
-  ["Test U increasing", MessageCode.SET_STATE_TEST_U_INCREASING],
-  ["Test U decreasing", MessageCode.SET_STATE_TEST_U_DECREASING],
-  ["Test V increasing", MessageCode.SET_STATE_TEST_V_INCREASING],
-  ["Test V decreasing", MessageCode.SET_STATE_TEST_V_DECREASING],
-  ["Test W increasing", MessageCode.SET_STATE_TEST_W_INCREASING],
-  ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
+  // ["Test U increasing", MessageCode.SET_STATE_TEST_U_INCREASING],
+  // ["Test U decreasing", MessageCode.SET_STATE_TEST_U_DECREASING],
+  // ["Test V increasing", MessageCode.SET_STATE_TEST_V_INCREASING],
+  // ["Test V decreasing", MessageCode.SET_STATE_TEST_V_DECREASING],
+  // ["Test W increasing", MessageCode.SET_STATE_TEST_W_INCREASING],
+  // ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
   ["Resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
   ["Inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
   ["Rotating chirp calibration", MessageCode.SET_STATE_ROTATING_CALIBRATION_CHIRP],
   ["Fixed chirp calibration", MessageCode.SET_STATE_FIXED_CALIBRATION_CHIRP],
+  ["HFI Saliency Pulses", MessageCode.SET_STATE_HFI_SALIENCY_PULSES],
 ];
 
 const test_buttons = Inputs.button(
@@ -591,24 +591,24 @@ const simple_drive_buttons = Inputs.button(
     ["Drive 6S -", async function(){
       await snapshot_if_checked({message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, pwm_value: -command_pwm});
     }],
-    ["Hold U positive", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_POSITIVE, pwm_value: command_pwm});
-    }],
-    ["Hold V positive", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_POSITIVE, pwm_value: command_pwm});
-    }],
-    ["Hold W positive", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_POSITIVE, pwm_value: command_pwm});
-    }],
-    ["Hold U negative", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_NEGATIVE, pwm_value: command_pwm});
-    }],
-    ["Hold V negative", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_NEGATIVE, pwm_value: command_pwm});
-    }],
-    ["Hold W negative", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_NEGATIVE, pwm_value: command_pwm});
-    }],
+    // ["Hold U positive", async function(){
+    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_POSITIVE, pwm_value: command_pwm});
+    // }],
+    // ["Hold V positive", async function(){
+    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_POSITIVE, pwm_value: command_pwm});
+    // }],
+    // ["Hold W positive", async function(){
+    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_POSITIVE, pwm_value: command_pwm});
+    // }],
+    // ["Hold U negative", async function(){
+    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_NEGATIVE, pwm_value: command_pwm});
+    // }],
+    // ["Hold V negative", async function(){
+    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_NEGATIVE, pwm_value: command_pwm});
+    // }],
+    // ["Hold W negative", async function(){
+    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_NEGATIVE, pwm_value: command_pwm});
+    // }],
   ],
   {label: "Simple drive commands"},
 );

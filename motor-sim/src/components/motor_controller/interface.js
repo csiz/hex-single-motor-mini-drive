@@ -341,9 +341,9 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
   const live_max_pwm = bare_full_readout.live_max_pwm;
 
 
-  const current_angle = angle_units_to_radians(bare_full_readout.current_angle);
+  const current_angle_offset = angle_units_to_radians(bare_full_readout.current_angle_offset);
   const current_magnitude = bare_full_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
-  const current_angle_offset = normalize_radians(current_angle - readout.predicted_angle);
+  const current_angle = normalize_radians(readout.predicted_angle + current_angle_offset);
 
 
   const total_power = bare_full_readout.total_power;

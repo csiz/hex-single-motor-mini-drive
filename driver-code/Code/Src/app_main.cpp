@@ -198,62 +198,6 @@ void handle_message(hex_mini_drive::Message const& message) {
         std::get<TestCommand>(message.message_data).take_snapshot > 0
       );
       return;
-    case SET_STATE_TEST_U_DIRECTIONS:
-      // motor_start_test(
-      //   test_u_directions,
-      //   std::get<TestCommand>(message.message_data).pwm_value,
-      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
-      // );
-      set_motor_command(DriverState{
-        .mode = DriverMode::HFI_SALIENCY_PULSES,
-        .duration = std::get<TestCommand>(message.message_data).test_duration,
-        .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
-      });
-
-      return;
-
-    case SET_STATE_TEST_U_INCREASING:
-      motor_start_test(
-        test_u_increasing, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
-      return;
-    case SET_STATE_TEST_U_DECREASING:
-      motor_start_test(
-        test_u_decreasing, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
-      return;
-    case SET_STATE_TEST_V_INCREASING:
-      motor_start_test(
-        test_v_increasing, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
-      return;
-    case SET_STATE_TEST_V_DECREASING:
-      motor_start_test(
-        test_v_decreasing, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
-      return;
-    case SET_STATE_TEST_W_INCREASING:
-      motor_start_test(
-        test_w_increasing, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
-      return;
-    case SET_STATE_TEST_W_DECREASING:
-      motor_start_test(
-        test_w_decreasing, 
-        std::get<TestCommand>(message.message_data).pwm_value, 
-        std::get<TestCommand>(message.message_data).take_snapshot > 0
-      );
-      return;
 
     // Drive the motor.
     case SET_STATE_DRIVE_6_SECTOR: {
@@ -341,75 +285,6 @@ void handle_message(hex_mini_drive::Message const& message) {
       set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
       return;
 
-    case SET_STATE_HOLD_U_POSITIVE: {
-      set_motor_command(DriverState{ 
-        .motor_outputs = MotorOutputs{ 
-          .enable_flags = enable_flags_all, 
-          .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
-        },
-        .mode = DriverMode::HOLD,
-        .duration = std::get<HoldCommand>(message.message_data).timeout, 
-      });
-      return;
-    }
-    case SET_STATE_HOLD_V_POSITIVE: {
-      set_motor_command(DriverState{ 
-        .motor_outputs = MotorOutputs{ 
-          .enable_flags = enable_flags_all, 
-          .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
-        },
-        .mode = DriverMode::HOLD,
-        .duration = std::get<HoldCommand>(message.message_data).timeout, 
-      });
-      return;
-    }
-    case SET_STATE_HOLD_W_POSITIVE: {
-      set_motor_command(DriverState{ 
-        .motor_outputs = MotorOutputs{ 
-          .enable_flags = enable_flags_all, 
-          .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
-        },
-        .mode = DriverMode::HOLD,
-        .duration = std::get<HoldCommand>(message.message_data).timeout, 
-      });
-      return;
-    }
-    case SET_STATE_HOLD_U_NEGATIVE: {
-      set_motor_command(DriverState{ 
-        .motor_outputs = MotorOutputs{ 
-          .enable_flags = enable_flags_all, 
-          .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
-          .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
-        },
-        .mode = DriverMode::HOLD,
-        .duration = std::get<HoldCommand>(message.message_data).timeout, 
-      });
-      return;
-    }
-    case SET_STATE_HOLD_V_NEGATIVE: {
-      set_motor_command(DriverState{ 
-        .motor_outputs = MotorOutputs{ 
-          .enable_flags = enable_flags_all, 
-          .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
-          .w_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
-        },
-        .mode = DriverMode::HOLD,
-        .duration = std::get<HoldCommand>(message.message_data).timeout, 
-      });
-      return;
-    }
-    case SET_STATE_HOLD_W_NEGATIVE: {
-      set_motor_command(DriverState{
-        .motor_outputs = MotorOutputs{ 
-          .enable_flags = enable_flags_all, 
-          .u_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value)),
-          .v_duty = static_cast<uint16_t>(faster_abs(std::get<HoldCommand>(message.message_data).pwm_value))
-        },
-        .mode = DriverMode::HOLD,
-        .duration = std::get<HoldCommand>(message.message_data).timeout, 
-      });
-      return;
-    }
     case SET_CURRENT_CALIBRATION:
       current_calibration = std::get<CurrentCalibration>(message.message_data);
       reset_calibration_variables();
@@ -540,6 +415,19 @@ void handle_message(hex_mini_drive::Message const& message) {
           .test_duration = std::get<TestCommand>(message.message_data).test_duration,
           .test_angle = std::get<TestCommand>(message.message_data).test_angle
         },
+      });
+      return;
+    }
+    case SET_STATE_HFI_SALIENCY_PULSES: {
+      // Clear the readouts buffer of old data.
+      readout_history_mark_reset();
+      readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
+      readouts_sent = 0;
+      
+      set_motor_command(DriverState{
+        .mode = DriverMode::HFI_SALIENCY_PULSES,
+        .duration = std::get<TestCommand>(message.message_data).test_duration,
+        .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
       });
       return;
     }

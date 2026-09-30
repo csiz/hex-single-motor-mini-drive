@@ -49,45 +49,6 @@ message_codes:
   SET_STATE_TEST_POSITIVE_SHORT:
     message_code: 0x2037
     type: TestCommand
-  SET_STATE_TEST_U_DIRECTIONS:
-    message_code: 0x2039
-    type: TestCommand
-  SET_STATE_TEST_U_INCREASING:
-    message_code: 0x203a
-    type: TestCommand
-  SET_STATE_TEST_U_DECREASING:
-    message_code: 0x203b
-    type: TestCommand
-  SET_STATE_TEST_V_INCREASING:
-    message_code: 0x203c
-    type: TestCommand
-  SET_STATE_TEST_V_DECREASING:
-    message_code: 0x203d
-    type: TestCommand
-  SET_STATE_TEST_W_INCREASING:
-    message_code: 0x203e
-    type: TestCommand
-  SET_STATE_TEST_W_DECREASING:
-    message_code: 0x203f
-    type: TestCommand
-  SET_STATE_HOLD_U_POSITIVE:
-    message_code: 0x3020
-    type: HoldCommand
-  SET_STATE_HOLD_V_POSITIVE:
-    message_code: 0x3021
-    type: HoldCommand
-  SET_STATE_HOLD_W_POSITIVE:
-    message_code: 0x3022
-    type: HoldCommand
-  SET_STATE_HOLD_U_NEGATIVE:
-    message_code: 0x3023
-    type: HoldCommand
-  SET_STATE_HOLD_V_NEGATIVE:
-    message_code: 0x3024
-    type: HoldCommand
-  SET_STATE_HOLD_W_NEGATIVE:
-    message_code: 0x3025
-    type: HoldCommand
     
   SET_STATE_DRIVE_PERIODIC:
     message_code: 0x3040
@@ -166,6 +127,9 @@ message_codes:
     type: TestCommand
   SET_STATE_FIXED_CALIBRATION_CHIRP:
     message_code: 0x5048
+    type: TestCommand
+  SET_STATE_HFI_SALIENCY_PULSES:
+    message_code: 0x5049
     type: TestCommand
 
 
@@ -366,9 +330,9 @@ definitions:
         type: float32
         doc: Current maximum PWM allowed by the driver.
       
-      current_angle:
+      current_angle_offset:
         type: int32
-        doc: Angle of the current vector.
+        doc: Angle of the current vector relative to the rotor angle.
 
       current_magnitude:
         type: float32
@@ -709,10 +673,6 @@ definitions:
       probing_angular_speed:
         type: float32
         doc: Probing angular speed for initial EMF detection.
-
-      max_hold_pwm:
-        type: float32
-        doc: Maximum PWM at which we use holding commands (or probing).
 
       max_pwm_change:
         type: float32

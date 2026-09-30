@@ -33,7 +33,7 @@ struct ADCReadings {
 // ------------
 
 // Driving modes for the motor control loop.
-enum struct DriverMode : uint16_t {
+enum struct DriverMode : uint8_t {
     // All motor outputs are set to 0, the coils are all connected to ground slowing down the motor.
     OFF,
     // Motor outputs are tri-state / floating. The motor coils are not connected to the driver and the
@@ -81,37 +81,29 @@ enum struct DriverMode : uint16_t {
 
 // Motor duty cycle (compare register values and enable settings).
 struct MotorOutputs {
-    uint16_t enable_flags; // Flags to enable/disable the motor outputs.
     uint16_t u_duty; // PWM duty cycle for U phase.
     uint16_t v_duty; // PWM duty cycle for V phase.
     uint16_t w_duty; // PWM duty cycle for W phase.
+    // TODO: add the 4th phase
+    // uint16_t z_duty; // PWM duty cycle for Z phase (4 wire servos).
 };
 
 // Enable all motor outputs (U, V, W).
-const uint16_t enable_flags_all = 0b111;
+const uint8_t enable_flags_all = 0b0111;
 // Enable U phase outputs.
-const uint16_t enable_flags_u = 0b001;
+const uint8_t enable_flags_u = 0b0001;
 // Enable V phase outputs.
-const uint16_t enable_flags_v = 0b010;
+const uint8_t enable_flags_v = 0b0010;
 // Enable W phase outputs.
-const uint16_t enable_flags_w = 0b100;
+const uint8_t enable_flags_w = 0b0100;
 // Disable all motor outputs.
-const uint16_t enable_flags_none = 0b000;
+const uint8_t enable_flags_none = 0b0000;
 
 // Zeroed motor outputs, used to short circuit break the motor outputs.
 const MotorOutputs breaking_motor_outputs = {
-    .enable_flags = enable_flags_all,
     .u_duty = 0,
     .v_duty = 0,
-    .w_duty = 0
-};
-
-// Freewheel motor outputs, used to disconnect the motor phases.
-const MotorOutputs freewheel_motor_outputs = {
-    .enable_flags = enable_flags_none,
-    .u_duty = 0,
-    .v_duty = 0,
-    .w_duty = 0
+    .w_duty = 0,
 };
 
 struct PWMStage {
@@ -160,6 +152,8 @@ struct DriverState {
     // Settings for the 3 phase MOSFET PWM drivers.
     MotorOutputs motor_outputs = breaking_motor_outputs;
 
+    uint8_t motor_enable_flags = enable_flags_all;
+
     // Motor driving mode (defaults to short circuit breaking).
     DriverMode mode;
 
@@ -169,6 +163,9 @@ struct DriverState {
     // Angle at which the motor is currently driven.
     int32_t active_angle;
     
+    // The angular speed of the driving wave.
+    float active_speed;
+
     // PWM value actively used to drive the motor.
     float active_pwm;
 

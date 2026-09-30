@@ -263,8 +263,8 @@ export class FullReadout extends Readout {
   temperature;
   // Current maximum PWM allowed by the driver.
   live_max_pwm;
-  // Angle of the current vector.
-  current_angle;
+  // Angle of the current vector relative to the rotor angle.
+  current_angle_offset;
   // Magnitude of the current vector.
   current_magnitude;
   // Total power used/given to VCC line (the battery usually).
@@ -322,7 +322,7 @@ function write_FullReadout(value) {
   offset += 4;
   view.setFloat32(offset, value.live_max_pwm)
   offset += 4;
-  view.setInt32(offset, value.current_angle)
+  view.setInt32(offset, value.current_angle_offset)
   offset += 4;
   view.setFloat32(offset, value.current_magnitude)
   offset += 4;
@@ -376,7 +376,7 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   result.live_max_pwm = view.getFloat32(offset);
   offset += 4;
-  result.current_angle = view.getInt32(offset);
+  result.current_angle_offset = view.getInt32(offset);
   offset += 4;
   result.current_magnitude = view.getFloat32(offset);
   offset += 4;
@@ -866,8 +866,6 @@ export class ControlParameters {
   current_offset_maximum;
   // Probing angular speed for initial EMF detection.
   probing_angular_speed;
-  // Maximum PWM at which we use holding commands (or probing).
-  max_hold_pwm;
   // Maximum allowable change in the PWM magnitude between control updates.
   max_pwm_change;
   // Minium EMF voltage to compute the motor constant.
@@ -908,7 +906,7 @@ export class ControlParameters {
 }
 
 function write_ControlParameters(value) {
-  const buffer = new Uint8Array(164);
+  const buffer = new Uint8Array(160);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setInt16(offset, value.motor_direction)
@@ -960,8 +958,6 @@ function write_ControlParameters(value) {
   view.setFloat32(offset, value.current_offset_maximum)
   offset += 4;
   view.setFloat32(offset, value.probing_angular_speed)
-  offset += 4;
-  view.setFloat32(offset, value.max_hold_pwm)
   offset += 4;
   view.setFloat32(offset, value.max_pwm_change)
   offset += 4;
@@ -1051,8 +1047,6 @@ function read_ControlParameters(view, offset = 0) {
   result.current_offset_maximum = view.getFloat32(offset);
   offset += 4;
   result.probing_angular_speed = view.getFloat32(offset);
-  offset += 4;
-  result.max_hold_pwm = view.getFloat32(offset);
   offset += 4;
   result.max_pwm_change = view.getFloat32(offset);
   offset += 4;
@@ -1146,19 +1140,6 @@ const SET_STATE_TEST_ALL_PERMUTATIONS = 8242;
 const SET_STATE_FREEWHEEL = 8244;
 const SET_STATE_TEST_GROUND_SHORT = 8246;
 const SET_STATE_TEST_POSITIVE_SHORT = 8247;
-const SET_STATE_TEST_U_DIRECTIONS = 8249;
-const SET_STATE_TEST_U_INCREASING = 8250;
-const SET_STATE_TEST_U_DECREASING = 8251;
-const SET_STATE_TEST_V_INCREASING = 8252;
-const SET_STATE_TEST_V_DECREASING = 8253;
-const SET_STATE_TEST_W_INCREASING = 8254;
-const SET_STATE_TEST_W_DECREASING = 8255;
-const SET_STATE_HOLD_U_POSITIVE = 12320;
-const SET_STATE_HOLD_V_POSITIVE = 12321;
-const SET_STATE_HOLD_W_POSITIVE = 12322;
-const SET_STATE_HOLD_U_NEGATIVE = 12323;
-const SET_STATE_HOLD_V_NEGATIVE = 12324;
-const SET_STATE_HOLD_W_NEGATIVE = 12325;
 const SET_STATE_DRIVE_PERIODIC = 12352;
 const SET_STATE_DRIVE_SMOOTH = 16432;
 const SET_STATE_DRIVE_TORQUE = 16433;
@@ -1183,6 +1164,7 @@ const SET_STATE_RESISTANCE_CALIBRATION = 20549;
 const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
 const SET_STATE_ROTATING_CALIBRATION_CHIRP = 20551;
 const SET_STATE_FIXED_CALIBRATION_CHIRP = 20552;
+const SET_STATE_HFI_SALIENCY_PULSES = 20553;
 
 export const MessageCode = {
   NULL_MESSAGE_CODE,
@@ -1196,19 +1178,6 @@ export const MessageCode = {
   SET_STATE_FREEWHEEL,
   SET_STATE_TEST_GROUND_SHORT,
   SET_STATE_TEST_POSITIVE_SHORT,
-  SET_STATE_TEST_U_DIRECTIONS,
-  SET_STATE_TEST_U_INCREASING,
-  SET_STATE_TEST_U_DECREASING,
-  SET_STATE_TEST_V_INCREASING,
-  SET_STATE_TEST_V_DECREASING,
-  SET_STATE_TEST_W_INCREASING,
-  SET_STATE_TEST_W_DECREASING,
-  SET_STATE_HOLD_U_POSITIVE,
-  SET_STATE_HOLD_V_POSITIVE,
-  SET_STATE_HOLD_W_POSITIVE,
-  SET_STATE_HOLD_U_NEGATIVE,
-  SET_STATE_HOLD_V_NEGATIVE,
-  SET_STATE_HOLD_W_NEGATIVE,
   SET_STATE_DRIVE_PERIODIC,
   SET_STATE_DRIVE_SMOOTH,
   SET_STATE_DRIVE_TORQUE,
@@ -1233,6 +1202,7 @@ export const MessageCode = {
   SET_STATE_INDUCTANCE_CALIBRATION,
   SET_STATE_ROTATING_CALIBRATION_CHIRP,
   SET_STATE_FIXED_CALIBRATION_CHIRP,
+  SET_STATE_HFI_SALIENCY_PULSES,
 };
 
 // Generic Serialize Function
@@ -1312,110 +1282,6 @@ export function write_message(message) {
     }
     case SET_STATE_TEST_POSITIVE_SHORT: {
       const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_U_DIRECTIONS: {
-      const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_U_INCREASING: {
-      const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_U_DECREASING: {
-      const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_V_INCREASING: {
-      const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_V_DECREASING: {
-      const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_W_INCREASING: {
-      const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_W_DECREASING: {
-      const message_buffer = write_TestCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_HOLD_U_POSITIVE: {
-      const message_buffer = write_HoldCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_HOLD_V_POSITIVE: {
-      const message_buffer = write_HoldCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_HOLD_W_POSITIVE: {
-      const message_buffer = write_HoldCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_HOLD_U_NEGATIVE: {
-      const message_buffer = write_HoldCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_HOLD_V_NEGATIVE: {
-      const message_buffer = write_HoldCommand(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_HOLD_W_NEGATIVE: {
-      const message_buffer = write_HoldCommand(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1602,6 +1468,14 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
+    case SET_STATE_HFI_SALIENCY_PULSES: {
+      const message_buffer = write_TestCommand(message);
+      const buffer = new Uint8Array(2 + message_buffer.length);
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, message.message_code);
+      buffer.set(message_buffer, 2);
+      return buffer;
+    }
   }
 }
 
@@ -1669,84 +1543,6 @@ export function read_message(buffer) {
       message.message_code = SET_STATE_TEST_POSITIVE_SHORT;
       return message;
     }
-    case SET_STATE_TEST_U_DIRECTIONS: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_TEST_U_DIRECTIONS;
-      return message;
-    }
-    case SET_STATE_TEST_U_INCREASING: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_TEST_U_INCREASING;
-      return message;
-    }
-    case SET_STATE_TEST_U_DECREASING: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_TEST_U_DECREASING;
-      return message;
-    }
-    case SET_STATE_TEST_V_INCREASING: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_TEST_V_INCREASING;
-      return message;
-    }
-    case SET_STATE_TEST_V_DECREASING: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_TEST_V_DECREASING;
-      return message;
-    }
-    case SET_STATE_TEST_W_INCREASING: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_TEST_W_INCREASING;
-      return message;
-    }
-    case SET_STATE_TEST_W_DECREASING: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
-      message.message_code = SET_STATE_TEST_W_DECREASING;
-      return message;
-    }
-    case SET_STATE_HOLD_U_POSITIVE: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_HoldCommand(view, 2);
-      message.message_code = SET_STATE_HOLD_U_POSITIVE;
-      return message;
-    }
-    case SET_STATE_HOLD_V_POSITIVE: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_HoldCommand(view, 2);
-      message.message_code = SET_STATE_HOLD_V_POSITIVE;
-      return message;
-    }
-    case SET_STATE_HOLD_W_POSITIVE: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_HoldCommand(view, 2);
-      message.message_code = SET_STATE_HOLD_W_POSITIVE;
-      return message;
-    }
-    case SET_STATE_HOLD_U_NEGATIVE: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_HoldCommand(view, 2);
-      message.message_code = SET_STATE_HOLD_U_NEGATIVE;
-      return message;
-    }
-    case SET_STATE_HOLD_V_NEGATIVE: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_HoldCommand(view, 2);
-      message.message_code = SET_STATE_HOLD_V_NEGATIVE;
-      return message;
-    }
-    case SET_STATE_HOLD_W_NEGATIVE: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_HoldCommand(view, 2);
-      message.message_code = SET_STATE_HOLD_W_NEGATIVE;
-      return message;
-    }
     case SET_STATE_DRIVE_PERIODIC: {
       if (buffer.length !== 2 + 16) return null;
       let message = read_SetStateDrivePeriodic(view, 2);
@@ -1810,13 +1606,13 @@ export function read_message(buffer) {
       return {message_code};
     }
     case CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 164) return null;
+      if (buffer.length !== 2 + 160) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = CONTROL_PARAMETERS;
       return message;
     }
     case SET_CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 164) return null;
+      if (buffer.length !== 2 + 160) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = SET_CONTROL_PARAMETERS;
       return message;
@@ -1877,6 +1673,12 @@ export function read_message(buffer) {
       if (buffer.length !== 2 + 20) return null;
       let message = read_TestCommand(view, 2);
       message.message_code = SET_STATE_FIXED_CALIBRATION_CHIRP;
+      return message;
+    }
+    case SET_STATE_HFI_SALIENCY_PULSES: {
+      if (buffer.length !== 2 + 20) return null;
+      let message = read_TestCommand(view, 2);
+      message.message_code = SET_STATE_HFI_SALIENCY_PULSES;
       return message;
     }
   }
