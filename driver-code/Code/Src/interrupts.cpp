@@ -92,12 +92,14 @@ volatile bool reset_calibration_variables_flag = false;
 // Additional state
 // ----------------
 
-
 // Track how many times we think our angle is correct.
 int32_t correct_angle_counter = 0;
 
+// Settings for the 3 phase MOSFET PWM drivers.
+MotorOutputs motor_outputs = breaking_motor_outputs;
+
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
-MotorOutputs previous_motor_outputs = {};
+MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
 
 // Motor driver state
@@ -198,6 +200,9 @@ void reset_calibration_variables() {
     reset_calibration_variables_flag = true;
 }
 
+// Critical functions!! 23KHz PWM cycle
+// ====================================
+
 // Helper functions
 // ----------------
 
@@ -213,33 +218,28 @@ static inline std::pair<int32_t, int32_t> get_cordic(){
     };
 }
 
-
-
-
-// Critical functions!! 23KHz PWM cycle
-// ====================================
-
-// Motor control functions
-// -----------------------
+// Motor control helper
+// --------------------
 
 // Set the motor outputs to the specified active_pwm and active_angle.
-static inline MotorOutputs update_motor_at_angle(
-    DriverState & driver_state,
-    hex_mini_drive::FullReadout const& readout
+static inline MotorOutputs compute_motor_outputs(
+    int32_t const& angle,
+    float const& pwm_value,
+    float const& live_max_pwm
 ) {
     // We need a single comparison and we can then use arithmetic math instead of branching conditionals.
-    const bool negative_pwm = driver_state.active_pwm < 0.f;
+    const bool negative_pwm = pwm_value < 0.f;
 
     // The PWM counter value must be positive, we use the sign to determine the direction.
-    const float abs_pwm = min(readout.live_max_pwm, negative_pwm ? -driver_state.active_pwm : driver_state.active_pwm);
+    const float abs_pwm = min(live_max_pwm, negative_pwm ? -pwm_value : pwm_value);
 
     // Use the active angle or flip it depending on the sign of the PWM.
-    const int32_t angle = driver_state.active_angle + negative_pwm * half_circle;
+    const int32_t adjusted_angle = angle + negative_pwm * half_circle;
 
     // Get the voltage for the three phases from the waveform table.
-    const float voltage_phase_u = get_phase_pwm(angle);
-    const float voltage_phase_v = get_phase_pwm(angle - third_circle);
-    const float voltage_phase_w = get_phase_pwm(angle - neg_third_circle);
+    const float voltage_phase_u = get_phase_pwm(adjusted_angle);
+    const float voltage_phase_v = get_phase_pwm(adjusted_angle - third_circle);
+    const float voltage_phase_w = get_phase_pwm(adjusted_angle - neg_third_circle);
 
     return MotorOutputs{
         .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
@@ -247,160 +247,6 @@ static inline MotorOutputs update_motor_at_angle(
         .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
     };
 }
-
-// Drive the inductors around a circle at the specified PWM and speed (open loop control).
-static inline MotorOutputs update_motor_periodic(
-    DriverState & driver_state,
-    hex_mini_drive::FullReadout const& readout
-){
-    driver_state.active_angle += static_cast<int32_t>(driver_state.active_angular_speed);
-
-    return update_motor_at_angle(driver_state, readout);
-}
-
-// Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
-// close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
-// The PWM duty cycle, drive angle, and angle speed are varied smoothly.
-static inline MotorOutputs update_motor_smooth(
-    DriverState & driver_state,
-    hex_mini_drive::FullReadout const& readout
-){
-    // Check if we have an accurate readout angle.
-    const bool current_detected = readout.state_flags & current_detected_bit_mask;
-
-    driver_state.active_pwm += clip_to(
-        -control_parameters.max_pwm_change,
-        +control_parameters.max_pwm_change,
-        driver_state.target_pwm - driver_state.active_pwm
-    );
-
-    // Base the direction on the sign of the target PWM.
-    const int32_t active_pwm_sign = sign(driver_state.active_pwm);
-
-    // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
-    // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
-    // 
-    // Of course, the inductors take a while to charge and the rotor is producing an EMF
-    // which all interacts with the current. However, the current that we end up measuring
-    // should be as close to the 90 degrees as possible for maximum torque per current use.
-    const int32_t ideal_angle = readout.angle + quarter_circle;
-
-    // TODO: recalculate this based directly on the current_angle_offset and with a parametrized target angle instead of the fixed quarter circle.
-    const int32_t current_angle = readout.angle + readout.current_angle_offset;
-    // Get the error between the measured current and the ideal current angle.
-    const int32_t lead_angle_error = current_detected * (ideal_angle - current_angle);
-
-    // Adjust the lead angle to keep the current orthogonal to the rotor magnetic pole.
-    driver_state.lead_angle += control_parameters.lead_angle_control_ki * lead_angle_error;
-
-    // Drive the motor to produce current perpendicular to the magnetic angle.
-    driver_state.active_angle = ideal_angle + active_pwm_sign * driver_state.lead_angle;
-
-    return update_motor_at_angle(driver_state, readout);
-}
-
-
-// Motor control
-// -------------
-
-// Set the driver state to OFF.
-static inline void set_breaking_control(DriverState & driver_state){
-    driver_state = breaking_driver_state;
-}
-
-// Copy the pending driver state with all values clamped to valid ranges.
-static inline DriverState setup_driver_state(
-    DriverState const& driver_state,
-    DriverState const& pending_state,
-    hex_mini_drive::FullReadout const& readout
-){
-    switch(pending_state.mode){
-        case DriverMode::GROUND_SHORT:
-            return DriverState{
-                .motor_outputs = breaking_motor_outputs,
-                .motor_enable_flags = enable_flags_all,
-                .mode = DriverMode::GROUND_SHORT
-            };
-        case DriverMode::POSITIVE_SHORT:
-            return DriverState{
-                .motor_outputs = MotorOutputs{
-                    .u_duty = pwm_max,
-                    .v_duty = pwm_max,
-                    .w_duty = pwm_max,
-                },
-                .motor_enable_flags = enable_flags_all,
-                .mode = DriverMode::POSITIVE_SHORT
-            };
-
-        case DriverMode::DRIVE_FIXED_COORDINATES:
-            return DriverState{
-                .mode = DriverMode::DRIVE_FIXED_COORDINATES,
-                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = pending_state.active_angle + (pending_state.active_pwm < 0 ? half_circle : 0),
-                .active_angular_speed = clip_to(-max_angular_speed, max_angular_speed, pending_state.active_angular_speed),
-                .active_pwm = min(pwm_max, faster_abs(pending_state.active_pwm)),
-            };
-
-        case DriverMode::DRIVE_RELATIVE_COORDINATES:
-            // Maintain a some of the previous state so we can smoothly transition to the new state.
-            return DriverState{
-                .mode = DriverMode::DRIVE_RELATIVE_COORDINATES,
-                .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                .active_angle = driver_state.active_pwm != 0 ? driver_state.active_angle : readout.angle,
-                .active_pwm = driver_state.active_pwm,
-                .target_pwm = clip_to(-pwm_max, +pwm_max, pending_state.target_pwm),
-                .lead_angle = driver_state.lead_angle,
-            };
-    }
-
-    return breaking_driver_state;
-}
-
-// Update the motor outputs based on the active driver state and measured phase currents and other derived values.
-static inline void update_motor_control(
-    DriverState & driver_state,
-    hex_mini_drive::FullReadout const& readout
-){
-    // Update based on the active mode.
-    switch (driver_state.mode) {
-        
-        case DriverMode::GROUND_SHORT:
-            // Continously reset the motor outputs to breaking state.
-            driver_state.motor_outputs = breaking_motor_outputs;
-            driver_state.motor_enable_flags = enable_flags_all;
-            return;
-
-        case DriverMode::POSITIVE_SHORT:
-            // Continously set the motor outputs to maximum.
-            driver_state.motor_outputs = MotorOutputs{
-                .u_duty = pwm_max,
-                .v_duty = pwm_max,
-                .w_duty = pwm_max,
-            };
-            driver_state.motor_enable_flags = enable_flags_all;
-            return;
-
-        case DriverMode::DRIVE_FIXED_COORDINATES:
-            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
-
-            driver_state.motor_outputs = update_motor_periodic(driver_state, readout);
-            driver_state.motor_enable_flags = enable_flags_all;
-            return;
-                
-
-        case DriverMode::DRIVE_RELATIVE_COORDINATES:
-            if (driver_state.duration-- <= 0) return set_breaking_control(driver_state);
-
-            // Update the motor outputs for the smooth driving.
-            driver_state.motor_outputs = update_motor_smooth(driver_state, readout);
-            driver_state.motor_enable_flags = enable_flags_all;
-            return;
-    }
-
-    // If we get here, we have an unknown/corrupted driver state.
-    return set_breaking_control(driver_state);
-}
-
 
 // ADC readings and calculation loop
 // ---------------------------------
@@ -483,13 +329,13 @@ void ADC1_2_IRQHandler(void){
     // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
     // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
     const ThreePhase drive_voltages = {
-        (driver_state.motor_outputs.u_duty + previous_motor_outputs.u_duty) * half_pwm_to_vcc,
-        (driver_state.motor_outputs.v_duty + previous_motor_outputs.v_duty) * half_pwm_to_vcc,
-        (driver_state.motor_outputs.w_duty + previous_motor_outputs.w_duty) * half_pwm_to_vcc
+        (motor_outputs.u_duty + previous_motor_outputs.u_duty) * half_pwm_to_vcc,
+        (motor_outputs.v_duty + previous_motor_outputs.v_duty) * half_pwm_to_vcc,
+        (motor_outputs.w_duty + previous_motor_outputs.w_duty) * half_pwm_to_vcc
     };
 
     // Store the active motor outputs for the next cycle.
-    previous_motor_outputs = driver_state.motor_outputs;
+    previous_motor_outputs = motor_outputs;
 
 
     // Predict the position; keeping track of fractional angles at the same resolution as
@@ -670,7 +516,7 @@ void ADC1_2_IRQHandler(void){
         0, control_parameters.angle_fix_max_certainty,
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
         // Our angle is incorrect if we don't have an EMF reading whilst driving the motor.
-        correct_angle_counter + ((driver_state.active_pwm and not emf_detected) ? -1 : emf_detected)
+        correct_angle_counter + ((driver_state.pwm_value and not emf_detected) ? -1 : emf_detected)
     );
     
     // Declare the angle to be correct after a threshold certainty.
@@ -919,14 +765,70 @@ void ADC1_2_IRQHandler(void){
     readout.resistive_power = resistive_power;
     readout.resistive_power_average = resistive_power_average;
     readout.emf_power = emf_power;
-    readout.lead_angle = driver_state.lead_angle;
-    readout.active_pwm = driver_state.active_pwm;
+    readout.lead_angle = 0; // TODO: this needs updating from the main loop.
+    readout.active_pwm = driver_state.pwm_value;
     
     // Calculate and set motor outputs!!
     // ---------------------------------
 
-    // Update the motor controls using the readout data.
-    update_motor_control(driver_state, readout);
+    if (driver_state.duration > 0) {
+        // Count down the active duration.
+        driver_state.duration--;
+    } else {
+        // Set the driver state to the safe breaking state if the duration has expired.
+        driver_state = breaking_driver_state;
+    }
+
+    // Update the motor controls using the readout data, based on the active mode.
+    switch (driver_state.mode) {
+        // TODO: we need to handle the pwm change.
+
+        case DriverMode::GROUND_SHORT:
+            // Continously reset the motor outputs to breaking state.
+            motor_outputs = breaking_motor_outputs;
+            break;
+
+        case DriverMode::POSITIVE_SHORT:
+            // Continously set the motor outputs to maximum.
+            motor_outputs = MotorOutputs{
+                .u_duty = driver_state.pwm_value,
+                .v_duty = driver_state.pwm_value,
+                .w_duty = driver_state.pwm_value,
+            };
+            break;
+
+        case DriverMode::DRIVE_FIXED_COORDINATES:{
+            // Drive the inductors around a circle at the specified PWM and speed (open loop control).
+            driver_state.angle += static_cast<int32_t>(driver_state.angular_speed);
+            motor_outputs = compute_motor_outputs(
+                driver_state.angle, 
+                driver_state.pwm_value,
+                readout.live_max_pwm
+            );
+            break;
+        }       
+        case DriverMode::DRIVE_RELATIVE_COORDINATES: {
+            // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
+            // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
+            // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
+            // Base the direction on the sign of the target PWM.
+            const int32_t active_pwm_sign = sign(driver_state.pwm_value);
+
+            // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
+            // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+            const int32_t ideal_angle = readout.angle + quarter_circle;
+
+            // Drive the motor to produce current perpendicular to the magnetic angle.
+            driver_state.angle = ideal_angle + active_pwm_sign * readout.lead_angle;
+
+            motor_outputs = compute_motor_outputs(
+                driver_state.angle,
+                driver_state.pwm_value,
+                readout.live_max_pwm
+            );
+            break;
+        }
+    }
 
     // Disable the update for the control registers so we can write all 3.
     LL_TIM_DisableUpdateEvent(TIM1);
@@ -934,9 +836,8 @@ void ADC1_2_IRQHandler(void){
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if
     // we set the output registers too late in the cycle.
-    set_motor_outputs(driver_state.motor_outputs);
-    set_motor_status(driver_state.motor_enable_flags);
-
+    set_motor_outputs(motor_outputs);
+    
     // Re-enable the update for the control registers now that we've written all 3.
     LL_TIM_EnableUpdateEvent(TIM1);
 
@@ -965,8 +866,52 @@ void ADC1_2_IRQHandler(void){
     // 
     // Note, the new pending state may clear the readout history so this must be done after the history push.
     if (new_pending_state) {
-        driver_state = setup_driver_state(driver_state, pending_state, readout);
+        // Copy the pending driver state with all values clamped to valid ranges.
+        switch(pending_state.mode){
+            case DriverMode::GROUND_SHORT:
+                driver_state = DriverState{
+                    .motor_flags = pending_state.motor_flags,
+                    .mode = DriverMode::GROUND_SHORT
+                };
+                break;
+            case DriverMode::POSITIVE_SHORT:
+                driver_state = DriverState{
+                    .motor_flags = pending_state.motor_flags,
+                    .mode = DriverMode::POSITIVE_SHORT,
+                    // In case we do the positive short, we'll allow the PWM value to be set all the way up to fully on.
+                    .pwm_value = min(static_cast<float>(hex_mini_drive::PWM_BASE), faster_abs(pending_state.pwm_value)),
+                    .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pending_state.pwm_change),
+                };
+                break;
+
+            case DriverMode::DRIVE_FIXED_COORDINATES:
+                driver_state = DriverState{
+                    .motor_flags = pending_state.motor_flags,
+                    .mode = DriverMode::DRIVE_FIXED_COORDINATES,
+                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                    .angle = pending_state.angle + (pending_state.pwm_value < 0 ? half_circle : 0),
+                    .angular_speed = clip_to(-max_angular_speed, max_angular_speed, pending_state.angular_speed),
+                    .pwm_value = min(pwm_max, faster_abs(pending_state.pwm_value)),
+                    .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pending_state.pwm_change),
+                };
+                break;
+
+            case DriverMode::DRIVE_RELATIVE_COORDINATES:
+                // Maintain a some of the previous state so we can smoothly transition to the new state.
+                driver_state = DriverState{
+                    .motor_flags = pending_state.motor_flags,
+                    .mode = DriverMode::DRIVE_RELATIVE_COORDINATES,
+                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
+                    .angle = driver_state.pwm_value != 0 ? driver_state.angle : readout.angle,
+                    .pwm_value = clip_to(-pwm_max, +pwm_max, pending_state.pwm_value),
+                    .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pending_state.pwm_change),
+                };
+                break;
+        }
         new_pending_state = false;
+
+        // Immediately set the motor flags; once per new drive state.
+        set_motor_status(driver_state.motor_flags);
     }
 
     if (reset_calibration_variables_flag) {

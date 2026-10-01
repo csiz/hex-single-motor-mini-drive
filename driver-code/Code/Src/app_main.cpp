@@ -106,21 +106,21 @@ void app_init() {
 // ---------------------------
 
 
-// Start an active test of the motor.
-void motor_start_test(PWMSchedule const& schedule, float value, bool take_snapshot) {
-  // Clear the readouts buffer of old data.
-  readout_history_mark_reset();
-  readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
-  readouts_sent = 0;
+// // Start an active test of the motor.
+// void motor_start_test(PWMSchedule const& schedule, float value, bool take_snapshot) {
+//   // Clear the readouts buffer of old data.
+//   readout_history_mark_reset();
+//   readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
+//   readouts_sent = 0;
 
-  // Start the test schedule.
-  // TODO:...
-  // set_motor_command(DriverState{ 
-  //   .mode = DriverMode::SCHEDULE,
-  //   .target = value,
-  //   .schedule = DriveSchedule{ .pointer = &schedule },
-  // });
-}
+//   // Start the test schedule.
+
+//   set_motor_command(DriverState{ 
+//     .mode = DriverMode::SCHEDULE,
+//     .target = value,
+//     .schedule = DriveSchedule{ .pointer = &schedule },
+//   });
+// }
 
 // Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
 bool run_unit_test(UnitTestFunction test_function) {
@@ -150,7 +150,7 @@ void handle_message(hex_mini_drive::Message const& message) {
       // Continuously stream data if timeout > 0.
       stream_state = std::get<StreamFullReadouts>(message.message_data).stream_state;
       // Also stop the motor if we stop the stream.
-      if (not stream_state) set_motor_command(DriverState{.mode = DriverMode::GROUND_SHORT});
+      if (not stream_state) set_motor_command(breaking_driver_state);
       return;
     }
     case GET_READOUTS_SNAPSHOT: {
@@ -167,7 +167,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     // Turn off the motor driver.
     case SET_STATE_OFF: {
       // Repeat command, with the interrupt guards.
-      set_motor_command(DriverState{.mode = DriverMode::GROUND_SHORT});
+      set_motor_command(breaking_driver_state);
       return;
     }
         
@@ -207,20 +207,22 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     case SET_STATE_DRIVE_PERIODIC: {
       set_motor_command(DriverState{
+        .motor_flags = enable_flags_all,
         .mode = DriverMode::DRIVE_FIXED_COORDINATES, 
         .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
-        .active_angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
-        .active_angular_speed = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
-        .active_pwm = std::get<SetStateDrivePeriodic>(message.message_data).pwm_value,
+        .angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
+        .angular_speed = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
+        .pwm_value = std::get<SetStateDrivePeriodic>(message.message_data).pwm_value,
       });
       return;
     }
 
     case SET_STATE_DRIVE_SMOOTH: {
       set_motor_command(DriverState{
+        .motor_flags = enable_flags_all,
         .mode = DriverMode::DRIVE_RELATIVE_COORDINATES, 
         .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout,
-        .target_pwm = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
+        .pwm_value = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
       });
       return;
     }
@@ -277,9 +279,10 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
 
     // Freewheel the motor.
-    case SET_STATE_FREEWHEEL:
-      // set_motor_command(DriverState{ .mode = DriverMode::FREEWHEEL });
+    case SET_STATE_FREEWHEEL: {
+      set_motor_command(freewheel_driver_state);
       return;
+    }
 
     case SET_CURRENT_CALIBRATION:
       current_calibration = std::get<CurrentCalibration>(message.message_data);
@@ -431,8 +434,6 @@ void handle_message(hex_mini_drive::Message const& message) {
 }
 
 void reset_buffers(){
-  set_motor_command(DriverState{.mode = DriverMode::GROUND_SHORT});
-
   encoding_buffer.encode_reset();
   encoding_buffer.decode_reset();
   last_receive_time = 0;

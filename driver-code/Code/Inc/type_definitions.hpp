@@ -73,70 +73,10 @@ const MotorOutputs breaking_motor_outputs = {
     .w_duty = 0,
 };
 
-struct PWMStage {
-    // Duration of the stage in PWM cycles.
-    uint32_t duration;
-    // PWM duty cycle for U phase.
-    float u_duty;
-    // PWM duty cycle for V phase.
-    float v_duty;
-    // PWM duty cycle for W phase.
-    float w_duty;
-};
-
-// Number of steps in test schedules.
-const size_t schedule_size = 12;
-
-// Motor driving PWM schedule.
-using PWMSchedule = PWMStage[schedule_size];
-
-// Pointer to a PWM schedule to run the test.
-struct DriveSchedule {
-    // Pointer to the schedule data.
-    PWMSchedule const* pointer;
-    // Current stage in the schedule.
-    uint16_t current_stage;
-    // Counter for the time spent (number of cycles) in the current stage.
-    uint16_t stage_counter;
-};
-
-// Drive the motor to a specific position.
-struct SeekAngle {
-    // The target angle. This is the fractional part of the target rotation.
-    int32_t target_angle;
-    // The target rotation index we want the motor to drive towards.
-    int32_t target_rotation;
-};
-
-struct TestParameters {
-    float test_speed;
-    uint32_t test_duration;
-    int32_t test_angle;
-};
-
-struct DriverCommand {
-    // Duration for the command in PWM cycles.
-    uint16_t duration;
-    // Control flags for the command.
-    uint8_t motor_flags;
-    // The mode of the driver for this command.
-    DriverMode mode;
-    // Start angle for the command.
-    int32_t angle;
-    // The angular speed for the command.
-    float angular_speed;
-    // Start value for the PWM drive.
-    float pwm_value;
-    // Incremental change for the PWM drive.
-    float pwm_change;
-};
-
 // The complete driver state, these values control the motor behaviour.
 struct DriverState {
-    // Settings for the 3 phase MOSFET PWM drivers.
-    MotorOutputs motor_outputs = breaking_motor_outputs;
-
-    uint8_t motor_enable_flags = enable_flags_all;
+    // Control flags for the driver (which motor outputs are enabled).
+    uint8_t motor_flags = enable_flags_all;
 
     // Motor driving mode (defaults to short circuit breaking).
     DriverMode mode;
@@ -145,25 +85,27 @@ struct DriverState {
     uint16_t duration;
 
     // Angle at which the motor is currently driven.
-    int32_t active_angle;
+    int32_t angle;
     
     // The angular speed of the driving wave.
-    float active_angular_speed;
+    float angular_speed;
 
     // PWM value actively used to drive the motor.
-    float active_pwm;
+    float pwm_value;
 
-    // PWM value that we're aiming for in the tight loop with smooth control.
-    float target_pwm;
-
-    // The lead angle value used to adjust the angle of the driven phase
-    // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
-    int32_t lead_angle;
+    // Incremental change for the PWM drive.
+    float pwm_change;
 };
 
 // Driver state for safely breaking the motor.
 const DriverState breaking_driver_state = {
-    .motor_outputs = breaking_motor_outputs,
+    .motor_flags = enable_flags_all,
+    .mode = DriverMode::GROUND_SHORT
+};
+
+// Driver state for electrically disconnecting the motor.
+const DriverState freewheel_driver_state = {
+    .motor_flags = enable_flags_none,
     .mode = DriverMode::GROUND_SHORT
 };
 
