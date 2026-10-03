@@ -129,6 +129,99 @@ public:
 };
 
 
+/* Circular buffer for sending generic data types between the main loop and an interrupt.
 
+! The rule is that one side is always the reader and the other always the writer, each must
+invoke only its own operations, never crossing the boundary.
+*/
+template<typename T, size_t N>
+class CircularQueue{
+  // The queue must have at least 2 elements to work.
+  static_assert(N >= 2, "CircularQueue requires N > 2");
 
+  // Data store; initialized to the default.
+  T data[N] = {};
+
+  // Index where we have to write, if there is space available.
+  volatile size_t write_index = 0;
+  // Index of data that we have finished reading.
+  volatile size_t read_index = 0;
+
+  public:
+
+  /* Get the amount of space available for writing. */
+  size_t write_available(){
+    // We can write up to read_index - 1, only the reading loop can push read_index to be equal to write_index.
+    return (read_index + N - 1 - write_index) % N;
+  }
+
+  /* Get the amount of contiguous space available for writing. */
+  size_t contiguous_write_available() {
+    // We must implement this operation with a single access to read_index.
+    const size_t copy_of_read_index = read_index;
+    if (write_index >= copy_of_read_index) {
+      return N - write_index;
+    } else {
+      return copy_of_read_index - write_index;
+    }
+  }
+
+  /* Get the pointer the the write_index. */
+  T * get_write_pointer() {
+    return &data[write_index];
+  }
+
+  /* Commit written data of the specified size. */
+  void mark_written(size_t size) {
+    write_index = (write_index + size) % N;
+  }
+  
+  /* Write an element if space is available. */
+  bool write_if_available(T const& element) {
+    // Check if there is space available for writing.
+    if (write_available() == 0) return false;
+    // There is at least one space; write it there.
+    data[write_index] = element;
+    mark_written(1);
+    return true;
+  }
+
+  /* Get active read element. */
+  T const& peek() {
+    return data[read_index];
+  }
+
+  /* Get modifiable pointer to the read buffer; use with contiguous_read_available() to get the size. */
+  T * get_read_pointer() {
+    return &data[read_index];
+  }
+
+  /* Get the amount of contiguous data available for reading. */
+  size_t contiguous_read_available() {
+    // We must write this operation with a single access to write_index.
+    const size_t copy_of_write_index = write_index;
+    // Note! Make this check identical to the one for writing.
+    if (copy_of_write_index >= read_index) {
+      return copy_of_write_index - read_index;
+    } else {
+      return N - read_index;
+    }
+  }
+
+  size_t read_available() {
+    return (write_index + N - read_index) % N;
+  }
+
+  /* Mark data as read. */
+  void mark_read(size_t size = 1) {
+    read_index = (read_index + size) % N;
+  }
+
+  bool read_if_available(T & element) {
+    if (read_available() == 0) return false;
+    element = data[read_index];
+    mark_read(1);
+    return true;
+  }
+};
 

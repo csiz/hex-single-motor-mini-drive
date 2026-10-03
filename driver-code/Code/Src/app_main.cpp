@@ -2,6 +2,7 @@
 
 #include "interrupts.hpp"
 #include "io.hpp"
+#include "type_definitions.hpp"
 #include "usb_com.hpp"
 #include "parameters_store.hpp"
 #include "math_utils.hpp"
@@ -10,6 +11,9 @@
 #include <stm32g4xx_hal.h>
 #include <stm32g4xx_ll_cordic.h>
 
+
+// Store the latest readout.
+hex_mini_drive::FullReadout latest_readout;
 
 // Keep track of how many readouts we see.
 uint16_t last_readout_number = 0;
@@ -105,6 +109,12 @@ void app_init() {
 // Communications and commands
 // ---------------------------
 
+void break_motor(){
+  while(not driver_state_queue.write_if_available(breaking_driver_state)){
+    // Wait until we successfully write the breaking state to the queue.
+  };
+}
+
 
 // // Start an active test of the motor.
 // void motor_start_test(PWMSchedule const& schedule, float value, bool take_snapshot) {
@@ -150,15 +160,15 @@ void handle_message(hex_mini_drive::Message const& message) {
       // Continuously stream data if timeout > 0.
       stream_state = std::get<StreamFullReadouts>(message.message_data).stream_state;
       // Also stop the motor if we stop the stream.
-      if (not stream_state) set_motor_command(breaking_driver_state);
+      if (not stream_state) break_motor();
       return;
     }
+
+    // TODO: what to do about this one?
     case GET_READOUTS_SNAPSHOT: {
       // Cancel streaming; so we can take a data snapshot without interruptions.
       stream_state = 0;
-      
-      // Reply with the full history.
-      readout_history_mark_reset();
+
       readouts_to_send = hex_mini_drive::HISTORY_SIZE;
       readouts_sent = 0;
 
@@ -167,7 +177,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     // Turn off the motor driver.
     case SET_STATE_OFF: {
       // Repeat command, with the interrupt guards.
-      set_motor_command(breaking_driver_state);
+      break_motor();
       return;
     }
         
@@ -206,23 +216,33 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_STATE_DRIVE_PERIODIC: {
-      set_motor_command(DriverState{
+      driver_state_queue.write_if_available(DriverState{
         .motor_flags = enable_flags_all,
-        .mode = DriverMode::DRIVE_FIXED_COORDINATES, 
+        .enable_closed_loop = false,
         .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
+        .pwm_value = min(pwm_max, faster_abs(
+          std::get<SetStateDrivePeriodic>(message.message_data).pwm_value
+        )),
+        .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
+          0/* std::get<SetStateDrivePeriodic>(message.message_data).pwm_change */
+        ),
         .angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
-        .angular_speed = std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction,
-        .pwm_value = std::get<SetStateDrivePeriodic>(message.message_data).pwm_value,
+        .angular_speed = clip_to(-max_angular_speed, max_angular_speed, 
+          std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction
+        ),
       });
       return;
     }
 
     case SET_STATE_DRIVE_SMOOTH: {
-      set_motor_command(DriverState{
+      driver_state_queue.write_if_available(DriverState{
         .motor_flags = enable_flags_all,
-        .mode = DriverMode::DRIVE_RELATIVE_COORDINATES, 
+        .enable_closed_loop = true,
         .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout,
-        .pwm_value = std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction,
+        .pwm_value = clip_to(-pwm_max, +pwm_max, 
+          std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction),
+        .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
+          0/* std::get<SetStateDriveSmooth>(message.message_data).pwm_change */),
       });
       return;
     }
@@ -280,7 +300,7 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     // Freewheel the motor.
     case SET_STATE_FREEWHEEL: {
-      set_motor_command(freewheel_driver_state);
+      driver_state_queue.write_if_available(freewheel_driver_state);
       return;
     }
 
@@ -316,12 +336,12 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
 
     case SET_ANGLE: {
-      set_angle(std::get<SetAngle>(message.message_data).angle);
+      set_angle_offset(std::get<SetAngle>(message.message_data).angle - latest_readout.angle);
       return;
     }
 
     case SET_ROTATIONS: {
-      set_rotations(std::get<SetRotations>(message.message_data).rotations);
+      set_rotations_offset(std::get<SetRotations>(message.message_data).rotations - latest_readout.rotations);
       return;
     }
 
@@ -454,16 +474,15 @@ void queue_response(hex_mini_drive::FullReadout const& readout) {
 
   // Queue the readout history to the send buffer.
   if(readouts_to_send > 0){
-    const bool reset_ongoing = readout_history_get_reset_flag();
-    const bool waiting_for_data = get_readout_history_size() < readouts_to_send;
-    
-    // Wait until we filled the buffer before sending readouts, to avoid interfering with the ADC loop.
-    if (reset_ongoing or waiting_for_data) return;
+    if (readout_history_queue.read_available()) {
 
-    serialize_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::READOUT,
-      .message_data = get_readout_history()[readouts_sent]
-    });
+      serialize_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::READOUT,
+        .message_data = readout_history_queue.peek()
+      });
+
+      readout_history_queue.mark_read();
+    }
     
     // Readout added to the USB buffer.
     readouts_sent += 1;
@@ -587,7 +606,9 @@ void comms_update(hex_mini_drive::FullReadout const& readout) {
 void app_tick() {
   main_loop_number += 1;
 
-  hex_mini_drive::FullReadout readout = get_readout();
+  full_readout_queue.read_if_available(latest_readout);
+
+  auto & readout = latest_readout;
 
   // Limits
   // ------
@@ -663,38 +684,38 @@ void app_tick() {
   // Calibration calculations
   // ------------------------
 
-  if (
-    calibration_mode != CalibrationMode::NONE and
-    not readout_history_get_reset_flag() and
-    (get_readout_history_size() >= hex_mini_drive::HISTORY_SIZE)
-  ) {
-    // We are in calibration mode; run the calibration calculations.
-    // 
-    // The calibration is done in the driver loop, but we need to run the calculations here
-    // to update the calibration values and send them to the host.
+  // if (
+  //   calibration_mode != CalibrationMode::NONE and
+  //   not readout_history_get_reset_flag() and
+  //   (get_readout_history_size() >= hex_mini_drive::HISTORY_SIZE)
+  // ) {
+  //   // We are in calibration mode; run the calibration calculations.
+  //   // 
+  //   // The calibration is done in the driver loop, but we need to run the calculations here
+  //   // to update the calibration values and send them to the host.
 
-    // Check if the calibration is complete.
-    // 
-    // The calibration starts after the reset flag is cleared, and ends when the motor returns to
-    // a safe state.
+  //   // Check if the calibration is complete.
+  //   // 
+  //   // The calibration starts after the reset flag is cleared, and ends when the motor returns to
+  //   // a safe state.
 
-    const float learning_rate = 0.0f;
+  //   const float learning_rate = 0.0f;
 
-    // Get data from history and compute gradients and the mean of the samples.
-    // Then run gradient descent on the resistance and inductance values.
-    hex_mini_drive::Readout const* readout_history = get_readout_history();
-    const size_t history_size = get_readout_history_size();
-    for (size_t i = 0; i < history_size; ++i) {
-      hex_mini_drive::Readout const& readout = readout_history[i];
+  //   // Get data from history and compute gradients and the mean of the samples.
+  //   // Then run gradient descent on the resistance and inductance values.
+  //   hex_mini_drive::Readout const* readout_history = get_readout_history();
+  //   const size_t history_size = get_readout_history_size();
+  //   for (size_t i = 0; i < history_size; ++i) {
+  //     hex_mini_drive::Readout const& readout = readout_history[i];
       
-      // Tag unused variables.
-      (void)readout; // Tag unused variable.
-      (void)learning_rate; // Tag unused variable.
-    }
+  //     // Tag unused variables.
+  //     (void)readout; // Tag unused variable.
+  //     (void)learning_rate; // Tag unused variable.
+  //   }
 
-    // Done an iteration of the calibration (it should take about 10 for a good value and 90 to stabilise).
-    calibration_mode = CalibrationMode::NONE;
-  }
+  //   // Done an iteration of the calibration (it should take about 10 for a good value and 90 to stabilise).
+  //   calibration_mode = CalibrationMode::NONE;
+  // }
 
   
 

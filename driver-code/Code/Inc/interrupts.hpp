@@ -19,30 +19,9 @@ extern "C" void ADC1_2_IRQHandler(void);
 
 
 #include "type_definitions.hpp"
+#include "circular_buffer.hpp"
 
 #include "hex_mini_drive_interface.hpp"
-
-// Latest Data
-// -----------
-
-// Get a copy of the latest readout data.
-hex_mini_drive::FullReadout get_readout();
-
-
-// Data queue
-// ----------
-
-// Reset the history buffer indexes.
-void readout_history_mark_reset();
-
-// Check if the history buffer is still marked for reset.
-bool readout_history_get_reset_flag();
-
-// Get a pointer to the readout history buffer.
-hex_mini_drive::Readout const* get_readout_history();
-
-// Get the number of readouts available in the history buffer.
-size_t get_readout_history_size();
 
 
 // Motor control
@@ -51,15 +30,12 @@ size_t get_readout_history_size();
 // Check if the motor is in a safe state (breaking or freewheeling).
 bool is_motor_safed();
 
-// Set the motor command to be executed by the interrupt loop.
-void set_motor_command(DriverState const& driver_state);
-
 // Set the rotor angle directly, eg. from an external sensor. The angle
 // is set as an offset to the current angle.
-void set_angle(int32_t angle);
+void set_angle_offset(int32_t angle_offset);
 
 // Offset the rotations counter to home the motor.
-void set_rotations(int32_t rotations);
+void set_rotations_offset(int32_t rotations_offset);
 
 // Set the live maximum PWM value for the motor driver.
 void set_live_max_pwm(float live_max_pwm);
@@ -67,11 +43,23 @@ void set_live_max_pwm(float live_max_pwm);
 // Reset the active calibration variables from the stored current calibration snapshot.
 void reset_calibration_variables();
 
-// Position tracking
-// -----------------
+// Control data
+// ------------
 
 // Current calibration factors.
 extern hex_mini_drive::CurrentCalibration current_calibration;
 
 // Interrupt loop control parameters.
 extern hex_mini_drive::ControlParameters control_parameters;
+
+// Medium length data recording, taken continuously from the interrupt handler.
+extern CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue;
+
+// 2 page buffer for full readouts.
+extern CircularQueue<hex_mini_drive::FullReadout, 2> full_readout_queue;
+
+// Command queue, the interrupt loop will switch to executing the latest set of commands from this queue.
+// ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
+// schedule while the first is executing, but also we will have 1 more space to write an emergency break
+// command! The break command will also lead to the interrupt loop freeing up space in the command queue.
+extern CircularQueue<DriverState, 25> driver_state_queue;

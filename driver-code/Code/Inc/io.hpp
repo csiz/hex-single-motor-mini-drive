@@ -68,7 +68,8 @@ static inline void disable_motor_outputs(){
 
 // Enable or disable all motors with a bitmask of enable flags.
 static inline void set_motor_status(uint8_t enable_flags) {
-    switch(enable_flags) {
+    // TODO: handle the 4 outputs.
+    switch(enable_flags & 0b0111) {
         case 0b000:
             disable_motor_outputs();
             return;

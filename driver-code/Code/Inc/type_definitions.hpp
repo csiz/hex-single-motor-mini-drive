@@ -32,20 +32,6 @@ struct ADCReadings {
 // Driver State
 // ------------
 
-// Driving modes for the motor control loop.
-enum struct DriverMode : uint8_t {
-    // All motor outputs are set to 0, the coils are all connected to ground slowing down the motor.
-    GROUND_SHORT,
-    // Set all motor outputs to maximum, the coils will still be connected together but through the high side switches.
-    POSITIVE_SHORT,
-    // Drive the motor with an open loop periodic excitation of the motor coils. The phases are
-    // driven around a circle at the specified PWM and speed.
-    DRIVE_FIXED_COORDINATES,
-    // Drive the motor using FOC targeting a PWM value. This is the closed loop driving mode where
-    // we aim to induce a current at the specified angle relative to the rotor position.
-    DRIVE_RELATIVE_COORDINATES,
-};
-
 // Motor duty cycle (compare register values and enable settings).
 struct MotorOutputs {
     uint16_t u_duty; // PWM duty cycle for U phase.
@@ -56,15 +42,19 @@ struct MotorOutputs {
 };
 
 // Enable all motor outputs (U, V, W).
-const uint8_t enable_flags_all = 0b0111;
+const uint8_t enable_flags_all = 0b1111;
 // Enable U phase outputs.
 const uint8_t enable_flags_u = 0b0001;
 // Enable V phase outputs.
 const uint8_t enable_flags_v = 0b0010;
 // Enable W phase outputs.
 const uint8_t enable_flags_w = 0b0100;
+// Enable Z phase outputs.
+const uint8_t enable_flags_z = 0b1000;
 // Disable all motor outputs.
 const uint8_t enable_flags_none = 0b0000;
+// Enable recording to the readout history. This flag allows us to synchornize recordings with new commands.
+const uint8_t enable_recording = 0b0001'0000;
 
 // Zeroed motor outputs, used to short circuit break the motor outputs.
 const MotorOutputs breaking_motor_outputs = {
@@ -78,35 +68,33 @@ struct DriverState {
     // Control flags for the driver (which motor outputs are enabled).
     uint8_t motor_flags = enable_flags_all;
 
-    // Motor driving mode (defaults to short circuit breaking).
-    DriverMode mode;
+    // Dedicated bool value for closed loop control mode.
+    uint8_t enable_closed_loop;
 
     // Duration for the command in pwm cycles.
     uint16_t duration;
+    
+    // PWM value actively used to drive the motor.
+    float pwm_value;
+    
+    // Incremental change for the PWM drive.
+    float pwm_change;
 
     // Angle at which the motor is currently driven.
     int32_t angle;
     
     // The angular speed of the driving wave.
     float angular_speed;
-
-    // PWM value actively used to drive the motor.
-    float pwm_value;
-
-    // Incremental change for the PWM drive.
-    float pwm_change;
 };
 
 // Driver state for safely breaking the motor.
 const DriverState breaking_driver_state = {
     .motor_flags = enable_flags_all,
-    .mode = DriverMode::GROUND_SHORT
 };
 
 // Driver state for electrically disconnecting the motor.
 const DriverState freewheel_driver_state = {
     .motor_flags = enable_flags_none,
-    .mode = DriverMode::GROUND_SHORT
 };
 
 // Size of the DriverState structure (we want to keep it small for performance).

@@ -7,7 +7,9 @@
 #include "io.hpp"
 #include "constants.hpp"
 #include "type_definitions.hpp"
+#include "circular_buffer.hpp"
 
+// TODO: need to fix this...
 // The interrupts must not enter the error handler!
 // 
 // The error handle will block forever, however we must safe the motor no matter what. The interrupt loop
@@ -38,8 +40,20 @@
 // on chip primitives; don't use division, multiplication, or floating point operations.
 
 
-// Interrupt Loop State
-// --------------------
+// Interrupt Data Interface
+// ------------------------
+
+// Medium length data recording, taken continuously from the interrupt handler.
+CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
+
+// 2 page buffer for full readouts.
+CircularQueue<hex_mini_drive::FullReadout, 2> full_readout_queue = {};
+
+// Command queue, the interrupt loop will switch to executing the latest set of commands from this queue.
+// ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
+// schedule while the first is executing, but also we will have 1 more space to write an emergency break
+// command! The break command will also lead to the interrupt loop freeing up space in the command queue.
+CircularQueue<DriverState, 25> driver_state_queue = {};
 
 // Initialize the loop control parameters and the calibration data. Either load 
 // them from the flash or use the defaults.
@@ -48,6 +62,9 @@ hex_mini_drive::CurrentCalibration current_calibration = get_current_calibration
 
 hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 
+
+// Interrupt Loop State
+// --------------------
 
 // Electrical and position state
 hex_mini_drive::FullReadout readout = {
@@ -60,23 +77,6 @@ hex_mini_drive::FullReadout readout = {
     .inductance_bias = current_calibration.inductance_bias,
 };
 
-// Latest readout we have copied from the shared_readout in the main loop.
-hex_mini_drive::FullReadout latest_readout = readout;
-
-// The readout where the ADC loop writes the latest value if not locked by the main loop.
-hex_mini_drive::FullReadout shared_readout = readout;
-
-// Lock away writes from the ADC loop so we can copy the shared_readout to the main loop.
-volatile bool shared_readout_lock = false;
-
-// History of light readouts so that we can record every cycle for a short snapshot.
-hex_mini_drive::Readout readout_history[hex_mini_drive::HISTORY_SIZE] = {};
-
-// Current write index.
-volatile size_t readout_history_write_index = 0;
-
-// Mark the readout history for reset.
-volatile bool readout_history_reset_flag = false;
 
 // Angle offsetting from the main loop or via commands; it will not influence speed.
 volatile int32_t external_angle_offset = 0;
@@ -101,101 +101,30 @@ MotorOutputs motor_outputs = breaking_motor_outputs;
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
-
-// Motor driver state
-// ------------------
-
 // Currently active driver state (the full motor control state should be stored here).
 DriverState driver_state = breaking_driver_state;
 
-// Must be volatile as it's the interaction flag between main loop and the interrupt handler.
-// 
-// The main loop will set pending_state and pending_state to the user command, but only
-// when the pending_state is DriverState::NO_CHANGE. The interrupt handler will copy the
-// pending_state and pending_state to the active state variables, and reset the pending_state.
-// 
-// Volatile will prevent the compiler from optimizing out the read/write operations to this variable.
-// In our case, the main loop will read this variable in a hot while loop that has no side effects, 
-// expecting the variable to be set by the interrupt handler. The compiler *will* optimize out the
-// while loop unless we mark the variable as volatile.
-volatile bool new_pending_state = false;
 
-// Settings for the new driver state.
-DriverState pending_state = breaking_driver_state;
-
-
-
-// Interrupt Data Interface
-// ------------------------
-
-// Guard the data access by indicating to the ADC interrupt that it shouldn't write data.
-hex_mini_drive::FullReadout get_readout(){
-    if (shared_readout_lock) {
-        latest_readout = shared_readout;
-        shared_readout_lock = false;
-    }
-    return latest_readout;
-}
-
-void readout_history_mark_reset() {
-    readout_history_reset_flag = true;
-}
-
-bool readout_history_get_reset_flag() {
-    return readout_history_reset_flag;
-}
-
-hex_mini_drive::Readout const* get_readout_history(){
-    return readout_history;
-}
-
-size_t get_readout_history_size() {
-    return readout_history_write_index;
-}
-
-// (Private func) Push a readout to the history buffer.
-static inline bool readout_history_push(hex_mini_drive::Readout const& readout){
-    if (readout_history_write_index >= hex_mini_drive::HISTORY_SIZE) return false;
-    readout_history[readout_history_write_index] = readout;
-    // Increment after we have finished copying the readout.
-    readout_history_write_index += 1;
-    return true;
-}
-
-// (Private func) Reset the readout history.
-static inline void readout_history_reset() {
-    readout_history_write_index = 0;
-    readout_history_reset_flag = false;
-}
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
-    return (driver_state.mode == DriverMode::GROUND_SHORT);
+    return (driver_state.pwm_value == 0.f);
 }
 
-void set_motor_command(DriverState const& driver_state){
-    // Don't override a pending command if the interrupt loop didn't copy it to active.
-    while (new_pending_state) continue;
-
-    // Copy the commanded state to the pending queue.
-    pending_state = driver_state;
-
-    // Flag that we have a new command to process.
-    new_pending_state = true;
+void set_angle_offset(int32_t angle_offset) {
+    external_angle_offset = angle_offset;
 }
 
-void set_angle(int32_t angle) {
-    external_angle_offset = angle - latest_readout.angle;
+void set_rotations_offset(int32_t rotations_offset) {
+    external_rotations_offset = rotations_offset;
 }
 
-void set_rotations(int32_t rotations) {
-    external_rotations_offset = rotations - latest_readout.rotations;
-}
-
+// TODO: need to implement this better
 void set_live_max_pwm(float pwm) {
     live_max_pwm = pwm;
 }
 
+// TODO: also this one, we need to move calibration to the main loop, so we don't need it here.
 void reset_calibration_variables() {
     reset_calibration_variables_flag = true;
 }
@@ -365,6 +294,7 @@ void ADC1_2_IRQHandler(void){
     // And transform the drive voltages too.
     const float direct_drive_voltage = dot(drive_voltages, d_transform);
     const float quadrature_drive_voltage = dot(drive_voltages, q_transform);
+
 
     // Current angle calculation
     // -------------------------
@@ -768,67 +698,37 @@ void ADC1_2_IRQHandler(void){
     readout.lead_angle = 0; // TODO: this needs updating from the main loop.
     readout.active_pwm = driver_state.pwm_value;
     
+
     // Calculate and set motor outputs!!
     // ---------------------------------
 
-    if (driver_state.duration > 0) {
-        // Count down the active duration.
-        driver_state.duration--;
+    // The main control flag is whether we drive in fixed coordinates (open loop) or relative coordinates (closed loop).
+    // 
+    // Breaking mode can be expressed as driving at 0 pwm in fixed coordinates.
+    if (driver_state.enable_closed_loop) {
+        // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
+        // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
+        // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
+        // Base the direction on the sign of the target PWM.
+        const int32_t active_pwm_sign = sign(driver_state.pwm_value);
+
+        // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
+        // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+        const int32_t ideal_angle = readout.angle + quarter_circle;
+
+        // Drive the motor to produce current perpendicular to the magnetic angle.
+        driver_state.angle = ideal_angle + active_pwm_sign * readout.lead_angle;
+
     } else {
-        // Set the driver state to the safe breaking state if the duration has expired.
-        driver_state = breaking_driver_state;
+        // Drive the inductors around a circle at the specified PWM and speed (open loop control).
+        driver_state.angle += static_cast<int32_t>(driver_state.angular_speed);
     }
 
-    // Update the motor controls using the readout data, based on the active mode.
-    switch (driver_state.mode) {
-        // TODO: we need to handle the pwm change.
-
-        case DriverMode::GROUND_SHORT:
-            // Continously reset the motor outputs to breaking state.
-            motor_outputs = breaking_motor_outputs;
-            break;
-
-        case DriverMode::POSITIVE_SHORT:
-            // Continously set the motor outputs to maximum.
-            motor_outputs = MotorOutputs{
-                .u_duty = driver_state.pwm_value,
-                .v_duty = driver_state.pwm_value,
-                .w_duty = driver_state.pwm_value,
-            };
-            break;
-
-        case DriverMode::DRIVE_FIXED_COORDINATES:{
-            // Drive the inductors around a circle at the specified PWM and speed (open loop control).
-            driver_state.angle += static_cast<int32_t>(driver_state.angular_speed);
-            motor_outputs = compute_motor_outputs(
-                driver_state.angle, 
-                driver_state.pwm_value,
-                readout.live_max_pwm
-            );
-            break;
-        }       
-        case DriverMode::DRIVE_RELATIVE_COORDINATES: {
-            // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
-            // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
-            // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
-            // Base the direction on the sign of the target PWM.
-            const int32_t active_pwm_sign = sign(driver_state.pwm_value);
-
-            // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
-            // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
-            const int32_t ideal_angle = readout.angle + quarter_circle;
-
-            // Drive the motor to produce current perpendicular to the magnetic angle.
-            driver_state.angle = ideal_angle + active_pwm_sign * readout.lead_angle;
-
-            motor_outputs = compute_motor_outputs(
-                driver_state.angle,
-                driver_state.pwm_value,
-                readout.live_max_pwm
-            );
-            break;
-        }
-    }
+    motor_outputs = compute_motor_outputs(
+        driver_state.angle, 
+        driver_state.pwm_value,
+        readout.live_max_pwm
+    );
 
     // Disable the update for the control registers so we can write all 3.
     LL_TIM_DisableUpdateEvent(TIM1);
@@ -850,14 +750,10 @@ void ADC1_2_IRQHandler(void){
     readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
 
     // Write to the latest readout if the main loop has unlocked it.
-    if (not shared_readout_lock) {
-        shared_readout = readout;
-        shared_readout_lock = true;
-    }
+    full_readout_queue.write_if_available(readout);
 
     // Write the latest readout to the history buffer for the main loop to read.
-    readout_history_push(readout);
-    if (readout_history_reset_flag) readout_history_reset();
+    if (driver_state.motor_flags & enable_recording) readout_history_queue.write_if_available(readout);
 
     // Setup the new state if we were commanded by the main loop so we are prepared for the next cycle.
     // 
@@ -865,53 +761,24 @@ void ADC1_2_IRQHandler(void){
     // after we've set the motor outputs. The new state will be ready for the next cycle.
     // 
     // Note, the new pending state may clear the readout history so this must be done after the history push.
-    if (new_pending_state) {
-        // Copy the pending driver state with all values clamped to valid ranges.
-        switch(pending_state.mode){
-            case DriverMode::GROUND_SHORT:
-                driver_state = DriverState{
-                    .motor_flags = pending_state.motor_flags,
-                    .mode = DriverMode::GROUND_SHORT
-                };
-                break;
-            case DriverMode::POSITIVE_SHORT:
-                driver_state = DriverState{
-                    .motor_flags = pending_state.motor_flags,
-                    .mode = DriverMode::POSITIVE_SHORT,
-                    // In case we do the positive short, we'll allow the PWM value to be set all the way up to fully on.
-                    .pwm_value = min(static_cast<float>(hex_mini_drive::PWM_BASE), faster_abs(pending_state.pwm_value)),
-                    .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pending_state.pwm_change),
-                };
-                break;
+    if (driver_state_queue.read_available()) {
+        // Copy the pending driver state.
+        // 
+        // ! Warning, we rely on the main loop to clamp the commands to valid ranges!
+        driver_state = driver_state_queue.peek();
 
-            case DriverMode::DRIVE_FIXED_COORDINATES:
-                driver_state = DriverState{
-                    .motor_flags = pending_state.motor_flags,
-                    .mode = DriverMode::DRIVE_FIXED_COORDINATES,
-                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                    .angle = pending_state.angle + (pending_state.pwm_value < 0 ? half_circle : 0),
-                    .angular_speed = clip_to(-max_angular_speed, max_angular_speed, pending_state.angular_speed),
-                    .pwm_value = min(pwm_max, faster_abs(pending_state.pwm_value)),
-                    .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pending_state.pwm_change),
-                };
-                break;
-
-            case DriverMode::DRIVE_RELATIVE_COORDINATES:
-                // Maintain a some of the previous state so we can smoothly transition to the new state.
-                driver_state = DriverState{
-                    .motor_flags = pending_state.motor_flags,
-                    .mode = DriverMode::DRIVE_RELATIVE_COORDINATES,
-                    .duration = static_cast<uint16_t>(clip_to(0, max_timeout, pending_state.duration)),
-                    .angle = driver_state.pwm_value != 0 ? driver_state.angle : readout.angle,
-                    .pwm_value = clip_to(-pwm_max, +pwm_max, pending_state.pwm_value),
-                    .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, pending_state.pwm_change),
-                };
-                break;
-        }
-        new_pending_state = false;
+        driver_state_queue.mark_read();
 
         // Immediately set the motor flags; once per new drive state.
         set_motor_status(driver_state.motor_flags);
+    } else if (driver_state.duration <= 0) {
+        // Set the driver state to the safe breaking state if the duration has expired.
+        driver_state = breaking_driver_state;
+        // Immediately set the motor flags; once per new drive state.
+        set_motor_status(driver_state.motor_flags);
+    } else {
+        // Count down the active duration.
+        driver_state.duration--;
     }
 
     if (reset_calibration_variables_flag) {
