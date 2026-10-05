@@ -20,11 +20,6 @@ message_codes:
     returns: FULL_READOUT
     returns_len: 'stream'
 
-  GET_READOUTS_SNAPSHOT:
-    message_code: 0x2022
-    returns: READOUT
-    returns_len: HISTORY_SIZE
-
   FULL_READOUT:
     message_code: 0x2023
     type: FullReadout
@@ -34,28 +29,29 @@ message_codes:
     
   SET_STATE_DRIVE_6_SECTOR:
     message_code: 0x2031
-    type: BasicDriveCommand
+    type: DriverState
 
   SET_STATE_TEST_ALL_PERMUTATIONS:
     message_code: 0x2032
-    type: TestCommand
+    type: DriverState
     
   SET_STATE_FREEWHEEL:
     message_code: 0x2034
 
   SET_STATE_TEST_GROUND_SHORT:
     message_code: 0x2036
-    type: TestCommand
+    type: DriverState
   SET_STATE_TEST_POSITIVE_SHORT:
     message_code: 0x2037
-    type: TestCommand
+    type: DriverState
     
   SET_STATE_DRIVE_PERIODIC:
     message_code: 0x3040
-    type: SetStateDrivePeriodic
+    type: DriverState
   SET_STATE_DRIVE_SMOOTH:
     message_code: 0x4030
-    type: SetStateDriveSmooth
+    type: DriverState
+
   SET_STATE_DRIVE_TORQUE:
     message_code: 0x4031
     type: SetStateDriveTorque
@@ -118,19 +114,19 @@ message_codes:
 
   SET_STATE_RESISTANCE_CALIBRATION:
     message_code: 0x5045
-    type: TestCommand
+    type: DriverState
   SET_STATE_INDUCTANCE_CALIBRATION:
     message_code: 0x5046
-    type: TestCommand
+    type: DriverState
   SET_STATE_ROTATING_CALIBRATION_CHIRP:
     message_code: 0x5047
-    type: TestCommand
+    type: DriverState
   SET_STATE_FIXED_CALIBRATION_CHIRP:
     message_code: 0x5048
-    type: TestCommand
+    type: DriverState
   SET_STATE_HFI_SALIENCY_PULSES:
     message_code: 0x5049
-    type: TestCommand
+    type: DriverState
 
 
 definitions:
@@ -179,6 +175,28 @@ definitions:
       !The time unit for the driver is the duration of a whole PWM cycle, which is 2 * PWM_BASE clock cycles.
     type: int32
     const: 3072
+
+  ENABLE_U_OUTPUT:
+    doc: Flag to enable the U output of the driver.
+    type: uint8
+    const: 1
+  ENABLE_V_OUTPUT:
+    doc: Flag to enable the V output of the driver.
+    type: uint8
+    const: 2
+  ENABLE_W_OUTPUT:
+    doc: Flag to enable the W output of the driver.
+    type: uint8
+    const: 4
+  ENABLE_Z_OUTPUT:
+    doc: Flag to enable the Z output of the driver.
+    type: uint8
+    const: 8
+  ENABLE_RECORDING:
+    doc: Flag to enable recording of the driver state.
+    type: uint8
+    const: 16
+
 
   UnitTestOutput:
     doc: Output data from unit test.
@@ -410,66 +428,32 @@ definitions:
         doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
       
 
-  BasicDriveCommand:
+  DriverState:
+    doc: |
+      The complete driver state, these values control the motor behaviour.
+
     struct:
-      pwm_value:
-        type: float32
-        doc: PWM value to use for driving the motor in 6 sector commutation mode.
-      timeout:
-        type: uint32
+      motor_flags:
+        type: uint8
+        doc: Flags controlling the behavior of the motor drive.
+      enable_closed_loop:
+        type: uint8
+        doc: Flag to enable or disable closed-loop control for the motor drive.
+      duration:
+        type: uint16
         doc: Time in pwm periods to drive the motor before stopping.
-
-  TestCommand:
-    struct:
-      pwm_value:
-        type: float32
-        doc: PWM value to use for the test.
-      take_snapshot:
-        type: uint32
-        doc: Whether to take a snapshot while running the test.
-      test_speed:
-        type: float32
-        doc: Speed target for the test.
-      test_duration:
-        type: uint32
-        doc: Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
-      test_angle:
-        type: int32
-        doc: Starting angle for the test.
-
-  HoldCommand:
-    struct:
-      pwm_value:
-        type: float32
-        doc: PWM value to use for holding the position.
-      timeout:
-        type: uint32
-        doc: Time in pwm periods to hold the position before stopping.
-
-  SetStateDrivePeriodic:
-    struct:
       pwm_value:
         type: float32
         doc: PWM value to use for driving the motor.
-      timeout:
-        type: uint32
-        doc: Time in pwm periods to drive the motor before stopping.
+      pwm_change:
+        type: float32
+        doc: How much to increment the PWM value on each cycle.
       angle:
         type: int32
-        doc: Starting angle.
+        doc: Angle at which to drive the PWM wave.
       angular_speed:
         type: float32
-        doc: Angular speed to drive the motor at.
-      
-
-  SetStateDriveSmooth:
-    struct:
-      pwm_value:
-        type: float32
-        doc: PWM value to use for driving the motor.
-      timeout:
-        type: uint32
-        doc: Time in pwm periods to drive the motor before stopping.
+        doc: Angular speed at which to drive the PWM wave.
 
   SetStateDriveTorque:
     struct:
@@ -589,6 +573,19 @@ definitions:
       angle_probing_interval:
         type: uint16
         doc: Time interval in pwm periods to probe the saliency angle when it's too noisy to update the angle from emf.
+
+      u_pwm_floor:
+        type: uint16
+        doc: Minimum PWM value for the U phase (below this, the line doesn't fully turn on).
+      v_pwm_floor:
+        type: uint16
+        doc: Minimum PWM value for the V phase (below this, the line doesn't fully turn on).
+      w_pwm_floor:
+        type: uint16
+        doc: Minimum PWM value for the W phase (below this, the line doesn't fully turn on).
+      z_pwm_floor:
+        type: uint16
+        doc: Minimum PWM value for the Z phase (below this, the line doesn't fully turn on).
 
       rotor_angle_ki:
         type: float32

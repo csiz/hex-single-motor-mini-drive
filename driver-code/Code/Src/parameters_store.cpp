@@ -1,15 +1,11 @@
 #include "parameters_store.hpp"
 
-#include "hex_mini_drive_interface.hpp"
-
 #include "constants.hpp"
 #include "error_handler.hpp"
 
-#include "stm32g4xx_hal.h"
-#include "stm32g4xx_hal_flash.h"
-#include "stm32g4xx_hal_flash_ex.h"
-#include "type_definitions.hpp"
-
+#include <stm32g4xx_hal.h>
+#include <stm32g4xx_hal_flash.h>
+#include <stm32g4xx_hal_flash_ex.h>
 #include <cstring>
 
 using namespace hex_mini_drive;

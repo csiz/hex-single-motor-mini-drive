@@ -1,6 +1,6 @@
 #pragma once
 
-#include "type_definitions.hpp"
+#include "hex_mini_drive_interface.hpp"
 
 #include <cstdint>
 #include <cstddef>

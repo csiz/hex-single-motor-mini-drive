@@ -6,7 +6,7 @@
 #include "math_utils.hpp"
 #include "io.hpp"
 #include "constants.hpp"
-#include "type_definitions.hpp"
+#include "dq0_transform.hpp"
 #include "circular_buffer.hpp"
 
 // TODO: need to fix this...
@@ -53,7 +53,7 @@ CircularQueue<hex_mini_drive::FullReadout, 2> full_readout_queue = {};
 // ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
 // schedule while the first is executing, but also we will have 1 more space to write an emergency break
 // command! The break command will also lead to the interrupt loop freeing up space in the command queue.
-CircularQueue<DriverState, 25> driver_state_queue = {};
+CircularQueue<hex_mini_drive::DriverState, 25> driver_state_queue = {};
 
 // Initialize the loop control parameters and the calibration data. Either load 
 // them from the flash or use the defaults.
@@ -102,7 +102,7 @@ MotorOutputs motor_outputs = breaking_motor_outputs;
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
 // Currently active driver state (the full motor control state should be stored here).
-DriverState driver_state = breaking_driver_state;
+hex_mini_drive::DriverState driver_state = breaking_driver_state;
 
 
 
@@ -282,8 +282,7 @@ void ADC1_2_IRQHandler(void){
     // rotate the frame afterwards using a 2D rotation matrix with just 4 elements.
 
     // Transform the measured currents into the DQ0 frame at the fixed angle 0.
-    const float direct_current = dot(currents, d_transform);
-    const float quadrature_current = dot(currents, q_transform);
+    const auto [direct_current, quadrature_current] = dq0_transform(currents);
 
     // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
     set_cordic(direct_current, quadrature_current);
@@ -292,8 +291,7 @@ void ADC1_2_IRQHandler(void){
     const float zero_current = (std::get<0>(currents) + std::get<1>(currents) + std::get<2>(currents)) * one_third;
 
     // And transform the drive voltages too.
-    const float direct_drive_voltage = dot(drive_voltages, d_transform);
-    const float quadrature_drive_voltage = dot(drive_voltages, q_transform);
+    const auto [direct_drive_voltage, quadrature_drive_voltage] = dq0_transform(drive_voltages);
 
 
     // Current angle calculation
@@ -753,7 +751,7 @@ void ADC1_2_IRQHandler(void){
     full_readout_queue.write_if_available(readout);
 
     // Write the latest readout to the history buffer for the main loop to read.
-    if (driver_state.motor_flags & enable_recording) readout_history_queue.write_if_available(readout);
+    if (driver_state.motor_flags & hex_mini_drive::ENABLE_RECORDING) readout_history_queue.write_if_available(readout);
 
     // Setup the new state if we were commanded by the main loop so we are prepared for the next cycle.
     // 

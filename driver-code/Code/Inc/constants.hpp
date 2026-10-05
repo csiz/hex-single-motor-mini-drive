@@ -5,7 +5,6 @@
 #include <cmath>
 #include <bit>
 
-#include "type_definitions.hpp"
 #include "math_utils.hpp"
 
 #include "hex_mini_drive_interface.hpp"
@@ -321,6 +320,31 @@ constexpr float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_
 
 constexpr float emf_angle_variance_max_inverse = 1.f / emf_angle_variance_max;
 
+// Driver state
+// ------------
+
+// Enable all motor outputs (U, V, W).
+const uint8_t ENABLE_ALL_OUTPUTS = (
+    hex_mini_drive::ENABLE_U_OUTPUT |
+    hex_mini_drive::ENABLE_V_OUTPUT |
+    hex_mini_drive::ENABLE_W_OUTPUT |
+    hex_mini_drive::ENABLE_Z_OUTPUT
+);
+
+// Disable all motor outputs.
+const uint8_t DISABLE_ALL_OUTPUTS = 0;
+
+
+// Driver state for safely breaking the motor.
+const hex_mini_drive::DriverState breaking_driver_state = {
+    .motor_flags = ENABLE_ALL_OUTPUTS,
+};
+
+// Driver state for electrically disconnecting the motor.
+const hex_mini_drive::DriverState freewheel_driver_state = {
+    .motor_flags = DISABLE_ALL_OUTPUTS,
+};
+
 // Calibration and Control Parameters
 // ----------------------------------
 
@@ -346,6 +370,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .angle_fix_max_certainty = 512,
     .angle_fix_threshold_count = 16,
     .angle_probing_interval = pwm_cycles_per_second / 20,
+    .u_pwm_floor = 14,
+    .v_pwm_floor = 14,
+    .w_pwm_floor = 12,
+    .z_pwm_floor = 0,
     // Rotor control gains.
     .rotor_angle_ki = std::pow(2, -2),
     // Gain for the angular speed, it should be much lower than the angle gain to average out the noise.

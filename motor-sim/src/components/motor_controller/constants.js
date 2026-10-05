@@ -5,6 +5,11 @@ import {
   CLOCK_FREQUENCY,
   CURRENT_UNITS_PER_AMP,
   VOLTAGE_UNITS_PER_VOLT,
+  ENABLE_U_OUTPUT,
+  ENABLE_V_OUTPUT,
+  ENABLE_W_OUTPUT,
+  ENABLE_Z_OUTPUT,
+  ENABLE_RECORDING,
 } from "hex-mini-drive-interface";
 
 import {normalize_radians, positive_radians} from "./angular_math.js";
@@ -16,6 +21,11 @@ export {
   CLOCK_FREQUENCY,  
   CURRENT_UNITS_PER_AMP,
   VOLTAGE_UNITS_PER_VOLT,
+  ENABLE_U_OUTPUT,
+  ENABLE_V_OUTPUT,
+  ENABLE_W_OUTPUT,
+  ENABLE_Z_OUTPUT,
+  ENABLE_RECORDING,
 };
 
 // Timing constants
@@ -86,6 +96,15 @@ export function parse_state_flags(state_flags){
     emf_detected: (state_flags >> emf_detected_bit_offset) & 0b1,
   };
 }
+
+export const ENABLE_ALL_OUTPUTS = (
+  ENABLE_U_OUTPUT |
+  ENABLE_V_OUTPUT |
+  ENABLE_W_OUTPUT |
+  ENABLE_Z_OUTPUT
+);
+
+export const DISABLE_ALL_OUTPUTS = 0;
 
 // Motor control constants
 // -----------------------

@@ -34,6 +34,21 @@ export const CLOCK_FREQUENCY = 144000000;
 // !The time unit for the driver is the duration of a whole PWM cycle, which is 2 * PWM_BASE clock cycles.
 export const PWM_BASE = 3072;
 
+// Flag to enable the U output of the driver.
+export const ENABLE_U_OUTPUT = 1;
+
+// Flag to enable the V output of the driver.
+export const ENABLE_V_OUTPUT = 2;
+
+// Flag to enable the W output of the driver.
+export const ENABLE_W_OUTPUT = 4;
+
+// Flag to enable the Z output of the driver.
+export const ENABLE_Z_OUTPUT = 8;
+
+// Flag to enable recording of the driver state.
+export const ENABLE_RECORDING = 16;
+
 // Output data from unit test.
 export class UnitTestOutput extends Array {
   constructor(init) {
@@ -416,128 +431,39 @@ function read_FullReadout(view, offset = 0) {
   offset += 4;
   return result;
 }
-export class BasicDriveCommand {
-  // PWM value to use for driving the motor in 6 sector commutation mode.
-  pwm_value;
+// The complete driver state, these values control the motor behaviour.
+export class DriverState {
+  // Flags controlling the behavior of the motor drive.
+  motor_flags;
+  // Flag to enable or disable closed-loop control for the motor drive.
+  enable_closed_loop;
   // Time in pwm periods to drive the motor before stopping.
-  timeout;
-  
-  constructor(init) {Object.assign(this, init);}
-}
-
-function write_BasicDriveCommand(value) {
-  const buffer = new Uint8Array(8);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  view.setFloat32(offset, value.pwm_value)
-  offset += 4;
-  view.setUint32(offset, value.timeout)
-  offset += 4;
-  return buffer;
-}
-function read_BasicDriveCommand(view, offset = 0) {
-  let result = new BasicDriveCommand();
-  
-  result.pwm_value = view.getFloat32(offset);
-  offset += 4;
-  result.timeout = view.getUint32(offset);
-  offset += 4;
-  return result;
-}
-export class TestCommand {
-  // PWM value to use for the test.
-  pwm_value;
-  // Whether to take a snapshot while running the test.
-  take_snapshot;
-  // Speed target for the test.
-  test_speed;
-  // Number of cycles to execute the test. Note we always record HISTORY_SIZE readouts.
-  test_duration;
-  // Starting angle for the test.
-  test_angle;
-  
-  constructor(init) {Object.assign(this, init);}
-}
-
-function write_TestCommand(value) {
-  const buffer = new Uint8Array(20);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  view.setFloat32(offset, value.pwm_value)
-  offset += 4;
-  view.setUint32(offset, value.take_snapshot)
-  offset += 4;
-  view.setFloat32(offset, value.test_speed)
-  offset += 4;
-  view.setUint32(offset, value.test_duration)
-  offset += 4;
-  view.setInt32(offset, value.test_angle)
-  offset += 4;
-  return buffer;
-}
-function read_TestCommand(view, offset = 0) {
-  let result = new TestCommand();
-  
-  result.pwm_value = view.getFloat32(offset);
-  offset += 4;
-  result.take_snapshot = view.getUint32(offset);
-  offset += 4;
-  result.test_speed = view.getFloat32(offset);
-  offset += 4;
-  result.test_duration = view.getUint32(offset);
-  offset += 4;
-  result.test_angle = view.getInt32(offset);
-  offset += 4;
-  return result;
-}
-export class HoldCommand {
-  // PWM value to use for holding the position.
-  pwm_value;
-  // Time in pwm periods to hold the position before stopping.
-  timeout;
-  
-  constructor(init) {Object.assign(this, init);}
-}
-
-function write_HoldCommand(value) {
-  const buffer = new Uint8Array(8);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  view.setFloat32(offset, value.pwm_value)
-  offset += 4;
-  view.setUint32(offset, value.timeout)
-  offset += 4;
-  return buffer;
-}
-function read_HoldCommand(view, offset = 0) {
-  let result = new HoldCommand();
-  
-  result.pwm_value = view.getFloat32(offset);
-  offset += 4;
-  result.timeout = view.getUint32(offset);
-  offset += 4;
-  return result;
-}
-export class SetStateDrivePeriodic {
+  duration;
   // PWM value to use for driving the motor.
   pwm_value;
-  // Time in pwm periods to drive the motor before stopping.
-  timeout;
-  // Starting angle.
+  // How much to increment the PWM value on each cycle.
+  pwm_change;
+  // Angle at which to drive the PWM wave.
   angle;
-  // Angular speed to drive the motor at.
+  // Angular speed at which to drive the PWM wave.
   angular_speed;
   
   constructor(init) {Object.assign(this, init);}
 }
 
-function write_SetStateDrivePeriodic(value) {
-  const buffer = new Uint8Array(16);
+function write_DriverState(value) {
+  const buffer = new Uint8Array(20);
   const view = new DataView(buffer.buffer);
   let offset = 0;
+  view.setUint8(offset, value.motor_flags)
+  offset += 1;
+  view.setUint8(offset, value.enable_closed_loop)
+  offset += 1;
+  view.setUint16(offset, value.duration)
+  offset += 2;
   view.setFloat32(offset, value.pwm_value)
   offset += 4;
-  view.setUint32(offset, value.timeout)
+  view.setFloat32(offset, value.pwm_change)
   offset += 4;
   view.setInt32(offset, value.angle)
   offset += 4;
@@ -545,44 +471,22 @@ function write_SetStateDrivePeriodic(value) {
   offset += 4;
   return buffer;
 }
-function read_SetStateDrivePeriodic(view, offset = 0) {
-  let result = new SetStateDrivePeriodic();
+function read_DriverState(view, offset = 0) {
+  let result = new DriverState();
   
+  result.motor_flags = view.getUint8(offset);
+  offset += 1;
+  result.enable_closed_loop = view.getUint8(offset);
+  offset += 1;
+  result.duration = view.getUint16(offset);
+  offset += 2;
   result.pwm_value = view.getFloat32(offset);
   offset += 4;
-  result.timeout = view.getUint32(offset);
+  result.pwm_change = view.getFloat32(offset);
   offset += 4;
   result.angle = view.getInt32(offset);
   offset += 4;
   result.angular_speed = view.getFloat32(offset);
-  offset += 4;
-  return result;
-}
-export class SetStateDriveSmooth {
-  // PWM value to use for driving the motor.
-  pwm_value;
-  // Time in pwm periods to drive the motor before stopping.
-  timeout;
-  
-  constructor(init) {Object.assign(this, init);}
-}
-
-function write_SetStateDriveSmooth(value) {
-  const buffer = new Uint8Array(8);
-  const view = new DataView(buffer.buffer);
-  let offset = 0;
-  view.setFloat32(offset, value.pwm_value)
-  offset += 4;
-  view.setUint32(offset, value.timeout)
-  offset += 4;
-  return buffer;
-}
-function read_SetStateDriveSmooth(view, offset = 0) {
-  let result = new SetStateDriveSmooth();
-  
-  result.pwm_value = view.getFloat32(offset);
-  offset += 4;
-  result.timeout = view.getUint32(offset);
   offset += 4;
   return result;
 }
@@ -824,6 +728,14 @@ export class ControlParameters {
   angle_fix_threshold_count;
   // Time interval in pwm periods to probe the saliency angle when it's too noisy to update the angle from emf.
   angle_probing_interval;
+  // Minimum PWM value for the U phase (below this, the line doesn't fully turn on).
+  u_pwm_floor;
+  // Minimum PWM value for the V phase (below this, the line doesn't fully turn on).
+  v_pwm_floor;
+  // Minimum PWM value for the W phase (below this, the line doesn't fully turn on).
+  w_pwm_floor;
+  // Minimum PWM value for the Z phase (below this, the line doesn't fully turn on).
+  z_pwm_floor;
   // Magnet position integral gain.
   rotor_angle_ki;
   // Magnet angular speed integral gain.
@@ -906,7 +818,7 @@ export class ControlParameters {
 }
 
 function write_ControlParameters(value) {
-  const buffer = new Uint8Array(160);
+  const buffer = new Uint8Array(168);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setInt16(offset, value.motor_direction)
@@ -916,6 +828,14 @@ function write_ControlParameters(value) {
   view.setInt16(offset, value.angle_fix_threshold_count)
   offset += 2;
   view.setUint16(offset, value.angle_probing_interval)
+  offset += 2;
+  view.setUint16(offset, value.u_pwm_floor)
+  offset += 2;
+  view.setUint16(offset, value.v_pwm_floor)
+  offset += 2;
+  view.setUint16(offset, value.w_pwm_floor)
+  offset += 2;
+  view.setUint16(offset, value.z_pwm_floor)
   offset += 2;
   view.setFloat32(offset, value.rotor_angle_ki)
   offset += 4;
@@ -1005,6 +925,14 @@ function read_ControlParameters(view, offset = 0) {
   result.angle_fix_threshold_count = view.getInt16(offset);
   offset += 2;
   result.angle_probing_interval = view.getUint16(offset);
+  offset += 2;
+  result.u_pwm_floor = view.getUint16(offset);
+  offset += 2;
+  result.v_pwm_floor = view.getUint16(offset);
+  offset += 2;
+  result.w_pwm_floor = view.getUint16(offset);
+  offset += 2;
+  result.z_pwm_floor = view.getUint16(offset);
   offset += 2;
   result.rotor_angle_ki = view.getFloat32(offset);
   offset += 4;
@@ -1132,7 +1060,6 @@ function read_SetRotations(view, offset = 0) {
 const NULL_MESSAGE_CODE = 0;
 const READOUT = 8224;
 const STREAM_FULL_READOUTS = 8225;
-const GET_READOUTS_SNAPSHOT = 8226;
 const FULL_READOUT = 8227;
 const SET_STATE_OFF = 8240;
 const SET_STATE_DRIVE_6_SECTOR = 8241;
@@ -1170,7 +1097,6 @@ export const MessageCode = {
   NULL_MESSAGE_CODE,
   READOUT,
   STREAM_FULL_READOUTS,
-  GET_READOUTS_SNAPSHOT,
   FULL_READOUT,
   SET_STATE_OFF,
   SET_STATE_DRIVE_6_SECTOR,
@@ -1230,12 +1156,6 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case GET_READOUTS_SNAPSHOT: {
-      const buffer = new Uint8Array(2);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      return buffer;
-    }
     case FULL_READOUT: {
       const message_buffer = write_FullReadout(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
@@ -1251,7 +1171,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_DRIVE_6_SECTOR: {
-      const message_buffer = write_BasicDriveCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1259,7 +1179,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_TEST_ALL_PERMUTATIONS: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1273,7 +1193,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_TEST_GROUND_SHORT: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1281,7 +1201,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_TEST_POSITIVE_SHORT: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1289,7 +1209,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_DRIVE_PERIODIC: {
-      const message_buffer = write_SetStateDrivePeriodic(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1297,7 +1217,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_DRIVE_SMOOTH: {
-      const message_buffer = write_SetStateDriveSmooth(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1437,7 +1357,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_RESISTANCE_CALIBRATION: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1445,7 +1365,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_INDUCTANCE_CALIBRATION: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1453,7 +1373,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1461,7 +1381,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_FIXED_CALIBRATION_CHIRP: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1469,7 +1389,7 @@ export function write_message(message) {
       return buffer;
     }
     case SET_STATE_HFI_SALIENCY_PULSES: {
-      const message_buffer = write_TestCommand(message);
+      const message_buffer = write_DriverState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1501,10 +1421,6 @@ export function read_message(buffer) {
       message.message_code = STREAM_FULL_READOUTS;
       return message;
     }
-    case GET_READOUTS_SNAPSHOT: {
-      if (buffer.length !== 2) return null;
-      return {message_code};
-    }
     case FULL_READOUT: {
       if (buffer.length !== 2 + 172) return null;
       let message = read_FullReadout(view, 2);
@@ -1516,14 +1432,14 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_STATE_DRIVE_6_SECTOR: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_BasicDriveCommand(view, 2);
+      if (buffer.length !== 2 + 20) return null;
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_DRIVE_6_SECTOR;
       return message;
     }
     case SET_STATE_TEST_ALL_PERMUTATIONS: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_TEST_ALL_PERMUTATIONS;
       return message;
     }
@@ -1533,25 +1449,25 @@ export function read_message(buffer) {
     }
     case SET_STATE_TEST_GROUND_SHORT: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_TEST_GROUND_SHORT;
       return message;
     }
     case SET_STATE_TEST_POSITIVE_SHORT: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_TEST_POSITIVE_SHORT;
       return message;
     }
     case SET_STATE_DRIVE_PERIODIC: {
-      if (buffer.length !== 2 + 16) return null;
-      let message = read_SetStateDrivePeriodic(view, 2);
+      if (buffer.length !== 2 + 20) return null;
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_DRIVE_PERIODIC;
       return message;
     }
     case SET_STATE_DRIVE_SMOOTH: {
-      if (buffer.length !== 2 + 8) return null;
-      let message = read_SetStateDriveSmooth(view, 2);
+      if (buffer.length !== 2 + 20) return null;
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_DRIVE_SMOOTH;
       return message;
     }
@@ -1606,13 +1522,13 @@ export function read_message(buffer) {
       return {message_code};
     }
     case CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 160) return null;
+      if (buffer.length !== 2 + 168) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = CONTROL_PARAMETERS;
       return message;
     }
     case SET_CONTROL_PARAMETERS: {
-      if (buffer.length !== 2 + 160) return null;
+      if (buffer.length !== 2 + 168) return null;
       let message = read_ControlParameters(view, 2);
       message.message_code = SET_CONTROL_PARAMETERS;
       return message;
@@ -1653,31 +1569,31 @@ export function read_message(buffer) {
     }
     case SET_STATE_RESISTANCE_CALIBRATION: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_RESISTANCE_CALIBRATION;
       return message;
     }
     case SET_STATE_INDUCTANCE_CALIBRATION: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_INDUCTANCE_CALIBRATION;
       return message;
     }
     case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_ROTATING_CALIBRATION_CHIRP;
       return message;
     }
     case SET_STATE_FIXED_CALIBRATION_CHIRP: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_FIXED_CALIBRATION_CHIRP;
       return message;
     }
     case SET_STATE_HFI_SALIENCY_PULSES: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_TestCommand(view, 2);
+      let message = read_DriverState(view, 2);
       message.message_code = SET_STATE_HFI_SALIENCY_PULSES;
       return message;
     }

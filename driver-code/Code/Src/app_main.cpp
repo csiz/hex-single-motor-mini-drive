@@ -2,7 +2,6 @@
 
 #include "interrupts.hpp"
 #include "io.hpp"
-#include "type_definitions.hpp"
 #include "usb_com.hpp"
 #include "parameters_store.hpp"
 #include "math_utils.hpp"
@@ -68,12 +67,13 @@ uint32_t bytes_sent = 0;
 
 uint16_t stream_state = 0;
 uint16_t stream_last_sent = 0;
-size_t readouts_to_send = 0;
-size_t readouts_sent = 0;
 bool reply_current_calibration = false;
 bool reply_control_parameters = false;
 bool reply_unit_test = false;
 bool reply_saved_to_flash = false;
+
+// Function signature for unit tests; the unit test prints text to the buffer.
+using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 
 UnitTestFunction unit_test_function = nullptr;
 
@@ -157,23 +157,13 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
 
     case STREAM_FULL_READOUTS: {
-      // Continuously stream data if timeout > 0.
+      // Continuously stream data if duration > 0.
       stream_state = std::get<StreamFullReadouts>(message.message_data).stream_state;
       // Also stop the motor if we stop the stream.
       if (not stream_state) break_motor();
       return;
     }
 
-    // TODO: what to do about this one?
-    case GET_READOUTS_SNAPSHOT: {
-      // Cancel streaming; so we can take a data snapshot without interruptions.
-      stream_state = 0;
-
-      readouts_to_send = hex_mini_drive::HISTORY_SIZE;
-      readouts_sent = 0;
-
-      return;
-    }
     // Turn off the motor driver.
     case SET_STATE_OFF: {
       // Repeat command, with the interrupt guards.
@@ -209,7 +199,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     case SET_STATE_DRIVE_6_SECTOR: {
       // set_motor_command(DriverState{ 
       //   .mode = DriverMode::DRIVE_6_SECTOR, 
-      //   .duration = std::get<BasicDriveCommand>(message.message_data).timeout, 
+      //   .duration = std::get<BasicDriveCommand>(message.message_data).duration, 
       //   .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
       // });
       return;
@@ -217,18 +207,18 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     case SET_STATE_DRIVE_PERIODIC: {
       driver_state_queue.write_if_available(DriverState{
-        .motor_flags = enable_flags_all,
+        .motor_flags = std::get<DriverState>(message.message_data).motor_flags,
         .enable_closed_loop = false,
-        .duration = std::get<SetStateDrivePeriodic>(message.message_data).timeout,
+        .duration = std::get<DriverState>(message.message_data).duration,
         .pwm_value = min(pwm_max, faster_abs(
-          std::get<SetStateDrivePeriodic>(message.message_data).pwm_value
+          std::get<DriverState>(message.message_data).pwm_value
         )),
         .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
-          0/* std::get<SetStateDrivePeriodic>(message.message_data).pwm_change */
+          0/* std::get<DriverState>(message.message_data).pwm_change */
         ),
-        .angle = std::get<SetStateDrivePeriodic>(message.message_data).angle,
+        .angle = std::get<DriverState>(message.message_data).angle,
         .angular_speed = clip_to(-max_angular_speed, max_angular_speed, 
-          std::get<SetStateDrivePeriodic>(message.message_data).angular_speed * control_parameters.motor_direction
+          std::get<DriverState>(message.message_data).angular_speed * control_parameters.motor_direction
         ),
       });
       return;
@@ -236,13 +226,13 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     case SET_STATE_DRIVE_SMOOTH: {
       driver_state_queue.write_if_available(DriverState{
-        .motor_flags = enable_flags_all,
+        .motor_flags = std::get<DriverState>(message.message_data).motor_flags,
         .enable_closed_loop = true,
-        .duration = std::get<SetStateDriveSmooth>(message.message_data).timeout,
+        .duration = std::get<DriverState>(message.message_data).duration,
         .pwm_value = clip_to(-pwm_max, +pwm_max, 
-          std::get<SetStateDriveSmooth>(message.message_data).pwm_value * control_parameters.motor_direction),
+          std::get<DriverState>(message.message_data).pwm_value * control_parameters.motor_direction),
         .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
-          0/* std::get<SetStateDriveSmooth>(message.message_data).pwm_change */),
+          0/* std::get<DriverState>(message.message_data).pwm_change */),
       });
       return;
     }
@@ -250,7 +240,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     case SET_STATE_DRIVE_TORQUE: {
       // set_motor_command(DriverState{
       //   .mode = DriverMode::DRIVE_TORQUE, 
-      //   .duration = std::get<SetStateDriveTorque>(message.message_data).timeout,
+      //   .duration = std::get<SetStateDriveTorque>(message.message_data).duration,
       //   .target = std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction,
       // });
       return;
@@ -259,7 +249,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     case SET_STATE_DRIVE_BATTERY_POWER: {
       // set_motor_command(DriverState{
       //   .mode = DriverMode::DRIVE_BATTERY_POWER, 
-      //   .duration = std::get<SetStateDriveBatteryPower>(message.message_data).timeout,
+      //   .duration = std::get<SetStateDriveBatteryPower>(message.message_data).duration,
       //   .target = std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction,
       // });
       return;
@@ -268,7 +258,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     case SET_STATE_DRIVE_SPEED: {
       // set_motor_command(DriverState{
       //   .mode = DriverMode::DRIVE_SPEED, 
-      //   .duration = std::get<SetStateDriveSpeed>(message.message_data).timeout,
+      //   .duration = std::get<SetStateDriveSpeed>(message.message_data).duration,
       //   .target = std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
       // });
       return;
@@ -277,7 +267,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     case SET_STATE_DRIVE_TORQUE_SPEED: {
       // set_motor_command(DriverState{
       //   .mode = DriverMode::DRIVE_TORQUE_SPEED, 
-      //   .duration = std::get<SetStateDriveTorqueSpeed>(message.message_data).timeout,
+      //   .duration = std::get<SetStateDriveTorqueSpeed>(message.message_data).duration,
       //   .current_target = std::get<SetStateDriveTorqueSpeed>(message.message_data).target_current * control_parameters.motor_direction,
       //   .speed_target = std::get<SetStateDriveTorqueSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
       // });
@@ -287,7 +277,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     case SET_STATE_SEEK_ANGLE: {
       // set_motor_command(DriverState{
       //   .mode = DriverMode::SEEK_ANGLE, 
-      //   .duration = std::get<SetStateSeekAngle>(message.message_data).timeout,
+      //   .duration = std::get<SetStateSeekAngle>(message.message_data).duration,
       //   .speed_target = std::get<SetStateSeekAngle>(message.message_data).target_speed * control_parameters.motor_direction,
       //   .target = std::get<SetStateSeekAngle>(message.message_data).target_current * control_parameters.motor_direction,
       //   .seek_angle = SeekAngle{
@@ -473,25 +463,13 @@ void queue_response(hex_mini_drive::FullReadout const& readout) {
   if (encoding_buffer.is_message_encoded()) return;
 
   // Queue the readout history to the send buffer.
-  if(readouts_to_send > 0){
-    if (readout_history_queue.read_available()) {
+  if(readout_history_queue.read_available() > 0){
+    serialize_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::READOUT,
+      .message_data = readout_history_queue.peek()
+    });
 
-      serialize_message(hex_mini_drive::Message{
-        .message_code = hex_mini_drive::MessageCode::READOUT,
-        .message_data = readout_history_queue.peek()
-      });
-
-      readout_history_queue.mark_read();
-    }
-    
-    // Readout added to the USB buffer.
-    readouts_sent += 1;
-
-    if (readouts_sent >= readouts_to_send) {
-      // We have sent all the readouts; reset the counters.
-      readouts_to_send = 0;
-      readouts_sent = 0;
-    }
+    readout_history_queue.mark_read();
 
     return;
   }

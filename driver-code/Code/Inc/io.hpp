@@ -7,9 +7,40 @@
 
 #include <stm32g4xx_ll_adc.h>
 
-#include "type_definitions.hpp"
 #include "constants.hpp"
 
+
+// ADC Readings
+// ------------
+
+struct ADCReadings {
+    int16_t u_readout;
+    int16_t v_readout;
+    int16_t w_readout;
+    int16_t ref_readout;
+    int16_t temp_readout;
+    int16_t vcc_readout;
+};
+
+
+// Driver State
+// ------------
+
+// Motor duty cycle (compare register values and enable settings).
+struct MotorOutputs {
+    uint16_t u_duty; // PWM duty cycle for U phase.
+    uint16_t v_duty; // PWM duty cycle for V phase.
+    uint16_t w_duty; // PWM duty cycle for W phase.
+    // TODO: add the 4th phase
+    // uint16_t z_duty; // PWM duty cycle for Z phase (4 wire servos).
+};
+
+// Zeroed motor outputs, used to short circuit break the motor outputs.
+constexpr MotorOutputs breaking_motor_outputs = {
+    .u_duty = 0,
+    .v_duty = 0,
+    .w_duty = 0,
+};
 
 
 // Motor PWM control
@@ -151,8 +182,6 @@ static inline void set_LED_RGB_colours(uint8_t r, uint8_t g, uint8_t b){
     set_GREEN_LED(g);
     set_BLUE_LED(b);
 }
-
-
 
 // Mapping from hall state to sector number.
 static inline uint8_t get_hall_sector(const uint8_t hall_state){

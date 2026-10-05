@@ -41,13 +41,12 @@ Motor Commands
 <div>${data_request_buttons}</div>
 <div>
   <span>${command_options_input}</span>
-  <span>${command_snapshot_delay_slider}</span>
 </div>
 <div>${stop_buttons}</div>
 <div>${test_buttons}</div>
 <div>
   <span>${simple_drive_buttons}</span>
-  <span>${command_timeout_slider}</span>
+  <span>${command_duration_slider}</span>
   <span>${command_pwm_slider}</span>
 </div>
 <div>
@@ -345,17 +344,13 @@ d3.select(command_options_input).select("div").style("width", "100%");
 d3.select(command_options_input).select("div label").style("width", "100em");
 const command_snapshot = transformed_input_value(command_options_input, (options) => options.includes("Take snapshot after command"));
 
-// Delay the command snapshot by a set millisecond duration from the start of the main command.
-const command_snapshot_delay_slider = inputs_wide_range([0, 1000], {value: 500, step: 1, label: "Snapshot delay (ms):"});
-const command_snapshot_delay = Generators.input(command_snapshot_delay_slider);
-
 // Slider to choose the command specific PWM setting.
 const command_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.05, step: 1, label: "Command value:"});
 const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.floor(value));
 
 // Timeout duration for each command. For safety, the motor runs each drive command for a short period until commanded again.
-const command_timeout_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 1, label: "Command timeout (ms):"});
-const command_timeout = transformed_input_value(command_timeout_slider, (millis) => Math.floor(millis * cycles_per_millisecond));
+const command_duration_slider = inputs_wide_range([0, max_timeout*millis_per_cycle], {value: 510, step: 1, label: "Command timeout (ms):"});
+const command_duration = transformed_input_value(command_duration_slider, (millis) => Math.floor(millis * cycles_per_millisecond));
 
 // Choose the angular speed target for certain commands.
 const command_angular_speed_slider = inputs_wide_range(
@@ -405,68 +400,24 @@ opened_ports_radio.addEventListener("input", function(){
 // Control functions
 // -----------------
 
-// Send a command, automatically adding the shared timeout parameter.
-async function send_command(message){
-  if (!motor_controller) return;
-
-  if (typeof message === "object") {
-    message = {
-      ...message,
-      timeout: command_timeout,
-    };
-  }
-
-  await motor_controller.send_command(message);
-}
-
-// Take a snapshot of continuously recorded readouts from the motor controller.
-async function take_readout_snapshot(command_options = {}){
-  if (!motor_controller) return;
-
-  // Remember the current controller and port before we await.
-  const controller = motor_controller;
-  const port = active_port;
-
-  const reply_data = await controller.send_command_and_await_reply({
-    message: MessageCode.GET_READOUTS_SNAPSHOT,
-    expected_code: MessageCode.READOUT,
-    expected_messages: HISTORY_SIZE,
-    ...command_options,
-  });
-
-  set_readout_series(reply_data, port);
-}
-
 // Run the test driving commands. The test commands can send a snapshot taken
 // during the test procedure if requested (using the timeout parameter as a flag.)
 async function test_command(message_code){
-  const message = {
-    message_code, 
-    pwm_value: command_pwm, 
-    test_speed: command_angular_speed,
-    test_duration: command_timeout,
-    take_snapshot: command_snapshot ? 1 : 0,
-  };
-
-  if (command_snapshot){
-    await take_readout_snapshot({
-      message,
-      expected_code: MessageCode.READOUT,
-      expected_messages: HISTORY_SIZE,
-    });
-  } else {
-    await send_command(message);
-  }
+  // TODO: reimplement...
 }
 
-// Take a snapshot after a user specified delay using a slider in the UI.
-const delayed_readout_snapshot = _.debounce(take_readout_snapshot, command_snapshot_delay);
 
 // Take a snapshot if the snapshot option is checked in the UI.
 async function snapshot_if_checked(message){
-  await send_command(message);
+  if (!motor_controller) return;
 
-  if (command_snapshot) delayed_readout_snapshot();
+  message = {
+    duration: command_duration,
+    motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+    ...message,
+  };
+
+  await motor_controller.send_command(message);
 }
 
 
@@ -501,17 +452,15 @@ function start_command_loop(loop_function){
 
 const data_request_buttons = Inputs.button(
   [
-    ["Uninterrupted snapshot", async function(){ 
-      await take_readout_snapshot(); 
-    }],
     ["Stream motor data", async function(){
+      if (!motor_controller) return;
       motor_controller.reset_history();
-      await send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 1});
+      await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 1});
     }],
     ["STOP stream", async function(){
       stop_command_loop();
-
-      await send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 0});
+      if (!motor_controller) return;
+      await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 0});
     }],
     ["Stream all motors", stream_all_motors],
     ["Stop all motors", async function(){
@@ -771,7 +720,8 @@ const shared_seek_buttons = Inputs.button(
 
           controller.send_command({
             message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_TORQUE,
-            timeout: command_timeout,
+            motor_flags: ENABLE_ALL_OUTPUTS,
+            duration: command_duration,
             target_angle: command_angle,
             max_drive_current: command_torque_current,
             target_rotation: target_position,
@@ -798,7 +748,8 @@ const shared_seek_buttons = Inputs.button(
 
           controller.send_command({
             message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
-            timeout: command_timeout,
+            motor_flags: ENABLE_ALL_OUTPUTS,
+            duration: command_duration,
             target_angle: command_angle,
             max_drive_power: controller === motor_controller ? 0 : command_power,
             target_rotation: target_position,
@@ -821,7 +772,8 @@ const shared_seek_buttons = Inputs.button(
 
           controller.send_command({
             message_code: MessageCode.SET_STATE_SEEK_ANGLE_WITH_POWER,
-            timeout: command_timeout,
+            motor_flags: ENABLE_ALL_OUTPUTS,
+            duration: command_duration,
             target_angle: command_angle,
             max_drive_power: command_power,
             target_rotation: target_position,
@@ -1293,6 +1245,8 @@ const plot_motor_values = plot_lines({
   x_label: "Time (ms)",
   y_label: "Value",
   channels: [
+    {y: "readout_number", label: "Readout Number", color: colors_categories[0]},
+    {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[1]},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
     {y: "target", label: "Target", color: colors_categories[2]},
     {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
@@ -2172,6 +2126,22 @@ const control_parameters_input = Object.fromEntries(
       label: "Angle Probing Interval",
       description: "Interval at which we do the saliency angle probing (when we don't have EMF).",
     }],
+    ["u_pwm_floor", {
+      label: "U PWM Floor",
+      description: "Minimum PWM value for the voltage applied to the U motor phase (below this value the switch doesn't turn on).",
+    }],
+    ["v_pwm_floor", {
+      label: "V PWM Floor",
+      description: "Minimum PWM value for the voltage applied to the V motor phase (below this value the switch doesn't turn on).",
+    }],
+    ["w_pwm_floor", {
+      label: "W PWM Floor",
+      description: "Minimum PWM value for the voltage applied to the W motor phase (below this value the switch doesn't turn on).",
+    }],
+    ["z_pwm_floor", {
+      label: "Z PWM Floor",
+      description: "Minimum PWM value for the voltage applied to the Z motor phase (below this value the switch doesn't turn on).",
+    }],
     ["rotor_angle_ki", {
       label: "Rotor Angle KI", 
       description: "Integral gain for the rotor angle observer from the measured EMF angle.",
@@ -2498,7 +2468,7 @@ import {normalize_radians} from "./components/motor_controller/angular_math.js";
 import {MessageCode, prompt_com_port_get_index, default_ws_uri, MotorController} from "./components/motor_controller/motor_controller.js";
 
 import {
-  PWM_BASE, HISTORY_SIZE, CURRENT_UNITS_PER_AMP, VOLTAGE_UNITS_PER_VOLT,
+  PWM_BASE, HISTORY_SIZE, CURRENT_UNITS_PER_AMP, VOLTAGE_UNITS_PER_VOLT, ENABLE_RECORDING, ENABLE_ALL_OUTPUTS, DISABLE_ALL_OUTPUTS,
   pwm_cycles_per_second, cycles_per_millisecond, millis_per_cycle, max_timeout, pwm_period, 
   radians_to_angle_units, 
   rotations_per_millisecond_to_speed_units,
