@@ -60,4 +60,4 @@ extern CircularQueue<hex_mini_drive::FullReadout, 2> full_readout_queue;
 // ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
 // schedule while the first is executing, but also we will have 1 more space to write an emergency break
 // command! The break command will also lead to the interrupt loop freeing up space in the command queue.
-extern CircularQueue<hex_mini_drive::DriverState, 25> driver_state_queue;
+extern CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue;

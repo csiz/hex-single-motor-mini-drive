@@ -39,20 +39,20 @@ Motor Commands
 <div>${connection_status}</div>
 <div>${opened_ports_radio}</div>
 <div>${data_request_buttons}</div>
+<div>${stop_buttons}</div>
 <div>
   <span>${command_options_input}</span>
 </div>
-<div>${stop_buttons}</div>
-<div>${test_buttons}</div>
 <div>
   <span>${simple_drive_buttons}</span>
+  <span>${test_buttons}</span>
   <span>${command_duration_slider}</span>
   <span>${command_pwm_slider}</span>
+  <span>${command_angle_slider}</span>
+  <span>${command_angular_speed_slider}</span>
 </div>
 <div>
   <span>${advanced_drive_buttons}</span>
-  <span>${command_angle_slider}</span>
-  <span>${command_angular_speed_slider}</span>
   <span>${command_torque_current_slider}</span>
   <span>${command_power_slider}</span>
 </div>
@@ -101,7 +101,6 @@ Current Calibration Procedures
   <div>${Object.values(current_calibration_input)}</div>
 </div>
 <div class="card tight">
-  <div>${current_calibration_run_buttons}</div>
   <div>${current_calibration_pwm_slider}</div>
   <div>${current_calibration_test_speed_slider}</div>
   <div>${current_calibration_test_duration_slider}</div>
@@ -334,7 +333,7 @@ d3.select(connect_buttons).selectAll("button").style("height", "3em");
 // The following variables are pairs of input html elements and their corresponding input value observers.
 
 const command_options_input = Inputs.checkbox(
-  ["Take snapshot after command"],
+  ["Take snapshot with command"],
   {
     value: [],
     label: "Command options:",
@@ -342,7 +341,7 @@ const command_options_input = Inputs.checkbox(
 );
 d3.select(command_options_input).select("div").style("width", "100%");
 d3.select(command_options_input).select("div label").style("width", "100em");
-const command_snapshot = transformed_input_value(command_options_input, (options) => options.includes("Take snapshot after command"));
+const command_snapshot = transformed_input_value(command_options_input, (options) => options.includes("Take snapshot with command"));
 
 // Slider to choose the command specific PWM setting.
 const command_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.05, step: 1, label: "Command value:"});
@@ -400,26 +399,13 @@ opened_ports_radio.addEventListener("input", function(){
 // Control functions
 // -----------------
 
-// Run the test driving commands. The test commands can send a snapshot taken
-// during the test procedure if requested (using the timeout parameter as a flag.)
-async function test_command(message_code){
-  // TODO: reimplement...
-}
-
-
-// Take a snapshot if the snapshot option is checked in the UI.
-async function snapshot_if_checked(message){
-  if (!motor_controller) return;
-
-  message = {
-    duration: command_duration,
-    motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
-    ...message,
-  };
-
-  await motor_controller.send_command(message);
-}
-
+const command_drive_state = {
+  motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+  duration: command_duration,
+  pwm_value: command_pwm, 
+  angular_speed: command_angular_speed, 
+  angle: command_angle,
+};
 
 async function stream_all_motors(){
   for (const {motor_controller} of opened_ports.values()) {
@@ -476,41 +462,70 @@ const data_request_buttons = Inputs.button(
 );
 d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 
-const test_buttons_to_code = [
-  ["Test all permutation", MessageCode.SET_STATE_TEST_ALL_PERMUTATIONS],
-  ["Test ground short", MessageCode.SET_STATE_TEST_GROUND_SHORT],
-  ["Test positive short", MessageCode.SET_STATE_TEST_POSITIVE_SHORT],
-  // ["Test U increasing", MessageCode.SET_STATE_TEST_U_INCREASING],
-  // ["Test U decreasing", MessageCode.SET_STATE_TEST_U_DECREASING],
-  // ["Test V increasing", MessageCode.SET_STATE_TEST_V_INCREASING],
-  // ["Test V decreasing", MessageCode.SET_STATE_TEST_V_DECREASING],
-  // ["Test W increasing", MessageCode.SET_STATE_TEST_W_INCREASING],
-  // ["Test W decreasing", MessageCode.SET_STATE_TEST_W_DECREASING],
-  ["Resistance calibration", MessageCode.SET_STATE_RESISTANCE_CALIBRATION],
-  ["Inductance calibration", MessageCode.SET_STATE_INDUCTANCE_CALIBRATION],
-  ["Rotating chirp calibration", MessageCode.SET_STATE_ROTATING_CALIBRATION_CHIRP],
-  ["Fixed chirp calibration", MessageCode.SET_STATE_FIXED_CALIBRATION_CHIRP],
-  ["HFI Saliency Pulses", MessageCode.SET_STATE_HFI_SALIENCY_PULSES],
-];
-
 const test_buttons = Inputs.button(
-  test_buttons_to_code.map(([label, code]) => [label, () => test_command(code)]),
+  [
+    ["Test all permutation", async function(){
+      let drive_schedule = [
+        [0, 1.0],
+        [0, 0.0],
+        [Math.PI * 1 / 3, 1.0],
+        [Math.PI * 1 / 3, 0.0],
+        [Math.PI * 2 / 3, 1.0],
+        [Math.PI * 2 / 3, 0.0],
+        [-Math.PI, 1.0],
+        [-Math.PI, 0.0],
+        [-Math.PI * 2 / 3, 1.0],
+        [-Math.PI * 2 / 3, 0.0],
+        [-Math.PI * 1 / 3, 1.0],
+        [-Math.PI * 1 / 3, 0.0],
+      ].map(([angle, value]) => ({
+        motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+        enable_closed_loop: false,
+        duration: HISTORY_SIZE / 12,
+        pwm_value: command_drive_state.pwm_value * value,
+        angle: radians_to_angle_units(angle),
+      }));
+      drive_schedule.message_code = MessageCode.SET_DRIVE_SCHEDULE;
+      await motor_controller.send_command(drive_schedule);
+    }],
+    ["Test ground short", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+        duration: HISTORY_SIZE,
+        pwm_value: 0,
+      });
+    }],
+    ["Test increasing steps", async function(){
+      let drive_schedule = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.0].map(value => ({
+        motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+        enable_closed_loop: false,
+        duration: HISTORY_SIZE / 12,
+        pwm_value: command_drive_state.pwm_value * value,
+        angle: command_angle,
+      }));
+      drive_schedule.message_code = MessageCode.SET_DRIVE_SCHEDULE;
+      await motor_controller.send_command(drive_schedule);
+    }],
+    ["HFI Saliency Pulses", async function(){
+      // TODO: reimplement this one, maybe instead of the pulses, we do a short rotation around the target angle axis.
+    }],
+  ],
   {label: "Test sequence"},
 );
 d3.select(test_buttons).selectAll("button").style("height", "4em");
-
 
 const stop_buttons = Inputs.button(
   [
     ["Stop / Brake", async function(){
       stop_command_loop();
 
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_OFF});
+      await motor_controller.send_command({message_code: MessageCode.SET_STATE_OFF});
     }],
     ["Freewheel", async function(){
       stop_command_loop();
 
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_FREEWHEEL});
+      await motor_controller.send_command({message_code: MessageCode.SET_STATE_FREEWHEEL});
     }],
     ["Stop all motors", async function(){
       stop_command_loop();
@@ -534,30 +549,37 @@ d3.select(stop_buttons)
 
 const simple_drive_buttons = Inputs.button(
   [
-    ["Drive 6S +", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, pwm_value: +command_pwm});
+    ["Drive periodic +", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        enable_closed_loop: false,
+        ...command_drive_state,
+      });
     }],
-    ["Drive 6S -", async function(){
-      await snapshot_if_checked({message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, pwm_value: -command_pwm});
+    ["Drive periodic -", async function(){
+
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        enable_closed_loop: false,
+        ...command_drive_state,
+        angular_speed: -command_drive_state.angular_speed,
+      });
     }],
-    // ["Hold U positive", async function(){
-    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_POSITIVE, pwm_value: command_pwm});
-    // }],
-    // ["Hold V positive", async function(){
-    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_POSITIVE, pwm_value: command_pwm});
-    // }],
-    // ["Hold W positive", async function(){
-    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_POSITIVE, pwm_value: command_pwm});
-    // }],
-    // ["Hold U negative", async function(){
-    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_U_NEGATIVE, pwm_value: command_pwm});
-    // }],
-    // ["Hold V negative", async function(){
-    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_V_NEGATIVE, pwm_value: command_pwm});
-    // }],
-    // ["Hold W negative", async function(){
-    //   await snapshot_if_checked({message_code: MessageCode.SET_STATE_HOLD_W_NEGATIVE, pwm_value: command_pwm});
-    // }],
+    ["Drive smooth +", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        enable_closed_loop: true,
+        ...command_drive_state,
+      });
+    }],
+    ["Drive smooth -", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        enable_closed_loop: true,
+        ...command_drive_state,
+        pwm_value: -command_drive_state.pwm_value
+      });
+    }],
   ],
   {label: "Simple drive commands"},
 );
@@ -567,87 +589,79 @@ d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
 const advanced_drive_buttons = Inputs.button(
   [
     ["Set Angle", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_ANGLE, 
         angle: command_angle,
       });
     }],
-    ["Drive periodic +", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_DRIVE_PERIODIC,
-        pwm_value: command_pwm, 
-        angular_speed: +command_angular_speed, 
-        angle: command_angle,
-      });
+    ["Drive 6S +", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
+        ...command_drive_state});
     }],
-    ["Drive periodic -", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_DRIVE_PERIODIC,
-        pwm_value: command_pwm, 
-        angular_speed: -command_angular_speed, 
-        angle: command_angle,
-      });
-    }],
-    ["Drive smooth +", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-        pwm_value: +command_pwm
-      });
-    }],
-    ["Drive smooth -", async function(){
-      await snapshot_if_checked({
-        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-        pwm_value: -command_pwm
+    ["Drive 6S -", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
+        ...command_drive_state,
+        pwm_value: -command_drive_state.pwm_value
       });
     }],
     ["Drive torque +", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_TORQUE,
-        target_current: +command_torque_current
+        target_current: +command_torque_current,
+        ...command_drive_state,
       });
     }],
     ["Drive torque -", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_TORQUE,
-        target_current: -command_torque_current
+        target_current: -command_torque_current,
+        ...command_drive_state,
       });
     }],
     ["Drive power +", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
         target_power: +command_power,
+        ...command_drive_state,
       });
     }],
     ["Drive power -", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
         target_power: -command_power,
+        ...command_drive_state,
       });
     }],
     ["Drive speed +", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_SPEED,
-        target_speed: +command_angular_speed
+        target_speed: +command_angular_speed,
+        ...command_drive_state,
       });
     }],
     ["Drive speed -", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_SPEED,
-        target_speed: -command_angular_speed
+        target_speed: -command_angular_speed,
+        ...command_drive_state,
       });
     }],
     ["Drive torque speed +", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_TORQUE_SPEED,
         target_speed: +command_angular_speed,
         target_current: +command_torque_current,
+        ...command_drive_state,
       });
     }],
     ["Drive torque speed -", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_TORQUE_SPEED,
         target_speed: -command_angular_speed,
         target_current: -command_torque_current,
+        ...command_drive_state,
       });
     }],
   ],
@@ -659,27 +673,29 @@ d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
 const seek_drive_buttons = Inputs.button(
   [
     ["Set Rotations", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_ROTATIONS, 
         rotations: command_seek_rotation,
       });
     }],
     ["Seek angle", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_SEEK_ANGLE,
         target_rotation: command_seek_rotation, 
         target_angle: command_angle,
         target_speed: command_angular_speed,
         target_current: command_torque_current,
+        ...command_drive_state,
       });
     }],
     ["Go to zero", async function(){
-      await snapshot_if_checked({
+      await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_SEEK_ANGLE,
         target_rotation: 0, 
         target_angle: 0,
         target_speed: command_angular_speed,
         target_current: command_torque_current,
+        ...command_drive_state,
       });
     }],
   ],
@@ -1398,6 +1414,8 @@ const update_current_calibration_data = (new_value) => {
 ```js
 
 async function run_current_calibration(motor_controller, message_options) {
+  // TODO: this all needs redoing; we changed the snapshot routine.
+
   if (!motor_controller.current_calibration) {
     console.error("We didn't load the active calibration data from the driver, we can't proceed without it.");
     throw new Error("Missing current calibration data");
@@ -1918,13 +1936,6 @@ async function run_current_calibration_by_code(message_code) {
   update_current_calibration_data(calibration_data);
   // set_readout_series(calibration_data.sample, active_port);
 }
-
-const current_calibration_run_buttons = Inputs.button(
-  test_buttons_to_code.map(([label, code]) => [label, () => run_current_calibration_by_code(code)]),
-  {label: "Run calibration sequence"},
-);
-d3.select(current_calibration_run_buttons).selectAll("button").style("height", "4em");
-
 
 const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [

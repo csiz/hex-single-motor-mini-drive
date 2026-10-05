@@ -77,7 +77,9 @@ using UnitTestFunction = void (*)(char * buffer, size_t max_size);
 
 UnitTestFunction unit_test_function = nullptr;
 
+hex_mini_drive::DriveSchedule pending_drive_schedule = {};
 
+size_t pending_schedule_length = 0;
 
 // Initialization
 // --------------
@@ -110,27 +112,11 @@ void app_init() {
 // ---------------------------
 
 void break_motor(){
-  while(not driver_state_queue.write_if_available(breaking_driver_state)){
+  pending_schedule_length = 0;
+  while(not drive_state_queue.write_if_available(breaking_drive_state)){
     // Wait until we successfully write the breaking state to the queue.
   };
 }
-
-
-// // Start an active test of the motor.
-// void motor_start_test(PWMSchedule const& schedule, float value, bool take_snapshot) {
-//   // Clear the readouts buffer of old data.
-//   readout_history_mark_reset();
-//   readouts_to_send = take_snapshot ? hex_mini_drive::HISTORY_SIZE : 0;
-//   readouts_sent = 0;
-
-//   // Start the test schedule.
-
-//   set_motor_command(DriverState{ 
-//     .mode = DriverMode::SCHEDULE,
-//     .target = value,
-//     .schedule = DriveSchedule{ .pointer = &schedule },
-//   });
-// }
 
 // Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
 bool run_unit_test(UnitTestFunction test_function) {
@@ -143,6 +129,22 @@ bool run_unit_test(UnitTestFunction test_function) {
   reply_unit_test = true;
 
   return false;
+}
+
+static inline hex_mini_drive::DriveState get_checked_drive_state(hex_mini_drive::DriveState const& drive_state) {
+  return hex_mini_drive::DriveState{
+    .motor_flags = drive_state.motor_flags,
+    .enable_closed_loop = drive_state.enable_closed_loop,
+    .duration = drive_state.duration,
+    .pwm_value = clip_to(-pwm_max, +pwm_max, 
+      drive_state.pwm_value * control_parameters.motor_direction),
+      .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
+        drive_state.pwm_change),
+    .angle = drive_state.angle,
+    .angular_speed = clip_to(-max_angular_speed, max_angular_speed,
+      drive_state.angular_speed * control_parameters.motor_direction
+    ),
+  };
 }
 
 
@@ -166,38 +168,41 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     // Turn off the motor driver.
     case SET_STATE_OFF: {
-      // Repeat command, with the interrupt guards.
+      // Repeat command until the driver stops.
       break_motor();
       return;
     }
-        
-    // Measure the motor phase currents.
-    
-    case SET_STATE_TEST_ALL_PERMUTATIONS:
-      // motor_start_test(
-      //   test_all_permutations, 
-      //   std::get<TestCommand>(message.message_data).pwm_value, 
-      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
-      // );
+
+    // Freewheel the motor.
+    case SET_STATE_FREEWHEEL: {
+      pending_schedule_length = 1;
+      pending_drive_schedule[0] = freewheel_drive_state;
       return;
-    case SET_STATE_TEST_GROUND_SHORT:
-      // motor_start_test(
-      //   test_ground_short, 
-      //   std::get<TestCommand>(message.message_data).pwm_value, 
-      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
-      // );
+    }
+
+    case SET_DRIVE_STATE: {
+      pending_schedule_length = 1;
+      auto const& drive_state = std::get<DriveState>(message.message_data);
+      pending_drive_schedule[0] = get_checked_drive_state(drive_state);
       return;
-    case SET_STATE_TEST_POSITIVE_SHORT:
-      // motor_start_test(
-      //   test_positive_short, 
-      //   std::get<TestCommand>(message.message_data).pwm_value, 
-      //   std::get<TestCommand>(message.message_data).take_snapshot > 0
-      // );
+    }
+
+    case SET_DRIVE_SCHEDULE: {
+      size_t i = 0;
+      for (; i < hex_mini_drive::DRIVE_SCHEDULE_SIZE; i++) {
+        auto const& drive_state = std::get<DriveSchedule>(message.message_data)[i];
+        // The schedule lasts until the first state with 0 duration.
+        if (drive_state.duration == 0) break;
+        pending_drive_schedule[i] = get_checked_drive_state(drive_state);
+      }
+      pending_schedule_length = i;
+      
       return;
+    }
 
     // Drive the motor.
     case SET_STATE_DRIVE_6_SECTOR: {
-      // set_motor_command(DriverState{ 
+      // set_motor_command(DriveState{ 
       //   .mode = DriverMode::DRIVE_6_SECTOR, 
       //   .duration = std::get<BasicDriveCommand>(message.message_data).duration, 
       //   .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
@@ -205,40 +210,8 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    case SET_STATE_DRIVE_PERIODIC: {
-      driver_state_queue.write_if_available(DriverState{
-        .motor_flags = std::get<DriverState>(message.message_data).motor_flags,
-        .enable_closed_loop = false,
-        .duration = std::get<DriverState>(message.message_data).duration,
-        .pwm_value = min(pwm_max, faster_abs(
-          std::get<DriverState>(message.message_data).pwm_value
-        )),
-        .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
-          0/* std::get<DriverState>(message.message_data).pwm_change */
-        ),
-        .angle = std::get<DriverState>(message.message_data).angle,
-        .angular_speed = clip_to(-max_angular_speed, max_angular_speed, 
-          std::get<DriverState>(message.message_data).angular_speed * control_parameters.motor_direction
-        ),
-      });
-      return;
-    }
-
-    case SET_STATE_DRIVE_SMOOTH: {
-      driver_state_queue.write_if_available(DriverState{
-        .motor_flags = std::get<DriverState>(message.message_data).motor_flags,
-        .enable_closed_loop = true,
-        .duration = std::get<DriverState>(message.message_data).duration,
-        .pwm_value = clip_to(-pwm_max, +pwm_max, 
-          std::get<DriverState>(message.message_data).pwm_value * control_parameters.motor_direction),
-        .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
-          0/* std::get<DriverState>(message.message_data).pwm_change */),
-      });
-      return;
-    }
-
     case SET_STATE_DRIVE_TORQUE: {
-      // set_motor_command(DriverState{
+      // set_motor_command(DriveState{
       //   .mode = DriverMode::DRIVE_TORQUE, 
       //   .duration = std::get<SetStateDriveTorque>(message.message_data).duration,
       //   .target = std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction,
@@ -247,7 +220,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_STATE_DRIVE_BATTERY_POWER: {
-      // set_motor_command(DriverState{
+      // set_motor_command(DriveState{
       //   .mode = DriverMode::DRIVE_BATTERY_POWER, 
       //   .duration = std::get<SetStateDriveBatteryPower>(message.message_data).duration,
       //   .target = std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction,
@@ -256,7 +229,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_STATE_DRIVE_SPEED: {
-      // set_motor_command(DriverState{
+      // set_motor_command(DriveState{
       //   .mode = DriverMode::DRIVE_SPEED, 
       //   .duration = std::get<SetStateDriveSpeed>(message.message_data).duration,
       //   .target = std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
@@ -265,7 +238,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_STATE_DRIVE_TORQUE_SPEED: {
-      // set_motor_command(DriverState{
+      // set_motor_command(DriveState{
       //   .mode = DriverMode::DRIVE_TORQUE_SPEED, 
       //   .duration = std::get<SetStateDriveTorqueSpeed>(message.message_data).duration,
       //   .current_target = std::get<SetStateDriveTorqueSpeed>(message.message_data).target_current * control_parameters.motor_direction,
@@ -275,7 +248,7 @@ void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_STATE_SEEK_ANGLE: {
-      // set_motor_command(DriverState{
+      // set_motor_command(DriveState{
       //   .mode = DriverMode::SEEK_ANGLE, 
       //   .duration = std::get<SetStateSeekAngle>(message.message_data).duration,
       //   .speed_target = std::get<SetStateSeekAngle>(message.message_data).target_speed * control_parameters.motor_direction,
@@ -288,11 +261,9 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    // Freewheel the motor.
-    case SET_STATE_FREEWHEEL: {
-      driver_state_queue.write_if_available(freewheel_driver_state);
+    case GET_CURRENT_CALIBRATION:
+      reply_current_calibration = true;
       return;
-    }
 
     case SET_CURRENT_CALIBRATION:
       current_calibration = std::get<CurrentCalibration>(message.message_data);
@@ -307,6 +278,10 @@ void handle_message(hex_mini_drive::Message const& message) {
       reply_current_calibration = true;
       return;
 
+    case GET_CONTROL_PARAMETERS:
+      reply_control_parameters = true;
+      return;
+
     case SET_CONTROL_PARAMETERS:
       control_parameters = std::get<ControlParameters>(message.message_data);
       reply_control_parameters = true;
@@ -314,14 +289,6 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     case RESET_CONTROL_PARAMETERS:
       control_parameters = default_control_parameters;
-      reply_control_parameters = true;
-      return;
-
-    case GET_CURRENT_CALIBRATION:
-      reply_current_calibration = true;
-      return;
-
-    case GET_CONTROL_PARAMETERS:
       reply_control_parameters = true;
       return;
 
@@ -354,92 +321,6 @@ void handle_message(hex_mini_drive::Message const& message) {
     case FULL_READOUT:
     case UNIT_TEST_OUTPUT:
       return;
-
-    
-    case SET_STATE_RESISTANCE_CALIBRATION: {
-      // calibration_mode = CalibrationMode::RESISTANCE;
-      
-      // // Clear the readouts buffer of old data.
-      // readout_history_mark_reset();
-      // readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
-      // readouts_sent = 0;
-
-      // set_motor_command(DriverState{
-      //   .mode = DriverMode::RESISTANCE_CALIBRATION,
-      //   .duration = hex_mini_drive::HISTORY_SIZE,
-      //   .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
-      // });
-      return;
-    }
-
-    case SET_STATE_INDUCTANCE_CALIBRATION: {
-      // calibration_mode = CalibrationMode::INDUCTANCE;
-
-      // // Clear the readouts buffer of old data.
-      // readout_history_mark_reset();
-      // readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
-      // readouts_sent = 0;
-      
-      // set_motor_command(DriverState{
-      //   .mode = DriverMode::INDUCTANCE_CALIBRATION,
-      //   .duration = hex_mini_drive::HISTORY_SIZE,
-      //   .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
-      // });
-      return;
-    }
-
-    case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
-      // calibration_mode = CalibrationMode::ROTATING_CHIRP;
-      // // Clear the readouts buffer of old data.
-      // readout_history_mark_reset();
-      // readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
-      // readouts_sent = 0;
-
-      // set_motor_command(DriverState{
-      //   .mode = DriverMode::ROTATING_CALIBRATION_CHIRP,
-      //   .duration = hex_mini_drive::HISTORY_SIZE,
-      //   .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
-      //   .test_parameters = TestParameters{
-      //     .test_speed = std::get<TestCommand>(message.message_data).test_speed,
-      //     .test_duration = std::get<TestCommand>(message.message_data).test_duration,
-      //   },
-      // });
-      return;
-    }
-    case SET_STATE_FIXED_CALIBRATION_CHIRP: {
-      // calibration_mode = CalibrationMode::FIXED_CHIRP;
-      
-      // readout_history_mark_reset();
-      // readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
-      // readouts_sent = 0;
-
-
-      // set_motor_command(DriverState{
-      //   .mode = DriverMode::FIXED_CALIBRATION_CHIRP,
-      //   .duration = hex_mini_drive::HISTORY_SIZE,
-      //   .active_angle = 0,
-      //   .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
-      //   .test_parameters = TestParameters{
-      //     .test_speed = std::get<TestCommand>(message.message_data).test_speed,
-      //     .test_duration = std::get<TestCommand>(message.message_data).test_duration,
-      //     .test_angle = std::get<TestCommand>(message.message_data).test_angle
-      //   },
-      // });
-      return;
-    }
-    case SET_STATE_HFI_SALIENCY_PULSES: {
-      // // Clear the readouts buffer of old data.
-      // readout_history_mark_reset();
-      // readouts_to_send = (std::get<TestCommand>(message.message_data).take_snapshot > 0) ? hex_mini_drive::HISTORY_SIZE : 0;
-      // readouts_sent = 0;
-      
-      // set_motor_command(DriverState{
-      //   .mode = DriverMode::HFI_SALIENCY_PULSES,
-      //   .duration = std::get<TestCommand>(message.message_data).test_duration,
-      //   .target = clip_to(0.0f, pwm_max, std::get<TestCommand>(message.message_data).pwm_value),
-      // });
-      return;
-    }
   }
 }
 
@@ -550,10 +431,7 @@ void receive_data(uint8_t * rx_buffer, size_t rx_size) {
   last_receive_time = HAL_GetTick();
 }
 
-void comms_update(hex_mini_drive::FullReadout const& readout) {
-  // Queue the state readouts on the USB buffer.
-  queue_response(readout);
-
+void comms_update() {
   const bool update_success = usb_update(
     encoding_buffer.encoding_buffer, encoding_buffer.encoding_buffer_size, 
     [&](uint8_t * buffer, size_t size){
@@ -720,7 +598,22 @@ void app_tick() {
   readout.rotations = control_parameters.motor_direction * readout.rotations;
 
   // Comms update
-  comms_update(readout);
+  // ------------
+
+  // Queue the state readouts on the USB buffer.
+  queue_response(readout);
+  // Send and receive over the USB buffer.
+  comms_update();
+
+  // Handle driver state using last message
+  // --------------------------------------
+  
+  // Write the whole message if we can.
+  if (drive_state_queue.write_from_if_available(pending_drive_schedule.data(), pending_schedule_length)) {
+    // We wrote it all, now reset the pending length.
+    pending_schedule_length = 0;
+  }
+
 }
 
 
@@ -729,7 +622,7 @@ void app_tick() {
 // -------------------------------------------------------------------------
 
 // // The complete driver state, these values control the motor behaviour.
-// struct DriverState {
+// struct DriveState {
 //     // Settings for the 3 phase MOSFET PWM drivers.
 //     MotorOutputs motor_outputs = breaking_motor_outputs;
 
@@ -786,7 +679,7 @@ void app_tick() {
 
 // // Update the motor outputs using simple 6 sector driving based on the hall sensors.
 // static inline MotorOutputs update_motor_6_sector(
-//     DriverState const& driver_state,
+//     DriveState const& drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
 
@@ -798,7 +691,7 @@ void app_tick() {
 
 //     if (not angle_valid) return breaking_motor_outputs;
 
-//     auto const& motor_sector_driving_table = driver_state.active_pwm >= 0 ? 
+//     auto const& motor_sector_driving_table = drive_state.active_pwm >= 0 ? 
 //         motor_sector_driving_positive : 
 //         motor_sector_driving_negative;
 
@@ -810,7 +703,7 @@ void app_tick() {
 
 //     const float abs_pwm = min(
 //         readout.live_max_pwm,
-//         faster_abs(driver_state.active_pwm)
+//         faster_abs(drive_state.active_pwm)
 //     );
 
 //     return MotorOutputs{
@@ -824,20 +717,20 @@ void app_tick() {
 // // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
 // // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
 // static inline MotorOutputs update_motor_smooth(
-//     DriverState & driver_state,
+//     DriveState & drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
 //     // Check if we have an accurate readout angle.
 //     const bool current_detected = readout.state_flags & current_detected_bit_mask;
 
-//     driver_state.active_pwm += clip_to(
+//     drive_state.active_pwm += clip_to(
 //         -control_parameters.max_pwm_change,
 //         +control_parameters.max_pwm_change,
-//         driver_state.target_pwm - driver_state.active_pwm
+//         drive_state.target_pwm - drive_state.active_pwm
 //     );
 
 //     // Base the direction on the sign of the target PWM.
-//     const int32_t active_pwm_sign = sign(driver_state.active_pwm);
+//     const int32_t active_pwm_sign = sign(drive_state.active_pwm);
 
 //     // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
 //     // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
@@ -853,19 +746,19 @@ void app_tick() {
 //     const int32_t lead_angle_error = current_detected * (ideal_angle - current_angle);
 
 //     // Adjust the lead angle to keep the current orthogonal to the rotor magnetic pole.
-//     driver_state.lead_angle += control_parameters.lead_angle_control_ki * lead_angle_error;
+//     drive_state.lead_angle += control_parameters.lead_angle_control_ki * lead_angle_error;
 
 //     // Drive the motor to produce current perpendicular to the magnetic angle.
-//     driver_state.active_angle = ideal_angle + active_pwm_sign * driver_state.lead_angle;
+//     drive_state.active_angle = ideal_angle + active_pwm_sign * drive_state.lead_angle;
 
-//     return update_motor_at_angle(driver_state, readout);
+//     return update_motor_at_angle(drive_state, readout);
 // }
 // // Drive the motor with the desired output current (note the DQ0 current is 3/2 phase current).
 // // This mode also uses the smooth driving algorithm to drive using field oriented control, thus
 // // keeping the current as close to 90 degrees ahead of the magnetic angle as possible. Allowing
 // // control of the torque produced by the motor which will be proportional to the current target.
 // static inline MotorOutputs update_motor_torque(
-//     DriverState & driver_state,
+//     DriveState & drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
     
@@ -876,16 +769,16 @@ void app_tick() {
 //     const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle_offset);
 
 //     // Calculate the difference between the target and measured current.
-//     const float control_error = (driver_state.target - measured_current) * max_drive_current_inverse;
+//     const float control_error = (drive_state.target - measured_current) * max_drive_current_inverse;
 
 //     // Update the PID control for the torque.
-//     driver_state.target_pwm = clip_to(
+//     drive_state.target_pwm = clip_to(
 //         -pwm_max,
 //         +pwm_max,
-//         driver_state.active_pwm + control_error * control_parameters.torque_control_ki
+//         drive_state.active_pwm + control_error * control_parameters.torque_control_ki
 //     );
 
-//     return update_motor_smooth(driver_state, readout);
+//     return update_motor_smooth(drive_state, readout);
 // }
 
 // // Drive motor using up to a target battery power consumption.
@@ -894,47 +787,47 @@ void app_tick() {
 // // 
 // // This mode will also control power absorption during breaking.
 // static inline MotorOutputs update_motor_battery_power(
-//     DriverState & driver_state,
+//     DriveState & drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
 
 //     const float measured_power = sign(readout.angular_speed) * readout.total_power;
 
-//     const float control_error = (driver_state.target - measured_power) * max_drive_power_inverse;
+//     const float control_error = (drive_state.target - measured_power) * max_drive_power_inverse;
 
 //     // Update the PID control for the torque.
-//     driver_state.target_pwm = clip_to(
+//     drive_state.target_pwm = clip_to(
 //         -pwm_max,
 //         +pwm_max,
-//         driver_state.active_pwm + control_error * control_parameters.battery_power_control_ki
+//         drive_state.active_pwm + control_error * control_parameters.battery_power_control_ki
 //     );
 
-//     return update_motor_smooth(driver_state, readout);
+//     return update_motor_smooth(drive_state, readout);
 // }
 
 
 // static inline MotorOutputs update_motor_speed(
-//     DriverState & driver_state,
+//     DriveState & drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
 //     // Calculate the difference between the target and measured current.
-//     const float control_error = (driver_state.target - readout.angular_speed) * max_angular_speed_inverse;
+//     const float control_error = (drive_state.target - readout.angular_speed) * max_angular_speed_inverse;
 
 //     // Update the PID control for the torque.
-//     driver_state.target_pwm = clip_to(
+//     drive_state.target_pwm = clip_to(
 //         -pwm_max,
 //         +pwm_max,
-//         driver_state.active_pwm + control_error * control_parameters.speed_control_ki
+//         drive_state.active_pwm + control_error * control_parameters.speed_control_ki
 //     );
 
-//     return update_motor_smooth(driver_state, readout);
+//     return update_motor_smooth(drive_state, readout);
 // }
 
 // static inline MotorOutputs update_motor_torque_speed(
-//     DriverState & driver_state,
+//     DriveState & drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
-//     const float command_sign = sign(driver_state.speed_target);
+//     const float command_sign = sign(drive_state.speed_target);
     
 //     // Squash very low currents to 0 to avoid noise.
 //     const bool current_detected = readout.state_flags & current_detected_bit_mask;
@@ -943,11 +836,11 @@ void app_tick() {
 //     const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle_offset);
     
 //     // Calculate the difference between the target and measured current.
-//     const float current_error = (driver_state.current_target - measured_current) * 
+//     const float current_error = (drive_state.current_target - measured_current) * 
 //         max_drive_current_inverse * control_parameters.torque_control_ki;
 
 //     // Calculate the difference between the target and measured current.
-//     const float speed_error = (driver_state.speed_target - readout.angular_speed) * 
+//     const float speed_error = (drive_state.speed_target - readout.angular_speed) * 
 //         max_angular_speed_inverse * control_parameters.speed_control_ki;
 
 
@@ -958,18 +851,18 @@ void app_tick() {
 //     );
 
 //     // Update the PID control for the torque.
-//     driver_state.target_pwm = clip_to(
+//     drive_state.target_pwm = clip_to(
 //         -pwm_max,
 //         +pwm_max,
-//         driver_state.active_pwm + control_error
+//         drive_state.active_pwm + control_error
 //     );
 
-//     return update_motor_smooth(driver_state, readout);
+//     return update_motor_smooth(drive_state, readout);
 // }
 
 
 // static inline MotorOutputs update_motor_seek_angle(
-//     DriverState & driver_state,
+//     DriveState & drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
 //     // The derivative of the error is negative the angular speed.
@@ -977,7 +870,7 @@ void app_tick() {
     
 //     // Get the error between the target angle and the current angle; predicted to
 //     // a future position determined by prediction parameter.
-//     const float rotations_error = driver_state.seek_angle.target_rotation - readout.rotations;
+//     const float rotations_error = drive_state.seek_angle.target_rotation - readout.rotations;
 
 //     // Cap to the maximum seek error which is set to 2x the maximum control output so
 //     // that the position term can overcome the derivative term. The cap is applied
@@ -1005,7 +898,7 @@ void app_tick() {
 //     const float integral = clip_to(
 //         -max_seek_integral_control, 
 //         +max_seek_integral_control,
-//         driver_state.seek_integral + control_parameters.seek_ki * position_error
+//         drive_state.seek_integral + control_parameters.seek_ki * position_error
 //     );
 
 //     // Update the output of the Proportional Integral Derivative (PID) control.
@@ -1015,187 +908,31 @@ void app_tick() {
 
 //     if (output > +1.0) {
 //         // Decay the integral if we are saturating the output.
-//         driver_state.seek_integral -= driver_state.seek_integral * seek_integral_decay_fraction;
+//         drive_state.seek_integral -= drive_state.seek_integral * seek_integral_decay_fraction;
 //         // Maximum output.
 //         output = +1.0;
 //     } else if (output < -1.0) {
 //         // Decay the integral if we are saturating the output negatively.
-//         driver_state.seek_integral -= driver_state.seek_integral * seek_integral_decay_fraction;
+//         drive_state.seek_integral -= drive_state.seek_integral * seek_integral_decay_fraction;
 //         // Minimum output.
 //         output = -1.0;
 //     } else {
 //         // Output is not saturated, we can update the integral either direction.
-//         driver_state.seek_integral = integral;
+//         drive_state.seek_integral = integral;
 //     }
 
-//     driver_state.current_target = output * driver_state.target;
-//     driver_state.speed_target = sign(driver_state.current_target) * faster_abs(driver_state.speed_target);
+//     drive_state.current_target = output * drive_state.target;
+//     drive_state.speed_target = sign(drive_state.current_target) * faster_abs(drive_state.speed_target);
 
-//     return update_motor_torque_speed(driver_state, readout);
+//     return update_motor_torque_speed(drive_state, readout);
 // }
 
-// // Drive the motor using a fixed schedule for the PWM outputs.
-// static inline MotorOutputs update_motor_schedule(
-//     DriverState & driver_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-//     PWMSchedule const& schedule = *driver_state.schedule.pointer;
-//     PWMStage const& schedule_stage = schedule[driver_state.schedule.current_stage];
-
-//     driver_state.schedule.stage_counter += 1;
-
-//     if (driver_state.schedule.stage_counter >= schedule_stage.duration) {
-//         // Move to the next stage in the schedule.
-//         driver_state.schedule.current_stage += 1;
-//         driver_state.schedule.stage_counter = 0;
-//     }
-    
-//     return MotorOutputs{
-//         .u_duty = static_cast<uint16_t>(schedule_stage.u_duty * driver_state.target),
-//         .v_duty = static_cast<uint16_t>(schedule_stage.v_duty * driver_state.target),
-//         .w_duty = static_cast<uint16_t>(schedule_stage.w_duty * driver_state.target)
-//     };
-// }
-
-
-
-// // For the resistance calibration we will drive the motor U V and W phases with a pyramid waveform
-// // and measure the current response to determine the resistance of the motor windings.
-// static inline MotorOutputs update_motor_resistance_calibration(
-//     DriverState & driver_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-//     // The total duration is HISTORY_SIZE, let's divide it into 6 segments where we
-//     // drive the current at 0, 60, 120, 180, 240, and 300 degrees phase angle. For
-//     // each phase divide the duration into 3 segments, first we stay at 0, then ramp
-//     // up to the target PWM, then ramp down to 0.
-
-//     // Number of PWM cycles elapsed since the calibration started.
-//     const int32_t elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
-
-//     // Duration of a single phase angle segment.
-//     const int32_t segment_duration = hex_mini_drive::HISTORY_SIZE / 6;
-
-//     // Which of the 6 phase angle segments we are currently in.
-//     const int32_t segment_index = elapsed / segment_duration;
-
-//     // How far we are into the current segment.
-//     const int32_t segment_progress = elapsed - segment_index * segment_duration;
-
-//     // Duration of a single ramp (a third of the segment).
-//     const int32_t ramp_duration = segment_duration / 3;
-
-//     // Drive the phases at 0, 60, 120, 180, 240, and 300 degrees.
-//     driver_state.active_angle = static_cast<int32_t>(segment_index * (angle_base / 6));
-
-//     // Build a pyramid waveform: hold at 0, ramp up to the target PWM, then ramp back down to 0.
-//     const float abs_pwm = (
-//         segment_progress < ramp_duration ? 0 :
-//         segment_progress < 2 * ramp_duration ? driver_state.target * (segment_progress - ramp_duration) / ramp_duration :
-//         driver_state.target * (3.0 * ramp_duration - segment_progress) / ramp_duration
-//     );
-
-//     driver_state.active_pwm = clip_to(0.0f, driver_state.target, abs_pwm);
-
-//     return update_motor_at_angle(driver_state, readout);
-// }
-
-// // Drive the motor using large step increases to measure the inductance of the motor windings.
-// static inline MotorOutputs update_motor_inductance_calibration(
-//     DriverState & driver_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-//     // For the inductance calibration we will also drive the 3 motor phases, however this time
-//     // we will do so in large steps and at opposite poles. This time split the HISTORY_SIZE total
-//     // into 3 segments, each phase is further divided into 6 segments as such, assuming we start at 0: 
-//     // first a step to half target PWM then a step to negative half target then step to 0,
-//     // then step to positive target PWM then a step to negative target PWM then back to 0.
-    
-//     // Number of PWM cycles elapsed since the calibration started.
-//     const int elapsed = hex_mini_drive::HISTORY_SIZE - driver_state.duration;
-
-//     // Duration of a single phase angle segment (one per phase: 0, 120, and 240 degrees).
-//     const int segment_duration = hex_mini_drive::HISTORY_SIZE / 3;
-
-//     // Which of the 3 phase angle segments we are currently in.
-//     const int segment_index = elapsed / segment_duration;
-
-//     // How far we are into the current segment.
-//     const int segment_progress = elapsed - segment_index * segment_duration;
-
-//     // Duration of a single step (a sixth of the segment).
-//     const int step_duration = segment_duration / 6;
-
-//     // Which of the 6 steps we are currently in.
-//     const int step_index = segment_progress / step_duration;
-
-//     // Drive the phases at 0, 120, and 240 degrees.
-//     driver_state.active_angle = static_cast<int32_t>(segment_index * (angle_base * 0.33333333));
-
-//     // Half of the target PWM used for the first two steps.
-//     const int half_pwm = driver_state.target / 2;
-
-//     // Build the step waveform: +half, -half, 0, +full, -full, 0. Negative PWM drives the
-//     // opposite pole via update_motor_at_angle flipping the angle by half a circle.
-//     driver_state.active_pwm = (
-//         step_index == 0 ? +half_pwm :
-//         step_index == 1 ? -half_pwm :
-//         step_index == 3 ? +driver_state.target :
-//         step_index == 4 ? -driver_state.target :
-//         0
-//     );
-
-//     return update_motor_at_angle(driver_state, readout);
-// }
-
-// // The chirp test drives the inductor at pwm_target around the coils at the requested speed
-// // and number of rotations. Because the chirp is fast and the motor is presumed stationary,
-// // we can measure the residual voltage terms after accounting for resistance and inductance
-// // to isolate the response of the iron core of the coils. We can use this to determine the
-// // rotor position.
-// static inline MotorOutputs update_motor_rotating_calibration_chirp(
-//     DriverState & driver_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-//     if (driver_state.test_parameters.test_duration > 0) {
-//         driver_state.test_parameters.test_duration -= 1;
-
-//         // Drive at the requested PWM until the test is done.
-//         driver_state.active_angle += static_cast<int32_t>(driver_state.test_parameters.test_speed);
-//         driver_state.active_pwm = faster_abs(driver_state.target);
-//         return update_motor_at_angle(driver_state, readout);
-//     } else {
-//         return breaking_motor_outputs;
-//     }
-// }
-
-// // In this test we chirp the motor in amplitude along the active_angle axis.
-// static inline MotorOutputs update_motor_fixed_calibration_chirp(
-//     DriverState & driver_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-
-//     if (driver_state.test_parameters.test_duration > 0) {
-//         driver_state.test_parameters.test_duration -= 1;
-
-//         // Reuse test_angle for the amplitude oscilation angle.
-//         driver_state.test_parameters.test_angle += static_cast<int32_t>(driver_state.test_parameters.test_speed);
-
-//         // Drive at a sinusoidal PWM amplitude along the active_angle axis until the test is done.
-//         driver_state.active_pwm = faster_abs(driver_state.target) * get_sin(driver_state.test_parameters.test_angle);
-
-//         return update_motor_at_angle(driver_state, readout);
-//     } else {
-//         // Record the shorted outputs.
-//         return breaking_motor_outputs;
-//     }
-// }
 
 // constexpr int16_t hfi_duration = 8;
 // constexpr int16_t hfi_skips = (5 /* milliseconds */ * pwm_cycles_per_second / 1000) / hfi_duration;
 
 // static inline MotorOutputs update_motor_hfi_saliency_pulses(
-//     DriverState & driver_state,
+//     DriveState & drive_state,
 //     hex_mini_drive::FullReadout const& readout
 // ){
 //     // Our puleses will be angled 45 degrees to the saliency angle div 2, the pulses will
@@ -1214,25 +951,25 @@ void app_tick() {
 //         const int32_t step = (readout.readout_number % hfi_duration) / 2;
 //         switch (step) {
 //             case 0:
-//                 driver_state.active_pwm = -driver_state.target;
-//                 driver_state.active_angle = angle_from_saliency + quarter_circle/2;
+//                 drive_state.active_pwm = -drive_state.target;
+//                 drive_state.active_angle = angle_from_saliency + quarter_circle/2;
 //                 break;
 //             case 1:
-//                 driver_state.active_pwm = +driver_state.target;
-//                 driver_state.active_angle = angle_from_saliency + quarter_circle/2;
+//                 drive_state.active_pwm = +drive_state.target;
+//                 drive_state.active_angle = angle_from_saliency + quarter_circle/2;
 //                 break;
 //             case 2:
-//                 driver_state.active_pwm = +driver_state.target;
-//                 driver_state.active_angle = angle_from_saliency - quarter_circle/2;
+//                 drive_state.active_pwm = +drive_state.target;
+//                 drive_state.active_angle = angle_from_saliency - quarter_circle/2;
 //                 break;
 //             case 3:
-//                 driver_state.active_pwm = -driver_state.target;
-//                 driver_state.active_angle = angle_from_saliency - quarter_circle/2;
+//                 drive_state.active_pwm = -drive_state.target;
+//                 drive_state.active_angle = angle_from_saliency - quarter_circle/2;
 //                 break;
 //         }
 //     } else {
-//         driver_state.active_pwm = 0;
+//         drive_state.active_pwm = 0;
 //     }
-//     return update_motor_at_angle(driver_state, readout);
+//     return update_motor_at_angle(drive_state, readout);
 // }
 

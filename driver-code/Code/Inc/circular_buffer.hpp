@@ -186,6 +186,15 @@ class CircularQueue{
     return true;
   }
 
+  size_t write_from_if_available(T const* elements, size_t const& count) {
+    if (count == 0 or write_available() < count) return 0;
+    for (size_t i = 0; i < count; ++i) {
+      data[(write_index + i) % N] = elements[i];
+    }
+    mark_written(count);
+    return count;
+  }
+
   /* Get active read element. */
   T const& peek() {
     return data[read_index];

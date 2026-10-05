@@ -15,6 +15,9 @@ export const MAX_MESSAGE_SIZE = 256;
 // Number of bytes in the unit test output; should be enough to store the output of the funky atan unit test.
 export const UNIT_TEST_OUTPUT_SIZE = 248;
 
+// Number of driver states that can be queued with a single command.
+export const DRIVE_SCHEDULE_SIZE = 12;
+
 // Scaling factor for the current units; although values are in float32 there are internal sections of code
 // that use Q1.31 integer math so we must be able to convert between the float32 and Q1.31 representations
 // without losing too much precision.
@@ -145,51 +148,51 @@ function write_Readout(value) {
   const buffer = new Uint8Array(80);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setUint16(offset, value.readout_number)
+  view.setUint16(offset, value?.readout_number)
   offset += 2;
-  view.setInt16(offset, value.cycle_start_tick)
+  view.setInt16(offset, value?.cycle_start_tick)
   offset += 2;
-  view.setInt16(offset, value.cycle_end_tick)
+  view.setInt16(offset, value?.cycle_end_tick)
   offset += 2;
-  view.setUint16(offset, value.angle_fix)
+  view.setUint16(offset, value?.angle_fix)
   offset += 2;
-  view.setUint16(offset, value.state_flags)
+  view.setUint16(offset, value?.state_flags)
   offset += 2;
-  view.setInt16(offset, value.ref_readout)
+  view.setInt16(offset, value?.ref_readout)
   offset += 2;
-  view.setFloat32(offset, value.direct_drive_voltage)
+  view.setFloat32(offset, value?.direct_drive_voltage)
   offset += 4;
-  view.setFloat32(offset, value.quadrature_drive_voltage)
+  view.setFloat32(offset, value?.quadrature_drive_voltage)
   offset += 4;
-  view.setFloat32(offset, value.direct_current)
+  view.setFloat32(offset, value?.direct_current)
   offset += 4;
-  view.setFloat32(offset, value.quadrature_current)
+  view.setFloat32(offset, value?.quadrature_current)
   offset += 4;
-  view.setFloat32(offset, value.zero_current)
+  view.setFloat32(offset, value?.zero_current)
   offset += 4;
-  view.setFloat32(offset, value.direct_current_diff)
+  view.setFloat32(offset, value?.direct_current_diff)
   offset += 4;
-  view.setFloat32(offset, value.quadrature_current_diff)
+  view.setFloat32(offset, value?.quadrature_current_diff)
   offset += 4;
-  view.setInt32(offset, value.angle)
+  view.setInt32(offset, value?.angle)
   offset += 4;
-  view.setInt32(offset, value.predicted_angle)
+  view.setInt32(offset, value?.predicted_angle)
   offset += 4;
-  view.setFloat32(offset, value.angular_speed)
+  view.setFloat32(offset, value?.angular_speed)
   offset += 4;
-  view.setFloat32(offset, value.vcc_voltage)
+  view.setFloat32(offset, value?.vcc_voltage)
   offset += 4;
-  view.setInt32(offset, value.emf_voltage_angle)
+  view.setInt32(offset, value?.emf_voltage_angle)
   offset += 4;
-  view.setFloat32(offset, value.emf_angle_variance)
+  view.setFloat32(offset, value?.emf_angle_variance)
   offset += 4;
-  view.setFloat32(offset, value.emf_voltage_magnitude)
+  view.setFloat32(offset, value?.emf_voltage_magnitude)
   offset += 4;
-  view.setFloat32(offset, value.emf_voltage_angular_speed)
+  view.setFloat32(offset, value?.emf_voltage_angular_speed)
   offset += 4;
-  view.setFloat32(offset, value.emf_angular_speed_variance)
+  view.setFloat32(offset, value?.emf_angular_speed_variance)
   offset += 4;
-  view.setInt32(offset, value.saliency_angle_offset)
+  view.setInt32(offset, value?.saliency_angle_offset)
   offset += 4;
   return buffer;
 }
@@ -256,7 +259,7 @@ function write_StreamFullReadouts(value) {
   const buffer = new Uint8Array(4);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setUint32(offset, value.stream_state)
+  view.setUint32(offset, value?.stream_state)
   offset += 4;
   return buffer;
 }
@@ -329,51 +332,51 @@ function write_FullReadout(value) {
   const base_buffer = new Uint8Array(view.buffer, offset, 80).set(write_Readout(value), 0);
   buffer.set(base_buffer, offset);
   offset += 80;
-  view.setFloat32(offset, value.main_loop_rate)
+  view.setFloat32(offset, value?.main_loop_rate)
   offset += 4;
-  view.setFloat32(offset, value.adc_update_rate)
+  view.setFloat32(offset, value?.adc_update_rate)
   offset += 4;
-  view.setFloat32(offset, value.temperature)
+  view.setFloat32(offset, value?.temperature)
   offset += 4;
-  view.setFloat32(offset, value.live_max_pwm)
+  view.setFloat32(offset, value?.live_max_pwm)
   offset += 4;
-  view.setInt32(offset, value.current_angle_offset)
+  view.setInt32(offset, value?.current_angle_offset)
   offset += 4;
-  view.setFloat32(offset, value.current_magnitude)
+  view.setFloat32(offset, value?.current_magnitude)
   offset += 4;
-  view.setFloat32(offset, value.total_power)
+  view.setFloat32(offset, value?.total_power)
   offset += 4;
-  view.setFloat32(offset, value.total_power_average)
+  view.setFloat32(offset, value?.total_power_average)
   offset += 4;
-  view.setFloat32(offset, value.resistive_power)
+  view.setFloat32(offset, value?.resistive_power)
   offset += 4;
-  view.setFloat32(offset, value.resistive_power_average)
+  view.setFloat32(offset, value?.resistive_power_average)
   offset += 4;
-  view.setFloat32(offset, value.emf_power)
+  view.setFloat32(offset, value?.emf_power)
   offset += 4;
-  view.setInt32(offset, value.rotations)
+  view.setInt32(offset, value?.rotations)
   offset += 4;
-  view.setInt32(offset, value.lead_angle)
+  view.setInt32(offset, value?.lead_angle)
   offset += 4;
-  view.setFloat32(offset, value.active_pwm)
+  view.setFloat32(offset, value?.active_pwm)
   offset += 4;
-  view.setFloat32(offset, value.target)
+  view.setFloat32(offset, value?.target)
   offset += 4;
-  view.setFloat32(offset, value.seek_integral)
+  view.setFloat32(offset, value?.seek_integral)
   offset += 4;
-  view.setFloat32(offset, value.u_current_zero)
+  view.setFloat32(offset, value?.u_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.v_current_zero)
+  view.setFloat32(offset, value?.v_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.w_current_zero)
+  view.setFloat32(offset, value?.w_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.resistance)
+  view.setFloat32(offset, value?.resistance)
   offset += 4;
-  view.setFloat32(offset, value.inductance)
+  view.setFloat32(offset, value?.inductance)
   offset += 4;
-  view.setFloat32(offset, value.inductance_bias)
+  view.setFloat32(offset, value?.inductance_bias)
   offset += 4;
-  view.setFloat32(offset, value.motor_constant)
+  view.setFloat32(offset, value?.motor_constant)
   offset += 4;
   return buffer;
 }
@@ -432,7 +435,7 @@ function read_FullReadout(view, offset = 0) {
   return result;
 }
 // The complete driver state, these values control the motor behaviour.
-export class DriverState {
+export class DriveState {
   // Flags controlling the behavior of the motor drive.
   motor_flags;
   // Flag to enable or disable closed-loop control for the motor drive.
@@ -451,28 +454,28 @@ export class DriverState {
   constructor(init) {Object.assign(this, init);}
 }
 
-function write_DriverState(value) {
+function write_DriveState(value) {
   const buffer = new Uint8Array(20);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setUint8(offset, value.motor_flags)
+  view.setUint8(offset, value?.motor_flags)
   offset += 1;
-  view.setUint8(offset, value.enable_closed_loop)
+  view.setUint8(offset, value?.enable_closed_loop)
   offset += 1;
-  view.setUint16(offset, value.duration)
+  view.setUint16(offset, value?.duration)
   offset += 2;
-  view.setFloat32(offset, value.pwm_value)
+  view.setFloat32(offset, value?.pwm_value)
   offset += 4;
-  view.setFloat32(offset, value.pwm_change)
+  view.setFloat32(offset, value?.pwm_change)
   offset += 4;
-  view.setInt32(offset, value.angle)
+  view.setInt32(offset, value?.angle)
   offset += 4;
-  view.setFloat32(offset, value.angular_speed)
+  view.setFloat32(offset, value?.angular_speed)
   offset += 4;
   return buffer;
 }
-function read_DriverState(view, offset = 0) {
-  let result = new DriverState();
+function read_DriveState(view, offset = 0) {
+  let result = new DriveState();
   
   result.motor_flags = view.getUint8(offset);
   offset += 1;
@@ -490,6 +493,38 @@ function read_DriverState(view, offset = 0) {
   offset += 4;
   return result;
 }
+// Set a series of driver states to be executed by the motor in sequence.
+export class DriveSchedule extends Array {
+  constructor(init) {
+    if (Array.isArray(init)) {
+      super(...init);
+    } else {
+      super(12);
+    }
+  }
+}
+
+
+function write_DriveSchedule(value) {
+  const buffer = new Uint8Array(240);
+  const view = new DataView(buffer.buffer);
+  let offset = 0;
+  for (let i = 0; i < 12; i++) {
+    new Uint8Array(view.buffer, offset, 20).set(write_DriveState(value[i]), 0);
+    offset += 20;
+  }
+  return buffer;
+}
+
+function read_DriveSchedule(view, offset = 0) {
+  let result = new DriveSchedule();
+  for (let i = 0; i < 12; i++) {
+    result[i] = read_DriveState(view, offset);
+    offset += 20;
+  }
+  return result;
+}
+
 export class SetStateDriveTorque {
   // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
   target_current;
@@ -503,9 +538,9 @@ function write_SetStateDriveTorque(value) {
   const buffer = new Uint8Array(8);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.target_current)
+  view.setFloat32(offset, value?.target_current)
   offset += 4;
-  view.setUint32(offset, value.timeout)
+  view.setUint32(offset, value?.timeout)
   offset += 4;
   return buffer;
 }
@@ -531,9 +566,9 @@ function write_SetStateDriveBatteryPower(value) {
   const buffer = new Uint8Array(8);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.target_power)
+  view.setFloat32(offset, value?.target_power)
   offset += 4;
-  view.setUint32(offset, value.timeout)
+  view.setUint32(offset, value?.timeout)
   offset += 4;
   return buffer;
 }
@@ -559,9 +594,9 @@ function write_SetStateDriveSpeed(value) {
   const buffer = new Uint8Array(8);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.target_speed)
+  view.setFloat32(offset, value?.target_speed)
   offset += 4;
-  view.setUint32(offset, value.timeout)
+  view.setUint32(offset, value?.timeout)
   offset += 4;
   return buffer;
 }
@@ -589,11 +624,11 @@ function write_SetStateDriveTorqueSpeed(value) {
   const buffer = new Uint8Array(12);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.target_current)
+  view.setFloat32(offset, value?.target_current)
   offset += 4;
-  view.setFloat32(offset, value.target_speed)
+  view.setFloat32(offset, value?.target_speed)
   offset += 4;
-  view.setUint32(offset, value.timeout)
+  view.setUint32(offset, value?.timeout)
   offset += 4;
   return buffer;
 }
@@ -627,15 +662,15 @@ function write_SetStateSeekAngle(value) {
   const buffer = new Uint8Array(20);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setInt32(offset, value.target_rotation)
+  view.setInt32(offset, value?.target_rotation)
   offset += 4;
-  view.setInt32(offset, value.target_angle)
+  view.setInt32(offset, value?.target_angle)
   offset += 4;
-  view.setFloat32(offset, value.target_current)
+  view.setFloat32(offset, value?.target_current)
   offset += 4;
-  view.setFloat32(offset, value.target_speed)
+  view.setFloat32(offset, value?.target_speed)
   offset += 4;
-  view.setUint32(offset, value.timeout)
+  view.setUint32(offset, value?.timeout)
   offset += 4;
   return buffer;
 }
@@ -679,19 +714,19 @@ function write_CurrentCalibration(value) {
   const buffer = new Uint8Array(28);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setFloat32(offset, value.u_current_zero)
+  view.setFloat32(offset, value?.u_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.v_current_zero)
+  view.setFloat32(offset, value?.v_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.w_current_zero)
+  view.setFloat32(offset, value?.w_current_zero)
   offset += 4;
-  view.setFloat32(offset, value.resistance)
+  view.setFloat32(offset, value?.resistance)
   offset += 4;
-  view.setFloat32(offset, value.inductance)
+  view.setFloat32(offset, value?.inductance)
   offset += 4;
-  view.setFloat32(offset, value.inductance_bias)
+  view.setFloat32(offset, value?.inductance_bias)
   offset += 4;
-  view.setFloat32(offset, value.motor_constant)
+  view.setFloat32(offset, value?.motor_constant)
   offset += 4;
   return buffer;
 }
@@ -821,97 +856,97 @@ function write_ControlParameters(value) {
   const buffer = new Uint8Array(168);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setInt16(offset, value.motor_direction)
+  view.setInt16(offset, value?.motor_direction)
   offset += 2;
-  view.setInt16(offset, value.angle_fix_max_certainty)
+  view.setInt16(offset, value?.angle_fix_max_certainty)
   offset += 2;
-  view.setInt16(offset, value.angle_fix_threshold_count)
+  view.setInt16(offset, value?.angle_fix_threshold_count)
   offset += 2;
-  view.setUint16(offset, value.angle_probing_interval)
+  view.setUint16(offset, value?.angle_probing_interval)
   offset += 2;
-  view.setUint16(offset, value.u_pwm_floor)
+  view.setUint16(offset, value?.u_pwm_floor)
   offset += 2;
-  view.setUint16(offset, value.v_pwm_floor)
+  view.setUint16(offset, value?.v_pwm_floor)
   offset += 2;
-  view.setUint16(offset, value.w_pwm_floor)
+  view.setUint16(offset, value?.w_pwm_floor)
   offset += 2;
-  view.setUint16(offset, value.z_pwm_floor)
+  view.setUint16(offset, value?.z_pwm_floor)
   offset += 2;
-  view.setFloat32(offset, value.rotor_angle_ki)
+  view.setFloat32(offset, value?.rotor_angle_ki)
   offset += 4;
-  view.setFloat32(offset, value.rotor_angular_speed_ki)
+  view.setFloat32(offset, value?.rotor_angular_speed_ki)
   offset += 4;
-  view.setFloat32(offset, value.current_angle_ki)
+  view.setFloat32(offset, value?.current_angle_ki)
   offset += 4;
-  view.setFloat32(offset, value.current_magnitude_ki)
+  view.setFloat32(offset, value?.current_magnitude_ki)
   offset += 4;
-  view.setFloat32(offset, value.emf_angle_ki)
+  view.setFloat32(offset, value?.emf_angle_ki)
   offset += 4;
-  view.setFloat32(offset, value.emf_magnitude_ki)
+  view.setFloat32(offset, value?.emf_magnitude_ki)
   offset += 4;
-  view.setFloat32(offset, value.emf_angular_speed_ki)
+  view.setFloat32(offset, value?.emf_angular_speed_ki)
   offset += 4;
-  view.setFloat32(offset, value.hall_angle_ki)
+  view.setFloat32(offset, value?.hall_angle_ki)
   offset += 4;
-  view.setFloat32(offset, value.lead_angle_control_ki)
+  view.setFloat32(offset, value?.lead_angle_control_ki)
   offset += 4;
-  view.setFloat32(offset, value.zero_current_ki)
+  view.setFloat32(offset, value?.zero_current_ki)
   offset += 4;
-  view.setFloat32(offset, value.resistance_ki)
+  view.setFloat32(offset, value?.resistance_ki)
   offset += 4;
-  view.setFloat32(offset, value.inductance_ki)
+  view.setFloat32(offset, value?.inductance_ki)
   offset += 4;
-  view.setFloat32(offset, value.inductance_bias_ki)
+  view.setFloat32(offset, value?.inductance_bias_ki)
   offset += 4;
-  view.setFloat32(offset, value.saliency_angle_ki)
+  view.setFloat32(offset, value?.saliency_angle_ki)
   offset += 4;
-  view.setFloat32(offset, value.motor_constant_ki)
+  view.setFloat32(offset, value?.motor_constant_ki)
   offset += 4;
-  view.setInt32(offset, value.current_measurement_minimum)
+  view.setInt32(offset, value?.current_measurement_minimum)
   offset += 4;
-  view.setFloat32(offset, value.voltage_measurement_variance)
+  view.setFloat32(offset, value?.voltage_measurement_variance)
   offset += 4;
-  view.setInt32(offset, value.resistance_current_minimum)
+  view.setInt32(offset, value?.resistance_current_minimum)
   offset += 4;
-  view.setFloat32(offset, value.inductance_excitation_minimum_square)
+  view.setFloat32(offset, value?.inductance_excitation_minimum_square)
   offset += 4;
-  view.setFloat32(offset, value.current_offset_maximum)
+  view.setFloat32(offset, value?.current_offset_maximum)
   offset += 4;
-  view.setFloat32(offset, value.probing_angular_speed)
+  view.setFloat32(offset, value?.probing_angular_speed)
   offset += 4;
-  view.setFloat32(offset, value.max_pwm_change)
+  view.setFloat32(offset, value?.max_pwm_change)
   offset += 4;
-  view.setFloat32(offset, value.min_emf_for_motor_constant)
+  view.setFloat32(offset, value?.min_emf_for_motor_constant)
   offset += 4;
-  view.setFloat32(offset, value.vcc_undervoltage)
+  view.setFloat32(offset, value?.vcc_undervoltage)
   offset += 4;
-  view.setFloat32(offset, value.max_resistive_power)
+  view.setFloat32(offset, value?.max_resistive_power)
   offset += 4;
-  view.setFloat32(offset, value.max_power_draw)
+  view.setFloat32(offset, value?.max_power_draw)
   offset += 4;
-  view.setFloat32(offset, value.resistive_power_ki)
+  view.setFloat32(offset, value?.resistive_power_ki)
   offset += 4;
-  view.setFloat32(offset, value.power_draw_ki)
+  view.setFloat32(offset, value?.power_draw_ki)
   offset += 4;
-  view.setFloat32(offset, value.torque_control_ki)
+  view.setFloat32(offset, value?.torque_control_ki)
   offset += 4;
-  view.setFloat32(offset, value.torque_control_kff)
+  view.setFloat32(offset, value?.torque_control_kff)
   offset += 4;
-  view.setFloat32(offset, value.battery_power_control_ki)
+  view.setFloat32(offset, value?.battery_power_control_ki)
   offset += 4;
-  view.setFloat32(offset, value.battery_power_control_kff)
+  view.setFloat32(offset, value?.battery_power_control_kff)
   offset += 4;
-  view.setFloat32(offset, value.speed_control_ki)
+  view.setFloat32(offset, value?.speed_control_ki)
   offset += 4;
-  view.setFloat32(offset, value.speed_control_kff)
+  view.setFloat32(offset, value?.speed_control_kff)
   offset += 4;
-  view.setFloat32(offset, value.seek_kff)
+  view.setFloat32(offset, value?.seek_kff)
   offset += 4;
-  view.setFloat32(offset, value.seek_ki)
+  view.setFloat32(offset, value?.seek_ki)
   offset += 4;
-  view.setFloat32(offset, value.seek_kp)
+  view.setFloat32(offset, value?.seek_kp)
   offset += 4;
-  view.setFloat32(offset, value.seek_kd)
+  view.setFloat32(offset, value?.seek_kd)
   offset += 4;
   return buffer;
 }
@@ -1023,7 +1058,7 @@ function write_SetAngle(value) {
   const buffer = new Uint8Array(4);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setInt32(offset, value.angle)
+  view.setInt32(offset, value?.angle)
   offset += 4;
   return buffer;
 }
@@ -1045,7 +1080,7 @@ function write_SetRotations(value) {
   const buffer = new Uint8Array(4);
   const view = new DataView(buffer.buffer);
   let offset = 0;
-  view.setInt32(offset, value.rotations)
+  view.setInt32(offset, value?.rotations)
   offset += 4;
   return buffer;
 }
@@ -1062,13 +1097,10 @@ const READOUT = 8224;
 const STREAM_FULL_READOUTS = 8225;
 const FULL_READOUT = 8227;
 const SET_STATE_OFF = 8240;
-const SET_STATE_DRIVE_6_SECTOR = 8241;
-const SET_STATE_TEST_ALL_PERMUTATIONS = 8242;
-const SET_STATE_FREEWHEEL = 8244;
-const SET_STATE_TEST_GROUND_SHORT = 8246;
-const SET_STATE_TEST_POSITIVE_SHORT = 8247;
-const SET_STATE_DRIVE_PERIODIC = 12352;
-const SET_STATE_DRIVE_SMOOTH = 16432;
+const SET_STATE_FREEWHEEL = 8241;
+const SET_DRIVE_STATE = 8242;
+const SET_DRIVE_SCHEDULE = 8243;
+const SET_STATE_DRIVE_6_SECTOR = 16432;
 const SET_STATE_DRIVE_TORQUE = 16433;
 const SET_STATE_DRIVE_BATTERY_POWER = 16434;
 const SET_STATE_DRIVE_SPEED = 16435;
@@ -1087,11 +1119,6 @@ const SET_ROTATIONS = 16465;
 const SAVE_SETTINGS_TO_FLASH = 16512;
 const SETTINGS_SAVED_TO_FLASH = 16513;
 const UNIT_TEST_OUTPUT = 20544;
-const SET_STATE_RESISTANCE_CALIBRATION = 20549;
-const SET_STATE_INDUCTANCE_CALIBRATION = 20550;
-const SET_STATE_ROTATING_CALIBRATION_CHIRP = 20551;
-const SET_STATE_FIXED_CALIBRATION_CHIRP = 20552;
-const SET_STATE_HFI_SALIENCY_PULSES = 20553;
 
 export const MessageCode = {
   NULL_MESSAGE_CODE,
@@ -1099,13 +1126,10 @@ export const MessageCode = {
   STREAM_FULL_READOUTS,
   FULL_READOUT,
   SET_STATE_OFF,
-  SET_STATE_DRIVE_6_SECTOR,
-  SET_STATE_TEST_ALL_PERMUTATIONS,
   SET_STATE_FREEWHEEL,
-  SET_STATE_TEST_GROUND_SHORT,
-  SET_STATE_TEST_POSITIVE_SHORT,
-  SET_STATE_DRIVE_PERIODIC,
-  SET_STATE_DRIVE_SMOOTH,
+  SET_DRIVE_STATE,
+  SET_DRIVE_SCHEDULE,
+  SET_STATE_DRIVE_6_SECTOR,
   SET_STATE_DRIVE_TORQUE,
   SET_STATE_DRIVE_BATTERY_POWER,
   SET_STATE_DRIVE_SPEED,
@@ -1124,11 +1148,6 @@ export const MessageCode = {
   SAVE_SETTINGS_TO_FLASH,
   SETTINGS_SAVED_TO_FLASH,
   UNIT_TEST_OUTPUT,
-  SET_STATE_RESISTANCE_CALIBRATION,
-  SET_STATE_INDUCTANCE_CALIBRATION,
-  SET_STATE_ROTATING_CALIBRATION_CHIRP,
-  SET_STATE_FIXED_CALIBRATION_CHIRP,
-  SET_STATE_HFI_SALIENCY_PULSES,
 };
 
 // Generic Serialize Function
@@ -1170,54 +1189,30 @@ export function write_message(message) {
       view.setUint16(0, message.message_code);
       return buffer;
     }
-    case SET_STATE_DRIVE_6_SECTOR: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_TEST_ALL_PERMUTATIONS: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
     case SET_STATE_FREEWHEEL: {
       const buffer = new Uint8Array(2);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
       return buffer;
     }
-    case SET_STATE_TEST_GROUND_SHORT: {
-      const message_buffer = write_DriverState(message);
+    case SET_DRIVE_STATE: {
+      const message_buffer = write_DriveState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_TEST_POSITIVE_SHORT: {
-      const message_buffer = write_DriverState(message);
+    case SET_DRIVE_SCHEDULE: {
+      const message_buffer = write_DriveSchedule(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_DRIVE_PERIODIC: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_DRIVE_SMOOTH: {
-      const message_buffer = write_DriverState(message);
+    case SET_STATE_DRIVE_6_SECTOR: {
+      const message_buffer = write_DriveState(message);
       const buffer = new Uint8Array(2 + message_buffer.length);
       const view = new DataView(buffer.buffer);
       view.setUint16(0, message.message_code);
@@ -1356,46 +1351,6 @@ export function write_message(message) {
       buffer.set(message_buffer, 2);
       return buffer;
     }
-    case SET_STATE_RESISTANCE_CALIBRATION: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_INDUCTANCE_CALIBRATION: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_FIXED_CALIBRATION_CHIRP: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
-    case SET_STATE_HFI_SALIENCY_PULSES: {
-      const message_buffer = write_DriverState(message);
-      const buffer = new Uint8Array(2 + message_buffer.length);
-      const view = new DataView(buffer.buffer);
-      view.setUint16(0, message.message_code);
-      buffer.set(message_buffer, 2);
-      return buffer;
-    }
   }
 }
 
@@ -1431,44 +1386,26 @@ export function read_message(buffer) {
       if (buffer.length !== 2) return null;
       return {message_code};
     }
-    case SET_STATE_DRIVE_6_SECTOR: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_DRIVE_6_SECTOR;
-      return message;
-    }
-    case SET_STATE_TEST_ALL_PERMUTATIONS: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_TEST_ALL_PERMUTATIONS;
-      return message;
-    }
     case SET_STATE_FREEWHEEL: {
       if (buffer.length !== 2) return null;
       return {message_code};
     }
-    case SET_STATE_TEST_GROUND_SHORT: {
+    case SET_DRIVE_STATE: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_TEST_GROUND_SHORT;
+      let message = read_DriveState(view, 2);
+      message.message_code = SET_DRIVE_STATE;
       return message;
     }
-    case SET_STATE_TEST_POSITIVE_SHORT: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_TEST_POSITIVE_SHORT;
+    case SET_DRIVE_SCHEDULE: {
+      if (buffer.length !== 2 + 240) return null;
+      let message = read_DriveSchedule(view, 2);
+      message.message_code = SET_DRIVE_SCHEDULE;
       return message;
     }
-    case SET_STATE_DRIVE_PERIODIC: {
+    case SET_STATE_DRIVE_6_SECTOR: {
       if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_DRIVE_PERIODIC;
-      return message;
-    }
-    case SET_STATE_DRIVE_SMOOTH: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_DRIVE_SMOOTH;
+      let message = read_DriveState(view, 2);
+      message.message_code = SET_STATE_DRIVE_6_SECTOR;
       return message;
     }
     case SET_STATE_DRIVE_TORQUE: {
@@ -1565,36 +1502,6 @@ export function read_message(buffer) {
       if (buffer.length !== 2 + 248) return null;
       let message = read_UnitTestOutput(view, 2);
       message.message_code = UNIT_TEST_OUTPUT;
-      return message;
-    }
-    case SET_STATE_RESISTANCE_CALIBRATION: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_RESISTANCE_CALIBRATION;
-      return message;
-    }
-    case SET_STATE_INDUCTANCE_CALIBRATION: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_INDUCTANCE_CALIBRATION;
-      return message;
-    }
-    case SET_STATE_ROTATING_CALIBRATION_CHIRP: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_ROTATING_CALIBRATION_CHIRP;
-      return message;
-    }
-    case SET_STATE_FIXED_CALIBRATION_CHIRP: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_FIXED_CALIBRATION_CHIRP;
-      return message;
-    }
-    case SET_STATE_HFI_SALIENCY_PULSES: {
-      if (buffer.length !== 2 + 20) return null;
-      let message = read_DriverState(view, 2);
-      message.message_code = SET_STATE_HFI_SALIENCY_PULSES;
       return message;
     }
   }

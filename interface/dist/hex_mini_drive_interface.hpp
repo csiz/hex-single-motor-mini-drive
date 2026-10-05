@@ -117,6 +117,8 @@ constexpr uint32_t MAX_MESSAGE_SIZE = 256;
 
 constexpr uint32_t UNIT_TEST_OUTPUT_SIZE = 248;
 
+constexpr uint32_t DRIVE_SCHEDULE_SIZE = 12;
+
 constexpr float CURRENT_UNITS_PER_AMP = 1000000;
 
 constexpr float VOLTAGE_UNITS_PER_VOLT = 1000000;
@@ -495,7 +497,7 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   return result;
 }
 // The complete driver state, these values control the motor behaviour.
-struct DriverState {
+struct DriveState {
   // Flags controlling the behavior of the motor drive.
   uint8_t motor_flags;
   // Flag to enable or disable closed-loop control for the motor drive.
@@ -512,7 +514,7 @@ struct DriverState {
   float angular_speed;
 };
 
-static inline void write_DriverState(uint8_t * buffer, DriverState const& value) {
+static inline void write_DriveState(uint8_t * buffer, DriveState const& value) {
   size_t offset = 0;
   write_uint8(buffer + offset, value.motor_flags);;
   offset += 1;
@@ -529,10 +531,10 @@ static inline void write_DriverState(uint8_t * buffer, DriverState const& value)
   write_float32(buffer + offset, value.angular_speed);;
   offset += 4;
 }
-static inline DriverState read_DriverState(uint8_t const* buffer) {
+static inline DriveState read_DriveState(uint8_t const* buffer) {
   size_t offset = 0;
   
-  DriverState result;
+  DriveState result;
   
   result.motor_flags = read_uint8(buffer + offset);
   offset += 1;
@@ -550,6 +552,27 @@ static inline DriverState read_DriverState(uint8_t const* buffer) {
   offset += 4;
   return result;
 }
+// Set a series of driver states to be executed by the motor in sequence.
+using DriveSchedule = std::array<DriveState, 12>;
+
+static inline void write_DriveSchedule(uint8_t * buffer, DriveSchedule const& value) {
+  size_t offset = 0;
+  for (size_t i = 0; i < 12; ++i) {
+    write_DriveState(buffer + offset, value[i]);;
+    offset += 20;
+  }
+}
+
+static inline DriveSchedule read_DriveSchedule(uint8_t const* buffer) {
+  DriveSchedule result;
+  size_t offset = 0;
+  for (size_t i = 0; i < 12; ++i) {
+    result[i] = read_DriveState(buffer + offset);
+    offset += 20;
+  }
+  return result;
+}
+
 struct SetStateDriveTorque {
   // Target current in the quadrature direction; the driver will try to achieve this current by adjusting the PWM commands.
   float target_current;
@@ -1096,13 +1119,10 @@ enum MessageCode : uint16_t {
   STREAM_FULL_READOUTS = 8225,
   FULL_READOUT = 8227,
   SET_STATE_OFF = 8240,
-  SET_STATE_DRIVE_6_SECTOR = 8241,
-  SET_STATE_TEST_ALL_PERMUTATIONS = 8242,
-  SET_STATE_FREEWHEEL = 8244,
-  SET_STATE_TEST_GROUND_SHORT = 8246,
-  SET_STATE_TEST_POSITIVE_SHORT = 8247,
-  SET_STATE_DRIVE_PERIODIC = 12352,
-  SET_STATE_DRIVE_SMOOTH = 16432,
+  SET_STATE_FREEWHEEL = 8241,
+  SET_DRIVE_STATE = 8242,
+  SET_DRIVE_SCHEDULE = 8243,
+  SET_STATE_DRIVE_6_SECTOR = 16432,
   SET_STATE_DRIVE_TORQUE = 16433,
   SET_STATE_DRIVE_BATTERY_POWER = 16434,
   SET_STATE_DRIVE_SPEED = 16435,
@@ -1121,11 +1141,6 @@ enum MessageCode : uint16_t {
   SAVE_SETTINGS_TO_FLASH = 16512,
   SETTINGS_SAVED_TO_FLASH = 16513,
   UNIT_TEST_OUTPUT = 20544,
-  SET_STATE_RESISTANCE_CALIBRATION = 20549,
-  SET_STATE_INDUCTANCE_CALIBRATION = 20550,
-  SET_STATE_ROTATING_CALIBRATION_CHIRP = 20551,
-  SET_STATE_FIXED_CALIBRATION_CHIRP = 20552,
-  SET_STATE_HFI_SALIENCY_PULSES = 20553,
 };
 
 // Generic Message Structure
@@ -1136,7 +1151,8 @@ struct Message {
     Readout,
     StreamFullReadouts,
     FullReadout,
-    DriverState,
+    DriveState,
+    DriveSchedule,
     SetStateDriveTorque,
     SetStateDriveBatteryPower,
     SetStateDriveSpeed,
@@ -1158,13 +1174,10 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::STREAM_FULL_READOUTS: return 6;
     case MessageCode::FULL_READOUT: return 174;
     case MessageCode::SET_STATE_OFF: return 2;
-    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 22;
-    case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: return 22;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
-    case MessageCode::SET_STATE_TEST_GROUND_SHORT: return 22;
-    case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: return 22;
-    case MessageCode::SET_STATE_DRIVE_PERIODIC: return 22;
-    case MessageCode::SET_STATE_DRIVE_SMOOTH: return 22;
+    case MessageCode::SET_DRIVE_STATE: return 22;
+    case MessageCode::SET_DRIVE_SCHEDULE: return 242;
+    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 22;
     case MessageCode::SET_STATE_DRIVE_TORQUE: return 10;
     case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 10;
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
@@ -1183,11 +1196,6 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
     case MessageCode::SETTINGS_SAVED_TO_FLASH: return 2;
     case MessageCode::UNIT_TEST_OUTPUT: return 250;
-    case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: return 22;
-    case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: return 22;
-    case MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP: return 22;
-    case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: return 22;
-    case MessageCode::SET_STATE_HFI_SALIENCY_PULSES: return 22;
   }
   return 0; // Unknown message code
 }
@@ -1222,44 +1230,26 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
       return 2;
     }
-    case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
     case MessageCode::SET_STATE_FREEWHEEL: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_FREEWHEEL));
       return 2;
     }
-    case MessageCode::SET_STATE_TEST_GROUND_SHORT: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_GROUND_SHORT));
+    case MessageCode::SET_DRIVE_STATE: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_STATE));
       if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
+      write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
       return 22;
     }
-    case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_TEST_POSITIVE_SHORT));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
+    case MessageCode::SET_DRIVE_SCHEDULE: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_SCHEDULE));
+      if (max_size < 2 + 240) return 0;
+      write_DriveSchedule(buffer + 2, std::get<DriveSchedule>(message.message_data));
+      return 242;
     }
-    case MessageCode::SET_STATE_DRIVE_PERIODIC: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_PERIODIC));
+    case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
       if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_DRIVE_SMOOTH: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_SMOOTH));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
+      write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
       return 22;
     }
     case MessageCode::SET_STATE_DRIVE_TORQUE: {
@@ -1358,36 +1348,6 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_UnitTestOutput(buffer + 2, std::get<UnitTestOutput>(message.message_data));
       return 250;
     }
-    case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_RESISTANCE_CALIBRATION));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_INDUCTANCE_CALIBRATION));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
-    case MessageCode::SET_STATE_HFI_SALIENCY_PULSES: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_HFI_SALIENCY_PULSES));
-      if (max_size < 2 + 20) return 0;
-      write_DriverState(buffer + 2, std::get<DriverState>(message.message_data));
-      return 22;
-    }
   }
   return 0;
 }
@@ -1425,39 +1385,24 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       message.message_data = std::monostate{};
       return true;
     }
-    case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_TEST_ALL_PERMUTATIONS: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
-      return true;
-    }
     case MessageCode::SET_STATE_FREEWHEEL: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;
     }
-    case MessageCode::SET_STATE_TEST_GROUND_SHORT: {
+    case MessageCode::SET_DRIVE_STATE: {
       if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
+      message.message_data = read_DriveState(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_TEST_POSITIVE_SHORT: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
+    case MessageCode::SET_DRIVE_SCHEDULE: {
+      if (size != 2 + 240) return false;
+      message.message_data = read_DriveSchedule(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_DRIVE_PERIODIC: {
+    case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_DRIVE_SMOOTH: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
+      message.message_data = read_DriveState(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_DRIVE_TORQUE: {
@@ -1548,31 +1493,6 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
     case MessageCode::UNIT_TEST_OUTPUT: {
       if (size != 2 + 248) return false;
       message.message_data = read_UnitTestOutput(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_RESISTANCE_CALIBRATION: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_INDUCTANCE_CALIBRATION: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_ROTATING_CALIBRATION_CHIRP: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_FIXED_CALIBRATION_CHIRP: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_HFI_SALIENCY_PULSES: {
-      if (size != 2 + 20) return false;
-      message.message_data = read_DriverState(buffer + 2);
       return true;
     }
   }

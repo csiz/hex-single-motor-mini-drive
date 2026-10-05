@@ -586,7 +586,7 @@ function write_js_serialization(code, def) {
 
     // Now serialize own fields.
     for (const field of Object.values(def.struct || {})) {
-      code.write`${serialize_js_field(`view`, `offset`, `value.${field.name}`, field.type)}`;
+      code.write`${serialize_js_field(`view`, `offset`, `value?.${field.name}`, field.type)}`;
       code.write`offset += ${field.type.size};`;
     }
     code.write`return buffer;`;

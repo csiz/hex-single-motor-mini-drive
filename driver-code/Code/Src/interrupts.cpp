@@ -53,7 +53,9 @@ CircularQueue<hex_mini_drive::FullReadout, 2> full_readout_queue = {};
 // ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
 // schedule while the first is executing, but also we will have 1 more space to write an emergency break
 // command! The break command will also lead to the interrupt loop freeing up space in the command queue.
-CircularQueue<hex_mini_drive::DriverState, 25> driver_state_queue = {};
+CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue = {};
+
+size_t drive_states_scheduled = 0;
 
 // Initialize the loop control parameters and the calibration data. Either load 
 // them from the flash or use the defaults.
@@ -102,13 +104,13 @@ MotorOutputs motor_outputs = breaking_motor_outputs;
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
 // Currently active driver state (the full motor control state should be stored here).
-hex_mini_drive::DriverState driver_state = breaking_driver_state;
+hex_mini_drive::DriveState drive_state = breaking_drive_state;
 
 
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
-    return (driver_state.pwm_value == 0.f);
+    return (drive_state.pwm_value == 0.f);
 }
 
 void set_angle_offset(int32_t angle_offset) {
@@ -444,7 +446,7 @@ void ADC1_2_IRQHandler(void){
         0, control_parameters.angle_fix_max_certainty,
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
         // Our angle is incorrect if we don't have an EMF reading whilst driving the motor.
-        correct_angle_counter + ((driver_state.pwm_value and not emf_detected) ? -1 : emf_detected)
+        correct_angle_counter + ((drive_state.pwm_value and not emf_detected) ? -1 : emf_detected)
     );
     
     // Declare the angle to be correct after a threshold certainty.
@@ -694,7 +696,7 @@ void ADC1_2_IRQHandler(void){
     readout.resistive_power_average = resistive_power_average;
     readout.emf_power = emf_power;
     readout.lead_angle = 0; // TODO: this needs updating from the main loop.
-    readout.active_pwm = driver_state.pwm_value;
+    readout.active_pwm = drive_state.pwm_value;
     
 
     // Calculate and set motor outputs!!
@@ -703,28 +705,28 @@ void ADC1_2_IRQHandler(void){
     // The main control flag is whether we drive in fixed coordinates (open loop) or relative coordinates (closed loop).
     // 
     // Breaking mode can be expressed as driving at 0 pwm in fixed coordinates.
-    if (driver_state.enable_closed_loop) {
+    if (drive_state.enable_closed_loop) {
         // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
         // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
         // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
         // Base the direction on the sign of the target PWM.
-        const int32_t active_pwm_sign = sign(driver_state.pwm_value);
+        const int32_t active_pwm_sign = sign(drive_state.pwm_value);
 
         // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
         // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
         const int32_t ideal_angle = readout.angle + quarter_circle;
 
         // Drive the motor to produce current perpendicular to the magnetic angle.
-        driver_state.angle = ideal_angle + active_pwm_sign * readout.lead_angle;
+        drive_state.angle = ideal_angle + active_pwm_sign * readout.lead_angle;
 
     } else {
         // Drive the inductors around a circle at the specified PWM and speed (open loop control).
-        driver_state.angle += static_cast<int32_t>(driver_state.angular_speed);
+        drive_state.angle += static_cast<int32_t>(drive_state.angular_speed);
     }
 
     motor_outputs = compute_motor_outputs(
-        driver_state.angle, 
-        driver_state.pwm_value,
+        drive_state.angle, 
+        drive_state.pwm_value,
         readout.live_max_pwm
     );
 
@@ -751,7 +753,7 @@ void ADC1_2_IRQHandler(void){
     full_readout_queue.write_if_available(readout);
 
     // Write the latest readout to the history buffer for the main loop to read.
-    if (driver_state.motor_flags & hex_mini_drive::ENABLE_RECORDING) readout_history_queue.write_if_available(readout);
+    if (drive_state.motor_flags & hex_mini_drive::ENABLE_RECORDING) readout_history_queue.write_if_available(readout);
 
     // Setup the new state if we were commanded by the main loop so we are prepared for the next cycle.
     // 
@@ -759,24 +761,43 @@ void ADC1_2_IRQHandler(void){
     // after we've set the motor outputs. The new state will be ready for the next cycle.
     // 
     // Note, the new pending state may clear the readout history so this must be done after the history push.
-    if (driver_state_queue.read_available()) {
+    const auto pending_drive_states = drive_state_queue.read_available();
+
+
+    if (pending_drive_states > drive_states_scheduled) {
+        const size_t new_drive_states = pending_drive_states - drive_states_scheduled;
+        // Skip these driver states as we've received new commands; always prioritize the latest batch.
+        drive_state_queue.mark_read(drive_states_scheduled);
+        // Set the new schedule count and load the first driver state.
+        drive_states_scheduled = new_drive_states;
+
         // Copy the pending driver state.
         // 
         // ! Warning, we rely on the main loop to clamp the commands to valid ranges!
-        driver_state = driver_state_queue.peek();
-
-        driver_state_queue.mark_read();
+        drive_state = drive_state_queue.peek();
 
         // Immediately set the motor flags; once per new drive state.
-        set_motor_status(driver_state.motor_flags);
-    } else if (driver_state.duration <= 0) {
-        // Set the driver state to the safe breaking state if the duration has expired.
-        driver_state = breaking_driver_state;
+        set_motor_status(drive_state.motor_flags);
+    } else if (drive_state.duration == 0) {
+        // If we were scheduling a bunch of driver states, decrement the scheduled count and mark executed
+        // state as read.
+        if (drive_states_scheduled >= 2) {
+            drive_states_scheduled--;
+            drive_state_queue.mark_read(1);
+            drive_state = drive_state_queue.peek();
+        } else if (drive_states_scheduled == 1) {
+            // We were at the last scheduled driver state; so now we're done and we transition to breaking.
+            drive_states_scheduled = 0;
+            // Set the driver state to the safe breaking state if the duration has expired.
+            drive_state = breaking_drive_state;
+            // Mark this as read, but do we have nothing else to peek at.
+            drive_state_queue.mark_read(1);
+        }
         // Immediately set the motor flags; once per new drive state.
-        set_motor_status(driver_state.motor_flags);
+        set_motor_status(drive_state.motor_flags);
     } else {
         // Count down the active duration.
-        driver_state.duration--;
+        drive_state.duration--;
     }
 
     if (reset_calibration_variables_flag) {

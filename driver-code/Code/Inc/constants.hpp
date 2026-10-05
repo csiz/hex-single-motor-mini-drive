@@ -336,12 +336,12 @@ const uint8_t DISABLE_ALL_OUTPUTS = 0;
 
 
 // Driver state for safely breaking the motor.
-const hex_mini_drive::DriverState breaking_driver_state = {
+const hex_mini_drive::DriveState breaking_drive_state = {
     .motor_flags = ENABLE_ALL_OUTPUTS,
 };
 
 // Driver state for electrically disconnecting the motor.
-const hex_mini_drive::DriverState freewheel_driver_state = {
+const hex_mini_drive::DriveState freewheel_drive_state = {
     .motor_flags = DISABLE_ALL_OUTPUTS,
 };
 

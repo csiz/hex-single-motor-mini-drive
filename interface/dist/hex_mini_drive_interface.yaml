@@ -27,31 +27,21 @@ message_codes:
   SET_STATE_OFF:
     message_code: 0x2030
     
-  SET_STATE_DRIVE_6_SECTOR:
-    message_code: 0x2031
-    type: DriverState
-
-  SET_STATE_TEST_ALL_PERMUTATIONS:
-    message_code: 0x2032
-    type: DriverState
-    
   SET_STATE_FREEWHEEL:
-    message_code: 0x2034
+    message_code: 0x2031
 
-  SET_STATE_TEST_GROUND_SHORT:
-    message_code: 0x2036
-    type: DriverState
-  SET_STATE_TEST_POSITIVE_SHORT:
-    message_code: 0x2037
-    type: DriverState
-    
-  SET_STATE_DRIVE_PERIODIC:
-    message_code: 0x3040
-    type: DriverState
-  SET_STATE_DRIVE_SMOOTH:
+  SET_DRIVE_STATE:
+    message_code: 0x2032
+    type: DriveState
+
+  SET_DRIVE_SCHEDULE:
+    message_code: 0x2033
+    type: DriveSchedule
+
+
+  SET_STATE_DRIVE_6_SECTOR:
     message_code: 0x4030
-    type: DriverState
-
+    type: DriveState
   SET_STATE_DRIVE_TORQUE:
     message_code: 0x4031
     type: SetStateDriveTorque
@@ -112,22 +102,6 @@ message_codes:
     message_code: 0x5040
     type: UnitTestOutput
 
-  SET_STATE_RESISTANCE_CALIBRATION:
-    message_code: 0x5045
-    type: DriverState
-  SET_STATE_INDUCTANCE_CALIBRATION:
-    message_code: 0x5046
-    type: DriverState
-  SET_STATE_ROTATING_CALIBRATION_CHIRP:
-    message_code: 0x5047
-    type: DriverState
-  SET_STATE_FIXED_CALIBRATION_CHIRP:
-    message_code: 0x5048
-    type: DriverState
-  SET_STATE_HFI_SALIENCY_PULSES:
-    message_code: 0x5049
-    type: DriverState
-
 
 definitions:
   HISTORY_SIZE:
@@ -144,6 +118,11 @@ definitions:
     doc: Number of bytes in the unit test output; should be enough to store the output of the funky atan unit test.
     type: uint32
     const: 248
+
+  DRIVE_SCHEDULE_SIZE:
+    doc: Number of driver states that can be queued with a single command.
+    type: uint32
+    const: 12
 
   CURRENT_UNITS_PER_AMP:
     doc: |
@@ -428,7 +407,7 @@ definitions:
         doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
       
 
-  DriverState:
+  DriveState:
     doc: |
       The complete driver state, these values control the motor behaviour.
 
@@ -454,6 +433,11 @@ definitions:
       angular_speed:
         type: float32
         doc: Angular speed at which to drive the PWM wave.
+
+  DriveSchedule:
+    doc: Set a series of driver states to be executed by the motor in sequence.
+    type: DriveState
+    array_len: DRIVE_SCHEDULE_SIZE
 
   SetStateDriveTorque:
     struct:
