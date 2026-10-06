@@ -741,7 +741,14 @@ void ADC1_2_IRQHandler(void){
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if
     // we set the output registers too late in the cycle.
-    set_motor_outputs(motor_outputs);
+    // 
+    // We also need to compensate for the turn on delay on each motor phase.
+    // Note that we mustn't add the floor compensation to our calculation; it represents the 0 point for the PWM duty cycle.
+    set_motor_outputs(readout.active_pwm == 0 ? breaking_motor_outputs : MotorOutputs{
+        motor_outputs.u_duty + control_parameters.u_pwm_floor,
+        motor_outputs.v_duty + control_parameters.v_pwm_floor,
+        motor_outputs.w_duty + control_parameters.w_pwm_floor
+    });
     
     // Re-enable the update for the control registers now that we've written all 3.
     LL_TIM_EnableUpdateEvent(TIM1);
