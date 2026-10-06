@@ -424,9 +424,6 @@ definitions:
       pwm_value:
         type: float32
         doc: PWM value to use for driving the motor.
-      pwm_change:
-        type: float32
-        doc: How much to increment the PWM value on each cycle.
       angle:
         type: int32
         doc: Angle at which to drive the PWM wave.

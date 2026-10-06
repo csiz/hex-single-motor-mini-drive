@@ -506,8 +506,6 @@ struct DriveState {
   uint16_t duration;
   // PWM value to use for driving the motor.
   float pwm_value;
-  // How much to increment the PWM value on each cycle.
-  float pwm_change;
   // Angle at which to drive the PWM wave.
   int32_t angle;
   // Angular speed at which to drive the PWM wave.
@@ -523,8 +521,6 @@ static inline void write_DriveState(uint8_t * buffer, DriveState const& value) {
   write_uint16(buffer + offset, value.duration);;
   offset += 2;
   write_float32(buffer + offset, value.pwm_value);;
-  offset += 4;
-  write_float32(buffer + offset, value.pwm_change);;
   offset += 4;
   write_int32(buffer + offset, value.angle);;
   offset += 4;
@@ -544,8 +540,6 @@ static inline DriveState read_DriveState(uint8_t const* buffer) {
   offset += 2;
   result.pwm_value = read_float32(buffer + offset);
   offset += 4;
-  result.pwm_change = read_float32(buffer + offset);
-  offset += 4;
   result.angle = read_int32(buffer + offset);
   offset += 4;
   result.angular_speed = read_float32(buffer + offset);
@@ -559,7 +553,7 @@ static inline void write_DriveSchedule(uint8_t * buffer, DriveSchedule const& va
   size_t offset = 0;
   for (size_t i = 0; i < 12; ++i) {
     write_DriveState(buffer + offset, value[i]);;
-    offset += 20;
+    offset += 16;
   }
 }
 
@@ -568,7 +562,7 @@ static inline DriveSchedule read_DriveSchedule(uint8_t const* buffer) {
   size_t offset = 0;
   for (size_t i = 0; i < 12; ++i) {
     result[i] = read_DriveState(buffer + offset);
-    offset += 20;
+    offset += 16;
   }
   return result;
 }
@@ -1175,9 +1169,9 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::FULL_READOUT: return 174;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
-    case MessageCode::SET_DRIVE_STATE: return 22;
-    case MessageCode::SET_DRIVE_SCHEDULE: return 242;
-    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 22;
+    case MessageCode::SET_DRIVE_STATE: return 18;
+    case MessageCode::SET_DRIVE_SCHEDULE: return 194;
+    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 18;
     case MessageCode::SET_STATE_DRIVE_TORQUE: return 10;
     case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 10;
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
@@ -1236,21 +1230,21 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_DRIVE_STATE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_STATE));
-      if (max_size < 2 + 20) return 0;
+      if (max_size < 2 + 16) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 22;
+      return 18;
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_SCHEDULE));
-      if (max_size < 2 + 240) return 0;
+      if (max_size < 2 + 192) return 0;
       write_DriveSchedule(buffer + 2, std::get<DriveSchedule>(message.message_data));
-      return 242;
+      return 194;
     }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
-      if (max_size < 2 + 20) return 0;
+      if (max_size < 2 + 16) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 22;
+      return 18;
     }
     case MessageCode::SET_STATE_DRIVE_TORQUE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_TORQUE));
@@ -1391,17 +1385,17 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_DRIVE_STATE: {
-      if (size != 2 + 20) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_DriveState(buffer + 2);
       return true;
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
-      if (size != 2 + 240) return false;
+      if (size != 2 + 192) return false;
       message.message_data = read_DriveSchedule(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
-      if (size != 2 + 20) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_DriveState(buffer + 2);
       return true;
     }

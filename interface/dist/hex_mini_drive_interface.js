@@ -444,8 +444,6 @@ export class DriveState {
   duration;
   // PWM value to use for driving the motor.
   pwm_value;
-  // How much to increment the PWM value on each cycle.
-  pwm_change;
   // Angle at which to drive the PWM wave.
   angle;
   // Angular speed at which to drive the PWM wave.
@@ -455,7 +453,7 @@ export class DriveState {
 }
 
 function write_DriveState(value) {
-  const buffer = new Uint8Array(20);
+  const buffer = new Uint8Array(16);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   view.setUint8(offset, value?.motor_flags)
@@ -465,8 +463,6 @@ function write_DriveState(value) {
   view.setUint16(offset, value?.duration)
   offset += 2;
   view.setFloat32(offset, value?.pwm_value)
-  offset += 4;
-  view.setFloat32(offset, value?.pwm_change)
   offset += 4;
   view.setInt32(offset, value?.angle)
   offset += 4;
@@ -484,8 +480,6 @@ function read_DriveState(view, offset = 0) {
   result.duration = view.getUint16(offset);
   offset += 2;
   result.pwm_value = view.getFloat32(offset);
-  offset += 4;
-  result.pwm_change = view.getFloat32(offset);
   offset += 4;
   result.angle = view.getInt32(offset);
   offset += 4;
@@ -506,12 +500,12 @@ export class DriveSchedule extends Array {
 
 
 function write_DriveSchedule(value) {
-  const buffer = new Uint8Array(240);
+  const buffer = new Uint8Array(192);
   const view = new DataView(buffer.buffer);
   let offset = 0;
   for (let i = 0; i < 12; i++) {
-    new Uint8Array(view.buffer, offset, 20).set(write_DriveState(value[i]), 0);
-    offset += 20;
+    new Uint8Array(view.buffer, offset, 16).set(write_DriveState(value[i]), 0);
+    offset += 16;
   }
   return buffer;
 }
@@ -520,7 +514,7 @@ function read_DriveSchedule(view, offset = 0) {
   let result = new DriveSchedule();
   for (let i = 0; i < 12; i++) {
     result[i] = read_DriveState(view, offset);
-    offset += 20;
+    offset += 16;
   }
   return result;
 }
@@ -1391,19 +1385,19 @@ export function read_message(buffer) {
       return {message_code};
     }
     case SET_DRIVE_STATE: {
-      if (buffer.length !== 2 + 20) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_DriveState(view, 2);
       message.message_code = SET_DRIVE_STATE;
       return message;
     }
     case SET_DRIVE_SCHEDULE: {
-      if (buffer.length !== 2 + 240) return null;
+      if (buffer.length !== 2 + 192) return null;
       let message = read_DriveSchedule(view, 2);
       message.message_code = SET_DRIVE_SCHEDULE;
       return message;
     }
     case SET_STATE_DRIVE_6_SECTOR: {
-      if (buffer.length !== 2 + 20) return null;
+      if (buffer.length !== 2 + 16) return null;
       let message = read_DriveState(view, 2);
       message.message_code = SET_STATE_DRIVE_6_SECTOR;
       return message;

@@ -696,11 +696,16 @@ void ADC1_2_IRQHandler(void){
     readout.resistive_power_average = resistive_power_average;
     readout.emf_power = emf_power;
     readout.lead_angle = 0; // TODO: this needs updating from the main loop.
-    readout.active_pwm = drive_state.pwm_value;
-    
 
     // Calculate and set motor outputs!!
     // ---------------------------------
+
+    // Instantly set to 0, but otherwise approach the target PWM gradually.
+    readout.active_pwm = drive_state.pwm_value == 0 ? 0 : (readout.active_pwm + clip_to(
+        -control_parameters.max_pwm_change,
+        +control_parameters.max_pwm_change,
+        drive_state.pwm_value - readout.active_pwm
+    ));
 
     // The main control flag is whether we drive in fixed coordinates (open loop) or relative coordinates (closed loop).
     // 
@@ -710,7 +715,7 @@ void ADC1_2_IRQHandler(void){
         // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
         // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
         // Base the direction on the sign of the target PWM.
-        const int32_t active_pwm_sign = sign(drive_state.pwm_value);
+        const int32_t active_pwm_sign = sign(readout.active_pwm);
 
         // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
         // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
@@ -726,7 +731,7 @@ void ADC1_2_IRQHandler(void){
 
     motor_outputs = compute_motor_outputs(
         drive_state.angle, 
-        drive_state.pwm_value,
+        readout.active_pwm,
         readout.live_max_pwm
     );
 

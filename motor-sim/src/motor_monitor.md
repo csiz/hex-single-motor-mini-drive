@@ -2239,10 +2239,6 @@ const control_parameters_input = Object.fromEntries(
       description: `Probing angular speed. We use this default speed to drive a current around the coils in order to
       move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
     }],
-    ["max_hold_pwm", {
-      label: "Max Hold PWM",
-      description: `Maximum PWM for holding commands.`
-    }],
     ["max_pwm_change", {
       label: "Max PWM Change",
       description: "Maximum allowed change in PWM between control cycles."

@@ -138,8 +138,6 @@ static inline hex_mini_drive::DriveState get_checked_drive_state(hex_mini_drive:
     .duration = drive_state.duration,
     .pwm_value = clip_to(-pwm_max, +pwm_max, 
       drive_state.pwm_value * control_parameters.motor_direction),
-      .pwm_change = clip_to(-control_parameters.max_pwm_change, +control_parameters.max_pwm_change, 
-        drive_state.pwm_change),
     .angle = drive_state.angle,
     .angular_speed = clip_to(-max_angular_speed, max_angular_speed,
       drive_state.angular_speed * control_parameters.motor_direction
