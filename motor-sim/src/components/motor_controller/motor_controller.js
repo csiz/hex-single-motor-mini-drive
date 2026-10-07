@@ -1,5 +1,11 @@
 import {exponential_average} from "./math_utils.js";
-import {parser_mapping, make_current_calibration} from "./interface.js";
+import {
+  parse_readout,
+  parse_full_readout,
+  parse_unit_test_output,
+  parse_current_calibration,
+  make_current_calibration,
+} from "./interface.js";
 
 import {ConsistentOverheadByteStuffing, MessageCode, write_message, read_message, MAX_MESSAGE_SIZE} from "hex-mini-drive-interface";
 
@@ -30,6 +36,13 @@ export async function prompt_com_port_get_index(){
 
 export const default_ws_uri = "ws://hex-mini-drive.local/ws";
 
+// Data management
+// ---------------
+
+// Maximum time between readouts to consider them part of the same series.
+const readout_series_timeout = 500;
+
+const max_data_length = 16384;
 
 // Motor driver control
 // --------------------
@@ -57,10 +70,10 @@ export class MotorController {
   }){
     this.motor_uri = motor_uri;
 
-    this.current_calibration = null;
-    this.control_parameters = null;
+    this.current_calibration = {};
+    this.control_parameters = {};
 
-    this.last_message = new Map();
+    this.data = [];
 
     this.onmessage = onmessage;
     this.onerror = onerror;
@@ -192,28 +205,43 @@ export class MotorController {
     }
     
     const message_code = bare_message.message_code;
-    
+    bare_message.local_time = Date.now();
+
+    // Reset data if it's been too long since the last message.
+    if (this.data?.length && this.data[this.data.length - 1].local_time + readout_series_timeout < bare_message.local_time) {
+      this.data = [];
+    }
+
     // We compute running averages and current index relative to previous messages of the same type.
-    const last_message = this.last_message.get(message_code);
+    const last_message = this.data?.length ? this.data[this.data.length - 1] : null;
 
-    // Add additional data to readout messages.
-    const message = parser_mapping[message_code] ? 
-      parser_mapping[message_code](bare_message, last_message, this) : 
-      // Otherwise just return the bare message.
-      bare_message;
-
-    // Remember for the next message so we can increment the message index.
-    this.last_message.set(message_code, message);
-
+    // Start with the bare message by default but we might add more info.
+    let message = bare_message;
+    
     // Intercept motor parameters and forward all other messages.
     if (message_code == MessageCode.CURRENT_CALIBRATION){
+      message = parse_current_calibration(bare_message);
       this.current_calibration = message;
     } else if (message_code == MessageCode.CONTROL_PARAMETERS) {
       this.control_parameters = message;
-    } else {
-      // Stream all replies through the `onmessage` callback.
-      this.onmessage(message);
+    } else if (message_code == MessageCode.READOUT) {
+      // Add the current_calibration data to the bare message and parse it all together. 
+      // This way we can also track how the calibration parameters change over time. And if
+      // transmission order is preserved, we should receive the new calibration data just ahead
+      // of the corresponding readout.
+      message = parse_readout({...this.current_calibration, ...bare_message}, last_message);
+      // Store readout data up to some maximum size. Allows us to easily plot and analyse data samples.
+      this.data = capped_push(this.data, message, max_data_length);
+    } else if (message_code == MessageCode.FULL_READOUT){
+      // TODO: now we can drop full readouts in favour of simpler readouts + concatenated calibration data
+      message = parse_full_readout({...this.current_calibration,...bare_message}, last_message);
+      this.data = capped_push(this.data, message, max_data_length);
+    } else if (message_code == MessageCode.UNIT_TEST_OUTPUT) {
+      message = parse_unit_test_output(bare_message);
     }
+
+    // Stream all replies through the `onmessage` callback.
+    this.onmessage(message);
   }
 
   forget(){
@@ -221,7 +249,7 @@ export class MotorController {
   }
 
   reset_history(){
-    this.last_message.clear();
+    this.data = [];
   }
 
   /* Send a command to the motor driver. */
@@ -283,4 +311,75 @@ export class MotorController {
   reset_control_parameters(){
     this.send_command(MessageCode.RESET_CONTROL_PARAMETERS);
   }
+}
+
+
+
+
+
+
+
+// TODO: We need to integrate more of the motor controller functionality
+// ---------------------------------------------------------------------
+// 
+
+
+
+
+
+
+
+
+// Connection info formatting utils
+// --------------------------------
+
+// Format a floating number of bytes with the common endings KiB, MiB, GiB (products of 1024).
+function format_bytes(bytes){
+  if (bytes < 1024) return `${bytes.toFixed(2)} bytes`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+}
+
+// Format the receiving data rate from the connection status.
+function format_data_rate({bytes_received, bytes_discarded, receive_rate}){
+  bytes_received = `received: ${format_bytes(bytes_received).padStart(12)}`;
+  bytes_discarded = `discarded: ${format_bytes(bytes_discarded).padStart(12)}`;
+  receive_rate = `download rate: ${format_bytes(receive_rate).padStart(12)}/s`;
+
+  return `${bytes_received} | ${bytes_discarded} | ${receive_rate}`;
+}
+
+// Format the connection error message as an html element.
+function displayable_connection_error(error){
+  if (error.message === "EOF") {
+    return `End of connection.`;
+  } else if (error.name === "NotFoundError") {
+    return `No device found or nothing selected.`;
+  } else if (error.name === "SecurityError") {
+    return `Permission for port dialog denied.`;
+  } else if (error.name === "NetworkError") {
+    return `Transmission error to usb device.`;
+  } else {
+    console.warn("Motor connection error:", error);
+    return `Connection lost; unknown error: ${error}`;
+  }
+}
+
+
+// Memory consumption capping
+// --------------------------
+
+// Push to array, but keep array size capped to a limit.
+function capped_push(data, value, target_size){
+  // Maximum amount of data readouts per motor driver to keep in memory, is
+  // used so we don't resize the array with every new readout. When the max
+  // cap is reached we resize to the target size, amortizing resize ops.
+  const max_size = 2 * target_size;
+  
+  let new_data = (data.length > max_size) ? data.slice(-target_size) : data;
+
+  new_data.push(value);
+
+  return new_data;
 }

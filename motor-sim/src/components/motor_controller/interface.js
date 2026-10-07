@@ -1,5 +1,4 @@
 import {
-  MessageCode,
   PWM_BASE,
   CURRENT_UNITS_PER_AMP,
   VOLTAGE_UNITS_PER_VOLT,
@@ -18,11 +17,6 @@ import {normalize_radians} from './angular_math.js';
 import {square, dq0_transform, abc_transform} from './math_utils.js';
 
 
-
-// Maximum time between readouts to consider them part of the same series.
-const readout_series_timeout = 500;
-
-
 export function get_hall_sector({hall_u, hall_v, hall_w}){
   const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
   switch(hall_state){
@@ -37,8 +31,8 @@ export function get_hall_sector({hall_u, hall_v, hall_w}){
 }
 
 
-function parse_readout(bare_readout, previous_readout, {current_calibration, control_parameters}) {
-  const local_time = Date.now();
+export function parse_readout(bare_readout, previous_readout) {
+  const local_time = bare_readout.local_time;
 
 
   // Get the readout number, a counter that increments with each readout & PWM cycle.
@@ -60,7 +54,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const angle = angle_units_to_radians(bare_readout.angle);
   const predicted_angle = angle_units_to_radians(bare_readout.predicted_angle);
   const angle_adjustment = normalize_radians(angle - predicted_angle);
-  const emf_angle_error = angle_adjustment / control_parameters?.rotor_angle_ki;
   const angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.angular_speed);
   const vcc_voltage = bare_readout.vcc_voltage / VOLTAGE_UNITS_PER_VOLT;
 
@@ -88,8 +81,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
 
   const angle_fix = bare_readout.angle_fix;
   
-  const nominal_vcc_voltage = 1.0 * (vcc_voltage >= (control_parameters.vcc_undervoltage / VOLTAGE_UNITS_PER_VOLT));
-
   const {
     hall_state,
     emf_detected,
@@ -141,13 +132,13 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   const web_current_angular_speed = speed_units_to_rotations_per_millisecond(radians_to_angle_units(normalize_radians(web_current_angle - web_previous_current_angle)));
 
 
-  const resistance = current_calibration?.resistance ?? 1.0;
+  const resistance = bare_readout?.resistance ?? 1.0;
 
   const u_R_voltage = resistance * u_current;
   const v_R_voltage = resistance * v_current;
   const w_R_voltage = resistance * w_current;
 
-  const inductance = current_calibration?.inductance ?? 0.0;
+  const inductance = bare_readout?.inductance ?? 0.0;
   
   // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
   const u_L_voltage = u_current_diff * inductance * pwm_cycles_per_second;
@@ -182,7 +173,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   // -------------
 
   // It's the first readout in the series if the previous readout is older than the timeout duration.
-  const is_first_readout = !previous_readout || (previous_readout.local_time + readout_series_timeout < local_time);
+  const is_first_readout = !previous_readout;
 
   // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
   const readout_number_diff = is_first_readout ? undefined : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
@@ -198,6 +189,7 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   // ---------------------------
 
   return {
+    ...bare_readout,
     local_time,
     // Index
     readout_number,
@@ -217,7 +209,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     emf_fix,
     current_detected,
     angle_fix,
-    nominal_vcc_voltage,
     // Readouts converted to physical dimensions
     direct_current, quadrature_current,
     direct_current_diff,
@@ -259,7 +250,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     angle,
     predicted_angle,
     angle_adjustment,
-    emf_angle_error,
     angular_speed,
     vcc_voltage,
     emf_voltage_angle, 
@@ -284,8 +274,8 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
 
 
 
-function parse_full_readout(bare_full_readout, previous_readout, motor_controller){
-  const readout = parse_readout(bare_full_readout, previous_readout, motor_controller);
+export function parse_full_readout(bare_full_readout, previous_readout){
+  const readout = parse_readout(bare_full_readout, previous_readout);
 
   if (!readout) return null;
 
@@ -323,10 +313,8 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
 
   const battery_current = total_power / readout.vcc_voltage;
 
-  const overpowered = 1.0 * (total_power_average > motor_controller.control_parameters.max_power_draw);
-  const overheating = 1.0 * (resistive_power_average > motor_controller.control_parameters.max_resistive_power);
-
   return {
+    ...bare_full_readout,
     ...readout,
     main_loop_rate,
     adc_update_rate,
@@ -342,8 +330,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     resistive_power,
     resistive_power_average,
     emf_power,
-    overpowered,
-    overheating,
 
     rotations,
     
@@ -364,7 +350,7 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
 }
 
 
-function parse_unit_test_output(bare_unit_test) {
+export function parse_unit_test_output(bare_unit_test) {
   // Convert number array to Uint8Array.
   const uint8_array = new Uint8Array(bare_unit_test);
 
@@ -379,8 +365,9 @@ function parse_unit_test_output(bare_unit_test) {
   return new TextDecoder().decode(data_view.buffer.slice(0, len));
 }
 
-function parse_current_calibration(bare_calibration) {
+export function parse_current_calibration(bare_calibration) {
   return {
+    ...bare_calibration,
     u_current_zero: bare_calibration.u_current_zero / CURRENT_UNITS_PER_AMP,
     v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
     w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
@@ -402,11 +389,4 @@ export function make_current_calibration(current_calibration){
     motor_constant: current_calibration.motor_constant,
   };
 }
-
-export const parser_mapping = {
-  [MessageCode.READOUT]: parse_readout,
-  [MessageCode.FULL_READOUT]: parse_full_readout,
-  [MessageCode.UNIT_TEST_OUTPUT]: parse_unit_test_output,
-  [MessageCode.CURRENT_CALIBRATION]: parse_current_calibration,
-};
 

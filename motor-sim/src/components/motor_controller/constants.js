@@ -1,6 +1,5 @@
 // Motor driver constants to convert to standard units.
 import {
-  MessageCode,
   HISTORY_SIZE, 
   PWM_BASE,
   CLOCK_FREQUENCY,
@@ -18,7 +17,6 @@ import {normalize_radians} from "./angular_math.js";
 
 
 export {
-  MessageCode,
   HISTORY_SIZE, 
   PWM_BASE, 
   CLOCK_FREQUENCY,  

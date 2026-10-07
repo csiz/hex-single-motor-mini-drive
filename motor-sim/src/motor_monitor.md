@@ -179,25 +179,6 @@ let connection_status = Mutable(html`<pre>Not connected.</pre>`);
 // Data management
 // ---------------
 
-function set_readout_series(new_data, motor_uri){
-  if (motor_uri === active_port.value) data.value = new_data;
-
-  opened_ports.value.get(motor_uri).data = new_data;
-}
-
-function update_readout_series(readout, motor_uri){
-  // Reset the data when the controller detects a new readout series and resets the index to 0.
-  const first_readout = (readout.readout_index === 0);
-
-  const previous_data = opened_ports.value.get(motor_uri)?.data ?? [];
-
-  const new_data = first_readout ? [readout] : capped_push(previous_data, readout, 4000 / (millis_per_cycle * 4));
-
-  if (motor_uri === active_port.value) data.value = new_data;
-
-  opened_ports.value.get(motor_uri).data = new_data;
-};
-
 
 function set_status(status, motor_uri){
   if (!motor_controller.value || motor_uri === active_port.value) connection_status.value = status;
@@ -229,7 +210,7 @@ function switch_to_port(motor_uri){
 
   motor_controller.value = port_state.motor_controller;
   connection_status.value = port_state.error ? displayable_connection_error(port_state.error) : port_state.status;
-  data.value = port_state.data;
+  data.value = port_state.motor_controller?.data;
 
   return true;
 }
@@ -265,7 +246,7 @@ async function connect_motor_controller(options = {}) {
         set_status(html`<pre>Connected; ${format_data_rate(status)}.</pre>`, motor_uri);
       },
       onmessage: (readout) => {
-        update_readout_series(readout, motor_uri);
+        if (motor_uri === active_port.value) data.value = motor_controller.data;
       },
       onready: (motor_controller) => {
         set_status(html`<pre>Connected, waiting for your commands.</pre>`, motor_uri);
@@ -1046,7 +1027,6 @@ const plot_electric_offsets = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
-    {y: "emf_angle_error", label: "EMF Angle Error", color: d3.color(colors.angle).brighter(1)},
     {y: "emf_angle_stdev", label: "EMF Angle stdev", color: d3.color(colors.voltage_angle).darker(1)},
     {y: "lead_angle", label: "Lead Angle", color: colors.v},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle_offset : null, label: "Drive Voltage Angle Offset", color: colors_categories[2]},
@@ -1238,9 +1218,6 @@ const plot_readout_flags = plot_lines({
     {y: "emf_fix", label: "EMF speed fix", color: colors_categories[4]},
     {y: "current_detected", label: "Current detected", color: colors_categories[6]},
     {y: "angle_fix", label: "Rotor position fix", color: colors_categories[7]},
-    {y: "nominal_vcc_voltage", label: "Nominal VCC Voltage", color: colors_categories[8]},
-    {y: "overpowered", label: "Overpowered", color: colors_categories[9]},
-    {y: "overheating", label: "Overheating", color: colors_categories[10]},
     {y: "hall_u", label: "Hall U", color: colors.u},
     {y: "hall_v", label: "Hall V", color: colors.v},
     {y: "hall_w", label: "Hall W", color: colors.w},
@@ -1387,17 +1364,6 @@ const update_current_calibration_data = (new_value) => {
 
 function run_current_calibration(sample) {
   console.info("Calculating calibration...");
-
-  // Test if we've had nominal VCC voltage throughout the calibration run.
-  const all_nominal_vcc_voltage = sample.every(({nominal_vcc_voltage}) => nominal_vcc_voltage);
-
-  if (!all_nominal_vcc_voltage) {
-    console.warn("Nominal VCC voltage was not maintained during the calibration run, we can't trust the drive voltage.");
-    return {
-      sample,
-      is_stable: false,
-    }
-  }
 
   const enabled_parameters = get_checked_parameters();
 
@@ -2467,24 +2433,6 @@ function displayable_connection_error(error){
     console.warn("Motor connection error:", error);
     return html`<pre style="color: red">Connection lost; unknown error: ${error}</pre>`;
   }
-}
-
-
-// Memory consumption capping
-// --------------------------
-
-// Push to array, but keep array size capped to a limit.
-function capped_push(data, value, target_size){
-  // Maximum amount of data readouts per motor driver to keep in memory, is
-  // used so we don't resize the array with every new readout. When the max
-  // cap is reached we resize to the target size, amortizing resize ops.
-  const max_size = 2 * target_size;
-  
-  let new_data = (data.length > max_size) ? data.slice(-target_size) : data;
-
-  new_data.push(value);
-
-  return new_data;
 }
 
 ```
