@@ -1,4 +1,10 @@
-import * as d3 from 'd3';
+
+function mean(data, accessor){
+  if (!data || data.length === 0) return 0;
+  if (!accessor) accessor = (d) => d;
+  const sum = data.reduce((acc, d) => acc + accessor(d), 0);
+  return sum / data.length;
+}
 
 export function circular_stats(values){
   if (!values || values.length === 0) {
@@ -9,14 +15,14 @@ export function circular_stats(values){
   }
 
   const mean_point = [
-    d3.mean(values, (d) => Math.cos(d)),
-    d3.mean(values, (d) => Math.sin(d)),
+    mean(values, (d) => Math.cos(d)),
+    mean(values, (d) => Math.sin(d)),
   ];
   
   const mean = Math.atan2(mean_point[1], mean_point[0]);
 
   const stdev = Math.sqrt(
-    d3.mean(values, (d) => {
+    mean(values, (d) => {
       const diff = normalize_radians(d - mean);
       return diff * diff;
     })

@@ -21,7 +21,9 @@ const initial_angular_speed_stdev = 50.0;
 
 const minimum_acceleration = 0.1;
 
-
+// TODO: if we want to fix this? this doesn't work anymore because we no longer use position_calibration.
+// The code was cumbersome, and the emf feedback is much more reliable. The hall sensors can really only do
+// positioning with a huge error margin; they can activate +- 20degrees off their expected activation point.
 export function accumulate_position_from_hall(readout, prev_readout, {position_calibration}){
   if (!position_calibration) return {};
 

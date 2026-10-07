@@ -48,6 +48,7 @@ Motor Commands
   <span>${test_buttons}</span>
   <span>${command_duration_slider}</span>
   <span>${command_pwm_slider}</span>
+  <span>${quickselect_angle_buttons}</span>
   <span>${command_angle_slider}</span>
   <span>${command_angular_speed_slider}</span>
 </div>
@@ -194,7 +195,7 @@ function update_readout_series(readout, motor_uri){
 
   const previous_data = opened_ports.value.get(motor_uri)?.data ?? [];
 
-  const new_data = first_readout ? [readout] : capped_push(previous_data, readout);
+  const new_data = first_readout ? [readout] : capped_push(previous_data, readout, 4000 / (millis_per_cycle * 4));
 
   if (motor_uri === active_port.value) data.value = new_data;
 
@@ -360,9 +361,24 @@ const command_angular_speed_slider = inputs_wide_range(
   {value: 0.20, step: 0.01, label: "Angular speed value (rotations/ms)"});
 const command_angular_speed = transformed_input_value(command_angular_speed_slider, rotations_per_millisecond_to_speed_units);
 
+
+
 // Choose the target angle for certain commands.
 const command_angle_slider = inputs_wide_range([-Math.PI, Math.PI], {value: 0, step: 0.01, label: "Command angle (radians):"});
 const command_angle = transformed_input_value(command_angle_slider, radians_to_angle_units);
+
+// 6 quickselect bottons for the angles with U+ being 0, U- being 180, V+ being 60, V- being 240, W+ being 120, W- being 300
+const quickselect_angle_buttons = Inputs.button(
+  [
+    ["U+", function() { set_input_value(command_angle_slider, 0); }],
+    ["W-", function() { set_input_value(command_angle_slider, Math.PI / 3); }],
+    ["V+", function() { set_input_value(command_angle_slider, 2 * Math.PI / 3); }],
+    ["U-", function() { set_input_value(command_angle_slider, -Math.PI); }],
+    ["W+", function() { set_input_value(command_angle_slider, -2 * Math.PI / 3); }],
+    ["V-", function() { set_input_value(command_angle_slider, -1 * Math.PI / 3); }]
+  ],
+  {label: "Quickselect angles"}
+);
 
 // Choose the torque target for torque driving modes.
 const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.750, step: 0.010, label: "Command torque (Amps):"});
@@ -947,20 +963,11 @@ const plot_power = plot_lines({
   channels: [
     {y: "total_power", label: "Total Power", color: colors.sum},
     {y: "total_power_average", label: "Total Power (on chip average)", color: d3.color(colors.sum).darker(1)},
-    {
-      y: "total_power_avg", label: "Total Power (2ms average)", color: d3.color(colors.sum).darker(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.total_power_stdev}),
-    },
     {y: "resistive_power", label: "Resistive Power", color: colors.web_current_magnitude},
     {y: "resistive_power_average", label: "Resistive Power (on chip average)", color: d3.color(colors.web_current_magnitude).darker(1)},
     {y: "emf_power", label: "EMF Power", color: colors.angle},
-    {
-      y: "emf_power_avg", label: "EMF Power (2ms average)", color: d3.color(colors.angle).darker(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.emf_power_stdev}),
-    },
     {y: "inductive_power", label: "Inductive Power", color: colors.current_angle},
-    
-    {y: "web_total_power", label: "Total Power (computed online)", color: colors.web_angle},
+    {y: "web_total_power", label: "Total Power (computed online)", color: colors_categories[3]},
     {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
     {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},
     {y: "web_inductive_power", label: "Inductive Power (computed online)", color: colors.w},
@@ -1016,7 +1023,7 @@ const plot_electric_position = plot_lines({
     {y: "predicted_angle", label: "Predicted Angle", color: d3.color(colors.angle).darker(1)},
     {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
-    {y: (d) => /* d.current_detected ?  */d.current_angle/*  : null */, label: "Current Angle", color: colors.web_angle},
+    {y: (d) => /* d.current_detected ?  */d.current_angle/*  : null */, label: "Current Angle", color: colors_categories[3]},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {
       y: (d) => d.emf_voltage_angle, label: "EMF Voltage Angle", color: colors.voltage_angle,
@@ -1182,10 +1189,6 @@ const plot_dq0_currents = plot_lines({
     {y: "web_quadrature_current", label: "Current on Quadrature (computed online)", color: d3.color(colors.quadrature_current).brighter(1)},
     {y: "steady_state_drive_current", label: "Drive Current if stalling", color: d3.color(colors.direct_current).darker(1)},
     {y: "web_current_magnitude", label: "Current Magnitude (computed online)", color: colors.web_current_magnitude},
-    {
-      y: "web_current_magnitude_avg", label: "Current Magnitude (2ms average)", color: d3.color(colors.web_current_magnitude).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_current_magnitude_stdev}),
-    },
   ],
   curve,
 });
@@ -1205,10 +1208,6 @@ const plot_dq0_voltages = plot_lines({
     {y: "web_direct_emf_voltage", label: "Voltage on Direct axis (computed online)", color: d3.color(colors.direct_current).brighter(1)},
     {y: "web_quadrature_emf_voltage", label: "Voltage on Quadrature (computed online)", color: d3.color(colors.quadrature_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
-    {
-      y: "web_emf_voltage_magnitude_avg", label: "Voltage Magnitude (2ms average)", color: d3.color(colors.web_current_magnitude).brighter(1),
-      draw_extra: setup_stdev_95({stdev: (d) => d.web_emf_voltage_magnitude_stdev}),
-    },
     {y: "drive_voltage_magnitude", label: "Drive Voltage Magnitude", color: colors_categories[2]},
   ],
   curve,
@@ -2493,7 +2492,7 @@ const colors = {
   u: "rgb(117, 112, 179)",
   v: "rgb(217, 95, 2)",
   w: "rgb(231, 41, 138)",
-  web_angle: "rgb(178, 228, 0)",
+  z: "rgb(178, 228, 0)",
   angle: "rgb(39, 163, 185)",
   web_current_magnitude: "rgb(197, 152, 67)",
   current_angle: "rgb(102, 166, 30)",
@@ -2550,17 +2549,14 @@ function displayable_connection_error(error){
 // Memory consumption capping
 // --------------------------
 
-// Desired amount of data readouts per motor driver to keep in memory.
-const target_data_size = 4000 / (millis_per_cycle * 4);
-
-// Maximum amount of data readouts per motor driver to keep in memory, is
-// used so we don't resize the array with every new readout. When the max
-// cap is reached we resize to the target size, amortizing resize ops.
-const max_data_size = 2 * target_data_size;
-
 // Push to array, but keep array size capped to a limit.
-function capped_push(data, value){
-  let new_data = (data.length > max_data_size) ? data.slice(-target_data_size) : data;
+function capped_push(data, value, target_size){
+  // Maximum amount of data readouts per motor driver to keep in memory, is
+  // used so we don't resize the array with every new readout. When the max
+  // cap is reached we resize to the target size, amortizing resize ops.
+  const max_size = 2 * target_size;
+  
+  let new_data = (data.length > max_size) ? data.slice(-target_size) : data;
 
   new_data.push(value);
 

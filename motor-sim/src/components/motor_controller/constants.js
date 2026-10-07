@@ -1,5 +1,6 @@
 // Motor driver constants to convert to standard units.
 import {
+  MessageCode,
   HISTORY_SIZE, 
   PWM_BASE,
   CLOCK_FREQUENCY,
@@ -10,12 +11,14 @@ import {
   ENABLE_W_OUTPUT,
   ENABLE_Z_OUTPUT,
   ENABLE_RECORDING,
+  UNIT_TEST_OUTPUT_SIZE,
 } from "hex-mini-drive-interface";
 
-import {normalize_radians, positive_radians} from "./angular_math.js";
+import {normalize_radians} from "./angular_math.js";
 
 
 export {
+  MessageCode,
   HISTORY_SIZE, 
   PWM_BASE, 
   CLOCK_FREQUENCY,  
@@ -26,6 +29,7 @@ export {
   ENABLE_W_OUTPUT,
   ENABLE_Z_OUTPUT,
   ENABLE_RECORDING,
+  UNIT_TEST_OUTPUT_SIZE,
 };
 
 // Timing constants
@@ -67,10 +71,6 @@ export function speed_units_to_rotations_per_millisecond(speed){
 
 export function rotations_per_millisecond_to_speed_units(speed){
   return angle_base * speed / cycles_per_millisecond;
-}
-
-export function acceleration_units_to_rotations_per_millisecond_squared(acceleration){
-  return speed_units_to_rotations_per_millisecond(acceleration) * cycles_per_millisecond;
 }
 
 export function rotations_per_millisecond_squared_to_acceleration_units(acceleration){

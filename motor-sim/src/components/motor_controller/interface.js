@@ -1,7 +1,9 @@
 import {
+  MessageCode,
   PWM_BASE,
   CURRENT_UNITS_PER_AMP,
   VOLTAGE_UNITS_PER_VOLT,
+  UNIT_TEST_OUTPUT_SIZE,
   millis_per_cycle,
   pwm_cycles_per_second,
   readout_base,
@@ -9,15 +11,12 @@ import {
   angle_units_to_radians, 
   radians_to_angle_units,
   speed_units_to_rotations_per_millisecond,
-  acceleration_units_to_rotations_per_millisecond_squared,
-  parse_state_flags,
+  parse_state_flags,  
 } from './constants.js';
 
 import {normalize_radians} from './angular_math.js';
 import {square, dq0_transform, abc_transform, exponential_stats} from './math_utils.js';
-import {accumulate_position_from_hall} from './position_kalman_filter.js';
 
-import { MessageCode, UNIT_TEST_OUTPUT_SIZE } from 'hex-mini-drive-interface';
 
 
 // Maximum time between readouts to consider them part of the same series.
@@ -195,42 +194,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
   // Time units are milliseconds.
   const dt = is_first_readout ? undefined : time - previous_readout.time;
 
-
-  // Infer angle with the Kalman filter
-  // ----------------------------------
-
-  const is_hall_transition = (hall_sector !== null) && (hall_sector !== previous_readout?.hall_sector);
-
-  const {
-    web_angle,
-    web_angle_stdev,
-    web_angular_speed,
-    web_angular_speed_stdev,
-  } = accumulate_position_from_hall({dt, hall_sector, is_hall_transition}, previous_readout, {});
-
-
-  // Running averages
-  // ----------------
-  
-  const exp_stats = exponential_stats(dt, 2.0);
-
-  const {average: web_emf_voltage_magnitude_avg, stdev: web_emf_voltage_magnitude_stdev} = exp_stats(
-    web_emf_voltage_magnitude,
-    {
-      average: previous_readout?.web_emf_voltage_magnitude_avg,
-      stdev: previous_readout?.web_emf_voltage_magnitude_stdev,
-    },
-  );
-
-  const {average: web_current_magnitude_avg, stdev: web_current_magnitude_stdev} = exp_stats(
-    web_current_magnitude,
-    {
-      average: previous_readout?.web_current_magnitude_avg,
-      stdev: previous_readout?.web_current_magnitude_stdev,
-    },
-  );
-
-
   // Return the complete readout
   // ---------------------------
 
@@ -250,7 +213,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     hall_v,
     hall_w,
     hall_sector,
-    is_hall_transition,
     emf_detected,
     emf_fix,
     current_detected,
@@ -317,14 +279,6 @@ function parse_readout(bare_readout, previous_readout, {current_calibration, con
     web_emf_power,
     web_resistive_power,
     web_inductive_power,
-    web_angle,
-    web_angle_stdev,
-    web_angular_speed,
-    web_angular_speed_stdev,
-    web_emf_voltage_magnitude_avg, 
-    web_emf_voltage_magnitude_stdev,
-    web_current_magnitude_avg, 
-    web_current_magnitude_stdev,
   };
 }
 
@@ -371,24 +325,6 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
 
   const overpowered = 1.0 * (total_power_average > motor_controller.control_parameters.max_power_draw);
   const overheating = 1.0 * (resistive_power_average > motor_controller.control_parameters.max_resistive_power);
-  
-  const exp_stats = exponential_stats(readout.dt, 2.0);
-
-  const {average: emf_power_avg, stdev: emf_power_stdev} = exp_stats(
-    emf_power,
-    {
-      average: previous_readout?.emf_power_avg,
-      stdev: previous_readout?.emf_power_stdev,
-    },
-  );
-
-  const {average: total_power_avg, stdev: total_power_stdev} = exp_stats(
-    total_power,
-    {
-      average: previous_readout?.total_power_avg,
-      stdev: previous_readout?.total_power_stdev,
-    },
-  );
 
   return {
     ...readout,
@@ -403,13 +339,9 @@ function parse_full_readout(bare_full_readout, previous_readout, motor_controlle
     battery_current,
     total_power,
     total_power_average,
-    total_power_avg, 
-    total_power_stdev,
     resistive_power,
     resistive_power_average,
     emf_power,
-    emf_power_avg, 
-    emf_power_stdev,
     overpowered,
     overheating,
 
