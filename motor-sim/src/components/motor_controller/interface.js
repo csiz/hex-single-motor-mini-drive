@@ -15,7 +15,7 @@ import {
 } from './constants.js';
 
 import {normalize_radians} from './angular_math.js';
-import {square, dq0_transform, abc_transform, exponential_stats} from './math_utils.js';
+import {square, dq0_transform, abc_transform} from './math_utils.js';
 
 
 

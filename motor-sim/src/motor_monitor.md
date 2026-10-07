@@ -97,16 +97,12 @@ Current Calibration Procedures
 
 <div class="card tight">
   <div>${current_calibration_buttons}</div>
+  <div>${current_calibration_checkboxes}</div>
   <p>Active electrical phase properties:</p>
   <pre>${active_current_calibration_table}</pre>
   <div>${Object.values(current_calibration_input)}</div>
 </div>
 <div class="card tight">
-  <div>${current_calibration_pwm_slider}</div>
-  <div>${current_calibration_test_speed_slider}</div>
-  <div>${current_calibration_test_duration_slider}</div>
-  <div>${current_calibration_angle_slider}</div>
-  <div>${current_calibration_checkboxes}</div>
   <h3>Current Calibration Results</h3>
   <div>${current_calibration_optimization_iteration_input}</div>
   <div>
@@ -1300,29 +1296,6 @@ autosave_inputs(monitoring_plots);
 // Current calibration
 // -------------------
 
-const current_calibration_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.04, step: 1.0, label: "Calibration max PWM:"});
-
-const current_calibration_pwm = Generators.input(current_calibration_pwm_slider);
-
-
-const current_calibration_test_speed_slider = inputs_wide_range(
-  [
-    -speed_units_to_rotations_per_millisecond(max_angular_speed), 
-    +speed_units_to_rotations_per_millisecond(max_angular_speed)
-  ], 
-  {value: 1.0, label: "Calibration test speed (rotations/ms):"});
-
-const current_calibration_test_speed = transformed_input_value(current_calibration_test_speed_slider, rotations_per_millisecond_to_speed_units);
-
-const current_calibration_test_duration_slider = inputs_wide_range([0, 16*HISTORY_SIZE], {value: HISTORY_SIZE, step: 1, label: "Calibration test duration:"});
-
-const current_calibration_duration = Generators.input(current_calibration_test_duration_slider);
-
-// Choose the target angle for certain commands.
-const current_calibration_angle_slider = inputs_wide_range([-Math.PI, Math.PI], {value: 0, step: 0.01, label: "Command angle (radians):"});
-const current_calibration_angle = transformed_input_value(current_calibration_angle_slider, radians_to_angle_units);
-
-
 function stringify_active_current_calibration() {
   return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
 }
@@ -1412,43 +1385,8 @@ const update_current_calibration_data = (new_value) => {
 
 ```js
 
-async function run_current_calibration(motor_controller, message_options) {
-  // TODO: this all needs redoing; we changed the snapshot routine.
-
-  if (!motor_controller.current_calibration) {
-    console.error("We didn't load the active calibration data from the driver, we can't proceed without it.");
-    throw new Error("Missing current calibration data");
-  }
-
-  const current_calibration = {...motor_controller.current_calibration};
-  const control_parameters = motor_controller.control_parameters;
-
-  // console.info("Starting motor spin...");
-  // await motor_controller.send_command({
-  //   message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-  //   timeout: Math.floor(1000 * cycles_per_millisecond),
-  //   pwm_value: +command_pwm,
-  // });
-
-  // await wait(1000);
-
-  console.info("Current calibration starting");
-
-  // Run a calibration instance.
-  let sample = await motor_controller.send_command_and_await_reply({
-    message: {
-      ...message_options,
-      take_snapshot: 1,
-    },
-    expected_messages: HISTORY_SIZE,
-    expected_code: MessageCode.READOUT,
-  });
-  
-  // Check all calibration data is complete.
-  if (sample.length !== HISTORY_SIZE) {
-    console.error("Calibration data incomplete", sample);
-    return;
-  }
+function run_current_calibration(sample) {
+  console.info("Calculating calibration...");
 
   // Test if we've had nominal VCC voltage throughout the calibration run.
   const all_nominal_vcc_voltage = sample.every(({nominal_vcc_voltage}) => nominal_vcc_voltage);
@@ -1463,22 +1401,20 @@ async function run_current_calibration(motor_controller, message_options) {
 
   const enabled_parameters = get_checked_parameters();
 
-  const min_speed = speed_units_to_rotations_per_millisecond(control_parameters?.min_emf_speed);
-
   // Test if the voltage was mostly 0.
   const count_idle = sample.filter(({u_drive_voltage, v_drive_voltage, w_drive_voltage, angular_speed}) => 
     Math.abs(u_drive_voltage) < 0.001 && 
     Math.abs(v_drive_voltage) < 0.001 && 
-    Math.abs(w_drive_voltage) < 0.001 &&
-    Math.abs(angular_speed) < min_speed
+    Math.abs(w_drive_voltage) < 0.001 
   ).length;
 
   // For all 0 voltages we calibrate the baseline offset of the currents.
   if (count_idle === sample.length) {
     console.info("All drive voltages are zero, calibrating current baseline offsets.");
-    const u_current_zero = sample.reduce((sum, {u_current}) => sum + u_current, 0) / sample.length + current_calibration?.u_current_zero;
-    const v_current_zero = sample.reduce((sum, {v_current}) => sum + v_current, 0) / sample.length + current_calibration?.v_current_zero;
-    const w_current_zero = sample.reduce((sum, {w_current}) => sum + w_current, 0) / sample.length + current_calibration?.w_current_zero; 
+    // Assuming the driver current_zero settings are 0.
+    const u_current_zero = sample.reduce((sum, {u_current}) => sum + u_current, 0) / sample.length;
+    const v_current_zero = sample.reduce((sum, {v_current}) => sum + v_current, 0) / sample.length;
+    const w_current_zero = sample.reduce((sum, {w_current}) => sum + w_current, 0) / sample.length; 
   
     return {
       sample,
@@ -1526,15 +1462,15 @@ async function run_current_calibration(motor_controller, message_options) {
 
   let parameters = {
     resistance: new Parameter({
-      value: current_calibration?.resistance ?? 0.01,
+      value: 0.01,
       max_learning_rate: 0.1,
     }),
     inductance: new Parameter({
-      value: current_calibration?.inductance ?? 0.00001, 
+      value: 0.00001, 
       max_learning_rate: 0.000_01,
     }),
     inductance_bias: new Parameter({
-      value: current_calibration?.inductance_bias ?? 0.0,
+      value: 0.0,
       max_learning_rate: 0.000_01,
     }),
     saliency_angle: new Parameter({
@@ -1542,7 +1478,7 @@ async function run_current_calibration(motor_controller, message_options) {
       max_learning_rate: Math.PI / 4,
     }),
     saturation_factor: new Parameter({
-      value: current_calibration?.saturation_factor ?? 0.0,
+      value: 0.0,
       max_learning_rate: 0.000_01,
     }),
     saturation_angle: new Parameter({
@@ -1550,7 +1486,7 @@ async function run_current_calibration(motor_controller, message_options) {
       max_learning_rate: Math.PI / 4,
     }),
     motor_constant: new Parameter({
-      value: current_calibration?.motor_constant ?? 0.0,
+      value: 0.0,
       max_learning_rate: 0.000_01,
     }),
   };
@@ -1920,24 +1856,12 @@ async function run_current_calibration(motor_controller, message_options) {
   return current_calibration_data;
 }
 
-async function run_current_calibration_by_code(message_code) {
-  if (!motor_controller) return;
-  const calibration_data = await run_current_calibration(
-    motor_controller, 
-    {
-      message_code,
-      pwm_value: current_calibration_pwm,
-      test_speed: current_calibration_test_speed,
-      test_duration: current_calibration_duration,
-      test_angle: current_calibration_angle,
-    }
-  );
-  update_current_calibration_data(calibration_data);
-  // set_readout_series(calibration_data.sample, active_port);
-}
 
 const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
+    ["Calculate calibration", async function(){
+      update_current_calibration_data(run_current_calibration(data));
+    }],
     ["Upload to Driver", async function(){
       if (!motor_controller) return;
       const current_calibration = {
@@ -2370,12 +2294,7 @@ function unsaved_changes(){
 const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
     ["Commit to Flash", async function(){
-      await motor_controller.send_command_and_await_reply({
-        message: {message_code: MessageCode.SAVE_SETTINGS_TO_FLASH},
-        expected_messages: 1,
-        expected_code: MessageCode.SETTINGS_SAVED_TO_FLASH,
-      });
-
+      await motor_controller.send_command({message_code: MessageCode.SAVE_SETTINGS_TO_FLASH});
       flash_status.value = `Settings saved to flash memory.`;
     }],
   ],
@@ -2389,6 +2308,11 @@ const flash_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` :
 ```js
 let unit_test_results = Mutable([]);
 
+// TODO: this needs redoing... we don't even have any unit tests.
+// But also we are dropping `send_command_and_await_reply`, to do the unit
+// test routine, we must first intercept "message" events from the motor controller
+// then concatenate them to get the test output (this way we can also get longer
+// test outputs).
 async function command_unit_test(test_code, subtitle){
   const expected = unit_test_expected[test_code];
 

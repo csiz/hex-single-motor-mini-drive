@@ -57,6 +57,11 @@ export class MotorController {
   }){
     this.motor_uri = motor_uri;
 
+    this.current_calibration = null;
+    this.control_parameters = null;
+
+    this.last_message = new Map();
+
     this.onmessage = onmessage;
     this.onerror = onerror;
     this.onstatus = onstatus;
@@ -68,20 +73,10 @@ export class MotorController {
     // Minimum time period for receiving messages to update the `receive_rate`.
     this.receive_rate_min_period = 0.050; // seconds
 
-    this.current_calibration = null;
-    this.control_parameters = null;
-    this.position_calibration = null;
-
-    this.awaiting_reply = new Map();
-    this.last_message = new Map();
-
     this.bytes_received = 0;
-    
     this.bytes_discarded = 0;
-    
     this.last_bytes_received = 0;
     this.last_received_time = Date.now();
-    
     this.receive_rate = 0.0;
 
     this.encoding_buffer = new ConsistentOverheadByteStuffing({max_message_size: MAX_MESSAGE_SIZE});
@@ -101,9 +96,9 @@ export class MotorController {
     }
   }
 
-  async when_opened(){
-    await this.load_current_calibration();
-    await this.load_control_parameters();
+  when_opened(){
+    this.load_current_calibration();
+    this.load_control_parameters();
     this.onready(this);
     console.info(`Motor controller is ready: ${this.motor_uri}`);
   }
@@ -116,10 +111,10 @@ export class MotorController {
   start_usb_connection(port_index){
     this.connection_worker = new Worker(new URL("./usb_connection_worker.js", import.meta.url), {type: "module"});
 
-    this.connection_worker.addEventListener("message", async (event) => {
+    this.connection_worker.addEventListener("message", (event) => {
       const {type} = event.data;
 
-      if (type === "opened") await this.when_opened();
+      if (type === "opened") this.when_opened();
       else if (type === "closed") this.when_closed();
       else if (type === "received") {
 
@@ -210,15 +205,13 @@ export class MotorController {
     // Remember for the next message so we can increment the message index.
     this.last_message.set(message_code, message);
 
-    // Intercept awaited messages and resolve the reply promise.
-    if (this.awaiting_reply.has(message_code)) {
-      const {resolve, data, expected_messages} = this.awaiting_reply.get(message_code);
-      data.push(message);
-      if (data.length === expected_messages) {
-        resolve(data);
-      }
+    // Intercept motor parameters and forward all other messages.
+    if (message_code == MessageCode.CURRENT_CALIBRATION){
+      this.current_calibration = message;
+    } else if (message_code == MessageCode.CONTROL_PARAMETERS) {
+      this.control_parameters = message;
     } else {
-      // Otherwise stream all replies through the `onmessage` callback.
+      // Stream all replies through the `onmessage` callback.
       this.onmessage(message);
     }
   }
@@ -232,8 +225,8 @@ export class MotorController {
   }
 
   /* Send a command to the motor driver. */
-  async send_command(message) {
-    console.log("Sending message:", message);
+  send_command(message) {
+    console.debug("Sending message:", message);
     // Send messages or message codes.
     if (typeof message === "number") {
       message = {message_code: message};
@@ -256,134 +249,38 @@ export class MotorController {
     }
   }
 
-  /* Send a command and capture the reply messages. */
-  async send_command_and_await_reply({
-    message,
-    expected_code = MessageCode.READOUT, 
-    expected_messages = 1, 
-    response_timeout = 500,
-  }) {
-    if (expected_messages <= 0) {
-      throw new Error("Must expect positive number of messages.");
-    }
 
-    // Setup the reply promise and message code indexed reply queue.
-
-    // Don't allow repeated messages with the same reply. User needs to await the first result or 
-    // timeout before sending another command with the same expected reply code to avoid confusion.
-    if (this.awaiting_reply.has(expected_code)) {
-      throw new Error(`Already awaiting reply for message code: ${expected_code}`);
-    }
-
-    // Reset the message history so we start from index 0.
-    this.last_message.delete(expected_code);
-
-    const { promise, resolve, reject } = Promise.withResolvers();
-
-    const data = [];
-
-    this.awaiting_reply.set(expected_code, {resolve, reject, data, expected_messages});
-
-    // Reject after a short timeout if we don't get a reply.
-    const timeout_id = setTimeout(() => {reject(new Error("Timeout"));}, response_timeout);
-    
-    // Send the command, return the data and do any cleanup necessary.
-    try {
-      // Wait for the command to be sent before waiting for the response.
-      await this.send_command(message);
-      
-      // Wait for the reading loop to resolve the promise with the expected data.
-      const data = await promise;
-      
-      // Return the promised data.
-      return expected_messages === 1 ? data[0] : data;
-    } finally {
-      // Clear the timeout and remove the queued reply.
-      clearTimeout(timeout_id);
-      // Remove the reply from the queue.
-      this.awaiting_reply.delete(expected_code);
-    }
+  load_current_calibration(){
+    this.send_command(MessageCode.GET_CURRENT_CALIBRATION);
   }
 
-
-  async load_current_calibration(){
-    try {
-      this.current_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.GET_CURRENT_CALIBRATION,
-        expected_code: MessageCode.CURRENT_CALIBRATION, 
-        expected_messages: 1,
-      });
-    } catch (error) {
-      // Log then ignore the error.
-      console.error("Error loading current calibration:", error);
-    }
-  }
-
-  async upload_current_calibration(current_calibration){
+  upload_current_calibration(current_calibration){
     if(!current_calibration) return;
 
-    try {
-      this.current_calibration = await this.send_command_and_await_reply({
-        message: {...make_current_calibration(current_calibration), message_code: MessageCode.SET_CURRENT_CALIBRATION},
-        expected_code: MessageCode.CURRENT_CALIBRATION,
-        expected_messages: 1,
-      });
-    } catch (error) {
-      console.error("Error uploading current calibration:", error);
-      throw error;
-    }
+    this.send_command({
+      message_code: MessageCode.SET_CURRENT_CALIBRATION,
+      ...make_current_calibration(current_calibration),
+    });
   }
 
-  async reset_current_calibration(){
-    try {
-      this.current_calibration = await this.send_command_and_await_reply({
-        message: MessageCode.RESET_CURRENT_CALIBRATION,
-        expected_code: MessageCode.CURRENT_CALIBRATION,
-        expected_messages: 1,
-      });
-    } catch (error) {
-      console.error("Error resetting current calibration:", error);
-      throw error;
-    }
+  reset_current_calibration(){
+    this.send_command(MessageCode.RESET_CURRENT_CALIBRATION);
   }
 
-  async load_control_parameters(){
-    try {
-      this.control_parameters = await this.send_command_and_await_reply({
-        message: MessageCode.GET_CONTROL_PARAMETERS,
-        expected_code: MessageCode.CONTROL_PARAMETERS,
-        expected_messages: 1
-      });
-    } catch (error) {
-      console.error("Error loading control parameters:", error);
-    }
+  load_control_parameters(){
+    this.send_command(MessageCode.GET_CONTROL_PARAMETERS);
   }
 
-  async upload_control_parameters(control_parameters){
+  upload_control_parameters(control_parameters){
     if(!control_parameters) return;
 
-    try {
-      this.control_parameters = await this.send_command_and_await_reply({
-        message: {message_code: MessageCode.SET_CONTROL_PARAMETERS, ...control_parameters},
-        expected_code: MessageCode.CONTROL_PARAMETERS,
-        expected_messages: 1
-      });
-    } catch (error) {
-      console.error("Error uploading control parameters:", error);
-      throw error;
-    }
+    this.send_command({
+      message_code: MessageCode.SET_CONTROL_PARAMETERS,
+      ...control_parameters,
+    });
   }
 
-  async reset_control_parameters(){
-    try {
-      this.control_parameters = await this.send_command_and_await_reply({
-        message: MessageCode.RESET_CONTROL_PARAMETERS,
-        expected_code: MessageCode.CONTROL_PARAMETERS,
-        expected_messages: 1
-      });
-    } catch (error) {
-      console.error("Error resetting control parameters:", error);
-      throw error;
-    }
+  reset_control_parameters(){
+    this.send_command(MessageCode.RESET_CONTROL_PARAMETERS);
   }
 }
