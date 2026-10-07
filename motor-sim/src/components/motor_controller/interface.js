@@ -64,8 +64,7 @@ export function parse_readout(bare_readout, previous_readout) {
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
   const emf_angular_speed_stdev = speed_units_to_rotations_per_millisecond(Math.sqrt(bare_readout.emf_angular_speed_variance));
 
-  const saliency_angle_offset = angle_units_to_radians(bare_readout.saliency_angle_offset);
-  const saliency_angle = normalize_radians(2*predicted_angle + saliency_angle_offset);
+  const saliency_angle = normalize_radians(2*predicted_angle + bare_readout.saliency_angle_offset);
 
   const [u_current, v_current, w_current] = abc_transform(direct_current, quadrature_current, 0);
 
@@ -168,6 +167,26 @@ export function parse_readout(bare_readout, previous_readout) {
 
   const steady_state_drive_current = drive_voltage_magnitude / resistance;
 
+  const temperature = calculate_temperature(bare_readout.temperature);
+
+
+  const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
+  const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
+  const current_angle = normalize_radians(predicted_angle + current_angle_offset);
+
+
+  const total_power = bare_readout.total_power;
+  const total_power_average = bare_readout.total_power_average;
+  // const resistive_power = bare_readout.resistive_power;
+  const resistive_power_average = bare_readout.resistive_power_average;
+  // const emf_power = bare_readout.emf_power;
+
+  const rotations = bare_readout.rotations;
+  
+  const active_pwm = bare_readout.active_pwm;
+
+  const battery_current = total_power / vcc_voltage;
+
 
   // Time indexing
   // -------------
@@ -260,7 +279,6 @@ export function parse_readout(bare_readout, previous_readout) {
     direct_emf_voltage,
     quadrature_emf_voltage,
     saliency_angle,
-    saliency_angle_offset,
     web_direct_emf_voltage, web_quadrature_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 
@@ -269,57 +287,8 @@ export function parse_readout(bare_readout, previous_readout) {
     web_emf_power,
     web_resistive_power,
     web_inductive_power,
-  };
-}
 
-
-
-export function parse_full_readout(bare_full_readout, previous_readout){
-  const readout = parse_readout(bare_full_readout, previous_readout);
-
-  if (!readout) return null;
-
-  const main_loop_rate = bare_full_readout.main_loop_rate;
-  const adc_update_rate = bare_full_readout.adc_update_rate;
-  const temperature = calculate_temperature(bare_full_readout.temperature);
-  const live_max_pwm = bare_full_readout.live_max_pwm;
-
-
-  const current_angle_offset = angle_units_to_radians(bare_full_readout.current_angle_offset);
-  const current_magnitude = bare_full_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
-  const current_angle = normalize_radians(readout.predicted_angle + current_angle_offset);
-
-
-  const total_power = bare_full_readout.total_power;
-  const total_power_average = bare_full_readout.total_power_average;
-  const resistive_power = bare_full_readout.resistive_power;
-  const resistive_power_average = bare_full_readout.resistive_power_average;
-  const emf_power = bare_full_readout.emf_power;
-
-  const rotations = bare_full_readout.rotations;
-  const lead_angle = angle_units_to_radians(bare_full_readout.lead_angle);
-  const active_pwm = bare_full_readout.active_pwm;
-  const target = bare_full_readout.target;
-  const seek_integral = bare_full_readout.seek_integral;
-  
-  const u_current_zero = bare_full_readout.u_current_zero / CURRENT_UNITS_PER_AMP;
-  const v_current_zero = bare_full_readout.v_current_zero / CURRENT_UNITS_PER_AMP;
-  const w_current_zero = bare_full_readout.w_current_zero / CURRENT_UNITS_PER_AMP;
-  const resistance = bare_full_readout.resistance;
-  const inductance = bare_full_readout.inductance;
-  const inductance_bias = bare_full_readout.inductance_bias;
-  const motor_constant = bare_full_readout.motor_constant;
-
-
-  const battery_current = total_power / readout.vcc_voltage;
-
-  return {
-    ...bare_full_readout,
-    ...readout,
-    main_loop_rate,
-    adc_update_rate,
     temperature,
-    live_max_pwm,
 
     current_angle, current_magnitude,
     current_angle_offset,
@@ -327,26 +296,12 @@ export function parse_full_readout(bare_full_readout, previous_readout){
     battery_current,
     total_power,
     total_power_average,
-    resistive_power,
+    // resistive_power,
     resistive_power_average,
-    emf_power,
-
+    // emf_power,
     rotations,
-    
-    lead_angle,
     active_pwm,
-    target,
-    seek_integral,
-    
-    u_current_zero,
-    v_current_zero,
-    w_current_zero,
-    resistance,
-    inductance,
-    inductance_bias,
-    motor_constant,
   };
-
 }
 
 
@@ -368,24 +323,34 @@ export function parse_unit_test_output(bare_unit_test) {
 export function parse_current_calibration(bare_calibration) {
   return {
     ...bare_calibration,
+    main_loop_rate: bare_calibration.main_loop_rate,
+    adc_update_rate: bare_calibration.adc_update_rate,
+    live_max_pwm: bare_calibration.live_max_pwm,
+    lead_angle: angle_units_to_radians(bare_calibration.lead_angle),
     u_current_zero: bare_calibration.u_current_zero / CURRENT_UNITS_PER_AMP,
     v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
     w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
     resistance: bare_calibration.resistance,
     inductance: bare_calibration.inductance,
     inductance_bias: bare_calibration.inductance_bias,
+    saliency_angle_offset: angle_units_to_radians(bare_calibration.saliency_angle_offset),
     motor_constant: bare_calibration.motor_constant,
   };
 } 
 
 export function make_current_calibration(current_calibration){
   return {
+    main_loop_rate: current_calibration.main_loop_rate,
+    adc_update_rate: current_calibration.adc_update_rate,
+    live_max_pwm: current_calibration.live_max_pwm,
+    lead_angle: radians_to_angle_units(current_calibration.lead_angle),
     u_current_zero: current_calibration.u_current_zero * CURRENT_UNITS_PER_AMP,
     v_current_zero: current_calibration.v_current_zero * CURRENT_UNITS_PER_AMP,
     w_current_zero: current_calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
     resistance: current_calibration.resistance,
     inductance: current_calibration.inductance,
     inductance_bias: current_calibration.inductance_bias,
+    saliency_angle_offset: radians_to_angle_units(current_calibration.saliency_angle_offset),
     motor_constant: current_calibration.motor_constant,
   };
 }

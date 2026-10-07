@@ -12,7 +12,7 @@
 
 
 // Store the latest readout.
-hex_mini_drive::FullReadout latest_readout;
+hex_mini_drive::Readout latest_readout;
 
 // Keep track of how many readouts we see.
 uint16_t last_readout_number = 0;
@@ -156,9 +156,9 @@ void handle_message(hex_mini_drive::Message const& message) {
       // No command received; ignore it.
       return;
 
-    case STREAM_FULL_READOUTS: {
+    case STREAM_READOUTS: {
       // Continuously stream data if duration > 0.
-      stream_state = std::get<StreamFullReadouts>(message.message_data).stream_state;
+      stream_state = std::get<StreamReadouts>(message.message_data).stream_state;
       // Also stop the motor if we stop the stream.
       if (not stream_state) break_motor();
       return;
@@ -265,14 +265,12 @@ void handle_message(hex_mini_drive::Message const& message) {
 
     case SET_CURRENT_CALIBRATION:
       current_calibration = std::get<CurrentCalibration>(message.message_data);
-      reset_calibration_variables();
       reply_current_calibration = true;
       return;
         
     case RESET_CURRENT_CALIBRATION:
       // Reset the current factors to the default values.
       current_calibration = default_current_calibration;
-      reset_calibration_variables();
       reply_current_calibration = true;
       return;
 
@@ -316,7 +314,6 @@ void handle_message(hex_mini_drive::Message const& message) {
     case CURRENT_CALIBRATION:
     case CONTROL_PARAMETERS:
     case READOUT:
-    case FULL_READOUT:
     case UNIT_TEST_OUTPUT:
       return;
   }
@@ -337,30 +334,20 @@ void serialize_message(hex_mini_drive::Message const& message) {
   if (out_buffer_size) encoding_buffer.encode_message(out_buffer, out_buffer_size);
 }
 
-void queue_response(hex_mini_drive::FullReadout const& readout) {
+void queue_response() {
   // Wait until the previous message has been sent or buffers reset before encoding a new message.
   if (encoding_buffer.is_message_encoded()) return;
 
   // Queue the readout history to the send buffer.
-  if(readout_history_queue.read_available() > 0){
+  if(stream_state and readout_history_queue.read_available() > 0){
     serialize_message(hex_mini_drive::Message{
       .message_code = hex_mini_drive::MessageCode::READOUT,
       .message_data = readout_history_queue.peek()
     });
 
+    // TODO: handle the read marking carefully, see if we need the data in the main loop.
     readout_history_queue.mark_read();
 
-    return;
-  }
-
-  // Stream readouts but only once per readout number.
-  if(stream_state and stream_last_sent != readout.readout_number){
-    serialize_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::FULL_READOUT,
-      .message_data = readout
-    });
-
-    stream_last_sent = readout.readout_number;
     return;
   }
 
@@ -460,9 +447,9 @@ void comms_update() {
 void app_tick() {
   main_loop_number += 1;
 
-  full_readout_queue.read_if_available(latest_readout);
+  readout_history_queue.read_if_available(latest_readout);
 
-  auto & readout = latest_readout;
+  auto const& readout = latest_readout;
 
   // Limits
   // ------
@@ -486,9 +473,7 @@ void app_tick() {
 
   const float pwm_penalty = (0.1f - 1.f * pwm_too_high) * readouts_since_last_tick;
 
-  set_live_max_pwm(
-    clip_to(0, pwm_max, readout.live_max_pwm + pwm_penalty)
-  );
+  current_calibration.live_max_pwm = clip_to(0, pwm_max, current_calibration.live_max_pwm + pwm_penalty);
 
 
   // Timing
@@ -524,7 +509,7 @@ void app_tick() {
   // The voltage magnitude is always positive, also use the positive angular speed.
   const float abs_angular_speed = readout.angular_speed > 0 ? readout.angular_speed : -readout.angular_speed;
 
-  const float predicted_emf_voltage = abs_angular_speed * readout.motor_constant * emf_motor_constant_conversion;
+  const float predicted_emf_voltage = abs_angular_speed * current_calibration.motor_constant * emf_motor_constant_conversion;
 
   // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
   const bool compute_motor_constant = readout.angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
@@ -532,7 +517,7 @@ void app_tick() {
   // Get the error (gradient) for the motor constant observer.
   const float motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
 
-  const float motor_constant = readout.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
+  current_calibration.motor_constant = current_calibration.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
 
   
   // Calibration calculations
@@ -576,30 +561,22 @@ void app_tick() {
   // Write all values
   // ----------------
   
-  readout.main_loop_rate = main_loop_rate;
-  readout.adc_update_rate = adc_update_rate;
+  current_calibration.main_loop_rate = main_loop_rate;
+  current_calibration.adc_update_rate = adc_update_rate;
   
-  // TODO: make sure these are updated in the interrupts.
-  // readout.resistance = current_calibration.resistance;
-  // readout.inductance_inverse = current_calibration.inductance_inverse;
-  // readout.inductance_bias = current_calibration.inductance_bias;
-  // readout.inductance_bias_angle = current_calibration.inductance_bias_angle;
-  // readout.saturation_angle = current_calibration.saturation_angle;
-  // readout.saturation_factor = current_calibration.saturation_factor;
-  readout.motor_constant = motor_constant;
+
 
   // Adjust direction
   // ----------------
 
-  readout.angle = control_parameters.motor_direction * readout.angle;
-  readout.angular_speed = control_parameters.motor_direction * readout.angular_speed;
-  readout.rotations = control_parameters.motor_direction * readout.rotations;
+  // TODO: properly adjust direction; we might wanna swap V and W instead, so everything is consistent. (Any 2 swaps changes direction.)
 
   // Comms update
   // ------------
 
   // Queue the state readouts on the USB buffer.
-  queue_response(readout);
+  queue_response();
+  
   // Send and receive over the USB buffer.
   comms_update();
 

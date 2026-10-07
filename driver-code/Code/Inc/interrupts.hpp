@@ -35,11 +35,6 @@ void set_angle_offset(int32_t angle_offset);
 // Offset the rotations counter to home the motor.
 void set_rotations_offset(int32_t rotations_offset);
 
-// Set the live maximum PWM value for the motor driver.
-void set_live_max_pwm(float live_max_pwm);
-
-// Reset the active calibration variables from the stored current calibration snapshot.
-void reset_calibration_variables();
 
 // Control data
 // ------------
@@ -52,9 +47,6 @@ extern hex_mini_drive::ControlParameters control_parameters;
 
 // Medium length data recording, taken continuously from the interrupt handler.
 extern CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue;
-
-// 2 page buffer for full readouts.
-extern CircularQueue<hex_mini_drive::FullReadout, 2> full_readout_queue;
 
 // Command queue, the interrupt loop will switch to executing the latest set of commands from this queue.
 // ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next

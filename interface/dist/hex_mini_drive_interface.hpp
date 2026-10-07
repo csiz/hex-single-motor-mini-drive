@@ -111,7 +111,7 @@ static inline float read_float32(uint8_t const* buffer) {
 // Constants and Definitions
 // -------------------------
 
-constexpr uint32_t HISTORY_SIZE = 240;
+constexpr uint32_t HISTORY_SIZE = 180;
 
 constexpr uint32_t MAX_MESSAGE_SIZE = 256;
 
@@ -134,8 +134,6 @@ constexpr uint8_t ENABLE_V_OUTPUT = 2;
 constexpr uint8_t ENABLE_W_OUTPUT = 4;
 
 constexpr uint8_t ENABLE_Z_OUTPUT = 8;
-
-constexpr uint8_t ENABLE_RECORDING = 16;
 
 // Output data from unit test.
 using UnitTestOutput = std::array<uint8_t, 248>;
@@ -212,8 +210,22 @@ struct Readout {
   float emf_voltage_angular_speed;
   // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
   float emf_angular_speed_variance;
-  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
-  int32_t saliency_angle_offset;
+  // Instantaneous temperature readout (ADC value); from the temperature sensor.
+  float temperature;
+  // Angle of the current vector relative to the rotor angle.
+  int32_t current_angle_offset;
+  // Magnitude of the current vector.
+  float current_magnitude;
+  // Estimated near-instantaneous total power draw of the motor.
+  float total_power;
+  // Long duration average of the total power; used to limit the maximum power draw.
+  float total_power_average;
+  // Long duration average of the resistive power; used to limit the maximum resistive power.
+  float resistive_power_average;
+  // Integrated number of EMF deduced rotor angle rotations since startup.
+  int32_t rotations;
+  // Active PWM value for the motor outputs, value set by the advanced control algorithms.
+  float active_pwm;
 };
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
@@ -262,7 +274,21 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.emf_angular_speed_variance);;
   offset += 4;
-  write_int32(buffer + offset, value.saliency_angle_offset);;
+  write_float32(buffer + offset, value.temperature);;
+  offset += 4;
+  write_int32(buffer + offset, value.current_angle_offset);;
+  offset += 4;
+  write_float32(buffer + offset, value.current_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.total_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.total_power_average);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistive_power_average);;
+  offset += 4;
+  write_int32(buffer + offset, value.rotations);;
+  offset += 4;
+  write_float32(buffer + offset, value.active_pwm);;
   offset += 4;
 }
 static inline Readout read_Readout(uint8_t const* buffer) {
@@ -314,147 +340,7 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.emf_angular_speed_variance = read_float32(buffer + offset);
   offset += 4;
-  result.saliency_angle_offset = read_int32(buffer + offset);
-  offset += 4;
-  return result;
-}
-// Continuously send full readouts of the motor driver internal state.
-struct StreamFullReadouts {
-  // Number of messages to send; the stream command should be repeated to keep sending messages.
-  uint32_t stream_state;
-};
-
-static inline void write_StreamFullReadouts(uint8_t * buffer, StreamFullReadouts const& value) {
-  size_t offset = 0;
-  write_uint32(buffer + offset, value.stream_state);;
-  offset += 4;
-}
-static inline StreamFullReadouts read_StreamFullReadouts(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  StreamFullReadouts result;
-  
-  result.stream_state = read_uint32(buffer + offset);
-  offset += 4;
-  return result;
-}
-// Complete readout of the motor driver internal state for exploration and data stream.
-struct FullReadout : Readout {
-  // Tick rate; the number of main loop (communication and commands) updates per second.
-  float main_loop_rate;
-  // ADC update rate; the number of ADC readouts per second. This is usually higher 
-  // than the main loop rate because we read the ADCs multiple times per main loop.
-  float adc_update_rate;
-  // Instantaneous temperature readout (ADC value); from the temperature sensor.
-  float temperature;
-  // Current maximum PWM allowed by the driver.
-  float live_max_pwm;
-  // Angle of the current vector relative to the rotor angle.
-  int32_t current_angle_offset;
-  // Magnitude of the current vector.
-  float current_magnitude;
-  // Total power used/given to VCC line (the battery usually).
-  float total_power;
-  // Long duration average of the total power; used to limit the maximum power draw.
-  float total_power_average;
-  // Resistive power; the power dissipated in the phase resistances.
-  float resistive_power;
-  // Long duration average of the resistive power; used to limit the maximum resistive power.
-  float resistive_power_average;
-  // EMF power; the power used to drive the motor (which is reflected to the 
-  // inductors as back EMF).
-  float emf_power;
-  // Integrated number of EMF deduced rotor angle rotations since startup.
-  int32_t rotations;
-  // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
-  // motor efficiently.
-  int32_t lead_angle;
-  // Active PWM value for the motor outputs, value set by the advanced control algorithms.
-  float active_pwm;
-  // Target for the advanced control algorithms.
-  float target;
-  // Value of the integral term for the seek position algorithm.
-  float seek_integral;
-  // Estimated zero-current offset for the U phase.
-  float u_current_zero;
-  // Estimated zero-current offset for the V phase.
-  float v_current_zero;
-  // Estimated zero-current offset for the W phase.
-  float w_current_zero;
-  // Estimated average resistance of the phase coils.
-  float resistance;
-  // Estimated baseline inductance of the motor coils.
-  float inductance;
-  // Estimated bias of the inductance due to magnetic saliency.
-  float inductance_bias;
-  // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
-  float motor_constant;
-};
-
-static inline void write_FullReadout(uint8_t * buffer, FullReadout const& value) {
-  size_t offset = 0;
-  write_Readout(buffer + offset, value);;
-  offset += 80;
-  write_float32(buffer + offset, value.main_loop_rate);;
-  offset += 4;
-  write_float32(buffer + offset, value.adc_update_rate);;
-  offset += 4;
-  write_float32(buffer + offset, value.temperature);;
-  offset += 4;
-  write_float32(buffer + offset, value.live_max_pwm);;
-  offset += 4;
-  write_int32(buffer + offset, value.current_angle_offset);;
-  offset += 4;
-  write_float32(buffer + offset, value.current_magnitude);;
-  offset += 4;
-  write_float32(buffer + offset, value.total_power);;
-  offset += 4;
-  write_float32(buffer + offset, value.total_power_average);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistive_power);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistive_power_average);;
-  offset += 4;
-  write_float32(buffer + offset, value.emf_power);;
-  offset += 4;
-  write_int32(buffer + offset, value.rotations);;
-  offset += 4;
-  write_int32(buffer + offset, value.lead_angle);;
-  offset += 4;
-  write_float32(buffer + offset, value.active_pwm);;
-  offset += 4;
-  write_float32(buffer + offset, value.target);;
-  offset += 4;
-  write_float32(buffer + offset, value.seek_integral);;
-  offset += 4;
-  write_float32(buffer + offset, value.u_current_zero);;
-  offset += 4;
-  write_float32(buffer + offset, value.v_current_zero);;
-  offset += 4;
-  write_float32(buffer + offset, value.w_current_zero);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_bias);;
-  offset += 4;
-  write_float32(buffer + offset, value.motor_constant);;
-  offset += 4;
-}
-static inline FullReadout read_FullReadout(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  FullReadout result {read_Readout(buffer + offset)};
-  offset += 80;
-  
-  result.main_loop_rate = read_float32(buffer + offset);
-  offset += 4;
-  result.adc_update_rate = read_float32(buffer + offset);
-  offset += 4;
   result.temperature = read_float32(buffer + offset);
-  offset += 4;
-  result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
   result.current_angle_offset = read_int32(buffer + offset);
   offset += 4;
@@ -464,35 +350,31 @@ static inline FullReadout read_FullReadout(uint8_t const* buffer) {
   offset += 4;
   result.total_power_average = read_float32(buffer + offset);
   offset += 4;
-  result.resistive_power = read_float32(buffer + offset);
-  offset += 4;
   result.resistive_power_average = read_float32(buffer + offset);
-  offset += 4;
-  result.emf_power = read_float32(buffer + offset);
   offset += 4;
   result.rotations = read_int32(buffer + offset);
   offset += 4;
-  result.lead_angle = read_int32(buffer + offset);
-  offset += 4;
   result.active_pwm = read_float32(buffer + offset);
   offset += 4;
-  result.target = read_float32(buffer + offset);
+  return result;
+}
+// Continuously send readouts of the motor driver internal state.
+struct StreamReadouts {
+  // Number of messages to send; the stream command should be repeated to keep sending messages.
+  uint32_t stream_state;
+};
+
+static inline void write_StreamReadouts(uint8_t * buffer, StreamReadouts const& value) {
+  size_t offset = 0;
+  write_uint32(buffer + offset, value.stream_state);;
   offset += 4;
-  result.seek_integral = read_float32(buffer + offset);
-  offset += 4;
-  result.u_current_zero = read_float32(buffer + offset);
-  offset += 4;
-  result.v_current_zero = read_float32(buffer + offset);
-  offset += 4;
-  result.w_current_zero = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_bias = read_float32(buffer + offset);
-  offset += 4;
-  result.motor_constant = read_float32(buffer + offset);
+}
+static inline StreamReadouts read_StreamReadouts(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  StreamReadouts result;
+  
+  result.stream_state = read_uint32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -716,8 +598,20 @@ static inline SetStateSeekAngle read_SetStateSeekAngle(uint8_t const* buffer) {
   offset += 4;
   return result;
 }
+// TODO: rename this to LiveParameters or something like that, these ones change ever
+// so often and they affect the readout processing.
 // Estimate resistance and inductance values for the motor coils.
 struct CurrentCalibration {
+  // Tick rate; the number of main loop (communication and commands) updates per second.
+  float main_loop_rate;
+  // ADC update rate; the number of ADC readouts per second. This is usually higher 
+  // than the main loop rate because we read the ADCs multiple times per main loop.
+  float adc_update_rate;
+  // Current maximum PWM allowed by the driver.
+  float live_max_pwm;
+  // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
+  // motor efficiently.
+  int32_t lead_angle;
   // Estimated zero-current offset for the U phase.
   float u_current_zero;
   // Estimated zero-current offset for the V phase.
@@ -731,12 +625,22 @@ struct CurrentCalibration {
   float inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   float inductance_bias;
+  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
+  int32_t saliency_angle_offset;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
 };
 
 static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration const& value) {
   size_t offset = 0;
+  write_float32(buffer + offset, value.main_loop_rate);;
+  offset += 4;
+  write_float32(buffer + offset, value.adc_update_rate);;
+  offset += 4;
+  write_float32(buffer + offset, value.live_max_pwm);;
+  offset += 4;
+  write_int32(buffer + offset, value.lead_angle);;
+  offset += 4;
   write_float32(buffer + offset, value.u_current_zero);;
   offset += 4;
   write_float32(buffer + offset, value.v_current_zero);;
@@ -749,6 +653,8 @@ static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration
   offset += 4;
   write_float32(buffer + offset, value.inductance_bias);;
   offset += 4;
+  write_int32(buffer + offset, value.saliency_angle_offset);;
+  offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
 }
@@ -757,6 +663,14 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   
   CurrentCalibration result;
   
+  result.main_loop_rate = read_float32(buffer + offset);
+  offset += 4;
+  result.adc_update_rate = read_float32(buffer + offset);
+  offset += 4;
+  result.live_max_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.lead_angle = read_int32(buffer + offset);
+  offset += 4;
   result.u_current_zero = read_float32(buffer + offset);
   offset += 4;
   result.v_current_zero = read_float32(buffer + offset);
@@ -768,6 +682,8 @@ static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) 
   result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_bias = read_float32(buffer + offset);
+  offset += 4;
+  result.saliency_angle_offset = read_int32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -1110,8 +1026,7 @@ static inline SetRotations read_SetRotations(uint8_t const* buffer) {
 enum MessageCode : uint16_t {
   NULL_MESSAGE_CODE = 0,
   READOUT = 8224,
-  STREAM_FULL_READOUTS = 8225,
-  FULL_READOUT = 8227,
+  STREAM_READOUTS = 8225,
   SET_STATE_OFF = 8240,
   SET_STATE_FREEWHEEL = 8241,
   SET_DRIVE_STATE = 8242,
@@ -1143,8 +1058,7 @@ struct Message {
   
   std::variant<
     Readout,
-    StreamFullReadouts,
-    FullReadout,
+    StreamReadouts,
     DriveState,
     DriveSchedule,
     SetStateDriveTorque,
@@ -1164,9 +1078,8 @@ struct Message {
 constexpr size_t message_size(MessageCode code) {
   switch (code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
-    case MessageCode::READOUT: return 82;
-    case MessageCode::STREAM_FULL_READOUTS: return 6;
-    case MessageCode::FULL_READOUT: return 174;
+    case MessageCode::READOUT: return 110;
+    case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
     case MessageCode::SET_DRIVE_STATE: return 18;
@@ -1177,9 +1090,9 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
     case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: return 14;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CURRENT_CALIBRATION: return 30;
+    case MessageCode::CURRENT_CALIBRATION: return 50;
     case MessageCode::GET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::SET_CURRENT_CALIBRATION: return 30;
+    case MessageCode::SET_CURRENT_CALIBRATION: return 50;
     case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 170;
     case MessageCode::SET_CONTROL_PARAMETERS: return 170;
@@ -1204,21 +1117,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 80) return 0;
+      if (max_size < 2 + 108) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 82;
+      return 110;
     }
-    case MessageCode::STREAM_FULL_READOUTS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_FULL_READOUTS));
+    case MessageCode::STREAM_READOUTS: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
       if (max_size < 2 + 4) return 0;
-      write_StreamFullReadouts(buffer + 2, std::get<StreamFullReadouts>(message.message_data));
+      write_StreamReadouts(buffer + 2, std::get<StreamReadouts>(message.message_data));
       return 6;
-    }
-    case MessageCode::FULL_READOUT: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::FULL_READOUT));
-      if (max_size < 2 + 172) return 0;
-      write_FullReadout(buffer + 2, std::get<FullReadout>(message.message_data));
-      return 174;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1278,9 +1185,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CURRENT_CALIBRATION));
-      if (max_size < 2 + 28) return 0;
+      if (max_size < 2 + 48) return 0;
       write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 30;
+      return 50;
     }
     case MessageCode::GET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CURRENT_CALIBRATION));
@@ -1288,9 +1195,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CURRENT_CALIBRATION));
-      if (max_size < 2 + 28) return 0;
+      if (max_size < 2 + 48) return 0;
       write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 30;
+      return 50;
     }
     case MessageCode::RESET_CURRENT_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CURRENT_CALIBRATION));
@@ -1360,18 +1267,13 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 80) return false;
+      if (size != 2 + 108) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
-    case MessageCode::STREAM_FULL_READOUTS: {
+    case MessageCode::STREAM_READOUTS: {
       if (size != 2 + 4) return false;
-      message.message_data = read_StreamFullReadouts(buffer + 2);
-      return true;
-    }
-    case MessageCode::FULL_READOUT: {
-      if (size != 2 + 172) return false;
-      message.message_data = read_FullReadout(buffer + 2);
+      message.message_data = read_StreamReadouts(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_OFF: {
@@ -1425,7 +1327,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CURRENT_CALIBRATION: {
-      if (size != 2 + 28) return false;
+      if (size != 2 + 48) return false;
       message.message_data = read_CurrentCalibration(buffer + 2);
       return true;
     }
@@ -1435,7 +1337,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_CURRENT_CALIBRATION: {
-      if (size != 2 + 28) return false;
+      if (size != 2 + 48) return false;
       message.message_data = read_CurrentCalibration(buffer + 2);
       return true;
     }

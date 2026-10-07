@@ -46,9 +46,6 @@
 // Medium length data recording, taken continuously from the interrupt handler.
 CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
 
-// 2 page buffer for full readouts.
-CircularQueue<hex_mini_drive::FullReadout, 2> full_readout_queue = {};
-
 // Command queue, the interrupt loop will switch to executing the latest set of commands from this queue.
 // ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
 // schedule while the first is executing, but also we will have 1 more space to write an emergency break
@@ -69,16 +66,7 @@ hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 // --------------------
 
 // Electrical and position state
-hex_mini_drive::FullReadout readout = {
-    .live_max_pwm = pwm_max,
-    .u_current_zero = current_calibration.u_current_zero,
-    .v_current_zero = current_calibration.v_current_zero,
-    .w_current_zero = current_calibration.w_current_zero,
-    .resistance = current_calibration.resistance,
-    .inductance = current_calibration.inductance,
-    .inductance_bias = current_calibration.inductance_bias,
-};
-
+hex_mini_drive::Readout readout = {};
 
 // Angle offsetting from the main loop or via commands; it will not influence speed.
 volatile int32_t external_angle_offset = 0;
@@ -86,10 +74,6 @@ volatile int32_t external_angle_offset = 0;
 // Also offset the current rotations counter.
 volatile int32_t external_rotations_offset = 0;
 
-// Compute the max pwm in the main loop to save cycles in the tight loop.
-volatile float live_max_pwm = pwm_max;
-
-volatile bool reset_calibration_variables_flag = false;
 
 // Additional state
 // ----------------
@@ -119,16 +103,6 @@ void set_angle_offset(int32_t angle_offset) {
 
 void set_rotations_offset(int32_t rotations_offset) {
     external_rotations_offset = rotations_offset;
-}
-
-// TODO: need to implement this better
-void set_live_max_pwm(float pwm) {
-    live_max_pwm = pwm;
-}
-
-// TODO: also this one, we need to move calibration to the main loop, so we don't need it here.
-void reset_calibration_variables() {
-    reset_calibration_variables_flag = true;
 }
 
 // Critical functions!! 23KHz PWM cycle
@@ -244,9 +218,9 @@ void ADC1_2_IRQHandler(void){
     // Note that the reference voltage is only connected to the current sense amplifier, not the
     // microcontroller. The ADC reference voltage is 3.3V.
     const ThreePhase currents{
-        -static_cast<float>(adc_readings.u_readout - adc_readings.ref_readout) * adc_to_current_units - readout.u_current_zero,
-        -static_cast<float>(adc_readings.v_readout - adc_readings.ref_readout) * adc_to_current_units - readout.v_current_zero,
-        -static_cast<float>(adc_readings.w_readout - adc_readings.ref_readout) * adc_to_current_units - readout.w_current_zero
+        -static_cast<float>(adc_readings.u_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.u_current_zero,
+        -static_cast<float>(adc_readings.v_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.v_current_zero,
+        -static_cast<float>(adc_readings.w_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.w_current_zero
     };
 
 
@@ -325,8 +299,8 @@ void ADC1_2_IRQHandler(void){
     // ---------------------
     
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const float direct_resistive_voltage = direct_current * readout.resistance;
-    const float quadrature_resistive_voltage = quadrature_current * readout.resistance;
+    const float direct_resistive_voltage = direct_current * current_calibration.resistance;
+    const float quadrature_resistive_voltage = quadrature_current * current_calibration.resistance;
 
     // Calculate the differential of the currents; this will be the real measurement of our model's prediction.
     const float direct_current_diff = direct_current - readout.direct_current;
@@ -338,22 +312,22 @@ void ADC1_2_IRQHandler(void){
     // The saliency effect is due to the iron between magnets so it occurs twice per 
     // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
     // For simplicity's sake we keep the saliency_angle_offset as already doubled.
-    const int32_t saliency_angle = 2*predicted_angle + readout.saliency_angle_offset;
+    const int32_t saliency_angle = 2*predicted_angle + current_calibration.saliency_angle_offset;
 
     const float cos_saliency = get_cos(saliency_angle);
     const float sin_saliency = get_sin(saliency_angle);
 
-    const float direct_inductance_bias_voltage = readout.inductance_bias * (
+    const float direct_inductance_bias_voltage = current_calibration.inductance_bias * (
         -direct_diff * cos_saliency 
         -quadrature_diff * sin_saliency
     );
-    const float quadrature_inductance_bias_voltage = readout.inductance_bias * (
+    const float quadrature_inductance_bias_voltage = current_calibration.inductance_bias * (
         -direct_diff * sin_saliency
         +quadrature_diff * cos_saliency
     );
 
-    const float direct_inductance_base_voltage = direct_diff * readout.inductance;
-    const float quadrature_inductance_base_voltage = quadrature_diff * readout.inductance;
+    const float direct_inductance_base_voltage = direct_diff * current_calibration.inductance;
+    const float quadrature_inductance_base_voltage = quadrature_diff * current_calibration.inductance;
 
     const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
     const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
@@ -554,7 +528,7 @@ void ADC1_2_IRQHandler(void){
                 quadrature_voltage_error * quadrature_current
             ) * voltage_mul_current_to_power;
 
-            readout.resistance -= resistance_gradient * control_parameters.resistance_ki;
+            current_calibration.resistance -= resistance_gradient * control_parameters.resistance_ki;
         }
 
         // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
@@ -568,35 +542,35 @@ void ADC1_2_IRQHandler(void){
                 quadrature_voltage_error * quadrature_inductance_base_voltage
             ) * volts_per_voltage_units_square;
 
-            readout.inductance -= inductance_gradient * control_parameters.inductance_ki;
+            current_calibration.inductance -= inductance_gradient * control_parameters.inductance_ki;
 
             const float inductance_bias_gradient = (
                 direct_voltage_error * direct_inductance_bias_voltage +
                 quadrature_voltage_error * quadrature_inductance_bias_voltage
             ) * volts_per_voltage_units_square;
             
-            readout.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
+            current_calibration.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
 
             const float saliency_angle_gradient = (
                 direct_voltage_error * (-quadrature_inductance_bias_voltage) +
                 quadrature_voltage_error * direct_inductance_bias_voltage
             ) * volts_per_voltage_units_square;
 
-            readout.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
+            current_calibration.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
         }
     } else {
         // Only track the zero offset while there is no noticeable current being measured.
         if (current_magnitude < control_parameters.current_offset_maximum) {
             // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
-            readout.u_current_zero = clip_to(
+            current_calibration.u_current_zero = clip_to(
                 -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                readout.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
-            readout.v_current_zero = clip_to(
+                current_calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
+            current_calibration.v_current_zero = clip_to(
                 -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                readout.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
-            readout.w_current_zero = clip_to(
+                current_calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
+            current_calibration.w_current_zero = clip_to(
                 -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                readout.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
+                current_calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
         }
     }
 
@@ -689,13 +663,9 @@ void ADC1_2_IRQHandler(void){
 
     readout.vcc_voltage = vcc_voltage;
     readout.temperature = temperature;
-    readout.live_max_pwm = live_max_pwm;
     readout.total_power = total_power;
     readout.total_power_average = total_power_average;
-    readout.resistive_power = resistive_power;
     readout.resistive_power_average = resistive_power_average;
-    readout.emf_power = emf_power;
-    readout.lead_angle = 0; // TODO: this needs updating from the main loop.
 
     // Calculate and set motor outputs!!
     // ---------------------------------
@@ -722,7 +692,7 @@ void ADC1_2_IRQHandler(void){
         const int32_t ideal_angle = readout.angle + quarter_circle;
 
         // Drive the motor to produce current perpendicular to the magnetic angle.
-        drive_state.angle = ideal_angle + active_pwm_sign * readout.lead_angle;
+        drive_state.angle = ideal_angle + active_pwm_sign * current_calibration.lead_angle;
 
     } else {
         // Drive the inductors around a circle at the specified PWM and speed (open loop control).
@@ -732,7 +702,7 @@ void ADC1_2_IRQHandler(void){
     motor_outputs = compute_motor_outputs(
         drive_state.angle, 
         readout.active_pwm,
-        readout.live_max_pwm
+        current_calibration.live_max_pwm
     );
 
     // Disable the update for the control registers so we can write all 3.
@@ -761,11 +731,8 @@ void ADC1_2_IRQHandler(void){
     // within the half cycle before the pwm registers update.
     readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
 
-    // Write to the latest readout if the main loop has unlocked it.
-    full_readout_queue.write_if_available(readout);
-
     // Write the latest readout to the history buffer for the main loop to read.
-    if (drive_state.motor_flags & hex_mini_drive::ENABLE_RECORDING) readout_history_queue.write_if_available(readout);
+    readout_history_queue.write_if_available(readout);
 
     // Setup the new state if we were commanded by the main loop so we are prepared for the next cycle.
     // 
@@ -810,22 +777,6 @@ void ADC1_2_IRQHandler(void){
     } else {
         // Count down the active duration.
         drive_state.duration--;
-    }
-
-    if (reset_calibration_variables_flag) {
-        // Reset the active calibration variables from the stored current calibration snapshot.
-        readout.u_current_zero = current_calibration.u_current_zero;
-        readout.v_current_zero = current_calibration.v_current_zero;
-        readout.w_current_zero = current_calibration.w_current_zero;
-        readout.resistance = current_calibration.resistance;
-        readout.inductance = current_calibration.inductance;
-        // Reset the voltage magnitude in case it nan'ed out.
-        readout.emf_voltage_magnitude = 0.f;
-        // We don't need to `readout.emf_voltage_angle = 0;` because any integer is a valid angle and 
-        // mod 2pi is handled automatically by integer overflows (with the compiler flag -fwrapv turned on).
-
-        // Clear the reset flag.
-        reset_calibration_variables_flag = false;
     }
 
     // TODO: we need complete nan checks; preferably in the main loop.

@@ -9,7 +9,6 @@ import {
   ENABLE_V_OUTPUT,
   ENABLE_W_OUTPUT,
   ENABLE_Z_OUTPUT,
-  ENABLE_RECORDING,
   UNIT_TEST_OUTPUT_SIZE,
 } from "hex-mini-drive-interface";
 
@@ -26,7 +25,6 @@ export {
   ENABLE_V_OUTPUT,
   ENABLE_W_OUTPUT,
   ENABLE_Z_OUTPUT,
-  ENABLE_RECORDING,
   UNIT_TEST_OUTPUT_SIZE,
 };
 

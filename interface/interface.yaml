@@ -14,15 +14,11 @@ message_codes:
     message_code: 0x2020
     type: Readout
 
-  STREAM_FULL_READOUTS:
+  STREAM_READOUTS:
     message_code: 0x2021
-    type: StreamFullReadouts
-    returns: FULL_READOUT
+    type: StreamReadouts
+    returns: READOUT
     returns_len: 'stream'
-
-  FULL_READOUT:
-    message_code: 0x2023
-    type: FullReadout
 
   SET_STATE_OFF:
     message_code: 0x2030
@@ -107,7 +103,7 @@ definitions:
   HISTORY_SIZE:
     doc: Number of contiguous readouts to store in the history buffer for a snapshot.
     type: uint32
-    const: 240
+    const: 180
 
   MAX_MESSAGE_SIZE:
     doc: Maximum size of a message in bytes; used to allocate buffers for the messages.
@@ -171,10 +167,6 @@ definitions:
     doc: Flag to enable the Z output of the driver.
     type: uint8
     const: 8
-  ENABLE_RECORDING:
-    doc: Flag to enable recording of the driver state.
-    type: uint8
-    const: 16
 
 
   UnitTestOutput:
@@ -287,46 +279,10 @@ definitions:
         type: float32
         doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
 
-      saliency_angle_offset:
-        type: int32
-        doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
-
-  StreamFullReadouts:
-    doc: |
-      Continuously send full readouts of the motor driver internal state.
-
-    struct:
-      stream_state:
-        type: uint32
-        doc: |
-          Number of messages to send; the stream command should be repeated to keep sending messages.
-
-
-  FullReadout:
-    doc: |
-      Complete readout of the motor driver internal state for exploration and data stream.
-    
-    struct_base: Readout
-    
-    struct:
-      main_loop_rate:
-        type: float32
-        doc: Tick rate; the number of main loop (communication and commands) updates per second.
-
-      adc_update_rate:
-        type: float32
-        doc: |
-          ADC update rate; the number of ADC readouts per second. This is usually higher 
-          than the main loop rate because we read the ADCs multiple times per main loop.
-
       temperature:
         type: float32
         doc: Instantaneous temperature readout (ADC value); from the temperature sensor.
 
-      live_max_pwm:
-        type: float32
-        doc: Current maximum PWM allowed by the driver.
-      
       current_angle_offset:
         type: int32
         doc: Angle of the current vector relative to the rotor angle.
@@ -337,75 +293,36 @@ definitions:
 
       total_power:
         type: float32
-        doc: Total power used/given to VCC line (the battery usually).
-
+        doc: Estimated near-instantaneous total power draw of the motor.
+ 
       total_power_average:
         type: float32
         doc: Long duration average of the total power; used to limit the maximum power draw.
-
-      resistive_power:
-        type: float32
-        doc: Resistive power; the power dissipated in the phase resistances.
 
       resistive_power_average:
         type: float32
         doc: Long duration average of the resistive power; used to limit the maximum resistive power.
 
-      emf_power:
-        type: float32
-        doc: |
-          EMF power; the power used to drive the motor (which is reflected to the 
-          inductors as back EMF).
-
-
       rotations:
         type: int32
         doc: Integrated number of EMF deduced rotor angle rotations since startup.
-
-      lead_angle:
-        type: int32
-        doc: | 
-          Lead angle for the motor driving; used to adjust the phase voltages to drive the 
-          motor efficiently.
 
       active_pwm:
         type: float32
         doc: Active PWM value for the motor outputs, value set by the advanced control algorithms.
 
-      target:
-        type: float32
-        doc: Target for the advanced control algorithms.
 
-      seek_integral:
-        type: float32
-        doc: Value of the integral term for the seek position algorithm.
 
-      u_current_zero:
-        type: float32
-        doc: Estimated zero-current offset for the U phase.
-      v_current_zero:
-        type: float32
-        doc: Estimated zero-current offset for the V phase.
-      w_current_zero:
-        type: float32
-        doc: Estimated zero-current offset for the W phase.
+  StreamReadouts:
+    doc: |
+      Continuously send readouts of the motor driver internal state.
 
-      resistance:
-        type: float32
-        doc: Estimated average resistance of the phase coils.
+    struct:
+      stream_state:
+        type: uint32
+        doc: |
+          Number of messages to send; the stream command should be repeated to keep sending messages.
 
-      inductance:
-        type: float32
-        doc: Estimated baseline inductance of the motor coils.
-
-      inductance_bias:
-        type: float32
-        doc: Estimated bias of the inductance due to magnetic saliency.
-
-      motor_constant:
-        type: float32
-        doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
-      
 
   DriveState:
     doc: |
@@ -496,9 +413,30 @@ definitions:
 
   CurrentCalibration:
     doc: |
+      TODO: rename this to LiveParameters or something like that, these ones change ever
+      so often and they affect the readout processing.
       Estimate resistance and inductance values for the motor coils.
 
     struct:
+      main_loop_rate:
+        type: float32
+        doc: Tick rate; the number of main loop (communication and commands) updates per second.
+
+      adc_update_rate:
+        type: float32
+        doc: |
+          ADC update rate; the number of ADC readouts per second. This is usually higher 
+          than the main loop rate because we read the ADCs multiple times per main loop.
+
+      live_max_pwm:
+        type: float32
+        doc: Current maximum PWM allowed by the driver.
+           
+      lead_angle:
+        type: int32
+        doc: | 
+          Lead angle for the motor driving; used to adjust the phase voltages to drive the 
+          motor efficiently.
 
       u_current_zero:
         type: float32
@@ -523,11 +461,15 @@ definitions:
       inductance_bias:
         type: float32
         doc: Estimated bias of the inductance due to magnetic saliency.
-      
+
+      saliency_angle_offset:
+        type: int32
+        doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
+
       motor_constant:
         type: float32
         doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
-      
+
       
   ControlParameters:
     doc: |

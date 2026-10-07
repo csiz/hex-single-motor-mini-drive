@@ -1,7 +1,6 @@
 import {exponential_average} from "./math_utils.js";
 import {
   parse_readout,
-  parse_full_readout,
   parse_unit_test_output,
   parse_current_calibration,
   make_current_calibration,
@@ -231,10 +230,6 @@ export class MotorController {
       // of the corresponding readout.
       message = parse_readout({...this.current_calibration, ...bare_message}, last_message);
       // Store readout data up to some maximum size. Allows us to easily plot and analyse data samples.
-      this.data = capped_push(this.data, message, max_data_length);
-    } else if (message_code == MessageCode.FULL_READOUT){
-      // TODO: now we can drop full readouts in favour of simpler readouts + concatenated calibration data
-      message = parse_full_readout({...this.current_calibration,...bare_message}, last_message);
       this.data = capped_push(this.data, message, max_data_length);
     } else if (message_code == MessageCode.UNIT_TEST_OUTPUT) {
       message = parse_unit_test_output(bare_message);

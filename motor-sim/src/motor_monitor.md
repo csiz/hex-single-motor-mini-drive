@@ -41,9 +41,6 @@ Motor Commands
 <div>${data_request_buttons}</div>
 <div>${stop_buttons}</div>
 <div>
-  <span>${command_options_input}</span>
-</div>
-<div>
   <span>${simple_drive_buttons}</span>
   <span>${test_buttons}</span>
   <span>${command_duration_slider}</span>
@@ -310,17 +307,6 @@ d3.select(connect_buttons).selectAll("button").style("height", "3em");
 
 // The following variables are pairs of input html elements and their corresponding input value observers.
 
-const command_options_input = Inputs.checkbox(
-  ["Take snapshot with command"],
-  {
-    value: [],
-    label: "Command options:",
-  },
-);
-d3.select(command_options_input).select("div").style("width", "100%");
-d3.select(command_options_input).select("div label").style("width", "100em");
-const command_snapshot = transformed_input_value(command_options_input, (options) => options.includes("Take snapshot with command"));
-
 // Slider to choose the command specific PWM setting.
 const command_pwm_slider = inputs_wide_range([0, PWM_BASE], {value: PWM_BASE * 0.05, step: 1, label: "Command value:"});
 const command_pwm = transformed_input_value(command_pwm_slider, (value) => Math.floor(value));
@@ -393,7 +379,7 @@ opened_ports_radio.addEventListener("input", function(){
 // -----------------
 
 const command_drive_state = {
-  motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+  motor_flags: ENABLE_ALL_OUTPUTS,
   duration: command_duration,
   pwm_value: command_pwm, 
   angular_speed: command_angular_speed, 
@@ -404,7 +390,7 @@ async function stream_all_motors(){
   for (const {motor_controller} of opened_ports.values()) {
     if (!motor_controller) continue;
     motor_controller.reset_history();
-    await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 1});
+    await motor_controller.send_command({message_code: MessageCode.STREAM_READOUTS, stream_state: 1});
   }
 }
 
@@ -434,12 +420,12 @@ const data_request_buttons = Inputs.button(
     ["Stream motor data", async function(){
       if (!motor_controller) return;
       motor_controller.reset_history();
-      await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 1});
+      await motor_controller.send_command({message_code: MessageCode.STREAM_READOUTS, stream_state: 1});
     }],
     ["STOP stream", async function(){
       stop_command_loop();
       if (!motor_controller) return;
-      await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 0});
+      await motor_controller.send_command({message_code: MessageCode.STREAM_READOUTS, stream_state: 0});
     }],
     ["Stream all motors", stream_all_motors],
     ["Stop all motors", async function(){
@@ -447,7 +433,7 @@ const data_request_buttons = Inputs.button(
 
       for (const {motor_controller} of opened_ports.values()) {
         if (!motor_controller) continue;
-        await motor_controller.send_command({message_code: MessageCode.STREAM_FULL_READOUTS, stream_state: 0});
+        await motor_controller.send_command({message_code: MessageCode.STREAM_READOUTS, stream_state: 0});
       }
     }],
   ],
@@ -472,7 +458,7 @@ const test_buttons = Inputs.button(
         [-Math.PI * 1 / 3, 1.0],
         [-Math.PI * 1 / 3, 0.0],
       ].map(([angle, value]) => ({
-        motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+        motor_flags: ENABLE_ALL_OUTPUTS,
         enable_closed_loop: false,
         duration: HISTORY_SIZE / 12,
         pwm_value: command_drive_state.pwm_value * value,
@@ -484,14 +470,14 @@ const test_buttons = Inputs.button(
     ["Test ground short", async function(){
       await motor_controller.send_command({
         message_code: MessageCode.SET_DRIVE_STATE,
-        motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+        motor_flags: ENABLE_ALL_OUTPUTS,
         duration: HISTORY_SIZE,
         pwm_value: 0,
       });
     }],
     ["Test increasing steps", async function(){
       let drive_schedule = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.0].map(value => ({
-        motor_flags: ENABLE_ALL_OUTPUTS | (command_snapshot ? ENABLE_RECORDING : 0),
+        motor_flags: ENABLE_ALL_OUTPUTS,
         enable_closed_loop: false,
         duration: HISTORY_SIZE / 12,
         pwm_value: command_drive_state.pwm_value * value,
@@ -1233,11 +1219,8 @@ const plot_motor_values = plot_lines({
   x_label: "Time (ms)",
   y_label: "Value",
   channels: [
-    {y: "readout_number", label: "Readout Number", color: colors_categories[0]},
-    {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[1]},
+    {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[0]},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "target", label: "Target", color: colors_categories[2]},
-    {y: "seek_integral", label: "Seek Integral", color: colors_categories[3]},
     {y: "resistance", label: "Phase Resistance", color: colors.u},
     {y: "inductance", label: "Phase Inductance", color: colors.v},
     {y: "inductance_bias", label: "Inductance Bias", color: colors_categories[4]},
@@ -2364,7 +2347,7 @@ import {normalize_radians} from "./components/motor_controller/angular_math.js";
 import {MessageCode, prompt_com_port_get_index, default_ws_uri, MotorController} from "./components/motor_controller/motor_controller.js";
 
 import {
-  PWM_BASE, HISTORY_SIZE, CURRENT_UNITS_PER_AMP, VOLTAGE_UNITS_PER_VOLT, ENABLE_RECORDING, ENABLE_ALL_OUTPUTS, DISABLE_ALL_OUTPUTS,
+  PWM_BASE, HISTORY_SIZE, CURRENT_UNITS_PER_AMP, VOLTAGE_UNITS_PER_VOLT, ENABLE_ALL_OUTPUTS, DISABLE_ALL_OUTPUTS,
   pwm_cycles_per_second, cycles_per_millisecond, millis_per_cycle, max_timeout, pwm_period, 
   radians_to_angle_units, 
   rotations_per_millisecond_to_speed_units,
