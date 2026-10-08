@@ -38,48 +38,19 @@
 
 // Try really hard to keep interrupts fast. Use short inline functions that only rely 
 // on chip primitives; don't use division, multiplication, or floating point operations.
-
-
-// Interrupt Data Interface
-// ------------------------
-
-// Medium length data recording, taken continuously from the interrupt handler.
-CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
-
-// Command queue, the interrupt loop will switch to executing the latest set of commands from this queue.
-// ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
-// schedule while the first is executing, but also we will have 1 more space to write an emergency break
-// command! The break command will also lead to the interrupt loop freeing up space in the command queue.
-CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue = {};
-
-size_t drive_states_scheduled = 0;
-
-// Initialize the loop control parameters and the calibration data. Either load 
-// them from the flash or use the defaults.
-
-hex_mini_drive::CurrentCalibration current_calibration = get_current_calibration();
-
-hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
-
-
-// Interrupt Loop State
-// --------------------
+// 
+// For our sanity we also want to keep the loop state condensed into as few variables as possible.
 
 // Electrical and position state
 hex_mini_drive::Readout readout = {};
 
-// Angle offsetting from the main loop or via commands; it will not influence speed.
-volatile int32_t external_angle_offset = 0;
-
-// Also offset the current rotations counter.
-volatile int32_t external_rotations_offset = 0;
-
 
 // Additional state
 // ----------------
-
-// Track how many times we think our angle is correct.
-int32_t correct_angle_counter = 0;
+// 
+// Unfortunately we need a tiny bit more state than the one we can serialize over the wire.
+// Maybe there's a way around it, but the big problem is we have to average motor outputs
+// over two PWM cycles to get the actual output.
 
 // Settings for the 3 phase MOSFET PWM drivers.
 MotorOutputs motor_outputs = breaking_motor_outputs;
@@ -90,19 +61,30 @@ MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 // Currently active driver state (the full motor control state should be stored here).
 hex_mini_drive::DriveState drive_state = breaking_drive_state;
 
+// Keep track of how many states were scheduled at the last update. We want to immediately skip to newer
+// commands if the schedule increases while we are still executing the previous ones.
+size_t drive_states_scheduled = 0;
 
+
+// Interrupt Data Interface
+// ------------------------
+
+// Initialize the loop control parameters and the calibration data. Either load 
+// them from the flash or use the defaults. Docstrings are in the header file.
+
+hex_mini_drive::Info info = {/* all default to 0 */};
+
+hex_mini_drive::Calibration calibration = get_calibration();
+
+hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
+
+CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
+
+CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue = {};
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
     return (drive_state.pwm_value == 0.f);
-}
-
-void set_angle_offset(int32_t angle_offset) {
-    external_angle_offset = angle_offset;
-}
-
-void set_rotations_offset(int32_t rotations_offset) {
-    external_rotations_offset = rotations_offset;
 }
 
 // Critical functions!! 23KHz PWM cycle
@@ -218,9 +200,9 @@ void ADC1_2_IRQHandler(void){
     // Note that the reference voltage is only connected to the current sense amplifier, not the
     // microcontroller. The ADC reference voltage is 3.3V.
     const ThreePhase currents{
-        -static_cast<float>(adc_readings.u_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.u_current_zero,
-        -static_cast<float>(adc_readings.v_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.v_current_zero,
-        -static_cast<float>(adc_readings.w_readout - adc_readings.ref_readout) * adc_to_current_units - current_calibration.w_current_zero
+        -static_cast<float>(adc_readings.u_readout - adc_readings.ref_readout) * adc_to_current_units - calibration.u_current_zero,
+        -static_cast<float>(adc_readings.v_readout - adc_readings.ref_readout) * adc_to_current_units - calibration.v_current_zero,
+        -static_cast<float>(adc_readings.w_readout - adc_readings.ref_readout) * adc_to_current_units - calibration.w_current_zero
     };
 
 
@@ -299,8 +281,8 @@ void ADC1_2_IRQHandler(void){
     // ---------------------
     
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const float direct_resistive_voltage = direct_current * current_calibration.resistance;
-    const float quadrature_resistive_voltage = quadrature_current * current_calibration.resistance;
+    const float direct_resistive_voltage = direct_current * calibration.resistance;
+    const float quadrature_resistive_voltage = quadrature_current * calibration.resistance;
 
     // Calculate the differential of the currents; this will be the real measurement of our model's prediction.
     const float direct_current_diff = direct_current - readout.direct_current;
@@ -312,22 +294,22 @@ void ADC1_2_IRQHandler(void){
     // The saliency effect is due to the iron between magnets so it occurs twice per 
     // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
     // For simplicity's sake we keep the saliency_angle_offset as already doubled.
-    const int32_t saliency_angle = 2*predicted_angle + current_calibration.saliency_angle_offset;
+    const int32_t saliency_angle = 2*predicted_angle + calibration.saliency_angle_offset;
 
     const float cos_saliency = get_cos(saliency_angle);
     const float sin_saliency = get_sin(saliency_angle);
 
-    const float direct_inductance_bias_voltage = current_calibration.inductance_bias * (
+    const float direct_inductance_bias_voltage = calibration.inductance_bias * (
         -direct_diff * cos_saliency 
         -quadrature_diff * sin_saliency
     );
-    const float quadrature_inductance_bias_voltage = current_calibration.inductance_bias * (
+    const float quadrature_inductance_bias_voltage = calibration.inductance_bias * (
         -direct_diff * sin_saliency
         +quadrature_diff * cos_saliency
     );
 
-    const float direct_inductance_base_voltage = direct_diff * current_calibration.inductance;
-    const float quadrature_inductance_base_voltage = quadrature_diff * current_calibration.inductance;
+    const float direct_inductance_base_voltage = direct_diff * calibration.inductance;
+    const float quadrature_inductance_base_voltage = quadrature_diff * calibration.inductance;
 
     const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
     const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
@@ -416,16 +398,12 @@ void ADC1_2_IRQHandler(void){
     const bool emf_fix = square(emf_voltage_angular_speed) > 4 * max_emf_speed_variance;
     
     // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
-    correct_angle_counter = clip_to(
-        0, control_parameters.angle_fix_max_certainty,
+    const int16_t angle_fix = clip_to(
+        0, static_cast<int32_t>(control_parameters.angle_fix_max_certainty),
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
         // Our angle is incorrect if we don't have an EMF reading whilst driving the motor.
-        correct_angle_counter + ((drive_state.pwm_value and not emf_detected) ? -1 : emf_detected)
+        readout.angle_fix + ((drive_state.pwm_value and not emf_detected) ? -1 : emf_detected)
     );
-    
-    // Declare the angle to be correct after a threshold certainty.
-    // TODO: gotta fix this, it ain't doing too good
-    const bool angle_fix = correct_angle_counter >= control_parameters.angle_fix_threshold_count;
     
     // Angle update
     // ------------
@@ -439,8 +417,7 @@ void ADC1_2_IRQHandler(void){
     );
     
     // Add the external angle offset to the angle adjustment.
-    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki + external_angle_offset;
-    external_angle_offset = 0;
+    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki;
 
     // Calculate the new angle based on the angle adjustment.
     const int32_t angle = predicted_angle + angle_adjustment;
@@ -456,8 +433,7 @@ void ADC1_2_IRQHandler(void){
     );
 
     // Calculate the new rotation index.
-    const int32_t rotations = readout.rotations + rotations_increment + external_rotations_offset;
-    external_rotations_offset = 0;
+    const int32_t rotations = readout.rotations + rotations_increment;
     
     // Calculate speed and acceleration
     // --------------------------------
@@ -528,7 +504,7 @@ void ADC1_2_IRQHandler(void){
                 quadrature_voltage_error * quadrature_current
             ) * voltage_mul_current_to_power;
 
-            current_calibration.resistance -= resistance_gradient * control_parameters.resistance_ki;
+            calibration.resistance -= resistance_gradient * control_parameters.resistance_ki;
         }
 
         // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
@@ -542,35 +518,35 @@ void ADC1_2_IRQHandler(void){
                 quadrature_voltage_error * quadrature_inductance_base_voltage
             ) * volts_per_voltage_units_square;
 
-            current_calibration.inductance -= inductance_gradient * control_parameters.inductance_ki;
+            calibration.inductance -= inductance_gradient * control_parameters.inductance_ki;
 
             const float inductance_bias_gradient = (
                 direct_voltage_error * direct_inductance_bias_voltage +
                 quadrature_voltage_error * quadrature_inductance_bias_voltage
             ) * volts_per_voltage_units_square;
             
-            current_calibration.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
+            calibration.inductance_bias -= inductance_bias_gradient * control_parameters.inductance_bias_ki;
 
             const float saliency_angle_gradient = (
                 direct_voltage_error * (-quadrature_inductance_bias_voltage) +
                 quadrature_voltage_error * direct_inductance_bias_voltage
             ) * volts_per_voltage_units_square;
 
-            current_calibration.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
+            calibration.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
         }
     } else {
         // Only track the zero offset while there is no noticeable current being measured.
         if (current_magnitude < control_parameters.current_offset_maximum) {
             // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
-            current_calibration.u_current_zero = clip_to(
+            calibration.u_current_zero = clip_to(
                 -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                current_calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
-            current_calibration.v_current_zero = clip_to(
+                calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
+            calibration.v_current_zero = clip_to(
                 -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                current_calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
-            current_calibration.w_current_zero = clip_to(
+                calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
+            calibration.w_current_zero = clip_to(
                 -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-                current_calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
+                calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
         }
     }
 
@@ -680,19 +656,18 @@ void ADC1_2_IRQHandler(void){
     // The main control flag is whether we drive in fixed coordinates (open loop) or relative coordinates (closed loop).
     // 
     // Breaking mode can be expressed as driving at 0 pwm in fixed coordinates.
-    if (drive_state.enable_closed_loop) {
-        // Drive the motor using FOC targeting a PWM value. The current is controlled to be as 
-        // close to 90 degrees ahead of the magnetic angle as possible; stray currents absorbed.
-        // The PWM duty cycle, drive angle, and angle speed are varied smoothly.
-        // Base the direction on the sign of the target PWM.
-        const int32_t active_pwm_sign = sign(readout.active_pwm);
+    
+    // TODO: !!!!
+    // use the readout.active_angle and keep driver_state.angle as the target (so we can also handle closed loop properly, see TODO below).
 
-        // Drive towards the ideal angle; however decay to 0 at low EMF voltage.
-        // Ideally the inductor current is exactly 90 degrees ahead of the magnetic angle.
+    if (drive_state.enable_closed_loop) {
+        // TODO: we just have to drive at an angle relative to the drive_state.angle
+        // But it needs a bit of refactor. We want drive_state.angle to be a target and we need to internalize the actual
+        // drive angle into the readouts.
         const int32_t ideal_angle = readout.angle + quarter_circle;
 
         // Drive the motor to produce current perpendicular to the magnetic angle.
-        drive_state.angle = ideal_angle + active_pwm_sign * current_calibration.lead_angle;
+        drive_state.angle = ideal_angle;
 
     } else {
         // Drive the inductors around a circle at the specified PWM and speed (open loop control).
@@ -702,7 +677,7 @@ void ADC1_2_IRQHandler(void){
     motor_outputs = compute_motor_outputs(
         drive_state.angle, 
         readout.active_pwm,
-        current_calibration.live_max_pwm
+        info.live_max_pwm
     );
 
     // Disable the update for the control registers so we can write all 3.
@@ -713,7 +688,13 @@ void ADC1_2_IRQHandler(void){
     // we set the output registers too late in the cycle.
     // 
     // We also need to compensate for the turn on delay on each motor phase.
-    // Note that we mustn't add the floor compensation to our calculation; it represents the 0 point for the PWM duty cycle.
+    // 
+    // Note that we mustn't add the floor compensation to our calculation; it represents 
+    // the 0 point for the PWM duty cycle. That's why we store the desired PWM setting in motor_outputs
+    // but we add the floor compensation only when writing to the actual hardware registers.
+    // 
+    // Also note that we want to write all zeroes when the motor is actually breaking so we don't
+    // drain extra power trying to half-switch the mosfets for a tiny amount of time.
     set_motor_outputs(readout.active_pwm == 0 ? breaking_motor_outputs : MotorOutputs{
         motor_outputs.u_duty + control_parameters.u_pwm_floor,
         motor_outputs.v_duty + control_parameters.v_pwm_floor,

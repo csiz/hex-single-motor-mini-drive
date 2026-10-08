@@ -89,26 +89,26 @@ Motor Driving Data
 <div class="card tight">${plot_motor_values}</div>
 
 
-Current Calibration Procedures
-------------------------------
+Calibration Procedures
+----------------------
 
 <div class="card tight">
-  <div>${current_calibration_buttons}</div>
-  <div>${current_calibration_checkboxes}</div>
+  <div>${calibration_buttons}</div>
+  <div>${calibration_checkboxes}</div>
   <p>Active electrical phase properties:</p>
-  <pre>${active_current_calibration_table}</pre>
-  <div>${Object.values(current_calibration_input)}</div>
+  <pre>${active_calibration_table}</pre>
+  <div>${Object.values(calibration_input)}</div>
 </div>
 <div class="card tight">
-  <h3>Current Calibration Results</h3>
-  <div>${current_calibration_optimization_iteration_input}</div>
+  <h3>Calibration Results</h3>
+  <div>${calibration_optimization_iteration_input}</div>
   <div>
     <p>Electrical phase properties at displayed iteration:</p>
-    <pre>${current_calibration_iteration_table}</pre>
-    <div>${current_calibration_optimizing_plot}</div>
-    <div>${current_calibration_angles_plot}</div>
-    <div>${current_calibration_angles_scatter}</div>
-    <div>${current_calibration_optimizing_gradients_plot}</div>
+    <pre>${calibration_iteration_table}</pre>
+    <div>${calibration_optimizing_plot}</div>
+    <div>${calibration_angles_plot}</div>
+    <div>${calibration_angles_scatter}</div>
+    <div>${calibration_optimizing_gradients_plot}</div>
   </div>
 
 </div>
@@ -207,7 +207,8 @@ function switch_to_port(motor_uri){
 
   motor_controller.value = port_state.motor_controller;
   connection_status.value = port_state.error ? displayable_connection_error(port_state.error) : port_state.status;
-  data.value = port_state.motor_controller?.data;
+  
+  data.value = port_state.motor_controller.data;
 
   return true;
 }
@@ -228,27 +229,18 @@ async function connect_motor_controller(options = {}) {
     // Switch to the existing motor controller if this port is already opened and initialized.
     if (switch_to_port(motor_uri)) return;
 
-    // Append this port to the opened ports list so we can capture it's errors too.
-    opened_ports.value = opened_ports.value.set(motor_uri, {
-      motor_uri,
-      motor_controller: null,
-      data: [],
-      status: html`<pre>Opening USB com port.</pre>`,
-      error: undefined,
-    });
 
     const motor_controller = new MotorController({
       motor_uri,
       onstatus: (status) => {
         set_status(html`<pre>Connected; ${format_data_rate(status)}.</pre>`, motor_uri);
       },
-      onmessage: (readout) => {
+      onmessage: (message) => {
+        // TODO: we need to handle the various message types (update control parameters or calibration tables).
         if (motor_uri === active_port.value) data.value = motor_controller.data;
       },
       onready: (motor_controller) => {
         set_status(html`<pre>Connected, waiting for your commands.</pre>`, motor_uri);
-        set_motor_controller(motor_controller, motor_uri);
-        switch_to_port(motor_uri);
       },
       onerror: (error) => {
         set_error(error, motor_uri);
@@ -260,6 +252,13 @@ async function connect_motor_controller(options = {}) {
       },
     });
 
+    // Append this port to the opened ports list so we can capture it's errors too.
+    opened_ports.value = opened_ports.value.set(motor_uri, {
+      motor_uri,
+      motor_controller: motor_controller,
+      status: html`<pre>Opening USB com port.</pre>`,
+      error: undefined,
+    });
 
     // Switch the display to the newly opening port.
     switch_to_port(motor_uri);
@@ -417,6 +416,11 @@ function start_command_loop(loop_function){
 
 const data_request_buttons = Inputs.button(
   [
+    ["Get readout snapshot", async function(){
+      if (!motor_controller) return;
+      motor_controller.reset_history();
+      await motor_controller.send_command({message_code: MessageCode.GET_READOUTS_SNAPSHOT, stream_state: HISTORY_SIZE});
+    }],
     ["Stream motor data", async function(){
       if (!motor_controller) return;
       motor_controller.reset_history();
@@ -567,12 +571,6 @@ d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
 
 const advanced_drive_buttons = Inputs.button(
   [
-    ["Set Angle", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_ANGLE, 
-        angle: command_angle,
-      });
-    }],
     ["Drive 6S +", async function(){
       await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
@@ -651,12 +649,6 @@ d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
 
 const seek_drive_buttons = Inputs.button(
   [
-    ["Set Rotations", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_ROTATIONS, 
-        rotations: command_seek_rotation,
-      });
-    }],
     ["Seek angle", async function(){
       await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_SEEK_ANGLE,
@@ -950,6 +942,7 @@ const plot_runtime_stats = plot_lines({
   channels: [
     {y: "main_loop_rate", label: "Main loop rate", color: colors.sum},
     {y: "adc_update_rate", label: "ADC & PWM rate", color: colors.u},
+    {y: "average_buffer_fill_rate", label: "Average Buffer Fill Rate", color: colors.w},
   ],
   curve,
 });
@@ -1253,14 +1246,14 @@ autosave_inputs(monitoring_plots);
 
 
 ```js
-// Current calibration
-// -------------------
+// Calibration
+// -----------
 
-function stringify_active_current_calibration() {
-  return `motor_controller.current_calibration = ${JSON.stringify(motor_controller?.current_calibration, null, 2)}`;
+function stringify_active_calibration() {
+  return `motor_controller.calibration = ${JSON.stringify(motor_controller?.calibration, null, 2)}`;
 }
 
-const active_current_calibration_table =  Mutable(stringify_active_current_calibration());
+const active_calibration_table =  Mutable(stringify_active_calibration());
 
 
 const calibration_parameters = {
@@ -1298,12 +1291,12 @@ const calibration_parameters = {
   },
 }
 
-const current_calibration_input = Object.fromEntries(
+const calibration_input = Object.fromEntries(
   Object.entries(calibration_parameters).map(([key, {label, description}]) => {
     
     let parameter_input = Inputs.number([], {
       label,
-      value: motor_controller?.current_calibration?.[key],
+      value: motor_controller?.calibration?.[key],
     });
 
     d3.select(parameter_input).style("width", "100%").style("margin", "1em 0em 1em 0em")
@@ -1314,30 +1307,30 @@ const current_calibration_input = Object.fromEntries(
   })
 );
 
-const current_calibration_checkboxes = enabled_checkbox(Object.entries(calibration_parameters).map(([key, {label, description}]) => label));
+const calibration_checkboxes = enabled_checkbox(Object.entries(calibration_parameters).map(([key, {label, description}]) => label));
   
 function get_checked_parameters(){
   return Object.fromEntries(
     Object.entries(calibration_parameters).map(([key, {label}]) => {
-      return [key, current_calibration_checkboxes.value.includes(label)];
+      return [key, calibration_checkboxes.value.includes(label)];
     })
   );
 }
 
-function show_active_current_calibration() {
-  active_current_calibration_table.value = stringify_active_current_calibration();
-  Object.entries(current_calibration_input).forEach(([key, input]) => {
-    input.value = motor_controller?.current_calibration?.[key];
+function show_active_calibration() {
+  active_calibration_table.value = stringify_active_calibration();
+  Object.entries(calibration_input).forEach(([key, input]) => {
+    input.value = motor_controller?.calibration?.[key];
   });
 }
 
-const current_calibration_data = Mutable(null);
+const calibration_data = Mutable(null);
 
-const update_current_calibration_data = (new_value) => {
-  current_calibration_data.value = new_value;
+const update_calibration_data = (new_value) => {
+  calibration_data.value = new_value;
   if (new_value.is_stable) {
-    Object.entries(current_calibration_input).forEach(([key, input]) => {
-      input.value = new_value.current_calibration[key];
+    Object.entries(calibration_input).forEach(([key, input]) => {
+      input.value = new_value.calibration[key];
     });
   }
 };
@@ -1345,7 +1338,7 @@ const update_current_calibration_data = (new_value) => {
 
 ```js
 
-function run_current_calibration(sample) {
+function run_calibration(sample) {
   console.info("Calculating calibration...");
 
   const enabled_parameters = get_checked_parameters();
@@ -1371,7 +1364,7 @@ function run_current_calibration(sample) {
       iterations: [
         {
           iteration: 0,
-          current_calibration: {
+          calibration: {
             u_current_zero,
             v_current_zero,
             w_current_zero,
@@ -1379,7 +1372,7 @@ function run_current_calibration(sample) {
           sample
         }
       ],
-      current_calibration: {
+      calibration: {
         u_current_zero,
         v_current_zero,
         w_current_zero,
@@ -1693,7 +1686,7 @@ function run_current_calibration(sample) {
 
     iterations.push({
       iteration: i,
-      current_calibration: {
+      calibration: {
         sqrt_loss: Math.sqrt(d3.mean(sample_gradients, (d) => d.loss)),
         resistance: parameters.resistance.value,
         inductance: parameters.inductance.value,
@@ -1787,11 +1780,11 @@ function run_current_calibration(sample) {
     if (parameters.motor_constant.value < 0.0) parameters.motor_constant.reset(0.0);
   }
 
-  const current_calibration_data = {
+  const calibration_data = {
     sample,
     is_stable,
     iterations,
-    current_calibration: {
+    calibration: {
       resistance: parameters.resistance.value,
       inductance: parameters.inductance.value,
       inductance_bias: parameters.inductance_bias.value,
@@ -1802,76 +1795,76 @@ function run_current_calibration(sample) {
     }
   };
 
-  return current_calibration_data;
+  return calibration_data;
 }
 
 
-const current_calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
+const calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
     ["Calculate calibration", async function(){
-      update_current_calibration_data(run_current_calibration(data));
+      update_calibration_data(run_calibration(data));
     }],
     ["Upload to Driver", async function(){
       if (!motor_controller) return;
-      const current_calibration = {
-        ...motor_controller.current_calibration,
-        ...Object.fromEntries(Object.entries(current_calibration_input).map(([key, input]) => [key, input.value])),
+      const calibration = {
+        ...motor_controller.calibration,
+        ...Object.fromEntries(Object.entries(calibration_input).map(([key, input]) => [key, input.value])),
       };
-      await motor_controller.upload_current_calibration(current_calibration);
-      show_active_current_calibration();
+      await motor_controller.upload_calibration(calibration);
+      show_active_calibration();
       unsaved_changes();
     }],
     ["Reload from Driver", async function(){
-      await motor_controller.load_current_calibration();
-      show_active_current_calibration();
+      await motor_controller.load_calibration();
+      show_active_calibration();
     }],
     ["Reset to Defaults", async function(){
-      await motor_controller.reset_current_calibration();
-      show_active_current_calibration();
+      await motor_controller.reset_calibration();
+      show_active_calibration();
       unsaved_changes();
     }],
   ],
   {
-    label: "Current Calibration",
+    label: "Calibration",
   },
 );
 
-d3.select(current_calibration_buttons).style("width", "100%");
+d3.select(calibration_buttons).style("width", "100%");
 ```
 
 
 
 ```js
-const current_calibration_iterations = current_calibration_data?.iterations ?? [];
+const calibration_iterations = calibration_data?.iterations ?? [];
 
 // Select the optimization iteration to display.
-const current_calibration_optimization_iteration_input = !current_calibration_data ? 
+const calibration_optimization_iteration_input = !calibration_data ? 
   html`<p>No optimization iterations available.</p>` : 
   inputs_wide_range(
-    [0, current_calibration_iterations.length - 1], {
+    [0, calibration_iterations.length - 1], {
     step: 1,
     label: "Select optimization iteration to display:",
   });
 
-const current_calibration_optimization_iteration = Generators.input(current_calibration_optimization_iteration_input);
+const calibration_optimization_iteration = Generators.input(calibration_optimization_iteration_input);
 
-set_input_value(current_calibration_optimization_iteration_input, current_calibration_iterations?.length - 1);
+set_input_value(calibration_optimization_iteration_input, calibration_iterations?.length - 1);
 
 
 ```
 
 ```js
 
-const current_calibration_iteration = current_calibration_iterations[current_calibration_optimization_iteration];
-const current_calibration_gradients = current_calibration_iteration?.sample ?? [];
+const calibration_iteration = calibration_iterations[calibration_optimization_iteration];
+const calibration_gradients = calibration_iteration?.sample ?? [];
 
-// Write out the current calibration results in copyable format.
-const current_calibration_iteration_table = `current_calibration = ${JSON.stringify(current_calibration_iterations[current_calibration_optimization_iteration]?.current_calibration, null, 2)}`;
+// Write out the calibration results in copyable format.
+const calibration_iteration_table = `calibration = ${JSON.stringify(calibration_iterations[calibration_optimization_iteration]?.calibration, null, 2)}`;
 
-const current_calibration_optimizing_plot = plot_lines({
-  data: current_calibration_gradients,
-  subtitle: "Current Calibration - Optimizing resistance & inductance",
-  description: "Current calibration optimization results for each phase.",
+const calibration_optimizing_plot = plot_lines({
+  data: calibration_gradients,
+  subtitle: "Calibration - Optimizing resistance & inductance",
+  description: "Calibration optimization results for each phase.",
   width: 1200, height: 300,
   x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
@@ -1907,10 +1900,10 @@ const current_calibration_optimizing_plot = plot_lines({
 });
 
 
-const current_calibration_angles_plot = plot_lines({
-  data: current_calibration_gradients,
-  subtitle: "Current Calibration - Optimizing angles",
-  description: "Current calibration optimization results for each phase.",
+const calibration_angles_plot = plot_lines({
+  data: calibration_gradients,
+  subtitle: "Calibration - Optimizing angles",
+  description: "Calibration optimization results for each phase.",
   width: 1200, height: 300,
   x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
@@ -1930,10 +1923,10 @@ const current_calibration_angles_plot = plot_lines({
   curve,
 });
 
-const current_calibration_angles_scatter = plot_lines({
-  data: current_calibration_gradients.slice(24).sort((a, b) => a.drive_voltage_angle - b.drive_voltage_angle),
-  subtitle: "Current Calibration - Angle Scatter",
-  description: "Scatter plot of current calibration angles.",
+const calibration_angles_scatter = plot_lines({
+  data: calibration_gradients.slice(24).sort((a, b) => a.drive_voltage_angle - b.drive_voltage_angle),
+  subtitle: "Calibration - Angle Scatter",
+  description: "Scatter plot of calibration angles.",
   width: 1200, height: 300,
   x_domain: [-Math.PI, Math.PI],
   x: "drive_voltage_angle",
@@ -1947,10 +1940,10 @@ const current_calibration_angles_scatter = plot_lines({
   curve: horizontal_step,
 });
 
-const current_calibration_optimizing_gradients_plot = plot_lines({
-  data: current_calibration_gradients,
-  subtitle: "Current Calibration - resistance & inductance gradients",
-  description: "Current calibration optimization results for each phase.",
+const calibration_optimizing_gradients_plot = plot_lines({
+  data: calibration_gradients,
+  subtitle: "Calibration - resistance & inductance gradients",
+  description: "Calibration optimization results for each phase.",
   width: 1200, height: 300,
   x_domain: [0, HISTORY_SIZE * millis_per_cycle],
   x: "time",
@@ -1972,11 +1965,11 @@ const current_calibration_optimizing_gradients_plot = plot_lines({
 });
 
 autosave_inputs({
-  current_calibration_optimizing_plot,
-  current_calibration_optimizing_gradients_plot,
-  current_calibration_angles_scatter,
-  current_calibration_angles_plot,
-  current_calibration_checkboxes,
+  calibration_optimizing_plot,
+  calibration_optimizing_gradients_plot,
+  calibration_angles_scatter,
+  calibration_angles_plot,
+  calibration_checkboxes,
 });
 ```
 
@@ -1993,6 +1986,14 @@ let active_control_parameters_table =  Mutable(stringify_active_control_paramete
 
 const control_parameters_input = Object.fromEntries(
   [
+    ["rotation_zero", {
+      label: "Rotation Zero",
+      description: "The zero position of the motor rotation.",
+    }],
+    ["angle_zero", {
+      label: "Angle Zero",
+      description: "The zero position of the motor angle.",
+    }],
     ["motor_direction", {
       label: "Motor direction", 
       description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."

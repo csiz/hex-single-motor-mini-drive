@@ -3,6 +3,7 @@ import {
   CURRENT_UNITS_PER_AMP,
   VOLTAGE_UNITS_PER_VOLT,
   UNIT_TEST_OUTPUT_SIZE,
+  VERSION_STRING_SIZE,
   millis_per_cycle,
   pwm_cycles_per_second,
   readout_base,
@@ -184,6 +185,7 @@ export function parse_readout(bare_readout, previous_readout) {
   const rotations = bare_readout.rotations;
   
   const active_pwm = bare_readout.active_pwm;
+  const active_angle = angle_units_to_radians(bare_readout.active_angle);
 
   const battery_current = total_power / vcc_voltage;
 
@@ -301,6 +303,7 @@ export function parse_readout(bare_readout, previous_readout) {
     // emf_power,
     rotations,
     active_pwm,
+    active_angle,
   };
 }
 
@@ -320,38 +323,58 @@ export function parse_unit_test_output(bare_unit_test) {
   return new TextDecoder().decode(data_view.buffer.slice(0, len));
 }
 
-export function parse_current_calibration(bare_calibration) {
-  return {
-    ...bare_calibration,
-    main_loop_rate: bare_calibration.main_loop_rate,
-    adc_update_rate: bare_calibration.adc_update_rate,
-    live_max_pwm: bare_calibration.live_max_pwm,
-    lead_angle: angle_units_to_radians(bare_calibration.lead_angle),
-    u_current_zero: bare_calibration.u_current_zero / CURRENT_UNITS_PER_AMP,
-    v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
-    w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
-    resistance: bare_calibration.resistance,
-    inductance: bare_calibration.inductance,
-    inductance_bias: bare_calibration.inductance_bias,
-    saliency_angle_offset: angle_units_to_radians(bare_calibration.saliency_angle_offset),
-    motor_constant: bare_calibration.motor_constant,
-  };
-} 
+export function parse_version(bare_version) {
+  // Convert number array to Uint8Array.
+  const uint8_array = new Uint8Array(bare_version);
 
-export function make_current_calibration(current_calibration){
+  // Get dataview from test data buffer.
+  const data_view = new DataView(uint8_array.buffer);
+
+  // Get the length of the null terminated string.
+  let len = 0;
+  while (data_view.getUint8(len) !== 0 && len < VERSION_STRING_SIZE) len++;
+
+  // Return the output as an utf-8 string.
+  return new TextDecoder().decode(data_view.buffer.slice(0, len));
+}
+
+export function parse_info(bare_info) {
   return {
-    main_loop_rate: current_calibration.main_loop_rate,
-    adc_update_rate: current_calibration.adc_update_rate,
-    live_max_pwm: current_calibration.live_max_pwm,
-    lead_angle: radians_to_angle_units(current_calibration.lead_angle),
-    u_current_zero: current_calibration.u_current_zero * CURRENT_UNITS_PER_AMP,
-    v_current_zero: current_calibration.v_current_zero * CURRENT_UNITS_PER_AMP,
-    w_current_zero: current_calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
-    resistance: current_calibration.resistance,
-    inductance: current_calibration.inductance,
-    inductance_bias: current_calibration.inductance_bias,
-    saliency_angle_offset: radians_to_angle_units(current_calibration.saliency_angle_offset),
-    motor_constant: current_calibration.motor_constant,
+    ...bare_info,
+    lead_angle: angle_units_to_radians(bare_info.lead_angle),
   };
 }
 
+export function parse_calibration(bare_calibration) {
+  return {
+    ...bare_calibration,
+    u_current_zero: bare_calibration.u_current_zero / CURRENT_UNITS_PER_AMP,
+    v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
+    w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
+    saliency_angle_offset: angle_units_to_radians(bare_calibration.saliency_angle_offset),
+  };
+} 
+
+export function make_calibration(calibration){
+  return {
+    ...calibration,
+    u_current_zero: calibration.u_current_zero * CURRENT_UNITS_PER_AMP,
+    v_current_zero: calibration.v_current_zero * CURRENT_UNITS_PER_AMP,
+    w_current_zero: calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
+    saliency_angle_offset: radians_to_angle_units(calibration.saliency_angle_offset),
+  };
+}
+
+export function parse_control_parameters(bare_control_parameters){
+  return {
+    ...bare_control_parameters,
+    angle_zero: angle_units_to_radians(bare_control_parameters.angle_zero),
+  };
+}
+
+export function make_control_parameters(control_parameters){
+  return {
+    ...control_parameters,
+    angle_zero: radians_to_angle_units(control_parameters.angle_zero),
+  };
+}

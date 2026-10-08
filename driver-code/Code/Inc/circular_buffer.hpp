@@ -2,26 +2,31 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
-
+template <auto & buffer>
 class CircularBuffer {
-  uint8_t * buffer;
-  size_t max_size;
+  // 1. Extract the full type of the array (e.g., uint8_t[256])
+  using ArrayType = std::remove_reference_t<decltype(buffer)>;
+
+  // 2. Extract the element type (e.g., uint8_t)
+  using T = std::remove_all_extents_t<ArrayType>;
+
+  // 3. Extract the size of the array (e.g., 256)
+  static constexpr std::size_t max_size = sizeof(buffer) / sizeof(T);
+
   volatile size_t write_head = 0;
   volatile size_t read_tail = 0;
   volatile size_t read_head = 0;
 
 public:
-  CircularBuffer(uint8_t * buffer, size_t max_size)
-    : buffer(buffer), max_size(max_size) {}
-
   void reset() {
     write_head = 0;
     read_tail = 0;
     read_head = 0;
   }
 
-  uint8_t * reserve_write_head(size_t size) {
+  T * reserve_write_head(size_t size) {
     if (write_head < read_tail) {
       // We are in wrap around mode.
 
@@ -66,7 +71,7 @@ public:
     }
   }
 
-  uint8_t mark_write(size_t size){
+  uint8_t mark_written(size_t size){
     // Compute tail of the written data.
     const size_t write_tail = write_head + size;
   
@@ -104,19 +109,19 @@ public:
     }
   }
   
-  size_t available_to_read() {
+  size_t read_available() {
     // Since read tail is reset before the read head we should cap our result to 0 in case.
     const int readable_size = read_tail - read_head;
     return (readable_size > 0) ? readable_size : 0;
   }
   
-  uint8_t * get_read_head() {
+  T * get_read_pointer() {
     return &buffer[read_head];
   }
 
   uint8_t mark_read(size_t size) {
     // Check how much data is available to read.
-    const size_t available_size = available_to_read();
+    const size_t available_size = read_available();
   
     // Ensure we are not trying to read more than available.
     if (size > available_size) return 1;
@@ -171,6 +176,14 @@ class CircularQueue{
     return &data[write_index];
   }
 
+  /* Write an element at the specified offset from the current write index.
+
+  ! Must ensure there is enough write_available to do so.
+  */
+  void write_at_offset(size_t offset, T const& element) {
+    data[(write_index + offset) % N] = element;
+  }
+
   /* Commit written data of the specified size. */
   void mark_written(size_t size) {
     write_index = (write_index + size) % N;
@@ -186,7 +199,7 @@ class CircularQueue{
     return true;
   }
 
-  size_t write_from_if_available(T const* elements, size_t const& count) {
+  size_t write_if_available(T const* elements, size_t const& count) {
     if (count == 0 or write_available() < count) return 0;
     for (size_t i = 0; i < count; ++i) {
       data[(write_index + i) % N] = elements[i];
@@ -224,13 +237,6 @@ class CircularQueue{
   /* Mark data as read. */
   void mark_read(size_t size = 1) {
     read_index = (read_index + size) % N;
-  }
-
-  bool read_if_available(T & element) {
-    if (read_available() == 0) return false;
-    element = data[read_index];
-    mark_read(1);
-    return true;
   }
 };
 

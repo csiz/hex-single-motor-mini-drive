@@ -22,25 +22,14 @@ extern "C" void ADC1_2_IRQHandler(void);
 #include "hex_mini_drive_interface.hpp"
 
 
-// Motor control
-// -------------
-
-// Check if the motor is in a safe state (breaking or freewheeling).
-bool is_motor_safed();
-
-// Set the rotor angle directly, eg. from an external sensor. The angle
-// is set as an offset to the current angle.
-void set_angle_offset(int32_t angle_offset);
-
-// Offset the rotations counter to home the motor.
-void set_rotations_offset(int32_t rotations_offset);
-
-
 // Control data
 // ------------
 
-// Current calibration factors.
-extern hex_mini_drive::CurrentCalibration current_calibration;
+// Runtime information.
+extern hex_mini_drive::Info info;
+
+// Calibration factors.
+extern hex_mini_drive::Calibration calibration;
 
 // Interrupt loop control parameters.
 extern hex_mini_drive::ControlParameters control_parameters;
@@ -53,3 +42,6 @@ extern CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> read
 // schedule while the first is executing, but also we will have 1 more space to write an emergency break
 // command! The break command will also lead to the interrupt loop freeing up space in the command queue.
 extern CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue;
+
+// Check if the motor is in a safe state (breaking or freewheeling).
+bool is_motor_safed();

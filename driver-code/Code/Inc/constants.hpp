@@ -350,7 +350,7 @@ const hex_mini_drive::DriveState freewheel_drive_state = {
 
 
 // Default to a the planetary 3 phase motor.
-const hex_mini_drive::CurrentCalibration default_current_calibration = {
+const hex_mini_drive::Calibration default_calibration = {
     .u_current_zero = 0.0f,
     .v_current_zero = 0.0f,
     .w_current_zero = 0.0f,

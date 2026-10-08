@@ -13,12 +13,22 @@ static inline constexpr int32_t min(int32_t a, int32_t b){
 }
 
 // Get the smaller between two numbers.
+static inline constexpr uint32_t min(uint32_t a, uint32_t b){
+    return a < b ? a : b;
+}
+
+// Get the smaller between two numbers.
 static inline constexpr float min(float a, float b){
     return a < b ? a : b;
 }
 
 // Get the larger between two numbers.
 static inline constexpr int32_t max(int32_t a, int32_t b){
+    return a > b ? a : b;
+}
+
+// Get the larger between two numbers.
+static inline constexpr uint32_t max(uint32_t a, uint32_t b){
     return a > b ? a : b;
 }
 

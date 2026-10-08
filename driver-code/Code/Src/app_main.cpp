@@ -7,55 +7,43 @@
 #include "math_utils.hpp"
 #include "constants.hpp"
 
+#include <cstring>
+#include <memory>
 #include <stm32g4xx_hal.h>
 #include <stm32g4xx_ll_cordic.h>
 
 
-// Store the latest readout.
-hex_mini_drive::Readout latest_readout;
+
+
+
+// Main loop stats tracking
+// ------------------------
 
 // Keep track of how many readouts we see.
 uint16_t last_readout_number = 0;
 
-// Main loop stats tracking
-// ------------------------
+// A number for the main loop iterations.
 uint32_t main_loop_number = 0;
+
+// Loop number the last time we counted run time stats.
 uint32_t timing_loop_number = 0;
+
+// Readout number the last time we counted run time stats.
 uint16_t timing_readout_number = 0;
 
-
+// Minimum period between timing updates in milliseconds.
 const uint32_t min_timing_period_millis = 50;
+
+// Time of the last run time stats calculation.
 uint32_t last_update_time_millis = 0;
-
-float main_loop_rate = 0.0f;
-float adc_update_rate = 0.0f;
-
-
-
-// Calibration tracking
-// --------------------
-
-enum struct CalibrationMode {
-  NONE,
-  RESISTANCE,
-  INDUCTANCE,
-  ROTATING_CHIRP,
-  FIXED_CHIRP
-};
-
-CalibrationMode calibration_mode = CalibrationMode::NONE;
 
 
 // Communication buffers and state
 // -------------------------------
 
 const uint32_t partial_message_timeout_ms = 500;
-const uint32_t sending_timeout_ms = 500;
 
-hex_mini_drive::ConsistentOverheadByteStuffing<hex_mini_drive::MAX_MESSAGE_SIZE> encoding_buffer = {};
-
-// Time of last USB packet sent; used to detect timeouts.
-uint32_t last_send_time = 0;
+hex_mini_drive::ConsistentOverheadByteStuffing<hex_mini_drive::MAX_MESSAGE_SIZE> encoder = {};
 
 // Time of the last USB packet received; used to detect timeouts.
 uint32_t last_receive_time = 0;
@@ -63,23 +51,15 @@ uint32_t last_receive_time = 0;
 // Number of bytes discarded due to invalid messages.
 uint32_t bytes_discarded = 0;
 
+// Count the number of bytes sent successfully.
 uint32_t bytes_sent = 0;
 
-uint16_t stream_state = 0;
-uint16_t stream_last_sent = 0;
-bool reply_current_calibration = false;
-bool reply_control_parameters = false;
-bool reply_unit_test = false;
-bool reply_saved_to_flash = false;
+// Whether we should stream data continuously.
+uint32_t stream_state = 0;
 
-// Function signature for unit tests; the unit test prints text to the buffer.
-using UnitTestFunction = void (*)(char * buffer, size_t max_size);
+// Number of readouts to snapshot and send over USB.
+uint32_t readouts_to_send = 0;
 
-UnitTestFunction unit_test_function = nullptr;
-
-hex_mini_drive::DriveSchedule pending_drive_schedule = {};
-
-size_t pending_schedule_length = 0;
 
 // Initialization
 // --------------
@@ -111,24 +91,12 @@ void app_init() {
 // Communications and commands
 // ---------------------------
 
-void break_motor(){
-  pending_schedule_length = 0;
-  while(not drive_state_queue.write_if_available(breaking_drive_state)){
-    // Wait until we successfully write the breaking state to the queue.
-  };
-}
-
-// Run a unit test that takes a function pointer to a test function (which itself takes a buffer); returns whether error occurred.
-bool run_unit_test(UnitTestFunction test_function) {
-  if (reply_unit_test) return true; // We are already running a unit test.
-
-  // Remember which test to run when the USB queue is ready.
-  unit_test_function = test_function;
-
-  // Set the flag to indicate that we have a unit test result ready to send.
-  reply_unit_test = true;
-
-  return false;
+static inline hex_mini_drive::Version make_version_object() {
+  hex_mini_drive::Version result;
+  std::strncpy(
+    reinterpret_cast<char*>(result.data()), 
+    hex_mini_drive::VERSION_STRING, hex_mini_drive::VERSION_STRING_SIZE);
+  return result;
 }
 
 static inline hex_mini_drive::DriveState get_checked_drive_state(hex_mini_drive::DriveState const& drive_state) {
@@ -145,9 +113,35 @@ static inline hex_mini_drive::DriveState get_checked_drive_state(hex_mini_drive:
   };
 }
 
+// Queue a message to the USB send buffer if there's enough space for it.
+static inline bool queue_message(hex_mini_drive::Message const& message) {
+  // Check if we have space before pushing the message on the buffer.
+  // To speed up the check we will assume we write the maximum sized message.
+  uint8_t * write_buffer = usb_reserve_send_pointer(hex_mini_drive::MAX_MESSAGE_SIZE);
+
+  // Not enough space in the USB send buffer; bail out early.
+  if (write_buffer == nullptr) return false;
+
+  // Serialize the message as bytes into the encoder's buffer.
+  encoder.encoding_buffer_size = hex_mini_drive::write_message(
+    encoder.encoding_buffer, 
+    hex_mini_drive::MAX_MESSAGE_SIZE, 
+    message
+  );
+
+  // COBS encode the message and get the actual size used (it will be 0 for errors).
+  const size_t write_size = encoder.encode_message(write_buffer, hex_mini_drive::MAX_MESSAGE_SIZE);
+
+  // Tell the USB controller that we've written data to the buffer.
+  usb_mark_written(write_size);
+
+  bytes_sent += write_size;
+
+  return true;
+}
 
 // Handle the command on the buffer; returns whether there was an error.
-void handle_message(hex_mini_drive::Message const& message) {
+static inline void handle_message(hex_mini_drive::Message const& message) {
 
   using namespace hex_mini_drive;
 
@@ -156,44 +150,76 @@ void handle_message(hex_mini_drive::Message const& message) {
       // No command received; ignore it.
       return;
 
+    case GET_VERSION: {
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::VERSION,
+        .message_data = make_version_object()
+      });
+      return;
+    }
+
     case STREAM_READOUTS: {
       // Continuously stream data if duration > 0.
       stream_state = std::get<StreamReadouts>(message.message_data).stream_state;
-      // Also stop the motor if we stop the stream.
-      if (not stream_state) break_motor();
+      // We should also stop the snapshot behaviour.
+      readouts_to_send = 0;
+      return;
+    }
+
+    case GET_READOUTS_SNAPSHOT: {
+      // Get the number of readouts to snapshot and send over USB.
+      readouts_to_send = min(
+        hex_mini_drive::HISTORY_SIZE, 
+        std::get<StreamReadouts>(message.message_data).stream_state
+      );
+      // We should also stop the continuous streaming behaviour.
+      stream_state = false;
+      return;
+    }
+
+    case GET_INFO: {
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::INFO,
+        .message_data = info
+      });
       return;
     }
 
     // Turn off the motor driver.
     case SET_STATE_OFF: {
-      // Repeat command until the driver stops.
-      break_motor();
+      while(not drive_state_queue.write_if_available(breaking_drive_state)){
+        // Wait until we successfully write the breaking state to the queue.
+      };
       return;
     }
 
     // Freewheel the motor.
     case SET_STATE_FREEWHEEL: {
-      pending_schedule_length = 1;
-      pending_drive_schedule[0] = freewheel_drive_state;
+      while(not drive_state_queue.write_if_available(freewheel_drive_state)){
+        // Wait until we successfully write the freewheel state to the queue.
+      };
       return;
     }
 
     case SET_DRIVE_STATE: {
-      pending_schedule_length = 1;
       auto const& drive_state = std::get<DriveState>(message.message_data);
-      pending_drive_schedule[0] = get_checked_drive_state(drive_state);
+      // Only write the drive_state if there is space available in the queue.
+      drive_state_queue.write_if_available(get_checked_drive_state(drive_state));
       return;
     }
 
     case SET_DRIVE_SCHEDULE: {
+      // Only write if there's space for the largest possible schedule size.
+      if (drive_state_queue.write_available() < hex_mini_drive::DRIVE_SCHEDULE_SIZE) return;
+
       size_t i = 0;
       for (; i < hex_mini_drive::DRIVE_SCHEDULE_SIZE; i++) {
         auto const& drive_state = std::get<DriveSchedule>(message.message_data)[i];
         // The schedule lasts until the first state with 0 duration.
         if (drive_state.duration == 0) break;
-        pending_drive_schedule[i] = get_checked_drive_state(drive_state);
+        drive_state_queue.write_at_offset(i, get_checked_drive_state(drive_state));
       }
-      pending_schedule_length = i;
+      drive_state_queue.mark_written(i);
       
       return;
     }
@@ -259,198 +285,81 @@ void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    case GET_CURRENT_CALIBRATION:
-      reply_current_calibration = true;
+    case GET_CALIBRATION:
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION,
+        .message_data = calibration
+      });
       return;
 
-    case SET_CURRENT_CALIBRATION:
-      current_calibration = std::get<CurrentCalibration>(message.message_data);
-      reply_current_calibration = true;
+    case SET_CALIBRATION:
+      calibration = std::get<Calibration>(message.message_data);
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION,
+        .message_data = calibration
+      });
       return;
         
-    case RESET_CURRENT_CALIBRATION:
+    case RESET_CALIBRATION:
       // Reset the current factors to the default values.
-      current_calibration = default_current_calibration;
-      reply_current_calibration = true;
+      calibration = default_calibration;
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION,
+        .message_data = calibration
+      });
       return;
 
     case GET_CONTROL_PARAMETERS:
-      reply_control_parameters = true;
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CONTROL_PARAMETERS,
+        .message_data = control_parameters
+      });
       return;
 
     case SET_CONTROL_PARAMETERS:
       control_parameters = std::get<ControlParameters>(message.message_data);
-      reply_control_parameters = true;
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CONTROL_PARAMETERS,
+        .message_data = control_parameters
+      });
       return;
 
     case RESET_CONTROL_PARAMETERS:
       control_parameters = default_control_parameters;
-      reply_control_parameters = true;
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CONTROL_PARAMETERS,
+        .message_data = control_parameters
+      });
       return;
-
-    case SET_ANGLE: {
-      set_angle_offset(std::get<SetAngle>(message.message_data).angle - latest_readout.angle);
-      return;
-    }
-
-    case SET_ROTATIONS: {
-      set_rotations_offset(std::get<SetRotations>(message.message_data).rotations - latest_readout.rotations);
-      return;
-    }
 
     case SAVE_SETTINGS_TO_FLASH:
       if(is_motor_safed()){
-        save_settings_to_flash(current_calibration, control_parameters);
+        save_settings_to_flash(calibration, control_parameters);
 
-        current_calibration = get_current_calibration();
+        calibration = get_calibration();
         control_parameters = get_control_parameters();
         
-        reply_saved_to_flash = true;
+        queue_message(hex_mini_drive::Message{
+          .message_code = hex_mini_drive::MessageCode::SETTINGS_SAVED_TO_FLASH,
+          .message_data = {}
+        });
         return;
       }
 
     // We shouldn't receive these messages; the driver only sends them.
+    case VERSION:
     case SETTINGS_SAVED_TO_FLASH:
-    case CURRENT_CALIBRATION:
+    case CALIBRATION:
     case CONTROL_PARAMETERS:
     case READOUT:
+    case INFO:
     case UNIT_TEST_OUTPUT:
       return;
   }
 }
 
-void reset_buffers(){
-  encoding_buffer.encode_reset();
-  encoding_buffer.decode_reset();
-  last_receive_time = 0;
-  stream_state = 0;
-}
 
-
-void serialize_message(hex_mini_drive::Message const& message) {
-  uint8_t out_buffer[hex_mini_drive::MAX_MESSAGE_SIZE] = {0};
-  size_t out_buffer_size = hex_mini_drive::write_message(out_buffer, hex_mini_drive::MAX_MESSAGE_SIZE, message);
-
-  if (out_buffer_size) encoding_buffer.encode_message(out_buffer, out_buffer_size);
-}
-
-void queue_response() {
-  // Wait until the previous message has been sent or buffers reset before encoding a new message.
-  if (encoding_buffer.is_message_encoded()) return;
-
-  // Queue the readout history to the send buffer.
-  if(stream_state and readout_history_queue.read_available() > 0){
-    serialize_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::READOUT,
-      .message_data = readout_history_queue.peek()
-    });
-
-    // TODO: handle the read marking carefully, see if we need the data in the main loop.
-    readout_history_queue.mark_read();
-
-    return;
-  }
-
-  // Send unit test response if requested.
-  if (reply_unit_test) {
-    hex_mini_drive::Message message = {
-      .message_code = hex_mini_drive::MessageCode::UNIT_TEST_OUTPUT,
-      .message_data = hex_mini_drive::UnitTestOutput{}
-    };
-    unit_test_function(
-      reinterpret_cast<char*>(std::get<hex_mini_drive::UnitTestOutput>(message.message_data).data()), 
-      hex_mini_drive::UNIT_TEST_OUTPUT_SIZE
-    );
-    serialize_message(message);
-    reply_unit_test = false;
-    return;
-  }
-
-  // Send control parameters if requested.
-  if (reply_control_parameters) {
-    serialize_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::CONTROL_PARAMETERS,
-      .message_data = control_parameters
-    });
-    reply_control_parameters = false;
-    return;
-  }
-
-  // Send current factors if requested.
-  if (reply_current_calibration) {
-    serialize_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::CURRENT_CALIBRATION,
-      .message_data = current_calibration
-    });
-    reply_current_calibration = false;
-    return;
-  }
-
-  if (reply_saved_to_flash) {
-    serialize_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::SETTINGS_SAVED_TO_FLASH,
-    });
-    reply_saved_to_flash = false;
-    return;
-  }
-}
-
-void receive_data(uint8_t * rx_buffer, size_t rx_size) {
-  // We have a partial message that has timed out; reset the buffer and continue 
-  // reading as a fresh message.
-  if (encoding_buffer.decode_ongoing() and 
-    (HAL_GetTick() - last_receive_time) > partial_message_timeout_ms) {
-    reset_buffers();
-  }
-
-  encoding_buffer.decode_chunk(rx_buffer, rx_size, [&](uint8_t * buffer, size_t size){
-    hex_mini_drive::Message message;
-    if(hex_mini_drive::read_message(message, buffer, size)){
-      // We have a valid message; handle it.
-      handle_message(message);
-    } else {
-      // Invalid message; ignore it.
-      bytes_discarded += size;
-    }
-  });
-  last_receive_time = HAL_GetTick();
-}
-
-void comms_update() {
-  const bool update_success = usb_update(
-    encoding_buffer.encoding_buffer, encoding_buffer.encoding_buffer_size, 
-    [&](uint8_t * buffer, size_t size){
-      receive_data(buffer, size);
-    }
-  );
-
-  if (update_success) {
-    bytes_sent += encoding_buffer.encoding_buffer_size;
-
-    // Data was queued; clear the response buffer.
-    encoding_buffer.encode_reset();
-    last_send_time = HAL_GetTick();
-  } else if (encoding_buffer.is_message_encoded()) {
-    // We have data to send but the queue is busy.
-    if(HAL_GetTick() - last_send_time > sending_timeout_ms){
-      // Timeout waiting for send; reset the buffers.
-      reset_buffers();
-
-      return usb_reset();
-    }
-  }
-}
-
-// Main app loop
-// -------------
-
-void app_tick() {
-  main_loop_number += 1;
-
-  readout_history_queue.read_if_available(latest_readout);
-
-  auto const& readout = latest_readout;
-
+static inline void process_readout(hex_mini_drive::Readout const& readout) {
   // Limits
   // ------
 
@@ -473,27 +382,7 @@ void app_tick() {
 
   const float pwm_penalty = (0.1f - 1.f * pwm_too_high) * readouts_since_last_tick;
 
-  current_calibration.live_max_pwm = clip_to(0, pwm_max, current_calibration.live_max_pwm + pwm_penalty);
-
-
-  // Timing
-  // ------
-
-  // Update timing information.
-  const uint32_t milliseconds = HAL_GetTick();
-
-  const uint32_t duration_since_timing_update = milliseconds - last_update_time_millis;
-  if (duration_since_timing_update > min_timing_period_millis) {
-    last_update_time_millis = milliseconds;
-    
-    float seconds = duration_since_timing_update / 1000.f;
-
-    main_loop_rate = (main_loop_number - timing_loop_number) / seconds;
-    adc_update_rate = ((readout_number_base + readout.readout_number - timing_readout_number) % readout_number_base) / seconds;
-
-    timing_loop_number = main_loop_number;
-    timing_readout_number = readout.readout_number;
-  }
+  info.live_max_pwm = clip_to(0, pwm_max, info.live_max_pwm + pwm_penalty);
 
   
   // Calculate the motor constant
@@ -509,7 +398,7 @@ void app_tick() {
   // The voltage magnitude is always positive, also use the positive angular speed.
   const float abs_angular_speed = readout.angular_speed > 0 ? readout.angular_speed : -readout.angular_speed;
 
-  const float predicted_emf_voltage = abs_angular_speed * current_calibration.motor_constant * emf_motor_constant_conversion;
+  const float predicted_emf_voltage = abs_angular_speed * calibration.motor_constant * emf_motor_constant_conversion;
 
   // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
   const bool compute_motor_constant = readout.angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
@@ -517,78 +406,150 @@ void app_tick() {
   // Get the error (gradient) for the motor constant observer.
   const float motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
 
-  current_calibration.motor_constant = current_calibration.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
+  calibration.motor_constant = calibration.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
 
   
   // Calibration calculations
   // ------------------------
 
-  // if (
-  //   calibration_mode != CalibrationMode::NONE and
-  //   not readout_history_get_reset_flag() and
-  //   (get_readout_history_size() >= hex_mini_drive::HISTORY_SIZE)
-  // ) {
-  //   // We are in calibration mode; run the calibration calculations.
-  //   // 
-  //   // The calibration is done in the driver loop, but we need to run the calculations here
-  //   // to update the calibration values and send them to the host.
+  // TODO: TODO TODO TODOOOO
+}
 
-  //   // Check if the calibration is complete.
-  //   // 
-  //   // The calibration starts after the reset flag is cleared, and ends when the motor returns to
-  //   // a safe state.
+// Main app loop
+// -------------
 
-  //   const float learning_rate = 0.0f;
-
-  //   // Get data from history and compute gradients and the mean of the samples.
-  //   // Then run gradient descent on the resistance and inductance values.
-  //   hex_mini_drive::Readout const* readout_history = get_readout_history();
-  //   const size_t history_size = get_readout_history_size();
-  //   for (size_t i = 0; i < history_size; ++i) {
-  //     hex_mini_drive::Readout const& readout = readout_history[i];
-      
-  //     // Tag unused variables.
-  //     (void)readout; // Tag unused variable.
-  //     (void)learning_rate; // Tag unused variable.
-  //   }
-
-  //   // Done an iteration of the calibration (it should take about 10 for a good value and 90 to stabilise).
-  //   calibration_mode = CalibrationMode::NONE;
-  // }
-
+void app_tick() {
   
+  // Run time stats
+  // --------------
 
-  // Write all values
-  // ----------------
+  // Count loop iterations.
+  main_loop_number += 1;
+
+  // Update timing information.
+  const uint32_t milliseconds = HAL_GetTick();
+
+  const uint32_t duration_since_timing_update = milliseconds - last_update_time_millis;
+  if (duration_since_timing_update > min_timing_period_millis) {
+    last_update_time_millis = milliseconds;
+    
+    float seconds = duration_since_timing_update / 1000.f;
+
+    info.main_loop_rate = (main_loop_number - timing_loop_number) / seconds;
+    info.adc_update_rate = ((readout_number_base + last_readout_number - timing_readout_number) % readout_number_base) / seconds;
+
+    timing_loop_number = main_loop_number;
+    timing_readout_number = last_readout_number;
+  }
   
-  current_calibration.main_loop_rate = main_loop_rate;
-  current_calibration.adc_update_rate = adc_update_rate;
-  
-
-
-  // Adjust direction
-  // ----------------
-
-  // TODO: properly adjust direction; we might wanna swap V and W instead, so everything is consistent. (Any 2 swaps changes direction.)
 
   // Comms update
   // ------------
 
-  // Queue the state readouts on the USB buffer.
-  queue_response();
-  
-  // Send and receive over the USB buffer.
-  comms_update();
+  usb_update();
 
-  // Handle driver state using last message
-  // --------------------------------------
-  
-  // Write the whole message if we can.
-  if (drive_state_queue.write_from_if_available(pending_drive_schedule.data(), pending_schedule_length)) {
-    // We wrote it all, now reset the pending length.
-    pending_schedule_length = 0;
+  // It's been too long since we have received anything, discard any partial message.
+  if (milliseconds - last_receive_time > partial_message_timeout_ms) {
+    encoder.decode_reset();
   }
 
+  size_t rx_size = usb_read_available();
+  
+  if (rx_size > 0) {
+    // We have data to read! Let's read up to the first message, or first error, or store the partial chunk.
+    const uint8_t * rx_buffer = usb_get_read_pointer();
+
+    // Read part of the message.
+    size_t rx_decoded_size = encoder.decode_chunk(rx_buffer, rx_size);
+    // And mark how much we've read to free up space in the usb buffer.
+    usb_mark_read(rx_decoded_size);
+    
+    if (encoder.decode_ready()) {
+      // Handle a message if the decoder is ready (we received the appropriately null terminated COBS encoded message).
+      hex_mini_drive::Message message;
+      if(hex_mini_drive::read_message(message, encoder.decoding_buffer, encoder.decoding_buffer_size)){
+        // We have a valid message; handle it.
+        handle_message(message);
+      } else {
+        // Invalid message; ignore it.
+        bytes_discarded += rx_decoded_size;
+      }
+      // We've handled the message, now we can free the encoder for the next message.
+      encoder.decode_reset();
+
+    } else if (encoder.decode_empty()){
+      
+      // The decoder is empty; but we've received data... Either we decoded 0 bytes, in which case the
+      // op below doesn't do anything. Or we've decoded some bytes but wrote nothing out because there was an error.
+      bytes_discarded += rx_decoded_size;
+    }
+
+    // Mark that we've received data at this time; we'll use this to timeout partial messages.
+    last_receive_time = milliseconds;
+  }
+
+
+  // Readout post-processing and streaming
+  // -------------------------------------
+
+  const size_t readouts_available = readout_history_queue.read_available();
+
+  info.average_buffer_fill_rate += (readouts_available - info.average_buffer_fill_rate) * 0.01f;
+
+  size_t i = 0;
+  for (; i < readouts_available; i++) {
+    // TODO: Adjust readout
+    // --------------
+    // Adjust readout to reflect the direction and offset settings from the user.
+
+    auto const& readout = readout_history_queue.peek();
+
+    // First, check whether we need to send; sometimes we need to block in which case we can
+    // postpone processing until unblocked.
+    const bool need_to_send = stream_state or readouts_to_send;
+
+    const bool queue_success = need_to_send ? queue_message(hex_mini_drive::Message{
+      .message_code = hex_mini_drive::MessageCode::READOUT,
+      .message_data = readout
+    }) : false;
+
+    // If we're taking a readout snapshot, use a FIFO strategy for as long as we can
+    // to send consecutive readouts to the USB host.
+    if (readouts_to_send) {
+      if (queue_success) readouts_to_send--;
+      else break;
+    }
+
+    if (stream_state) {
+      // Also queue up info and calibration with each message.
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::INFO,
+        .message_data = info
+      });
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION,
+        .message_data = calibration
+      });
+    }
+
+    // Now that we're done with message queueing we can post-process for before we discard.
+
+    // Post process for calibration, safety limits and advanced control.
+    process_readout(readout);
+
+    // All done with this readout, mark it to free up space.
+    readout_history_queue.mark_read(1);
+  }
+
+  // If the history is full but we're not sending anything then process at least 1 readout to keep the system responsive.
+  if (readouts_available == hex_mini_drive::HISTORY_SIZE and i == 0) {
+    // Post process for the safety limits, but otherwise skip sending despite the request.
+    process_readout(readout_history_queue.peek());
+
+    // Discard the oldest readout, we always want to keep some space for the interrupt
+    // loop to write the latest readout for the safety limits update!
+    readout_history_queue.mark_read(1);
+  }
 }
 
 

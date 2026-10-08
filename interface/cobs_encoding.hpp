@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 
 namespace hex_mini_drive {
 
@@ -27,6 +26,9 @@ struct ConsistentOverheadByteStuffing {
   // we must not insert a zero byte in the decoded output.
   bool decoding_insert_zero_byte = false;
 
+  // Whether we have a complete message in the decoding_buffer.
+  bool decoding_ready = false;
+
   // Buffer for encoding; we can reuse the same buffer for each message.
   uint8_t encoding_buffer[max_message_size] = {0};
   size_t encoding_buffer_size = 0;
@@ -37,17 +39,23 @@ struct ConsistentOverheadByteStuffing {
     decoding_buffer_size = 0;
     decoding_length_until_zero = 0;
     decoding_insert_zero_byte = false;
+    decoding_ready = false;
+  }
+
+  // Check if the decoder is empty.
+  bool decode_empty() {
+    return decoding_buffer_size == 0;
   }
 
   // Check whether we are in the middle of decoding a message.
-  bool decode_ongoing(){
-    return decoding_buffer_size > 0;
+  bool decode_ready(){
+    return decoding_ready;
   }
 
-  // Decode a chunk of data framed using COBS; return the number of dropped bytes due to errors.
-  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length, std::function<void(uint8_t * buffer, size_t size)> received_message) {
-    size_t dropped_bytes = 0;
-    
+  // Decode a chunk of data framed using COBS; return the number of bytes processed.
+  // It may return early. A message is ready if decoding_ready is true, otherwise there's 
+  // a partial message, other otherwise the bytes were dropped if decode_empty.
+  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length) {
     // Iterate over all bytes in the data chunk.
     for (size_t i = 0; i < chunk_length; ++i) {
       const uint8_t byte = chunk[i];
@@ -57,18 +65,18 @@ struct ConsistentOverheadByteStuffing {
         if (decoding_buffer_size == 0) {
           // Do nothing for an empty message.
         } else if (decoding_length_until_zero == 0) {
-          // Process the complete message.
-          received_message(decoding_buffer, decoding_buffer_size);
-          // Reset for the next message.
-          decode_reset();
+          // We're done reading the message by receiving a zero byte at the right time.
+          decoding_ready = true;
+          // Return the length of the processed chunk.
+          return i + 1;
         } else {
           // We received a zero byte but we were still expecting more data for 
           // the current message, so this is an error.
-          dropped_bytes += decoding_buffer_size;
-          // Reset for the next message.
+          //
+          // Reset for the next message; and return the data processed so far.
           decode_reset();
+          return i + 1;
         }
-
 
       // Otherwise we expect to read the length till the next 0.
       } else if (decoding_length_until_zero == 0) {
@@ -82,8 +90,8 @@ struct ConsistentOverheadByteStuffing {
         if (decoding_insert_zero_byte) {
           if (decoding_buffer_size >= max_message_size) {
             // We don't have space to insert the zero byte, so we drop the current message.
-            dropped_bytes += decoding_buffer_size;
             decode_reset();
+            return i + 1;
           } else {
             decoding_buffer[decoding_buffer_size++] = 0;  // Insert zero byte for COBS decoding.
           }
@@ -99,8 +107,8 @@ struct ConsistentOverheadByteStuffing {
         // Copy the current byte and count down the length until we need to insert a zero byte.
         if (decoding_buffer_size >= max_message_size) {
           // We don't have space to copy the byte, so we drop the current message.
-          dropped_bytes += decoding_buffer_size;
           decode_reset();
+          return i + 1;
         } else {
           decoding_buffer[decoding_buffer_size++] = byte;
           decoding_length_until_zero--;
@@ -108,7 +116,8 @@ struct ConsistentOverheadByteStuffing {
       }
     }
 
-    return dropped_bytes;
+    // We finished processing the whole chunk without an early return.
+    return chunk_length;
   }
 
   // Reset the encoder state.
@@ -117,22 +126,21 @@ struct ConsistentOverheadByteStuffing {
     encoding_buffer_size = 0;
   }
 
-  // Check whether a message has been encoded.
-  bool is_message_encoded() {
-    return encoding_buffer_size > 0;
+  // Check whether the encoding buffer is empty.
+  bool encode_empty() {
+    return encoding_buffer_size == 0;
   }
 
-  // Encode a message using COBS (Consistent Overhead Byte Stuffing); returns true for success, false for failure/invalid input.
-  bool encode_message(uint8_t const* input, size_t input_size) {
-    // Check if the encoding buffer is clear.
-    if (encoding_buffer_size != 0) return false;
+  // Calculate the expected output size for the current message in the encoding buffer.
+  size_t encode_max_required_size() {
+    // Each non-zero byte may require an additional length byte, plus one for the final zero delimiter.
+    return encoding_buffer_size + (encoding_buffer_size / 254) + 1;
+  }
 
-    // Nothing to encode.
-    if (input_size == 0) return true;
+  // Encode a message using COBS (Consistent Overhead Byte Stuffing).
+  // Returns the amount of data written; 0 for errors.
+  size_t encode_message(uint8_t * output, size_t max_output_size) {
 
-    // Reset encode length to zero in case of errors.
-    encoding_buffer_size = 0;
-    
     // Current reading index from the input message.
     size_t read_index = 0;
     // Start writing after the first length byte.
@@ -142,42 +150,40 @@ struct ConsistentOverheadByteStuffing {
     // Current length byte value.
     uint8_t code = 1;
 
-    if (write_index >= max_message_size) {
-      return false;  // Indicate failure due to insufficient buffer size.
+    if (write_index >= max_output_size) {
+      return 0;  // Indicate failure due to insufficient buffer size.
     }
 
-    while (read_index < input_size) {
-      if (input[read_index] == 0) {
+    while (read_index < encoding_buffer_size) {
+      if (encoding_buffer[read_index] == 0) {
         // Write the length byte.
-        encoding_buffer[code_index] = code;
+        output[code_index] = code;
         code_index = write_index++;
         code = 1;  // Reset code for the next segment.
         read_index++;
       } else {
         // Copy non-zero byte to output.
-        encoding_buffer[write_index++] = input[read_index++];
+        output[write_index++] = encoding_buffer[read_index++];
         code++;
         // If code reaches 0xFF, we need to start a new segment.
         if (code == 0xFF) {
-          encoding_buffer[code_index] = code;
+          output[code_index] = code;
           code_index = write_index++;
           code = 1;
         }
       }
       // Check for output buffer overflow.
-      if (write_index >= max_message_size) {
-        return false;  // Indicate failure due to insufficient buffer size.
+      if (write_index >= max_output_size) {
+        return 0;  // Indicate failure due to insufficient buffer size.
       }
     }
     // Write the final length byte.
-    encoding_buffer[code_index] = code;
+    output[code_index] = code;
     // Append the zero delimiter at the end.
-    encoding_buffer[write_index++] = 0;
-
-    encoding_buffer_size = write_index;
+    output[write_index++] = 0;
 
     // Yay.
-    return true;
+    return write_index;
   }
 };
 

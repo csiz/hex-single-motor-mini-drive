@@ -10,6 +10,7 @@ import {
   ENABLE_W_OUTPUT,
   ENABLE_Z_OUTPUT,
   UNIT_TEST_OUTPUT_SIZE,
+  VERSION_STRING_SIZE,
 } from "hex-mini-drive-interface";
 
 import {normalize_radians} from "./angular_math.js";
@@ -26,6 +27,7 @@ export {
   ENABLE_W_OUTPUT,
   ENABLE_Z_OUTPUT,
   UNIT_TEST_OUTPUT_SIZE,
+  VERSION_STRING_SIZE,
 };
 
 // Timing constants

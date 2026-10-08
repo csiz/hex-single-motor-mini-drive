@@ -5,6 +5,7 @@
 #include "error_handler.hpp"
 
 #include "circular_buffer.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -15,9 +16,9 @@ extern "C" uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 const int max_usb_packet = 512;
 
-CircularBuffer usb_com_rx_buffer = {UserRxBufferFS,APP_RX_DATA_SIZE};
+CircularBuffer<UserRxBufferFS> usb_com_rx_buffer;
 
-CircularBuffer usb_com_tx_buffer = {UserTxBufferFS, APP_TX_DATA_SIZE};
+CircularBuffer<UserTxBufferFS> usb_com_tx_buffer;
 
 
 static_assert(APP_RX_DATA_SIZE == 2 * max_usb_packet, "The USB sizes must be twice the max USB packet size.");
@@ -60,7 +61,7 @@ void usb_received(size_t rx_size) {
   // Ignore data we weren't prepared to receive.
   if (not receiving_active) return;
 
-  if(usb_com_rx_buffer.mark_write(rx_size)) error();
+  if(usb_com_rx_buffer.mark_written(rx_size)) error();
 
   usb_prepare_receive();
 }
@@ -76,7 +77,36 @@ void usb_confirmed_send(size_t len){
 }
 
 
-static inline void usb_prepare_send() {
+uint8_t * usb_reserve_send_pointer(size_t max_write_size){
+  if (not usb_active) return nullptr;
+
+  return usb_com_tx_buffer.reserve_write_head(max_write_size);
+}
+
+void usb_mark_written(size_t tx_size) {
+  if(usb_com_tx_buffer.mark_written(tx_size)) error();
+}
+
+// Return the number of bytes available to read from the USB receive buffer.
+size_t usb_read_available(){
+  return usb_com_rx_buffer.read_available();
+}
+
+uint8_t const* usb_get_read_pointer() {
+  return usb_com_rx_buffer.get_read_pointer();
+}
+
+void usb_mark_read(size_t read_size) {
+  if(usb_com_rx_buffer.mark_read(read_size)) error();
+}
+
+void usb_update() {
+  if (not usb_active) return;
+  
+  if (not receiving_active) {
+    usb_prepare_receive();
+  }
+  
   // Wait until the previous transmission is complete.
   if (usb_pending_send) return;
 
@@ -84,11 +114,11 @@ static inline void usb_prepare_send() {
   if (not usb_host_is_ready) return;
 
   // Check if there is data to send.
-  usb_pending_send = usb_com_tx_buffer.available_to_read();
+  usb_pending_send = usb_com_tx_buffer.read_available();
 
   if (not usb_pending_send) return;
 
-  uint8_t * const tx_head = usb_com_tx_buffer.get_read_head();
+  uint8_t * const tx_head = usb_com_tx_buffer.get_read_pointer();
 
   // Not ready yet.
   const USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
@@ -96,37 +126,6 @@ static inline void usb_prepare_send() {
 
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, tx_head, usb_pending_send);
   USBD_CDC_TransmitPacket(&hUsbDeviceFS);
-}
-
-bool usb_update(uint8_t * tx_data, size_t tx_size, std::function<void(uint8_t * buffer, size_t size)> process_received_data) {
-  if (not usb_active) return false;
-
-
-  // Read any data in the reading buffer.
-  const int read_available = usb_com_rx_buffer.available_to_read();
-  if (read_available > 0) {
-    process_received_data(usb_com_rx_buffer.get_read_head(), read_available);
-    if(usb_com_rx_buffer.mark_read(read_available)) error();
-  }
-  
-  if (not receiving_active) {
-    usb_prepare_receive();
-  }
-
-  uint8_t * const tx_head = usb_com_tx_buffer.reserve_write_head(tx_size);
-
-  const bool can_queue_send = tx_head != nullptr;
-
-  // Queue data if we have space to send it.
-  if (tx_size and can_queue_send) {
-    // There is enough space to queue the data.
-    std::memcpy(tx_head, tx_data, tx_size);
-    if(usb_com_tx_buffer.mark_write(tx_size)) error();
-  }
-
-  usb_prepare_send();
-
-  return can_queue_send;
 }
 
 void usb_reset(){

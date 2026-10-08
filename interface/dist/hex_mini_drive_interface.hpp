@@ -15,6 +15,8 @@
 
 namespace hex_mini_drive {
 
+constexpr char const* VERSION_STRING = "0.114.0";
+
 // Basic Type Serialization Functions
 // ----------------------------------
 
@@ -111,6 +113,8 @@ static inline float read_float32(uint8_t const* buffer) {
 // Constants and Definitions
 // -------------------------
 
+constexpr uint32_t VERSION_STRING_SIZE = 64;
+
 constexpr uint32_t HISTORY_SIZE = 180;
 
 constexpr uint32_t MAX_MESSAGE_SIZE = 256;
@@ -134,6 +138,27 @@ constexpr uint8_t ENABLE_V_OUTPUT = 2;
 constexpr uint8_t ENABLE_W_OUTPUT = 4;
 
 constexpr uint8_t ENABLE_Z_OUTPUT = 8;
+
+// Version information of the driver.
+using Version = std::array<uint8_t, 64>;
+
+static inline void write_Version(uint8_t * buffer, Version const& value) {
+  size_t offset = 0;
+  for (size_t i = 0; i < 64; ++i) {
+    write_uint8(buffer + offset, value[i]);;
+    offset += 1;
+  }
+}
+
+static inline Version read_Version(uint8_t const* buffer) {
+  Version result;
+  size_t offset = 0;
+  for (size_t i = 0; i < 64; ++i) {
+    result[i] = read_uint8(buffer + offset);
+    offset += 1;
+  }
+  return result;
+}
 
 // Output data from unit test.
 using UnitTestOutput = std::array<uint8_t, 248>;
@@ -224,8 +249,10 @@ struct Readout {
   float resistive_power_average;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   int32_t rotations;
-  // Active PWM value for the motor outputs, value set by the advanced control algorithms.
+  // Active PWM duty for the motor outputs.
   float active_pwm;
+  // Angle of the active drive vector.
+  int32_t active_angle;
 };
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
@@ -289,6 +316,8 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   write_int32(buffer + offset, value.rotations);;
   offset += 4;
   write_float32(buffer + offset, value.active_pwm);;
+  offset += 4;
+  write_int32(buffer + offset, value.active_angle);;
   offset += 4;
 }
 static inline Readout read_Readout(uint8_t const* buffer) {
@@ -356,11 +385,13 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.active_pwm = read_float32(buffer + offset);
   offset += 4;
+  result.active_angle = read_int32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Continuously send readouts of the motor driver internal state.
 struct StreamReadouts {
-  // Number of messages to send; the stream command should be repeated to keep sending messages.
+  // Number of messages to send or whether the stream is on/off.
   uint32_t stream_state;
 };
 
@@ -375,6 +406,115 @@ static inline StreamReadouts read_StreamReadouts(uint8_t const* buffer) {
   StreamReadouts result;
   
   result.stream_state = read_uint32(buffer + offset);
+  offset += 4;
+  return result;
+}
+// Additional info about the running state of the driver.
+struct Info {
+  // Tick rate; the number of main loop (communication and commands) updates per second.
+  float main_loop_rate;
+  // ADC update rate; the number of ADC readouts per second. This is usually higher 
+  // than the main loop rate because we read the ADCs multiple times per main loop.
+  float adc_update_rate;
+  // Average size of the readout batch processed per main loop iteration.
+  float average_buffer_fill_rate;
+  // Current maximum PWM allowed by the driver.
+  float live_max_pwm;
+  // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
+  // motor efficiently.
+  int32_t lead_angle;
+};
+
+static inline void write_Info(uint8_t * buffer, Info const& value) {
+  size_t offset = 0;
+  write_float32(buffer + offset, value.main_loop_rate);;
+  offset += 4;
+  write_float32(buffer + offset, value.adc_update_rate);;
+  offset += 4;
+  write_float32(buffer + offset, value.average_buffer_fill_rate);;
+  offset += 4;
+  write_float32(buffer + offset, value.live_max_pwm);;
+  offset += 4;
+  write_int32(buffer + offset, value.lead_angle);;
+  offset += 4;
+}
+static inline Info read_Info(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  Info result;
+  
+  result.main_loop_rate = read_float32(buffer + offset);
+  offset += 4;
+  result.adc_update_rate = read_float32(buffer + offset);
+  offset += 4;
+  result.average_buffer_fill_rate = read_float32(buffer + offset);
+  offset += 4;
+  result.live_max_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.lead_angle = read_int32(buffer + offset);
+  offset += 4;
+  return result;
+}
+// Estimate resistance and inductance values for the motor coils; updated live.
+struct Calibration {
+  // Estimated zero-current offset for the U phase.
+  float u_current_zero;
+  // Estimated zero-current offset for the V phase.
+  float v_current_zero;
+  // Estimated zero-current offset for the W phase.
+  float w_current_zero;
+  // Estimated baseline resistance of the motor coils.
+  float resistance;
+  // Estimated baseline inductance of the motor coils. Written as a conductance
+  // for efficient math: `conductance = delta_t/L`.
+  float inductance;
+  // Estimated bias of the inductance due to magnetic saliency.
+  float inductance_bias;
+  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
+  int32_t saliency_angle_offset;
+  // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
+  float motor_constant;
+};
+
+static inline void write_Calibration(uint8_t * buffer, Calibration const& value) {
+  size_t offset = 0;
+  write_float32(buffer + offset, value.u_current_zero);;
+  offset += 4;
+  write_float32(buffer + offset, value.v_current_zero);;
+  offset += 4;
+  write_float32(buffer + offset, value.w_current_zero);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_bias);;
+  offset += 4;
+  write_int32(buffer + offset, value.saliency_angle_offset);;
+  offset += 4;
+  write_float32(buffer + offset, value.motor_constant);;
+  offset += 4;
+}
+static inline Calibration read_Calibration(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  Calibration result;
+  
+  result.u_current_zero = read_float32(buffer + offset);
+  offset += 4;
+  result.v_current_zero = read_float32(buffer + offset);
+  offset += 4;
+  result.w_current_zero = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_bias = read_float32(buffer + offset);
+  offset += 4;
+  result.saliency_angle_offset = read_int32(buffer + offset);
+  offset += 4;
+  result.motor_constant = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -598,101 +738,14 @@ static inline SetStateSeekAngle read_SetStateSeekAngle(uint8_t const* buffer) {
   offset += 4;
   return result;
 }
-// TODO: rename this to LiveParameters or something like that, these ones change ever
-// so often and they affect the readout processing.
-// Estimate resistance and inductance values for the motor coils.
-struct CurrentCalibration {
-  // Tick rate; the number of main loop (communication and commands) updates per second.
-  float main_loop_rate;
-  // ADC update rate; the number of ADC readouts per second. This is usually higher 
-  // than the main loop rate because we read the ADCs multiple times per main loop.
-  float adc_update_rate;
-  // Current maximum PWM allowed by the driver.
-  float live_max_pwm;
-  // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
-  // motor efficiently.
-  int32_t lead_angle;
-  // Estimated zero-current offset for the U phase.
-  float u_current_zero;
-  // Estimated zero-current offset for the V phase.
-  float v_current_zero;
-  // Estimated zero-current offset for the W phase.
-  float w_current_zero;
-  // Estimated baseline resistance of the motor coils.
-  float resistance;
-  // Estimated baseline inductance of the motor coils. Written as a conductance
-  // for efficient math: `conductance = delta_t/L`.
-  float inductance;
-  // Estimated bias of the inductance due to magnetic saliency.
-  float inductance_bias;
-  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
-  int32_t saliency_angle_offset;
-  // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
-  float motor_constant;
-};
-
-static inline void write_CurrentCalibration(uint8_t * buffer, CurrentCalibration const& value) {
-  size_t offset = 0;
-  write_float32(buffer + offset, value.main_loop_rate);;
-  offset += 4;
-  write_float32(buffer + offset, value.adc_update_rate);;
-  offset += 4;
-  write_float32(buffer + offset, value.live_max_pwm);;
-  offset += 4;
-  write_int32(buffer + offset, value.lead_angle);;
-  offset += 4;
-  write_float32(buffer + offset, value.u_current_zero);;
-  offset += 4;
-  write_float32(buffer + offset, value.v_current_zero);;
-  offset += 4;
-  write_float32(buffer + offset, value.w_current_zero);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_bias);;
-  offset += 4;
-  write_int32(buffer + offset, value.saliency_angle_offset);;
-  offset += 4;
-  write_float32(buffer + offset, value.motor_constant);;
-  offset += 4;
-}
-static inline CurrentCalibration read_CurrentCalibration(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  CurrentCalibration result;
-  
-  result.main_loop_rate = read_float32(buffer + offset);
-  offset += 4;
-  result.adc_update_rate = read_float32(buffer + offset);
-  offset += 4;
-  result.live_max_pwm = read_float32(buffer + offset);
-  offset += 4;
-  result.lead_angle = read_int32(buffer + offset);
-  offset += 4;
-  result.u_current_zero = read_float32(buffer + offset);
-  offset += 4;
-  result.v_current_zero = read_float32(buffer + offset);
-  offset += 4;
-  result.w_current_zero = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_bias = read_float32(buffer + offset);
-  offset += 4;
-  result.saliency_angle_offset = read_int32(buffer + offset);
-  offset += 4;
-  result.motor_constant = read_float32(buffer + offset);
-  offset += 4;
-  return result;
-}
 // Parameters used in the motor control loop; for detailed descriptions check the
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
 struct ControlParameters {
+  // The user set zero position of the rotor in terms of rotation count.
+  int32_t rotation_zero;
+  // The user set zero position of the rotor relative to the angle.
+  int32_t angle_zero;
   // Sign of the motor direction (positive by default, negative to reverse turning direction).
   int16_t motor_direction;
   // Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
@@ -792,6 +845,10 @@ struct ControlParameters {
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
   size_t offset = 0;
+  write_int32(buffer + offset, value.rotation_zero);;
+  offset += 4;
+  write_int32(buffer + offset, value.angle_zero);;
+  offset += 4;
   write_int16(buffer + offset, value.motor_direction);;
   offset += 2;
   write_int16(buffer + offset, value.angle_fix_max_certainty);;
@@ -890,6 +947,10 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   
   ControlParameters result;
   
+  result.rotation_zero = read_int32(buffer + offset);
+  offset += 4;
+  result.angle_zero = read_int32(buffer + offset);
+  offset += 4;
   result.motor_direction = read_int16(buffer + offset);
   offset += 2;
   result.angle_fix_max_certainty = read_int16(buffer + offset);
@@ -984,49 +1045,16 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   return result;
 }
-struct SetAngle {
-  // Set the current angle of the motor; used for initial angle calibration.
-  int32_t angle;
-};
-
-static inline void write_SetAngle(uint8_t * buffer, SetAngle const& value) {
-  size_t offset = 0;
-  write_int32(buffer + offset, value.angle);;
-  offset += 4;
-}
-static inline SetAngle read_SetAngle(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetAngle result;
-  
-  result.angle = read_int32(buffer + offset);
-  offset += 4;
-  return result;
-}
-struct SetRotations {
-  // Set the number of rotations, used to home the motor.
-  int32_t rotations;
-};
-
-static inline void write_SetRotations(uint8_t * buffer, SetRotations const& value) {
-  size_t offset = 0;
-  write_int32(buffer + offset, value.rotations);;
-  offset += 4;
-}
-static inline SetRotations read_SetRotations(uint8_t const* buffer) {
-  size_t offset = 0;
-  
-  SetRotations result;
-  
-  result.rotations = read_int32(buffer + offset);
-  offset += 4;
-  return result;
-}
 // Message Codes
 enum MessageCode : uint16_t {
   NULL_MESSAGE_CODE = 0,
-  READOUT = 8224,
+  GET_VERSION = 1,
+  VERSION = 2,
+  READOUT = 8208,
+  INFO = 8209,
   STREAM_READOUTS = 8225,
+  GET_READOUTS_SNAPSHOT = 8226,
+  GET_INFO = 8227,
   SET_STATE_OFF = 8240,
   SET_STATE_FREEWHEEL = 8241,
   SET_DRIVE_STATE = 8242,
@@ -1037,16 +1065,14 @@ enum MessageCode : uint16_t {
   SET_STATE_DRIVE_SPEED = 16435,
   SET_STATE_DRIVE_TORQUE_SPEED = 16436,
   SET_STATE_SEEK_ANGLE = 16437,
-  CURRENT_CALIBRATION = 16448,
-  GET_CURRENT_CALIBRATION = 16449,
-  SET_CURRENT_CALIBRATION = 16450,
-  RESET_CURRENT_CALIBRATION = 16451,
+  CALIBRATION = 16448,
+  GET_CALIBRATION = 16449,
+  SET_CALIBRATION = 16450,
+  RESET_CALIBRATION = 16451,
   CONTROL_PARAMETERS = 16457,
   SET_CONTROL_PARAMETERS = 16458,
   GET_CONTROL_PARAMETERS = 16459,
   RESET_CONTROL_PARAMETERS = 16460,
-  SET_ANGLE = 16464,
-  SET_ROTATIONS = 16465,
   SAVE_SETTINGS_TO_FLASH = 16512,
   SETTINGS_SAVED_TO_FLASH = 16513,
   UNIT_TEST_OUTPUT = 20544,
@@ -1057,7 +1083,9 @@ struct Message {
   MessageCode message_code = static_cast<MessageCode>(0);
   
   std::variant<
+    Version,
     Readout,
+    Info,
     StreamReadouts,
     DriveState,
     DriveSchedule,
@@ -1066,10 +1094,8 @@ struct Message {
     SetStateDriveSpeed,
     SetStateDriveTorqueSpeed,
     SetStateSeekAngle,
-    CurrentCalibration,
+    Calibration,
     ControlParameters,
-    SetAngle,
-    SetRotations,
     UnitTestOutput,
     std::monostate
   > message_data;
@@ -1078,8 +1104,13 @@ struct Message {
 constexpr size_t message_size(MessageCode code) {
   switch (code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
-    case MessageCode::READOUT: return 110;
+    case MessageCode::GET_VERSION: return 2;
+    case MessageCode::VERSION: return 66;
+    case MessageCode::READOUT: return 114;
+    case MessageCode::INFO: return 22;
     case MessageCode::STREAM_READOUTS: return 6;
+    case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
+    case MessageCode::GET_INFO: return 2;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
     case MessageCode::SET_DRIVE_STATE: return 18;
@@ -1090,16 +1121,14 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
     case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: return 14;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CURRENT_CALIBRATION: return 50;
-    case MessageCode::GET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::SET_CURRENT_CALIBRATION: return 50;
-    case MessageCode::RESET_CURRENT_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 170;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 170;
+    case MessageCode::CALIBRATION: return 34;
+    case MessageCode::GET_CALIBRATION: return 2;
+    case MessageCode::SET_CALIBRATION: return 34;
+    case MessageCode::RESET_CALIBRATION: return 2;
+    case MessageCode::CONTROL_PARAMETERS: return 178;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 178;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
-    case MessageCode::SET_ANGLE: return 6;
-    case MessageCode::SET_ROTATIONS: return 6;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
     case MessageCode::SETTINGS_SAVED_TO_FLASH: return 2;
     case MessageCode::UNIT_TEST_OUTPUT: return 250;
@@ -1115,17 +1144,43 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::NULL_MESSAGE_CODE));
       return 2;
     }
+    case MessageCode::GET_VERSION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_VERSION));
+      return 2;
+    }
+    case MessageCode::VERSION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::VERSION));
+      if (max_size < 2 + 64) return 0;
+      write_Version(buffer + 2, std::get<Version>(message.message_data));
+      return 66;
+    }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 108) return 0;
+      if (max_size < 2 + 112) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 110;
+      return 114;
+    }
+    case MessageCode::INFO: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
+      if (max_size < 2 + 20) return 0;
+      write_Info(buffer + 2, std::get<Info>(message.message_data));
+      return 22;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
       if (max_size < 2 + 4) return 0;
       write_StreamReadouts(buffer + 2, std::get<StreamReadouts>(message.message_data));
       return 6;
+    }
+    case MessageCode::GET_READOUTS_SNAPSHOT: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_READOUTS_SNAPSHOT));
+      if (max_size < 2 + 4) return 0;
+      write_StreamReadouts(buffer + 2, std::get<StreamReadouts>(message.message_data));
+      return 6;
+    }
+    case MessageCode::GET_INFO: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_INFO));
+      return 2;
     }
     case MessageCode::SET_STATE_OFF: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_OFF));
@@ -1183,37 +1238,37 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_SetStateSeekAngle(buffer + 2, std::get<SetStateSeekAngle>(message.message_data));
       return 22;
     }
-    case MessageCode::CURRENT_CALIBRATION: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::CURRENT_CALIBRATION));
-      if (max_size < 2 + 48) return 0;
-      write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 50;
+    case MessageCode::CALIBRATION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION));
+      if (max_size < 2 + 32) return 0;
+      write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
+      return 34;
     }
-    case MessageCode::GET_CURRENT_CALIBRATION: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CURRENT_CALIBRATION));
+    case MessageCode::GET_CALIBRATION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CALIBRATION));
       return 2;
     }
-    case MessageCode::SET_CURRENT_CALIBRATION: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CURRENT_CALIBRATION));
-      if (max_size < 2 + 48) return 0;
-      write_CurrentCalibration(buffer + 2, std::get<CurrentCalibration>(message.message_data));
-      return 50;
+    case MessageCode::SET_CALIBRATION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CALIBRATION));
+      if (max_size < 2 + 32) return 0;
+      write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
+      return 34;
     }
-    case MessageCode::RESET_CURRENT_CALIBRATION: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CURRENT_CALIBRATION));
+    case MessageCode::RESET_CALIBRATION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CALIBRATION));
       return 2;
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 168) return 0;
+      if (max_size < 2 + 176) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 170;
+      return 178;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 168) return 0;
+      if (max_size < 2 + 176) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 170;
+      return 178;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1222,18 +1277,6 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     case MessageCode::RESET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CONTROL_PARAMETERS));
       return 2;
-    }
-    case MessageCode::SET_ANGLE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_ANGLE));
-      if (max_size < 2 + 4) return 0;
-      write_SetAngle(buffer + 2, std::get<SetAngle>(message.message_data));
-      return 6;
-    }
-    case MessageCode::SET_ROTATIONS: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_ROTATIONS));
-      if (max_size < 2 + 4) return 0;
-      write_SetRotations(buffer + 2, std::get<SetRotations>(message.message_data));
-      return 6;
     }
     case MessageCode::SAVE_SETTINGS_TO_FLASH: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SAVE_SETTINGS_TO_FLASH));
@@ -1266,14 +1309,39 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       message.message_data = std::monostate{};
       return true;
     }
+    case MessageCode::GET_VERSION: {
+      if (size != 2) return false;
+      message.message_data = std::monostate{};
+      return true;
+    }
+    case MessageCode::VERSION: {
+      if (size != 2 + 64) return false;
+      message.message_data = read_Version(buffer + 2);
+      return true;
+    }
     case MessageCode::READOUT: {
-      if (size != 2 + 108) return false;
+      if (size != 2 + 112) return false;
       message.message_data = read_Readout(buffer + 2);
+      return true;
+    }
+    case MessageCode::INFO: {
+      if (size != 2 + 20) return false;
+      message.message_data = read_Info(buffer + 2);
       return true;
     }
     case MessageCode::STREAM_READOUTS: {
       if (size != 2 + 4) return false;
       message.message_data = read_StreamReadouts(buffer + 2);
+      return true;
+    }
+    case MessageCode::GET_READOUTS_SNAPSHOT: {
+      if (size != 2 + 4) return false;
+      message.message_data = read_StreamReadouts(buffer + 2);
+      return true;
+    }
+    case MessageCode::GET_INFO: {
+      if (size != 2) return false;
+      message.message_data = std::monostate{};
       return true;
     }
     case MessageCode::SET_STATE_OFF: {
@@ -1326,33 +1394,33 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       message.message_data = read_SetStateSeekAngle(buffer + 2);
       return true;
     }
-    case MessageCode::CURRENT_CALIBRATION: {
-      if (size != 2 + 48) return false;
-      message.message_data = read_CurrentCalibration(buffer + 2);
+    case MessageCode::CALIBRATION: {
+      if (size != 2 + 32) return false;
+      message.message_data = read_Calibration(buffer + 2);
       return true;
     }
-    case MessageCode::GET_CURRENT_CALIBRATION: {
+    case MessageCode::GET_CALIBRATION: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;
     }
-    case MessageCode::SET_CURRENT_CALIBRATION: {
-      if (size != 2 + 48) return false;
-      message.message_data = read_CurrentCalibration(buffer + 2);
+    case MessageCode::SET_CALIBRATION: {
+      if (size != 2 + 32) return false;
+      message.message_data = read_Calibration(buffer + 2);
       return true;
     }
-    case MessageCode::RESET_CURRENT_CALIBRATION: {
+    case MessageCode::RESET_CALIBRATION: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 168) return false;
+      if (size != 2 + 176) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 168) return false;
+      if (size != 2 + 176) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
@@ -1364,16 +1432,6 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
     case MessageCode::RESET_CONTROL_PARAMETERS: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
-      return true;
-    }
-    case MessageCode::SET_ANGLE: {
-      if (size != 2 + 4) return false;
-      message.message_data = read_SetAngle(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_ROTATIONS: {
-      if (size != 2 + 4) return false;
-      message.message_data = read_SetRotations(buffer + 2);
       return true;
     }
     case MessageCode::SAVE_SETTINGS_TO_FLASH: {
@@ -1403,7 +1461,6 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 
 namespace hex_mini_drive {
 
@@ -1428,6 +1485,9 @@ struct ConsistentOverheadByteStuffing {
   // we must not insert a zero byte in the decoded output.
   bool decoding_insert_zero_byte = false;
 
+  // Whether we have a complete message in the decoding_buffer.
+  bool decoding_ready = false;
+
   // Buffer for encoding; we can reuse the same buffer for each message.
   uint8_t encoding_buffer[max_message_size] = {0};
   size_t encoding_buffer_size = 0;
@@ -1438,17 +1498,23 @@ struct ConsistentOverheadByteStuffing {
     decoding_buffer_size = 0;
     decoding_length_until_zero = 0;
     decoding_insert_zero_byte = false;
+    decoding_ready = false;
+  }
+
+  // Check if the decoder is empty.
+  bool decode_empty() {
+    return decoding_buffer_size == 0;
   }
 
   // Check whether we are in the middle of decoding a message.
-  bool decode_ongoing(){
-    return decoding_buffer_size > 0;
+  bool decode_ready(){
+    return decoding_ready;
   }
 
-  // Decode a chunk of data framed using COBS; return the number of dropped bytes due to errors.
-  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length, std::function<void(uint8_t * buffer, size_t size)> received_message) {
-    size_t dropped_bytes = 0;
-    
+  // Decode a chunk of data framed using COBS; return the number of bytes processed.
+  // It may return early. A message is ready if decoding_ready is true, otherwise there's 
+  // a partial message, other otherwise the bytes were dropped if decode_empty.
+  size_t decode_chunk(const uint8_t * chunk, size_t chunk_length) {
     // Iterate over all bytes in the data chunk.
     for (size_t i = 0; i < chunk_length; ++i) {
       const uint8_t byte = chunk[i];
@@ -1458,18 +1524,18 @@ struct ConsistentOverheadByteStuffing {
         if (decoding_buffer_size == 0) {
           // Do nothing for an empty message.
         } else if (decoding_length_until_zero == 0) {
-          // Process the complete message.
-          received_message(decoding_buffer, decoding_buffer_size);
-          // Reset for the next message.
-          decode_reset();
+          // We're done reading the message by receiving a zero byte at the right time.
+          decoding_ready = true;
+          // Return the length of the processed chunk.
+          return i + 1;
         } else {
           // We received a zero byte but we were still expecting more data for 
           // the current message, so this is an error.
-          dropped_bytes += decoding_buffer_size;
-          // Reset for the next message.
+          //
+          // Reset for the next message; and return the data processed so far.
           decode_reset();
+          return i + 1;
         }
-
 
       // Otherwise we expect to read the length till the next 0.
       } else if (decoding_length_until_zero == 0) {
@@ -1483,8 +1549,8 @@ struct ConsistentOverheadByteStuffing {
         if (decoding_insert_zero_byte) {
           if (decoding_buffer_size >= max_message_size) {
             // We don't have space to insert the zero byte, so we drop the current message.
-            dropped_bytes += decoding_buffer_size;
             decode_reset();
+            return i + 1;
           } else {
             decoding_buffer[decoding_buffer_size++] = 0;  // Insert zero byte for COBS decoding.
           }
@@ -1500,8 +1566,8 @@ struct ConsistentOverheadByteStuffing {
         // Copy the current byte and count down the length until we need to insert a zero byte.
         if (decoding_buffer_size >= max_message_size) {
           // We don't have space to copy the byte, so we drop the current message.
-          dropped_bytes += decoding_buffer_size;
           decode_reset();
+          return i + 1;
         } else {
           decoding_buffer[decoding_buffer_size++] = byte;
           decoding_length_until_zero--;
@@ -1509,7 +1575,8 @@ struct ConsistentOverheadByteStuffing {
       }
     }
 
-    return dropped_bytes;
+    // We finished processing the whole chunk without an early return.
+    return chunk_length;
   }
 
   // Reset the encoder state.
@@ -1518,22 +1585,21 @@ struct ConsistentOverheadByteStuffing {
     encoding_buffer_size = 0;
   }
 
-  // Check whether a message has been encoded.
-  bool is_message_encoded() {
-    return encoding_buffer_size > 0;
+  // Check whether the encoding buffer is empty.
+  bool encode_empty() {
+    return encoding_buffer_size == 0;
   }
 
-  // Encode a message using COBS (Consistent Overhead Byte Stuffing); returns true for success, false for failure/invalid input.
-  bool encode_message(uint8_t const* input, size_t input_size) {
-    // Check if the encoding buffer is clear.
-    if (encoding_buffer_size != 0) return false;
+  // Calculate the expected output size for the current message in the encoding buffer.
+  size_t encode_max_required_size() {
+    // Each non-zero byte may require an additional length byte, plus one for the final zero delimiter.
+    return encoding_buffer_size + (encoding_buffer_size / 254) + 1;
+  }
 
-    // Nothing to encode.
-    if (input_size == 0) return true;
+  // Encode a message using COBS (Consistent Overhead Byte Stuffing).
+  // Returns the amount of data written; 0 for errors.
+  size_t encode_message(uint8_t * output, size_t max_output_size) {
 
-    // Reset encode length to zero in case of errors.
-    encoding_buffer_size = 0;
-    
     // Current reading index from the input message.
     size_t read_index = 0;
     // Start writing after the first length byte.
@@ -1543,42 +1609,40 @@ struct ConsistentOverheadByteStuffing {
     // Current length byte value.
     uint8_t code = 1;
 
-    if (write_index >= max_message_size) {
-      return false;  // Indicate failure due to insufficient buffer size.
+    if (write_index >= max_output_size) {
+      return 0;  // Indicate failure due to insufficient buffer size.
     }
 
-    while (read_index < input_size) {
-      if (input[read_index] == 0) {
+    while (read_index < encoding_buffer_size) {
+      if (encoding_buffer[read_index] == 0) {
         // Write the length byte.
-        encoding_buffer[code_index] = code;
+        output[code_index] = code;
         code_index = write_index++;
         code = 1;  // Reset code for the next segment.
         read_index++;
       } else {
         // Copy non-zero byte to output.
-        encoding_buffer[write_index++] = input[read_index++];
+        output[write_index++] = encoding_buffer[read_index++];
         code++;
         // If code reaches 0xFF, we need to start a new segment.
         if (code == 0xFF) {
-          encoding_buffer[code_index] = code;
+          output[code_index] = code;
           code_index = write_index++;
           code = 1;
         }
       }
       // Check for output buffer overflow.
-      if (write_index >= max_message_size) {
-        return false;  // Indicate failure due to insufficient buffer size.
+      if (write_index >= max_output_size) {
+        return 0;  // Indicate failure due to insufficient buffer size.
       }
     }
     // Write the final length byte.
-    encoding_buffer[code_index] = code;
+    output[code_index] = code;
     // Append the zero delimiter at the end.
-    encoding_buffer[write_index++] = 0;
-
-    encoding_buffer_size = write_index;
+    output[write_index++] = 0;
 
     // Yay.
-    return true;
+    return write_index;
   }
 };
 

@@ -1,9 +1,13 @@
 import {exponential_average} from "./math_utils.js";
 import {
+  parse_version,
   parse_readout,
   parse_unit_test_output,
-  parse_current_calibration,
-  make_current_calibration,
+  parse_info,
+  parse_calibration,
+  make_calibration,
+  parse_control_parameters,
+  make_control_parameters,
 } from "./interface.js";
 
 import {ConsistentOverheadByteStuffing, MessageCode, write_message, read_message, MAX_MESSAGE_SIZE} from "hex-mini-drive-interface";
@@ -69,7 +73,8 @@ export class MotorController {
   }){
     this.motor_uri = motor_uri;
 
-    this.current_calibration = {};
+    this.info = {};
+    this.calibration = {};
     this.control_parameters = {};
 
     this.data = [];
@@ -109,7 +114,9 @@ export class MotorController {
   }
 
   when_opened(){
-    this.load_current_calibration();
+    this.get_version();
+    this.get_info();
+    this.load_calibration();
     this.load_control_parameters();
     this.onready(this);
     console.info(`Motor controller is ready: ${this.motor_uri}`);
@@ -218,21 +225,27 @@ export class MotorController {
     let message = bare_message;
     
     // Intercept motor parameters and forward all other messages.
-    if (message_code == MessageCode.CURRENT_CALIBRATION){
-      message = parse_current_calibration(bare_message);
-      this.current_calibration = message;
+    if (message_code == MessageCode.CALIBRATION){
+      message = parse_calibration(bare_message);
+      this.calibration = message;
     } else if (message_code == MessageCode.CONTROL_PARAMETERS) {
+      message = parse_control_parameters(bare_message);
       this.control_parameters = message;
     } else if (message_code == MessageCode.READOUT) {
-      // Add the current_calibration data to the bare message and parse it all together. 
+      // Add the calibration data to the bare message and parse it all together. 
       // This way we can also track how the calibration parameters change over time. And if
       // transmission order is preserved, we should receive the new calibration data just ahead
       // of the corresponding readout.
-      message = parse_readout({...this.current_calibration, ...bare_message}, last_message);
+      message = parse_readout({...this.calibration, ...this.info, ...bare_message}, last_message);
       // Store readout data up to some maximum size. Allows us to easily plot and analyse data samples.
       this.data = capped_push(this.data, message, max_data_length);
     } else if (message_code == MessageCode.UNIT_TEST_OUTPUT) {
       message = parse_unit_test_output(bare_message);
+    } else if (message_code == MessageCode.INFO) {
+      message = parse_info(bare_message);
+      this.info = message;
+    } else if (message_code == MessageCode.VERSION) {
+      message = parse_version(bare_message);
     }
 
     // Stream all replies through the `onmessage` callback.
@@ -272,22 +285,29 @@ export class MotorController {
     }
   }
 
-
-  load_current_calibration(){
-    this.send_command(MessageCode.GET_CURRENT_CALIBRATION);
+  get_version(){
+    this.send_command(MessageCode.GET_VERSION);
   }
 
-  upload_current_calibration(current_calibration){
-    if(!current_calibration) return;
+  get_info(){
+    this.send_command(MessageCode.GET_INFO);
+  }
+
+  load_calibration(){
+    this.send_command(MessageCode.GET_CALIBRATION);
+  }
+
+  upload_calibration(calibration){
+    if(!calibration) return;
 
     this.send_command({
-      message_code: MessageCode.SET_CURRENT_CALIBRATION,
-      ...make_current_calibration(current_calibration),
+      message_code: MessageCode.SET_CALIBRATION,
+      ...make_calibration(calibration),
     });
   }
 
-  reset_current_calibration(){
-    this.send_command(MessageCode.RESET_CURRENT_CALIBRATION);
+  reset_calibration(){
+    this.send_command(MessageCode.RESET_CALIBRATION);
   }
 
   load_control_parameters(){
@@ -299,7 +319,7 @@ export class MotorController {
 
     this.send_command({
       message_code: MessageCode.SET_CONTROL_PARAMETERS,
-      ...control_parameters,
+      ...make_control_parameters(control_parameters),
     });
   }
 
