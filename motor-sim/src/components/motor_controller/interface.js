@@ -342,6 +342,7 @@ export function parse_info(bare_info) {
   return {
     ...bare_info,
     lead_angle: angle_units_to_radians(bare_info.lead_angle),
+    saliency_angle_offset: angle_units_to_radians(bare_info.saliency_angle_offset),
   };
 }
 
@@ -351,7 +352,6 @@ export function parse_calibration(bare_calibration) {
     u_current_zero: bare_calibration.u_current_zero / CURRENT_UNITS_PER_AMP,
     v_current_zero: bare_calibration.v_current_zero / CURRENT_UNITS_PER_AMP,
     w_current_zero: bare_calibration.w_current_zero / CURRENT_UNITS_PER_AMP,
-    saliency_angle_offset: angle_units_to_radians(bare_calibration.saliency_angle_offset),
   };
 } 
 
@@ -361,7 +361,6 @@ export function make_calibration(calibration){
     u_current_zero: calibration.u_current_zero * CURRENT_UNITS_PER_AMP,
     v_current_zero: calibration.v_current_zero * CURRENT_UNITS_PER_AMP,
     w_current_zero: calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
-    saliency_angle_offset: radians_to_angle_units(calibration.saliency_angle_offset),
   };
 }
 

@@ -1005,6 +1005,7 @@ const plot_electric_offsets = plot_lines({
       y: (d) => d.emf_detected ? d.emf_voltage_angle_offset : null, label: "EMF Voltage Angle Offset", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
+    {y: "saliency_angle_offset", label: "Saliency Angle Offset", color: d3.color(colors.angle).brighter(1)},
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
     {y: "emf_angle_stdev", label: "EMF Angle stdev", color: d3.color(colors.voltage_angle).darker(1)},
     {y: "lead_angle", label: "Lead Angle", color: colors.v},

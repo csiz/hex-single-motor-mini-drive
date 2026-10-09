@@ -375,6 +375,11 @@ definitions:
           Lead angle for the motor driving; used to adjust the phase voltages to drive the 
           motor efficiently.
 
+      saliency_angle_offset:
+        type: int32
+        doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
+
+
   Calibration:
     doc: Estimate resistance and inductance values for the motor coils; updated live.
 
@@ -402,10 +407,6 @@ definitions:
       inductance_bias:
         type: float32
         doc: Estimated bias of the inductance due to magnetic saliency.
-
-      saliency_angle_offset:
-        type: int32
-        doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
 
       motor_constant:
         type: float32

@@ -348,6 +348,9 @@ const hex_mini_drive::DriveState freewheel_drive_state = {
 // Calibration and Control Parameters
 // ----------------------------------
 
+constexpr float minimum_resistance = 0.050f;
+constexpr float minimum_inductance = 0.000'001f;
+constexpr float minimum_inductance_bias = 0.000'000'1f;
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::Calibration default_calibration = {
@@ -355,16 +358,18 @@ const hex_mini_drive::Calibration default_calibration = {
     .v_current_zero = 0.0f,
     .w_current_zero = 0.0f,
     // Underestimate resistance.
-    .resistance = 0.1f,
+    .resistance = minimum_resistance,
     // Underestimate inductance.
-    .inductance = 0.000'001f,
-    .inductance_bias = 0.0f,
+    .inductance = minimum_inductance,
+    .inductance_bias = minimum_inductance_bias,
 };
 
 // The default control parameters should be set to reasonable values for any motor.
 // 
 // The reset button will reload these values.
 const hex_mini_drive::ControlParameters default_control_parameters = {
+    .rotation_zero = 0,
+    .angle_zero = 0,
     // Option to flip the motor direction.
     .motor_direction = +1,
     .angle_fix_max_certainty = 512,
@@ -391,10 +396,9 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -11),
 
     .zero_current_ki = std::pow(2, -16),
-    // TODO: re-enable once moved to main loop
-    .resistance_ki = 0.f, // std::pow(2, -12),
-    .inductance_ki = 0.f, // std::pow(2, -20),
-    .inductance_bias_ki = 0.f, // std::pow(2, -20),
+    .resistance_ki = std::pow(2, -12),
+    .inductance_ki = std::pow(2, -20),
+    .inductance_bias_ki = std::pow(2, -20),
     .saliency_angle_ki = std::pow(2, 32+4),
     .motor_constant_ki = std::pow(2, -11),
     .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),

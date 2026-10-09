@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.114.0";
+constexpr char const* VERSION_STRING = "0.115.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -423,6 +423,8 @@ struct Info {
   // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
   // motor efficiently.
   int32_t lead_angle;
+  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
+  int32_t saliency_angle_offset;
 };
 
 static inline void write_Info(uint8_t * buffer, Info const& value) {
@@ -436,6 +438,8 @@ static inline void write_Info(uint8_t * buffer, Info const& value) {
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
   write_int32(buffer + offset, value.lead_angle);;
+  offset += 4;
+  write_int32(buffer + offset, value.saliency_angle_offset);;
   offset += 4;
 }
 static inline Info read_Info(uint8_t const* buffer) {
@@ -452,6 +456,8 @@ static inline Info read_Info(uint8_t const* buffer) {
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
   result.lead_angle = read_int32(buffer + offset);
+  offset += 4;
+  result.saliency_angle_offset = read_int32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -470,8 +476,6 @@ struct Calibration {
   float inductance;
   // Estimated bias of the inductance due to magnetic saliency.
   float inductance_bias;
-  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
-  int32_t saliency_angle_offset;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
 };
@@ -489,8 +493,6 @@ static inline void write_Calibration(uint8_t * buffer, Calibration const& value)
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_bias);;
-  offset += 4;
-  write_int32(buffer + offset, value.saliency_angle_offset);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
@@ -511,8 +513,6 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_bias = read_float32(buffer + offset);
-  offset += 4;
-  result.saliency_angle_offset = read_int32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -1107,7 +1107,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
     case MessageCode::READOUT: return 114;
-    case MessageCode::INFO: return 22;
+    case MessageCode::INFO: return 26;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
@@ -1121,9 +1121,9 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
     case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: return 14;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CALIBRATION: return 34;
+    case MessageCode::CALIBRATION: return 30;
     case MessageCode::GET_CALIBRATION: return 2;
-    case MessageCode::SET_CALIBRATION: return 34;
+    case MessageCode::SET_CALIBRATION: return 30;
     case MessageCode::RESET_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 178;
     case MessageCode::SET_CONTROL_PARAMETERS: return 178;
@@ -1162,9 +1162,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
-      if (max_size < 2 + 20) return 0;
+      if (max_size < 2 + 24) return 0;
       write_Info(buffer + 2, std::get<Info>(message.message_data));
-      return 22;
+      return 26;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
@@ -1240,9 +1240,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION));
-      if (max_size < 2 + 32) return 0;
+      if (max_size < 2 + 28) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 34;
+      return 30;
     }
     case MessageCode::GET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CALIBRATION));
@@ -1250,9 +1250,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CALIBRATION));
-      if (max_size < 2 + 32) return 0;
+      if (max_size < 2 + 28) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 34;
+      return 30;
     }
     case MessageCode::RESET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CALIBRATION));
@@ -1325,7 +1325,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::INFO: {
-      if (size != 2 + 20) return false;
+      if (size != 2 + 24) return false;
       message.message_data = read_Info(buffer + 2);
       return true;
     }
@@ -1395,7 +1395,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION: {
-      if (size != 2 + 32) return false;
+      if (size != 2 + 28) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }
@@ -1405,7 +1405,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_CALIBRATION: {
-      if (size != 2 + 32) return false;
+      if (size != 2 + 28) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }

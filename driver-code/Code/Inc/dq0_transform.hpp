@@ -49,3 +49,12 @@ static inline TwoPhase dq0_transform(ThreePhase const& abc) {
         dot(abc, q_transform)
     };
 }
+
+// Compute the inverse to the dq0 transform.
+static inline ThreePhase abc_transform(TwoPhase const& dq, float const& zero_offset) {
+    return {
+        std::get<0>(dq) + zero_offset,
+        -0.5f * std::get<0>(dq) + 0.86602540378f * std::get<1>(dq) + zero_offset,
+        -0.5f * std::get<0>(dq) - 0.86602540378f * std::get<1>(dq) + zero_offset
+    };
+}
