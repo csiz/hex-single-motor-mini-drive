@@ -65,6 +65,8 @@ hex_mini_drive::DriveState drive_state = breaking_drive_state;
 // commands if the schedule increases while we are still executing the previous ones.
 size_t drive_states_scheduled = 0;
 
+// Angle adjustment from the main loop.
+volatile int32_t external_angle_adjustment = 0;
 
 // Interrupt Data Interface
 // ------------------------
@@ -80,11 +82,17 @@ hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 
 CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
 
-CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue = {};
+CircularQueue<hex_mini_drive::DriveState, 2 * hex_mini_drive::DRIVE_SCHEDULE_SIZE + 1> drive_state_queue = {};
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
     return (drive_state.pwm_value == 0.f);
+}
+
+bool set_angle_adjustment(int32_t const& adjustment){
+    if (external_angle_adjustment) return false;
+    external_angle_adjustment = adjustment;
+    return true;
 }
 
 // Critical functions!! 23KHz PWM cycle
@@ -417,7 +425,8 @@ void ADC1_2_IRQHandler(void){
     );
     
     // Add the external angle offset to the angle adjustment.
-    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki;
+    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki + external_angle_adjustment;
+    external_angle_adjustment = 0;
 
     // Calculate the new angle based on the angle adjustment.
     const int32_t angle = predicted_angle + angle_adjustment;
@@ -637,9 +646,9 @@ void ADC1_2_IRQHandler(void){
         // Immediately set the motor flags; once per new drive state.
         set_motor_status(drive_state.motor_flags);
     } else if (drive_state.duration == 0) {
-        // If we were scheduling a bunch of driver states, decrement the scheduled count and mark executed
-        // state as read.
-        if (drive_states_scheduled >= 2) {
+        // If we were scheduling a sequence of driver states, decrement the scheduled count
+        // and mark executed state as read/done.
+        if (drive_states_scheduled > 1) {
             drive_states_scheduled--;
             drive_state_queue.mark_read(1);
             drive_state = drive_state_queue.peek();

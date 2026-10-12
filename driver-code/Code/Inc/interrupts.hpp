@@ -45,3 +45,6 @@ extern CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue;
 
 // Check if the motor is in a safe state (breaking or freewheeling).
 bool is_motor_safed();
+
+// Set an external angle adjustment for the motor control loop. Returns true if the adjustment was successfully set, false otherwise.
+bool set_angle_adjustment(int32_t const& adjustment);

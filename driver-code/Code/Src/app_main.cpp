@@ -61,6 +61,9 @@ uint32_t stream_state = 0;
 // Number of readouts to snapshot and send over USB.
 uint32_t readouts_to_send = 0;
 
+// Accumulate angle adjustment while we're unable to send it.
+int32_t accumulated_angle_adjustment = 0;
+
 
 // Initialization
 // --------------
@@ -416,8 +419,14 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   
 
+  // Variable tracking update
+  // ------------------------
+  
+  // TODO: is the thing below the right condition?
+  // Stop updating calibration if we detect EMF.
+  if (readout.state_flags & emf_detected_bit_mask) return;
+
   // Using DQ0 coordinates again
-  // ---------------------------
   //
   // We need to recalculate these values in the main loop as they are not the primary tracking variables.
   
@@ -453,10 +462,6 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   const float measured_direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - readout.direct_drive_voltage;
   const float measured_quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - readout.quadrature_drive_voltage;
-
-
-  // Variable tracking update
-  // ------------------------
 
 
   // Get the sin and cos for the emf angle.
@@ -568,6 +573,14 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
               calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
       }
   }
+
+  // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
+  const int32_t pending_adjustment = (info.saliency_angle_offset / 2) * control_parameters.rotor_angle_ki;
+
+  accumulated_angle_adjustment += pending_adjustment;
+  info.saliency_angle_offset -= 2 * pending_adjustment;
+
+  if (set_angle_adjustment(accumulated_angle_adjustment)) accumulated_angle_adjustment = 0;
 }
 
 // Main app loop
