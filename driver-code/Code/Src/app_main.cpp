@@ -108,12 +108,8 @@ static inline hex_mini_drive::DriveState get_checked_drive_state(hex_mini_drive:
     .motor_flags = drive_state.motor_flags,
     .enable_closed_loop = drive_state.enable_closed_loop,
     .duration = drive_state.duration,
-    .pwm_value = clip_to(-pwm_max, +pwm_max, 
-      drive_state.pwm_value * control_parameters.motor_direction),
-    .angle = drive_state.angle,
-    .angular_speed = clip_to(-max_angular_speed, max_angular_speed,
-      drive_state.angular_speed * control_parameters.motor_direction
-    ),
+    .pwm_value = clip_to(-pwm_max, +pwm_max, drive_state.pwm_value * control_parameters.motor_direction),
+    .angle_value = drive_state.angle_value * control_parameters.motor_direction,
   };
 }
 
@@ -551,7 +547,9 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
               quadrature_voltage_error * direct_inductance_bias_voltage
           ) * volts_per_voltage_units_square;
 
-          info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
+          const float saliency_angle_change = saliency_angle_gradient * control_parameters.saliency_angle_ki;
+          info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_change);
+          info.saliency_angle_variance += (square(saliency_angle_change) - info.saliency_angle_variance) * 0.01f;
       }
   } else {
       // Only track the zero offset while there is no noticeable current being measured.

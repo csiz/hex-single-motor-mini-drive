@@ -45,8 +45,6 @@ Motor Commands
   <span>${test_buttons}</span>
   <span>${command_duration_slider}</span>
   <span>${command_pwm_slider}</span>
-  <span>${quickselect_angle_buttons}</span>
-  <span>${command_angle_slider}</span>
   <span>${command_angular_speed_slider}</span>
 </div>
 <div>
@@ -56,6 +54,8 @@ Motor Commands
 </div>
 <div>
   <span>${seek_drive_buttons}</span>
+  <span>${command_angle_slider}</span>
+  <span>${quickselect_angle_buttons}</span>
   <span>${command_seek_rotation_slider}</span>
   <span>${shared_seek_buttons}</span>
 </div>
@@ -381,8 +381,7 @@ const command_drive_state = {
   motor_flags: ENABLE_ALL_OUTPUTS,
   duration: command_duration,
   pwm_value: command_pwm, 
-  angular_speed: command_angular_speed, 
-  angle: command_angle,
+  angle_value: command_angular_speed, 
 };
 
 async function stream_all_motors(){
@@ -1006,7 +1005,8 @@ const plot_electric_offsets = plot_lines({
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
     {y: "saliency_angle_offset", label: "Saliency Angle Offset", color: d3.color(colors.angle).brighter(1)},
-    {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.angle).darker(1)},
+    {y: "saliency_angle_stdev", label: "Saliency Angle stdev", color: d3.color(colors.angle).darker(1)},
+    {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: "emf_angle_stdev", label: "EMF Angle stdev", color: d3.color(colors.voltage_angle).darker(1)},
     {y: "lead_angle", label: "Lead Angle", color: colors.v},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle_offset : null, label: "Drive Voltage Angle Offset", color: colors_categories[2]},

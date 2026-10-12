@@ -65,6 +65,8 @@ hex_mini_drive::DriveState drive_state = breaking_drive_state;
 // commands if the schedule increases while we are still executing the previous ones.
 size_t drive_states_scheduled = 0;
 
+uint32_t duration_executed = 0;
+
 // Angle adjustment from the main loop.
 volatile int32_t external_angle_adjustment = 0;
 
@@ -86,7 +88,7 @@ CircularQueue<hex_mini_drive::DriveState, 2 * hex_mini_drive::DRIVE_SCHEDULE_SIZ
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
-    return (drive_state.pwm_value == 0.f);
+    return (readout.active_pwm == 0.f);
 }
 
 bool set_angle_adjustment(int32_t const& adjustment){
@@ -410,7 +412,7 @@ void ADC1_2_IRQHandler(void){
         0, static_cast<int32_t>(control_parameters.angle_fix_max_certainty),
         // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
         // Our angle is incorrect if we don't have an EMF reading whilst driving the motor.
-        readout.angle_fix + ((drive_state.pwm_value and not emf_detected) ? -1 : emf_detected)
+        readout.angle_fix + ((readout.active_pwm and not emf_detected) ? -1 : emf_detected)
     );
     
     // Angle update
@@ -553,6 +555,11 @@ void ADC1_2_IRQHandler(void){
     // Calculate and set motor outputs!!
     // ---------------------------------
 
+    const auto pending_drive_states = drive_state_queue.read_available();
+
+    // Target the top of the drive state queue if there is anything scheduled; otherwise break.
+    auto const& drive_state = pending_drive_states ? drive_state_queue.peek() : breaking_drive_state;
+
     // Instantly set to 0, but otherwise approach the target PWM gradually.
     readout.active_pwm = drive_state.pwm_value == 0 ? 0 : (readout.active_pwm + clip_to(
         -control_parameters.max_pwm_change,
@@ -560,29 +567,28 @@ void ADC1_2_IRQHandler(void){
         drive_state.pwm_value - readout.active_pwm
     ));
 
+    // Copy the motor flags.
+    readout.motor_flags = drive_state.motor_flags;
+
+
     // The main control flag is whether we drive in fixed coordinates (open loop) or relative coordinates (closed loop).
     // 
     // Breaking mode can be expressed as driving at 0 pwm in fixed coordinates.
     
-    // TODO: !!!!
-    // use the readout.active_angle and keep driver_state.angle as the target (so we can also handle closed loop properly, see TODO below).
-
     if (drive_state.enable_closed_loop) {
-        // TODO: we just have to drive at an angle relative to the drive_state.angle
-        // But it needs a bit of refactor. We want drive_state.angle to be a target and we need to internalize the actual
-        // drive angle into the readouts.
+        // TODO: drive at the offset specified by drive_state.angle_value
         const int32_t ideal_angle = readout.angle + quarter_circle;
 
         // Drive the motor to produce current perpendicular to the magnetic angle.
-        drive_state.angle = ideal_angle;
+        readout.active_angle = ideal_angle;
 
     } else {
         // Drive the inductors around a circle at the specified PWM and speed (open loop control).
-        drive_state.angle += static_cast<int32_t>(drive_state.angular_speed);
+        readout.active_angle += drive_state.angle_value;
     }
 
     motor_outputs = compute_motor_outputs(
-        drive_state.angle, 
+        readout.active_angle, 
         readout.active_pwm,
         info.live_max_pwm
     );
@@ -607,7 +613,10 @@ void ADC1_2_IRQHandler(void){
         motor_outputs.v_duty + control_parameters.v_pwm_floor,
         motor_outputs.w_duty + control_parameters.w_pwm_floor
     });
-    
+
+    // Enable phases based on the motor_flags settings.
+    set_motor_status(readout.motor_flags);
+
     // Re-enable the update for the control registers now that we've written all 3.
     LL_TIM_EnableUpdateEvent(TIM1);
 
@@ -628,43 +637,23 @@ void ADC1_2_IRQHandler(void){
     // after we've set the motor outputs. The new state will be ready for the next cycle.
     // 
     // Note, the new pending state may clear the readout history so this must be done after the history push.
-    const auto pending_drive_states = drive_state_queue.read_available();
 
-
+    // Either we receive a new schedule of drive states, in which case switch to that.
     if (pending_drive_states > drive_states_scheduled) {
         const size_t new_drive_states = pending_drive_states - drive_states_scheduled;
-        // Skip these driver states as we've received new commands; always prioritize the latest batch.
+        // Skip old drive states as we've received new commands; always prioritize the latest batch.
         drive_state_queue.mark_read(drive_states_scheduled);
         // Set the new schedule count and load the first driver state.
         drive_states_scheduled = new_drive_states;
-
-        // Copy the pending driver state.
-        // 
-        // ! Warning, we rely on the main loop to clamp the commands to valid ranges!
-        drive_state = drive_state_queue.peek();
-
-        // Immediately set the motor flags; once per new drive state.
-        set_motor_status(drive_state.motor_flags);
-    } else if (drive_state.duration == 0) {
+        duration_executed = 0;
+    
+    // Otherwise track the execution of the current drive state; and switch to the next one if needed.
+    } else if (drive_states_scheduled > 0 and duration_executed++ > drive_state.duration) {
         // If we were scheduling a sequence of driver states, decrement the scheduled count
         // and mark executed state as read/done.
-        if (drive_states_scheduled > 1) {
-            drive_states_scheduled--;
-            drive_state_queue.mark_read(1);
-            drive_state = drive_state_queue.peek();
-        } else if (drive_states_scheduled == 1) {
-            // We were at the last scheduled driver state; so now we're done and we transition to breaking.
-            drive_states_scheduled = 0;
-            // Set the driver state to the safe breaking state if the duration has expired.
-            drive_state = breaking_drive_state;
-            // Mark this as read, but do we have nothing else to peek at.
-            drive_state_queue.mark_read(1);
-        }
-        // Immediately set the motor flags; once per new drive state.
-        set_motor_status(drive_state.motor_flags);
-    } else {
-        // Count down the active duration.
-        drive_state.duration--;
+        drive_states_scheduled--;
+        drive_state_queue.mark_read(1);
+        duration_executed = 0;
     }
 
     // TODO: we need complete nan checks; preferably in the main loop.

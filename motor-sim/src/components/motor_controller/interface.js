@@ -16,6 +16,7 @@ import {
 
 import {normalize_radians} from './angular_math.js';
 import {square, dq0_transform, abc_transform} from './math_utils.js';
+import { sqrt } from 'three/tsl';
 
 
 export function get_hall_sector({hall_u, hall_v, hall_w}){
@@ -38,6 +39,7 @@ export function parse_readout(bare_readout, previous_readout) {
 
   // Get the readout number, a counter that increments with each readout & PWM cycle.
   const readout_number = bare_readout.readout_number;
+  const motor_flags = bare_readout.motor_flags;
   const state_flags = bare_readout.state_flags;
   const cycle_start_tick = bare_readout.cycle_start_tick;
   const cycle_end_tick = bare_readout.cycle_end_tick;
@@ -222,6 +224,7 @@ export function parse_readout(bare_readout, previous_readout) {
     cycle_end_tick,
     
     // State flags
+    motor_flags,
     hall_u,
     hall_v,
     hall_w,
@@ -343,6 +346,7 @@ export function parse_info(bare_info) {
     ...bare_info,
     lead_angle: angle_units_to_radians(bare_info.lead_angle),
     saliency_angle_offset: angle_units_to_radians(bare_info.saliency_angle_offset),
+    saliency_angle_stdev: angle_units_to_radians(Math.sqrt(bare_info.saliency_angle_variance)),
   };
 }
 

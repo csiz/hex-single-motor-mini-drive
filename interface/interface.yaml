@@ -222,9 +222,13 @@ definitions:
         doc: Whether we have an angle fix and how confident it is.
 
       state_flags:
-        type: uint16
+        type: uint8
         doc: Driver state flags; packed into a 16-bit value.
         
+      motor_flags:
+        type: uint8
+        doc: Active motor flags. Each bit represents the state of a motor phase.
+
       ref_readout:
         type: int16
         doc: |
@@ -379,6 +383,9 @@ definitions:
         type: int32
         doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
 
+      saliency_angle_variance:
+        type: float32
+        doc: Variance of the estimated saliency angle, indicating the confidence in the saliency angle estimation.
 
   Calibration:
     doc: Estimate resistance and inductance values for the motor coils; updated live.
@@ -431,12 +438,9 @@ definitions:
       pwm_value:
         type: float32
         doc: PWM value to use for driving the motor.
-      angle:
+      angle_value:
         type: int32
-        doc: Angle at which to drive the PWM wave.
-      angular_speed:
-        type: float32
-        doc: Angular speed at which to drive the PWM wave.
+        doc: Either angular_speed or lead_angle when enable_closed_loop is active.
 
   DriveSchedule:
     doc: Set a series of driver states to be executed by the motor in sequence.
