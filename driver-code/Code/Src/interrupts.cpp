@@ -406,32 +406,26 @@ void ADC1_2_IRQHandler(void){
 
     // Declare that we have an EMF fix if our speed is greater than the measurment error.
     const bool emf_fix = square(emf_voltage_angular_speed) > 4 * max_emf_speed_variance;
-    
-    // Track how many times we think our rotor angle is correct. Note that we keep the angle fix whilst the motor is off.
-    const int16_t angle_fix = clip_to(
-        0, static_cast<int32_t>(control_parameters.angle_fix_max_certainty),
-        // Subtract 1 for incorrect angles; otherwise add 1 for emf or hall angle fixes.
-        // Our angle is incorrect if we don't have an EMF reading whilst driving the motor.
-        readout.angle_fix + ((readout.active_pwm and not emf_detected) ? -1 : emf_detected)
-    );
+
     
     // Angle update
     // ------------
     
     // Integrate the EMF position error only if we're detecting EMF.
-    const int32_t prediction_error = emf_detected * (emf_fix ? 
+    const int32_t angle_adjustment = emf_detected * control_parameters.rotor_angle_ki * (emf_fix ? 
         // Aim to the axis corrected angle if we have certainty in the emf speed sign.
         (emf_voltage_angle + (emf_voltage_angular_speed > 0 ? quarter_circle : neg_quarter_circle) - predicted_angle) :
         // Otherwise adjust only towards the axis of the emf angle observer.
         (((emf_voltage_angle - predicted_angle) & most_positive_angle) - quarter_circle)
     );
     
-    // Add the external angle offset to the angle adjustment.
-    const int32_t angle_adjustment = prediction_error * control_parameters.rotor_angle_ki + external_angle_adjustment;
-    external_angle_adjustment = 0;
+    // Calculate the new angle based on all the angle adjustments.
+    const int32_t angle = predicted_angle + angle_adjustment + external_angle_adjustment;
 
-    // Calculate the new angle based on the angle adjustment.
-    const int32_t angle = predicted_angle + angle_adjustment;
+    // Remember whether we had an external angle fix.
+    const bool external_angle_fix = external_angle_adjustment != 0;
+    // Clear the external angle adjustment after applying it.
+    external_angle_adjustment = 0;
 
     // Get the total angle change for the current cycle including adjustment and speed.
     const int32_t angle_diff = angle - readout.angle;
@@ -446,9 +440,17 @@ void ADC1_2_IRQHandler(void){
     // Calculate the new rotation index.
     const int32_t rotations = readout.rotations + rotations_increment;
     
+
+    // Track how many times we think our rotor angle is correct.
+    const int16_t angle_fix = clip_to(
+        0, static_cast<int32_t>(control_parameters.angle_fix_max_certainty),
+        readout.angle_fix + ((emf_fix or external_angle_fix) ? +1 : (emf_detected ? 0 : -1))
+    );
+
     // Calculate speed and acceleration
     // --------------------------------
 
+    // TODO:... we should prolly adjust it based on angle adjustment directly.
     // Calculate the rotor speed as a low pass of the detected emf speed.
     const float angular_speed_error = readout.emf_voltage_angular_speed - readout.angular_speed;
     
