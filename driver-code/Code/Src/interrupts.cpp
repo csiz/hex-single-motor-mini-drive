@@ -108,32 +108,20 @@ static inline std::pair<int32_t, int32_t> get_cordic(){
 // Motor control helper
 // --------------------
 
-
-// Set the motor outputs to the specified active_pwm and active_angle.
-static inline MotorOutputs compute_motor_outputs(
-    int32_t const& angle,
-    float const& pwm_value,
-    float const& live_max_pwm
-) {
-    // We need a single comparison and we can then use arithmetic math instead of branching conditionals.
-    const bool negative_pwm = pwm_value < 0.f;
-
-    // The PWM counter value must be positive, we use the sign to determine the direction.
-    const float abs_pwm = min(live_max_pwm, negative_pwm ? -pwm_value : pwm_value);
-
-    // Use the active angle or flip it depending on the sign of the PWM.
-    const int32_t adjusted_angle = angle + negative_pwm * half_circle;
+// Get the 3 phase motor outputs to drive a voltage vector specified by angle and pwm magnitude.
+static inline MotorOutputs compute_motor_outputs(int32_t const& angle, float const& pwm_value) {
 
     // Get the voltage for the three phases from the waveform table.
-    const float voltage_phase_u = get_phase_pwm(adjusted_angle);
-    const float voltage_phase_v = get_phase_pwm(adjusted_angle - third_circle);
-    const float voltage_phase_w = get_phase_pwm(adjusted_angle - neg_third_circle);
+    const float voltage_phase_u = get_phase_pwm(angle);
+    const float voltage_phase_v = get_phase_pwm(angle - third_circle);
+    const float voltage_phase_w = get_phase_pwm(angle - neg_third_circle);
 
     return MotorOutputs{
-        .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
-        .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
-        .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
+        .u_duty = static_cast<uint16_t>(voltage_phase_u * pwm_value),
+        .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_value),
+        .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_value)
     };
+    
 }
 
 // ADC readings and calculation loop
@@ -545,6 +533,7 @@ void ADC1_2_IRQHandler(void){
     readout.total_power_average = total_power_average;
     readout.resistive_power_average = resistive_power_average;
 
+    
     // Calculate and set motor outputs!!
     // ---------------------------------
 
@@ -580,14 +569,21 @@ void ADC1_2_IRQHandler(void){
         readout.active_angle += drive_state.angle_value;
     }
 
-    motor_outputs = compute_motor_outputs(
-        readout.active_angle, 
-        readout.active_pwm,
-        info.live_max_pwm
-    );
+    // TODO: ... maybe we should stick with strictly positive pwm all the time so we don't do this check,
+    // yeah, we can use negative pwm in the main loop if really makes our algos easier, but gotta translate
+    // to normalized vectors in the interrupt loop.
 
-    // Disable the update for the control registers so we can write all 3.
-    LL_TIM_DisableUpdateEvent(TIM1);
+    // We need a single comparison and we can then use arithmetic math instead of branching conditionals.
+    const bool is_pwm_negative = readout.active_pwm < 0;
+
+    // The PWM counter value must be positive, we use the sign to determine the direction.
+    const float abs_pwm = min(info.live_max_pwm, is_pwm_negative ? -readout.active_pwm : readout.active_pwm);
+
+    // Use the active angle or flip it depending on the sign of the PWM.
+    const int32_t normalized_angle = readout.active_angle + is_pwm_negative * half_circle;
+
+    // Calculate and store desired motor pwm.
+    motor_outputs = compute_motor_outputs(normalized_angle, abs_pwm);
 
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if
@@ -601,17 +597,14 @@ void ADC1_2_IRQHandler(void){
     // 
     // Also note that we want to write all zeroes when the motor is actually breaking so we don't
     // drain extra power trying to half-switch the mosfets for a tiny amount of time.
-    set_motor_outputs(readout.active_pwm == 0 ? breaking_motor_outputs : MotorOutputs{
-        motor_outputs.u_duty + control_parameters.u_pwm_floor,
-        motor_outputs.v_duty + control_parameters.v_pwm_floor,
-        motor_outputs.w_duty + control_parameters.w_pwm_floor
+    set_motor_outputs(MotorOutputs{
+        motor_outputs.u_duty ? motor_outputs.u_duty + control_parameters.u_pwm_floor : 0,
+        motor_outputs.v_duty ? motor_outputs.v_duty + control_parameters.v_pwm_floor : 0,
+        motor_outputs.w_duty ? motor_outputs.w_duty + control_parameters.w_pwm_floor : 0
     });
 
     // Enable phases based on the motor_flags settings.
     set_motor_status(readout.motor_flags);
-
-    // Re-enable the update for the control registers now that we've written all 3.
-    LL_TIM_EnableUpdateEvent(TIM1);
 
 
     // End of cycle
