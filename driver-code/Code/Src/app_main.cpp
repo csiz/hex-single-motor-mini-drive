@@ -579,6 +579,8 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
   info.saliency_angle_offset -= 2 * pending_adjustment;
 
   if (set_angle_adjustment(accumulated_angle_adjustment)) accumulated_angle_adjustment = 0;
+
+  
 }
 
 // Main app loop

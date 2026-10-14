@@ -9,16 +9,6 @@
 #include "dq0_transform.hpp"
 #include "circular_buffer.hpp"
 
-// TODO: need to fix this...
-// The interrupts must not enter the error handler!
-// 
-// The error handle will block forever, however we must safe the motor no matter what. The interrupt loop
-// will always timeout any command and return to a safe state if it doesn't receive new commands from the
-// main app loop.
-// 
-// Do not: #include "error_handler.hpp"
-
-
 #include <cmath>
 #include <stm32g4xx_ll_adc.h>
 #include <stm32g4xx_ll_tim.h>
@@ -117,6 +107,7 @@ static inline std::pair<int32_t, int32_t> get_cordic(){
 
 // Motor control helper
 // --------------------
+
 
 // Set the motor outputs to the specified active_pwm and active_angle.
 static inline MotorOutputs compute_motor_outputs(

@@ -381,7 +381,7 @@ const command_drive_state = {
   motor_flags: ENABLE_ALL_OUTPUTS,
   duration: command_duration,
   pwm_value: command_pwm, 
-  angle_value: command_angular_speed, 
+  angle_value: Math.floor(command_angular_speed), 
 };
 
 async function stream_all_motors(){
@@ -447,6 +447,7 @@ d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 const test_buttons = Inputs.button(
   [
     ["Test all permutation", async function(){
+      // TODO: fix angle setting. We need rotate 60 degrees during the 0 pwm periods.
       let drive_schedule = [
         [0, 1.0],
         [0, 0.0],
@@ -479,18 +480,55 @@ const test_buttons = Inputs.button(
       });
     }],
     ["Test increasing steps", async function(){
+      // TODO: fix angle setting. We need to use the first schedule to rotate from current active_angle to the target angle at 0 pwm.
       let drive_schedule = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.0].map(value => ({
         motor_flags: ENABLE_ALL_OUTPUTS,
         enable_closed_loop: false,
         duration: HISTORY_SIZE / 12,
         pwm_value: command_drive_state.pwm_value * value,
-        angle: command_angle,
       }));
       drive_schedule.message_code = MessageCode.SET_DRIVE_SCHEDULE;
       await motor_controller.send_command(drive_schedule);
     }],
     ["HFI Saliency Pulses", async function(){
-      // TODO: reimplement this one, maybe instead of the pulses, we do a short rotation around the target angle axis.
+      // For the saliency detection pulses we will drive the motor open loop at positive
+      // speed until we reach 45 degree electrical angle. Then negative speed until we reach
+      // -45 degree electrical angle. And again positive speed back to 0.
+      const common_state = {
+        motor_flags: ENABLE_ALL_OUTPUTS,
+        enable_closed_loop: false,
+        pwm_value: command_drive_state.pwm_value,
+      };
+
+      // const half_duration = Math.floor(
+      //   Math.PI / 4 / 
+      //   speed_units_to_rotations_per_millisecond(command_angular_speed) * 
+      //   (pwm_cycles_per_second / 1000.0)
+      // );
+      
+      // Or we just rotate it for a fixed duration, the math works easier on chip so 
+      // we don't have to do DIVISIOOOOOON.
+      const half_duration = 8;
+
+      let drive_schedule = [
+        {
+          ...common_state, 
+          angle_value: command_angular_speed,
+          duration: half_duration,
+        },
+        {
+          ...common_state,
+          angle_value: -command_angular_speed,
+          duration: half_duration * 2,
+        },
+        {
+          ...common_state,
+          angle_value: command_angular_speed,
+          duration: half_duration,
+        }
+      ];
+      drive_schedule.message_code = MessageCode.SET_DRIVE_SCHEDULE;
+      await motor_controller.send_command(drive_schedule);
     }],
   ],
   {label: "Test sequence"},
@@ -544,7 +582,7 @@ const simple_drive_buttons = Inputs.button(
         message_code: MessageCode.SET_DRIVE_STATE,
         enable_closed_loop: false,
         ...command_drive_state,
-        angular_speed: -command_drive_state.angular_speed,
+        angle_value: -command_drive_state.angle_value,
       });
     }],
     ["Drive smooth +", async function(){

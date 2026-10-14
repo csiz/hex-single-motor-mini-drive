@@ -4,11 +4,7 @@
 
 
 void error(){
-    // TODO: motor stop
-
     set_BLUE_LED(0xFF);
     
-    __disable_irq();
-
-    while (true) {}
+    // ! Don't disable interrupts, the motor control loop must flow.
 }
