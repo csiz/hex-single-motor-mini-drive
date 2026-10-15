@@ -381,7 +381,7 @@ const command_drive_state = {
   motor_flags: ENABLE_ALL_OUTPUTS,
   duration: command_duration,
   pwm_value: command_pwm, 
-  angle_value: Math.floor(command_angular_speed), 
+  angle_increment: Math.floor(command_angular_speed), 
 };
 
 async function stream_all_motors(){
@@ -463,7 +463,6 @@ const test_buttons = Inputs.button(
         [-Math.PI * 1 / 3, 0.0],
       ].map(([angle, value]) => ({
         motor_flags: ENABLE_ALL_OUTPUTS,
-        enable_closed_loop: false,
         duration: HISTORY_SIZE / 12,
         pwm_value: command_drive_state.pwm_value * value,
         angle: radians_to_angle_units(angle),
@@ -483,7 +482,6 @@ const test_buttons = Inputs.button(
       // TODO: fix angle setting. We need to use the first schedule to rotate from current active_angle to the target angle at 0 pwm.
       let drive_schedule = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.0].map(value => ({
         motor_flags: ENABLE_ALL_OUTPUTS,
-        enable_closed_loop: false,
         duration: HISTORY_SIZE / 12,
         pwm_value: command_drive_state.pwm_value * value,
       }));
@@ -496,7 +494,6 @@ const test_buttons = Inputs.button(
       // -45 degree electrical angle. And again positive speed back to 0.
       const common_state = {
         motor_flags: ENABLE_ALL_OUTPUTS,
-        enable_closed_loop: false,
         pwm_value: command_drive_state.pwm_value,
       };
 
@@ -513,17 +510,17 @@ const test_buttons = Inputs.button(
       let drive_schedule = [
         {
           ...common_state, 
-          angle_value: command_angular_speed,
+          angle_increment: command_angular_speed,
           duration: half_duration,
         },
         {
           ...common_state,
-          angle_value: -command_angular_speed,
+          angle_increment: -command_angular_speed,
           duration: half_duration * 2,
         },
         {
           ...common_state,
-          angle_value: command_angular_speed,
+          angle_increment: command_angular_speed,
           duration: half_duration,
         }
       ];
@@ -572,7 +569,6 @@ const simple_drive_buttons = Inputs.button(
     ["Drive periodic +", async function(){
       await motor_controller.send_command({
         message_code: MessageCode.SET_DRIVE_STATE,
-        enable_closed_loop: false,
         ...command_drive_state,
       });
     }],
@@ -580,26 +576,11 @@ const simple_drive_buttons = Inputs.button(
 
       await motor_controller.send_command({
         message_code: MessageCode.SET_DRIVE_STATE,
-        enable_closed_loop: false,
         ...command_drive_state,
-        angle_value: -command_drive_state.angle_value,
+        angle_increment: -command_drive_state.angle_increment,
       });
     }],
-    ["Drive smooth +", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_DRIVE_STATE,
-        enable_closed_loop: true,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive smooth -", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_DRIVE_STATE,
-        enable_closed_loop: true,
-        ...command_drive_state,
-        pwm_value: -command_drive_state.pwm_value
-      });
-    }],
+
   ],
   {label: "Simple drive commands"},
 );
@@ -616,6 +597,19 @@ const advanced_drive_buttons = Inputs.button(
     ["Drive 6S -", async function(){
       await motor_controller.send_command({
         message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
+        ...command_drive_state,
+        pwm_value: -command_drive_state.pwm_value
+      });
+    }],
+    ["Drive smooth +", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
+        ...command_drive_state,
+      });
+    }],
+    ["Drive smooth -", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
         ...command_drive_state,
         pwm_value: -command_drive_state.pwm_value
       });
@@ -2146,9 +2140,9 @@ const control_parameters_input = Object.fromEntries(
       label: "Current Offset Maximum",
       description: "Maximum allowable current offset. Helps in filtering out systematic measurement errors."
     }],
-    ["probing_angular_speed", {
-      label: "Probing Angular Speed",
-      description: `Probing angular speed. We use this default speed to drive a current around the coils in order to
+    ["emf_probing_angular_speed", {
+      label: "EMF Probing Angular Speed",
+      description: `EMF probing angular speed. We use this default speed to drive a current around the coils in order to
       move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
     }],
     ["max_pwm_change", {
@@ -2219,6 +2213,22 @@ const control_parameters_input = Object.fromEntries(
     ["seek_kd", {
       label: "Seek KD",
       description: "Seek via torque derivative gain. Dampening factor to lower torque when the error is decreasing quickly."
+    }],
+    ["saliency_angle_influence_ki", {
+      label: "Saliency Angle Influence KI",
+      description: "Integral gain for the influence of the saliency angle. Controls how fast we adjust the PWM to compensate for the saliency angle."
+    }],
+    ["angle_probing_pwm", {
+      label: "Angle Probing PWM",
+      description: "PWM used during angle probing."
+    }],
+    ["angle_probing_angular_speed", {
+      label: "Angle Probing Angular Speed",
+      description: "Angular speed used during angle probing."
+    }],
+    ["angle_probing_sweep_duration", {
+      label: "Angle Probing Sweep Duration",
+      description: "Duration of the sweep during angle probing."
     }],
 
   ].map(([key, {label, description}]) => {

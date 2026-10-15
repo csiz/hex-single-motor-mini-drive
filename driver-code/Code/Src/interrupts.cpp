@@ -401,8 +401,6 @@ void ADC1_2_IRQHandler(void){
     // Calculate the new angle based on all the angle adjustments.
     const int32_t angle = predicted_angle + angle_adjustment + external_angle_adjustment;
 
-    // Remember whether we had an external angle fix.
-    const bool external_angle_fix = external_angle_adjustment != 0;
     // Clear the external angle adjustment after applying it.
     external_angle_adjustment = 0;
 
@@ -423,7 +421,7 @@ void ADC1_2_IRQHandler(void){
     // Track how many times we think our rotor angle is correct.
     const int16_t angle_fix = clip_to(
         0, static_cast<int32_t>(control_parameters.angle_fix_max_certainty),
-        readout.angle_fix + ((emf_fix or external_angle_fix) ? +1 : (emf_detected ? 0 : -1))
+        readout.angle_fix + (emf_fix ? +1 : (emf_detected ? 0 : -1))
     );
 
     // Calculate speed and acceleration
@@ -542,36 +540,15 @@ void ADC1_2_IRQHandler(void){
     // Target the top of the drive state queue if there is anything scheduled; otherwise break.
     auto const& drive_state = pending_drive_states ? drive_state_queue.peek() : breaking_drive_state;
 
-    // Instantly set to 0, but otherwise approach the target PWM gradually.
-    readout.active_pwm = drive_state.pwm_value == 0 ? 0 : (readout.active_pwm + clip_to(
-        -control_parameters.max_pwm_change,
-        +control_parameters.max_pwm_change,
-        drive_state.pwm_value - readout.active_pwm
-    ));
+    // Copy the commanded PWM value from the drive command to our readout state.
+    readout.active_pwm = drive_state.pwm_value;;
 
     // Copy the motor flags.
     readout.motor_flags = drive_state.motor_flags;
 
-
-    // The main control flag is whether we drive in fixed coordinates (open loop) or relative coordinates (closed loop).
-    // 
-    // Breaking mode can be expressed as driving at 0 pwm in fixed coordinates.
-    
-    if (drive_state.enable_closed_loop) {
-        // TODO: drive at the offset specified by drive_state.angle_value
-        const int32_t ideal_angle = readout.angle + quarter_circle;
-
-        // Drive the motor to produce current perpendicular to the magnetic angle.
-        readout.active_angle = ideal_angle;
-
-    } else {
-        // Drive the inductors around a circle at the specified PWM and speed (open loop control).
-        readout.active_angle += drive_state.angle_value;
-    }
-
-    // TODO: ... maybe we should stick with strictly positive pwm all the time so we don't do this check,
-    // yeah, we can use negative pwm in the main loop if really makes our algos easier, but gotta translate
-    // to normalized vectors in the interrupt loop.
+    // Drive the inductors around a circle at the specified PWM and speed. Note the interrupt 
+    // loop always does open loop control. Main loop adjusts settings for closed loop control.
+    readout.active_angle += drive_state.angle_increment;
 
     // We need a single comparison and we can then use arithmetic math instead of branching conditionals.
     const bool is_pwm_negative = readout.active_pwm < 0;

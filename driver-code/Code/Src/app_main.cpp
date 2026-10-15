@@ -103,10 +103,9 @@ static inline hex_mini_drive::Version make_version_object() {
 static inline hex_mini_drive::DriveState get_checked_drive_state(hex_mini_drive::DriveState const& drive_state) {
   return hex_mini_drive::DriveState{
     .motor_flags = drive_state.motor_flags,
-    .enable_closed_loop = drive_state.enable_closed_loop,
     .duration = drive_state.duration,
     .pwm_value = clip_to(-pwm_max, +pwm_max, drive_state.pwm_value * control_parameters.motor_direction),
-    .angle_value = drive_state.angle_value * control_parameters.motor_direction,
+    .angle_increment = drive_state.angle_increment * control_parameters.motor_direction,
   };
 }
 
@@ -228,6 +227,11 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       //   .duration = std::get<BasicDriveCommand>(message.message_data).duration, 
       //   .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
       // });
+      return;
+    }
+
+    case SET_STATE_DRIVE_SMOOTH: {
+      // TODO:...
       return;
     }
 
@@ -568,7 +572,7 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
   }
 
   // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
-  const int32_t pending_adjustment = (info.saliency_angle_offset / 2) * control_parameters.rotor_angle_ki;
+  const int32_t pending_adjustment = (info.saliency_angle_offset / 2) * control_parameters.saliency_angle_influence_ki;
 
   if (set_angle_adjustment(pending_adjustment)) {
     info.saliency_angle_offset -= 2 * pending_adjustment;

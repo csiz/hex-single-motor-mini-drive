@@ -402,11 +402,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .resistance_current_minimum = 4.f * current_measurement_noise,
     .inductance_excitation_minimum_square = square(0.050f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT),
     .current_offset_maximum = 16 * adc_to_current_units,
-    .probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    .max_pwm_change = pwm_max / 512,
-    .min_emf_for_motor_constant = 1.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
-    .vcc_undervoltage = 8.0 * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
-    .max_resistive_power = 8.0,
+    .emf_probing_angular_speed = 10.f * angle_base / static_cast<float>(pwm_cycles_per_second),
+    .min_emf_for_motor_constant = 1.0f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
+    .vcc_undervoltage = 8.0f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
+    .max_resistive_power = 8.0f,
     .max_power_draw = max_drive_power,
     .resistive_power_ki = std::pow(2, -12),
     .power_draw_ki = std::pow(2, -12),
@@ -425,6 +424,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_kp = 1.0f,
     .seek_kd = 0.0f,
 
+    .saliency_angle_influence_ki = std::pow(2, -4),
+    .angle_probing_pwm = 32.0f,
+    .angle_probing_angular_speed = angle_base / 12,
+    .angle_probing_sweep_duration = 4,
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

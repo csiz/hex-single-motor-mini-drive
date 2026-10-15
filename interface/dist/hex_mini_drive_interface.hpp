@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.119.0";
+constexpr char const* VERSION_STRING = "0.122.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -534,27 +534,29 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
 struct DriveState {
   // Flags controlling the behavior of the motor drive.
   uint8_t motor_flags;
-  // Flag to enable or disable closed-loop control for the motor drive.
-  uint8_t enable_closed_loop;
+  // Reserved for future use.
+  uint8_t reserved;
   // Time in pwm periods to drive the motor before stopping.
   uint16_t duration;
   // PWM value to use for driving the motor.
   float pwm_value;
-  // Either angular_speed or lead_angle when enable_closed_loop is active.
-  int32_t angle_value;
+  // Incremental change in the active_angle used in driving the pwm signal.
+  // This is angular_speed but with int32 units instead of float32. It still
+  // means angle units per step, as does our definition of angular_speed.
+  int32_t angle_increment;
 };
 
 static inline void write_DriveState(uint8_t * buffer, DriveState const& value) {
   size_t offset = 0;
   write_uint8(buffer + offset, value.motor_flags);;
   offset += 1;
-  write_uint8(buffer + offset, value.enable_closed_loop);;
+  write_uint8(buffer + offset, value.reserved);;
   offset += 1;
   write_uint16(buffer + offset, value.duration);;
   offset += 2;
   write_float32(buffer + offset, value.pwm_value);;
   offset += 4;
-  write_int32(buffer + offset, value.angle_value);;
+  write_int32(buffer + offset, value.angle_increment);;
   offset += 4;
 }
 static inline DriveState read_DriveState(uint8_t const* buffer) {
@@ -564,13 +566,13 @@ static inline DriveState read_DriveState(uint8_t const* buffer) {
   
   result.motor_flags = read_uint8(buffer + offset);
   offset += 1;
-  result.enable_closed_loop = read_uint8(buffer + offset);
+  result.reserved = read_uint8(buffer + offset);
   offset += 1;
   result.duration = read_uint16(buffer + offset);
   offset += 2;
   result.pwm_value = read_float32(buffer + offset);
   offset += 4;
-  result.angle_value = read_int32(buffer + offset);
+  result.angle_increment = read_int32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -811,9 +813,7 @@ struct ControlParameters {
   // Maximum allowable current offset to adjust the current sensing bias from 0.
   float current_offset_maximum;
   // Probing angular speed for initial EMF detection.
-  float probing_angular_speed;
-  // Maximum allowable change in the PWM magnitude between control updates.
-  float max_pwm_change;
+  float emf_probing_angular_speed;
   // Minium EMF voltage to compute the motor constant.
   float min_emf_for_motor_constant;
   // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
@@ -847,6 +847,14 @@ struct ControlParameters {
   float seek_kp;
   // Seek derivative gain for the PID control.
   float seek_kd;
+  // Integral gain for the saliency angle influence on the rotor_angle.
+  float saliency_angle_influence_ki;
+  // PWM magnitude used for angle probing with HFI (High-Frequency Injection).
+  float angle_probing_pwm;
+  // Angular speed used for HFI probing (in integer angle units per pwm cycle).
+  int32_t angle_probing_angular_speed;
+  // Duration of an angle probing sweep for HFI (the full probe has 4 sweeps).
+  uint32_t angle_probing_sweep_duration;
 };
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
@@ -911,9 +919,7 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.current_offset_maximum);;
   offset += 4;
-  write_float32(buffer + offset, value.probing_angular_speed);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_pwm_change);;
+  write_float32(buffer + offset, value.emf_probing_angular_speed);;
   offset += 4;
   write_float32(buffer + offset, value.min_emf_for_motor_constant);;
   offset += 4;
@@ -946,6 +952,14 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.seek_kp);;
   offset += 4;
   write_float32(buffer + offset, value.seek_kd);;
+  offset += 4;
+  write_float32(buffer + offset, value.saliency_angle_influence_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.angle_probing_pwm);;
+  offset += 4;
+  write_int32(buffer + offset, value.angle_probing_angular_speed);;
+  offset += 4;
+  write_uint32(buffer + offset, value.angle_probing_sweep_duration);;
   offset += 4;
 }
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
@@ -1013,9 +1027,7 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.current_offset_maximum = read_float32(buffer + offset);
   offset += 4;
-  result.probing_angular_speed = read_float32(buffer + offset);
-  offset += 4;
-  result.max_pwm_change = read_float32(buffer + offset);
+  result.emf_probing_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.min_emf_for_motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -1049,6 +1061,14 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.seek_kd = read_float32(buffer + offset);
   offset += 4;
+  result.saliency_angle_influence_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.angle_probing_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.angle_probing_angular_speed = read_int32(buffer + offset);
+  offset += 4;
+  result.angle_probing_sweep_duration = read_uint32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Message Codes
@@ -1065,12 +1085,13 @@ enum MessageCode : uint16_t {
   SET_STATE_FREEWHEEL = 8241,
   SET_DRIVE_STATE = 8242,
   SET_DRIVE_SCHEDULE = 8243,
-  SET_STATE_DRIVE_6_SECTOR = 16432,
-  SET_STATE_DRIVE_TORQUE = 16433,
-  SET_STATE_DRIVE_BATTERY_POWER = 16434,
-  SET_STATE_DRIVE_SPEED = 16435,
-  SET_STATE_DRIVE_TORQUE_SPEED = 16436,
-  SET_STATE_SEEK_ANGLE = 16437,
+  SET_STATE_DRIVE_SMOOTH = 16432,
+  SET_STATE_DRIVE_6_SECTOR = 16433,
+  SET_STATE_DRIVE_TORQUE = 16434,
+  SET_STATE_DRIVE_BATTERY_POWER = 16435,
+  SET_STATE_DRIVE_SPEED = 16436,
+  SET_STATE_DRIVE_TORQUE_SPEED = 16437,
+  SET_STATE_SEEK_ANGLE = 16438,
   CALIBRATION = 16448,
   GET_CALIBRATION = 16449,
   SET_CALIBRATION = 16450,
@@ -1121,6 +1142,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
     case MessageCode::SET_DRIVE_STATE: return 14;
     case MessageCode::SET_DRIVE_SCHEDULE: return 146;
+    case MessageCode::SET_STATE_DRIVE_SMOOTH: return 14;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 14;
     case MessageCode::SET_STATE_DRIVE_TORQUE: return 10;
     case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 10;
@@ -1131,8 +1153,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 30;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 178;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 178;
+    case MessageCode::CONTROL_PARAMETERS: return 190;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 190;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
@@ -1208,6 +1230,12 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_DriveSchedule(buffer + 2, std::get<DriveSchedule>(message.message_data));
       return 146;
     }
+    case MessageCode::SET_STATE_DRIVE_SMOOTH: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_SMOOTH));
+      if (max_size < 2 + 12) return 0;
+      write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
+      return 14;
+    }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
       if (max_size < 2 + 12) return 0;
@@ -1266,15 +1294,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 176) return 0;
+      if (max_size < 2 + 188) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 178;
+      return 190;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 176) return 0;
+      if (max_size < 2 + 188) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 178;
+      return 190;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1370,6 +1398,11 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       message.message_data = read_DriveSchedule(buffer + 2);
       return true;
     }
+    case MessageCode::SET_STATE_DRIVE_SMOOTH: {
+      if (size != 2 + 12) return false;
+      message.message_data = read_DriveState(buffer + 2);
+      return true;
+    }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       if (size != 2 + 12) return false;
       message.message_data = read_DriveState(buffer + 2);
@@ -1421,12 +1454,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 176) return false;
+      if (size != 2 + 188) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 176) return false;
+      if (size != 2 + 188) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

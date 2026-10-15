@@ -53,24 +53,26 @@ message_codes:
     message_code: 0x2033
     type: DriveSchedule
 
-
-  SET_STATE_DRIVE_6_SECTOR:
+  SET_STATE_DRIVE_SMOOTH:
     message_code: 0x4030
     type: DriveState
-  SET_STATE_DRIVE_TORQUE:
+  SET_STATE_DRIVE_6_SECTOR:
     message_code: 0x4031
+    type: DriveState
+  SET_STATE_DRIVE_TORQUE:
+    message_code: 0x4032
     type: SetStateDriveTorque
   SET_STATE_DRIVE_BATTERY_POWER:
-    message_code: 0x4032
+    message_code: 0x4033
     type: SetStateDriveBatteryPower
   SET_STATE_DRIVE_SPEED:
-    message_code: 0x4033
+    message_code: 0x4034
     type: SetStateDriveSpeed
   SET_STATE_DRIVE_TORQUE_SPEED:
-    message_code: 0x4034
+    message_code: 0x4035
     type: SetStateDriveTorqueSpeed
   SET_STATE_SEEK_ANGLE:
-    message_code: 0x4035
+    message_code: 0x4036
     type: SetStateSeekAngle
 
   CALIBRATION:
@@ -429,18 +431,21 @@ definitions:
       motor_flags:
         type: uint8
         doc: Flags controlling the behavior of the motor drive.
-      enable_closed_loop:
+      reserved:
         type: uint8
-        doc: Flag to enable or disable closed-loop control for the motor drive.
+        doc: Reserved for future use.
       duration:
         type: uint16
         doc: Time in pwm periods to drive the motor before stopping.
       pwm_value:
         type: float32
         doc: PWM value to use for driving the motor.
-      angle_value:
+      angle_increment:
         type: int32
-        doc: Either angular_speed or lead_angle when enable_closed_loop is active.
+        doc: |
+          Incremental change in the active_angle used in driving the pwm signal.
+          This is angular_speed but with int32 units instead of float32. It still
+          means angle units per step, as does our definition of angular_speed.
 
   DriveSchedule:
     doc: Set a series of driver states to be executed by the motor in sequence.
@@ -631,13 +636,9 @@ definitions:
         type: float32
         doc: Maximum allowable current offset to adjust the current sensing bias from 0.
 
-      probing_angular_speed:
+      emf_probing_angular_speed:
         type: float32
         doc: Probing angular speed for initial EMF detection.
-
-      max_pwm_change:
-        type: float32
-        doc: Maximum allowable change in the PWM magnitude between control updates.
 
       min_emf_for_motor_constant:
         type: float32
@@ -704,3 +705,19 @@ definitions:
       seek_kd:
         type: float32
         doc: Seek derivative gain for the PID control.
+
+      saliency_angle_influence_ki:
+        type: float32
+        doc: Integral gain for the saliency angle influence on the rotor_angle.
+
+      angle_probing_pwm:
+        type: float32
+        doc: PWM magnitude used for angle probing with HFI (High-Frequency Injection).
+
+      angle_probing_angular_speed:
+        type: int32
+        doc: Angular speed used for HFI probing (in integer angle units per pwm cycle).
+
+      angle_probing_sweep_duration:
+        type: uint32
+        doc: Duration of an angle probing sweep for HFI (the full probe has 4 sweeps).
