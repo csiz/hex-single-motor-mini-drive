@@ -493,9 +493,8 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   const bool calibration_error_detected = square_voltage_error > control_parameters.voltage_measurement_variance;
   
-  // TODO: do we want to update when we have emf or not?!?
   // Run calibration when there's error or back EMF is detected.
-  if (calibration_error_detected and not (readout.state_flags & emf_detected_bit_mask)) {
+  if (calibration_error_detected) {
 
       // Compute the gradients of the loss with respect to each of the tracked parameters.
 
@@ -550,25 +549,25 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
           info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_change);
           info.saliency_angle_variance += (square(saliency_angle_change) - info.saliency_angle_variance) * 0.01f;
       }
-  } else {
-      // Only track the zero offset while there is no noticeable current being measured.
-      if (readout.current_magnitude < control_parameters.current_offset_maximum) {
-          const auto currents = abc_transform(
-            {readout.direct_current, readout.quadrature_current}, 
-            readout.zero_current
-          );
+  }
 
-          // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
-          calibration.u_current_zero = clip_to(
-              -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-              calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
-          calibration.v_current_zero = clip_to(
-              -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-              calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
-          calibration.w_current_zero = clip_to(
-              -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-              calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
-      }
+  // Only track the zero offset while there is no noticeable current being measured.
+  if (readout.current_magnitude < control_parameters.current_offset_maximum) {
+      const auto currents = abc_transform(
+        {readout.direct_current, readout.quadrature_current}, 
+        readout.zero_current
+      );
+
+      // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
+      calibration.u_current_zero = clip_to(
+          -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
+          calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
+      calibration.v_current_zero = clip_to(
+          -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
+          calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
+      calibration.w_current_zero = clip_to(
+          -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
+          calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
   }
 
   // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
