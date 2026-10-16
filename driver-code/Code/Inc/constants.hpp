@@ -425,9 +425,9 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_kd = 0.0f,
 
     .saliency_angle_influence_ki = std::pow(2, -4),
-    .angle_probing_pwm = 32.0f,
-    .angle_probing_angular_speed = angle_base / 12,
-    .angle_probing_sweep_duration = 4,
+    .angle_probing_pwm = 48.0f,
+    .angle_probing_angular_speed = angle_base / 24,
+    .angle_probing_sweep_duration = 8,
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

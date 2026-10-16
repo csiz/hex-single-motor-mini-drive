@@ -57,6 +57,34 @@ uint32_t duration_executed = 0;
 // Angle adjustment from the main loop.
 volatile int32_t external_angle_adjustment = 0;
 
+
+// Angle probing via High-Frequency Injection (HFI)
+// ------------------------------------------------
+
+enum struct AngleProbingMode : uint8_t {
+    WAITING,
+    HFI_SWEEP_0,
+    HFI_SWEEP_1,
+    HFI_SWEEP_2,
+    HFI_SWEEP_3
+};
+
+struct AngleProbingState {
+    AngleProbingMode mode = AngleProbingMode::WAITING;
+    uint32_t counter = 0;
+    int32_t angle = 0;
+
+    void count_and_switch(uint32_t const counter_threshold, AngleProbingMode && next_mode) {
+        counter += 1;
+        if (counter > counter_threshold) {
+            mode = next_mode;
+            counter = 0;
+        }
+    }
+};
+
+AngleProbingState angle_probing = {};
+
 // Interrupt Data Interface
 // ------------------------
 
@@ -118,7 +146,46 @@ static inline MotorOutputs compute_motor_outputs(int32_t const& angle, float con
         .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_value),
         .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_value)
     };
+}
+
+static inline MotorOutputs angle_probing_update(AngleProbingState & angle_probing, const int32_t readout_angle, const bool emf_detected){
+    // 0 sweep means HFI is disabled
+    if (not control_parameters.angle_probing_sweep_duration) return MotorOutputs{};
     
+    switch (angle_probing.mode){
+        case AngleProbingMode::WAITING: {
+            angle_probing.angle = readout_angle;
+            // Reset the counter as long as we have a known position.
+            if (emf_detected) {
+                angle_probing.counter = 0; 
+            } else {
+                angle_probing.count_and_switch(control_parameters.angle_probing_interval, AngleProbingMode::HFI_SWEEP_0);
+            }
+            return MotorOutputs{};
+        }
+        case AngleProbingMode::HFI_SWEEP_0: {
+            angle_probing.angle += control_parameters.angle_probing_angular_speed;
+            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::HFI_SWEEP_1);
+            break;
+        }
+        case AngleProbingMode::HFI_SWEEP_1: {
+            angle_probing.angle -= control_parameters.angle_probing_angular_speed;
+            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::HFI_SWEEP_2);
+            break;
+        }
+        case AngleProbingMode::HFI_SWEEP_2: {
+            angle_probing.angle -= control_parameters.angle_probing_angular_speed;
+            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::HFI_SWEEP_3);
+            break;
+        }
+        case AngleProbingMode::HFI_SWEEP_3: {
+            angle_probing.angle += control_parameters.angle_probing_angular_speed;
+            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::WAITING);
+            break;
+        }
+    }
+
+    return compute_motor_outputs(angle_probing.angle, control_parameters.angle_probing_pwm);
 }
 
 // ADC readings and calculation loop
@@ -415,12 +482,6 @@ void ADC1_2_IRQHandler(void){
     const int32_t rotations = readout.rotations + rotations_increment;
     
 
-    // Track how many times we think our rotor angle is correct.
-    const int16_t angle_fix = clip_to(
-        0, static_cast<int32_t>(control_parameters.angle_fix_max_certainty),
-        readout.angle_fix + (emf_detected ? +1 : -1)
-    );
-
     // Calculate speed and acceleration
     // --------------------------------
 
@@ -487,8 +548,6 @@ void ADC1_2_IRQHandler(void){
     // Must update the whole state before motor pwm calculation!
 
     readout.readout_number = readout_number;
-    
-    readout.angle_fix = angle_fix;
     
     readout.state_flags = (
         (hall_state << hall_state_bit_offset) |
@@ -586,7 +645,15 @@ void ADC1_2_IRQHandler(void){
     const int32_t normalized_angle = readout.active_angle + is_pwm_negative * half_circle;
 
     // Calculate and store desired motor pwm.
-    motor_outputs = compute_motor_outputs(normalized_angle, abs_pwm);
+    // 
+    // Run the angle probing in the interrupt loop, it makes managing state much easier because HFI
+    // has to run on top of any other commands. It automatically stops while the motor is running
+    // because we get an angle fix from the emf_detected, however we need to run probing at standstill
+    // even during a torque hold command (actually, that's when it's most needed).
+    motor_outputs = (
+        compute_motor_outputs(normalized_angle, abs_pwm) +
+        angle_probing_update(angle_probing, readout.angle, emf_detected)
+    );
 
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if

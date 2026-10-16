@@ -388,7 +388,12 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   const float pwm_penalty = (0.1f - 1.f * pwm_too_high) * readouts_since_last_tick;
 
-  info.live_max_pwm = clip_to(0, pwm_max, info.live_max_pwm + pwm_penalty);
+  info.live_max_pwm = clip_to(
+    0, 
+    // Leave some pwm headroom for the HFI probing if that is enabled.
+    control_parameters.angle_probing_sweep_duration ? pwm_max - control_parameters.angle_probing_pwm : pwm_max, 
+    info.live_max_pwm + pwm_penalty
+  );
 
   
   // Calculate the motor constant
