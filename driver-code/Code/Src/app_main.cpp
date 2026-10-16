@@ -39,8 +39,8 @@ const uint32_t min_timing_period_millis = 50;
 uint32_t last_update_time_millis = 0;
 
 
-// Communication buffers and state
-// -------------------------------
+// Communication buffers and connection state
+// ------------------------------------------
 
 const uint32_t partial_message_timeout_ms = 500;
 
@@ -366,13 +366,13 @@ static inline float validate_parameter(float const& value, float const& minimum_
 }
 
 static inline void process_readout(hex_mini_drive::Readout const& readout) {
-  // Limits
-  // ------
-
+  // Count if we skip any readouts.
   const uint16_t readouts_since_last_tick = (readout_number_base + readout.readout_number - last_readout_number) % readout_number_base;
 
   last_readout_number = readout.readout_number;
-  
+    
+  // Safety Limits
+  // -------------
   // Reduce the maximum output PWM to keep within safe limits:
   // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
   // let the battery recharge our local capacitors.
@@ -549,10 +549,8 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
           info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_change);
           info.saliency_angle_variance += (square(saliency_angle_change) - info.saliency_angle_variance) * 0.01f;
       }
-  }
-
-  // Only track the zero offset while there is no noticeable current being measured.
-  if (readout.current_magnitude < control_parameters.current_offset_maximum) {
+    // Only track the zero offset while there is no noticeable current being measured.
+    } else if (readout.current_magnitude < control_parameters.current_offset_maximum) {
       const auto currents = abc_transform(
         {readout.direct_current, readout.quadrature_current}, 
         readout.zero_current

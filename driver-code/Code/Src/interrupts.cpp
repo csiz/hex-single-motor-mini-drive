@@ -48,9 +48,6 @@ MotorOutputs motor_outputs = breaking_motor_outputs;
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
-// Currently active driver state (the full motor control state should be stored here).
-hex_mini_drive::DriveState drive_state = breaking_drive_state;
-
 // Keep track of how many states were scheduled at the last update. We want to immediately skip to newer
 // commands if the schedule increases while we are still executing the previous ones.
 size_t drive_states_scheduled = 0;
@@ -421,7 +418,7 @@ void ADC1_2_IRQHandler(void){
     // Track how many times we think our rotor angle is correct.
     const int16_t angle_fix = clip_to(
         0, static_cast<int32_t>(control_parameters.angle_fix_max_certainty),
-        readout.angle_fix + (emf_fix ? +1 : (emf_detected ? 0 : -1))
+        readout.angle_fix + (emf_detected ? +1 : -1)
     );
 
     // Calculate speed and acceleration
@@ -535,20 +532,49 @@ void ADC1_2_IRQHandler(void){
     // Calculate and set motor outputs!!
     // ---------------------------------
 
+    // Setup the new state if we were commanded by the main loop.
     const auto pending_drive_states = drive_state_queue.read_available();
 
-    // Target the top of the drive state queue if there is anything scheduled; otherwise break.
-    auto const& drive_state = pending_drive_states ? drive_state_queue.peek() : breaking_drive_state;
+    // Either we receive a new schedule of drive states, in which case switch to that.
+    if (pending_drive_states > drive_states_scheduled) {
+        const size_t new_drive_states = pending_drive_states - drive_states_scheduled;
+        // Skip old drive states as we've received new commands; always prioritize the latest batch.
+        drive_state_queue.mark_read(drive_states_scheduled);
+        // Set the new schedule count and load the first driver state.
+        drive_states_scheduled = new_drive_states;
+        duration_executed = 0;
+    }
+    
+    // Otherwise track the execution of the current drive state; and switch to the next one if needed.
+    if (drive_states_scheduled > 0) {
+        auto const& drive_state = drive_state_queue.peek();
 
-    // Copy the commanded PWM value from the drive command to our readout state.
-    readout.active_pwm = drive_state.pwm_value;;
+        // Copy the commanded PWM value from the drive command to our readout state.
+        readout.active_pwm = drive_state.pwm_value;;
 
-    // Copy the motor flags.
-    readout.motor_flags = drive_state.motor_flags;
+        // Copy the motor flags.
+        readout.motor_flags = drive_state.motor_flags;
 
-    // Drive the inductors around a circle at the specified PWM and speed. Note the interrupt 
-    // loop always does open loop control. Main loop adjusts settings for closed loop control.
-    readout.active_angle += drive_state.angle_increment;
+        // Drive the inductors around a circle at the specified PWM and speed. Note the interrupt 
+        // loop always does open loop control. Main loop adjusts settings for closed loop control.
+        readout.active_angle = readout.active_angle + drive_state.angle_increment;
+
+        // Count execution time.
+        duration_executed += 1;
+        
+        // Schedule the next in sequence if we've executed for the full duration of the current drive state.
+        if (duration_executed >= drive_state.duration) {
+            drive_states_scheduled -= 1;
+            drive_state_queue.mark_read(1);
+            duration_executed = 0;
+        }
+    // Finally if nothing is scheduled make the active_angle track the rotor position for smooth starting.
+    } else {
+        duration_executed = 0;
+        readout.motor_flags = breaking_drive_state.motor_flags;
+        readout.active_pwm = breaking_drive_state.pwm_value;
+        readout.active_angle = readout.angle;
+    }
 
     // We need a single comparison and we can then use arithmetic math instead of branching conditionals.
     const bool is_pwm_negative = readout.active_pwm < 0;
@@ -594,30 +620,6 @@ void ADC1_2_IRQHandler(void){
     // Write the latest readout to the history buffer for the main loop to read.
     readout_history_queue.write_if_available(readout);
 
-    // Setup the new state if we were commanded by the main loop so we are prepared for the next cycle.
-    // 
-    // There are a few checks when copying to state, so to keep things glitchlessly fast we update it
-    // after we've set the motor outputs. The new state will be ready for the next cycle.
-    // 
-    // Note, the new pending state may clear the readout history so this must be done after the history push.
-
-    // Either we receive a new schedule of drive states, in which case switch to that.
-    if (pending_drive_states > drive_states_scheduled) {
-        const size_t new_drive_states = pending_drive_states - drive_states_scheduled;
-        // Skip old drive states as we've received new commands; always prioritize the latest batch.
-        drive_state_queue.mark_read(drive_states_scheduled);
-        // Set the new schedule count and load the first driver state.
-        drive_states_scheduled = new_drive_states;
-        duration_executed = 0;
-    
-    // Otherwise track the execution of the current drive state; and switch to the next one if needed.
-    } else if (drive_states_scheduled > 0 and duration_executed++ > drive_state.duration) {
-        // If we were scheduling a sequence of driver states, decrement the scheduled count
-        // and mark executed state as read/done.
-        drive_states_scheduled--;
-        drive_state_queue.mark_read(1);
-        duration_executed = 0;
-    }
 
     // TODO: we need complete nan checks; preferably in the main loop.
     if (std::isnan(readout.emf_voltage_magnitude)) {

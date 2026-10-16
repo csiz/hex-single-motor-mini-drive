@@ -1019,6 +1019,7 @@ const plot_electric_position = plot_lines({
     {y: (d) => normalize_radians(2*d.emf_voltage_angle)*0.5, label: "EMF Voltage Axis", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: "web_emf_voltage_angle", label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
+    {y: "active_angle", label: "Active Angle", color: d3.color(colors_categories[2]).brighter(1)},
   ],
   curve,
 });
