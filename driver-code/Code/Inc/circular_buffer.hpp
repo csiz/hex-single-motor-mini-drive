@@ -212,7 +212,12 @@ class CircularQueue{
   T const& peek() {
     return data[read_index];
   }
-
+  
+  /* Modify the active read element. */
+  T & modify() {
+    return data[read_index];
+  }
+  
   /* Get modifiable pointer to the read buffer; use with contiguous_read_available() to get the size. */
   T * get_read_pointer() {
     return &data[read_index];

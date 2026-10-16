@@ -389,7 +389,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .emf_angular_speed_ki = std::pow(2, -5),
 
     .hall_angle_ki = std::pow(2, -4),
-    .lead_angle_control_ki = std::pow(2, -11),
+    .lead_angle_control_ki = std::pow(2, -8),
 
     .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -12),
