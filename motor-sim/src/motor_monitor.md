@@ -591,8 +591,8 @@ const simple_drive_buttons = Inputs.button(
         message_code: MessageCode.SET_DRIVE_STATE,
         ...command_drive_state,
         closed_loop: true,
-        target_speed: +command_angular_speed,
-        angle_value: -radians_to_angle_units(Math.PI/2),
+        target_speed: -command_angular_speed,
+        angle_value: +radians_to_angle_units(Math.PI/2),
         target_value: +command_torque_current,
       });
     }],

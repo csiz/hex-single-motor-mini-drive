@@ -17,7 +17,7 @@
 constexpr float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
 
 // Inverse for fast math.
-constexpr float max_drive_current_inverse = 1.f / max_drive_current;
+// constexpr float max_drive_current_inverse = 1.f / max_drive_current;
 
 // 12W max drive power.
 constexpr float max_drive_power = 12.0;
@@ -50,7 +50,7 @@ constexpr float max_rpm = max_frequency * 60.f / rotor_revolutions_per_electric;
 constexpr float max_angular_speed = 1.f * angle_base * max_frequency / static_cast<float>(pwm_cycles_per_second);
 
 // Inverse of the maximum angular speed so we can convert to floating point values without doing a division.
-constexpr float max_angular_speed_inverse = 1.f / max_angular_speed;
+// constexpr float max_angular_speed_inverse = 1.f / max_angular_speed;
 
 
 // Unit definitions
@@ -410,7 +410,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .resistive_power_ki = std::pow(2, -12),
     .power_draw_ki = std::pow(2, -10),
 
-    .torque_control_ki = 1.0f * amps_per_current_units,
+    .torque_control_ki = 10.0f * amps_per_current_units,
     .torque_control_kff = 0.1f,
 
     .battery_power_control_ki = 4.0f,
