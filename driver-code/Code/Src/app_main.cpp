@@ -66,11 +66,11 @@ uint32_t readouts_to_send = 0;
 // -------------------------
 
 enum struct ControlModes : uint8_t {
-  OPEN_LOOP,
-  DRIVE_SMOOTH
+  DRIVE_SCHEDULE,
+  SEEK_ANGLE
 };
 
-ControlModes control_mode = ControlModes::OPEN_LOOP;
+ControlModes control_mode = ControlModes::DRIVE_SCHEDULE;
 
 // Initialization
 // --------------
@@ -108,15 +108,6 @@ static inline hex_mini_drive::Version make_version_object() {
     reinterpret_cast<char*>(result.data()), 
     hex_mini_drive::VERSION_STRING, hex_mini_drive::VERSION_STRING_SIZE);
   return result;
-}
-
-static inline hex_mini_drive::DriveState get_checked_drive_state(hex_mini_drive::DriveState const& drive_state) {
-  return hex_mini_drive::DriveState{
-    .motor_flags = drive_state.motor_flags,
-    .duration = drive_state.duration,
-    .pwm_value = clip_to(-pwm_max, +pwm_max, drive_state.pwm_value * control_parameters.motor_direction),
-    .angle_increment = drive_state.angle_increment * control_parameters.motor_direction,
-  };
 }
 
 // Queue a message to the USB send buffer if there's enough space for it.
@@ -208,7 +199,7 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_DRIVE_STATE: {
-      auto const& drive_state = get_checked_drive_state(std::get<DriveState>(message.message_data));
+      auto const& drive_state = std::get<DriveState>(message.message_data);
       // Only write the drive_state if there is space available in the queue.
       drive_state_queue.write_if_available(drive_state);
       return;
@@ -220,7 +211,7 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
 
       size_t i = 0;
       for (; i < hex_mini_drive::DRIVE_SCHEDULE_SIZE; i++) {
-        auto const& drive_state = get_checked_drive_state(std::get<DriveSchedule>(message.message_data)[i]);
+        auto const& drive_state = std::get<DriveSchedule>(message.message_data)[i];
         // The schedule lasts until the first state with 0 duration.
         if (drive_state.duration == 0) break;
         drive_state_queue.write_at_offset(i, drive_state);
@@ -241,16 +232,16 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_STATE_DRIVE_SMOOTH: {
-      auto drive_state = get_checked_drive_state(std::get<DriveState>(message.message_data));
-      // Carry over the current drive speed from any ongoing drive state.
-      auto const& ongoing_drive_state = drive_state_queue.peek();
-      // If the motor is idle, start at 0.
-      drive_state.angle_increment = drive_state_queue.read_available() ? ongoing_drive_state.angle_increment : 0;
+      // auto drive_state = std::get<DriveState>(message.message_data);
+      // // Carry over the current drive speed from any ongoing drive state.
+      // auto const& ongoing_drive_state = drive_state_queue.peek();
+      // // If the motor is idle, start at 0.
+      // drive_state.target_speed = drive_state_queue.read_available() ? ongoing_drive_state.target_speed : 0;
 
-      // Only write the drive_state if there is space available in the queue.
-      if(drive_state_queue.write_if_available(drive_state)) {
-        control_mode = ControlModes::DRIVE_SMOOTH;
-      }
+      // // Only write the drive_state if there is space available in the queue.
+      // if(drive_state_queue.write_if_available(drive_state)) {
+      //   control_mode = ControlModes::DRIVE_SCHEDULE;
+      // }
 
       return;
     }
@@ -609,21 +600,21 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
   if(drive_state_queue.read_available()) {
     // Update drive_state for closed-loop control.
     switch(control_mode) {
-      // No special handling required for open-loop control.
-      case ControlModes::OPEN_LOOP: break;
+      // No special handling required for a fixed drive schedule.
+      case ControlModes::DRIVE_SCHEDULE: break;
       // Smooth driving at set pwm.
-      case ControlModes::DRIVE_SMOOTH: {
-        const int32_t current_angle_error = drive_state.pwm_value > 0 ? 
+      case ControlModes::SEEK_ANGLE: {
+        const int32_t current_angle_error = drive_state.target_value > 0 ? 
           readout.current_angle_offset - quarter_circle :
           readout.current_angle_offset + quarter_circle;
         // Adjust the drive_state speed to maintain the ideal driving angle.
-        drive_state.angle_increment = readout.angular_speed - current_angle_error * control_parameters.lead_angle_control_ki;
+        drive_state.target_speed = readout.angular_speed - current_angle_error * control_parameters.lead_angle_control_ki;
       }
     }
 
   } else {
     // No active drive state, clear the mode back to open-loop (motor idle state).
-    control_mode = ControlModes::OPEN_LOOP;
+    control_mode = ControlModes::DRIVE_SCHEDULE;
   }
 }
 

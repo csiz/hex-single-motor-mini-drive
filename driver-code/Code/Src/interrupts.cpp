@@ -593,7 +593,7 @@ void ADC1_2_IRQHandler(void){
 
     // Setup the new state if we were commanded by the main loop.
     const auto pending_drive_states = drive_state_queue.read_available();
-
+    
     // Either we receive a new schedule of drive states, in which case switch to that.
     if (pending_drive_states > drive_states_scheduled) {
         const size_t new_drive_states = pending_drive_states - drive_states_scheduled;
@@ -608,15 +608,39 @@ void ADC1_2_IRQHandler(void){
     if (drive_states_scheduled > 0) {
         auto const& drive_state = drive_state_queue.peek();
 
-        // Copy the commanded PWM value from the drive command to our readout state.
-        readout.active_pwm = drive_state.pwm_value;;
-
         // Copy the motor flags.
         readout.motor_flags = drive_state.motor_flags;
 
-        // Drive the inductors around a circle at the specified PWM and speed. Note the interrupt 
-        // loop always does open loop control. Main loop adjusts settings for closed loop control.
-        readout.active_angle = readout.active_angle + drive_state.angle_increment;
+        if (drive_state.closed_loop) {
+            const float current_error = drive_state.target_value - readout.current_magnitude;
+            const float speed_error = drive_state.target_speed - faster_abs(readout.angular_speed);
+
+            readout.active_pwm = clip_to(
+                0, info.live_max_pwm, 
+                readout.active_pwm + min(
+                    current_error * control_parameters.torque_control_ki,
+                    speed_error * control_parameters.speed_control_ki
+                )
+            );
+            readout.active_angle += static_cast<int32_t>(
+                readout.angular_speed + (drive_state.angle_value - readout.current_angle_offset) * control_parameters.lead_angle_control_ki
+            );
+        } else {
+            // Copy the commanded PWM value from the drive command to our readout state.
+            readout.active_pwm = clip_to(
+                0, info.live_max_pwm, 
+                drive_state.target_value
+            );
+    
+            // Drive the inductors around a circle at the specified PWM and speed. Note the interrupt 
+            // loop always does open loop control. Main loop adjusts settings for closed loop control.
+            readout.active_angle = (
+                // Increment the active_angle except the first iteration of an open loop command where
+                // we jump to the command angle_value.
+                (duration_executed ? readout.active_angle : drive_state.angle_value) +
+                static_cast<int32_t>(drive_state.target_speed)
+            );
+        }
 
         // Count execution time.
         duration_executed += 1;
@@ -631,18 +655,9 @@ void ADC1_2_IRQHandler(void){
     } else {
         duration_executed = 0;
         readout.motor_flags = breaking_drive_state.motor_flags;
-        readout.active_pwm = breaking_drive_state.pwm_value;
+        readout.active_pwm = breaking_drive_state.target_value;
         readout.active_angle = readout.angle;
     }
-
-    // We need a single comparison and we can then use arithmetic math instead of branching conditionals.
-    const bool is_pwm_negative = readout.active_pwm < 0;
-
-    // The PWM counter value must be positive, we use the sign to determine the direction.
-    const float abs_pwm = min(info.live_max_pwm, is_pwm_negative ? -readout.active_pwm : readout.active_pwm);
-
-    // Use the active angle or flip it depending on the sign of the PWM.
-    const int32_t normalized_angle = readout.active_angle + is_pwm_negative * half_circle;
 
     // Calculate and store desired motor pwm.
     // 
@@ -651,7 +666,7 @@ void ADC1_2_IRQHandler(void){
     // because we get an angle fix from the emf_detected, however we need to run probing at standstill
     // even during a torque hold command (actually, that's when it's most needed).
     motor_outputs = (
-        compute_motor_outputs(normalized_angle, abs_pwm) +
+        compute_motor_outputs(readout.active_angle, readout.active_pwm) +
         angle_probing_update(angle_probing, readout.angle, emf_detected)
     );
 

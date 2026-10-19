@@ -344,7 +344,6 @@ export function parse_version(bare_version) {
 export function parse_info(bare_info) {
   return {
     ...bare_info,
-    lead_angle: angle_units_to_radians(bare_info.lead_angle),
     saliency_angle_offset: angle_units_to_radians(bare_info.saliency_angle_offset),
     saliency_angle_stdev: angle_units_to_radians(Math.sqrt(bare_info.saliency_angle_variance)),
   };

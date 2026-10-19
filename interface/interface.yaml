@@ -375,12 +375,6 @@ definitions:
         type: float32
         doc: Current maximum PWM allowed by the driver.
            
-      lead_angle:
-        type: int32
-        doc: | 
-          Lead angle for the motor driving; used to adjust the phase voltages to drive the 
-          motor efficiently.
-
       saliency_angle_offset:
         type: int32
         doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
@@ -431,21 +425,25 @@ definitions:
       motor_flags:
         type: uint8
         doc: Flags controlling the behavior of the motor drive.
-      reserved:
+      closed_loop:
         type: uint8
-        doc: Reserved for future use.
+        doc: |
+          Enable closed loop control, targetting a current, speed and drive offset 
+          angle, which is usually +- 90 degrees relative to the rotor angle.
       duration:
         type: uint16
         doc: Time in pwm periods to drive the motor before stopping.
-      pwm_value:
+      target_value:
         type: float32
-        doc: PWM value to use for driving the motor.
-      angle_increment:
+        doc: PWM or current value to use for driving the motor.
+      angle_value:
         type: int32
         doc: |
-          Incremental change in the active_angle used in driving the pwm signal.
-          This is angular_speed but with int32 units instead of float32. It still
-          means angle units per step, as does our definition of angular_speed.
+          Initial angle for the the open loop drive, or drive offset relative
+          to the rotor angle for closed loop control, usually +- 90 degrees.
+      target_speed:
+        type: float32
+        doc: Open loop rotation speed, or maximum (abs) velocity for closed loop control.
 
   DriveSchedule:
     doc: Set a series of driver states to be executed by the motor in sequence.

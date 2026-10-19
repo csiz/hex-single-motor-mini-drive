@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.122.0";
+constexpr char const* VERSION_STRING = "0.124.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -426,9 +426,6 @@ struct Info {
   float average_buffer_fill_rate;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
-  // Lead angle for the motor driving; used to adjust the phase voltages to drive the 
-  // motor efficiently.
-  int32_t lead_angle;
   // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
   int32_t saliency_angle_offset;
   // Variance of the estimated saliency angle, indicating the confidence in the saliency angle estimation.
@@ -444,8 +441,6 @@ static inline void write_Info(uint8_t * buffer, Info const& value) {
   write_float32(buffer + offset, value.average_buffer_fill_rate);;
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
-  offset += 4;
-  write_int32(buffer + offset, value.lead_angle);;
   offset += 4;
   write_int32(buffer + offset, value.saliency_angle_offset);;
   offset += 4;
@@ -464,8 +459,6 @@ static inline Info read_Info(uint8_t const* buffer) {
   result.average_buffer_fill_rate = read_float32(buffer + offset);
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
-  offset += 4;
-  result.lead_angle = read_int32(buffer + offset);
   offset += 4;
   result.saliency_angle_offset = read_int32(buffer + offset);
   offset += 4;
@@ -534,29 +527,33 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
 struct DriveState {
   // Flags controlling the behavior of the motor drive.
   uint8_t motor_flags;
-  // Reserved for future use.
-  uint8_t reserved;
+  // Enable closed loop control, targetting a current, speed and drive offset 
+  // angle, which is usually +- 90 degrees relative to the rotor angle.
+  uint8_t closed_loop;
   // Time in pwm periods to drive the motor before stopping.
   uint16_t duration;
-  // PWM value to use for driving the motor.
-  float pwm_value;
-  // Incremental change in the active_angle used in driving the pwm signal.
-  // This is angular_speed but with int32 units instead of float32. It still
-  // means angle units per step, as does our definition of angular_speed.
-  int32_t angle_increment;
+  // PWM or current value to use for driving the motor.
+  float target_value;
+  // Initial angle for the the open loop drive, or drive offset relative
+  // to the rotor angle for closed loop control, usually +- 90 degrees.
+  int32_t angle_value;
+  // Open loop rotation speed, or maximum (abs) velocity for closed loop control.
+  float target_speed;
 };
 
 static inline void write_DriveState(uint8_t * buffer, DriveState const& value) {
   size_t offset = 0;
   write_uint8(buffer + offset, value.motor_flags);;
   offset += 1;
-  write_uint8(buffer + offset, value.reserved);;
+  write_uint8(buffer + offset, value.closed_loop);;
   offset += 1;
   write_uint16(buffer + offset, value.duration);;
   offset += 2;
-  write_float32(buffer + offset, value.pwm_value);;
+  write_float32(buffer + offset, value.target_value);;
   offset += 4;
-  write_int32(buffer + offset, value.angle_increment);;
+  write_int32(buffer + offset, value.angle_value);;
+  offset += 4;
+  write_float32(buffer + offset, value.target_speed);;
   offset += 4;
 }
 static inline DriveState read_DriveState(uint8_t const* buffer) {
@@ -566,13 +563,15 @@ static inline DriveState read_DriveState(uint8_t const* buffer) {
   
   result.motor_flags = read_uint8(buffer + offset);
   offset += 1;
-  result.reserved = read_uint8(buffer + offset);
+  result.closed_loop = read_uint8(buffer + offset);
   offset += 1;
   result.duration = read_uint16(buffer + offset);
   offset += 2;
-  result.pwm_value = read_float32(buffer + offset);
+  result.target_value = read_float32(buffer + offset);
   offset += 4;
-  result.angle_increment = read_int32(buffer + offset);
+  result.angle_value = read_int32(buffer + offset);
+  offset += 4;
+  result.target_speed = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -583,7 +582,7 @@ static inline void write_DriveSchedule(uint8_t * buffer, DriveSchedule const& va
   size_t offset = 0;
   for (size_t i = 0; i < 12; ++i) {
     write_DriveState(buffer + offset, value[i]);;
-    offset += 12;
+    offset += 16;
   }
 }
 
@@ -592,7 +591,7 @@ static inline DriveSchedule read_DriveSchedule(uint8_t const* buffer) {
   size_t offset = 0;
   for (size_t i = 0; i < 12; ++i) {
     result[i] = read_DriveState(buffer + offset);
-    offset += 12;
+    offset += 16;
   }
   return result;
 }
@@ -1134,16 +1133,16 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
     case MessageCode::READOUT: return 114;
-    case MessageCode::INFO: return 30;
+    case MessageCode::INFO: return 26;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
-    case MessageCode::SET_DRIVE_STATE: return 14;
-    case MessageCode::SET_DRIVE_SCHEDULE: return 146;
-    case MessageCode::SET_STATE_DRIVE_SMOOTH: return 14;
-    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 14;
+    case MessageCode::SET_DRIVE_STATE: return 18;
+    case MessageCode::SET_DRIVE_SCHEDULE: return 194;
+    case MessageCode::SET_STATE_DRIVE_SMOOTH: return 18;
+    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 18;
     case MessageCode::SET_STATE_DRIVE_TORQUE: return 10;
     case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 10;
     case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
@@ -1190,9 +1189,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
-      if (max_size < 2 + 28) return 0;
+      if (max_size < 2 + 24) return 0;
       write_Info(buffer + 2, std::get<Info>(message.message_data));
-      return 30;
+      return 26;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
@@ -1220,27 +1219,27 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_DRIVE_STATE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_STATE));
-      if (max_size < 2 + 12) return 0;
+      if (max_size < 2 + 16) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 14;
+      return 18;
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_SCHEDULE));
-      if (max_size < 2 + 144) return 0;
+      if (max_size < 2 + 192) return 0;
       write_DriveSchedule(buffer + 2, std::get<DriveSchedule>(message.message_data));
-      return 146;
+      return 194;
     }
     case MessageCode::SET_STATE_DRIVE_SMOOTH: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_SMOOTH));
-      if (max_size < 2 + 12) return 0;
+      if (max_size < 2 + 16) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 14;
+      return 18;
     }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
-      if (max_size < 2 + 12) return 0;
+      if (max_size < 2 + 16) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 14;
+      return 18;
     }
     case MessageCode::SET_STATE_DRIVE_TORQUE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_TORQUE));
@@ -1359,7 +1358,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::INFO: {
-      if (size != 2 + 28) return false;
+      if (size != 2 + 24) return false;
       message.message_data = read_Info(buffer + 2);
       return true;
     }
@@ -1389,22 +1388,22 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_DRIVE_STATE: {
-      if (size != 2 + 12) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_DriveState(buffer + 2);
       return true;
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
-      if (size != 2 + 144) return false;
+      if (size != 2 + 192) return false;
       message.message_data = read_DriveSchedule(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_DRIVE_SMOOTH: {
-      if (size != 2 + 12) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_DriveState(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
-      if (size != 2 + 12) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_DriveState(buffer + 2);
       return true;
     }

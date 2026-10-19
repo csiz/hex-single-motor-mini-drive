@@ -45,17 +45,13 @@ Motor Commands
   <span>${test_buttons}</span>
   <span>${command_duration_slider}</span>
   <span>${command_pwm_slider}</span>
+  <span>${quickselect_angle_buttons}</span>
+  <span>${command_angle_slider}</span>
   <span>${command_angular_speed_slider}</span>
-</div>
-<div>
-  <span>${advanced_drive_buttons}</span>
   <span>${command_torque_current_slider}</span>
-  <span>${command_power_slider}</span>
 </div>
 <div>
   <span>${seek_drive_buttons}</span>
-  <span>${command_angle_slider}</span>
-  <span>${quickselect_angle_buttons}</span>
   <span>${command_seek_rotation_slider}</span>
   <span>${shared_seek_buttons}</span>
 </div>
@@ -346,10 +342,6 @@ const quickselect_angle_buttons = Inputs.button(
 const command_torque_current_slider = inputs_wide_range([0, max_drive_current], {value: 0.750, step: 0.010, label: "Command torque (Amps):"});
 const command_torque_current = transformed_input_value(command_torque_current_slider, (amps) => amps * CURRENT_UNITS_PER_AMP);
 
-// Choose the power target for power driving modes.
-const command_power_slider = inputs_wide_range([0, max_drive_power], {value: 1.500, step: 0.010, label: "Command power (Watts):"});
-const command_power = Generators.input(command_power_slider);
-
 // Choose the position for target seeking.
 const command_seek_rotation_slider = inputs_wide_range([-1024, +1024], {value: 0, step: 1, label: "Seek angle (rotations):"});
 const command_seek_rotation = Generators.input(command_seek_rotation_slider);
@@ -379,9 +371,11 @@ opened_ports_radio.addEventListener("input", function(){
 
 const command_drive_state = {
   motor_flags: ENABLE_ALL_OUTPUTS,
+  closed_loop: false,
   duration: command_duration,
-  pwm_value: command_pwm, 
-  angle_increment: Math.floor(command_angular_speed), 
+  target_value: command_pwm, 
+  target_speed: command_angular_speed, 
+  angle_value: command_angle,
 };
 
 async function stream_all_motors(){
@@ -447,7 +441,6 @@ d3.select(data_request_buttons).selectAll("button").style("height", "4em");
 const test_buttons = Inputs.button(
   [
     ["Test all permutation", async function(){
-      // TODO: fix angle setting. We need rotate 60 degrees during the 0 pwm periods.
       let drive_schedule = [
         [0, 1.0],
         [0, 0.0],
@@ -464,8 +457,9 @@ const test_buttons = Inputs.button(
       ].map(([angle, value]) => ({
         motor_flags: ENABLE_ALL_OUTPUTS,
         duration: HISTORY_SIZE / 12,
-        pwm_value: command_drive_state.pwm_value * value,
-        angle: radians_to_angle_units(angle),
+        target_value: command_drive_state.target_value * value,
+        angle_value: radians_to_angle_units(angle),
+        target_speed: 0,
       }));
       drive_schedule.message_code = MessageCode.SET_DRIVE_SCHEDULE;
       await motor_controller.send_command(drive_schedule);
@@ -475,15 +469,16 @@ const test_buttons = Inputs.button(
         message_code: MessageCode.SET_DRIVE_STATE,
         motor_flags: ENABLE_ALL_OUTPUTS,
         duration: HISTORY_SIZE,
-        pwm_value: 0,
+        target_value: 0,
       });
     }],
     ["Test increasing steps", async function(){
-      // TODO: fix angle setting. We need to use the first schedule to rotate from current active_angle to the target angle at 0 pwm.
       let drive_schedule = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.0].map(value => ({
         motor_flags: ENABLE_ALL_OUTPUTS,
         duration: HISTORY_SIZE / 12,
-        pwm_value: command_drive_state.pwm_value * value,
+        target_value: command_drive_state.target_value * value,
+        angle_value: command_drive_state.angle_value,
+        target_speed: 0,
       }));
       drive_schedule.message_code = MessageCode.SET_DRIVE_SCHEDULE;
       await motor_controller.send_command(drive_schedule);
@@ -494,7 +489,8 @@ const test_buttons = Inputs.button(
       // -45 degree electrical angle. And again positive speed back to 0.
       const common_state = {
         motor_flags: ENABLE_ALL_OUTPUTS,
-        pwm_value: command_drive_state.pwm_value,
+        target_value: command_drive_state.target_value,
+        angle_value: command_drive_state.angle_value,
       };
 
       // const half_duration = Math.floor(
@@ -510,17 +506,17 @@ const test_buttons = Inputs.button(
       let drive_schedule = [
         {
           ...common_state, 
-          angle_increment: command_angular_speed,
+          target_speed: command_angular_speed,
           duration: half_duration,
         },
         {
           ...common_state,
-          angle_increment: -command_angular_speed,
+          target_speed: -command_angular_speed,
           duration: half_duration * 2,
         },
         {
           ...common_state,
-          angle_increment: command_angular_speed,
+          target_speed: command_angular_speed,
           duration: half_duration,
         }
       ];
@@ -566,116 +562,60 @@ d3.select(stop_buttons)
 
 const simple_drive_buttons = Inputs.button(
   [
-    ["Drive periodic +", async function(){
+    ["Drive open loop +", async function(){
       await motor_controller.send_command({
         message_code: MessageCode.SET_DRIVE_STATE,
         ...command_drive_state,
       });
     }],
-    ["Drive periodic -", async function(){
+    ["Drive open loop -", async function(){
 
       await motor_controller.send_command({
         message_code: MessageCode.SET_DRIVE_STATE,
         ...command_drive_state,
-        angle_increment: -command_drive_state.angle_increment,
+        target_speed: -command_drive_state.target_speed,
+      });
+      }],
+      ["Drive closed loop +", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        ...command_drive_state,
+        closed_loop: true,
+        target_speed: +command_angular_speed,
+        angle_value: +radians_to_angle_units(Math.PI/2),
+        target_value: +command_torque_current,
       });
     }],
-
+    ["Drive closed loop -", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        ...command_drive_state,
+        closed_loop: true,
+        target_speed: +command_angular_speed,
+        angle_value: -radians_to_angle_units(Math.PI/2),
+        target_value: +command_torque_current,
+      });
+    }],
+    // TODO: these need fixin' we want PWM always positive.
+    // ["Drive 6S +", async function(){
+    //   await motor_controller.send_command({
+    //     message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
+    //     ...command_drive_state});
+    // }],
+    // ["Drive 6S -", async function(){
+    //   await motor_controller.send_command({
+    //     message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
+    //     ...command_drive_state,
+    //     target_value: -command_drive_state.target_value
+    //   });
+    // }],
   ],
   {label: "Simple drive commands"},
 );
 d3.select(simple_drive_buttons).selectAll("button").style("height", "4em");
 
 
-const advanced_drive_buttons = Inputs.button(
-  [
-    ["Drive 6S +", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
-        ...command_drive_state});
-    }],
-    ["Drive 6S -", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_6_SECTOR, 
-        ...command_drive_state,
-        pwm_value: -command_drive_state.pwm_value
-      });
-    }],
-    ["Drive smooth +", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive smooth -", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_SMOOTH,
-        ...command_drive_state,
-        pwm_value: -command_drive_state.pwm_value
-      });
-    }],
-    ["Drive torque +", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_TORQUE,
-        target_current: +command_torque_current,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive torque -", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_TORQUE,
-        target_current: -command_torque_current,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive power +", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
-        target_power: +command_power,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive power -", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_BATTERY_POWER,
-        target_power: -command_power,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive speed +", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_SPEED,
-        target_speed: +command_angular_speed,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive speed -", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_SPEED,
-        target_speed: -command_angular_speed,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive torque speed +", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_TORQUE_SPEED,
-        target_speed: +command_angular_speed,
-        target_current: +command_torque_current,
-        ...command_drive_state,
-      });
-    }],
-    ["Drive torque speed -", async function(){
-      await motor_controller.send_command({
-        message_code: MessageCode.SET_STATE_DRIVE_TORQUE_SPEED,
-        target_speed: -command_angular_speed,
-        target_current: -command_torque_current,
-        ...command_drive_state,
-      });
-    }],
-  ],
-  {label: "Advanced drive commands"},
-);
-d3.select(advanced_drive_buttons).selectAll("button").style("height", "4em");
+
 
 
 const seek_drive_buttons = Inputs.button(
@@ -769,7 +709,6 @@ const shared_seek_buttons = Inputs.button(
             motor_flags: ENABLE_ALL_OUTPUTS,
             duration: command_duration,
             target_angle: command_angle,
-            max_drive_power: controller === motor_controller ? 0 : command_power,
             target_rotation: target_position,
           });
         }
@@ -793,7 +732,6 @@ const shared_seek_buttons = Inputs.button(
             motor_flags: ENABLE_ALL_OUTPUTS,
             duration: command_duration,
             target_angle: command_angle,
-            max_drive_power: command_power,
             target_rotation: target_position,
           });
         }
@@ -1041,7 +979,6 @@ const plot_electric_offsets = plot_lines({
     {y: "saliency_angle_stdev", label: "Saliency Angle stdev", color: d3.color(colors.angle).darker(1)},
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: "emf_angle_stdev", label: "EMF Angle stdev", color: d3.color(colors.voltage_angle).darker(1)},
-    {y: "lead_angle", label: "Lead Angle", color: colors.v},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle_offset : null, label: "Drive Voltage Angle Offset", color: colors_categories[2]},
   ],
   curve,

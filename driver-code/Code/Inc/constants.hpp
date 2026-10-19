@@ -410,12 +410,12 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .resistive_power_ki = std::pow(2, -12),
     .power_draw_ki = std::pow(2, -12),
 
-    .torque_control_ki = 1.0f,
+    .torque_control_ki = 1.0f * amps_per_current_units,
     .torque_control_kff = 0.1f,
 
     .battery_power_control_ki = 4.0f,
     .battery_power_control_kff = 0.1f,
-    .speed_control_ki = 2.0f,
+    .speed_control_ki = 100.0f * angle_base_inverse,
     .speed_control_kff = 0.1f,
 
 
