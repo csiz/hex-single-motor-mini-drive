@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.126.0";
+constexpr char const* VERSION_STRING = "0.127.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -1078,12 +1078,7 @@ enum MessageCode : uint16_t {
   SET_STATE_FREEWHEEL = 8241,
   SET_DRIVE_STATE = 8242,
   SET_DRIVE_SCHEDULE = 8243,
-  SET_STATE_DRIVE_SMOOTH = 16432,
   SET_STATE_DRIVE_6_SECTOR = 16433,
-  SET_STATE_DRIVE_TORQUE = 16434,
-  SET_STATE_DRIVE_BATTERY_POWER = 16435,
-  SET_STATE_DRIVE_SPEED = 16436,
-  SET_STATE_DRIVE_TORQUE_SPEED = 16437,
   SET_STATE_SEEK_ANGLE = 16438,
   CALIBRATION = 16448,
   GET_CALIBRATION = 16449,
@@ -1109,10 +1104,6 @@ struct Message {
     StreamReadouts,
     DriveState,
     DriveSchedule,
-    SetStateDriveTorque,
-    SetStateDriveBatteryPower,
-    SetStateDriveSpeed,
-    SetStateDriveTorqueSpeed,
     SetStateSeekAngle,
     Calibration,
     ControlParameters,
@@ -1135,12 +1126,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
     case MessageCode::SET_DRIVE_STATE: return 18;
     case MessageCode::SET_DRIVE_SCHEDULE: return 194;
-    case MessageCode::SET_STATE_DRIVE_SMOOTH: return 18;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 18;
-    case MessageCode::SET_STATE_DRIVE_TORQUE: return 10;
-    case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: return 10;
-    case MessageCode::SET_STATE_DRIVE_SPEED: return 10;
-    case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: return 14;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
     case MessageCode::CALIBRATION: return 30;
     case MessageCode::GET_CALIBRATION: return 2;
@@ -1223,41 +1209,11 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_DriveSchedule(buffer + 2, std::get<DriveSchedule>(message.message_data));
       return 194;
     }
-    case MessageCode::SET_STATE_DRIVE_SMOOTH: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_SMOOTH));
-      if (max_size < 2 + 16) return 0;
-      write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 18;
-    }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
       if (max_size < 2 + 16) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
       return 18;
-    }
-    case MessageCode::SET_STATE_DRIVE_TORQUE: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_TORQUE));
-      if (max_size < 2 + 8) return 0;
-      write_SetStateDriveTorque(buffer + 2, std::get<SetStateDriveTorque>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_BATTERY_POWER));
-      if (max_size < 2 + 8) return 0;
-      write_SetStateDriveBatteryPower(buffer + 2, std::get<SetStateDriveBatteryPower>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_DRIVE_SPEED: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_SPEED));
-      if (max_size < 2 + 8) return 0;
-      write_SetStateDriveSpeed(buffer + 2, std::get<SetStateDriveSpeed>(message.message_data));
-      return 10;
-    }
-    case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_TORQUE_SPEED));
-      if (max_size < 2 + 12) return 0;
-      write_SetStateDriveTorqueSpeed(buffer + 2, std::get<SetStateDriveTorqueSpeed>(message.message_data));
-      return 14;
     }
     case MessageCode::SET_STATE_SEEK_ANGLE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE));
@@ -1391,34 +1347,9 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       message.message_data = read_DriveSchedule(buffer + 2);
       return true;
     }
-    case MessageCode::SET_STATE_DRIVE_SMOOTH: {
-      if (size != 2 + 16) return false;
-      message.message_data = read_DriveState(buffer + 2);
-      return true;
-    }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       if (size != 2 + 16) return false;
       message.message_data = read_DriveState(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_DRIVE_TORQUE: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_SetStateDriveTorque(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_DRIVE_BATTERY_POWER: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_SetStateDriveBatteryPower(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_DRIVE_SPEED: {
-      if (size != 2 + 8) return false;
-      message.message_data = read_SetStateDriveSpeed(buffer + 2);
-      return true;
-    }
-    case MessageCode::SET_STATE_DRIVE_TORQUE_SPEED: {
-      if (size != 2 + 12) return false;
-      message.message_data = read_SetStateDriveTorqueSpeed(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_SEEK_ANGLE: {

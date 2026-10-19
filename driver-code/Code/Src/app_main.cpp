@@ -221,64 +221,11 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    // Drive the motor.
     case SET_STATE_DRIVE_6_SECTOR: {
       // set_motor_command(DriveState{ 
       //   .mode = DriverMode::DRIVE_6_SECTOR, 
       //   .duration = std::get<BasicDriveCommand>(message.message_data).duration, 
       //   .active_pwm = std::get<BasicDriveCommand>(message.message_data).pwm_value * control_parameters.motor_direction,
-      // });
-      return;
-    }
-
-    case SET_STATE_DRIVE_SMOOTH: {
-      // auto drive_state = std::get<DriveState>(message.message_data);
-      // // Carry over the current drive speed from any ongoing drive state.
-      // auto const& ongoing_drive_state = drive_state_queue.peek();
-      // // If the motor is idle, start at 0.
-      // drive_state.target_speed = drive_state_queue.read_available() ? ongoing_drive_state.target_speed : 0;
-
-      // // Only write the drive_state if there is space available in the queue.
-      // if(drive_state_queue.write_if_available(drive_state)) {
-      //   control_mode = ControlModes::DRIVE_SCHEDULE;
-      // }
-
-      return;
-    }
-
-    case SET_STATE_DRIVE_TORQUE: {
-      // set_motor_command(DriveState{
-      //   .mode = DriverMode::DRIVE_TORQUE, 
-      //   .duration = std::get<SetStateDriveTorque>(message.message_data).duration,
-      //   .target = std::get<SetStateDriveTorque>(message.message_data).target_current * control_parameters.motor_direction,
-      // });
-      return;
-    }
-
-    case SET_STATE_DRIVE_BATTERY_POWER: {
-      // set_motor_command(DriveState{
-      //   .mode = DriverMode::DRIVE_BATTERY_POWER, 
-      //   .duration = std::get<SetStateDriveBatteryPower>(message.message_data).duration,
-      //   .target = std::get<SetStateDriveBatteryPower>(message.message_data).target_power * control_parameters.motor_direction,
-      // });
-      return;
-    }
-
-    case SET_STATE_DRIVE_SPEED: {
-      // set_motor_command(DriveState{
-      //   .mode = DriverMode::DRIVE_SPEED, 
-      //   .duration = std::get<SetStateDriveSpeed>(message.message_data).duration,
-      //   .target = std::get<SetStateDriveSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
-      // });
-      return;
-    }
-
-    case SET_STATE_DRIVE_TORQUE_SPEED: {
-      // set_motor_command(DriveState{
-      //   .mode = DriverMode::DRIVE_TORQUE_SPEED, 
-      //   .duration = std::get<SetStateDriveTorqueSpeed>(message.message_data).duration,
-      //   .current_target = std::get<SetStateDriveTorqueSpeed>(message.message_data).target_current * control_parameters.motor_direction,
-      //   .speed_target = std::get<SetStateDriveTorqueSpeed>(message.message_data).target_speed * control_parameters.motor_direction,
       // });
       return;
     }
@@ -569,28 +516,15 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   // Update drive state
   // ------------------
-
-  // Get a reference to the currently executing drive state before checking if available!
-  auto & drive_state = drive_state_queue.modify();
-  // Now check if it's still valid.
-  if(drive_state_queue.read_available()) {
-    // Update drive_state for closed-loop control.
-    switch(control_mode) {
-      // No special handling required for a fixed drive schedule.
-      case ControlModes::DRIVE_SCHEDULE: break;
-      // Smooth driving at set pwm.
-      case ControlModes::SEEK_ANGLE: {
-        const int32_t current_angle_error = drive_state.target_value > 0 ? 
-          readout.current_angle_offset - quarter_circle :
-          readout.current_angle_offset + quarter_circle;
-        // Adjust the drive_state speed to maintain the ideal driving angle.
-        drive_state.target_speed = readout.angular_speed - current_angle_error * control_parameters.lead_angle_control_ki;
-      }
+  
+  // Update drive_state for closed-loop control.
+  switch(control_mode) {
+    // No special handling required for a fixed drive schedule.
+    case ControlModes::DRIVE_SCHEDULE: break;
+    // Seek a particular position.
+    // TODO: implement
+    case ControlModes::SEEK_ANGLE: {
     }
-
-  } else {
-    // No active drive state, clear the mode back to open-loop (motor idle state).
-    control_mode = ControlModes::DRIVE_SCHEDULE;
   }
 }
 
@@ -736,61 +670,6 @@ void app_tick() {
 // TODO: Reimplement the advanced motor control algorithms in the main loop.
 // -------------------------------------------------------------------------
 
-// // The complete driver state, these values control the motor behaviour.
-// struct DriveState {
-//     // Settings for the 3 phase MOSFET PWM drivers.
-//     MotorOutputs motor_outputs = breaking_motor_outputs;
-
-//     uint16_t motor_enable_flags = enable_flags_all;
-
-//     // Motor driving mode (defaults to short circuit breaking).
-//     DriverMode mode;
-
-//     // Duration for the command in pwm cycles.
-//     uint16_t duration;
-
-//     // Angle at which the motor is currently driven.
-//     int32_t active_angle;
-    
-//     // The angular speed of the driving wave.
-//     float active_speed;
-
-//     // PWM value actively used to drive the motor.
-//     float active_pwm;
-
-//     // PWM value that we're aiming for in the tight loop with smooth control.
-//     float target_pwm;
-
-//     // The lead angle value used to adjust the angle of the driven phase
-//     // to obtain a current that leads the rotor magnetic orientation by 90 degrees.
-//     int32_t lead_angle;
-
-//     // Integral term for the PWM control via PID.
-//     float pwm_integral;
-
-//     float current_target;
-    
-//     float speed_target;
-    
-//     // The target we are aiming for with the command.
-//     float target;
-    
-//     float seek_integral;
-
-//     // The additional data depends on the driver mode.
-//     union {
-//         // Drive the motor using a fixed PWM schedule.
-//         DriveSchedule schedule;
-
-//         // Drive the motor to a specific angle.
-//         SeekAngle seek_angle;
-
-//         // Run a test chirp to calibrate/test the motor.
-//         TestParameters test_parameters;
-//     };
-// };
-
-
 
 // // Update the motor outputs using simple 6 sector driving based on the hall sensors.
 // static inline MotorOutputs update_motor_6_sector(
@@ -868,75 +747,7 @@ void app_tick() {
 
 //     return update_motor_at_angle(drive_state, readout);
 // }
-// // Drive the motor with the desired output current (note the DQ0 current is 3/2 phase current).
-// // This mode also uses the smooth driving algorithm to drive using field oriented control, thus
-// // keeping the current as close to 90 degrees ahead of the magnetic angle as possible. Allowing
-// // control of the torque produced by the motor which will be proportional to the current target.
-// static inline MotorOutputs update_motor_torque(
-//     DriveState & drive_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-    
-//     // Squash very low currents to 0 to avoid noise.
-//     const bool current_detected = readout.state_flags & current_detected_bit_mask;
-    
-//     // Get the signed current magnitude to compare against the target.
-//     const float measured_current = current_detected * readout.current_magnitude * get_sin(readout.current_angle_offset);
 
-//     // Calculate the difference between the target and measured current.
-//     const float control_error = (drive_state.target - measured_current) * max_drive_current_inverse;
-
-//     // Update the PID control for the torque.
-//     drive_state.target_pwm = clip_to(
-//         -pwm_max,
-//         +pwm_max,
-//         drive_state.active_pwm + control_error * control_parameters.torque_control_ki
-//     );
-
-//     return update_motor_smooth(drive_state, readout);
-// }
-
-// // Drive motor using up to a target battery power consumption.
-// // 
-// // The sign of the target power determines the direction of driving.
-// // 
-// // This mode will also control power absorption during breaking.
-// static inline MotorOutputs update_motor_battery_power(
-//     DriveState & drive_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-
-//     const float measured_power = sign(readout.angular_speed) * readout.total_power;
-
-//     const float control_error = (drive_state.target - measured_power) * max_drive_power_inverse;
-
-//     // Update the PID control for the torque.
-//     drive_state.target_pwm = clip_to(
-//         -pwm_max,
-//         +pwm_max,
-//         drive_state.active_pwm + control_error * control_parameters.battery_power_control_ki
-//     );
-
-//     return update_motor_smooth(drive_state, readout);
-// }
-
-
-// static inline MotorOutputs update_motor_speed(
-//     DriveState & drive_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-//     // Calculate the difference between the target and measured current.
-//     const float control_error = (drive_state.target - readout.angular_speed) * max_angular_speed_inverse;
-
-//     // Update the PID control for the torque.
-//     drive_state.target_pwm = clip_to(
-//         -pwm_max,
-//         +pwm_max,
-//         drive_state.active_pwm + control_error * control_parameters.speed_control_ki
-//     );
-
-//     return update_motor_smooth(drive_state, readout);
-// }
 
 // static inline MotorOutputs update_motor_torque_speed(
 //     DriveState & drive_state,
@@ -1041,50 +852,3 @@ void app_tick() {
 
 //     return update_motor_torque_speed(drive_state, readout);
 // }
-
-
-// constexpr int16_t hfi_duration = 8;
-// constexpr int16_t hfi_skips = (5 /* milliseconds */ * pwm_cycles_per_second / 1000) / hfi_duration;
-
-// static inline MotorOutputs update_motor_hfi_saliency_pulses(
-//     DriveState & drive_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-//     // Our puleses will be angled 45 degrees to the saliency angle div 2, the pulses will
-//     // each be exactly 2 pwm cycles long, and in this order:
-//     // 1. Negative pulse at 45 degrees
-//     // 2. Positive pulse at 45 degrees
-//     // 3. Positive pulse at -45 degrees
-//     // 4. Negative pulse at -45 degrees
-//     // So they take 8 pwm cycles.
-//     //
-//     // We'll also then sleep for n*8 pwm cycles until the next set of pulses.
-//     const int32_t angle_from_saliency = readout.angle + readout.saliency_angle_offset / 2;
-
-//     if (readout.readout_number / hfi_duration % hfi_skips == 0) {
-//         // Get the step within the pulse sequence.
-//         const int32_t step = (readout.readout_number % hfi_duration) / 2;
-//         switch (step) {
-//             case 0:
-//                 drive_state.active_pwm = -drive_state.target;
-//                 drive_state.active_angle = angle_from_saliency + quarter_circle/2;
-//                 break;
-//             case 1:
-//                 drive_state.active_pwm = +drive_state.target;
-//                 drive_state.active_angle = angle_from_saliency + quarter_circle/2;
-//                 break;
-//             case 2:
-//                 drive_state.active_pwm = +drive_state.target;
-//                 drive_state.active_angle = angle_from_saliency - quarter_circle/2;
-//                 break;
-//             case 3:
-//                 drive_state.active_pwm = -drive_state.target;
-//                 drive_state.active_angle = angle_from_saliency - quarter_circle/2;
-//                 break;
-//         }
-//     } else {
-//         drive_state.active_pwm = 0;
-//     }
-//     return update_motor_at_angle(drive_state, readout);
-// }
-

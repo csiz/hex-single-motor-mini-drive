@@ -53,24 +53,10 @@ message_codes:
     message_code: 0x2033
     type: DriveSchedule
 
-  SET_STATE_DRIVE_SMOOTH:
-    message_code: 0x4030
-    type: DriveState
   SET_STATE_DRIVE_6_SECTOR:
     message_code: 0x4031
     type: DriveState
-  SET_STATE_DRIVE_TORQUE:
-    message_code: 0x4032
-    type: SetStateDriveTorque
-  SET_STATE_DRIVE_BATTERY_POWER:
-    message_code: 0x4033
-    type: SetStateDriveBatteryPower
-  SET_STATE_DRIVE_SPEED:
-    message_code: 0x4034
-    type: SetStateDriveSpeed
-  SET_STATE_DRIVE_TORQUE_SPEED:
-    message_code: 0x4035
-    type: SetStateDriveTorqueSpeed
+    
   SET_STATE_SEEK_ANGLE:
     message_code: 0x4036
     type: SetStateSeekAngle
