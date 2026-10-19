@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.124.0";
+constexpr char const* VERSION_STRING = "0.126.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -194,7 +194,7 @@ struct Readout {
   int16_t cycle_end_tick;
   // Whether we have an angle fix and how confident it is.
   uint16_t angle_fix;
-  // Driver state flags; packed into a 16-bit value.
+  // Flag indicating whether the driver is in closed-loop mode.
   uint8_t state_flags;
   // Active motor flags. Each bit represents the state of a motor phase.
   uint8_t motor_flags;
@@ -243,8 +243,8 @@ struct Readout {
   int32_t current_angle_offset;
   // Magnitude of the current vector.
   float current_magnitude;
-  // Estimated near-instantaneous total power draw of the motor.
-  float total_power;
+  // Current maximum PWM allowed by the driver.
+  float live_max_pwm;
   // Long duration average of the total power; used to limit the maximum power draw.
   float total_power_average;
   // Long duration average of the resistive power; used to limit the maximum resistive power.
@@ -311,7 +311,7 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
   offset += 4;
-  write_float32(buffer + offset, value.total_power);;
+  write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
   write_float32(buffer + offset, value.total_power_average);;
   offset += 4;
@@ -381,7 +381,7 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
   offset += 4;
-  result.total_power = read_float32(buffer + offset);
+  result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
   result.total_power_average = read_float32(buffer + offset);
   offset += 4;
@@ -424,8 +424,6 @@ struct Info {
   float adc_update_rate;
   // Average size of the readout batch processed per main loop iteration.
   float average_buffer_fill_rate;
-  // Current maximum PWM allowed by the driver.
-  float live_max_pwm;
   // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
   int32_t saliency_angle_offset;
   // Variance of the estimated saliency angle, indicating the confidence in the saliency angle estimation.
@@ -439,8 +437,6 @@ static inline void write_Info(uint8_t * buffer, Info const& value) {
   write_float32(buffer + offset, value.adc_update_rate);;
   offset += 4;
   write_float32(buffer + offset, value.average_buffer_fill_rate);;
-  offset += 4;
-  write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
   write_int32(buffer + offset, value.saliency_angle_offset);;
   offset += 4;
@@ -457,8 +453,6 @@ static inline Info read_Info(uint8_t const* buffer) {
   result.adc_update_rate = read_float32(buffer + offset);
   offset += 4;
   result.average_buffer_fill_rate = read_float32(buffer + offset);
-  offset += 4;
-  result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
   result.saliency_angle_offset = read_int32(buffer + offset);
   offset += 4;
@@ -1133,7 +1127,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
     case MessageCode::READOUT: return 114;
-    case MessageCode::INFO: return 26;
+    case MessageCode::INFO: return 22;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
@@ -1189,9 +1183,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
-      if (max_size < 2 + 24) return 0;
+      if (max_size < 2 + 20) return 0;
       write_Info(buffer + 2, std::get<Info>(message.message_data));
-      return 26;
+      return 22;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
@@ -1358,7 +1352,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::INFO: {
-      if (size != 2 + 24) return false;
+      if (size != 2 + 20) return false;
       message.message_data = read_Info(buffer + 2);
       return true;
     }

@@ -408,7 +408,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .max_resistive_power = 8.0f,
     .max_power_draw = max_drive_power,
     .resistive_power_ki = std::pow(2, -12),
-    .power_draw_ki = std::pow(2, -12),
+    .power_draw_ki = std::pow(2, -10),
 
     .torque_control_ki = 1.0f * amps_per_current_units,
     .torque_control_kff = 0.1f,

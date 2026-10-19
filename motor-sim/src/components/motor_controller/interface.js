@@ -174,22 +174,20 @@ export function parse_readout(bare_readout, previous_readout) {
 
 
   const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
-  const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
   const current_angle = normalize_radians(predicted_angle + current_angle_offset);
+  const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
+  const live_max_pwm = bare_readout.live_max_pwm;
 
 
-  const total_power = bare_readout.total_power;
   const total_power_average = bare_readout.total_power_average;
-  // const resistive_power = bare_readout.resistive_power;
   const resistive_power_average = bare_readout.resistive_power_average;
-  // const emf_power = bare_readout.emf_power;
 
   const rotations = bare_readout.rotations;
   
   const active_pwm = bare_readout.active_pwm;
   const active_angle = angle_units_to_radians(bare_readout.active_angle);
 
-  const battery_current = total_power / vcc_voltage;
+  const battery_current = total_power_average / vcc_voltage;
 
 
   // Time indexing
@@ -297,13 +295,11 @@ export function parse_readout(bare_readout, previous_readout) {
 
     current_angle, current_magnitude,
     current_angle_offset,
+    live_max_pwm,
     
     battery_current,
-    total_power,
     total_power_average,
-    // resistive_power,
     resistive_power_average,
-    // emf_power,
     rotations,
     active_pwm,
     active_angle,

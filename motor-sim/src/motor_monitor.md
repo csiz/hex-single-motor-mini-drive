@@ -885,12 +885,8 @@ const plot_power = plot_lines({
   x_label: "Time (ms)",
   y_label: "Power (W)",
   channels: [
-    {y: "total_power", label: "Total Power", color: colors.sum},
     {y: "total_power_average", label: "Total Power (on chip average)", color: d3.color(colors.sum).darker(1)},
-    {y: "resistive_power", label: "Resistive Power", color: colors.web_current_magnitude},
     {y: "resistive_power_average", label: "Resistive Power (on chip average)", color: d3.color(colors.web_current_magnitude).darker(1)},
-    {y: "emf_power", label: "EMF Power", color: colors.angle},
-    {y: "inductive_power", label: "Inductive Power", color: colors.current_angle},
     {y: "web_total_power", label: "Total Power (computed online)", color: colors_categories[3]},
     {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
     {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},

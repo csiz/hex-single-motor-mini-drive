@@ -225,7 +225,7 @@ definitions:
 
       state_flags:
         type: uint8
-        doc: Driver state flags; packed into a 16-bit value.
+        doc: Flag indicating whether the driver is in closed-loop mode.
         
       motor_flags:
         type: uint8
@@ -318,10 +318,10 @@ definitions:
         type: float32
         doc: Magnitude of the current vector.  
 
-      total_power:
+      live_max_pwm:
         type: float32
-        doc: Estimated near-instantaneous total power draw of the motor.
- 
+        doc: Current maximum PWM allowed by the driver.
+           
       total_power_average:
         type: float32
         doc: Long duration average of the total power; used to limit the maximum power draw.
@@ -371,10 +371,6 @@ definitions:
         type: float32
         doc: Average size of the readout batch processed per main loop iteration.
 
-      live_max_pwm:
-        type: float32
-        doc: Current maximum PWM allowed by the driver.
-           
       saliency_angle_offset:
         type: int32
         doc: Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.

@@ -149,9 +149,8 @@ static inline MotorOutputs compute_motor_outputs(int32_t const& angle, float con
 }
 
 static inline MotorOutputs angle_probing_update(AngleProbingState & angle_probing, const int32_t readout_angle, const bool emf_detected){
-    // 0 sweep means HFI is disabled
-    if (not control_parameters.angle_probing_sweep_duration) return MotorOutputs{};
-    
+    // Disable sweeping by setting the control_parameters.angle_probing_pwm to zero.
+
     switch (angle_probing.mode){
         case AngleProbingMode::WAITING: {
             angle_probing.angle = readout_angle;
@@ -541,6 +540,30 @@ void ADC1_2_IRQHandler(void){
         (total_power - readout.total_power_average) * control_parameters.power_draw_ki
     );
 
+    // Safety Limits
+    // -------------
+    // Reduce the maximum output PWM to keep within safe limits:
+    // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
+    // let the battery recharge our local capacitors.
+    // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
+    // 3. The total power is a good proxy for total current consumed from the battery.
+    // 
+    // The penalty should normally be negative indicating we can increase the PWM.
+    const bool pwm_too_high = (
+        (vcc_voltage < control_parameters.vcc_undervoltage) or
+        (resistive_power_average > control_parameters.max_resistive_power) or
+        (total_power_average > control_parameters.max_power_draw)
+    );
+
+    const float pwm_penalty = (0.1f - 1.f * pwm_too_high);
+
+    const float live_max_pwm = clip_to(
+        0, 
+        // Leave some pwm headroom for the HFI probing if that is enabled.
+        pwm_max - control_parameters.angle_probing_pwm, 
+        readout.live_max_pwm + pwm_penalty
+    );
+
 
     // Write the latest readout data
     // -----------------------------
@@ -583,7 +606,7 @@ void ADC1_2_IRQHandler(void){
 
     readout.vcc_voltage = vcc_voltage;
     readout.temperature = temperature;
-    readout.total_power = total_power;
+    readout.live_max_pwm = live_max_pwm;
     readout.total_power_average = total_power_average;
     readout.resistive_power_average = resistive_power_average;
 
@@ -616,7 +639,7 @@ void ADC1_2_IRQHandler(void){
             const float speed_error = drive_state.target_speed - faster_abs(readout.angular_speed);
 
             readout.active_pwm = clip_to(
-                0, info.live_max_pwm, 
+                0, live_max_pwm, 
                 readout.active_pwm + min(
                     current_error * control_parameters.torque_control_ki,
                     speed_error * control_parameters.speed_control_ki
@@ -628,7 +651,7 @@ void ADC1_2_IRQHandler(void){
         } else {
             // Copy the commanded PWM value from the drive command to our readout state.
             readout.active_pwm = clip_to(
-                0, info.live_max_pwm, 
+                0, live_max_pwm, 
                 drive_state.target_value
             );
     

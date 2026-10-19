@@ -378,34 +378,10 @@ static inline float validate_parameter(float const& value, float const& minimum_
 
 static inline void process_readout(hex_mini_drive::Readout const& readout) {
   // Count if we skip any readouts.
-  const uint16_t readouts_since_last_tick = (readout_number_base + readout.readout_number - last_readout_number) % readout_number_base;
+  // const uint16_t readouts_since_last_tick = (readout_number_base + readout.readout_number - last_readout_number) % readout_number_base;
 
   last_readout_number = readout.readout_number;
     
-  // Safety Limits
-  // -------------
-  // Reduce the maximum output PWM to keep within safe limits:
-  // 1. The MOSFET drivers need to be kept in their operating voltage range. Reduce PWM to
-  // let the battery recharge our local capacitors.
-  // 2. The resistive power heats up the motor coils. Keep it under a threshold to avoid overheating.
-  // 3. The total power is a good proxy for total current consumed from the battery.
-  // 
-  // The penalty should normally be negative indicating we can increase the PWM.
-  const bool pwm_too_high = (
-      (readout.vcc_voltage < control_parameters.vcc_undervoltage) or
-      (readout.resistive_power_average > control_parameters.max_resistive_power) or
-      (readout.total_power_average > control_parameters.max_power_draw)
-  );
-
-  const float pwm_penalty = (0.1f - 1.f * pwm_too_high) * readouts_since_last_tick;
-
-  info.live_max_pwm = clip_to(
-    0, 
-    // Leave some pwm headroom for the HFI probing if that is enabled.
-    control_parameters.angle_probing_sweep_duration ? pwm_max - control_parameters.angle_probing_pwm : pwm_max, 
-    info.live_max_pwm + pwm_penalty
-  );
-
   
   // Calculate the motor constant
   // ----------------------------
