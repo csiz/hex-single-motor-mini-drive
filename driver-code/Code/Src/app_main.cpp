@@ -421,90 +421,94 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   // Following the formulas above, but this time we will try to estimate the inductor voltage given our other
   // masurements.
-  const float direct_inductor_excitation = direct_inductor_voltage - direct_voltage_error;
-  const float quadrature_inductor_excitation = quadrature_inductor_voltage - quadrature_voltage_error;
-
-  const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
+  const float direct_inductor_excitation = readout.direct_drive_voltage + direct_emf_voltage - direct_resistive_voltage;
+  const float quadrature_inductor_excitation = readout.quadrature_drive_voltage + quadrature_emf_voltage - quadrature_resistive_voltage;
 
   // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
   // there isn't enough energy in the error to warrant an update.
+  // const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
 
-  const bool calibration_error_detected = square_voltage_error > control_parameters.voltage_measurement_variance;
-  
+  // const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
+  const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
+
   // Run calibration when there's error or back EMF is detected.
-  if (calibration_error_detected) {
+  if (not emf_fix) {
 
-      // Compute the gradients of the loss with respect to each of the tracked parameters.
+    // Compute the gradients of the loss with respect to each of the tracked parameters.
 
-      // Only update the resistance if we have sufficient current to make the measurement meaningful.
-      if(readout.current_magnitude > control_parameters.resistance_current_minimum) {
-          const float resistance_gradient = (
-              direct_voltage_error * readout.direct_current +
-              quadrature_voltage_error * readout.quadrature_current
-          ) * voltage_mul_current_to_power;
+    // Only update the resistance if we have sufficient current to make the measurement meaningful.
+    if(readout.current_magnitude > control_parameters.resistance_current_minimum) {
+        const float resistance_gradient = (
+            direct_voltage_error * readout.direct_current +
+            quadrature_voltage_error * readout.quadrature_current
+        ) * voltage_mul_current_to_power;
 
-          
-          calibration.resistance = validate_parameter(
-            calibration.resistance - resistance_gradient * control_parameters.resistance_ki,
-            minimum_resistance
-          );
-      }
+        
+        calibration.resistance = validate_parameter(
+          calibration.resistance - resistance_gradient * control_parameters.resistance_ki,
+          minimum_resistance
+        );
+    }
 
-      // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
-      const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
+    // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
+    const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
 
-      // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
-      // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
-      if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
-          const float inductance_gradient = (
-              direct_voltage_error * direct_inductance_base_voltage + 
-              quadrature_voltage_error * quadrature_inductance_base_voltage
-          ) * volts_per_voltage_units_square;
-          
-          // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-          calibration.inductance = validate_parameter(
-            calibration.inductance - inductance_gradient * control_parameters.inductance_ki,
-            minimum_inductance
-          );
-
-          const float inductance_bias_gradient = (
-              direct_voltage_error * direct_inductance_bias_voltage +
-              quadrature_voltage_error * quadrature_inductance_bias_voltage
-          ) * volts_per_voltage_units_square;
-          
-          // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-          calibration.inductance_bias = validate_parameter(
-            calibration.inductance_bias - inductance_bias_gradient * control_parameters.inductance_bias_ki,
-            minimum_inductance_bias
-          );
-
-          const float saliency_angle_gradient = (
-              direct_voltage_error * (-quadrature_inductance_bias_voltage) +
-              quadrature_voltage_error * direct_inductance_bias_voltage
-          ) * volts_per_voltage_units_square;
-
-          const float saliency_angle_change = saliency_angle_gradient * control_parameters.saliency_angle_ki;
-          info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_change);
-          info.saliency_angle_variance += (square(saliency_angle_change) - info.saliency_angle_variance) * 0.01f;
-      }
-    // Only track the zero offset while there is no noticeable current being measured.
-    } else if (readout.current_magnitude < control_parameters.current_offset_maximum) {
-      const auto currents = abc_transform(
-        {readout.direct_current, readout.quadrature_current}, 
-        readout.zero_current
+    // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
+    // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
+    if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
+      const float inductance_gradient = (
+          direct_voltage_error * direct_inductance_base_voltage +
+          quadrature_voltage_error * quadrature_inductance_base_voltage
+      ) * volts_per_voltage_units_square;
+      
+      // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
+      calibration.inductance = validate_parameter(
+        calibration.inductance - inductance_gradient * control_parameters.inductance_ki,
+        minimum_inductance
       );
 
-      // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
-      calibration.u_current_zero = clip_to(
+      const float inductance_bias_gradient = (
+          direct_voltage_error * direct_inductance_bias_voltage +
+          quadrature_voltage_error * quadrature_inductance_bias_voltage
+      ) * volts_per_voltage_units_square;
+      
+      // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
+      calibration.inductance_bias = validate_parameter(
+        calibration.inductance_bias - inductance_bias_gradient * control_parameters.inductance_bias_ki,
+        minimum_inductance_bias
+      );
+
+      const float saliency_angle_gradient = (
+          direct_voltage_error * (-quadrature_inductance_bias_voltage) +
+          quadrature_voltage_error * direct_inductance_bias_voltage
+      ) * volts_per_voltage_units_square;
+
+      const float saliency_angle_change = saliency_angle_gradient * control_parameters.saliency_angle_ki;
+      info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_change);
+      info.saliency_angle_variance += (square(saliency_angle_change) - info.saliency_angle_variance) * 0.01f;
+      // Only track the zero offset while there is no noticeable current being measured.
+      if (readout.current_magnitude < control_parameters.current_offset_maximum) {
+        const auto currents = abc_transform(
+          {readout.direct_current, readout.quadrature_current}, 
+          readout.zero_current
+        );
+
+        // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
+        calibration.u_current_zero = clip_to(
           -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-          calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki);
-      calibration.v_current_zero = clip_to(
+          calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki
+        );
+        calibration.v_current_zero = clip_to(
           -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-          calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki);
-      calibration.w_current_zero = clip_to(
+          calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki
+        );
+        calibration.w_current_zero = clip_to(
           -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-          calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki);
+          calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki
+        );
+      }
+    }
   }
 
   // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
