@@ -67,22 +67,7 @@ Motor Driving Data
   <span>${plot_curve_input}</span>
   <span>${timeline_position_input}</span>
 </div>
-<div class="card tight">${plot_power}</div>
-<div class="card tight">${plot_runtime_stats}</div>
-<div class="card tight">${plot_cycle_loop_stats}</div>
-<div class="card tight">${plot_electric_position}</div>
-<div class="card tight">${plot_electric_offsets}</div>
-<div class="card tight">${plot_speed}</div>
-<div class="card tight">${plot_measured_voltage}</div>
-<div class="card tight">${plot_measured_temperature}</div>
-<div class="card tight">${plot_measured_current}</div>
-<div class="card tight">${plot_voltages}</div>
-<div class="card tight">${plot_inferred_voltages}</div>
-<div class="card tight">${plot_dq0_currents}</div>
-<div class="card tight">${plot_dq0_voltages}</div>
-<div class="card tight">${plot_pwm_settings}</div>
-<div class="card tight">${plot_readout_flags}</div>
-<div class="card tight">${plot_motor_values}</div>
+<div class="card tight">${Object.values(monitoring_plots)}</div>
 
 
 Calibration Procedures
@@ -1171,6 +1156,33 @@ const plot_readout_flags = plot_lines({
   curve,
 });
 
+const plot_resistance_calibration = plot_lines({
+  subtitle: "Resistance Calibration",
+  description: "The calibration values for the motor's phase resistance.",
+  width: 1200, height: 300,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Resistance (Ohms)",
+  channels: [
+    {y: "resistance", label: "Phase Resistance", color: colors.u},
+  ],
+  curve,
+});
+
+const plot_inductance_calibration = plot_lines({
+  subtitle: "Inductance Calibration",
+  description: "The calibration values for the motor's phase inductance.",
+  width: 1200, height: 300,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Inductance (H)",
+  channels: [
+    {y: "inductance", label: "Phase Inductance", color: colors.v},
+    {y: "inductance_bias", label: "Inductance Bias", color: colors.w},
+  ],
+  curve,
+});
+
 const plot_motor_values = plot_lines({
   subtitle: "Motor Values",
   description: "Various values related to the motor's operation.",
@@ -1181,9 +1193,6 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[0]},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "resistance", label: "Phase Resistance", color: colors.u},
-    {y: "inductance", label: "Phase Inductance", color: colors.v},
-    {y: "inductance_bias", label: "Inductance Bias", color: colors_categories[4]},
     {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
   ],
   curve,
@@ -1205,6 +1214,8 @@ const monitoring_plots = {
   plot_dq0_voltages,
   plot_pwm_settings,
   plot_readout_flags,
+  plot_resistance_calibration,
+  plot_inductance_calibration,
   plot_motor_values,
 };
 

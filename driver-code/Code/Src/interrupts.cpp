@@ -414,7 +414,7 @@ void ADC1_2_IRQHandler(void){
         (instant_emf_angle_variance - readout.emf_angle_variance) * control_parameters.emf_angle_ki
     );
 
-    const float emf_voltage_magnitude = (
+    const float emf_voltage_magnitude = emf_angle_flip ? 0 : (
         readout.emf_voltage_magnitude + 
         (measured_emf_voltage_magnitude - readout.emf_voltage_magnitude) * control_parameters.emf_magnitude_ki
     );

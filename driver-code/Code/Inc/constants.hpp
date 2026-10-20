@@ -344,7 +344,7 @@ const hex_mini_drive::DriveState freewheel_drive_state = {
 // Calibration and Control Parameters
 // ----------------------------------
 
-constexpr float minimum_resistance = 0.050f;
+constexpr float minimum_resistance = 0.005f; // This is lower than the sense resistors, something definitely wrong if we reach here.
 constexpr float minimum_inductance = 0.000'001f;
 constexpr float minimum_inductance_bias = 0.000'000'1f;
 
@@ -730,6 +730,15 @@ const float phases_waveform[4096] = {
     0.8895161917, 0.8888142636, 0.8881102440, 0.8874041345, 0.8866959370, 0.8859856529, 0.8852732841, 0.8845588321, 0.8838422986, 0.8831236854, 0.8824029941, 0.8816802265, 0.8809553841, 0.8802284688, 0.8794994822, 0.8787684261,
     0.8780353022, 0.8773001121, 0.8765628577, 0.8758235406, 0.8750821627, 0.8743387256, 0.8735932310, 0.8728456809, 0.8720960768, 0.8713444206, 0.8705907141, 0.8698349590, 0.8690771570, 0.8683173101, 0.8675554199, 0.8667914883
 };
+
+// Convert from an active_pwm command in the phases_waveform to the target voltage magnitude in the dq0 frame.
+// 
+// If we used a simple sine waveform this value would be 0.5f but since we are smart we noticed 
+// that the maximum voltage difference between a 3 phase system at 120degrees apart is going
+// to be ~0.866 of the sine amplitude. This is the first value of our phases_waveform because
+// for angle 0 we energize one phase fully and 0 out the other too, and this is the maximum
+// voltage we can drive in the dq0 system at any angle.
+const float active_pwm_to_voltage_conversion = 0.5f / phases_waveform[0] * pwm_base_inverse;
 
 // Get the PWM fraction at the specified angle.
 static inline float get_phase_pwm(const int32_t angle) {
