@@ -152,10 +152,10 @@ export function parse_readout(bare_readout, previous_readout) {
   const v_emf_voltage =  v_L_voltage + v_R_voltage - v_drive_voltage;
   const w_emf_voltage =  w_L_voltage + w_R_voltage - w_drive_voltage;
   
-  // Check the effect of the inductor voltage on the EMF calculation; we invert to compare with the inductor voltage.
-  const u_partial_voltage = -(u_R_voltage - u_drive_voltage);
-  const v_partial_voltage = -(v_R_voltage - v_drive_voltage);
-  const w_partial_voltage = -(w_R_voltage - w_drive_voltage);
+  // Check the effect of the inductor voltage on the EMF calculation.
+  const u_partial_voltage = u_R_voltage - u_drive_voltage;
+  const v_partial_voltage = v_R_voltage - v_drive_voltage;
+  const w_partial_voltage = w_R_voltage - w_drive_voltage;
 
   const [web_direct_emf_voltage, web_quadrature_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, 0);
 
