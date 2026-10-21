@@ -88,25 +88,29 @@ const float decrease_factor = 0.7f;
 hex_mini_drive::Calibration gradient_accumulator = {
   .resistance = 0.f,
   .inductance = 0.f,
-  .inductance_bias = 0.f
+  .inductance_bias = 0.f,
+  .motor_constant = 0.f
 };
 
 hex_mini_drive::Calibration gradient_count = {
   .resistance = 0.f,
   .inductance = 0.f,
-  .inductance_bias = 0.f
+  .inductance_bias = 0.f,
+  .motor_constant = 0.f
 };
 
 hex_mini_drive::Calibration update_sign = {
   .resistance = 0.f,
   .inductance = 0.f,
-  .inductance_bias = 0.f
+  .inductance_bias = 0.f,
+  .motor_constant = 0.f
 };
 
 hex_mini_drive::Calibration learning_rate_multiplier = {
   .resistance = 1.f,
   .inductance = 1.f,
-  .inductance_bias = 1.f
+  .inductance_bias = 1.f,
+  .motor_constant = 1.f
 };
 
 static inline float resilient_gradient(
@@ -409,6 +413,11 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   ) {
     return;
   }
+  
+  const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
+  const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
+
+
 
   // Get the commanded driving voltage, ignoring the HFI contribution, assuming that doesn't
   // interfere with actually driving the motor.
@@ -418,6 +427,66 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // if (readout.emf_voltage_magnitude > active_voltage + 0.01f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT) {
   //   return;
   // }
+
+  // Calculate the motor constant
+  // ----------------------------
+  // 
+  // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
+  // 
+  // It is also the ratio between the torque produced by the motor and the quadrature current. We 
+  // can compute the motor constant from the a spinning motor and use it to estimate our torque.
+  // 
+  // We calculate the motor constant by gradient descent using the configured integral gain.
+
+
+  const bool speed_is_negative = readout.angular_speed < 0;
+
+  // The voltage magnitude is always positive, also use the positive angular speed.
+  const float abs_angular_speed = speed_is_negative ? -readout.angular_speed : readout.angular_speed;
+
+  const float predicted_emf_voltage = abs_angular_speed * calibration.motor_constant * emf_motor_constant_conversion;
+
+  // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
+  if (emf_fix and abs_angular_speed > (0.5f * control_parameters.emf_probing_angular_speed)){
+    
+    // Get the error (gradient) for the motor constant observer.
+    const float motor_constant_gradient = predicted_emf_voltage - readout.emf_voltage_magnitude;
+  
+    const float resilient_motor_constant_gradient = resilient_gradient(
+      motor_constant_gradient,
+      gradient_accumulator.motor_constant,
+      gradient_count.motor_constant,
+      update_sign.motor_constant,
+      learning_rate_multiplier.motor_constant
+    );
+
+    calibration.motor_constant = validate_parameter(
+      calibration.motor_constant - resilient_motor_constant_gradient * control_parameters.motor_constant_ki,
+      0
+    );
+    info.motor_constant_multiplier = learning_rate_multiplier.motor_constant;
+  }
+
+  // EMF Check
+  // ---------
+
+  // For the remaining parameters we can only optimize them when there's no EMF voltage because
+  // of the way we've set our equations. We detect the EMF voltage as basically the error term
+  // of our electrical equations so if we optimize resistance and inductance while the motor spins
+  // then we're going to slowly attribute all of the resistance and inductance voltage to the EMF.
+
+  // Obviously we're looking for emf_detected, but we have to account for the weird case where our
+  // resistance and inductance are miscalibrated and we detect a fake stationary EMF. In that case
+  // we need to re-start optimizing resistance and inductance to exit the faulty state.
+
+  // The emf is detected only while we're above the negative certainty threshold for the special counter.
+  const bool valid_emf_detected = readout.emf_counter > -control_parameters.angle_fix_max_certainty;
+
+  if (emf_detected and valid_emf_detected) return;
+
+
+  // Current offsets
+  // ---------------
 
   // Only track the zero offset while there is no noticeable current being measured.
   if (readout.current_magnitude < 2 * control_parameters.current_offset_maximum) {
@@ -441,23 +510,15 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     );
   }
 
+  // Reference voltage check
+  // -----------------------
 
-
-  // Variable tracking update
-  // ------------------------
-
-  // Get the sin and cos for the emf angle.
-  const float cos_emf = get_cos(readout.emf_voltage_angle);
-  const float sin_emf = get_sin(readout.emf_voltage_angle);
-
-  // Compute the predicted EMF voltage based on the running estimate at constant emf.
-  const float direct_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
-  const float quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
-
-  const float direct_excitation = direct_emf_voltage + readout.direct_drive_voltage;
-  const float quadrature_excitation = quadrature_emf_voltage + readout.quadrature_drive_voltage;
+  // Because our best source of voltage information is the drive_voltage we also need to make sure
+  // we are driving with enough power to get any information.
 
   const float drive_voltage_square = square(readout.direct_drive_voltage) + square(readout.quadrature_drive_voltage);
+
+  if (drive_voltage_square < control_parameters.voltage_measurement_variance) return;
 
   // Recalculate
   // -----------
@@ -504,16 +565,24 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // 
   // The error can also be due to either resistance or inductance, so despite naming it measured emf voltage, it's actually 
   // all the errors combined. We can use this value and calibrate all parameters live by gradient descent.
-  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage - direct_excitation;
-  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_excitation;
+  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage - readout.direct_drive_voltage;
+  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage - readout.quadrature_drive_voltage;
 
-  const float direct_resistive_excitation = 0 ; //direct_excitation - direct_inductor_voltage;
-  const float quadrature_resistive_excitation = 0 ; //quadrature_excitation - quadrature_inductor_voltage;
+  // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
+  // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
+  // there isn't enough energy in the error to warrant an update.
+  // const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
 
-  // Following the formulas above, but this time we will try to estimate the inductor voltage given our other
-  // masurements.
-  const float direct_inductor_excitation = direct_excitation - direct_resistive_voltage;
-  const float quadrature_inductor_excitation = quadrature_excitation - quadrature_resistive_voltage;
+  // Get the expected voltage across the inductors so we can condition the inductance update.
+  const float direct_inductor_excitation = readout.direct_drive_voltage - direct_resistive_voltage;
+  const float quadrature_inductor_excitation = readout.quadrature_drive_voltage - quadrature_resistive_voltage;
+
+  // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
+  const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
+
+
+  const float direct_resistive_excitation = 0 ; //readout.direct_drive_voltage - direct_inductor_voltage;
+  const float quadrature_resistive_excitation = 0 ; //readout.quadrature_drive_voltage - quadrature_inductor_voltage;
 
   const float direct_inductor_base_excitation = 0 ; //direct_inductor_excitation - direct_inductance_bias_voltage;
   const float quadrature_inductor_base_excitation = 0 ; //quadrature_inductor_excitation - quadrature_inductance_bias_voltage;
@@ -521,30 +590,11 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float direct_inductor_bias_excitation = 0 ; //direct_inductor_excitation - direct_inductance_base_voltage;
   const float quadrature_inductor_bias_excitation = 0 ; //quadrature_inductor_excitation - quadrature_inductance_base_voltage;
 
-  // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
-  // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
-  // there isn't enough energy in the error to warrant an update.
-  // const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
-
-  // TODO: investigate why the resistance plummets if we calibrate while we have back emf.
-  // 
-  // It's because there's a lag in our position estimation which is captured by the
-  // R and L observers. Hmm, what to do about that, sounds kinda tough.
-  // const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
-  // const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
-
-
 
   // Compute the gradients of the loss with respect to each of the tracked parameters.
 
   // Only update the resistance if we have sufficient current to make the measurement meaningful.
-  // 
-  // Because our best source of voltage information is the drive_voltage we also need to make sure
-  // we are driving with enough power to get any information.
-  if(
-    drive_voltage_square > control_parameters.voltage_measurement_variance and 
-    readout.current_magnitude > control_parameters.resistance_current_minimum
-  ) {
+  if(readout.current_magnitude > control_parameters.resistance_current_minimum) {
     const float resistance_gradient = (
         direct_voltage_error * (direct_resistive_voltage + direct_resistive_excitation) +
         quadrature_voltage_error * (quadrature_resistive_voltage + quadrature_resistive_excitation)
@@ -563,10 +613,10 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
       calibration.resistance - resilient_resistance_gradient * control_parameters.resistance_ki,
       minimum_resistance
     );
+    
+    info.resistance_multiplier = learning_rate_multiplier.resistance;
   }
 
-  // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
-  const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
 
   // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
   // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
@@ -589,6 +639,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
       calibration.inductance - resilient_inductance_gradient * control_parameters.inductance_ki,
       minimum_inductance
     );
+    info.inductance_multiplier = learning_rate_multiplier.inductance;
+
 
     const float inductance_bias_gradient = (
       direct_voltage_error * (direct_inductance_bias_voltage + direct_inductor_bias_excitation) +
@@ -608,6 +660,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
       calibration.inductance_bias - resilient_inductance_bias_gradient * control_parameters.inductance_bias_ki,
       minimum_inductance_bias
     );
+    info.inductance_bias_multiplier = learning_rate_multiplier.inductance_bias;
 
     const float saliency_angle_gradient = (
       direct_voltage_error * -(quadrature_inductance_bias_voltage + quadrature_inductor_bias_excitation) +
@@ -618,29 +671,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_change);
     info.saliency_angle_variance += (square(saliency_angle_change) - info.saliency_angle_variance) * 0.01f;
   }
-
-  // Calculate the motor constant
-  // ----------------------------
-  // 
-  // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
-  // 
-  // It is also the ratio between the torque produced by the motor and the quadrature current. We 
-  // can compute the motor constant from the a spinning motor and use it to estimate our torque.
-  // 
-  // We calculate the motor constant by gradient descent using the configured integral gain.
-
-  // The voltage magnitude is always positive, also use the positive angular speed.
-  const float abs_angular_speed = readout.angular_speed > 0 ? readout.angular_speed : -readout.angular_speed;
-
-  const float predicted_emf_voltage = abs_angular_speed * calibration.motor_constant * emf_motor_constant_conversion;
-
-  // Only compute the motor constant if we have a valid angle and the EMF voltage is above the threshold where noise is low.
-  const bool compute_motor_constant = readout.angle_fix and (readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant);
-
-  // Get the error (gradient) for the motor constant observer.
-  const float motor_constant_error = compute_motor_constant * (readout.emf_voltage_magnitude - predicted_emf_voltage);
-
-  calibration.motor_constant = calibration.motor_constant + motor_constant_error * control_parameters.motor_constant_ki;
 }
 
 static inline void process_readout(hex_mini_drive::Readout const& readout) {

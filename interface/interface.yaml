@@ -205,9 +205,9 @@ definitions:
           PWM counter value at the end of the control update. Should occur immediately 
           before the halfway point.
 
-      angle_fix:
-        type: uint16
-        doc: Whether we have an angle fix and how confident it is.
+      emf_counter:
+        type: int16
+        doc: Additional counter for emf detection logic.
 
       state_flags:
         type: uint8
@@ -365,6 +365,20 @@ definitions:
         type: float32
         doc: Variance of the estimated saliency angle, indicating the confidence in the saliency angle estimation.
 
+      resistance_multiplier:
+        type: float32
+        doc: Multiplier for the resistance, used to adjust the effective resistance in calculations.
+      inductance_multiplier:
+        type: float32
+        doc: Multiplier for the inductance, used to adjust the effective inductance in calculations.
+      inductance_bias_multiplier:
+        type: float32
+        doc: Multiplier for the inductance bias, used to adjust the effective inductance bias in calculations.
+      motor_constant_multiplier:
+        type: float32
+        doc: Multiplier for the motor constant, used to adjust the effective motor constant in calculations.
+
+
   Calibration:
     doc: Estimate resistance and inductance values for the motor coils; updated live.
 
@@ -382,6 +396,10 @@ definitions:
       resistance:
         type: float32
         doc: Estimated baseline resistance of the motor coils.
+
+      resistance_2:
+        type: float32
+        doc: The "other" resistance.
 
       inductance:
         type: float32

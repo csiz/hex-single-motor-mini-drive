@@ -449,7 +449,7 @@ void ADC1_2_IRQHandler(void){
     // Declare that we have an EMF fix if our speed is greater than the measurment error.
     const bool emf_fix = square(emf_voltage_angular_speed) > 4 * max_emf_speed_variance;
 
-    
+
     // Angle update
     // ------------
     
@@ -564,6 +564,18 @@ void ADC1_2_IRQHandler(void){
         readout.live_max_pwm + pwm_penalty
     );
 
+
+    // Update EMF counter
+    // ------------------
+    if (emf_fix) {
+        readout.emf_counter = min(static_cast<int32_t>(control_parameters.angle_fix_max_certainty), readout.emf_counter + 1);
+    } else {
+        if (emf_detected) {
+            readout.emf_counter = max(-static_cast<int32_t>(control_parameters.angle_fix_max_certainty), readout.emf_counter - 1);
+        } else {
+            readout.emf_counter = max(0, static_cast<int32_t>(readout.emf_counter - 1));
+        }
+    }
 
     // Write the latest readout data
     // -----------------------------

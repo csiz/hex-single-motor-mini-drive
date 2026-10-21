@@ -392,11 +392,11 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -8),
 
     .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -12),
-    .inductance_ki = std::pow(2, -20),
-    .inductance_bias_ki = std::pow(2, -20),
+    .resistance_ki = std::pow(2, -16),
+    .inductance_ki = std::pow(2, -22),
+    .inductance_bias_ki = std::pow(2, -22),
     .saliency_angle_ki = std::pow(2, 32+4),
-    .motor_constant_ki = std::pow(2, -11),
+    .motor_constant_ki = std::pow(2, -36),
     .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),
     .voltage_measurement_variance = square(current_measurement_noise * current_to_voltage_units),
     .resistance_current_minimum = 4.f * current_measurement_noise,
@@ -461,8 +461,8 @@ const float seek_integral_decay_fraction = 0.02;
 const float current_diff_to_voltage_units = pwm_cycles_per_second *
     hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
-// Conversion factor between the motor constant and our speed/voltage units.
-const float emf_motor_constant_conversion = radians_per_second_to_speed_units / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+// Conversion factor from speed units to voltage units prefix for motor constant.
+const float emf_motor_constant_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * speed_units_to_radians_per_second;
 
 
 // Waveform and Trigonometric tables

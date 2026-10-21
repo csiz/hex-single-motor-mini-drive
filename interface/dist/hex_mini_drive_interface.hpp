@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.127.0";
+constexpr char const* VERSION_STRING = "0.128.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -192,8 +192,8 @@ struct Readout {
   // PWM counter value at the end of the control update. Should occur immediately 
   // before the halfway point.
   int16_t cycle_end_tick;
-  // Whether we have an angle fix and how confident it is.
-  uint16_t angle_fix;
+  // Additional counter for emf detection logic.
+  int16_t emf_counter;
   // Flag indicating whether the driver is in closed-loop mode.
   uint8_t state_flags;
   // Active motor flags. Each bit represents the state of a motor phase.
@@ -265,7 +265,7 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 2;
   write_int16(buffer + offset, value.cycle_end_tick);;
   offset += 2;
-  write_uint16(buffer + offset, value.angle_fix);;
+  write_int16(buffer + offset, value.emf_counter);;
   offset += 2;
   write_uint8(buffer + offset, value.state_flags);;
   offset += 1;
@@ -335,7 +335,7 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 2;
   result.cycle_end_tick = read_int16(buffer + offset);
   offset += 2;
-  result.angle_fix = read_uint16(buffer + offset);
+  result.emf_counter = read_int16(buffer + offset);
   offset += 2;
   result.state_flags = read_uint8(buffer + offset);
   offset += 1;
@@ -428,6 +428,14 @@ struct Info {
   int32_t saliency_angle_offset;
   // Variance of the estimated saliency angle, indicating the confidence in the saliency angle estimation.
   float saliency_angle_variance;
+  // Multiplier for the resistance, used to adjust the effective resistance in calculations.
+  float resistance_multiplier;
+  // Multiplier for the inductance, used to adjust the effective inductance in calculations.
+  float inductance_multiplier;
+  // Multiplier for the inductance bias, used to adjust the effective inductance bias in calculations.
+  float inductance_bias_multiplier;
+  // Multiplier for the motor constant, used to adjust the effective motor constant in calculations.
+  float motor_constant_multiplier;
 };
 
 static inline void write_Info(uint8_t * buffer, Info const& value) {
@@ -441,6 +449,14 @@ static inline void write_Info(uint8_t * buffer, Info const& value) {
   write_int32(buffer + offset, value.saliency_angle_offset);;
   offset += 4;
   write_float32(buffer + offset, value.saliency_angle_variance);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_bias_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.motor_constant_multiplier);;
   offset += 4;
 }
 static inline Info read_Info(uint8_t const* buffer) {
@@ -458,6 +474,14 @@ static inline Info read_Info(uint8_t const* buffer) {
   offset += 4;
   result.saliency_angle_variance = read_float32(buffer + offset);
   offset += 4;
+  result.resistance_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_bias_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.motor_constant_multiplier = read_float32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Estimate resistance and inductance values for the motor coils; updated live.
@@ -470,6 +494,8 @@ struct Calibration {
   float w_current_zero;
   // Estimated baseline resistance of the motor coils.
   float resistance;
+  // The "other" resistance.
+  float resistance_2;
   // Estimated baseline inductance of the motor coils. Written as a conductance
   // for efficient math: `conductance = delta_t/L`.
   float inductance;
@@ -488,6 +514,8 @@ static inline void write_Calibration(uint8_t * buffer, Calibration const& value)
   write_float32(buffer + offset, value.w_current_zero);;
   offset += 4;
   write_float32(buffer + offset, value.resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_2);;
   offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
@@ -508,6 +536,8 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   result.w_current_zero = read_float32(buffer + offset);
   offset += 4;
   result.resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_2 = read_float32(buffer + offset);
   offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
@@ -1118,7 +1148,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
     case MessageCode::READOUT: return 114;
-    case MessageCode::INFO: return 22;
+    case MessageCode::INFO: return 38;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
@@ -1128,9 +1158,9 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_DRIVE_SCHEDULE: return 194;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 18;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CALIBRATION: return 30;
+    case MessageCode::CALIBRATION: return 34;
     case MessageCode::GET_CALIBRATION: return 2;
-    case MessageCode::SET_CALIBRATION: return 30;
+    case MessageCode::SET_CALIBRATION: return 34;
     case MessageCode::RESET_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 190;
     case MessageCode::SET_CONTROL_PARAMETERS: return 190;
@@ -1169,9 +1199,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
-      if (max_size < 2 + 20) return 0;
+      if (max_size < 2 + 36) return 0;
       write_Info(buffer + 2, std::get<Info>(message.message_data));
-      return 22;
+      return 38;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
@@ -1223,9 +1253,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION));
-      if (max_size < 2 + 28) return 0;
+      if (max_size < 2 + 32) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 30;
+      return 34;
     }
     case MessageCode::GET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CALIBRATION));
@@ -1233,9 +1263,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CALIBRATION));
-      if (max_size < 2 + 28) return 0;
+      if (max_size < 2 + 32) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 30;
+      return 34;
     }
     case MessageCode::RESET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CALIBRATION));
@@ -1308,7 +1338,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::INFO: {
-      if (size != 2 + 20) return false;
+      if (size != 2 + 36) return false;
       message.message_data = read_Info(buffer + 2);
       return true;
     }
@@ -1358,7 +1388,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION: {
-      if (size != 2 + 28) return false;
+      if (size != 2 + 32) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }
@@ -1368,7 +1398,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_CALIBRATION: {
-      if (size != 2 + 28) return false;
+      if (size != 2 + 32) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }
