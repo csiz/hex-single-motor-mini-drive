@@ -62,8 +62,12 @@ uint32_t stream_state = 0;
 uint32_t readouts_to_send = 0;
 
 
+
 // Calibration state
 // -----------------
+
+// We need to track the emf state to properly run the calibration.
+int32_t emf_pending_counter = 0;
 
 // Trying resilient backpropagation again, this time in the main loop.
 // 
@@ -413,20 +417,10 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   ) {
     return;
   }
-  
+
+  // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
   const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
-  const bool emf_detected = readout.state_flags & emf_detected_bit_mask;
-
-
-
-  // Get the commanded driving voltage, ignoring the HFI contribution, assuming that doesn't
-  // interfere with actually driving the motor.
-  // const float active_voltage = readout.vcc_voltage * active_pwm_to_voltage_conversion * readout.active_pwm;
-
-  // TODO: magic constant, we consider the motor to be breaking anytime it exceeds this value.
-  // if (readout.emf_voltage_magnitude > active_voltage + 0.01f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT) {
-  //   return;
-  // }
+  
 
   // Calculate the motor constant
   // ----------------------------
@@ -447,7 +441,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float predicted_emf_voltage = abs_angular_speed * calibration.motor_constant * emf_motor_constant_conversion;
 
   // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
-  if (emf_fix and abs_angular_speed > (0.5f * control_parameters.emf_probing_angular_speed)){
+  if (emf_fix and abs_angular_speed > control_parameters.emf_probing_angular_speed){
     
     // Get the error (gradient) for the motor constant observer.
     const float motor_constant_gradient = predicted_emf_voltage - readout.emf_voltage_magnitude;
@@ -479,11 +473,21 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // resistance and inductance are miscalibrated and we detect a fake stationary EMF. In that case
   // we need to re-start optimizing resistance and inductance to exit the faulty state.
 
-  // The emf is detected only while we're above the negative certainty threshold for the special counter.
-  const bool valid_emf_detected = readout.emf_counter > -control_parameters.angle_fix_max_certainty;
+  // Check if there's any magnitude to the emf voltage whatsoever.
+  const bool emf_any_magnitude = readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant;
 
-  if (emf_detected and valid_emf_detected) return;
+  // We are waiting for an EMF fix if we if there's detectable magnitude. If we don't see movement (aka emf_fix)
+  // then it might be a false positive due to miscalibration of the motor parameters.
+  const bool emf_fix_pending = emf_any_magnitude and not emf_fix;
 
+  // Count the steps when we detect EMF voltage but don't have an emf_fix; reset on either emf_fix or no EMF voltage.
+  emf_pending_counter = emf_fix_pending ? min(emf_pending_counter + 1, control_parameters.angle_fix_max_certainty) : 0;
+  
+  // Skip the calibration steps below as long as we're detecting any emf voltage.
+  // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
+  if (emf_any_magnitude and emf_pending_counter < control_parameters.angle_fix_max_certainty) {
+    return;
+  }
 
   // Current offsets
   // ---------------

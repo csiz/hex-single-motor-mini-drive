@@ -1111,7 +1111,6 @@ const plot_dq0_voltages = plot_lines({
     {y: "direct_emf_voltage", label: "EMF Voltage on Direct axis", color: colors.direct_current},
     {y: "quadrature_emf_voltage", label: "EMF Voltage on Quadrature", color: colors.quadrature_current},
     {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude},
-    {y: "emf_angle_stdev", label: "EMF Voltage Stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
     {y: "web_direct_emf_voltage", label: "Voltage on Direct axis (computed online)", color: d3.color(colors.direct_current).brighter(1)},
     {y: "web_quadrature_emf_voltage", label: "Voltage on Quadrature (computed online)", color: d3.color(colors.quadrature_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},

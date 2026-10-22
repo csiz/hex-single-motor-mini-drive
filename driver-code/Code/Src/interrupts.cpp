@@ -179,7 +179,9 @@ static inline MotorOutputs angle_probing_update(AngleProbingState & angle_probin
         }
         case AngleProbingMode::HFI_SWEEP_3: {
             angle_probing.angle += control_parameters.angle_probing_angular_speed;
-            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::WAITING);
+            angle_probing.count_and_switch(
+                control_parameters.angle_probing_sweep_duration, 
+                control_parameters.angle_probing_interval ? AngleProbingMode::WAITING : AngleProbingMode::HFI_SWEEP_0);
             break;
         }
     }
@@ -562,19 +564,6 @@ void ADC1_2_IRQHandler(void){
         pwm_max - control_parameters.angle_probing_pwm, 
         readout.live_max_pwm + pwm_penalty
     );
-
-
-    // Update EMF counter
-    // ------------------
-    if (emf_fix) {
-        readout.emf_counter = min(static_cast<int32_t>(control_parameters.angle_fix_max_certainty), readout.emf_counter + 1);
-    } else {
-        if (emf_detected) {
-            readout.emf_counter = max(-static_cast<int32_t>(control_parameters.angle_fix_max_certainty), readout.emf_counter - 1);
-        } else {
-            readout.emf_counter = max(0, static_cast<int32_t>(readout.emf_counter - 1));
-        }
-    }
 
     // Write the latest readout data
     // -----------------------------
