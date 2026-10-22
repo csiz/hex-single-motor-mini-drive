@@ -386,7 +386,7 @@ void ADC1_2_IRQHandler(void){
 
     const int32_t emf_angle_error_plus_quarter = emf_angle_error + quarter_circle;
 
-    const int32_t emf_angle_flip = emf_angle_error_plus_quarter & most_negative_angle;
+    const int32_t emf_angle_flip_adjustment = emf_angle_error_plus_quarter & most_negative_angle;
 
     // Compute the angle error to the emf axis.
     // 
@@ -402,7 +402,7 @@ void ADC1_2_IRQHandler(void){
     // But we slowly trace to the new angle by integrating the error over time using the control parameter.
     const int32_t emf_voltage_angle = (
         predicted_emf_voltage_angle + 
-        emf_angle_flip + 
+        emf_angle_flip_adjustment + 
         emf_angle_adjustment
     );
     
@@ -414,10 +414,9 @@ void ADC1_2_IRQHandler(void){
         (instant_emf_angle_variance - readout.emf_angle_variance) * control_parameters.emf_angle_ki
     );
 
-    const float emf_voltage_magnitude = emf_angle_flip ? 0 : (
-        readout.emf_voltage_magnitude + 
-        (measured_emf_voltage_magnitude - readout.emf_voltage_magnitude) * control_parameters.emf_magnitude_ki
-    );
+    const float emf_voltage_error = (emf_angle_flip_adjustment ? 0 : measured_emf_voltage_magnitude) - readout.emf_voltage_magnitude;
+
+    const float emf_voltage_magnitude = readout.emf_voltage_magnitude + emf_voltage_error * control_parameters.emf_magnitude_ki;
     
     const float max_angle_error_variance = max(instant_emf_angle_variance, emf_angle_variance);
     
