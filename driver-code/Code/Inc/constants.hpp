@@ -310,11 +310,6 @@ constexpr float speed_units_to_radians_per_second = angle_units_to_radians * sta
 // Conversion factor between radians per second and our speed units.
 constexpr float radians_per_second_to_speed_units = 1.f / speed_units_to_radians_per_second;
 
-// Maximum variance of the EMF angle before we start computing EMF angular speed.
-constexpr float emf_angle_variance_threshold = square(20.f * angle_base / 360.f);
-
-// Inverse of the EMF angle variance threshold to avoid divisions in the fast loop.
-constexpr float emf_angle_variance_threshold_inverse = 1.f / emf_angle_variance_threshold;
 
 // Driver state
 // ------------

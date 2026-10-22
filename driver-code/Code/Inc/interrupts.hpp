@@ -48,3 +48,6 @@ bool is_motor_safed();
 
 // Set an external angle adjustment for the motor control loop. Returns true if the adjustment was successfully set, false otherwise.
 bool set_angle_adjustment(int32_t const& adjustment);
+
+// Get the temperature sensor reading.
+float get_temperature();

@@ -39,8 +39,6 @@ export function parse_readout(bare_readout, previous_readout) {
 
   // Get the readout number, a counter that increments with each readout & PWM cycle.
   const readout_number = bare_readout.readout_number;
-  const motor_flags = bare_readout.motor_flags;
-  const state_flags = bare_readout.state_flags;
   const cycle_start_tick = bare_readout.cycle_start_tick;
   const cycle_end_tick = bare_readout.cycle_end_tick;
   const ref_readout = bare_readout.ref_readout;
@@ -61,9 +59,9 @@ export function parse_readout(bare_readout, previous_readout) {
   const vcc_voltage = bare_readout.vcc_voltage / VOLTAGE_UNITS_PER_VOLT;
 
   const emf_voltage_angle = angle_units_to_radians(bare_readout.emf_voltage_angle);
-  const emf_angle_stdev = angle_units_to_radians(Math.sqrt(bare_readout.emf_angle_variance));
   
   const emf_voltage_magnitude = bare_readout.emf_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
+  const emf_magnitude_stdev = Math.sqrt(bare_readout.emf_magnitude_variance) / VOLTAGE_UNITS_PER_VOLT;
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
   const emf_angular_speed_stdev = speed_units_to_rotations_per_millisecond(Math.sqrt(bare_readout.emf_angular_speed_variance));
 
@@ -80,29 +78,6 @@ export function parse_readout(bare_readout, previous_readout) {
   const u_current_diff = u_current - prev_u_current;
   const v_current_diff = v_current - prev_v_current;
   const w_current_diff = w_current - prev_w_current;
-
-  const angle_fix = bare_readout.angle_fix;
-  
-  const {
-    hall_state,
-    emf_detected,
-    emf_fix,
-    current_detected,
-  } = parse_state_flags(state_flags);
-
-  const hall_u = Boolean(hall_state & 0b001) * 1;
-  const hall_v = Boolean(hall_state & 0b010) * 1;
-  const hall_w = Boolean(hall_state & 0b100) * 1;
-
-  const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
-
-
-  // Approximate the angle for the 6 sectors of the hall sensor; for plotting.
-  const ε = 2;
-  const hall_u_as_angle = hall_u ? hall_v ? + 60 - ε : hall_w ? - 60 + ε :    0 : null;
-  const hall_v_as_angle = hall_v ? hall_u ? + 60 + ε : hall_w ? +180 - ε : +120 : null;
-  const hall_w_as_angle = hall_w ? hall_v ? -180 + ε : hall_u ? - 60 - ε : -120 : null;
-
 
   const direct_emf_voltage = emf_voltage_magnitude * Math.cos(emf_voltage_angle);
   const quadrature_emf_voltage = emf_voltage_magnitude * Math.sin(emf_voltage_angle);
@@ -170,9 +145,6 @@ export function parse_readout(bare_readout, previous_readout) {
 
   const steady_state_drive_current = drive_voltage_magnitude / resistance;
 
-  const temperature = calculate_temperature(bare_readout.temperature);
-
-
   const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
   const current_angle = normalize_radians(predicted_angle + current_angle_offset);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
@@ -184,9 +156,6 @@ export function parse_readout(bare_readout, previous_readout) {
 
   const rotations = bare_readout.rotations;
   
-  const active_pwm = bare_readout.active_pwm;
-  const active_angle = angle_units_to_radians(bare_readout.active_angle);
-
   const battery_current = total_power_average / vcc_voltage;
 
 
@@ -220,17 +189,8 @@ export function parse_readout(bare_readout, previous_readout) {
     dt,
     cycle_start_tick,
     cycle_end_tick,
-    
-    // State flags
-    motor_flags,
-    hall_u,
-    hall_v,
-    hall_w,
-    hall_sector,
-    emf_detected,
-    emf_fix,
-    current_detected,
-    angle_fix,
+
+
     // Readouts converted to physical dimensions
     direct_current, quadrature_current,
     direct_current_diff,
@@ -266,9 +226,6 @@ export function parse_readout(bare_readout, previous_readout) {
     u_partial_voltage, v_partial_voltage, w_partial_voltage,
     u_R_voltage, v_R_voltage, w_R_voltage,
     u_L_voltage, v_L_voltage, w_L_voltage,
-    hall_u_as_angle,
-    hall_v_as_angle,
-    hall_w_as_angle,
     angle,
     predicted_angle,
     angle_adjustment,
@@ -277,7 +234,7 @@ export function parse_readout(bare_readout, previous_readout) {
     emf_voltage_angle, 
     emf_voltage_magnitude, 
     emf_voltage_angular_speed,
-    emf_angle_stdev,
+    emf_magnitude_stdev,
     emf_angular_speed_stdev,
     direct_emf_voltage,
     quadrature_emf_voltage,
@@ -291,8 +248,6 @@ export function parse_readout(bare_readout, previous_readout) {
     web_resistive_power,
     web_inductive_power,
 
-    temperature,
-
     current_angle, current_magnitude,
     current_angle_offset,
     live_max_pwm,
@@ -301,8 +256,6 @@ export function parse_readout(bare_readout, previous_readout) {
     total_power_average,
     resistive_power_average,
     rotations,
-    active_pwm,
-    active_angle,
   };
 }
 
@@ -338,8 +291,28 @@ export function parse_version(bare_version) {
 }
 
 export function parse_info(bare_info) {
+  
+  const temperature = calculate_temperature(bare_info.temperature);
+
+
+  // const {
+  //   hall_state,
+  //   emf_detected,
+  //   emf_fix,
+  //   current_detected,
+  // } = parse_state_flags(state_flags);
+
+  // const hall_u = Boolean(hall_state & 0b001) * 1;
+  // const hall_v = Boolean(hall_state & 0b010) * 1;
+  // const hall_w = Boolean(hall_state & 0b100) * 1;
+
+  // const hall_sector = get_hall_sector({hall_u, hall_v, hall_w});
+
   return {
     ...bare_info,
+    
+    temperature,
+
     saliency_angle_offset: angle_units_to_radians(bare_info.saliency_angle_offset),
     saliency_angle_stdev: angle_units_to_radians(Math.sqrt(bare_info.saliency_angle_variance)),
   };

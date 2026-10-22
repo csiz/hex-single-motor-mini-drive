@@ -419,7 +419,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   }
 
   // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
-  const bool emf_fix = readout.state_flags & emf_fix_bit_mask;
+  const bool emf_fix = square(readout.emf_voltage_angular_speed) > 4 * readout.emf_angular_speed_variance;
   
 
   // Calculate the motor constant
@@ -473,19 +473,18 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // resistance and inductance are miscalibrated and we detect a fake stationary EMF. In that case
   // we need to re-start optimizing resistance and inductance to exit the faulty state.
 
-  // Check if there's any magnitude to the emf voltage whatsoever.
-  const bool emf_any_magnitude = readout.emf_voltage_magnitude > control_parameters.min_emf_for_motor_constant;
-
+  const bool emf_detected = square(readout.emf_voltage_magnitude) > 4 * readout.emf_magnitude_variance;
+  
   // We are waiting for an EMF fix if we if there's detectable magnitude. If we don't see movement (aka emf_fix)
   // then it might be a false positive due to miscalibration of the motor parameters.
-  const bool emf_fix_pending = emf_any_magnitude and not emf_fix;
+  const bool emf_fix_pending = emf_detected and not emf_fix;
 
   // Count the steps when we detect EMF voltage but don't have an emf_fix; reset on either emf_fix or no EMF voltage.
   emf_pending_counter = emf_fix_pending ? min(emf_pending_counter + 1, control_parameters.angle_fix_max_certainty) : 0;
   
   // Skip the calibration steps below as long as we're detecting any emf voltage.
   // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
-  if (emf_any_magnitude and emf_pending_counter < control_parameters.angle_fix_max_certainty) {
+  if (emf_detected and emf_pending_counter < control_parameters.angle_fix_max_certainty) {
     return;
   }
 
@@ -731,11 +730,18 @@ void app_tick() {
 
     info.main_loop_rate = (main_loop_number - timing_loop_number) / seconds;
     info.adc_update_rate = ((readout_number_base + last_readout_number - timing_readout_number) % readout_number_base) / seconds;
+    info.temperature = get_temperature();
 
     timing_loop_number = main_loop_number;
     timing_readout_number = last_readout_number;
   }
-  
+
+  // Slow sensor updates
+  // -------------------
+
+  // Read new data from the hall sensors.
+  // const uint8_t hall_state = read_hall_sensors_state();
+    
 
   // Comms update
   // ------------

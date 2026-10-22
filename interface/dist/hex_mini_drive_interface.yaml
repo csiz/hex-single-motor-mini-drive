@@ -205,18 +205,6 @@ definitions:
           PWM counter value at the end of the control update. Should occur immediately 
           before the halfway point.
 
-      emf_counter:
-        type: int16
-        doc: Additional counter for emf detection logic.
-
-      state_flags:
-        type: uint8
-        doc: Flag indicating whether the driver is in closed-loop mode.
-        
-      motor_flags:
-        type: uint8
-        doc: Active motor flags. Each bit represents the state of a motor phase.
-
       ref_readout:
         type: int16
         doc: |
@@ -272,10 +260,6 @@ definitions:
         type: int32
         doc: Angle of the EMF voltage vector.
 
-      emf_angle_variance:
-        type: float32
-        doc: Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
-
       emf_voltage_magnitude:
         type: float32
         doc: |
@@ -284,6 +268,10 @@ definitions:
           as well. We can rotate the EMF voltage vector fully to the beta direction and get 
           closer to the actual EMF voltage magnitude.
 
+      emf_magnitude_variance:
+        type: float32
+        doc: Variance of the EMF magnitude error, we can use it to determine when EMF is detected.
+
       emf_voltage_angular_speed:
         type: float32
         doc: Angular speed of the EMF voltage vector.
@@ -291,10 +279,6 @@ definitions:
       emf_angular_speed_variance:
         type: float32
         doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
-
-      temperature:
-        type: float32
-        doc: Instantaneous temperature readout (ADC value); from the temperature sensor.
 
       current_angle_offset:
         type: int32
@@ -319,15 +303,7 @@ definitions:
       rotations:
         type: int32
         doc: Integrated number of EMF deduced rotor angle rotations since startup.
-
-      active_pwm:
-        type: float32
-        doc: Active PWM duty for the motor outputs.
-
-      active_angle:
-        type: int32
-        doc: Angle of the active drive vector.
-
+      
 
   StreamReadouts:
     doc: |
@@ -356,6 +332,10 @@ definitions:
       average_buffer_fill_rate:
         type: float32
         doc: Average size of the readout batch processed per main loop iteration.
+
+      temperature:
+        type: float32
+        doc: Temperature readout from the internal temperature sensor.
 
       saliency_angle_offset:
         type: int32

@@ -43,7 +43,7 @@ export const cycles_per_millisecond = pwm_cycles_per_second / 1000.0;
 // Millisecond (fractions) per PWM motor cycle.
 export const millis_per_cycle = 1.0/cycles_per_millisecond;
 
-export const max_frequency = pwm_cycles_per_second / 11.9;
+export const max_frequency = pwm_cycles_per_second / 24.0;
 
 // Angle & speed units
 // -------------------

@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.128.0";
+constexpr char const* VERSION_STRING = "0.129.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -192,12 +192,6 @@ struct Readout {
   // PWM counter value at the end of the control update. Should occur immediately 
   // before the halfway point.
   int16_t cycle_end_tick;
-  // Additional counter for emf detection logic.
-  int16_t emf_counter;
-  // Flag indicating whether the driver is in closed-loop mode.
-  uint8_t state_flags;
-  // Active motor flags. Each bit represents the state of a motor phase.
-  uint8_t motor_flags;
   // Raw reference readout (ADC value); this is the reference voltage for the current 
   // readouts as seen by the amplifier. The phase readouts are relative to this voltage
   // so if this is quite noisy then the phases will also be noisy. We must track it!
@@ -226,19 +220,17 @@ struct Readout {
   float vcc_voltage;
   // Angle of the EMF voltage vector.
   int32_t emf_voltage_angle;
-  // Variance of the EMF angle error; used to determine if the EMF angle is too noisy to update.
-  float emf_angle_variance;
   // EMF voltage magnitude. The EMF is always along the beta direction, but we can have 
   // errors in the measurements and the rotor position and thus we see alpha component 
   // as well. We can rotate the EMF voltage vector fully to the beta direction and get 
   // closer to the actual EMF voltage magnitude.
   float emf_voltage_magnitude;
+  // Variance of the EMF magnitude error, we can use it to determine when EMF is detected.
+  float emf_magnitude_variance;
   // Angular speed of the EMF voltage vector.
   float emf_voltage_angular_speed;
   // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
   float emf_angular_speed_variance;
-  // Instantaneous temperature readout (ADC value); from the temperature sensor.
-  float temperature;
   // Angle of the current vector relative to the rotor angle.
   int32_t current_angle_offset;
   // Magnitude of the current vector.
@@ -251,10 +243,6 @@ struct Readout {
   float resistive_power_average;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   int32_t rotations;
-  // Active PWM duty for the motor outputs.
-  float active_pwm;
-  // Angle of the active drive vector.
-  int32_t active_angle;
 };
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
@@ -265,12 +253,6 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 2;
   write_int16(buffer + offset, value.cycle_end_tick);;
   offset += 2;
-  write_int16(buffer + offset, value.emf_counter);;
-  offset += 2;
-  write_uint8(buffer + offset, value.state_flags);;
-  offset += 1;
-  write_uint8(buffer + offset, value.motor_flags);;
-  offset += 1;
   write_int16(buffer + offset, value.ref_readout);;
   offset += 2;
   write_float32(buffer + offset, value.direct_drive_voltage);;
@@ -297,15 +279,13 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_int32(buffer + offset, value.emf_voltage_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.emf_angle_variance);;
-  offset += 4;
   write_float32(buffer + offset, value.emf_voltage_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_magnitude_variance);;
   offset += 4;
   write_float32(buffer + offset, value.emf_voltage_angular_speed);;
   offset += 4;
   write_float32(buffer + offset, value.emf_angular_speed_variance);;
-  offset += 4;
-  write_float32(buffer + offset, value.temperature);;
   offset += 4;
   write_int32(buffer + offset, value.current_angle_offset);;
   offset += 4;
@@ -319,10 +299,6 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_int32(buffer + offset, value.rotations);;
   offset += 4;
-  write_float32(buffer + offset, value.active_pwm);;
-  offset += 4;
-  write_int32(buffer + offset, value.active_angle);;
-  offset += 4;
 }
 static inline Readout read_Readout(uint8_t const* buffer) {
   size_t offset = 0;
@@ -335,12 +311,6 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 2;
   result.cycle_end_tick = read_int16(buffer + offset);
   offset += 2;
-  result.emf_counter = read_int16(buffer + offset);
-  offset += 2;
-  result.state_flags = read_uint8(buffer + offset);
-  offset += 1;
-  result.motor_flags = read_uint8(buffer + offset);
-  offset += 1;
   result.ref_readout = read_int16(buffer + offset);
   offset += 2;
   result.direct_drive_voltage = read_float32(buffer + offset);
@@ -367,15 +337,13 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.emf_voltage_angle = read_int32(buffer + offset);
   offset += 4;
-  result.emf_angle_variance = read_float32(buffer + offset);
-  offset += 4;
   result.emf_voltage_magnitude = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_magnitude_variance = read_float32(buffer + offset);
   offset += 4;
   result.emf_voltage_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.emf_angular_speed_variance = read_float32(buffer + offset);
-  offset += 4;
-  result.temperature = read_float32(buffer + offset);
   offset += 4;
   result.current_angle_offset = read_int32(buffer + offset);
   offset += 4;
@@ -388,10 +356,6 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   result.resistive_power_average = read_float32(buffer + offset);
   offset += 4;
   result.rotations = read_int32(buffer + offset);
-  offset += 4;
-  result.active_pwm = read_float32(buffer + offset);
-  offset += 4;
-  result.active_angle = read_int32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -424,6 +388,8 @@ struct Info {
   float adc_update_rate;
   // Average size of the readout batch processed per main loop iteration.
   float average_buffer_fill_rate;
+  // Temperature readout from the internal temperature sensor.
+  float temperature;
   // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
   int32_t saliency_angle_offset;
   // Variance of the estimated saliency angle, indicating the confidence in the saliency angle estimation.
@@ -445,6 +411,8 @@ static inline void write_Info(uint8_t * buffer, Info const& value) {
   write_float32(buffer + offset, value.adc_update_rate);;
   offset += 4;
   write_float32(buffer + offset, value.average_buffer_fill_rate);;
+  offset += 4;
+  write_float32(buffer + offset, value.temperature);;
   offset += 4;
   write_int32(buffer + offset, value.saliency_angle_offset);;
   offset += 4;
@@ -469,6 +437,8 @@ static inline Info read_Info(uint8_t const* buffer) {
   result.adc_update_rate = read_float32(buffer + offset);
   offset += 4;
   result.average_buffer_fill_rate = read_float32(buffer + offset);
+  offset += 4;
+  result.temperature = read_float32(buffer + offset);
   offset += 4;
   result.saliency_angle_offset = read_int32(buffer + offset);
   offset += 4;
@@ -1147,8 +1117,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 114;
-    case MessageCode::INFO: return 38;
+    case MessageCode::READOUT: return 98;
+    case MessageCode::INFO: return 42;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
@@ -1193,15 +1163,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 112) return 0;
+      if (max_size < 2 + 96) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 114;
+      return 98;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
-      if (max_size < 2 + 36) return 0;
+      if (max_size < 2 + 40) return 0;
       write_Info(buffer + 2, std::get<Info>(message.message_data));
-      return 38;
+      return 42;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
@@ -1333,12 +1303,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 112) return false;
+      if (size != 2 + 96) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
     case MessageCode::INFO: {
-      if (size != 2 + 36) return false;
+      if (size != 2 + 40) return false;
       message.message_data = read_Info(buffer + 2);
       return true;
     }
