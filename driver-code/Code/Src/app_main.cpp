@@ -442,7 +442,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const bool emf_fix = square(readout.emf_voltage_angular_speed) > 4 * readout.emf_angular_speed_variance;
   
   // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
-  if (emf_fix and abs_angular_speed > control_parameters.emf_probing_angular_speed){
+  if (emf_fix and abs_angular_speed > control_parameters.emf_min_angular_speed){
     
     // Get the error (gradient) for the motor constant observer.
     const float motor_constant_gradient = predicted_emf_voltage - readout.emf_voltage_magnitude;
@@ -484,11 +484,11 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const bool emf_pending = emf_suspected and not emf_good;
 
   // Count the steps when we detect EMF voltage but don't have an emf_fix; reset on either emf_fix or no EMF voltage.
-  emf_pending_counter = emf_pending ? min(emf_pending_counter + 1, control_parameters.angle_fix_max_certainty) : 0;
+  emf_pending_counter = emf_pending ? min(emf_pending_counter + 1, control_parameters.emf_uncertainty_threshold) : 0;
   
   // Skip the calibration steps below as long as we're detecting any emf voltage.
   // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
-  if (emf_suspected and emf_pending_counter < control_parameters.angle_fix_max_certainty) {
+  if (emf_suspected and emf_pending_counter < control_parameters.emf_uncertainty_threshold) {
     return;
   }
 
@@ -687,7 +687,7 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
   last_readout_number = readout.readout_number;
 
   // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
-  const int32_t pending_adjustment = (info.saliency_angle_offset / 2) * control_parameters.saliency_angle_influence_ki;
+  const int32_t pending_adjustment = (info.saliency_angle_offset / 2) * control_parameters.angle_from_saliency_ki;
 
   if (set_angle_adjustment(pending_adjustment)) {
     info.saliency_angle_offset -= 2 * pending_adjustment;
@@ -802,7 +802,7 @@ void app_tick() {
 
   size_t i = 0;
   for (; i < readouts_available; i++) {
-    // TODO: Adjust readout
+    // TODO: Adjust readout?
     // --------------
     // Adjust readout to reflect the direction and offset settings from the user.
 
@@ -860,44 +860,6 @@ void app_tick() {
 
 // TODO: Reimplement the advanced motor control algorithms in the main loop.
 // -------------------------------------------------------------------------
-
-
-// // Update the motor outputs using simple 6 sector driving based on the hall sensors.
-// static inline MotorOutputs update_motor_6_sector(
-//     DriveState const& drive_state,
-//     hex_mini_drive::FullReadout const& readout
-// ){
-
-//     // Update the sector variable.
-//     const uint8_t hall_sector = get_hall_sector(readout.state_flags & hall_state_bit_mask);
-
-//     // Check if the magnet is present.
-//     const bool angle_valid = hall_sector < hall_sector_base;
-
-//     if (not angle_valid) return breaking_motor_outputs;
-
-//     auto const& motor_sector_driving_table = drive_state.active_pwm >= 0 ? 
-//         motor_sector_driving_positive : 
-//         motor_sector_driving_negative;
-
-//     // Get the voltage for the three phases from the table.
-
-//     const float voltage_phase_u = motor_sector_driving_table[hall_sector][0];
-//     const float voltage_phase_v = motor_sector_driving_table[hall_sector][1];
-//     const float voltage_phase_w = motor_sector_driving_table[hall_sector][2];
-
-//     const float abs_pwm = min(
-//         readout.live_max_pwm,
-//         faster_abs(drive_state.active_pwm)
-//     );
-
-//     return MotorOutputs{
-//         .u_duty = static_cast<uint16_t>(voltage_phase_u * abs_pwm),
-//         .v_duty = static_cast<uint16_t>(voltage_phase_v * abs_pwm),
-//         .w_duty = static_cast<uint16_t>(voltage_phase_w * abs_pwm)
-//     };
-// }
-
 
 // static inline MotorOutputs update_motor_seek_angle(
 //     DriveState & drive_state,

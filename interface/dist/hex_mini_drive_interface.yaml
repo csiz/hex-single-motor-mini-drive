@@ -240,6 +240,10 @@ definitions:
         type: float32
         doc: Difference in quadrature current compared to the previous readout.
 
+      rotations:
+        type: int32
+        doc: Integrated number of EMF deduced rotor angle rotations since startup.
+      
       angle:
         type: int32
         doc: Best estimate for the rotor magnetic angle.
@@ -286,7 +290,19 @@ definitions:
 
       current_magnitude:
         type: float32
-        doc: Magnitude of the current vector.  
+        doc: Magnitude of the current vector.
+
+      drive_voltage_angle:
+        type: int32
+        doc: Angle of the drive voltage vector; exponentially averaged exactly like emf voltage angle.
+      
+      drive_voltage_magnitude:
+        type: float32
+        doc: Magnitude of the drive voltage vector; exponentially averaged exactly like emf voltage magnitude.
+      
+      drive_voltage_angular_speed:
+        type: float32
+        doc: Angular speed of the drive voltage vector; exponentially averaged exactly like emf voltage angular speed.
 
       live_max_pwm:
         type: float32
@@ -300,10 +316,6 @@ definitions:
         type: float32
         doc: Long duration average of the resistive power; used to limit the maximum resistive power.
 
-      rotations:
-        type: int32
-        doc: Integrated number of EMF deduced rotor angle rotations since startup.
-      
 
   StreamReadouts:
     doc: |
@@ -377,7 +389,7 @@ definitions:
         type: float32
         doc: Estimated baseline resistance of the motor coils.
 
-      resistance_2:
+      y_resistance:
         type: float32
         doc: The "other" resistance.
 
@@ -506,20 +518,22 @@ definitions:
         type: int16
         doc: Sign of the motor direction (positive by default, negative to reverse turning direction).
 
-      angle_fix_max_certainty:
-        type: int16
-        doc: |
-          Any time we can determine the correct angle of the rotor we increase the certainty by 1 and
-          conversely if we cannot determine the correct angle we decrease the certainty by 1. This is
-          the maximum value of certainty we can reach, we will lose the angle fix when we decay from max.
-
-      angle_fix_threshold_count:
-        type: int16
-        doc: Threshold count for determining when to establish the rotor angle.
-      
       angle_probing_interval:
         type: uint16
         doc: Time interval in pwm periods to probe the saliency angle when it's too noisy to update the angle from emf.
+        
+      angle_probing_pwm:
+        type: float32
+        doc: PWM magnitude used for angle probing with HFI (High-Frequency Injection).
+
+      angle_probing_sweep_duration:
+        type: uint32
+        doc: Duration of an angle probing sweep for HFI (the full probe has 4 sweeps).
+
+      angle_probing_angular_speed:
+        type: int32
+        doc: Angular speed used for HFI probing (in integer angle units per pwm cycle).
+        
 
       u_pwm_floor:
         type: uint16
@@ -534,35 +548,24 @@ definitions:
         type: uint16
         doc: Minimum PWM value for the Z phase (below this, the line doesn't fully turn on).
 
-      rotor_angle_ki:
+      angle_from_emf_ki:
         type: float32
-        doc: Magnet position integral gain.
+        doc: Integral gain for the angle and angular speed estimated from EMF.
 
-      rotor_angular_speed_ki:
+      loop_fast_ki:
         type: float32
-        doc: Magnet angular speed integral gain.
+        doc: |
+          Integral gain for fast changing values in the tight control loop. It is the same
+          gain for current, emf and voltage angle so they maintain consistent response with
+          eachother.
 
-      current_angle_ki:
+      loop_slow_ki:
         type: float32
-        doc: Integral gain for the current angle adjustment.
+        doc: |
+          Integral gain for slow changing values in the control loop. These are mostly the
+          variances of the fast measurements.
 
-      current_magnitude_ki:
-        type: float32
-        doc: Integral gain for the current magnitude adjustment.
-      
-      emf_angle_ki:
-        type: float32
-        doc: Integral gain for the EMF angle adjustment.
-
-      emf_magnitude_ki:
-        type: float32
-        doc: Integral gain for the EMF magnitude adjustment.
-
-      emf_angular_speed_ki:
-        type: float32
-        doc: Integral gain for the EMF angular speed adjustment.
-
-      hall_angle_ki:
+      angle_from_hall_ki:
         type: float32
         doc: Integral gain for the hall angle adjustment (0 to ignore).
 
@@ -588,8 +591,12 @@ definitions:
 
       saliency_angle_ki:
         type: float32
-        doc: Integral gain for the inductance bias angle observer.
+        doc: Integral gain for the saliency angle observer.
       
+      angle_from_saliency_ki:
+        type: float32
+        doc: Integral gain for the influence of the saliency angle on the rotor_angle.
+
       motor_constant_ki:
         type: float32
         doc: Motor constant integral gain.
@@ -614,13 +621,21 @@ definitions:
         type: float32
         doc: Maximum allowable current offset to adjust the current sensing bias from 0.
 
-      emf_probing_angular_speed:
+      emf_min_angular_speed:
         type: float32
-        doc: Probing angular speed for initial EMF detection.
+        doc: | 
+          Minimum detectable angular speed for EMF detection. This value also determines
+          the maximum reliable angular speed variance. It also determines how fast we probe
+          for EMF when HFI is disabled and we must rely on spinning the motor to generate a
+          detectable EMF signal.
 
-      min_emf_for_motor_constant:
-        type: float32
-        doc: Minium EMF voltage to compute the motor constant.
+      emf_uncertainty_threshold:
+        type: int32
+        doc: |
+          When we detect incosistent EMF measurements (static EMF or high correlation with
+          the drive voltage) we need to re-enable calibration in order to isolate differing
+          resistance or inductance from the observed EMF measurements. We use a counter for
+          each inconsistent reading and this threshold determines when we must act.
 
       vcc_undervoltage:
         type: float32
@@ -683,19 +698,3 @@ definitions:
       seek_kd:
         type: float32
         doc: Seek derivative gain for the PID control.
-
-      saliency_angle_influence_ki:
-        type: float32
-        doc: Integral gain for the saliency angle influence on the rotor_angle.
-
-      angle_probing_pwm:
-        type: float32
-        doc: PWM magnitude used for angle probing with HFI (High-Frequency Injection).
-
-      angle_probing_angular_speed:
-        type: int32
-        doc: Angular speed used for HFI probing (in integer angle units per pwm cycle).
-
-      angle_probing_sweep_duration:
-        type: uint32
-        doc: Duration of an angle probing sweep for HFI (the full probe has 4 sweeps).

@@ -1976,17 +1976,21 @@ const control_parameters_input = Object.fromEntries(
       label: "Motor direction", 
       description: "Direction of the motor rotation (+1 for default, -1 to reverse rotation direction)."
     }],
-    ["angle_fix_max_certainty", {
-      label: "Angle Fix Max Certainty", 
-      description: "Number of incorrect direction detections before losing the angle fix."
-    }],
-    ["angle_fix_threshold_count", {
-      label: "Angle Fix Threshold Count", 
-      description: "Number of consecutive correct direction detections required to regain the angle fix."
-    }],
     ["angle_probing_interval", {
       label: "Angle Probing Interval",
       description: "Interval at which we do the saliency angle probing (when we don't have EMF).",
+    }],
+    ["angle_probing_pwm", {
+      label: "Angle Probing PWM",
+      description: "PWM used during angle probing."
+    }],
+    ["angle_probing_sweep_duration", {
+      label: "Angle Probing Sweep Duration",
+      description: "Duration of the sweep during angle probing."
+    }],
+    ["angle_probing_angular_speed", {
+      label: "Angle Probing Angular Speed",
+      description: "Angular speed used during angle probing."
     }],
     ["u_pwm_floor", {
       label: "U PWM Floor",
@@ -2004,36 +2008,19 @@ const control_parameters_input = Object.fromEntries(
       label: "Z PWM Floor",
       description: "Minimum PWM value for the voltage applied to the Z motor phase (below this value the switch doesn't turn on).",
     }],
-    ["rotor_angle_ki", {
-      label: "Rotor Angle KI", 
-      description: "Integral gain for the rotor angle observer from the measured EMF angle.",
+    ["angle_from_emf_ki", {
+      label: "Angle from EMF KI",
+      description: "Integral gain for the angle and angular speed estimated from EMF."
     }],
-    ["rotor_angular_speed_ki", {
-      label: "Rotor Angular Speed KI", 
-      description: `Integral gain for speed of the angle based on the same error used for the EMF angle (an 
-      incorrect angle prediction implies a speed error as well).`
+    ["loop_fast_ki", {
+      label: "Loop Fast KI",
+      description: "Integral gain for fast changing values in the tight control loop."
     }],
-    ["current_angle_ki", {
-      label: "Current Angle KI", 
-      description: "Integral gain for the current angle observer from the measured current angle."
+    ["loop_slow_ki", {
+      label: "Loop Slow KI",
+      description: "Integral gain for slow changing values in the control loop."
     }],
-    ["current_magnitude_ki", {
-      label: "Current Magnitude KI", 
-      description: "Integral gain for the current magnitude observer from the measured current magnitude."
-    }],
-    ["emf_angle_ki", {
-      label: "EMF Angle KI", 
-      description: "Integral gain for the EMF angle observer from the measured EMF angle."
-    }],
-    ["emf_magnitude_ki", {
-      label: "EMF Magnitude KI", 
-      description: "Integral gain for the EMF magnitude observer from the measured EMF angle."
-    }],
-    ["emf_angular_speed_ki", {
-      label: "EMF Angular Speed KI", 
-      description: "Integral gain for the EMF angular speed observer from the measured EMF angle."
-    }],
-    ["hall_angle_ki", {
+    ["angle_from_hall_ki", {
       label: "Position adjustment from hall angle KI", 
       description: "Integral gain for the angle adjustment based on the hall sensors."
     }],
@@ -2061,6 +2048,10 @@ const control_parameters_input = Object.fromEntries(
       label: "Saliency Angle KI",
       description: "Integral gain for saliency angle estimation. To be explained later..."
     }],
+    ["angle_from_saliency_ki", {
+      label: "Angle from Saliency KI",
+      description: "Integral gain for the angle estimated from the saliency effect. Controls how fast we adjust the PWM to compensate for the saliency angle."
+    }],
     ["motor_constant_ki", {
       label: "Motor Constant KI", 
       description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
@@ -2085,14 +2076,19 @@ const control_parameters_input = Object.fromEntries(
       label: "Current Offset Maximum",
       description: "Maximum allowable current offset. Helps in filtering out systematic measurement errors."
     }],
-    ["emf_probing_angular_speed", {
-      label: "EMF Probing Angular Speed",
-      description: `EMF probing angular speed. We use this default speed to drive a current around the coils in order to
-      move the rotor to measure its position from the back EMF. Used when we don't have hall sensors and no angle fix.`
+    ["emf_min_angular_speed", {
+      label: "EMF Minimum Angular Speed",
+      description: `Minimum detectable angular speed for EMF detection. This value also determines
+        the maximum reliable angular speed variance. It also determines how fast we probe
+        for EMF when HFI is disabled and we must rely on spinning the motor to generate a
+        detectable EMF signal.`
     }],
-    ["min_emf_for_motor_constant", {
-      label: "Threshold for motor constant",
-      description: "Minimum EMF voltage magnitude required to compute the motor constant. Below this threshold it is too noisy because we divide by voltage."
+    ["emf_uncertainty_threshold", {
+      label: "EMF Uncertainty Threshold",
+      description: `When we detect incosistent EMF measurements (static EMF or high correlation with
+        the drive voltage) we need to re-enable calibration in order to isolate differing
+        resistance or inductance from the observed EMF measurements. We use a counter for
+        each inconsistent reading and this threshold determines when we must act.`
     }],
     ["vcc_undervoltage", {
       label: "VCC Undervoltage Threshold",
@@ -2114,7 +2110,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Power Draw KI",
       description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
     }],
-
     ["torque_control_ki", {
       label: "Torque Control KI",
       description: "Torque control gain. Controls how fast we adjust the PWM to achieve the desired torque."
@@ -2155,23 +2150,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Seek KD",
       description: "Seek via torque derivative gain. Dampening factor to lower torque when the error is decreasing quickly."
     }],
-    ["saliency_angle_influence_ki", {
-      label: "Saliency Angle Influence KI",
-      description: "Integral gain for the influence of the saliency angle. Controls how fast we adjust the PWM to compensate for the saliency angle."
-    }],
-    ["angle_probing_pwm", {
-      label: "Angle Probing PWM",
-      description: "PWM used during angle probing."
-    }],
-    ["angle_probing_angular_speed", {
-      label: "Angle Probing Angular Speed",
-      description: "Angular speed used during angle probing."
-    }],
-    ["angle_probing_sweep_duration", {
-      label: "Angle Probing Sweep Duration",
-      description: "Duration of the sweep during angle probing."
-    }],
-
   ].map(([key, {label, description}]) => {
 
     let parameter_input = Inputs.number([], {

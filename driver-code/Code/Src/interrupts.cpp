@@ -335,11 +335,11 @@ void ADC1_2_IRQHandler(void){
 
     const int32_t current_angle_error = instant_current_angle - predicted_current_angle;
 
-    const int32_t current_angle = predicted_current_angle + static_cast<int32_t>(current_angle_error * control_parameters.current_angle_ki);
+    const int32_t current_angle = predicted_current_angle + static_cast<int32_t>(current_angle_error * control_parameters.loop_fast_ki);
 
     const int32_t current_angle_offset = current_angle - predicted_angle;
 
-    const float current_magnitude = readout.current_magnitude + (instant_current_magnitude - readout.current_magnitude) * control_parameters.current_magnitude_ki;
+    const float current_magnitude = readout.current_magnitude + (instant_current_magnitude - readout.current_magnitude) * control_parameters.loop_fast_ki;
     
     // Using DQ0 coordinates
     // ---------------------
@@ -408,7 +408,7 @@ void ADC1_2_IRQHandler(void){
     const int32_t emf_axis_error = (emf_angle_error_plus_quarter & most_positive_angle) - quarter_circle;
 
 
-    const int32_t emf_axis_adjustment = emf_axis_error * control_parameters.emf_angle_ki;
+    const int32_t emf_axis_adjustment = emf_axis_error * control_parameters.loop_fast_ki;
 
     // Update the new emf_voltage_angle. If the emf changes sign, we will also immediately change sign.
     // But we slowly trace to the new angle by integrating the error over time using the control parameter.
@@ -420,11 +420,11 @@ void ADC1_2_IRQHandler(void){
     
     const float emf_voltage_error = (emf_angle_flip_adjustment ? 0 : measured_emf_voltage_magnitude) - readout.emf_voltage_magnitude;
 
-    const float emf_voltage_magnitude = readout.emf_voltage_magnitude + emf_voltage_error * control_parameters.emf_magnitude_ki;
+    const float emf_voltage_magnitude = readout.emf_voltage_magnitude + emf_voltage_error * control_parameters.loop_fast_ki;
     
     const float emf_magnitude_variance = (
         readout.emf_magnitude_variance +
-        (square(emf_voltage_error) - readout.emf_magnitude_variance) * control_parameters.emf_magnitude_ki * control_parameters.emf_magnitude_ki
+        (square(emf_voltage_error) - readout.emf_magnitude_variance) * control_parameters.loop_slow_ki
     );
 
     const float emf_magnitude_square = square(emf_voltage_magnitude);
@@ -442,32 +442,29 @@ void ADC1_2_IRQHandler(void){
     // Decay the emf speed to 0 if we don't have an emf detection.
     const float emf_voltage_angular_speed = (
         readout.emf_voltage_angular_speed + 
-        (emf_detected ? emf_speed_error : -readout.emf_voltage_angular_speed) * control_parameters.emf_angular_speed_ki
+        (emf_detected ? emf_speed_error : -readout.emf_voltage_angular_speed) * control_parameters.loop_fast_ki
     );
 
     const float instant_emf_speed_variance = square(emf_detected ? emf_speed_error : max_angular_speed);
 
-    // TODO: separate parameter for variances?
     const float emf_angular_speed_variance = (
         readout.emf_angular_speed_variance + 
-        (instant_emf_speed_variance - readout.emf_angular_speed_variance) * control_parameters.emf_angular_speed_ki * control_parameters.emf_angular_speed_ki
+        (instant_emf_speed_variance - readout.emf_angular_speed_variance) * control_parameters.loop_slow_ki
     );
 
 
     // Calculate speed and acceleration
     // --------------------------------
 
-    // TODO: make a constant for this one
-    const bool emf_speed_detected = emf_angular_speed_variance < square(2 * control_parameters.emf_probing_angular_speed);
+    const bool emf_speed_detected = emf_angular_speed_variance < square(2 * control_parameters.emf_min_angular_speed);
 
-    // TODO:... we should prolly adjust it based on angle adjustment directly.
     // Calculate the rotor speed as a low pass of the detected emf speed.
     const float angular_speed_error = readout.emf_voltage_angular_speed - readout.angular_speed;
     
     // Use the integral gain, but decay to 0 on loss of EMF certainty.
     const float angular_speed = (
         readout.angular_speed + 
-        (emf_speed_detected ? angular_speed_error : -readout.angular_speed) * control_parameters.rotor_angular_speed_ki
+        (emf_speed_detected ? angular_speed_error : -readout.angular_speed) * control_parameters.angle_from_emf_ki
     );
 
     // Declare that we have an EMF fix if our speed is greater than the measurment error.
@@ -478,7 +475,7 @@ void ADC1_2_IRQHandler(void){
     // ------------
     
     // Integrate the EMF position error only if we're detecting EMF.
-    const int32_t angle_adjustment = emf_detected * control_parameters.rotor_angle_ki * (emf_fix ? 
+    const int32_t angle_adjustment = emf_detected * control_parameters.angle_from_emf_ki * (emf_fix ? 
         // Aim to the axis corrected angle if we have certainty in the emf speed sign.
         (emf_voltage_angle + (emf_voltage_angular_speed > 0 ? quarter_circle : neg_quarter_circle) - predicted_angle) :
         // Otherwise adjust only towards the axis of the emf angle observer.
@@ -602,6 +599,8 @@ void ADC1_2_IRQHandler(void){
     
     readout.current_angle_offset = current_angle_offset;
     readout.current_magnitude = current_magnitude;
+
+
     readout.emf_voltage_angle = emf_voltage_angle;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.emf_magnitude_variance = emf_magnitude_variance;

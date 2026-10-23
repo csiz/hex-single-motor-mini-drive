@@ -363,29 +363,23 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .angle_zero = 0,
     // Option to flip the motor direction.
     .motor_direction = +1,
-    // TODO: rename this
-    .angle_fix_max_certainty = 4096,
-    // TODO: rename this
-    .angle_fix_threshold_count = 256,
     .angle_probing_interval = 0.010f * pwm_cycles_per_second,
+    .angle_probing_pwm = 64.0f,
+    .angle_probing_sweep_duration = 12,
+    .angle_probing_angular_speed = angle_base / 48,
+
     .u_pwm_floor = 14,
     .v_pwm_floor = 14,
     .w_pwm_floor = 12,
     .z_pwm_floor = 0,
     // Rotor control gains.
-    .rotor_angle_ki = std::pow(2, -4),
+    .angle_from_emf_ki = std::pow(2, -4),
     // Gain for the angular speed, it should be much lower than the angle gain to average out the noise.
-    .rotor_angular_speed_ki = std::pow(2, -4),
-    .current_angle_ki = std::pow(2, -2),
-    .current_magnitude_ki = std::pow(2, -2),
-    // Gain for the EMF angle, it should be much lower than the rotor angle gain to average out the noise.
-    .emf_angle_ki = std::pow(2, -3),
-    // Gain for the EMF magnitude.
-    .emf_magnitude_ki = std::pow(2, -3),
-    // Gain for the EMF angular speed, it should be much lower than the rotor angular speed gain to average out the noise.
-    .emf_angular_speed_ki = std::pow(2, -3),
+    .loop_fast_ki = std::pow(2, -3),
+    .loop_slow_ki = std::pow(2, -6),
+
     // Gain for angle adjustments from hall sensors.
-    .hall_angle_ki = std::pow(2, -4),
+    .angle_from_hall_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -8),
 
     .zero_current_ki = std::pow(2, -16),
@@ -393,16 +387,16 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .inductance_ki = std::pow(2, -22),
     .inductance_bias_ki = std::pow(2, -22),
     .saliency_angle_ki = std::pow(2, 32+4),
+    .angle_from_saliency_ki = std::pow(2, -4),
+
     .motor_constant_ki = std::pow(2, -32-6),
     .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),
     .voltage_measurement_variance = square(current_measurement_noise * current_to_voltage_units),
     .resistance_current_minimum = 4.f * current_measurement_noise,
     .inductance_excitation_minimum_square = square(0.020f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT),
     .current_offset_maximum = 16 * adc_to_current_units,
-    // TODO: rename to emf min detectable speed
-    .emf_probing_angular_speed = 25.f * angle_base / static_cast<float>(pwm_cycles_per_second),
-    // TODO: rename to emf min detectable magnitude
-    .min_emf_for_motor_constant = 0.030f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
+    .emf_min_angular_speed = 25.f * angle_base / static_cast<float>(pwm_cycles_per_second),
+    .emf_uncertainty_threshold = 256,
     .vcc_undervoltage = 8.0f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     .max_resistive_power = 8.0f,
     .max_power_draw = max_drive_power,
@@ -423,10 +417,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_kp = 1.0f,
     .seek_kd = 0.0f,
 
-    .saliency_angle_influence_ki = std::pow(2, -4),
-    .angle_probing_pwm = 64.0f,
-    .angle_probing_angular_speed = angle_base / 48,
-    .angle_probing_sweep_duration = 12,
+
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.
