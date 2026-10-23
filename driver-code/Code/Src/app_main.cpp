@@ -418,9 +418,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     return;
   }
 
-  // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
-  const bool emf_fix = square(readout.emf_voltage_angular_speed) > 4 * readout.emf_angular_speed_variance;
-  
+
 
   // Calculate the motor constant
   // ----------------------------
@@ -440,6 +438,9 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float predicted_emf_voltage = abs_angular_speed * calibration.motor_constant * emf_motor_constant_conversion;
 
+  // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
+  const bool emf_fix = square(readout.emf_voltage_angular_speed) > 4 * readout.emf_angular_speed_variance;
+  
   // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
   if (emf_fix and abs_angular_speed > control_parameters.emf_probing_angular_speed){
     
@@ -473,18 +474,21 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // resistance and inductance are miscalibrated and we detect a fake stationary EMF. In that case
   // we need to re-start optimizing resistance and inductance to exit the faulty state.
 
-  const bool emf_detected = square(readout.emf_voltage_magnitude) > 4 * readout.emf_magnitude_variance;
+  const bool emf_suspected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
+  
+  // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
+  const bool emf_good = square(readout.angular_speed) > readout.emf_angular_speed_variance;
   
   // We are waiting for an EMF fix if we if there's detectable magnitude. If we don't see movement (aka emf_fix)
   // then it might be a false positive due to miscalibration of the motor parameters.
-  const bool emf_fix_pending = emf_detected and not emf_fix;
+  const bool emf_pending = emf_suspected and not emf_good;
 
   // Count the steps when we detect EMF voltage but don't have an emf_fix; reset on either emf_fix or no EMF voltage.
-  emf_pending_counter = emf_fix_pending ? min(emf_pending_counter + 1, control_parameters.angle_fix_max_certainty) : 0;
+  emf_pending_counter = emf_pending ? min(emf_pending_counter + 1, control_parameters.angle_fix_max_certainty) : 0;
   
   // Skip the calibration steps below as long as we're detecting any emf voltage.
   // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
-  if (emf_detected and emf_pending_counter < control_parameters.angle_fix_max_certainty) {
+  if (emf_suspected and emf_pending_counter < control_parameters.angle_fix_max_certainty) {
     return;
   }
 

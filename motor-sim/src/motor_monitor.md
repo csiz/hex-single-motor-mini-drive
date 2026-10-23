@@ -971,7 +971,7 @@ const plot_speed = plot_lines({
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: "emf_voltage_angular_speed", label: "EMF Voltage Angular Speed", color: colors.voltage_angle},
-    {y: "emf_angular_speed_stdev", label: "EMF Angular Speed stdev", color: colors.angle_driven},
+    {y: (d) => Math.min(0.050, d.emf_angular_speed_stdev), label: "EMF Angular Speed stdev", color: colors.angle_driven},
   ],
   curve,
 });
@@ -1108,6 +1108,8 @@ const plot_dq0_voltages = plot_lines({
     {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude},
     {y: "emf_magnitude_stdev", label: "EMF Magnitude stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
     {y: "drive_voltage_magnitude", label: "Drive Voltage Magnitude", color: colors_categories[2]},
+    {y: "direct_drive_voltage", label: "Drive Voltage on Direct axis", color: colors.u},
+    {y: "quadrature_drive_voltage", label: "Drive Voltage on Quadrature axis", color: colors.v},
     {y: "web_direct_emf_voltage", label: "Voltage on Direct axis (computed online)", color: d3.color(colors.direct_current).brighter(1)},
     {y: "web_quadrature_emf_voltage", label: "Voltage on Quadrature (computed online)", color: d3.color(colors.quadrature_current).brighter(1)},
     {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
