@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.133.0";
+constexpr char const* VERSION_STRING = "0.134.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -115,7 +115,7 @@ static inline float read_float32(uint8_t const* buffer) {
 
 constexpr uint32_t VERSION_STRING_SIZE = 64;
 
-constexpr uint32_t HISTORY_SIZE = 180;
+constexpr uint32_t HISTORY_SIZE = 168;
 
 constexpr uint32_t MAX_MESSAGE_SIZE = 256;
 
@@ -218,6 +218,8 @@ struct Readout {
   int32_t predicted_angle;
   // Best estimate for the rotor magnetic angular speed.
   float angular_speed;
+  // Estimate of angular acceleration.
+  float acceleration;
   // Instantaneous VCC voltage readout (ADC value); from resistance divider.
   float vcc_voltage;
   // Angle of the EMF voltage vector.
@@ -237,12 +239,12 @@ struct Readout {
   int32_t current_angle_offset;
   // Magnitude of the current vector.
   float current_magnitude;
-  // Angle of the drive voltage vector; exponentially averaged exactly like emf voltage angle.
-  int32_t drive_voltage_angle;
+  // Angle of the drive voltage vector relative to the rotor predicted_angle; exponentially averaged exactly like emf voltage angle.
+  int32_t drive_voltage_angle_offset;
   // Magnitude of the drive voltage vector; exponentially averaged exactly like emf voltage magnitude.
   float drive_voltage_magnitude;
-  // Angular speed of the drive voltage vector; exponentially averaged exactly like emf voltage angular speed.
-  float drive_voltage_angular_speed;
+  // Angular speed of the drive voltage vector offset; exponentially averaged exactly like emf voltage angular speed.
+  float drive_voltage_offset_speed;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
   // Long duration average of the total power; used to limit the maximum power draw.
@@ -283,6 +285,8 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.angular_speed);;
   offset += 4;
+  write_float32(buffer + offset, value.acceleration);;
+  offset += 4;
   write_float32(buffer + offset, value.vcc_voltage);;
   offset += 4;
   write_int32(buffer + offset, value.emf_voltage_angle);;
@@ -299,11 +303,11 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
   offset += 4;
-  write_int32(buffer + offset, value.drive_voltage_angle);;
+  write_int32(buffer + offset, value.drive_voltage_angle_offset);;
   offset += 4;
   write_float32(buffer + offset, value.drive_voltage_magnitude);;
   offset += 4;
-  write_float32(buffer + offset, value.drive_voltage_angular_speed);;
+  write_float32(buffer + offset, value.drive_voltage_offset_speed);;
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
@@ -347,6 +351,8 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.angular_speed = read_float32(buffer + offset);
   offset += 4;
+  result.acceleration = read_float32(buffer + offset);
+  offset += 4;
   result.vcc_voltage = read_float32(buffer + offset);
   offset += 4;
   result.emf_voltage_angle = read_int32(buffer + offset);
@@ -363,11 +369,11 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
   offset += 4;
-  result.drive_voltage_angle = read_int32(buffer + offset);
+  result.drive_voltage_angle_offset = read_int32(buffer + offset);
   offset += 4;
   result.drive_voltage_magnitude = read_float32(buffer + offset);
   offset += 4;
-  result.drive_voltage_angular_speed = read_float32(buffer + offset);
+  result.drive_voltage_offset_speed = read_float32(buffer + offset);
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
@@ -1106,7 +1112,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 110;
+    case MessageCode::READOUT: return 114;
     case MessageCode::INFO: return 42;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
@@ -1152,9 +1158,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 108) return 0;
+      if (max_size < 2 + 112) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 110;
+      return 114;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
@@ -1292,7 +1298,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 108) return false;
+      if (size != 2 + 112) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }

@@ -97,9 +97,6 @@ export function parse_readout(bare_readout, previous_readout) {
 
 
   const [web_direct_drive_voltage, web_quadrature_drive_voltage] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
-  const drive_voltage_angle = Math.atan2(web_quadrature_drive_voltage, web_direct_drive_voltage);
-  const drive_voltage_magnitude = Math.sqrt(web_direct_drive_voltage * web_direct_drive_voltage + web_quadrature_drive_voltage * web_quadrature_drive_voltage);
-  const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
 
   const [web_direct_current, web_quadrature_current] = dq0_transform(u_current, v_current, w_current, 0);
   
@@ -143,11 +140,15 @@ export function parse_readout(bare_readout, previous_readout) {
   const web_resistive_power = (square(u_current) * resistance + square(v_current) * resistance + square(w_current) * resistance);
   const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
 
-  const steady_state_drive_current = drive_voltage_magnitude / resistance;
 
   const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
   const current_angle = normalize_radians(predicted_angle + current_angle_offset);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
+  const drive_voltage_magnitude = bare_readout.drive_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
+  const drive_voltage_angle_offset = angle_units_to_radians(bare_readout.drive_voltage_angle_offset);
+  const drive_voltage_angle = normalize_radians(drive_voltage_angle_offset + predicted_angle);
+  const drive_voltage_offset_speed = speed_units_to_rotations_per_millisecond(bare_readout.drive_voltage_offset_speed);
+
   const live_max_pwm = bare_readout.live_max_pwm;
 
 
@@ -156,6 +157,8 @@ export function parse_readout(bare_readout, previous_readout) {
 
   const rotations = bare_readout.rotations;
   
+  const steady_state_drive_current = drive_voltage_magnitude / resistance;
+
   const battery_current = total_power_average / vcc_voltage;
 
 
@@ -220,6 +223,7 @@ export function parse_readout(bare_readout, previous_readout) {
     web_quadrature_drive_voltage,
     drive_voltage_angle, 
     drive_voltage_angle_offset,
+    drive_voltage_offset_speed,
     drive_voltage_magnitude,
     steady_state_drive_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,

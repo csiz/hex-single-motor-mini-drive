@@ -291,12 +291,6 @@ void ADC1_2_IRQHandler(void){
     // Store the active motor outputs for the next cycle.
     previous_motor_outputs = motor_outputs;
 
-
-    // Predict the position; keeping track of fractional angles at the same resolution as
-    // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
-    // the rotor is exactly the angular speed.
-    const int32_t predicted_angle = readout.angle + static_cast<int32_t>(readout.angular_speed);
-
     // Switching to DQ0 Frame
     // ----------------------
     // 
@@ -306,17 +300,54 @@ void ADC1_2_IRQHandler(void){
     // immediately transform to the dq0 frame at the fixed angle 0. We can always
     // rotate the frame afterwards using a 2D rotation matrix with just 4 elements.
 
+
+    // And transform the drive voltages too.
+    const auto [direct_drive_voltage, quadrature_drive_voltage] = dq0_transform(drive_voltages);
+
+    // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
+    set_cordic(direct_drive_voltage, quadrature_drive_voltage);
+
+    // Intermingle other calculations while the cordic calculates.
+
+    // Predict the position; keeping track of fractional angles at the same resolution as
+    // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
+    // the rotor is exactly the angular speed.
+    const int32_t predicted_angle = readout.angle + static_cast<int32_t>(readout.angular_speed);
+
     // Transform the measured currents into the DQ0 frame at the fixed angle 0.
     const auto [direct_current, quadrature_current] = dq0_transform(currents);
+
+    // Calculate the angle of our drive voltage, because of the averaging in the abc frame we must recalculate this
+    // angle; instead of what we store in 
+    const auto [instant_drive_voltage_angle, instant_drive_voltage_magnitude] = get_cordic();
 
     // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
     set_cordic(direct_current, quadrature_current);
 
+    const float drive_voltage_magnitude = (
+        readout.drive_voltage_magnitude + 
+        (instant_drive_voltage_magnitude - readout.drive_voltage_magnitude) * control_parameters.loop_fast_ki
+    );
+    
+    const int32_t predicted_drive_voltage_angle = predicted_angle + readout.drive_voltage_angle_offset;
+    
+    // Reset to the rotor angle if there's no driven voltage.
+    const int32_t drive_voltage_angle_offset = not instant_drive_voltage_magnitude ? 0 : (
+        readout.drive_voltage_angle_offset + static_cast<int32_t>(
+            (instant_drive_voltage_angle - predicted_drive_voltage_angle) * control_parameters.loop_fast_ki
+        )
+    );
+
+    // Finally the drive voltage offset speed, calculated as the speed of the offset to the rotor angle.
+    const float instant_drive_offset_speed = drive_voltage_angle_offset - readout.drive_voltage_angle_offset;
+
+    const float drive_voltage_offset_speed = (
+        readout.drive_voltage_offset_speed + 
+        (instant_drive_offset_speed - readout.drive_voltage_offset_speed) * control_parameters.loop_fast_ki
+    );
+
     // Get the common mode current. It should be 0 in theory, but of course it is not in practice...
     const float zero_current = (std::get<0>(currents) + std::get<1>(currents) + std::get<2>(currents)) * one_third;
-
-    // And transform the drive voltages too.
-    const auto [direct_drive_voltage, quadrature_drive_voltage] = dq0_transform(drive_voltages);
 
 
     // Current angle calculation
@@ -502,7 +533,6 @@ void ADC1_2_IRQHandler(void){
     const int32_t rotations = readout.rotations + rotations_increment;
   
 
-
     // Calculate the power use
     // -----------------------
 
@@ -599,7 +629,9 @@ void ADC1_2_IRQHandler(void){
     
     readout.current_angle_offset = current_angle_offset;
     readout.current_magnitude = current_magnitude;
-
+    readout.drive_voltage_angle_offset = drive_voltage_angle_offset;
+    readout.drive_voltage_offset_speed = drive_voltage_offset_speed;
+    readout.drive_voltage_magnitude = drive_voltage_magnitude;
 
     readout.emf_voltage_angle = emf_voltage_angle;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
