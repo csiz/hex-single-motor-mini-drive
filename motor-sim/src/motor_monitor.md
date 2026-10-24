@@ -970,6 +970,7 @@ const plot_speed = plot_lines({
     {y: "emf_voltage_angular_speed", label: "EMF Voltage Angular Speed", color: colors.voltage_angle},
     {y: (d) => Math.min(0.050, d.emf_angular_speed_stdev), label: "EMF Angular Speed stdev", color: colors.angle_driven},
     {y: "drive_voltage_offset_speed", label: "Drive Voltage Offset Speed", color: colors_categories[2]},
+    {y: "drive_and_emf_correlation", label: "Drive and EMF Correlation", color: d3.color(colors_categories[2]).darker(1)},
   ],
   curve,
 });

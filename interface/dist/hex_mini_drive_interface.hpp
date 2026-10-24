@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.134.0";
+constexpr char const* VERSION_STRING = "0.137.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -426,6 +426,8 @@ struct Info {
   float inductance_bias_multiplier;
   // Multiplier for the motor constant, used to adjust the effective motor constant in calculations.
   float motor_constant_multiplier;
+  // Correlation between the drive and EMF measurements, indicating the confidence in the drive and EMF estimation.
+  float drive_and_emf_correlation;
 };
 
 static inline void write_Info(uint8_t * buffer, Info const& value) {
@@ -449,6 +451,8 @@ static inline void write_Info(uint8_t * buffer, Info const& value) {
   write_float32(buffer + offset, value.inductance_bias_multiplier);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.drive_and_emf_correlation);;
   offset += 4;
 }
 static inline Info read_Info(uint8_t const* buffer) {
@@ -475,6 +479,8 @@ static inline Info read_Info(uint8_t const* buffer) {
   result.inductance_bias_multiplier = read_float32(buffer + offset);
   offset += 4;
   result.motor_constant_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.drive_and_emf_correlation = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1113,7 +1119,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
     case MessageCode::READOUT: return 114;
-    case MessageCode::INFO: return 42;
+    case MessageCode::INFO: return 46;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
@@ -1164,9 +1170,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
-      if (max_size < 2 + 40) return 0;
+      if (max_size < 2 + 44) return 0;
       write_Info(buffer + 2, std::get<Info>(message.message_data));
-      return 42;
+      return 46;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
@@ -1303,7 +1309,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::INFO: {
-      if (size != 2 + 40) return false;
+      if (size != 2 + 44) return false;
       message.message_data = read_Info(buffer + 2);
       return true;
     }

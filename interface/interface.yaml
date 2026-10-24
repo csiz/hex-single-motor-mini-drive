@@ -373,7 +373,9 @@ definitions:
       motor_constant_multiplier:
         type: float32
         doc: Multiplier for the motor constant, used to adjust the effective motor constant in calculations.
-
+      drive_and_emf_correlation:
+        type: float32
+        doc: Correlation between the drive and EMF measurements, indicating the confidence in the drive and EMF estimation.
 
   Calibration:
     doc: Estimate resistance and inductance values for the motor coils; updated live.
