@@ -329,21 +329,21 @@ void ADC1_2_IRQHandler(void){
         (instant_drive_voltage_magnitude - readout.drive_voltage_magnitude) * control_parameters.loop_fast_ki
     );
     
-    const int32_t predicted_drive_voltage_angle = predicted_angle + readout.drive_voltage_angle_offset;
+    const int32_t predicted_drive_voltage_angle = readout.drive_voltage_angle + static_cast<int32_t>(readout.angular_speed);
     
     // Reset to the rotor angle if there's no driven voltage.
-    const int32_t drive_voltage_angle_offset = not instant_drive_voltage_magnitude ? 0 : (
-        readout.drive_voltage_angle_offset + static_cast<int32_t>(
+    const int32_t drive_voltage_angle = not instant_drive_voltage_magnitude ? 0 : (
+        predicted_drive_voltage_angle + static_cast<int32_t>(
             (instant_drive_voltage_angle - predicted_drive_voltage_angle) * control_parameters.loop_fast_ki
         )
     );
 
     // Finally the drive voltage offset speed, calculated as the speed of the offset to the rotor angle.
-    const float instant_drive_offset_speed = drive_voltage_angle_offset - readout.drive_voltage_angle_offset;
+    const float instant_drive_voltage_speed = drive_voltage_angle - readout.drive_voltage_angle;
 
-    const float drive_voltage_offset_speed = (
-        readout.drive_voltage_offset_speed + 
-        (instant_drive_offset_speed - readout.drive_voltage_offset_speed) * control_parameters.loop_fast_ki
+    const float drive_voltage_angular_speed = (
+        readout.drive_voltage_angular_speed + 
+        (instant_drive_voltage_speed - readout.drive_voltage_angular_speed) * control_parameters.loop_fast_ki
     );
 
     // Get the common mode current. It should be 0 in theory, but of course it is not in practice...
@@ -629,8 +629,8 @@ void ADC1_2_IRQHandler(void){
     
     readout.current_angle_offset = current_angle_offset;
     readout.current_magnitude = current_magnitude;
-    readout.drive_voltage_angle_offset = drive_voltage_angle_offset;
-    readout.drive_voltage_offset_speed = drive_voltage_offset_speed;
+    readout.drive_voltage_angle = drive_voltage_angle;
+    readout.drive_voltage_angular_speed = drive_voltage_angular_speed;
     readout.drive_voltage_magnitude = drive_voltage_magnitude;
 
     readout.emf_voltage_angle = emf_voltage_angle;

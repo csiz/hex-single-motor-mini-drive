@@ -145,9 +145,9 @@ export function parse_readout(bare_readout, previous_readout) {
   const current_angle = normalize_radians(predicted_angle + current_angle_offset);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
   const drive_voltage_magnitude = bare_readout.drive_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
-  const drive_voltage_angle_offset = angle_units_to_radians(bare_readout.drive_voltage_angle_offset);
-  const drive_voltage_angle = normalize_radians(drive_voltage_angle_offset + predicted_angle);
-  const drive_voltage_offset_speed = speed_units_to_rotations_per_millisecond(bare_readout.drive_voltage_offset_speed);
+  const drive_voltage_angle = angle_units_to_radians(bare_readout.drive_voltage_angle);
+  const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
+  const drive_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.drive_voltage_angular_speed);
 
   const live_max_pwm = bare_readout.live_max_pwm;
 
@@ -223,7 +223,7 @@ export function parse_readout(bare_readout, previous_readout) {
     web_quadrature_drive_voltage,
     drive_voltage_angle, 
     drive_voltage_angle_offset,
-    drive_voltage_offset_speed,
+    drive_voltage_angular_speed,
     drive_voltage_magnitude,
     steady_state_drive_current,
     u_emf_voltage, v_emf_voltage, w_emf_voltage,

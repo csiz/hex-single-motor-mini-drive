@@ -365,7 +365,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .motor_direction = +1,
     .angle_probing_interval = 0.010f * pwm_cycles_per_second,
     .angle_probing_pwm = 64.0f,
-    .angle_probing_sweep_duration = 12,
+    .angle_probing_sweep_duration = 48,
     .angle_probing_angular_speed = angle_base / 48,
 
     .u_pwm_floor = 14,

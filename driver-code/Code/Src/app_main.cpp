@@ -437,27 +437,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const bool idle_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
 
-  // Correlation check
-  // -----------------
-
-  const float abs_drive_speed = faster_abs(readout.drive_voltage_offset_speed);
-  const float abs_emf_speed = faster_abs(readout.emf_voltage_angular_speed);
-
-  // Track correlation statistics between driving offset speed and the emf speed.
-  avg_drive_speed = ewma(avg_drive_speed, abs_drive_speed, correlation_ki);
-  avg_emf_speed = ewma(avg_emf_speed, abs_emf_speed, correlation_ki);
-  avg_drive_speed_sq = ewma(avg_drive_speed_sq, square(abs_drive_speed), correlation_ki);
-  avg_emf_speed_sq = ewma(avg_emf_speed_sq, square(abs_emf_speed), correlation_ki);
-  avg_drive_speed_dot_emf_speed = ewma(avg_drive_speed_dot_emf_speed, abs_drive_speed * abs_emf_speed, correlation_ki);
-
-  const float drive_speed_variance = avg_drive_speed_sq - square(avg_drive_speed);
-  const float emf_speed_variance = avg_emf_speed_sq - square(avg_emf_speed);
-  const float drive_and_emf_covariance = avg_drive_speed_dot_emf_speed - avg_drive_speed * avg_emf_speed;
-
-  const float drive_and_emf_variance_sq = drive_speed_variance * emf_speed_variance;
-
-  info.drive_and_emf_correlation = (idle_drive or (drive_and_emf_variance_sq <= 0.1f)) ? 0 : drive_and_emf_covariance / std::sqrt(drive_and_emf_variance_sq);
-
 
   // Calculate the motor constant
   // ----------------------------
