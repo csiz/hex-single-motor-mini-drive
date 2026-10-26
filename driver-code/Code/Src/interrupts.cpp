@@ -386,10 +386,9 @@ void ADC1_2_IRQHandler(void){
     const float direct_diff = direct_current_diff * current_diff_to_voltage_units;
     const float quadrature_diff = quadrature_current_diff * current_diff_to_voltage_units;
 
-    // The saliency effect is due to the iron between magnets so it occurs twice per 
-    // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
-    // For simplicity's sake we keep the saliency_angle_offset as already doubled.
-    const int32_t saliency_angle = 2*predicted_angle + info.saliency_angle_offset;
+    // Ignore the saliency_angle_offset in the tight loop and assume it is 0. The saliency
+    // effect depends on the rotor position!
+    const int32_t saliency_angle = 2*predicted_angle;
 
     const float cos_saliency = get_cos(saliency_angle);
     const float sin_saliency = get_sin(saliency_angle);
@@ -408,6 +407,7 @@ void ADC1_2_IRQHandler(void){
 
     const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
     const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
+
 
     const float measured_direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
     const float measured_quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;
@@ -436,9 +436,7 @@ void ADC1_2_IRQHandler(void){
     // positive angle and then we center it on 0 by subtracting a quarter circle.
     const int32_t emf_axis_error = (emf_angle_error_plus_quarter & most_positive_angle) - quarter_circle;
 
-    const bool valid_error = (emf_axis_error < eight_circle and emf_axis_error > neg_eight_circle);
-
-    const int32_t emf_axis_adjustment = valid_error * emf_axis_error * control_parameters.loop_fast_ki;
+    const int32_t emf_axis_adjustment = emf_axis_error * control_parameters.loop_fast_ki;
 
     // Update the new emf_voltage_angle. If the emf changes sign, we will also immediately change sign.
     // But we slowly trace to the new angle by integrating the error over time using the control parameter.
@@ -452,17 +450,21 @@ void ADC1_2_IRQHandler(void){
 
     const float emf_voltage_magnitude = readout.emf_voltage_magnitude + emf_voltage_error * control_parameters.loop_fast_ki;
     
+    const float instant_emf_voltage_variance = square(emf_voltage_error);
+
     const float emf_magnitude_variance = (
         readout.emf_magnitude_variance +
-        (square(emf_voltage_error) - readout.emf_magnitude_variance) * control_parameters.loop_slow_ki
+        (instant_emf_voltage_variance - readout.emf_magnitude_variance) * control_parameters.loop_slow_ki
     );
 
+    const float worst_emf_variance = max(instant_emf_voltage_variance, emf_magnitude_variance);
+    
     const float emf_magnitude_square = square(emf_voltage_magnitude);
 
     // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
     // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
     // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
-    const bool emf_detected = emf_magnitude_square > 4 * emf_magnitude_variance;
+    const bool emf_detected = emf_magnitude_square > worst_emf_variance;
     
     // Distance travelled by the emf axis on this timestep, directly converted to angular speed given the unit timestep.
     const float instant_emf_speed = emf_axis_adjustment + readout.angular_speed;
@@ -471,7 +473,7 @@ void ADC1_2_IRQHandler(void){
 
     const float emf_speed_error_sq = square(emf_speed_error);
 
-    const float emf_speed_threshold_sq = square(4 * control_parameters.emf_min_angular_speed);
+    const float emf_speed_threshold_sq = square(2 * control_parameters.emf_min_angular_speed);
 
     const bool emf_speed_valid = (emf_speed_error_sq < emf_speed_threshold_sq) and emf_detected;
 
@@ -488,34 +490,35 @@ void ADC1_2_IRQHandler(void){
         (instant_emf_speed_variance - readout.emf_angular_speed_variance) * control_parameters.loop_slow_ki
     );
 
+    const float worst_emf_speed_variance = max(instant_emf_speed_variance, emf_angular_speed_variance);
 
     // Calculate speed and acceleration
     // --------------------------------
 
-    const bool emf_speed_detected = emf_speed_valid; //emf_angular_speed_variance < max_angular_speed_variance;
+    const bool emf_speed_fix = worst_emf_speed_variance < 0.5f * max_angular_speed_sq;
 
     // Calculate the rotor speed as a low pass of the detected emf speed.
-    const float angular_speed_error = readout.emf_voltage_angular_speed - readout.angular_speed;
+    const float angular_speed_error = emf_voltage_angular_speed - readout.angular_speed;
     
     // Use the integral gain, but decay to 0 on loss of EMF certainty.
     const float angular_speed = (
         readout.angular_speed + 
-        (emf_speed_detected ? angular_speed_error : -readout.angular_speed) * control_parameters.angle_from_emf_ki
+        (emf_speed_fix ? angular_speed_error : -readout.angular_speed) * control_parameters.angle_from_emf_ki
     );
 
     // Declare that we have an EMF fix if our speed is greater than the measurment error.
-    const bool emf_fix = square(angular_speed) > 4 * emf_angular_speed_variance;
+    const bool emf_fix = square(angular_speed) > 16 * worst_emf_speed_variance;
 
 
     // Angle update
     // ------------
     
     // Integrate the EMF position error only if we're detecting EMF.
-    const int32_t angle_adjustment = emf_speed_detected * control_parameters.angle_from_emf_ki * (emf_fix ? 
+    const int32_t angle_adjustment = emf_speed_valid * control_parameters.angle_from_emf_ki * (emf_fix ? 
         // Aim to the axis corrected angle if we have certainty in the emf speed sign.
         (emf_voltage_angle + (emf_voltage_angular_speed > 0 ? quarter_circle : neg_quarter_circle) - predicted_angle) :
-        // Otherwise adjust only towards the axis of the emf angle observer.
-        (((emf_voltage_angle - predicted_angle) & most_positive_angle) - quarter_circle)
+        // Otherwise adjust only towards the axis of the emf angle observer, with an extra downscaling.
+        (((emf_voltage_angle - predicted_angle) & most_positive_angle) - quarter_circle) * control_parameters.angle_from_emf_ki
     );
     
     // Calculate the new angle based on all the angle adjustments.

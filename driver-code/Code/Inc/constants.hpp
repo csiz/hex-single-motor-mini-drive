@@ -389,7 +389,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 
     // Gain for angle adjustments from hall sensors.
     .angle_from_hall_ki = std::pow(2, -4),
-    .lead_angle_control_ki = std::pow(2, -8),
+    .lead_angle_control_ki = std::pow(2, -10),
 
     .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -16),
@@ -412,7 +412,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .resistive_power_ki = std::pow(2, -12),
     .power_draw_ki = std::pow(2, -10),
 
-    .torque_control_ki = 10.0f * amps_per_current_units,
+    .torque_control_ki = 1.0f * amps_per_current_units,
     .torque_control_kff = 0.1f,
 
     .battery_power_control_ki = 4.0f,
