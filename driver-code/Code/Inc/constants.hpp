@@ -52,6 +52,9 @@ constexpr float max_angular_speed = angle_base * max_frequency / static_cast<flo
 // Inverse of the maximum angular speed so we can convert to floating point values without doing a division.
 constexpr float max_angular_speed_inverse = 1.f / max_angular_speed;
 
+// Square of the maximum angular speed.
+constexpr float max_angular_speed_sq = square(max_angular_speed);
+
 
 // Unit definitions
 // ----------------
@@ -285,6 +288,12 @@ constexpr int32_t quarter_circle = angle_base / 4;
 
 // Negative quarter of a circle (-pi/4) aka -90 degrees.
 constexpr int32_t neg_quarter_circle = -quarter_circle;
+
+// 1/8 of a circle (pi/8) aka 45 degrees.
+constexpr int32_t eight_circle = angle_base / 8;
+
+// Negative 1/8 of a circle (-pi/8) aka -45 degrees.
+constexpr int32_t neg_eight_circle = -eight_circle;
 
 // Conversion factor between radians and angle units.
 constexpr float radians_to_angle_units = angle_base / (2*3.14159265f);
