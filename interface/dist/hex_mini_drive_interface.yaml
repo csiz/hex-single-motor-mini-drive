@@ -288,6 +288,22 @@ definitions:
         type: float32
         doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
 
+      emf_speed_constant:
+        type: float32
+        doc: |
+          Instantaneous emf speed constant; ratio of EMF voltage magnitude to emf angular speed; 
+          gives an estimate of the motor's back-EMF constant in the interrupt control loop.
+          We use this faster estimate to deduce the real rotor angular speed because it looks
+          like it depends much more reliably on the EMF magnitude rather than the EMF angle
+          estimation. Because the EMF response is quite noisy around motor parameter shifts
+          the EMF angle is often distorted by a noise of comparable magnitude to the EMF signal.
+          When differentiated, this noise often oscillates to negative values, while the emf
+          magnitude changes much more slowly despite being optimized with the same learning rate.
+
+      emf_speed_constant_variance:
+        type: float32
+        doc: Variance of the instantaneous emf speed constant; used to determine if the estimate is reliable.
+
       current_angle_offset:
         type: int32
         doc: Angle of the current vector relative to the rotor angle.
@@ -295,18 +311,6 @@ definitions:
       current_magnitude:
         type: float32
         doc: Magnitude of the current vector.
-
-      drive_voltage_angle:
-        type: int32
-        doc: Angle of the drive voltage vector; exponentially averaged exactly like emf voltage angle.
-      
-      drive_voltage_magnitude:
-        type: float32
-        doc: Magnitude of the drive voltage vector; exponentially averaged exactly like emf voltage magnitude.
-      
-      drive_voltage_angular_speed:
-        type: float32
-        doc: Angular speed of the drive voltage vector; exponentially averaged exactly like emf voltage angular speed.
 
       live_max_pwm:
         type: float32
@@ -701,3 +705,7 @@ definitions:
       seek_kd:
         type: float32
         doc: Seek derivative gain for the PID control.
+
+      emf_speed_constant_ki:
+        type: float32
+        doc: EMF speed constant integral gain.

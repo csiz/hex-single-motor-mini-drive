@@ -185,6 +185,8 @@ constexpr float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UN
 // Our dq0 transformation is the power variant form which needs to be corrected by a factor of 3/2.
 constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 3.0 / 2.0;
 
+// Maximum measurable voltage by the ADC given the voltage divider and reference voltage.
+constexpr float max_measured_voltage = adc_max_value * voltage_conversion;
 
 // Timing and PWM constants
 // ------------------------
@@ -389,7 +391,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 
     // Gain for angle adjustments from hall sensors.
     .angle_from_hall_ki = std::pow(2, -4),
-    .lead_angle_control_ki = std::pow(2, -10),
+    .lead_angle_control_ki = std::pow(2, -8),
 
     .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -16),
@@ -412,7 +414,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .resistive_power_ki = std::pow(2, -12),
     .power_draw_ki = std::pow(2, -10),
 
-    .torque_control_ki = 1.0f * amps_per_current_units,
+    .torque_control_ki = 2.0f * amps_per_current_units,
     .torque_control_kff = 0.1f,
 
     .battery_power_control_ki = 4.0f,
@@ -426,7 +428,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_kp = 1.0f,
     .seek_kd = 0.0f,
 
-
+    .emf_speed_constant_ki = std::pow(2, -8),
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.
@@ -463,6 +465,18 @@ const float current_diff_to_voltage_units = pwm_cycles_per_second *
 // Conversion factor from speed units to voltage units prefix for motor constant.
 const float emf_motor_constant_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * speed_units_to_radians_per_second;
 
+const float emf_speed_constant_conversion = radians_per_second_to_speed_units / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+
+
+const float emf_speed_constant_conversion_inverse = 1.f / emf_speed_constant_conversion;
+
+const float max_speed_constant = 4 * max_angular_speed / (emf_speed_constant_conversion * max_measured_voltage);
+
+const float max_speed_constant_sq = square(max_speed_constant);
+
+const float min_speed_constant = angle_base * 1.f / pwm_cycles_per_second / (emf_speed_constant_conversion * max_measured_voltage);
+
+const float min_speed_constant_sq = square(min_speed_constant);
 
 // Waveform and Trigonometric tables
 // ---------------------------------

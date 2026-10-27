@@ -969,7 +969,6 @@ const plot_speed = plot_lines({
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: "emf_voltage_angular_speed", label: "EMF Voltage Angular Speed", color: colors.voltage_angle},
     {y: (d) => Math.min(0.100, d.emf_angular_speed_stdev), label: "EMF Angular Speed stdev", color: colors.angle_driven},
-    {y: "drive_voltage_angular_speed", label: "Drive Voltage Angular Speed", color: colors_categories[2]},
   ],
   curve,
 });
@@ -980,11 +979,13 @@ const plot_measured_voltage = plot_lines({
   description: "Measured voltage values for VCC.",
   width: 1200, height: 150,
   x: "time",
-  y_domain: [0, 24],
+  // y_domain: [0, 24],
   x_label: "Time (ms)",
   y_label: "Voltage (V)",
   channels: [
     {y: "vcc_voltage", label: "VCC Voltage", color: colors.v},
+    {y: "emf_speed_constant", label: "EMF Speed Constant", color: d3.color(colors.voltage_angle).brighter(1)},
+    {y: "emf_speed_constant_stdev", label: "EMF Speed Constant stdev", color: d3.color(colors.voltage_angle).darker(1)},
   ],
   curve,
 });
@@ -2148,6 +2149,10 @@ const control_parameters_input = Object.fromEntries(
       label: "Seek KD",
       description: "Seek via torque derivative gain. Dampening factor to lower torque when the error is decreasing quickly."
     }],
+    ["emf_speed_constant_ki", {
+      label: "EMF Speed Constant KI",
+      description: "EMF speed constant integral gain. Controls how fast we adjust for errors in the back EMF estimation."
+    }]
   ].map(([key, {label, description}]) => {
 
     let parameter_input = Inputs.number([], {

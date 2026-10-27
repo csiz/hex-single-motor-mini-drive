@@ -301,8 +301,8 @@ export class MotorController {
     if(!calibration) return;
 
     this.send_command({
-      message_code: MessageCode.SET_CALIBRATION,
       ...make_calibration(calibration),
+      message_code: MessageCode.SET_CALIBRATION,
     });
   }
 
@@ -318,8 +318,8 @@ export class MotorController {
     if(!control_parameters) return;
 
     this.send_command({
-      message_code: MessageCode.SET_CONTROL_PARAMETERS,
       ...make_control_parameters(control_parameters),
+      message_code: MessageCode.SET_CONTROL_PARAMETERS,
     });
   }
 

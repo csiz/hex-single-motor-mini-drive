@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.139.0";
+constexpr char const* VERSION_STRING = "0.142.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -235,16 +235,21 @@ struct Readout {
   float emf_voltage_angular_speed;
   // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
   float emf_angular_speed_variance;
+  // Instantaneous emf speed constant; ratio of EMF voltage magnitude to emf angular speed; 
+  // gives an estimate of the motor's back-EMF constant in the interrupt control loop.
+  // We use this faster estimate to deduce the real rotor angular speed because it looks
+  // like it depends much more reliably on the EMF magnitude rather than the EMF angle
+  // estimation. Because the EMF response is quite noisy around motor parameter shifts
+  // the EMF angle is often distorted by a noise of comparable magnitude to the EMF signal.
+  // When differentiated, this noise often oscillates to negative values, while the emf
+  // magnitude changes much more slowly despite being optimized with the same learning rate.
+  float emf_speed_constant;
+  // Variance of the instantaneous emf speed constant; used to determine if the estimate is reliable.
+  float emf_speed_constant_variance;
   // Angle of the current vector relative to the rotor angle.
   int32_t current_angle_offset;
   // Magnitude of the current vector.
   float current_magnitude;
-  // Angle of the drive voltage vector; exponentially averaged exactly like emf voltage angle.
-  int32_t drive_voltage_angle;
-  // Magnitude of the drive voltage vector; exponentially averaged exactly like emf voltage magnitude.
-  float drive_voltage_magnitude;
-  // Angular speed of the drive voltage vector; exponentially averaged exactly like emf voltage angular speed.
-  float drive_voltage_angular_speed;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
   // Long duration average of the total power; used to limit the maximum power draw.
@@ -299,15 +304,13 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.emf_angular_speed_variance);;
   offset += 4;
+  write_float32(buffer + offset, value.emf_speed_constant);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_speed_constant_variance);;
+  offset += 4;
   write_int32(buffer + offset, value.current_angle_offset);;
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
-  offset += 4;
-  write_int32(buffer + offset, value.drive_voltage_angle);;
-  offset += 4;
-  write_float32(buffer + offset, value.drive_voltage_magnitude);;
-  offset += 4;
-  write_float32(buffer + offset, value.drive_voltage_angular_speed);;
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
@@ -365,15 +368,13 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.emf_angular_speed_variance = read_float32(buffer + offset);
   offset += 4;
+  result.emf_speed_constant = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_speed_constant_variance = read_float32(buffer + offset);
+  offset += 4;
   result.current_angle_offset = read_int32(buffer + offset);
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
-  offset += 4;
-  result.drive_voltage_angle = read_int32(buffer + offset);
-  offset += 4;
-  result.drive_voltage_magnitude = read_float32(buffer + offset);
-  offset += 4;
-  result.drive_voltage_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
@@ -867,6 +868,8 @@ struct ControlParameters {
   float seek_kp;
   // Seek derivative gain for the PID control.
   float seek_kd;
+  // EMF speed constant integral gain.
+  float emf_speed_constant_ki;
 };
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
@@ -960,6 +963,8 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.seek_kp);;
   offset += 4;
   write_float32(buffer + offset, value.seek_kd);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_speed_constant_ki);;
   offset += 4;
 }
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
@@ -1057,6 +1062,8 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.seek_kd = read_float32(buffer + offset);
   offset += 4;
+  result.emf_speed_constant_ki = read_float32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Message Codes
@@ -1112,7 +1119,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 114;
+    case MessageCode::READOUT: return 110;
     case MessageCode::INFO: return 42;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
@@ -1127,8 +1134,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 34;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 170;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 170;
+    case MessageCode::CONTROL_PARAMETERS: return 174;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 174;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
@@ -1158,9 +1165,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 112) return 0;
+      if (max_size < 2 + 108) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 114;
+      return 110;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
@@ -1238,15 +1245,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 168) return 0;
+      if (max_size < 2 + 172) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 170;
+      return 174;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 168) return 0;
+      if (max_size < 2 + 172) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 170;
+      return 174;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1298,7 +1305,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 112) return false;
+      if (size != 2 + 108) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1373,12 +1380,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 168) return false;
+      if (size != 2 + 172) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 168) return false;
+      if (size != 2 + 172) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
