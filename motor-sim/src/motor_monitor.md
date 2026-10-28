@@ -581,6 +581,16 @@ const simple_drive_buttons = Inputs.button(
         target_value: +command_torque_current,
       });
     }],
+    ["Drive closed loop 0", async function(){
+      await motor_controller.send_command({
+        message_code: MessageCode.SET_DRIVE_STATE,
+        ...command_drive_state,
+        closed_loop: true,
+        target_speed: command_angular_speed,
+        angle_value: 0,
+        target_value: +command_torque_current,
+      });
+    }]
     // TODO: these need fixin' we want PWM always positive.
     // ["Drive 6S +", async function(){
     //   await motor_controller.send_command({

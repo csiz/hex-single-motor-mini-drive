@@ -502,10 +502,10 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   
   // Skip the calibration steps below as long as we're detecting any emf voltage.
   // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
-  // TODO: the best update conditions are different! (dunno exactly how) also we should somehow update resistance while driving too.
-  // if (emf_suspected and emf_pending_counter < control_parameters.emf_uncertainty_threshold) {
-  //   return;
-  // }
+  TODO: the best update conditions are different! (dunno exactly how) also we should somehow update resistance while driving too.
+  if (emf_suspected and emf_pending_counter < control_parameters.emf_uncertainty_threshold) {
+    return;
+  }
 
   // Current offsets
   // ---------------
@@ -543,6 +543,12 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // -----------
   // We need to recalculate these values in the main loop as they are not the primary tracking variables.
   
+  const float cos_emf = get_cos(readout.emf_voltage_angle);
+  const float sin_emf = get_sin(readout.emf_voltage_angle);
+
+  const float direct_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
+  const float quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
+
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const float direct_resistive_voltage = readout.direct_current * calibration.resistance;
   const float quadrature_resistive_voltage = readout.quadrature_current * calibration.resistance;
@@ -584,8 +590,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // 
   // The error can also be due to either resistance or inductance, so despite naming it measured emf voltage, it's actually 
   // all the errors combined. We can use this value and calibrate all parameters live by gradient descent.
-  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage - readout.direct_drive_voltage;
-  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage - readout.quadrature_drive_voltage;
+  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage - readout.direct_drive_voltage - direct_emf_voltage;
+  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage - readout.quadrature_drive_voltage - quadrature_emf_voltage;
 
   // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
@@ -600,24 +606,14 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
 
 
-  const float direct_resistive_excitation = 0 ; //readout.direct_drive_voltage - direct_inductor_voltage;
-  const float quadrature_resistive_excitation = 0 ; //readout.quadrature_drive_voltage - quadrature_inductor_voltage;
-
-  const float direct_inductor_base_excitation = 0 ; //direct_inductor_excitation - direct_inductance_bias_voltage;
-  const float quadrature_inductor_base_excitation = 0 ; //quadrature_inductor_excitation - quadrature_inductance_bias_voltage;
-
-  const float direct_inductor_bias_excitation = 0 ; //direct_inductor_excitation - direct_inductance_base_voltage;
-  const float quadrature_inductor_bias_excitation = 0 ; //quadrature_inductor_excitation - quadrature_inductance_base_voltage;
-
-
   // Compute the gradients of the loss with respect to each of the tracked parameters.
 
   // Only update the resistance if we have sufficient current to make the measurement meaningful.
   if(readout.current_magnitude > control_parameters.resistance_current_minimum) {
     const float resistance_gradient = (
-        direct_voltage_error * (direct_resistive_voltage + direct_resistive_excitation) +
-        quadrature_voltage_error * (quadrature_resistive_voltage + quadrature_resistive_excitation)
-    ) * voltage_mul_current_to_power;
+        direct_voltage_error * direct_resistive_voltage +
+        quadrature_voltage_error * quadrature_resistive_voltage
+    ) / square(readout.current_magnitude);
 
     const float resilient_resistance_gradient = resilient_gradient(
         resistance_gradient,
@@ -641,8 +637,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
   if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
     const float inductance_gradient = (
-      direct_voltage_error * (direct_inductance_base_voltage + direct_inductor_base_excitation) +
-      quadrature_voltage_error * (quadrature_inductance_base_voltage + quadrature_inductor_base_excitation)
+      direct_voltage_error * direct_inductance_base_voltage +
+      quadrature_voltage_error * quadrature_inductance_base_voltage
     ) * volts_per_voltage_units_square;
 
     const float resilient_inductance_gradient = resilient_gradient(
@@ -662,8 +658,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
 
     const float inductance_bias_gradient = (
-      direct_voltage_error * (direct_inductance_bias_voltage + direct_inductor_bias_excitation) +
-      quadrature_voltage_error * (quadrature_inductance_bias_voltage + quadrature_inductor_bias_excitation)
+      direct_voltage_error * direct_inductance_bias_voltage +
+      quadrature_voltage_error * quadrature_inductance_bias_voltage
     ) * volts_per_voltage_units_square;
 
     const float resilient_inductance_bias_gradient = resilient_gradient(
@@ -682,8 +678,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     info.inductance_bias_multiplier = learning_rate_multiplier.inductance_bias;
 
     const float saliency_angle_gradient = (
-      direct_voltage_error * -(quadrature_inductance_bias_voltage + quadrature_inductor_bias_excitation) +
-      quadrature_voltage_error * (direct_inductance_bias_voltage + direct_inductor_bias_excitation)
+      direct_voltage_error * -quadrature_inductance_bias_voltage +
+      quadrature_voltage_error * direct_inductance_bias_voltage
     ) * volts_per_voltage_units_square;
 
     const float saliency_angle_change = saliency_angle_gradient * control_parameters.saliency_angle_ki;
