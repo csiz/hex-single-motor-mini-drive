@@ -520,56 +520,9 @@ void ADC1_2_IRQHandler(void){
 
     const float pwm_penalty = (0.1f - 1.f * pwm_too_high);
 
-    const float live_max_pwm = clip_to(
-        0, 
-        // Leave some pwm headroom for the HFI probing if that is enabled.
-        pwm_max - control_parameters.angle_probing_pwm, 
-        readout.live_max_pwm + pwm_penalty
-    );
-
-    // Write the latest readout data
-    // -----------------------------
-
-    readout.readout_number = readout_number;
-    
-
-    readout.direct_drive_voltage = direct_drive_voltage;
-    readout.quadrature_drive_voltage = quadrature_drive_voltage;
-
-    readout.direct_current = direct_current;
-    readout.quadrature_current = quadrature_current;
-    readout.zero_current = zero_current;
-
-    readout.ref_readout = adc_readings.ref_readout;
-    
-    readout.direct_current_diff = direct_current_diff;
-    readout.quadrature_current_diff = quadrature_current_diff;
-    
-    readout.angle = angle;
-    readout.predicted_angle = predicted_angle;
-    readout.angular_speed = angular_speed;
-    readout.rotations = rotations;
-    
-    readout.current_angle_offset = current_angle_offset;
-    readout.current_magnitude = current_magnitude;
-
-    readout.emf_speed_constant = emf_speed_constant;
-    readout.emf_speed_constant_variance = emf_speed_constant_variance;
-
-    readout.emf_voltage_angle = emf_voltage_angle;
-    readout.emf_voltage_magnitude = emf_voltage_magnitude;
-    readout.emf_stable_magnitude = emf_stable_magnitude;
-    readout.emf_magnitude_variance = emf_magnitude_variance;
-    readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
-    readout.emf_angular_speed_variance = emf_angular_speed_variance;
+    const float live_max_pwm = clip_to(0, pwm_max, readout.live_max_pwm + pwm_penalty);
 
 
-    readout.vcc_voltage = vcc_voltage;
-    readout.live_max_pwm = live_max_pwm;
-    readout.total_power_average = total_power_average;
-    readout.resistive_power_average = resistive_power_average;
-
-    
     // Calculate and set motor outputs!!
     // ---------------------------------
 
@@ -602,13 +555,13 @@ void ADC1_2_IRQHandler(void){
             // Adjust the actual speed based on the target direction (it's cheaper to reuse
             // the target_sign this way than to compute the absolute speed, it also
             // gives us the correct distance in speed units betwen target and actual speed).
-            const float sign_adjusted_speed = readout.angular_speed * target_sign;
+            const float sign_adjusted_speed = angular_speed * target_sign;
             // Use the sign of the target speed to determine the direction of the angle offset.
             const int32_t target_angle_offset = drive_state.angle_value * target_sign;
                 
             // Get the pwm adjustment to obtain the desired current magnitude.
             const float current_adjustment = (
-                (drive_state.target_value - readout.current_magnitude) * 
+                (drive_state.target_value - current_magnitude) * 
                 control_parameters.torque_control_ki
             );
 
@@ -632,10 +585,10 @@ void ADC1_2_IRQHandler(void){
             //     // commanded current magnitude (regenerative breaking). Because to reduce current
             //     // absorbed during breaking, we need to increase PWM! So that we compensate for
             //     // the back EMF harder.
-            //     readout.active_pwm = clip_to(0, live_max_pwm, readout.active_pwm - current_adjustment);
+            //     active_pwm = clip_to(0, live_max_pwm, active_pwm - current_adjustment);
             //     // Target the mirror current angle if breaking.
-            //     readout.active_angle += static_cast<int32_t>(readout.angular_speed + (
-            //         (target_angle_offset - readout.current_angle_offset + half_circle) * 
+            //     active_angle += static_cast<int32_t>(angular_speed + (
+            //         (target_angle_offset - current_angle_offset + half_circle) * 
             //         control_parameters.lead_angle_control_ki
             //     ));
             // } else {
@@ -643,8 +596,8 @@ void ADC1_2_IRQHandler(void){
                 // commanded current magnitude, whichever comes first.
                 active_pwm = clip_to(0, live_max_pwm, active_pwm + min(speed_adjustment, current_adjustment));
                 // Target the sign adjusted angle_value normally.
-                active_angle += static_cast<int32_t>(readout.angular_speed + (
-                    (target_angle_offset - readout.current_angle_offset) * 
+                active_angle += static_cast<int32_t>(angular_speed + (
+                    (target_angle_offset - current_angle_offset) * 
                     control_parameters.lead_angle_control_ki
                 ));
             // }
@@ -680,7 +633,7 @@ void ADC1_2_IRQHandler(void){
         duration_executed = 0;
         motor_flags = breaking_drive_state.motor_flags;
         active_pwm = breaking_drive_state.target_value;
-        active_angle = readout.angle;
+        active_angle = angle;
     }
 
     
@@ -688,7 +641,6 @@ void ADC1_2_IRQHandler(void){
     // has to run on top of any other commands. It automatically stops while the motor is running...
     const bool run_hfi_angle_probing = not emf_speed_detected;
 
-    // ! Note that we must update the probing_voltage for the next readout, after saving the current readout.
     probing_angle += static_cast<int32_t>(control_parameters.angle_probing_angular_speed);
     const float probing_pwm = run_hfi_angle_probing ? control_parameters.angle_probing_pwm : 0;
     
@@ -721,6 +673,7 @@ void ADC1_2_IRQHandler(void){
     set_motor_status(motor_flags);
 
 
+    
     // End of cycle
     // ------------
 
@@ -728,14 +681,54 @@ void ADC1_2_IRQHandler(void){
     // within the half cycle before the pwm registers update.
     readout.cycle_end_tick = LL_TIM_GetDirection(TIM1) == LL_TIM_COUNTERDIRECTION_UP ? LL_TIM_GetCounter(TIM1) : (pwm_period - LL_TIM_GetCounter(TIM1));
 
-    // Write the latest readout to the history buffer for the main loop to read.
-    readout_history_queue.write_if_available(readout);
-
-
+    
     // TODO: we need complete nan checks; preferably in the main loop.
     if (std::isnan(readout.emf_voltage_magnitude)) {
         readout.emf_voltage_magnitude = 0.f;
     }
+
+    // Write the latest readout data
+    // -----------------------------
+
+    readout.readout_number = readout_number;
+    readout.ref_readout = adc_readings.ref_readout;
+    
+    readout.direct_drive_voltage = direct_drive_voltage;
+    readout.quadrature_drive_voltage = quadrature_drive_voltage;
+
+    readout.direct_current = direct_current;
+    readout.quadrature_current = quadrature_current;
+    readout.zero_current = zero_current;
+    readout.direct_current_diff = direct_current_diff;
+    readout.quadrature_current_diff = quadrature_current_diff;
+    
+    readout.rotations = rotations;
+    readout.angle = angle;
+    readout.predicted_angle = predicted_angle;
+    readout.angular_speed = angular_speed;
+    readout.acceleration = 0; // TODO
+
+    readout.vcc_voltage = vcc_voltage;
+    readout.emf_voltage_angle = emf_voltage_angle;
+    readout.emf_voltage_magnitude = emf_voltage_magnitude;
+    readout.emf_magnitude_variance = emf_magnitude_variance;
+    readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
+    readout.emf_angular_speed_variance = emf_angular_speed_variance;
+
+    readout.emf_speed_constant = emf_speed_constant;
+    readout.emf_speed_constant_variance = emf_speed_constant_variance;
+
+    readout.current_angle_offset = current_angle_offset;
+    readout.current_magnitude = current_magnitude;
+
+    readout.live_max_pwm = live_max_pwm;
+    readout.total_power_average = total_power_average;
+    readout.resistive_power_average = resistive_power_average;
+
+    readout.emf_stable_magnitude = emf_stable_magnitude;
+
+    // Write the latest readout to the history buffer for the main loop to read.
+    readout_history_queue.write_if_available(readout);
 
     // Clear the ADC end of conversion flag so we're ready for the next conversion.
     LL_ADC_ClearFlag_JEOS(ADC1);
