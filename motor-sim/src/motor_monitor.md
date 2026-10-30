@@ -935,7 +935,10 @@ const plot_electric_position = plot_lines({
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
     {y: "current_angle", label: "Current Angle", color: colors_categories[3]},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
-    {y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle},
+    {
+      y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle,
+      draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
+    },
     {y: (d) => normalize_radians(2*d.emf_voltage_angle)*0.5, label: "EMF Voltage Axis", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: "web_emf_voltage_angle", label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
@@ -951,6 +954,7 @@ const plot_electric_offsets = plot_lines({
   x_label: "Time (ms)",
   y_label: "Angle (radians)",
   channels: [
+    {y: "emf_angle_stdev", label: "EMF Angle stdev", color: colors.angle_driven},
     {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
     {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset", color: colors.voltage_angle},
     {y: "saliency_angle_offset", label: "Saliency Angle Offset", color: d3.color(colors.angle).brighter(1)},
@@ -972,7 +976,6 @@ const plot_speed = plot_lines({
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: "emf_voltage_angular_speed", label: "EMF Voltage Angular Speed", color: colors.voltage_angle},
-    {y: (d) => Math.min(0.100, d.emf_angular_speed_stdev), label: "EMF Angular Speed stdev", color: colors.angle_driven},
   ],
   curve,
 });
@@ -2156,7 +2159,15 @@ const control_parameters_input = Object.fromEntries(
     ["emf_speed_constant_ki", {
       label: "EMF Speed Constant KI",
       description: "EMF speed constant integral gain. Controls how fast we adjust for errors in the back EMF estimation."
-    }]
+    }],
+    ["emf_angle_suspected_threshold", {
+      label: "EMF Speed Constant Suspected Threshold",
+      description: "Threshold for suspecting errors in the EMF speed constant estimation."
+    }],
+    ["emf_speed_constant_confirmed_threshold", {
+      label: "EMF Speed Constant Confirmed Threshold",
+      description: "Threshold for confirming the EMF speed constant estimation."
+    }],
   ].map(([key, {label, description}]) => {
 
     let parameter_input = Inputs.number([], {

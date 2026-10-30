@@ -437,7 +437,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const bool idle_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
 
   // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
-  const bool emf_speed_detected = square(readout.emf_speed_constant) > 0.03125f * readout.emf_speed_constant_variance;
+  const bool emf_fix = square(readout.emf_speed_constant) > readout.emf_speed_constant_variance * control_parameters.emf_speed_constant_confirmed_threshold;
 
   // Calculate the motor constant
   // ----------------------------
@@ -458,7 +458,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
 
   // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
-  if (emf_speed_detected and abs_angular_speed > control_parameters.emf_min_angular_speed){
+  if (emf_fix and abs_angular_speed > control_parameters.emf_min_angular_speed){
     
     // Get the error (gradient) for the motor constant observer.
     const float motor_constant_gradient = predicted_emf_voltage - readout.emf_voltage_magnitude;
@@ -490,11 +490,11 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // resistance and inductance are miscalibrated and we detect a fake stationary EMF. In that case
   // we need to re-start optimizing resistance and inductance to exit the faulty state.
 
-  const bool emf_suspected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
+  const bool emf_detected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
   
   // We are waiting for an EMF fix if we if there's detectable magnitude. If we don't see movement (aka emf_fix)
   // then it might be a false positive due to miscalibration of the motor parameters.
-  const bool emf_pending = emf_suspected and not emf_speed_detected;
+  const bool emf_pending = emf_detected and not emf_fix;
 
   // Count the steps when we detect EMF voltage but don't have an emf_fix; reset on either emf_fix or no EMF voltage.
   emf_pending_counter = emf_pending ? min(emf_pending_counter + 1, control_parameters.emf_uncertainty_threshold) : 0;
@@ -502,7 +502,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Skip the calibration steps below as long as we're detecting any emf voltage.
   // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
   // TODO: the best update conditions are different! (dunno exactly how) also we should somehow update resistance while driving too.
-  if (emf_suspected and emf_pending_counter < control_parameters.emf_uncertainty_threshold) {
+  if (emf_detected and emf_pending_counter < control_parameters.emf_uncertainty_threshold) {
     return;
   }
 
@@ -510,7 +510,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // ---------------
 
   // Only track the zero offset while there is no noticeable current being measured.
-  if (not emf_suspected and readout.current_magnitude < 2 * control_parameters.current_offset_maximum) {
+  if (not emf_detected and readout.current_magnitude < 2 * control_parameters.current_offset_maximum) {
     const auto currents = abc_transform(
       {readout.direct_current, readout.quadrature_current}, 
       readout.zero_current

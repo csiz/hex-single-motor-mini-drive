@@ -430,6 +430,8 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .seek_kd = 0.0f,
 
     .emf_speed_constant_ki = std::pow(2, -8),
+    .emf_angle_suspected_threshold = square(quarter_circle / 3),
+    .emf_speed_constant_confirmed_threshold = 16.0f,
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

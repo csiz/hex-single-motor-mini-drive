@@ -131,7 +131,7 @@ definitions:
       that use Q1.31 integer math so we must be able to convert between the float32 and Q1.31 representations
       without losing too much precision.
     type: float32
-    const: 1000000.0
+    const: 10000000.0
 
   VOLTAGE_UNITS_PER_VOLT:
     doc: |
@@ -139,7 +139,7 @@ definitions:
       that use Q1.31 integer math so we must be able to convert between the float32 and Q1.31 representations
       without losing too much precision.
     type: float32
-    const: 1000000.0
+    const: 10000000.0
 
   CLOCK_FREQUENCY:
     doc: |
@@ -284,9 +284,9 @@ definitions:
         type: float32
         doc: Angular speed of the EMF voltage vector.
 
-      emf_angular_speed_variance:
+      emf_angle_variance:
         type: float32
-        doc: Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
+        doc: Variance of the EMF angle; used to determine if the EMF angle is too noisy to update.
 
       emf_speed_constant:
         type: float32
@@ -748,3 +748,11 @@ definitions:
       emf_speed_constant_ki:
         type: float32
         doc: EMF speed constant integral gain.
+
+      emf_angle_suspected_threshold:
+        type: float32
+        doc: Threshold for the EMF angle when we suspect we might have fixed onto the EMF signal.
+
+      emf_speed_constant_confirmed_threshold:
+        type: float32
+        doc: Threshold for the emf constant when we are confident that we have correctly identified the emf signal.

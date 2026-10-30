@@ -63,7 +63,7 @@ export function parse_readout(bare_readout, previous_readout) {
   const emf_voltage_magnitude = bare_readout.emf_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
   const emf_magnitude_stdev = Math.sqrt(bare_readout.emf_magnitude_variance) / VOLTAGE_UNITS_PER_VOLT;
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
-  const emf_angular_speed_stdev = speed_units_to_rotations_per_millisecond(Math.sqrt(bare_readout.emf_angular_speed_variance));
+  const emf_angle_stdev = angle_units_to_radians(Math.sqrt(bare_readout.emf_angle_variance));
 
   const saliency_angle = normalize_radians(2*predicted_angle + bare_readout.saliency_angle_offset);
 
@@ -248,7 +248,7 @@ export function parse_readout(bare_readout, previous_readout) {
     emf_voltage_magnitude, 
     emf_voltage_angular_speed,
     emf_magnitude_stdev,
-    emf_angular_speed_stdev,
+    emf_angle_stdev,
     emf_speed_constant,
     emf_speed_constant_stdev,
     direct_emf_voltage,

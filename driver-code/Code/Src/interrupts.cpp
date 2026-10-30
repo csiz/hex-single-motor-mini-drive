@@ -174,12 +174,6 @@ void ADC1_2_IRQHandler(void){
     // I've attempted to use the finite differences approach `diff(x) = ((x[n] - x[n-1]) + (x[n+1] - x[n])) / (2 * dt)`
     // but it doesn't work as well as exponential filtering.
 
-
-    // Average the temperature readings since we are sampling quicker than the manufacturer indicates.
-    // We can't extend the sampling time longer than it is set at the moment (about half the recommendation),
-    // so we have to massage the readings for noise. Temperature varies slowly anyway.
-    temperature_reading = (adc_readings.temp_readout * 0.25f + temperature_reading * 0.75f);
-
     // Average out the VCC voltage; it should be relatively stable so we average to reduce our error.
     const float vcc_voltage = (adc_readings.vcc_readout * voltage_conversion * 0.25f + readout.vcc_voltage * 0.75f);
 
@@ -273,7 +267,7 @@ void ADC1_2_IRQHandler(void){
 
     const float predicted_direct_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
     const float predicted_quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
-    
+
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
     const float direct_resistive_voltage = direct_current * calibration.resistance;
     const float quadrature_resistive_voltage = quadrature_current * calibration.resistance;
@@ -319,6 +313,12 @@ void ADC1_2_IRQHandler(void){
     // Send the emf values to the CORDIC asap.
     set_cordic(direct_emf_voltage, quadrature_emf_voltage);
 
+    // More unrelated calculations intermingled.
+
+    // Average the temperature readings since we are sampling quicker than the manufacturer indicates.
+    // We can't extend the sampling time longer than it is set at the moment (about half the recommendation),
+    // so we have to massage the readings for noise. Temperature varies slowly anyway.
+    temperature_reading = (adc_readings.temp_readout * 0.25f + temperature_reading * 0.75f);
 
     // Back EMF angle observer
     // -----------------------
@@ -333,16 +333,6 @@ void ADC1_2_IRQHandler(void){
     // estimate independently. We update it all the time so we can calculate the baseline variance for the angular speed.
     const float emf_voltage_angular_speed = readout.emf_voltage_angular_speed + emf_speed_error * control_parameters.loop_fast_ki;
     
-    // The variance will be the square of the angle error, it should fluctuate wildly at standstill when the emf vector is near 0.
-    const float instant_emf_speed_variance = square(emf_speed_error);
-
-    // Track the worst case variance for speed, the max of the instantaneous speed variance and the filtered speed variance.
-    const float emf_angular_speed_variance = instant_emf_speed_variance > readout.emf_angular_speed_variance ? instant_emf_speed_variance : (
-        readout.emf_angular_speed_variance + 
-        (instant_emf_speed_variance - readout.emf_angular_speed_variance) * control_parameters.loop_fast_ki
-    );
-
-    
     // For the emf voltage variance we add the errors in the frame before rotating.
     const float instant_emf_voltage_variance = (
         square(direct_emf_voltage_error) +
@@ -350,7 +340,7 @@ void ADC1_2_IRQHandler(void){
     );
 
     // Use the worst of the instantaneous variance or the filtered variance to track the worst case variance.
-    const float emf_magnitude_variance = instant_emf_voltage_variance > readout.emf_magnitude_variance ? instant_emf_voltage_variance : (
+    const float emf_magnitude_variance = (
         readout.emf_magnitude_variance +
         (instant_emf_voltage_variance - readout.emf_magnitude_variance) * control_parameters.loop_fast_ki
     );
@@ -365,7 +355,14 @@ void ADC1_2_IRQHandler(void){
     // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
     const bool emf_detected = square(emf_voltage_magnitude) > emf_magnitude_variance;
 
-    // const bool emf_speed_fix = square(emf_voltage_angular_speed) > emf_speed_variance;
+    // The variance will be the square of the angle error, it should fluctuate wildly at standstill when the emf vector is near 0.
+    const float instant_emf_angle_variance = square(emf_voltage_angle - predicted_emf_voltage_angle);
+
+    // Track the worst case variance for speed, the max of the instantaneous speed variance and the filtered speed variance.
+    const float emf_angle_variance = (
+        readout.emf_angle_variance + 
+        (instant_emf_angle_variance - readout.emf_angle_variance) * control_parameters.loop_fast_ki
+    );
 
     // Calculate the instant motor constant
     // ------------------------------------
@@ -390,41 +387,37 @@ void ADC1_2_IRQHandler(void){
 
     const float instant_emf_speed_constant_variance = square(emf_speed_constant_error) + min_speed_constant_sq;
 
-    const float emf_speed_constant_variance = instant_emf_speed_constant_variance > readout.emf_speed_constant_variance ? instant_emf_speed_constant_variance : (
+    const float emf_speed_constant_variance = (
         readout.emf_speed_constant_variance + 
         (instant_emf_speed_constant_variance - readout.emf_speed_constant_variance) * control_parameters.emf_speed_constant_ki
     );
 
     // Calculate motor constant, speed, and acceleration
     // -------------------------------------------------
+    
+    const bool emf_angle_fix = emf_detected and (emf_angle_variance < control_parameters.emf_angle_suspected_threshold);
 
     const float emf_speed_constant_sq = square(emf_speed_constant);
 
-    // Accept our emf speed only if it's consistent with the emf voltage magnitude. That is, the motor constant
-    // variance has somewhat stablizied.
-    const bool emf_speed_detected = emf_speed_constant_sq > 0.03125f * emf_speed_constant_variance;
-
     // Calculate the rotor speed as a low pass of the detected emf speed.
-    const float angular_speed_error = emf_speed_detected * (emf_speed_constant * emf_speed_constant_conversion * emf_voltage_magnitude) - readout.angular_speed;
+    const float angular_speed_error = emf_detected * (emf_speed_constant * emf_speed_constant_conversion * emf_voltage_magnitude) - readout.angular_speed;
 
     // Use the integral gain, but decay to 0 on loss of EMF certainty.
     const float angular_speed = readout.angular_speed + angular_speed_error * control_parameters.angle_from_emf_ki;
 
     // Declare that we have an EMF fix if our speed is greater than the measurment error.
-    const bool emf_fix = emf_speed_constant_sq > 16 * emf_speed_constant_variance;
+    const bool emf_fix = emf_speed_constant_sq > emf_speed_constant_variance * control_parameters.emf_speed_constant_confirmed_threshold;
 
 
     // Angle update
     // ------------
     
     // Integrate the EMF position error only if we're detecting EMF.
-    const int32_t angle_adjustment = emf_detected * control_parameters.angle_from_emf_ki * (emf_fix ? 
+    const int32_t angle_adjustment = emf_angle_fix * control_parameters.angle_from_emf_ki * (emf_fix ? 
         // Aim to the axis corrected angle if we have certainty in the emf speed sign.
         (emf_voltage_angle + (angular_speed > 0 ? quarter_circle : neg_quarter_circle) - predicted_angle) :
         // Otherwise adjust only towards the axis of the emf angle observer, with an extra downscaling.
-        (((emf_voltage_angle - predicted_angle) & most_positive_angle) - quarter_circle) * control_parameters.angle_from_emf_ki *
-        // And even more downscaling if we don't have speed certainty, probably means we don't have position certainty.
-        (emf_speed_detected ? 1.f : control_parameters.angle_from_emf_ki)
+        (((emf_voltage_angle - predicted_angle) & most_positive_angle) - quarter_circle) * control_parameters.angle_from_emf_ki
     );
     
     // Calculate the new angle based on all the angle adjustments.
@@ -666,7 +659,7 @@ void ADC1_2_IRQHandler(void){
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
     readout.emf_magnitude_variance = emf_magnitude_variance;
     readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
-    readout.emf_angular_speed_variance = emf_angular_speed_variance;
+    readout.emf_angle_variance = emf_angle_variance;
 
     readout.emf_speed_constant = emf_speed_constant;
     readout.emf_speed_constant_variance = emf_speed_constant_variance;

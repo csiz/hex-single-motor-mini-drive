@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.151.0";
+constexpr char const* VERSION_STRING = "0.154.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -123,9 +123,9 @@ constexpr uint32_t UNIT_TEST_OUTPUT_SIZE = 248;
 
 constexpr uint32_t DRIVE_SCHEDULE_SIZE = 6;
 
-constexpr float CURRENT_UNITS_PER_AMP = 1000000;
+constexpr float CURRENT_UNITS_PER_AMP = 10000000;
 
-constexpr float VOLTAGE_UNITS_PER_VOLT = 1000000;
+constexpr float VOLTAGE_UNITS_PER_VOLT = 10000000;
 
 constexpr int32_t CLOCK_FREQUENCY = 144000000;
 
@@ -233,8 +233,8 @@ struct Readout {
   float emf_magnitude_variance;
   // Angular speed of the EMF voltage vector.
   float emf_voltage_angular_speed;
-  // Variance of the EMF angular speed; used to determine if the EMF speed is too noisy to update.
-  float emf_angular_speed_variance;
+  // Variance of the EMF angle; used to determine if the EMF angle is too noisy to update.
+  float emf_angle_variance;
   // Instantaneous emf speed constant; ratio of EMF voltage magnitude to emf angular speed; 
   // gives an estimate of the motor's back-EMF constant in the interrupt control loop.
   // We use this faster estimate to deduce the real rotor angular speed because it looks
@@ -310,7 +310,7 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.emf_voltage_angular_speed);;
   offset += 4;
-  write_float32(buffer + offset, value.emf_angular_speed_variance);;
+  write_float32(buffer + offset, value.emf_angle_variance);;
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant);;
   offset += 4;
@@ -382,7 +382,7 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.emf_voltage_angular_speed = read_float32(buffer + offset);
   offset += 4;
-  result.emf_angular_speed_variance = read_float32(buffer + offset);
+  result.emf_angle_variance = read_float32(buffer + offset);
   offset += 4;
   result.emf_speed_constant = read_float32(buffer + offset);
   offset += 4;
@@ -928,6 +928,10 @@ struct ControlParameters {
   float seek_kd;
   // EMF speed constant integral gain.
   float emf_speed_constant_ki;
+  // Threshold for the EMF angle when we suspect we might have fixed onto the EMF signal.
+  float emf_angle_suspected_threshold;
+  // Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
+  float emf_speed_constant_confirmed_threshold;
 };
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
@@ -1023,6 +1027,10 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.seek_kd);;
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_angle_suspected_threshold);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_speed_constant_confirmed_threshold);;
   offset += 4;
 }
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
@@ -1122,6 +1130,10 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.emf_speed_constant_ki = read_float32(buffer + offset);
   offset += 4;
+  result.emf_angle_suspected_threshold = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_speed_constant_confirmed_threshold = read_float32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Message Codes
@@ -1192,8 +1204,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 34;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 174;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 174;
+    case MessageCode::CONTROL_PARAMETERS: return 182;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 182;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
@@ -1303,15 +1315,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 172) return 0;
+      if (max_size < 2 + 180) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 174;
+      return 182;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 172) return 0;
+      if (max_size < 2 + 180) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 174;
+      return 182;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1438,12 +1450,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 172) return false;
+      if (size != 2 + 180) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 172) return false;
+      if (size != 2 + 180) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
