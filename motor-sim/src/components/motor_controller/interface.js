@@ -164,6 +164,13 @@ export function parse_readout(bare_readout, previous_readout) {
 
   const battery_current = total_power_average / vcc_voltage;
 
+  const emf_stable_magnitude = bare_readout.emf_stable_magnitude / VOLTAGE_UNITS_PER_VOLT;
+
+  const active_pwm = bare_readout.active_pwm;
+
+  const active_angle = angle_units_to_radians(bare_readout.active_angle);
+
+  const probing_angle = angle_units_to_radians(bare_readout.probing_angle);
 
   // Time indexing
   // -------------
@@ -264,6 +271,11 @@ export function parse_readout(bare_readout, previous_readout) {
     total_power_average,
     resistive_power_average,
     rotations,
+
+    emf_stable_magnitude,
+    active_pwm,
+    active_angle,
+    probing_angle,
   };
 }
 

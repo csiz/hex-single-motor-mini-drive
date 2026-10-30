@@ -42,12 +42,6 @@ hex_mini_drive::Readout readout = {};
 // Maybe there's a way around it, but the big problem is we have to average motor outputs
 // over two PWM cycles to get the actual output.
 
-// Active angle at which we're driving the motor.
-int32_t active_angle = 0;
-
-// Active PWM value to drive the motor.
-float active_pwm = 0.f;
-
 // Settings for the 3 phases (on or tri-state).
 uint8_t motor_flags = 0;
 
@@ -69,8 +63,6 @@ volatile int32_t external_angle_adjustment = 0;
 // Average out temperature reading for the main loop to calculate.
 float temperature_reading = 0.f;
 
-// HFI probing angle.
-int32_t probing_angle = 0;
 
 // Interrupt Data Interface
 // ------------------------
@@ -90,7 +82,7 @@ CircularQueue<hex_mini_drive::DriveState, 2 * hex_mini_drive::DRIVE_SCHEDULE_SIZ
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
-    return (active_pwm == 0.f);
+    return (readout.active_pwm == 0.f);
 }
 
 bool set_angle_adjustment(int32_t const& adjustment){
@@ -594,9 +586,9 @@ void ADC1_2_IRQHandler(void){
             // } else {
                 // Otherwise, used the conservative PWM to achieve either the target speed or 
                 // commanded current magnitude, whichever comes first.
-                active_pwm = clip_to(0, live_max_pwm, active_pwm + min(speed_adjustment, current_adjustment));
+                readout.active_pwm = clip_to(0, live_max_pwm, readout.active_pwm + min(speed_adjustment, current_adjustment));
                 // Target the sign adjusted angle_value normally.
-                active_angle += static_cast<int32_t>(angular_speed + (
+                readout.active_angle += static_cast<int32_t>(angular_speed + (
                     (target_angle_offset - current_angle_offset) * 
                     control_parameters.lead_angle_control_ki
                 ));
@@ -604,17 +596,17 @@ void ADC1_2_IRQHandler(void){
         // Drive in open loop control.
         } else {
             // Copy the commanded PWM value from the drive command to our readout state.
-            active_pwm = clip_to(
+            readout.active_pwm = clip_to(
                 0, live_max_pwm, 
                 drive_state.target_value
             );
     
             // Drive the inductors around a circle at the specified PWM and speed. Note the interrupt 
             // loop always does open loop control. Main loop adjusts settings for closed loop control.
-            active_angle = (
+            readout.active_angle = (
                 // Increment the active_angle except the first iteration of an open loop command where
                 // we jump to the command angle_value.
-                (duration_executed ? active_angle : drive_state.angle_value) +
+                (duration_executed ? readout.active_angle : drive_state.angle_value) +
                 static_cast<int32_t>(drive_state.target_speed)
             );
         }
@@ -632,24 +624,15 @@ void ADC1_2_IRQHandler(void){
     } else {
         duration_executed = 0;
         motor_flags = breaking_drive_state.motor_flags;
-        active_pwm = breaking_drive_state.target_value;
-        active_angle = angle;
+        readout.active_pwm = breaking_drive_state.target_value;
+        readout.active_angle = angle;
     }
 
-    
-    // Run the angle probing in the interrupt loop, it makes managing state much easier because HFI
-    // has to run on top of any other commands. It automatically stops while the motor is running...
-    const bool run_hfi_angle_probing = not emf_speed_detected;
+    readout.probing_angle += static_cast<int32_t>(control_parameters.angle_probing_angular_speed);
 
-    probing_angle += static_cast<int32_t>(control_parameters.angle_probing_angular_speed);
-    const float probing_pwm = run_hfi_angle_probing ? control_parameters.angle_probing_pwm : 0;
     
     // Calculate and store desired motor pwm;
-    // TODO: add the values in xy coordinates before setting outputs with the special waveform.
-    motor_outputs = (
-        compute_motor_outputs(active_angle, active_pwm) +
-        compute_motor_outputs(probing_angle, probing_pwm)
-    );
+    motor_outputs = compute_motor_outputs(readout.active_angle, readout.active_pwm);
 
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if

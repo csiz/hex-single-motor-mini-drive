@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.146.0";
+constexpr char const* VERSION_STRING = "0.150.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -115,7 +115,7 @@ static inline float read_float32(uint8_t const* buffer) {
 
 constexpr uint32_t VERSION_STRING_SIZE = 64;
 
-constexpr uint32_t HISTORY_SIZE = 168;
+constexpr uint32_t HISTORY_SIZE = 144;
 
 constexpr uint32_t MAX_MESSAGE_SIZE = 256;
 
@@ -258,6 +258,12 @@ struct Readout {
   float resistive_power_average;
   // A slower varying estimate of the EMF voltage magnitude.
   float emf_stable_magnitude;
+  // Current active PWM value applied to the motor.
+  float active_pwm;
+  // Current angle of the driving PWM signal applied to the motor.
+  int32_t active_angle;
+  // Phase of the probing signal modulation.
+  int32_t probing_angle;
 };
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
@@ -321,6 +327,12 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   write_float32(buffer + offset, value.resistive_power_average);;
   offset += 4;
   write_float32(buffer + offset, value.emf_stable_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.active_pwm);;
+  offset += 4;
+  write_int32(buffer + offset, value.active_angle);;
+  offset += 4;
+  write_int32(buffer + offset, value.probing_angle);;
   offset += 4;
 }
 static inline Readout read_Readout(uint8_t const* buffer) {
@@ -387,6 +399,12 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   result.resistive_power_average = read_float32(buffer + offset);
   offset += 4;
   result.emf_stable_magnitude = read_float32(buffer + offset);
+  offset += 4;
+  result.active_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.active_angle = read_int32(buffer + offset);
+  offset += 4;
+  result.probing_angle = read_int32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -564,6 +582,24 @@ struct DriveState {
   int32_t angle_value;
   // Open loop rotation speed, or maximum (abs) velocity for closed loop control.
   float target_speed;
+  // Extra probing signal; changes the pwm duty cycle as: 
+  //   pwm = target_value * (1 - probing_factor * cos(probing_factor_modulation * time + probing_offset))
+  float probing_factor;
+  // Modulation speed for the probing_factor.
+  float probing_factor_modulation;
+  // Modulation speed for the target speed, this allows us to combine a fast spinning small
+  // amplitude probing signal with slow spinning high magnitude holding command. For this
+  // approximaton we obtain the modulated angle and magnitude of the drive vector with fewer
+  // operations in the tight loop. The formula used is:
+  //   speed = target_speed - probing_speed_modulation * probing_factor * cos(probing_factor_modulation * time + probing_offset)
+  // For circular probing signals use:
+  //   probing_speed_modulation = probing_factor_modulation
+  // For fixed angle oscillating probing signals use:
+  //   probing_speed_modulation = 0
+  float probing_speed_modulation;
+  // Initial phase offset for the probing signal, at 0 offset we start the probing the probing
+  // signal anti-aligned with the holding signal.
+  int32_t probing_offset;
 };
 
 static inline void write_DriveState(uint8_t * buffer, DriveState const& value) {
@@ -579,6 +615,14 @@ static inline void write_DriveState(uint8_t * buffer, DriveState const& value) {
   write_int32(buffer + offset, value.angle_value);;
   offset += 4;
   write_float32(buffer + offset, value.target_speed);;
+  offset += 4;
+  write_float32(buffer + offset, value.probing_factor);;
+  offset += 4;
+  write_float32(buffer + offset, value.probing_factor_modulation);;
+  offset += 4;
+  write_float32(buffer + offset, value.probing_speed_modulation);;
+  offset += 4;
+  write_int32(buffer + offset, value.probing_offset);;
   offset += 4;
 }
 static inline DriveState read_DriveState(uint8_t const* buffer) {
@@ -598,6 +642,14 @@ static inline DriveState read_DriveState(uint8_t const* buffer) {
   offset += 4;
   result.target_speed = read_float32(buffer + offset);
   offset += 4;
+  result.probing_factor = read_float32(buffer + offset);
+  offset += 4;
+  result.probing_factor_modulation = read_float32(buffer + offset);
+  offset += 4;
+  result.probing_speed_modulation = read_float32(buffer + offset);
+  offset += 4;
+  result.probing_offset = read_int32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Set a series of driver states to be executed by the motor in sequence.
@@ -607,7 +659,7 @@ static inline void write_DriveSchedule(uint8_t * buffer, DriveSchedule const& va
   size_t offset = 0;
   for (size_t i = 0; i < 12; ++i) {
     write_DriveState(buffer + offset, value[i]);;
-    offset += 16;
+    offset += 32;
   }
 }
 
@@ -616,7 +668,7 @@ static inline DriveSchedule read_DriveSchedule(uint8_t const* buffer) {
   size_t offset = 0;
   for (size_t i = 0; i < 12; ++i) {
     result[i] = read_DriveState(buffer + offset);
-    offset += 16;
+    offset += 32;
   }
   return result;
 }
@@ -1125,16 +1177,16 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 114;
+    case MessageCode::READOUT: return 126;
     case MessageCode::INFO: return 42;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
-    case MessageCode::SET_DRIVE_STATE: return 18;
-    case MessageCode::SET_DRIVE_SCHEDULE: return 194;
-    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 18;
+    case MessageCode::SET_DRIVE_STATE: return 34;
+    case MessageCode::SET_DRIVE_SCHEDULE: return 386;
+    case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 34;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
     case MessageCode::CALIBRATION: return 34;
     case MessageCode::GET_CALIBRATION: return 2;
@@ -1171,9 +1223,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 112) return 0;
+      if (max_size < 2 + 124) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 114;
+      return 126;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
@@ -1207,21 +1259,21 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_DRIVE_STATE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_STATE));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 32) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 18;
+      return 34;
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_SCHEDULE));
-      if (max_size < 2 + 192) return 0;
+      if (max_size < 2 + 384) return 0;
       write_DriveSchedule(buffer + 2, std::get<DriveSchedule>(message.message_data));
-      return 194;
+      return 386;
     }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
-      if (max_size < 2 + 16) return 0;
+      if (max_size < 2 + 32) return 0;
       write_DriveState(buffer + 2, std::get<DriveState>(message.message_data));
-      return 18;
+      return 34;
     }
     case MessageCode::SET_STATE_SEEK_ANGLE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_SEEK_ANGLE));
@@ -1311,7 +1363,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 112) return false;
+      if (size != 2 + 124) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1346,17 +1398,17 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_DRIVE_STATE: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 32) return false;
       message.message_data = read_DriveState(buffer + 2);
       return true;
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
-      if (size != 2 + 192) return false;
+      if (size != 2 + 384) return false;
       message.message_data = read_DriveSchedule(buffer + 2);
       return true;
     }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
-      if (size != 2 + 16) return false;
+      if (size != 2 + 32) return false;
       message.message_data = read_DriveState(buffer + 2);
       return true;
     }

@@ -26,6 +26,9 @@ constexpr float one_third = 1.0 / 3.0;
 
 constexpr float two_thirds = 2.0 / 3.0;
 
+// sin(120 degrees) used in the dq0 transform for the Q axis coefficients.
+constexpr float sin_120 = 0.86602540378f; 
+
 // DQ0 transform coefficients to the fixed angle 0.
 
 // D transform row.
@@ -38,8 +41,8 @@ constexpr ThreePhase d_transform = {
 // Q transform row.
 constexpr ThreePhase q_transform = {
     0.0f * two_thirds,
-    0.86602540378f * two_thirds, // sin(120 degrees)
-    -0.86602540378f * two_thirds // sin(-120 degrees)
+    sin_120 * two_thirds,
+    -sin_120 * two_thirds
 };
 
 // Compute the dq0 transform of a three phase vector using the reference angle 0.
@@ -54,7 +57,7 @@ static inline TwoPhase dq0_transform(ThreePhase const& abc) {
 static inline ThreePhase abc_transform(TwoPhase const& dq, float const& zero_offset) {
     return {
         std::get<0>(dq) + zero_offset,
-        -0.5f * std::get<0>(dq) + 0.86602540378f * std::get<1>(dq) + zero_offset,
-        -0.5f * std::get<0>(dq) - 0.86602540378f * std::get<1>(dq) + zero_offset
+        -0.5f * std::get<0>(dq) + sin_120 * std::get<1>(dq) + zero_offset,
+        -0.5f * std::get<0>(dq) - sin_120 * std::get<1>(dq) + zero_offset
     };
 }

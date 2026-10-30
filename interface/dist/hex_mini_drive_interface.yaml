@@ -108,7 +108,7 @@ definitions:
   HISTORY_SIZE:
     doc: Number of contiguous readouts to store in the history buffer for a snapshot.
     type: uint32
-    const: 168
+    const: 144
 
   MAX_MESSAGE_SIZE:
     doc: Maximum size of a message in bytes; used to allocate buffers for the messages.
@@ -328,7 +328,17 @@ definitions:
         type: float32
         doc: A slower varying estimate of the EMF voltage magnitude.
 
-        
+      active_pwm:
+        type: float32
+        doc: Current active PWM value applied to the motor.
+      active_angle:
+        type: int32
+        doc: Current angle of the driving PWM signal applied to the motor.
+      probing_angle:
+        type: int32
+        doc: Phase of the probing signal modulation.
+      
+
   StreamReadouts:
     doc: |
       Continuously send readouts of the motor driver internal state.
@@ -447,7 +457,32 @@ definitions:
       target_speed:
         type: float32
         doc: Open loop rotation speed, or maximum (abs) velocity for closed loop control.
-
+      probing_factor:
+        type: float32
+        doc: |
+          Extra probing signal; changes the pwm duty cycle as: 
+            pwm = target_value * (1 - probing_factor * cos(probing_factor_modulation * time + probing_offset))
+      probing_factor_modulation:
+        type: float32
+        doc: Modulation speed for the probing_factor.
+      probing_speed_modulation:
+        type: float32
+        doc: |
+          Modulation speed for the target speed, this allows us to combine a fast spinning small
+          amplitude probing signal with slow spinning high magnitude holding command. For this
+          approximaton we obtain the modulated angle and magnitude of the drive vector with fewer
+          operations in the tight loop. The formula used is:
+            speed = target_speed - probing_speed_modulation * probing_factor * cos(probing_factor_modulation * time + probing_offset)
+          For circular probing signals use:
+            probing_speed_modulation = probing_factor_modulation
+          For fixed angle oscillating probing signals use:
+            probing_speed_modulation = 0
+      probing_offset:
+        type: int32
+        doc: |
+          Initial phase offset for the probing signal, at 0 offset we start the probing the probing
+          signal anti-aligned with the holding signal.
+          
   DriveSchedule:
     doc: Set a series of driver states to be executed by the motor in sequence.
     type: DriveState

@@ -243,5 +243,10 @@ class CircularQueue{
   void mark_read(size_t size = 1) {
     read_index = (read_index + size) % N;
   }
+
+  /* Mark all data as read. */
+  void mark_all_read() {
+    read_index = write_index;
+  }
 };
 
