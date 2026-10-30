@@ -176,6 +176,12 @@ class CircularQueue{
     return &data[write_index];
   }
 
+  /* Quick copy write; assumes there is space available. */
+  void write(T const& element) {
+    data[write_index] = element;
+    mark_written(1);
+  }
+
   /* Write an element at the specified offset from the current write index.
 
   ! Must ensure there is enough write_available to do so.

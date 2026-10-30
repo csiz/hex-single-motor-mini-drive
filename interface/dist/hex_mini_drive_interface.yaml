@@ -123,7 +123,7 @@ definitions:
   DRIVE_SCHEDULE_SIZE:
     doc: Number of driver states that can be queued with a single command.
     type: uint32
-    const: 12
+    const: 6
 
   CURRENT_UNITS_PER_AMP:
     doc: |

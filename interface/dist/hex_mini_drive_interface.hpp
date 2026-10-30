@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.150.0";
+constexpr char const* VERSION_STRING = "0.151.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -121,7 +121,7 @@ constexpr uint32_t MAX_MESSAGE_SIZE = 256;
 
 constexpr uint32_t UNIT_TEST_OUTPUT_SIZE = 248;
 
-constexpr uint32_t DRIVE_SCHEDULE_SIZE = 12;
+constexpr uint32_t DRIVE_SCHEDULE_SIZE = 6;
 
 constexpr float CURRENT_UNITS_PER_AMP = 1000000;
 
@@ -653,11 +653,11 @@ static inline DriveState read_DriveState(uint8_t const* buffer) {
   return result;
 }
 // Set a series of driver states to be executed by the motor in sequence.
-using DriveSchedule = std::array<DriveState, 12>;
+using DriveSchedule = std::array<DriveState, 6>;
 
 static inline void write_DriveSchedule(uint8_t * buffer, DriveSchedule const& value) {
   size_t offset = 0;
-  for (size_t i = 0; i < 12; ++i) {
+  for (size_t i = 0; i < 6; ++i) {
     write_DriveState(buffer + offset, value[i]);;
     offset += 32;
   }
@@ -666,7 +666,7 @@ static inline void write_DriveSchedule(uint8_t * buffer, DriveSchedule const& va
 static inline DriveSchedule read_DriveSchedule(uint8_t const* buffer) {
   DriveSchedule result;
   size_t offset = 0;
-  for (size_t i = 0; i < 12; ++i) {
+  for (size_t i = 0; i < 6; ++i) {
     result[i] = read_DriveState(buffer + offset);
     offset += 32;
   }
@@ -1185,7 +1185,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_STATE_OFF: return 2;
     case MessageCode::SET_STATE_FREEWHEEL: return 2;
     case MessageCode::SET_DRIVE_STATE: return 34;
-    case MessageCode::SET_DRIVE_SCHEDULE: return 386;
+    case MessageCode::SET_DRIVE_SCHEDULE: return 194;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 34;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
     case MessageCode::CALIBRATION: return 34;
@@ -1265,9 +1265,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_DRIVE_SCHEDULE));
-      if (max_size < 2 + 384) return 0;
+      if (max_size < 2 + 192) return 0;
       write_DriveSchedule(buffer + 2, std::get<DriveSchedule>(message.message_data));
-      return 386;
+      return 194;
     }
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_STATE_DRIVE_6_SECTOR));
@@ -1403,7 +1403,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_DRIVE_SCHEDULE: {
-      if (size != 2 + 384) return false;
+      if (size != 2 + 192) return false;
       message.message_data = read_DriveSchedule(buffer + 2);
       return true;
     }

@@ -66,6 +66,8 @@ uint32_t readouts_to_send = 0;
 // Calibration state
 // -----------------
 
+hex_mini_drive::Calibration working_calibration = get_calibration();
+
 // We need to track the emf state to properly run the calibration.
 int32_t emf_pending_counter = 0;
 
@@ -270,17 +272,14 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
 
     // Turn off the motor driver.
     case SET_STATE_OFF: {
-      while(not drive_state_queue.write_if_available(breaking_drive_state)){
-        // Wait until we successfully write the breaking state to the queue.
-      };
+      drive_state_queue.mark_all_read();
       return;
     }
 
     // Freewheel the motor.
     case SET_STATE_FREEWHEEL: {
-      while(not drive_state_queue.write_if_available(freewheel_drive_state)){
-        // Wait until we successfully write the freewheel state to the queue.
-      };
+      drive_state_queue.mark_all_read();
+      drive_state_queue.write(freewheel_drive_state);
       return;
     }
 
@@ -292,9 +291,9 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
     }
 
     case SET_DRIVE_SCHEDULE: {
-      // Only write if there's space for the largest possible schedule size.
-      if (drive_state_queue.write_available() < hex_mini_drive::DRIVE_SCHEDULE_SIZE) return;
-
+      // Clear the queue for a new schedule.
+      drive_state_queue.mark_all_read();
+      
       size_t i = 0;
       for (; i < hex_mini_drive::DRIVE_SCHEDULE_SIZE; i++) {
         auto const& drive_state = std::get<DriveSchedule>(message.message_data)[i];
@@ -438,7 +437,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const bool idle_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
 
   // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
-  const bool emf_speed_detected = square(readout.emf_speed_constant) > 0.0625f * readout.emf_speed_constant_variance;
+  const bool emf_speed_detected = square(readout.emf_speed_constant) > 0.03125f * readout.emf_speed_constant_variance;
 
   // Calculate the motor constant
   // ----------------------------
@@ -455,7 +454,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // The voltage magnitude is always positive, also use the positive angular speed.
   const float abs_angular_speed = speed_is_negative ? -readout.angular_speed : readout.angular_speed;
 
-  const float predicted_emf_voltage = abs_angular_speed * calibration.motor_constant * emf_motor_constant_conversion;
+  const float predicted_emf_voltage = abs_angular_speed * working_calibration.motor_constant * emf_motor_constant_conversion;
 
 
   // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
@@ -472,8 +471,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
       learning_rate_multiplier.motor_constant
     );
 
-    calibration.motor_constant = validate_parameter(
-      calibration.motor_constant - resilient_motor_constant_gradient * control_parameters.motor_constant_ki,
+    working_calibration.motor_constant = validate_parameter(
+      working_calibration.motor_constant - resilient_motor_constant_gradient * control_parameters.motor_constant_ki,
       0
     );
     info.motor_constant_multiplier = learning_rate_multiplier.motor_constant;
@@ -548,8 +547,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
 
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-  const float direct_resistive_voltage = readout.direct_current * calibration.resistance;
-  const float quadrature_resistive_voltage = readout.quadrature_current * calibration.resistance;
+  const float direct_resistive_voltage = readout.direct_current * working_calibration.resistance;
+  const float quadrature_resistive_voltage = readout.quadrature_current * working_calibration.resistance;
 
   // And the current diffs for calculating inductance.
   const float direct_diff = readout.direct_current_diff * current_diff_to_voltage_units;
@@ -563,17 +562,17 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float cos_saliency = get_cos(saliency_angle);
   const float sin_saliency = get_sin(saliency_angle);
 
-  const float direct_inductance_bias_voltage = calibration.inductance_bias * (
+  const float direct_inductance_bias_voltage = working_calibration.inductance_bias * (
       -direct_diff * cos_saliency 
       -quadrature_diff * sin_saliency
   );
-  const float quadrature_inductance_bias_voltage = calibration.inductance_bias * (
+  const float quadrature_inductance_bias_voltage = working_calibration.inductance_bias * (
       -direct_diff * sin_saliency
       +quadrature_diff * cos_saliency
   );
 
-  const float direct_inductance_base_voltage = direct_diff * calibration.inductance;
-  const float quadrature_inductance_base_voltage = quadrature_diff * calibration.inductance;
+  const float direct_inductance_base_voltage = direct_diff * working_calibration.inductance;
+  const float quadrature_inductance_base_voltage = quadrature_diff * working_calibration.inductance;
 
   const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
   const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
@@ -623,8 +622,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     );
         
     
-    calibration.resistance = validate_parameter(
-      calibration.resistance - resilient_resistance_gradient * control_parameters.resistance_ki,
+    working_calibration.resistance = validate_parameter(
+      working_calibration.resistance - resilient_resistance_gradient * control_parameters.resistance_ki,
       minimum_resistance
     );
     
@@ -649,8 +648,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     );
     
     // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-    calibration.inductance = validate_parameter(
-      calibration.inductance - resilient_inductance_gradient * control_parameters.inductance_ki,
+    working_calibration.inductance = validate_parameter(
+      working_calibration.inductance - resilient_inductance_gradient * control_parameters.inductance_ki,
       minimum_inductance
     );
     info.inductance_multiplier = learning_rate_multiplier.inductance;
@@ -670,8 +669,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     );
     
     // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-    calibration.inductance_bias = validate_parameter(
-      calibration.inductance_bias - resilient_inductance_bias_gradient * control_parameters.inductance_bias_ki,
+    working_calibration.inductance_bias = validate_parameter(
+      working_calibration.inductance_bias - resilient_inductance_bias_gradient * control_parameters.inductance_bias_ki,
       minimum_inductance_bias
     );
     info.inductance_bias_multiplier = learning_rate_multiplier.inductance_bias;
@@ -839,7 +838,7 @@ void app_tick() {
       });
       queue_message(hex_mini_drive::Message{
         .message_code = hex_mini_drive::MessageCode::CALIBRATION,
-        .message_data = calibration
+        .message_data = working_calibration
       });
     }
 

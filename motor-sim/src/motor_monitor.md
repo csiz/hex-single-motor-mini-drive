@@ -433,15 +433,9 @@ const test_buttons = Inputs.button(
         [Math.PI * 1 / 3, 0.0],
         [Math.PI * 2 / 3, 1.0],
         [Math.PI * 2 / 3, 0.0],
-        [-Math.PI, 1.0],
-        [-Math.PI, 0.0],
-        [-Math.PI * 2 / 3, 1.0],
-        [-Math.PI * 2 / 3, 0.0],
-        [-Math.PI * 1 / 3, 1.0],
-        [-Math.PI * 1 / 3, 0.0],
       ].map(([angle, value]) => ({
         motor_flags: ENABLE_ALL_OUTPUTS,
-        duration: HISTORY_SIZE / 12,
+        duration: HISTORY_SIZE / 6,
         target_value: command_drive_state.target_value * value,
         angle_value: radians_to_angle_units(angle),
         target_speed: 0,
@@ -458,9 +452,9 @@ const test_buttons = Inputs.button(
       });
     }],
     ["Test increasing steps", async function(){
-      let drive_schedule = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.0].map(value => ({
+      let drive_schedule = [0.0, 0.25, 0.5, 1.0, 0.75, 0.0].map(value => ({
         motor_flags: ENABLE_ALL_OUTPUTS,
-        duration: HISTORY_SIZE / 12,
+        duration: HISTORY_SIZE / 6,
         target_value: command_drive_state.target_value * value,
         angle_value: command_drive_state.angle_value,
         target_speed: 0,

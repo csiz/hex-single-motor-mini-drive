@@ -51,17 +51,14 @@ MotorOutputs motor_outputs = breaking_motor_outputs;
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
-// Keep track of how many states were scheduled at the last update. We want to immediately skip to newer
-// commands if the schedule increases while we are still executing the previous ones.
-size_t drive_states_scheduled = 0;
-
-uint32_t duration_executed = 0;
-
 // Angle adjustment from the main loop.
 volatile int32_t external_angle_adjustment = 0;
 
 // Average out temperature reading for the main loop to calculate.
 float temperature_reading = 0.f;
+
+// Default drive state to use when no command is available.
+hex_mini_drive::DriveState default_drive_state = breaking_drive_state;
 
 
 // Interrupt Data Interface
@@ -78,7 +75,7 @@ hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 
 CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
 
-CircularQueue<hex_mini_drive::DriveState, 2 * hex_mini_drive::DRIVE_SCHEDULE_SIZE + 1> drive_state_queue = {};
+CircularQueue<hex_mini_drive::DriveState, hex_mini_drive::DRIVE_SCHEDULE_SIZE + 1> drive_state_queue = {};
 
 bool is_motor_safed(){
     // Consider both motor breaking and freewheeling as safe states.
@@ -366,7 +363,7 @@ void ADC1_2_IRQHandler(void){
     // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
     // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
     // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
-    const bool emf_detected = square(emf_voltage_magnitude) > 4 * emf_magnitude_variance;
+    const bool emf_detected = square(emf_voltage_magnitude) > emf_magnitude_variance;
 
     // const bool emf_speed_fix = square(emf_voltage_angular_speed) > emf_speed_variance;
 
@@ -405,7 +402,7 @@ void ADC1_2_IRQHandler(void){
 
     // Accept our emf speed only if it's consistent with the emf voltage magnitude. That is, the motor constant
     // variance has somewhat stablizied.
-    const bool emf_speed_detected = emf_speed_constant_sq > 0.0625f * emf_speed_constant_variance;
+    const bool emf_speed_detected = emf_speed_constant_sq > 0.03125f * emf_speed_constant_variance;
 
     // Calculate the rotor speed as a low pass of the detected emf speed.
     const float angular_speed_error = emf_speed_detected * (emf_speed_constant * emf_speed_constant_conversion * emf_voltage_magnitude) - readout.angular_speed;
@@ -518,117 +515,87 @@ void ADC1_2_IRQHandler(void){
     // Calculate and set motor outputs!!
     // ---------------------------------
 
-    // Setup the new state if we were commanded by the main loop.
-    const auto pending_drive_states = drive_state_queue.read_available();
-    
-    // Either we receive a new schedule of drive states, in which case switch to that.
-    if (pending_drive_states > drive_states_scheduled) {
-        const size_t new_drive_states = pending_drive_states - drive_states_scheduled;
-        // Skip old drive states as we've received new commands; always prioritize the latest batch.
-        drive_state_queue.mark_read(drive_states_scheduled);
-        // Set the new schedule count and load the first driver state.
-        drive_states_scheduled = new_drive_states;
-        duration_executed = 0;
-    }
-    
-    // Otherwise track the execution of the current drive state; and switch to the next one if needed.
-    if (drive_states_scheduled > 0) {
-        auto const& drive_state = drive_state_queue.peek();
 
-        // Copy the motor flags.
-        motor_flags = drive_state.motor_flags;
+    // Check if there is a command from the main loop.
+    const bool drive_state_available = drive_state_queue.read_available();
 
-        // Drive in closed loop control relative to the rotor angle and targetting a max torque and speed.
-        if (drive_state.closed_loop) {
-            // Get the rotation direction from the target speed.
-            const int32_t target_sign = (drive_state.target_speed < 0) ? -1 : 1;
-            // Use the previous sign to determine the absolute value of the target speed.
-            const float target_abs_speed = drive_state.target_speed * target_sign;
-            // Adjust the actual speed based on the target direction (it's cheaper to reuse
-            // the target_sign this way than to compute the absolute speed, it also
-            // gives us the correct distance in speed units betwen target and actual speed).
-            const float sign_adjusted_speed = angular_speed * target_sign;
-            // Use the sign of the target speed to determine the direction of the angle offset.
-            const int32_t target_angle_offset = drive_state.angle_value * target_sign;
-                
-            // Get the pwm adjustment to obtain the desired current magnitude.
-            const float current_adjustment = (
-                (drive_state.target_value - current_magnitude) * 
-                control_parameters.torque_control_ki
-            );
+    auto & drive_state = drive_state_available ? drive_state_queue.modify() : default_drive_state;
 
-            // Get the speed adjustment to obtain the desired speed.
-            const float speed_adjustment = (
-                (target_abs_speed - sign_adjusted_speed) * 
-                control_parameters.speed_control_ki
-            );
+    // Drive in closed loop control relative to the rotor angle and targetting a max torque and speed.
+    if (drive_state.closed_loop) {
+        // Get the rotation direction from the target speed.
+        const int32_t target_sign = (drive_state.target_speed < 0) ? -1 : 1;
+        // Use the previous sign to determine the absolute value of the target speed.
+        const float target_abs_speed = drive_state.target_speed * target_sign;
+        // Adjust the actual speed based on the target direction (it's cheaper to reuse
+        // the target_sign this way than to compute the absolute speed, it also
+        // gives us the correct distance in speed units betwen target and actual speed).
+        const float sign_adjusted_speed = angular_speed * target_sign;
+        // Use the sign of the target speed to determine the direction of the angle offset.
+        const int32_t target_angle_offset = drive_state.angle_value * target_sign;
             
-            // TODO: fix the breaking logic or maybe make it a special command from the main loop.
-            // Hmm, maybe we can use the driver_state.angle_value being opposite of angular_speed
-            // as a signal that we want to achieve breaking.
-            
-            // // We're breaking if the motor is moving the opposite direction the target speed.
-            // const bool breaking = emf_fix and sign_adjusted_speed < 0;
-            
-            // // We need to treat breaking case separately because all behaviour reverses sign
-            // // when we try to absorb energy from the rotor (regenerative braking).
-            // if (breaking) {
-            //     // If breaking we need to reverse our pwm and angle adjustments to max out on the
-            //     // commanded current magnitude (regenerative breaking). Because to reduce current
-            //     // absorbed during breaking, we need to increase PWM! So that we compensate for
-            //     // the back EMF harder.
-            //     active_pwm = clip_to(0, live_max_pwm, active_pwm - current_adjustment);
-            //     // Target the mirror current angle if breaking.
-            //     active_angle += static_cast<int32_t>(angular_speed + (
-            //         (target_angle_offset - current_angle_offset + half_circle) * 
-            //         control_parameters.lead_angle_control_ki
-            //     ));
-            // } else {
-                // Otherwise, used the conservative PWM to achieve either the target speed or 
-                // commanded current magnitude, whichever comes first.
-                readout.active_pwm = clip_to(0, live_max_pwm, readout.active_pwm + min(speed_adjustment, current_adjustment));
-                // Target the sign adjusted angle_value normally.
-                readout.active_angle += static_cast<int32_t>(angular_speed + (
-                    (target_angle_offset - current_angle_offset) * 
-                    control_parameters.lead_angle_control_ki
-                ));
-            // }
-        // Drive in open loop control.
-        } else {
-            // Copy the commanded PWM value from the drive command to our readout state.
-            readout.active_pwm = clip_to(
-                0, live_max_pwm, 
-                drive_state.target_value
-            );
-    
-            // Drive the inductors around a circle at the specified PWM and speed. Note the interrupt 
-            // loop always does open loop control. Main loop adjusts settings for closed loop control.
-            readout.active_angle = (
-                // Increment the active_angle except the first iteration of an open loop command where
-                // we jump to the command angle_value.
-                (duration_executed ? readout.active_angle : drive_state.angle_value) +
-                static_cast<int32_t>(drive_state.target_speed)
-            );
-        }
+        // Get the pwm adjustment to obtain the desired current magnitude.
+        const float current_adjustment = (
+            (drive_state.target_value - current_magnitude) * 
+            control_parameters.torque_control_ki
+        );
 
-        // Count execution time.
-        duration_executed += 1;
+        // Get the speed adjustment to obtain the desired speed.
+        const float speed_adjustment = (
+            (target_abs_speed - sign_adjusted_speed) * 
+            control_parameters.speed_control_ki
+        );
+
+        // Use the conservative PWM to achieve either the target speed or commanded current magnitude, whichever comes first.
+        readout.active_pwm = clip_to(0, live_max_pwm, readout.active_pwm + min(speed_adjustment, current_adjustment));
         
-        // Schedule the next in sequence if we've executed for the full duration of the current drive state.
-        if (duration_executed >= drive_state.duration) {
-            drive_states_scheduled -= 1;
-            drive_state_queue.mark_read(1);
-            duration_executed = 0;
-        }
-    // Finally if nothing is scheduled make the active_angle track the rotor position for smooth starting.
+        // Target the sign adjusted angle_value normally.
+        readout.active_angle = readout.active_angle + static_cast<int32_t>(angular_speed + (
+            (target_angle_offset - current_angle_offset) * control_parameters.lead_angle_control_ki
+        ));
+        
+        
+        // TODO: fix the breaking logic or maybe make it a special command from the main loop.
+        // Hmm, maybe we can use the driver_state.angle_value being opposite of angular_speed
+        // as a signal that we want to achieve breaking.
+        
+        // // We're breaking if the motor is moving the opposite direction the target speed.
+        // const bool breaking = emf_fix and sign_adjusted_speed < 0;
+        
+        // // We need to treat breaking case separately because all behaviour reverses sign
+        // // when we try to absorb energy from the rotor (regenerative braking).
+        // if (breaking) {
+        //     // If breaking we need to reverse our pwm and angle adjustments to max out on the
+        //     // commanded current magnitude (regenerative breaking). Because to reduce current
+        //     // absorbed during breaking, we need to increase PWM! So that we compensate for
+        //     // the back EMF harder.
+        //     active_pwm = clip_to(0, live_max_pwm, active_pwm - current_adjustment);
+        //     // Target the mirror current angle if breaking.
+        //     active_angle += static_cast<int32_t>(angular_speed + (
+        //         (target_angle_offset - current_angle_offset + half_circle) * 
+        //         control_parameters.lead_angle_control_ki
+        //     ));
+        // }
+    // Drive in open loop control.
     } else {
-        duration_executed = 0;
-        motor_flags = breaking_drive_state.motor_flags;
-        readout.active_pwm = breaking_drive_state.target_value;
+        // Drive the inductors around a circle at the specified PWM and speed. And apply the initial offset.
+        readout.active_angle = readout.active_angle + static_cast<int32_t>(drive_state.target_speed) + drive_state.angle_value;
+        // Zero out the offset so we don't apply it again in the next control cycle.
+        drive_state.angle_value = 0;
+        // Copy the commanded PWM value from the drive command to our readout state.
+        readout.active_pwm = clip_to(0, live_max_pwm, drive_state.target_value);
+    }
+
+    if (drive_state_available) {
+        // Count down execution time or discard the top drive state when we finish its duration.
+        if (drive_state.duration) drive_state.duration -= 1;
+        else drive_state_queue.mark_read(1);
+    } else {
+        // Set the active_angle to the rotor angle while there's no drive command.
         readout.active_angle = angle;
     }
 
-    readout.probing_angle += static_cast<int32_t>(control_parameters.angle_probing_angular_speed);
+    readout.probing_angle += drive_state.probing_speed_modulation;
 
     
     // Calculate and store desired motor pwm;
@@ -653,7 +620,7 @@ void ADC1_2_IRQHandler(void){
     });
 
     // Enable phases based on the motor_flags settings.
-    set_motor_status(motor_flags);
+    set_motor_status(drive_state.motor_flags);
 
 
     
@@ -672,6 +639,9 @@ void ADC1_2_IRQHandler(void){
 
     // Write the latest readout data
     // -----------------------------
+
+    // TODO: Copy the motor flags somewhere?
+    // motor_flags = drive_state.motor_flags;
 
     readout.readout_number = readout_number;
     readout.ref_readout = adc_readings.ref_readout;

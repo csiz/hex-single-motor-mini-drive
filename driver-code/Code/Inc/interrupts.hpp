@@ -41,7 +41,7 @@ extern CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> read
 // ! Note, we should keep it twice the size of the maximum schedule + 1. This way we can load the next
 // schedule while the first is executing, but also we will have 1 more space to write an emergency break
 // command! The break command will also lead to the interrupt loop freeing up space in the command queue.
-extern CircularQueue<hex_mini_drive::DriveState, 25> drive_state_queue;
+extern CircularQueue<hex_mini_drive::DriveState, hex_mini_drive::DRIVE_SCHEDULE_SIZE + 1> drive_state_queue;
 
 // Check if the motor is in a safe state (breaking or freewheeling).
 bool is_motor_safed();
