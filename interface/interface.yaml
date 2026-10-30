@@ -324,7 +324,11 @@ definitions:
         type: float32
         doc: Long duration average of the resistive power; used to limit the maximum resistive power.
 
+      emf_stable_magnitude:
+        type: float32
+        doc: A slower varying estimate of the EMF voltage magnitude.
 
+        
   StreamReadouts:
     doc: |
       Continuously send readouts of the motor driver internal state.

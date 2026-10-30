@@ -25,7 +25,7 @@ rotating phasor frame).
 
 <div class="card tight">
   <div>${phases_rebased_plot}</div>
-  Maximum voltage diff is: ${(max_adj / 2).toFixed(3)} VCC
+  Maximum voltage diff is: ${(max_adj).toFixed(3)} VCC
 </div>
 
 Atan2 Approximation
@@ -59,9 +59,9 @@ function phase_func(t){
 
   const sin = Math.sin(t);
 
-  const u = Math.cos(t);
-  const v = Math.cos(t + 2 * Math.PI / 3);
-  const w = Math.cos(t + 4 * Math.PI / 3);
+  const u = 0.5 + 0.5 * Math.cos(t);
+  const v = 0.5 + 0.5 * Math.cos(t + 2 * Math.PI / 3);
+  const w = 0.5 + 0.5 * Math.cos(t + 4 * Math.PI / 3);
 
   const max = Math.max(u, v, w);
   const min = Math.min(u, v, w);
@@ -80,7 +80,7 @@ const phases = phi.map(phase_func);
 const max_adj = d3.max(phases, d => d.adj_u);
 
 const phases_and_maximums_plot = Plot.plot({
-  y: {domain: [-1.0, 1.0]},
+  y: {domain: [0.0, 1.0]},
   marks: [
     Plot.lineY(phases, {x: "deg", y: "u", stroke: 'red', label: 'U'}),
     Plot.lineY(phases, {x: "deg", y: "v", stroke: 'green', label: 'V'}),
@@ -95,7 +95,7 @@ const phases_and_maximums_plot = Plot.plot({
 
 
 const phases_rebased_plot = Plot.plot({
-  y: {domain: [0, 2.0]},
+  y: {domain: [0, 1.0]},
   marks: [
     Plot.lineY(phases, {x: "deg", y: "adj", stroke: 'black', label: 'Adjustment'}),
     Plot.lineY(phases, {x: "deg", y: "adj_u", stroke: 'red', label: 'U'}),

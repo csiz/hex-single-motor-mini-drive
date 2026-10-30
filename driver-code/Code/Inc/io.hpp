@@ -415,18 +415,12 @@ static inline void io_init(){
 
 // Operators and other misc stuff
 // ------------------------------
-
+// TODO: actually this might not be the correct way to add motor outputs, we probably want to do it before
+// the abc transform.
 static inline MotorOutputs operator+(const MotorOutputs& lhs, const MotorOutputs& rhs) {
     return MotorOutputs{
         lhs.u_duty + rhs.u_duty,
         lhs.v_duty + rhs.v_duty,
         lhs.w_duty + rhs.w_duty
     };
-}
-
-static inline MotorOutputs operator+=(MotorOutputs& lhs, const MotorOutputs& rhs) {
-    lhs.u_duty += rhs.u_duty;
-    lhs.v_duty += rhs.v_duty;
-    lhs.w_duty += rhs.w_duty;
-    return lhs;
 }

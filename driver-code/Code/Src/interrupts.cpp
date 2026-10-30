@@ -69,32 +69,8 @@ volatile int32_t external_angle_adjustment = 0;
 // Average out temperature reading for the main loop to calculate.
 float temperature_reading = 0.f;
 
-// Angle probing via High-Frequency Injection (HFI)
-// ------------------------------------------------
-
-enum struct AngleProbingMode : uint8_t {
-    WAITING,
-    HFI_SWEEP_0,
-    HFI_SWEEP_1,
-    HFI_SWEEP_2,
-    HFI_SWEEP_3
-};
-
-struct AngleProbingState {
-    AngleProbingMode mode = AngleProbingMode::WAITING;
-    uint32_t counter = 0;
-    int32_t angle = 0;
-
-    void count_and_switch(uint32_t const counter_threshold, AngleProbingMode && next_mode) {
-        counter += 1;
-        if (counter > counter_threshold) {
-            mode = next_mode;
-            counter = 0;
-        }
-    }
-};
-
-AngleProbingState angle_probing = {};
+// HFI probing angle.
+int32_t probing_angle = 0;
 
 // Interrupt Data Interface
 // ------------------------
@@ -161,47 +137,6 @@ static inline MotorOutputs compute_motor_outputs(int32_t const& angle, float con
         .v_duty = static_cast<uint16_t>(voltage_phase_v * pwm_value),
         .w_duty = static_cast<uint16_t>(voltage_phase_w * pwm_value)
     };
-}
-
-static inline MotorOutputs angle_probing_update(AngleProbingState & angle_probing, const int32_t readout_angle, const bool emf_fix){
-    // Disable sweeping by setting the control_parameters.angle_probing_pwm to zero.
-
-    switch (angle_probing.mode){
-        case AngleProbingMode::WAITING: {
-            angle_probing.angle = readout_angle;
-            // Reset the counter as long as we have a known position.
-            if (emf_fix) {
-                angle_probing.counter = 0; 
-            } else {
-                angle_probing.count_and_switch(control_parameters.angle_probing_interval, AngleProbingMode::HFI_SWEEP_0);
-            }
-            return MotorOutputs{};
-        }
-        case AngleProbingMode::HFI_SWEEP_0: {
-            angle_probing.angle += control_parameters.angle_probing_angular_speed;
-            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::HFI_SWEEP_1);
-            break;
-        }
-        case AngleProbingMode::HFI_SWEEP_1: {
-            angle_probing.angle -= control_parameters.angle_probing_angular_speed;
-            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::HFI_SWEEP_2);
-            break;
-        }
-        case AngleProbingMode::HFI_SWEEP_2: {
-            angle_probing.angle -= control_parameters.angle_probing_angular_speed;
-            angle_probing.count_and_switch(control_parameters.angle_probing_sweep_duration, AngleProbingMode::HFI_SWEEP_3);
-            break;
-        }
-        case AngleProbingMode::HFI_SWEEP_3: {
-            angle_probing.angle += control_parameters.angle_probing_angular_speed;
-            angle_probing.count_and_switch(
-                control_parameters.angle_probing_sweep_duration, 
-                (control_parameters.angle_probing_interval or emf_fix) ? AngleProbingMode::WAITING : AngleProbingMode::HFI_SWEEP_0);
-            break;
-        }
-    }
-
-    return compute_motor_outputs(angle_probing.angle, control_parameters.angle_probing_pwm);
 }
 
 // ADC readings and calculation loop
@@ -304,22 +239,13 @@ void ADC1_2_IRQHandler(void){
     // And transform the drive voltages too.
     const auto [direct_drive_voltage, quadrature_drive_voltage] = dq0_transform(drive_voltages);
 
-    // Intermingle other calculations while the cordic calculates.
+    // Cast the angle speed to angle units per pwm cycle.
+    const int32_t angle_traversed = readout.angular_speed;
 
     // Predict the position; keeping track of fractional angles at the same resolution as
     // the speed. By our definition the time unit is 1 per cycle; so the angle spanned by 
     // the rotor is exactly the angular speed.
-    const int32_t predicted_angle = readout.angle + static_cast<int32_t>(readout.angular_speed);
-
-    // Transform the measured currents into the DQ0 frame at the fixed angle 0.
-    const auto [direct_current, quadrature_current] = dq0_transform(currents);
-
-    // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
-    set_cordic(direct_current, quadrature_current);
-
-
-    // Get the common mode current. It should be 0 in theory, but of course it is not in practice...
-    const float zero_current = (std::get<0>(currents) + std::get<1>(currents) + std::get<2>(currents)) * one_third;
+    const int32_t predicted_angle = readout.angle + angle_traversed;
 
 
     // Current angle calculation
@@ -330,26 +256,28 @@ void ADC1_2_IRQHandler(void){
     // In our convention the inductors driven with positive current form a south pole that attracts
     // the north pole of the rotor.
 
-    // Calculate the angle at which the current is running on the motor coils. The angle offset is
-    // with respect to the predicted angle as that was the angle used in the park transform.
-    const auto [instant_current_angle, instant_current_magnitude] = get_cordic();
+    // Transform the measured currents into the DQ0 frame at the fixed angle 0.
+    const auto [direct_current, quadrature_current] = dq0_transform(currents);
     
-    const int32_t predicted_current_angle = predicted_angle + readout.current_angle_offset;
+    // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
+    set_cordic(direct_current, quadrature_current);
 
-    const int32_t current_angle_error = instant_current_angle - predicted_current_angle;
+    // Intermingle other calculations while the cordic calculates.
 
-    const int32_t current_angle = predicted_current_angle + static_cast<int32_t>(current_angle_error * control_parameters.loop_fast_ki);
+    // Get the common mode current. It should be 0 in theory, but of course it is not in practice...
+    const float zero_current = (std::get<0>(currents) + std::get<1>(currents) + std::get<2>(currents)) * one_third;
+
+    // Calculate the angle at which the current is running on the motor coils, averaged the same way as we do for emf.
+    const auto [current_angle, current_magnitude] = get_cordic();
 
     const int32_t current_angle_offset = current_angle - predicted_angle;
 
-    const float current_magnitude = readout.current_magnitude + (instant_current_magnitude - readout.current_magnitude) * control_parameters.loop_fast_ki;
-    
+
     // Using DQ0 coordinates
     // ---------------------
         
     // Calculate the predicted EMF angle.
-    const int32_t predicted_emf_voltage_angle = readout.emf_voltage_angle + static_cast<int32_t>(readout.angular_speed);
-
+    const int32_t predicted_emf_voltage_angle = readout.emf_voltage_angle + angle_traversed;
 
     const float cos_emf = get_cos(predicted_emf_voltage_angle);
     const float sin_emf = get_sin(predicted_emf_voltage_angle);
@@ -409,46 +337,46 @@ void ADC1_2_IRQHandler(void){
     // Get the angle measured from EMF relative to the predicted rotor angle.
     const auto [emf_voltage_angle, emf_voltage_magnitude] = get_cordic();
 
-    const float instant_emf_voltage_variance = (
-        square(emf_voltage_magnitude - readout.emf_voltage_magnitude) + 
-        square(direct_emf_voltage_error) +
-        square(quadrature_emf_voltage_error)
-    );
-
-    const float emf_magnitude_variance = (
-        readout.emf_magnitude_variance +
-        (instant_emf_voltage_variance - readout.emf_magnitude_variance) * control_parameters.loop_fast_ki
-    );
-
-    const float worst_emf_variance = max(instant_emf_voltage_variance, emf_magnitude_variance);
+    // Distance travelled by the emf axis on this timestep, directly converted to angular speed given our unit timestep convention.
+    const float emf_speed_error = (emf_voltage_angle - readout.emf_voltage_angle) - readout.emf_voltage_angular_speed;
     
-    const float emf_magnitude_square = square(emf_voltage_magnitude);
-
-    // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
-    // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
-    // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
-    const bool emf_detected = emf_magnitude_square > 4 * worst_emf_variance;
+    // Note that the sliding mode emf observer is based on the rotor angular_speed, so we are free to update the emf angular speed
+    // estimate independently. We update it all the time so we can calculate the baseline variance for the angular speed.
+    const float emf_voltage_angular_speed = readout.emf_voltage_angular_speed + emf_speed_error * control_parameters.loop_fast_ki;
     
-    // Distance travelled by the emf axis on this timestep, directly converted to angular speed given the unit timestep.
-    const float instant_emf_speed = emf_voltage_angle - readout.emf_voltage_angle;
-
-    const float emf_speed_error = instant_emf_speed - readout.emf_voltage_angular_speed;
-
-    // Decay the emf speed to 0 if we don't have an emf detection.
-    const float emf_voltage_angular_speed = (
-        readout.emf_voltage_angular_speed + emf_speed_error * control_parameters.loop_fast_ki
-    );
-
+    // The variance will be the square of the angle error, it should fluctuate wildly at standstill when the emf vector is near 0.
     const float instant_emf_speed_variance = square(emf_speed_error);
 
-    const float emf_angular_speed_variance = (
+    // Track the worst case variance for speed, the max of the instantaneous speed variance and the filtered speed variance.
+    const float emf_angular_speed_variance = instant_emf_speed_variance > readout.emf_angular_speed_variance ? instant_emf_speed_variance : (
         readout.emf_angular_speed_variance + 
         (instant_emf_speed_variance - readout.emf_angular_speed_variance) * control_parameters.loop_fast_ki
     );
 
-    // const float worst_emf_speed_variance = max(instant_emf_speed_variance, emf_angular_speed_variance);
+    
+    // For the emf voltage variance we add the errors in the frame before rotating.
+    const float instant_emf_voltage_variance = (
+        square(direct_emf_voltage_error) +
+        square(quadrature_emf_voltage_error)
+    );
 
-    // const bool emf_speed_fix = square(emf_voltage_angular_speed) > worst_emf_speed_variance;
+    // Use the worst of the instantaneous variance or the filtered variance to track the worst case variance.
+    const float emf_magnitude_variance = instant_emf_voltage_variance > readout.emf_magnitude_variance ? instant_emf_voltage_variance : (
+        readout.emf_magnitude_variance +
+        (instant_emf_voltage_variance - readout.emf_magnitude_variance) * control_parameters.loop_fast_ki
+    );
+
+
+    // Compute a second tracker for the emf magnitude that is lagged exactly the same as the angular speed estimate
+    // so that we can compute an unbiased motor constant.
+    const float emf_stable_magnitude = readout.emf_stable_magnitude + (emf_voltage_magnitude - readout.emf_stable_magnitude) * control_parameters.loop_fast_ki;
+
+    // Check if the EMF angle is relatively stable. This is a proxy for detecting emf because at 0 speed, 0 emf, and
+    // random noise readings for the u, v, w phases we should detect a random emf voltage of very low magnitude. Which
+    // causes the angle to jump wildy and stabilize at about 90degree sqrt(variance).
+    const bool emf_detected = square(emf_voltage_magnitude) > 4 * emf_magnitude_variance;
+
+    // const bool emf_speed_fix = square(emf_voltage_angular_speed) > emf_speed_variance;
 
     // Calculate the instant motor constant
     // ------------------------------------
@@ -463,7 +391,7 @@ void ADC1_2_IRQHandler(void){
     // magnitude changes much more slowly despite being optimized with the same learning rate.
 
     const float predicted_emf_speed_constant = emf_detected ? 
-        ((emf_voltage_angular_speed * emf_speed_constant_conversion_inverse) / emf_voltage_magnitude) :
+        ((emf_voltage_angular_speed * emf_speed_constant_conversion_inverse) / emf_stable_magnitude) :
         0.0f;
 
     // Get the error (gradient) for the motor constant observer.
@@ -473,28 +401,28 @@ void ADC1_2_IRQHandler(void){
 
     const float instant_emf_speed_constant_variance = square(emf_speed_constant_error) + min_speed_constant_sq;
 
-    const float emf_speed_constant_variance = (
+    const float emf_speed_constant_variance = instant_emf_speed_constant_variance > readout.emf_speed_constant_variance ? instant_emf_speed_constant_variance : (
         readout.emf_speed_constant_variance + 
         (instant_emf_speed_constant_variance - readout.emf_speed_constant_variance) * control_parameters.emf_speed_constant_ki
     );
 
-    const float worst_emf_speed_constant_variance = max(emf_speed_constant_variance, instant_emf_speed_constant_variance);
-
-    // Calculate speed and acceleration
-    // --------------------------------
+    // Calculate motor constant, speed, and acceleration
+    // -------------------------------------------------
 
     const float emf_speed_constant_sq = square(emf_speed_constant);
 
-    const bool emf_speed_constant_fix = emf_speed_constant_sq > 0.0625f * worst_emf_speed_constant_variance;
+    // Accept our emf speed only if it's consistent with the emf voltage magnitude. That is, the motor constant
+    // variance has somewhat stablizied.
+    const bool emf_speed_detected = emf_speed_constant_sq > 0.0625f * emf_speed_constant_variance;
 
     // Calculate the rotor speed as a low pass of the detected emf speed.
-    const float angular_speed_error = emf_speed_constant_fix * (emf_speed_constant * emf_speed_constant_conversion * emf_voltage_magnitude) - readout.angular_speed;
+    const float angular_speed_error = emf_speed_detected * (emf_speed_constant * emf_speed_constant_conversion * emf_voltage_magnitude) - readout.angular_speed;
 
     // Use the integral gain, but decay to 0 on loss of EMF certainty.
     const float angular_speed = readout.angular_speed + angular_speed_error * control_parameters.angle_from_emf_ki;
 
     // Declare that we have an EMF fix if our speed is greater than the measurment error.
-    const bool emf_fix = emf_speed_constant_sq > 16 * worst_emf_speed_constant_variance;
+    const bool emf_fix = emf_speed_constant_sq > 16 * emf_speed_constant_variance;
 
 
     // Angle update
@@ -507,7 +435,7 @@ void ADC1_2_IRQHandler(void){
         // Otherwise adjust only towards the axis of the emf angle observer, with an extra downscaling.
         (((emf_voltage_angle - predicted_angle) & most_positive_angle) - quarter_circle) * control_parameters.angle_from_emf_ki *
         // And even more downscaling if we don't have speed certainty, probably means we don't have position certainty.
-        (emf_speed_constant_fix ? 1.f : control_parameters.angle_from_emf_ki)
+        (emf_speed_detected ? 1.f : control_parameters.angle_from_emf_ki)
     );
     
     // Calculate the new angle based on all the angle adjustments.
@@ -601,8 +529,6 @@ void ADC1_2_IRQHandler(void){
 
     // Write the latest readout data
     // -----------------------------
-    // 
-    // Must update the whole state before motor pwm calculation!
 
     readout.readout_number = readout_number;
     
@@ -632,9 +558,11 @@ void ADC1_2_IRQHandler(void){
 
     readout.emf_voltage_angle = emf_voltage_angle;
     readout.emf_voltage_magnitude = emf_voltage_magnitude;
+    readout.emf_stable_magnitude = emf_stable_magnitude;
     readout.emf_magnitude_variance = emf_magnitude_variance;
     readout.emf_voltage_angular_speed = emf_voltage_angular_speed;
     readout.emf_angular_speed_variance = emf_angular_speed_variance;
+
 
     readout.vcc_voltage = vcc_voltage;
     readout.live_max_pwm = live_max_pwm;
@@ -755,13 +683,20 @@ void ADC1_2_IRQHandler(void){
         active_angle = readout.angle;
     }
 
-    // Calculate and store desired motor pwm.
-    // 
+    
     // Run the angle probing in the interrupt loop, it makes managing state much easier because HFI
-    // has to run on top of any other commands. It automatically stops while the motor is running..
+    // has to run on top of any other commands. It automatically stops while the motor is running...
+    const bool run_hfi_angle_probing = not emf_speed_detected;
+
+    // ! Note that we must update the probing_voltage for the next readout, after saving the current readout.
+    probing_angle += static_cast<int32_t>(control_parameters.angle_probing_angular_speed);
+    const float probing_pwm = run_hfi_angle_probing ? control_parameters.angle_probing_pwm : 0;
+    
+    // Calculate and store desired motor pwm;
+    // TODO: add the values in xy coordinates before setting outputs with the special waveform.
     motor_outputs = (
         compute_motor_outputs(active_angle, active_pwm) +
-        angle_probing_update(angle_probing, readout.angle, emf_fix)
+        compute_motor_outputs(probing_angle, probing_pwm)
     );
 
     // Send the command to the timer compare registers. Set the registers close to when cycle_end_tick 

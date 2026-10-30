@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.142.0";
+constexpr char const* VERSION_STRING = "0.146.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -256,6 +256,8 @@ struct Readout {
   float total_power_average;
   // Long duration average of the resistive power; used to limit the maximum resistive power.
   float resistive_power_average;
+  // A slower varying estimate of the EMF voltage magnitude.
+  float emf_stable_magnitude;
 };
 
 static inline void write_Readout(uint8_t * buffer, Readout const& value) {
@@ -317,6 +319,8 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   write_float32(buffer + offset, value.total_power_average);;
   offset += 4;
   write_float32(buffer + offset, value.resistive_power_average);;
+  offset += 4;
+  write_float32(buffer + offset, value.emf_stable_magnitude);;
   offset += 4;
 }
 static inline Readout read_Readout(uint8_t const* buffer) {
@@ -381,6 +385,8 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   result.total_power_average = read_float32(buffer + offset);
   offset += 4;
   result.resistive_power_average = read_float32(buffer + offset);
+  offset += 4;
+  result.emf_stable_magnitude = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1119,7 +1125,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 110;
+    case MessageCode::READOUT: return 114;
     case MessageCode::INFO: return 42;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
@@ -1165,9 +1171,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 108) return 0;
+      if (max_size < 2 + 112) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 110;
+      return 114;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
@@ -1305,7 +1311,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 108) return false;
+      if (size != 2 + 112) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }

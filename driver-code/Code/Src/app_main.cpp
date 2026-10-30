@@ -438,7 +438,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const bool idle_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
 
   // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
-  const bool emf_speed_constant_good = square(readout.emf_speed_constant) > 0.0625f * readout.emf_speed_constant_variance;
+  const bool emf_speed_detected = square(readout.emf_speed_constant) > 0.0625f * readout.emf_speed_constant_variance;
 
   // Calculate the motor constant
   // ----------------------------
@@ -459,7 +459,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
 
   // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
-  if (emf_speed_constant_good and abs_angular_speed > control_parameters.emf_min_angular_speed){
+  if (emf_speed_detected and abs_angular_speed > control_parameters.emf_min_angular_speed){
     
     // Get the error (gradient) for the motor constant observer.
     const float motor_constant_gradient = predicted_emf_voltage - readout.emf_voltage_magnitude;
@@ -491,18 +491,18 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // resistance and inductance are miscalibrated and we detect a fake stationary EMF. In that case
   // we need to re-start optimizing resistance and inductance to exit the faulty state.
 
-  const bool emf_suspected = square(readout.emf_voltage_magnitude) > 4 * readout.emf_magnitude_variance;
+  const bool emf_suspected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
   
   // We are waiting for an EMF fix if we if there's detectable magnitude. If we don't see movement (aka emf_fix)
   // then it might be a false positive due to miscalibration of the motor parameters.
-  const bool emf_pending = emf_suspected and not emf_speed_constant_good;
+  const bool emf_pending = emf_suspected and not emf_speed_detected;
 
   // Count the steps when we detect EMF voltage but don't have an emf_fix; reset on either emf_fix or no EMF voltage.
   emf_pending_counter = emf_pending ? min(emf_pending_counter + 1, control_parameters.emf_uncertainty_threshold) : 0;
   
   // Skip the calibration steps below as long as we're detecting any emf voltage.
   // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
-  TODO: the best update conditions are different! (dunno exactly how) also we should somehow update resistance while driving too.
+  // TODO: the best update conditions are different! (dunno exactly how) also we should somehow update resistance while driving too.
   if (emf_suspected and emf_pending_counter < control_parameters.emf_uncertainty_threshold) {
     return;
   }
@@ -532,10 +532,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     );
   }
 
-
-  
   // The rest of the calibration can only be done if we're actively driving the motor phases as that
-  // is our only source of scale for the phase voltages.
+  // is our only source of reference scale for the phase voltages.
   if (idle_drive) return;
 
 
@@ -553,6 +551,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float direct_resistive_voltage = readout.direct_current * calibration.resistance;
   const float quadrature_resistive_voltage = readout.quadrature_current * calibration.resistance;
 
+  // And the current diffs for calculating inductance.
   const float direct_diff = readout.direct_current_diff * current_diff_to_voltage_units;
   const float quadrature_diff = readout.quadrature_current_diff * current_diff_to_voltage_units;
 
@@ -578,8 +577,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
   const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
-
-
+  
+  // TODO: update explanation
   // Now we track the resistance and inductance using some form of gradient descent. The equation that we want to solve is:
   // 
   //     0 ~ voltage_error = resistance_voltage + inductor_voltage - drive_voltage - emf_voltage
@@ -607,13 +606,13 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
 
   // Compute the gradients of the loss with respect to each of the tracked parameters.
-
+  
   // Only update the resistance if we have sufficient current to make the measurement meaningful.
   if(readout.current_magnitude > control_parameters.resistance_current_minimum) {
     const float resistance_gradient = (
         direct_voltage_error * direct_resistive_voltage +
         quadrature_voltage_error * quadrature_resistive_voltage
-    ) / square(readout.current_magnitude);
+    ) * volts_per_voltage_units_square;
 
     const float resilient_resistance_gradient = resilient_gradient(
         resistance_gradient,
