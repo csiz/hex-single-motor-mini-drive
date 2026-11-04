@@ -55,6 +55,8 @@ constexpr float max_angular_speed_inverse = 1.f / max_angular_speed;
 // Square of the maximum angular speed.
 constexpr float max_angular_speed_sq = square(max_angular_speed);
 
+// Maximum drive state duration.
+constexpr uint16_t max_duration = 0xFFFF;
 
 // Unit definitions
 // ----------------

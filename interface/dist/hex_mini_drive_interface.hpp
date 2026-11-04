@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.154.0";
+constexpr char const* VERSION_STRING = "0.158.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -439,18 +439,6 @@ struct Info {
   float average_buffer_fill_rate;
   // Temperature readout from the internal temperature sensor.
   float temperature;
-  // Estimated angle relative to the rotor angle of the inductance bias due to saliency effects.
-  int32_t saliency_angle_offset;
-  // Variance of the estimated saliency angle, indicating the confidence in the saliency angle estimation.
-  float saliency_angle_variance;
-  // Multiplier for the resistance, used to adjust the effective resistance in calculations.
-  float resistance_multiplier;
-  // Multiplier for the inductance, used to adjust the effective inductance in calculations.
-  float inductance_multiplier;
-  // Multiplier for the inductance bias, used to adjust the effective inductance bias in calculations.
-  float inductance_bias_multiplier;
-  // Multiplier for the motor constant, used to adjust the effective motor constant in calculations.
-  float motor_constant_multiplier;
 };
 
 static inline void write_Info(uint8_t * buffer, Info const& value) {
@@ -462,18 +450,6 @@ static inline void write_Info(uint8_t * buffer, Info const& value) {
   write_float32(buffer + offset, value.average_buffer_fill_rate);;
   offset += 4;
   write_float32(buffer + offset, value.temperature);;
-  offset += 4;
-  write_int32(buffer + offset, value.saliency_angle_offset);;
-  offset += 4;
-  write_float32(buffer + offset, value.saliency_angle_variance);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_bias_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.motor_constant_multiplier);;
   offset += 4;
 }
 static inline Info read_Info(uint8_t const* buffer) {
@@ -489,21 +465,9 @@ static inline Info read_Info(uint8_t const* buffer) {
   offset += 4;
   result.temperature = read_float32(buffer + offset);
   offset += 4;
-  result.saliency_angle_offset = read_int32(buffer + offset);
-  offset += 4;
-  result.saliency_angle_variance = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_bias_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.motor_constant_multiplier = read_float32(buffer + offset);
-  offset += 4;
   return result;
 }
-// Estimate resistance and inductance values for the motor coils; updated live.
+// Final calibration values used during live control of the motor.
 struct Calibration {
   // Estimated zero-current offset for the U phase.
   float u_current_zero;
@@ -563,6 +527,116 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   result.inductance_bias = read_float32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
+  offset += 4;
+  return result;
+}
+// Instance of the calibration process for a specific pwm, speed and drive configuration.
+struct CalibrationInstance {
+  // Number of calibration data points.
+  uint32_t count;
+  // Target PWM value for this calibration instance.
+  float target_pwm;
+  // Target speed for this calibration instance.
+  float target_speed;
+  // Drive voltage used during this calibration instance.
+  float drive_voltage;
+  // Current magnitude during this calibration instance.
+  float current_magnitude;
+  // Measured resistance value for the X phase.
+  float resistance_x;
+  // Multiplier for the X phase resistance, used to adjust the effective resistance in calculations.
+  float resistance_x_multiplier;
+  // Measured resistance value for the Y phase.
+  float resistance_y;
+  // Multiplier for the Y phase resistance, used to adjust the effective resistance in calculations.
+  float resistance_y_multiplier;
+  // Measured inductance value for the X phase.
+  float inductance_x;
+  // Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
+  float inductance_x_multiplier;
+  // Measured inductance value for the Y phase.
+  float inductance_y;
+  // Multiplier for the Y phase inductance, used to adjust the effective inductance in calculations.
+  float inductance_y_multiplier;
+  // Measured inductance saliency bias.
+  float inductance_saliency;
+  // Multiplier for the inductance saliency, used to adjust the effective inductance saliency in calculations.
+  float inductance_saliency_multiplier;
+  // Saliency angle for the inductance saliency effect.
+  int32_t saliency_angle;
+};
+
+static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstance const& value) {
+  size_t offset = 0;
+  write_uint32(buffer + offset, value.count);;
+  offset += 4;
+  write_float32(buffer + offset, value.target_pwm);;
+  offset += 4;
+  write_float32(buffer + offset, value.target_speed);;
+  offset += 4;
+  write_float32(buffer + offset, value.drive_voltage);;
+  offset += 4;
+  write_float32(buffer + offset, value.current_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_x);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_x_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_y);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_y_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_x);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_x_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_y);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_y_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_saliency);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_saliency_multiplier);;
+  offset += 4;
+  write_int32(buffer + offset, value.saliency_angle);;
+  offset += 4;
+}
+static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  CalibrationInstance result;
+  
+  result.count = read_uint32(buffer + offset);
+  offset += 4;
+  result.target_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.target_speed = read_float32(buffer + offset);
+  offset += 4;
+  result.drive_voltage = read_float32(buffer + offset);
+  offset += 4;
+  result.current_magnitude = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_x = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_x_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_y = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_y_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_x = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_x_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_y = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_y_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_saliency = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_saliency_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1156,6 +1230,8 @@ enum MessageCode : uint16_t {
   GET_CALIBRATION = 16449,
   SET_CALIBRATION = 16450,
   RESET_CALIBRATION = 16451,
+  CALIBRATION_INSTANCE = 16452,
+  RUN_CALIBRATION = 16453,
   CONTROL_PARAMETERS = 16457,
   SET_CONTROL_PARAMETERS = 16458,
   GET_CONTROL_PARAMETERS = 16459,
@@ -1178,6 +1254,7 @@ struct Message {
     DriveSchedule,
     SetStateSeekAngle,
     Calibration,
+    CalibrationInstance,
     ControlParameters,
     UnitTestOutput,
     std::monostate
@@ -1190,7 +1267,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
     case MessageCode::READOUT: return 126;
-    case MessageCode::INFO: return 42;
+    case MessageCode::INFO: return 18;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
     case MessageCode::GET_INFO: return 2;
@@ -1204,6 +1281,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 34;
     case MessageCode::RESET_CALIBRATION: return 2;
+    case MessageCode::CALIBRATION_INSTANCE: return 66;
+    case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 182;
     case MessageCode::SET_CONTROL_PARAMETERS: return 182;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
@@ -1241,9 +1320,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
-      if (max_size < 2 + 40) return 0;
+      if (max_size < 2 + 16) return 0;
       write_Info(buffer + 2, std::get<Info>(message.message_data));
-      return 42;
+      return 18;
     }
     case MessageCode::STREAM_READOUTS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::STREAM_READOUTS));
@@ -1313,6 +1392,16 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CALIBRATION));
       return 2;
     }
+    case MessageCode::CALIBRATION_INSTANCE: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
+      if (max_size < 2 + 64) return 0;
+      write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
+      return 66;
+    }
+    case MessageCode::RUN_CALIBRATION: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
+      return 2;
+    }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
       if (max_size < 2 + 180) return 0;
@@ -1380,7 +1469,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::INFO: {
-      if (size != 2 + 40) return false;
+      if (size != 2 + 16) return false;
       message.message_data = read_Info(buffer + 2);
       return true;
     }
@@ -1445,6 +1534,16 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::RESET_CALIBRATION: {
+      if (size != 2) return false;
+      message.message_data = std::monostate{};
+      return true;
+    }
+    case MessageCode::CALIBRATION_INSTANCE: {
+      if (size != 2 + 64) return false;
+      message.message_data = read_CalibrationInstance(buffer + 2);
+      return true;
+    }
+    case MessageCode::RUN_CALIBRATION: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;

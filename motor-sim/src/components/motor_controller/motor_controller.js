@@ -5,6 +5,7 @@ import {
   parse_unit_test_output,
   parse_info,
   parse_calibration,
+  parse_calibration_instance,
   make_calibration,
   parse_control_parameters,
   make_control_parameters,
@@ -75,9 +76,11 @@ export class MotorController {
 
     this.info = {};
     this.calibration = {};
+    this.calibration_instance = {};
     this.control_parameters = {};
 
     this.data = [];
+    this.calibration_series = new Map();
 
     this.onmessage = onmessage;
     this.onerror = onerror;
@@ -228,6 +231,11 @@ export class MotorController {
     if (message_code == MessageCode.CALIBRATION){
       message = parse_calibration(bare_message);
       this.calibration = message;
+    } else if (message_code == MessageCode.CALIBRATION_INSTANCE) {
+      message = parse_calibration_instance(bare_message);
+      this.calibration_instance = message;
+      const {target_speed, target_pwm} = message;
+      this.calibration_series.set(`{speed: ${target_speed}, pwm: ${target_pwm}}`, message);
     } else if (message_code == MessageCode.CONTROL_PARAMETERS) {
       message = parse_control_parameters(bare_message);
       this.control_parameters = message;
@@ -236,7 +244,7 @@ export class MotorController {
       // This way we can also track how the calibration parameters change over time. And if
       // transmission order is preserved, we should receive the new calibration data just ahead
       // of the corresponding readout.
-      message = parse_readout({...this.calibration, ...this.info, ...bare_message}, last_message);
+      message = parse_readout({...this.calibration_instance, ...this.info, ...bare_message}, last_message);
       // Store readout data up to some maximum size. Allows us to easily plot and analyse data samples.
       this.data = capped_push(this.data, message, max_data_length);
     } else if (message_code == MessageCode.UNIT_TEST_OUTPUT) {

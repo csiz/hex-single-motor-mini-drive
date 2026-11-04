@@ -65,8 +65,6 @@ export function parse_readout(bare_readout, previous_readout) {
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
   const emf_angle_stdev = angle_units_to_radians(Math.sqrt(bare_readout.emf_angle_variance));
 
-  const saliency_angle = normalize_radians(2*predicted_angle + bare_readout.saliency_angle_offset);
-
   const [u_current, v_current, w_current] = abc_transform(direct_current, quadrature_current, 0);
 
   const prev_direct_current = direct_current - direct_current_diff;
@@ -253,7 +251,6 @@ export function parse_readout(bare_readout, previous_readout) {
     emf_speed_constant_stdev,
     direct_emf_voltage,
     quadrature_emf_voltage,
-    saliency_angle,
     web_direct_emf_voltage, web_quadrature_emf_voltage, 
     web_emf_voltage_magnitude,
     web_emf_voltage_angle, 
@@ -311,10 +308,6 @@ export function parse_version(bare_version) {
 }
 
 export function parse_info(bare_info) {
-  
-  const temperature = calculate_temperature(bare_info.temperature);
-
-
   // const {
   //   hall_state,
   //   emf_detected,
@@ -330,11 +323,7 @@ export function parse_info(bare_info) {
 
   return {
     ...bare_info,
-    
-    temperature,
-
-    saliency_angle_offset: angle_units_to_radians(bare_info.saliency_angle_offset),
-    saliency_angle_stdev: angle_units_to_radians(Math.sqrt(bare_info.saliency_angle_variance)),
+    temperature: calculate_temperature(bare_info.temperature),
   };
 }
 
@@ -354,6 +343,17 @@ export function make_calibration(calibration){
     v_current_zero: calibration.v_current_zero * CURRENT_UNITS_PER_AMP,
     w_current_zero: calibration.w_current_zero * CURRENT_UNITS_PER_AMP,
   };
+}
+
+export function parse_calibration_instance(bare_calibration_instance){
+  return {
+    ...bare_calibration_instance,
+    angle: angle_units_to_radians(bare_calibration_instance.angle),
+    target_speed: speed_units_to_rotations_per_millisecond(bare_calibration_instance.target_speed),
+    drive_voltage: bare_calibration_instance.drive_voltage / VOLTAGE_UNITS_PER_VOLT,
+    current_magnitude: bare_calibration_instance.current_magnitude / CURRENT_UNITS_PER_AMP,
+    saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
+  }
 }
 
 export function parse_control_parameters(bare_control_parameters){

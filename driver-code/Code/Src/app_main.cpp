@@ -8,13 +8,17 @@
 #include "constants.hpp"
 #include "dq0_transform.hpp"
 
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <stm32g4xx_hal.h>
 #include <stm32g4xx_ll_cordic.h>
 
 
+// Last known motor values
+// -----------------------
 
+int32_t angle = 0;
 
 
 // Main loop stats tracking
@@ -66,10 +70,31 @@ uint32_t readouts_to_send = 0;
 // Calibration state
 // -----------------
 
-hex_mini_drive::Calibration working_calibration = get_calibration();
+// Current calibration result.
+hex_mini_drive::CalibrationInstance calibration_instance = {};
 
-// We need to track the emf state to properly run the calibration.
-int32_t emf_pending_counter = 0;
+struct CalibrationInstanceSettings {
+  // Number of calibration steps remaining.
+  size_t steps_remaining;
+  // Target value for the series.
+  float target;
+  // Speed for the series.
+  float speed;
+};
+
+// Track calibration settings.
+CalibrationInstanceSettings calibration_instance_settings;
+
+const uint16_t calibration_duration = max_duration / 2;
+
+const float calibration_target_increment = 32.f;
+
+const float calibration_target_max = 256.f;
+
+const float calibration_speed_increment = 100.f * angle_base / static_cast<float>(pwm_cycles_per_second);
+
+const float calibration_speed_max = angle_base / 2.f;
+
 
 // Trying resilient backpropagation again, this time in the main loop.
 // 
@@ -81,8 +106,7 @@ int32_t emf_pending_counter = 0;
 // We can also declare that we have stable calibration parameters when the learning
 // rate multiplier drops below a threshold.
   
-const size_t batch_size = 128;
-const float inverse_batch_size = 1.0f / static_cast<float>(batch_size);
+const size_t batch_size = 32;
 
 const float minimum_multiplier = 0.01f;
 const float stabile_multiplier = 0.1f;
@@ -91,33 +115,10 @@ const float maximum_multiplier = 1000.f;
 const float increase_factor = 1.2f;
 const float decrease_factor = 0.7f;
 
-hex_mini_drive::Calibration gradient_accumulator = {
-  .resistance = 0.f,
-  .inductance = 0.f,
-  .inductance_bias = 0.f,
-  .motor_constant = 0.f
-};
+hex_mini_drive::CalibrationInstance gradient_accumulator;
+hex_mini_drive::CalibrationInstance gradient_count;
+hex_mini_drive::CalibrationInstance update_sign;
 
-hex_mini_drive::Calibration gradient_count = {
-  .resistance = 0.f,
-  .inductance = 0.f,
-  .inductance_bias = 0.f,
-  .motor_constant = 0.f
-};
-
-hex_mini_drive::Calibration update_sign = {
-  .resistance = 0.f,
-  .inductance = 0.f,
-  .inductance_bias = 0.f,
-  .motor_constant = 0.f
-};
-
-hex_mini_drive::Calibration learning_rate_multiplier = {
-  .resistance = 1.f,
-  .inductance = 1.f,
-  .inductance_bias = 1.f,
-  .motor_constant = 1.f
-};
 
 static inline float resilient_gradient(
   const float gradient,
@@ -150,15 +151,107 @@ static inline float resilient_gradient(
   return learning_rate_multiplier * gradient_sum;
 }
 
-// Closed-loop control modes
-// -------------------------
+static inline void start_calibration_series(
+  hex_mini_drive::Calibration const& active_calibration,
+  float target,
+  float speed
+) {
+  
+  // Reset the calibration instance state and initialize with the currently active calibration.
 
-enum struct ControlModes : uint8_t {
+  calibration_instance = hex_mini_drive::CalibrationInstance {
+    .count = 0,
+    .target_pwm = target,
+    .target_speed = speed,
+    .resistance_x = active_calibration.resistance,
+    .resistance_x_multiplier = 1.f,
+    .resistance_y = 0,
+    .resistance_y_multiplier = 1.f,
+    .inductance_x = active_calibration.inductance,
+    .inductance_x_multiplier = 1.f,
+    .inductance_y = 0,
+    .inductance_y_multiplier = 1.f,
+    .inductance_saliency = active_calibration.inductance_bias,
+    .inductance_saliency_multiplier = 1.f,
+    .saliency_angle = 2 * angle,
+  };
+    
+  gradient_accumulator = {
+    .resistance_x = 0.f,
+    .inductance_x = 0.f,
+    .inductance_saliency = 0.f
+  };
+
+  gradient_count = {
+    .resistance_x = 0.f,
+    .inductance_x = 0.f,
+    .inductance_saliency = 0.f
+  };
+
+  update_sign = {
+    .resistance_x = 0.f,
+    .inductance_x = 0.f,
+    .inductance_saliency = 0.f
+  };
+
+  drive_state_queue.write(hex_mini_drive::DriveState{
+    .motor_flags = ENABLE_ALL_OUTPUTS,
+    .closed_loop = false,
+    .duration = calibration_duration,
+    .target_value = target,
+    .angle_value = angle,
+    .target_speed = speed,
+    .probing_factor = 0,
+    .probing_factor_modulation = 0,
+    .probing_speed_modulation = 0,
+    .probing_offset = 0,
+  });
+}
+
+
+// Main loop control modes
+// -----------------------
+
+enum struct ControlMode : uint8_t {
+  IDLE,
   DRIVE_SCHEDULE,
-  SEEK_ANGLE
+  SEEK_ANGLE,
+  CALIBRATE
 };
 
-ControlModes control_mode = ControlModes::DRIVE_SCHEDULE;
+ControlMode control_mode = ControlMode::DRIVE_SCHEDULE;
+
+// Switch to idle control mode and cancel any ongoing mode.
+static inline void control_mode_idle(){
+  drive_state_queue.mark_all_read();
+  control_mode = ControlMode::IDLE;
+}
+
+static inline void control_mode_drive_state(hex_mini_drive::DriveState const& drive_state) {
+  control_mode_idle();
+  drive_state_queue.write(drive_state);
+  control_mode = ControlMode::DRIVE_SCHEDULE;
+}
+
+static inline void control_mode_drive_schedule(hex_mini_drive::DriveSchedule const& drive_schedule) {
+  control_mode_idle();
+  size_t i = 0;
+  for (; i < hex_mini_drive::DRIVE_SCHEDULE_SIZE; i++) {
+    auto const& drive_state = drive_schedule[i];
+    // The schedule lasts until the first state with 0 duration.
+    if (drive_state.duration == 0) break;
+    drive_state_queue.write_at_offset(i, drive_state);
+  }
+  drive_state_queue.mark_written(i);
+ 
+  control_mode = ControlMode::DRIVE_SCHEDULE;
+}
+
+static inline void control_mode_calibrate(hex_mini_drive::Calibration const& active_calibration){
+  control_mode_idle();
+  start_calibration_series(active_calibration, calibration_target_increment, 0.f);
+  control_mode = ControlMode::CALIBRATE;
+}
 
 // Initialization
 // --------------
@@ -270,39 +363,23 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       return;
     }
 
-    // Turn off the motor driver.
     case SET_STATE_OFF: {
-      drive_state_queue.mark_all_read();
+      control_mode_idle();
       return;
     }
 
-    // Freewheel the motor.
     case SET_STATE_FREEWHEEL: {
-      drive_state_queue.mark_all_read();
-      drive_state_queue.write(freewheel_drive_state);
+      control_mode_drive_state(freewheel_drive_state);
       return;
     }
 
     case SET_DRIVE_STATE: {
-      auto const& drive_state = std::get<DriveState>(message.message_data);
-      // Only write the drive_state if there is space available in the queue.
-      drive_state_queue.write_if_available(drive_state);
+      control_mode_drive_state(std::get<DriveState>(message.message_data));
       return;
     }
 
     case SET_DRIVE_SCHEDULE: {
-      // Clear the queue for a new schedule.
-      drive_state_queue.mark_all_read();
-      
-      size_t i = 0;
-      for (; i < hex_mini_drive::DRIVE_SCHEDULE_SIZE; i++) {
-        auto const& drive_state = std::get<DriveSchedule>(message.message_data)[i];
-        // The schedule lasts until the first state with 0 duration.
-        if (drive_state.duration == 0) break;
-        drive_state_queue.write_at_offset(i, drive_state);
-      }
-      drive_state_queue.mark_written(i);
-      
+      control_mode_drive_schedule(std::get<DriveSchedule>(message.message_data));
       return;
     }
 
@@ -353,6 +430,11 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       });
       return;
 
+    case RUN_CALIBRATION: {
+      control_mode_calibrate(calibration);
+      return;
+    }
+
     case GET_CONTROL_PARAMETERS:
       queue_message(hex_mini_drive::Message{
         .message_code = hex_mini_drive::MessageCode::CONTROL_PARAMETERS,
@@ -394,6 +476,7 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
     case VERSION:
     case SETTINGS_SAVED_TO_FLASH:
     case CALIBRATION:
+    case CALIBRATION_INSTANCE:
     case CONTROL_PARAMETERS:
     case READOUT:
     case INFO:
@@ -408,106 +491,241 @@ static inline float validate_parameter(float const& value, float const& minimum_
   return max(minimum_value, value);
 }
 
-float avg_drive_speed = 0;
-float avg_emf_speed = 0;
-float avg_drive_speed_sq = 0;
-float avg_emf_speed_sq = 0;
-float avg_drive_speed_dot_emf_speed = 0;
 
-const float correlation_ki = std::pow(2, -8);
+static inline void finish_calibration_series(){
+  queue_message(hex_mini_drive::Message{
+    .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
+    .message_data = calibration_instance
+  });
+  
+  float target = calibration_instance.target_pwm;
+  float speed = calibration_instance.target_speed + calibration_speed_increment;
 
-static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout) {
+  if (speed > calibration_speed_max) {
+    // Increment target pwm if we reach the end of the speed scanning.
+    speed = 0;
+    target += calibration_target_increment;
 
-  // Skip calibration updates when we are undervoltage or overcurrent, we won't get accurate readings.
-  if (
-    readout.vcc_voltage < control_parameters.vcc_undervoltage or 
-    readout.current_magnitude > max_drive_current
-  ) {
-    return;
+    // Finish calibration mode and return to idle when we have scanned through all target PWM values.
+    if (target > calibration_target_max) return control_mode_idle();
   }
 
-  // Reference voltage check
-  // -----------------------
+  // We have another series to run if we've reach this spot, set it up and go!
+  start_calibration_series(calibration, target, speed);
+}
+
+static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout) {
+  // Calibration checks
+  // ------------------
+  // 
+  // For the remaining parameters we can only optimize them when there's no EMF voltage because
+  // of the way we've set our equations. We detect the EMF voltage as basically the error term
+  // of our electrical equations so if we optimize resistance and inductance while the motor spins
+  // then we're going to slowly attribute all of the resistance and inductance voltage to the EMF.
+  // 
+  // It appears that it's really difficult to gauge when we can calibrate and when we cannot because
+  // of EMF. Instead we will only calibrate when commanded and the driver is realatively certain the
+  // motor is in a stopped state. We then run the calibration at various frequencies and check the
+  // response assuming the motor is stationary and not generating any EMF voltage.
+
+  
+  // Stop calibration updates when we are undervoltage or overcurrent, we won't get accurate readings.
+  const bool undervoltage = readout.vcc_voltage < control_parameters.vcc_undervoltage;
+  const bool overcurrent = readout.current_magnitude > max_drive_current;
+
+  // Check when we finished the current calibration series by seeing when the drive state has finished.
+  const bool series_finished = not drive_state_queue.read_available();
+
+  // Finish the current calibration series if trigger any stop condition or the probing just ends naturally.
+  if (undervoltage or overcurrent or series_finished) return finish_calibration_series();
 
   // Because our best source of voltage information is the drive_voltage we also need to make sure
   // we are driving with enough power to get any information.
 
   const float drive_voltage_square = square(readout.direct_drive_voltage) + square(readout.quadrature_drive_voltage);
 
-  const bool idle_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
+  const bool low_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
 
-  // Extract the EMF fix status from the readout flags, we'll need it in a couple of places.
-  const bool emf_fix = square(readout.emf_speed_constant) > readout.emf_speed_constant_variance * control_parameters.emf_speed_constant_confirmed_threshold;
-
-  // Calculate the motor constant
-  // ----------------------------
-  // 
-  // The motor constant is the ratio of the EMF voltage to the angular speed (in radians per second).
-  // 
-  // It is also the ratio between the torque produced by the motor and the quadrature current. We 
-  // can compute the motor constant from the a spinning motor and use it to estimate our torque.
-  // 
-  // We calculate the motor constant by gradient descent using the configured integral gain.
-
-  const bool speed_is_negative = readout.angular_speed < 0;
-
-  // The voltage magnitude is always positive, also use the positive angular speed.
-  const float abs_angular_speed = speed_is_negative ? -readout.angular_speed : readout.angular_speed;
-
-  const float predicted_emf_voltage = abs_angular_speed * working_calibration.motor_constant * emf_motor_constant_conversion;
+  // The rest of the calibration can only be done if we're actively driving the motor phases as that
+  // is our only source of reference scale for the phase voltages. In any case, idle driving isn't an
+  // error so we continue the calibration, we just ignore this readout.
+  if (low_drive) return;
 
 
-  // Only compute the motor constant if we have a valid angle and moving at around the minimum detectable speed.
-  if (emf_fix and abs_angular_speed > control_parameters.emf_min_angular_speed){
-    
-    // Get the error (gradient) for the motor constant observer.
-    const float motor_constant_gradient = predicted_emf_voltage - readout.emf_voltage_magnitude;
+  // From now on we are definitely calibrating.
+  calibration_instance.count += 1;
+
+
+  // Recalculate
+  // -----------
+  // We need to recalculate these values in the main loop as they are not the primary tracking variables.
   
-    const float resilient_motor_constant_gradient = resilient_gradient(
-      motor_constant_gradient,
-      gradient_accumulator.motor_constant,
-      gradient_count.motor_constant,
-      update_sign.motor_constant,
-      learning_rate_multiplier.motor_constant
-    );
 
-    working_calibration.motor_constant = validate_parameter(
-      working_calibration.motor_constant - resilient_motor_constant_gradient * control_parameters.motor_constant_ki,
-      0
-    );
-    info.motor_constant_multiplier = learning_rate_multiplier.motor_constant;
-  }
+  // Calculate the resistive voltage drop across the coil and MOSFET resistance.
+  const float direct_resistive_voltage = readout.direct_current * calibration_instance.resistance_x;
+  const float quadrature_resistive_voltage = readout.quadrature_current * calibration_instance.resistance_x;
 
-  // EMF Check
-  // ---------
+  // And the current diffs for calculating inductance.
+  const float direct_diff = readout.direct_current_diff * current_diff_to_voltage_units;
+  const float quadrature_diff = readout.quadrature_current_diff * current_diff_to_voltage_units;
 
-  // For the remaining parameters we can only optimize them when there's no EMF voltage because
-  // of the way we've set our equations. We detect the EMF voltage as basically the error term
-  // of our electrical equations so if we optimize resistance and inductance while the motor spins
-  // then we're going to slowly attribute all of the resistance and inductance voltage to the EMF.
+  // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
+  // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
 
-  // Obviously we're looking for emf_detected, but we have to account for the weird case where our
-  // resistance and inductance are miscalibrated and we detect a fake stationary EMF. In that case
-  // we need to re-start optimizing resistance and inductance to exit the faulty state.
+  const float cos_saliency = get_cos(calibration_instance.saliency_angle);
+  const float sin_saliency = get_sin(calibration_instance.saliency_angle);
 
-  const bool emf_detected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
+  const float direct_inductance_bias_voltage = calibration_instance.inductance_saliency * (
+      -direct_diff * cos_saliency 
+      -quadrature_diff * sin_saliency
+  );
+  const float quadrature_inductance_bias_voltage = calibration_instance.inductance_saliency * (
+      -direct_diff * sin_saliency
+      +quadrature_diff * cos_saliency
+  );
+
+  const float direct_inductance_base_voltage = direct_diff * calibration_instance.inductance_x;
+  const float quadrature_inductance_base_voltage = quadrature_diff * calibration_instance.inductance_x;
+
+  const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
+  const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
   
-  // We are waiting for an EMF fix if we if there's detectable magnitude. If we don't see movement (aka emf_fix)
-  // then it might be a false positive due to miscalibration of the motor parameters.
-  const bool emf_pending = emf_detected and not emf_fix;
+  // Calibrate without EMF!!!
+  // ------------------------
+  // 
+  // It's very important that we don't calibrate while the motor is rotating and generating EMF.
+  // During sensorless running we infer the EMF as the error of the electrical equation, but
+  // that means we can't use the inferred EMF to calibrate the electrical parameters accurately.
+  // Especially because the resistance voltage and EMF voltage are covarying quantities.
+  // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  // Count the steps when we detect EMF voltage but don't have an emf_fix; reset on either emf_fix or no EMF voltage.
-  emf_pending_counter = emf_pending ? min(emf_pending_counter + 1, control_parameters.emf_uncertainty_threshold) : 0;
+  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage - readout.direct_drive_voltage;
+  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage - readout.quadrature_drive_voltage;
+
+  // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
+  // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
+  // there isn't enough energy in the error to warrant an update.
+  // const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
+
+  // Gradients & Parameter Updates
+  // -----------------------------
+  // 
+  // Compute the gradients of the loss with respect to each of the tracked parameters.
+  // 
+  // ! We must not condition the updates apparently...
+
+  const float resistance_gradient = (
+      direct_voltage_error * direct_resistive_voltage +
+      quadrature_voltage_error * quadrature_resistive_voltage
+  ) * volts_per_voltage_units_square;
+
+  const float resilient_resistance_gradient = resilient_gradient(
+      resistance_gradient,
+      gradient_accumulator.resistance_x,
+      gradient_count.resistance_x,
+      update_sign.resistance_x,
+      calibration_instance.resistance_x_multiplier
+  );
   
-  // Skip the calibration steps below as long as we're detecting any emf voltage.
-  // However, resume calibration if we've been waiting for an emf_fix for too long and therefore suspect miscalibration.
-  // TODO: the best update conditions are different! (dunno exactly how) also we should somehow update resistance while driving too.
-  if (emf_detected and emf_pending_counter < control_parameters.emf_uncertainty_threshold) {
-    return;
+  calibration_instance.resistance_x = validate_parameter(
+    calibration_instance.resistance_x - resilient_resistance_gradient * control_parameters.resistance_ki,
+    minimum_resistance
+  );
+  
+  const float inductance_gradient = (
+    direct_voltage_error * direct_inductance_base_voltage +
+    quadrature_voltage_error * quadrature_inductance_base_voltage
+  ) * volts_per_voltage_units_square;
+
+  const float resilient_inductance_gradient = resilient_gradient(
+    inductance_gradient,
+    gradient_accumulator.inductance_x,
+    gradient_count.inductance_x,
+    update_sign.inductance_x,
+    calibration_instance.inductance_x_multiplier
+  );
+  
+  // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
+  calibration_instance.inductance_x = validate_parameter(
+    calibration_instance.inductance_x - resilient_inductance_gradient * control_parameters.inductance_ki,
+    minimum_inductance
+  );
+
+  const float inductance_bias_gradient = (
+    direct_voltage_error * direct_inductance_bias_voltage +
+    quadrature_voltage_error * quadrature_inductance_bias_voltage
+  ) * volts_per_voltage_units_square;
+
+  const float resilient_inductance_bias_gradient = resilient_gradient(
+    inductance_bias_gradient,
+    gradient_accumulator.inductance_saliency,
+    gradient_count.inductance_saliency,
+    update_sign.inductance_saliency,
+    calibration_instance.inductance_saliency_multiplier
+  );
+  
+  // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
+  calibration_instance.inductance_saliency = validate_parameter(
+    calibration_instance.inductance_saliency - resilient_inductance_bias_gradient * control_parameters.inductance_bias_ki,
+    minimum_inductance_bias
+  );
+
+  const float saliency_angle_gradient = (
+    direct_voltage_error * -quadrature_inductance_bias_voltage +
+    quadrature_voltage_error * direct_inductance_bias_voltage
+  ) * volts_per_voltage_units_square;
+
+  const float saliency_angle_change = saliency_angle_gradient * control_parameters.saliency_angle_ki;
+  calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
+}
+
+static inline void process_readout(hex_mini_drive::Readout const& readout) {
+  // Count if we skip any readouts.
+  // const uint16_t readouts_since_last_tick = (readout_number_base + readout.readout_number - last_readout_number) % readout_number_base;
+
+  last_readout_number = readout.readout_number;
+
+  angle = readout.angle;
+
+  // TODO: redo the saliency angle adjustments (we might wanna do this in the drive loop i reckon, and leave the rest of the calibration logic here).
+  // // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
+  // const int32_t pending_adjustment = (info.saliency_angle_offset / 2) * control_parameters.angle_from_saliency_ki;
+
+  // if (set_angle_adjustment(pending_adjustment)) {
+  //   info.saliency_angle_offset -= 2 * pending_adjustment;
+  // }
+
+  // Update control
+  // --------------
+  
+  // Keep track of the control mode and send drive_state commands to the interrupt loop if required.
+  switch(control_mode) {
+    // Do nothing while in IDLE mode.
+    case ControlMode::IDLE: break;
+    // Switch back to idle when the drive schedule has completed.
+    case ControlMode::DRIVE_SCHEDULE: {
+      if (not drive_state_queue.read_available()) control_mode = ControlMode::IDLE;
+      break;
+    }
+    // Seek a particular position.
+    case ControlMode::SEEK_ANGLE: {
+      // TODO: implement
+      break;
+    }
+    // Run calibration routine.
+    case ControlMode::CALIBRATE: {
+      // ! Only calibrate if we're in calibration mode.
+      calibrate_from_readout(readout);
+      break;
+    }
   }
 
   // Current offsets
   // ---------------
+
+  // Track the zero current offsets in the main loop.
+
+  const bool emf_detected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
 
   // Only track the zero offset while there is no noticeable current being measured.
   if (not emf_detected and readout.current_magnitude < 2 * control_parameters.current_offset_maximum) {
@@ -531,210 +749,19 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     );
   }
 
-  // The rest of the calibration can only be done if we're actively driving the motor phases as that
-  // is our only source of reference scale for the phase voltages.
-  if (idle_drive) return;
-
-
-  // Recalculate
-  // -----------
-  // We need to recalculate these values in the main loop as they are not the primary tracking variables.
-  
-  const float cos_emf = get_cos(readout.emf_voltage_angle);
-  const float sin_emf = get_sin(readout.emf_voltage_angle);
-
-  const float direct_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
-  const float quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
-
-  // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-  const float direct_resistive_voltage = readout.direct_current * working_calibration.resistance;
-  const float quadrature_resistive_voltage = readout.quadrature_current * working_calibration.resistance;
-
-  // And the current diffs for calculating inductance.
-  const float direct_diff = readout.direct_current_diff * current_diff_to_voltage_units;
-  const float quadrature_diff = readout.quadrature_current_diff * current_diff_to_voltage_units;
-
-  // The saliency effect is due to the iron between magnets so it occurs twice per 
-  // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
-  // For simplicity's sake we keep the saliency_angle_offset as already doubled.
-  const int32_t saliency_angle = 2*readout.angle + info.saliency_angle_offset;
-
-  const float cos_saliency = get_cos(saliency_angle);
-  const float sin_saliency = get_sin(saliency_angle);
-
-  const float direct_inductance_bias_voltage = working_calibration.inductance_bias * (
-      -direct_diff * cos_saliency 
-      -quadrature_diff * sin_saliency
-  );
-  const float quadrature_inductance_bias_voltage = working_calibration.inductance_bias * (
-      -direct_diff * sin_saliency
-      +quadrature_diff * cos_saliency
-  );
-
-  const float direct_inductance_base_voltage = direct_diff * working_calibration.inductance;
-  const float quadrature_inductance_base_voltage = quadrature_diff * working_calibration.inductance;
-
-  const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
-  const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
-  
-  // TODO: update explanation
-  // Now we track the resistance and inductance using some form of gradient descent. The equation that we want to solve is:
-  // 
-  //     0 ~ voltage_error = resistance_voltage + inductor_voltage - drive_voltage - emf_voltage
-  // 
-  // Where we've already defined the "measured" emf voltage as if the error were zero. Ie.
-  // 
-  //     measured_emf_voltage = resistance_voltage + inductor_voltage - drive_voltage
-  // 
-  // The error can also be due to either resistance or inductance, so despite naming it measured emf voltage, it's actually 
-  // all the errors combined. We can use this value and calibrate all parameters live by gradient descent.
-  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage - readout.direct_drive_voltage - direct_emf_voltage;
-  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage - readout.quadrature_drive_voltage - quadrature_emf_voltage;
-
-  // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
-  // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
-  // there isn't enough energy in the error to warrant an update.
-  // const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
-
-  // Get the expected voltage across the inductors so we can condition the inductance update.
-  const float direct_inductor_excitation = readout.direct_drive_voltage - direct_resistive_voltage;
-  const float quadrature_inductor_excitation = readout.quadrature_drive_voltage - quadrature_resistive_voltage;
-
-  // Get the magnitude of the inductor driving voltage so we can determine whether the inductance is significant.
-  const float inductor_excitation_square = square(direct_inductor_excitation) + square(quadrature_inductor_excitation);
-
-
-  // Compute the gradients of the loss with respect to each of the tracked parameters.
-  
-  // Only update the resistance if we have sufficient current to make the measurement meaningful.
-  if(readout.current_magnitude > control_parameters.resistance_current_minimum) {
-    const float resistance_gradient = (
-        direct_voltage_error * direct_resistive_voltage +
-        quadrature_voltage_error * quadrature_resistive_voltage
-    ) * volts_per_voltage_units_square;
-
-    const float resilient_resistance_gradient = resilient_gradient(
-        resistance_gradient,
-        gradient_accumulator.resistance,
-        gradient_count.resistance,
-        update_sign.resistance,
-        learning_rate_multiplier.resistance
-    );
-        
-    
-    working_calibration.resistance = validate_parameter(
-      working_calibration.resistance - resilient_resistance_gradient * control_parameters.resistance_ki,
-      minimum_resistance
-    );
-    
-    info.resistance_multiplier = learning_rate_multiplier.resistance;
-  }
-
-
-  // Only update the inductance if the inductor is sufficiently excited to make up for the measurement noise.
-  // Note the inductor noise is at least twice as much as the current noise because it is the difference of 2 measurements.
-  if (inductor_excitation_square > control_parameters.inductance_excitation_minimum_square) {
-    const float inductance_gradient = (
-      direct_voltage_error * direct_inductance_base_voltage +
-      quadrature_voltage_error * quadrature_inductance_base_voltage
-    ) * volts_per_voltage_units_square;
-
-    const float resilient_inductance_gradient = resilient_gradient(
-      inductance_gradient,
-      gradient_accumulator.inductance,
-      gradient_count.inductance,
-      update_sign.inductance,
-      learning_rate_multiplier.inductance
-    );
-    
-    // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-    working_calibration.inductance = validate_parameter(
-      working_calibration.inductance - resilient_inductance_gradient * control_parameters.inductance_ki,
-      minimum_inductance
-    );
-    info.inductance_multiplier = learning_rate_multiplier.inductance;
-
-
-    const float inductance_bias_gradient = (
-      direct_voltage_error * direct_inductance_bias_voltage +
-      quadrature_voltage_error * quadrature_inductance_bias_voltage
-    ) * volts_per_voltage_units_square;
-
-    const float resilient_inductance_bias_gradient = resilient_gradient(
-      inductance_bias_gradient,
-      gradient_accumulator.inductance_bias,
-      gradient_count.inductance_bias,
-      update_sign.inductance_bias,
-      learning_rate_multiplier.inductance_bias
-    );
-    
-    // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-    working_calibration.inductance_bias = validate_parameter(
-      working_calibration.inductance_bias - resilient_inductance_bias_gradient * control_parameters.inductance_bias_ki,
-      minimum_inductance_bias
-    );
-    info.inductance_bias_multiplier = learning_rate_multiplier.inductance_bias;
-
-    const float saliency_angle_gradient = (
-      direct_voltage_error * -quadrature_inductance_bias_voltage +
-      quadrature_voltage_error * direct_inductance_bias_voltage
-    ) * volts_per_voltage_units_square;
-
-    const float saliency_angle_change = saliency_angle_gradient * control_parameters.saliency_angle_ki;
-    info.saliency_angle_offset -= static_cast<int32_t>(saliency_angle_change);
-    info.saliency_angle_variance += (square(saliency_angle_change) - info.saliency_angle_variance) * 0.01f;
-  }
 }
 
-static inline void process_readout(hex_mini_drive::Readout const& readout) {
-  // Count if we skip any readouts.
-  // const uint16_t readouts_since_last_tick = (readout_number_base + readout.readout_number - last_readout_number) % readout_number_base;
 
-  last_readout_number = readout.readout_number;
-
-  // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
-  const int32_t pending_adjustment = (info.saliency_angle_offset / 2) * control_parameters.angle_from_saliency_ki;
-
-  if (set_angle_adjustment(pending_adjustment)) {
-    info.saliency_angle_offset -= 2 * pending_adjustment;
-  }
-
-  // Update drive state
-  // ------------------
-  
-  // Update drive_state for closed-loop control.
-  switch(control_mode) {
-    // No special handling required for a fixed drive schedule.
-    case ControlModes::DRIVE_SCHEDULE: break;
-    // Seek a particular position.
-    // TODO: implement
-    case ControlModes::SEEK_ANGLE: {
-    }
-  }
-
-  // Run calibration if we have time.
-  if (info.average_buffer_fill_rate < 4) {
-    calibrate_from_readout(readout);
-  }
-}
-
-// Main app loop
-// -------------
-
-void app_tick() {
-  
+static inline void runtime_info_update(uint32_t milliseconds_time){
   // Run time stats
   // --------------
 
   // Count loop iterations.
   main_loop_number += 1;
 
-  // Update timing information.
-  const uint32_t milliseconds = HAL_GetTick();
-
-  const uint32_t duration_since_timing_update = milliseconds - last_update_time_millis;
+  const uint32_t duration_since_timing_update = milliseconds_time - last_update_time_millis;
   if (duration_since_timing_update > min_timing_period_millis) {
-    last_update_time_millis = milliseconds;
+    last_update_time_millis = milliseconds_time;
     
     float seconds = duration_since_timing_update / 1000.f;
 
@@ -745,6 +772,17 @@ void app_tick() {
     timing_loop_number = main_loop_number;
     timing_readout_number = last_readout_number;
   }
+}
+
+// Main app loop
+// -------------
+
+void app_tick() {
+  // Get the current time in milliseconds.
+  const uint32_t milliseconds_time = HAL_GetTick();
+  
+  // Update timing information.
+  runtime_info_update(milliseconds_time);
 
   // Slow sensor updates
   // -------------------
@@ -759,7 +797,7 @@ void app_tick() {
   usb_update();
 
   // It's been too long since we have received anything, discard any partial message.
-  if (milliseconds - last_receive_time > partial_message_timeout_ms) {
+  if (milliseconds_time - last_receive_time > partial_message_timeout_ms) {
     encoder.decode_reset();
   }
 
@@ -795,7 +833,7 @@ void app_tick() {
     }
 
     // Mark that we've received data at this time; we'll use this to timeout partial messages.
-    last_receive_time = milliseconds;
+    last_receive_time = milliseconds_time;
   }
 
 
@@ -836,9 +874,10 @@ void app_tick() {
         .message_code = hex_mini_drive::MessageCode::INFO,
         .message_data = info
       });
-      queue_message(hex_mini_drive::Message{
-        .message_code = hex_mini_drive::MessageCode::CALIBRATION,
-        .message_data = working_calibration
+
+      if (control_mode == ControlMode::CALIBRATE) queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
+        .message_data = calibration_instance
       });
     }
 

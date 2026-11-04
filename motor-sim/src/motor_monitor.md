@@ -68,7 +68,7 @@ Motor Driving Data
   <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${Object.values(monitoring_plots)}</div>
-
+<div class="card tight">${Object.values(calibration_series_plots)}</div>
 
 Calibration Procedures
 ----------------------
@@ -140,6 +140,10 @@ Unit Tests
 
 // Active data to be displayed on the main plots.
 let data = Mutable([]);
+
+
+let calibration_series = Mutable([]);
+
 
 // Active motor controller (can be null or selected from multiple motor connections).
 let motor_controller = Mutable(null);
@@ -217,8 +221,21 @@ async function connect_motor_controller(options = {}) {
         set_status(html`<pre>Connected; ${format_data_rate(status)}.</pre>`, motor_uri);
       },
       onmessage: (message) => {
-        // TODO: we need to handle the various message types (update control parameters or calibration tables).
-        if (motor_uri === active_port.value) data.value = motor_controller.data;
+        if (motor_uri != active_port.value) return;
+        
+        if (message.message_code == MessageCode.READOUT) {
+          data.value = motor_controller.data;
+          // TODO: circular definition
+        // } else if (message.message_code == MessageCode.CALIBRATION) {
+        //   show_active_calibration();
+        // } else if (message.message_code == MessageCode.CONTROL_PARAMETERS) {
+        //   show_active_control_parameters();
+        } else if (message.message_code == MessageCode.CALIBRATION_INSTANCE) {
+          calibration_series.value = [...motor_controller.calibration_series.values()];
+        } else {
+          // ... nothing to do really
+        }
+
       },
       onready: (motor_controller) => {
         set_status(html`<pre>Connected, waiting for your commands.</pre>`, motor_uri);
@@ -398,6 +415,10 @@ const data_request_buttons = Inputs.button(
       if (!motor_controller) return;
       motor_controller.reset_history();
       await motor_controller.send_command({message_code: MessageCode.GET_READOUTS_SNAPSHOT, stream_state: HISTORY_SIZE});
+    }],
+    ["Run calibration", async function(){
+      if (!motor_controller) return;
+      await motor_controller.send_command({message_code: MessageCode.RUN_CALIBRATION});
     }],
     ["Stream motor data", async function(){
       if (!motor_controller) return;
@@ -957,8 +978,6 @@ const plot_electric_offsets = plot_lines({
     {y: "emf_angle_stdev", label: "EMF Angle stdev", color: colors.angle_driven},
     {y: "current_angle_offset", label: "Current Angle Offset", color: colors.current_angle},
     {y: "emf_voltage_angle_offset", label: "EMF Voltage Angle Offset", color: colors.voltage_angle},
-    {y: "saliency_angle_offset", label: "Saliency Angle Offset", color: d3.color(colors.angle).brighter(1)},
-    {y: "saliency_angle_stdev", label: "Saliency Angle stdev", color: d3.color(colors.angle).darker(1)},
     {y: "angle_adjustment", label: "Magnet Angle Correction", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle_offset : null, label: "Drive Voltage Angle Offset", color: colors_categories[2]},
   ],
@@ -1166,7 +1185,8 @@ const plot_resistance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Resistance (Ohms)",
   channels: [
-    {y: "resistance", label: "Phase Resistance", color: colors.u},
+    {y: "resistance_x", label: "Phase Resistance X", color: colors.u},
+    {y: "resistance_y", label: "Phase Resistance Y", color: colors.v},
   ],
   curve,
 });
@@ -1179,8 +1199,8 @@ const plot_inductance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Inductance (H)",
   channels: [
-    {y: "inductance", label: "Phase Inductance", color: colors.v},
-    {y: "inductance_bias", label: "Inductance Bias", color: colors.w},
+    {y: "inductance_x", label: "Phase Inductance", color: colors.v},
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors.w},
   ],
   curve,
 });
@@ -1195,11 +1215,9 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[0]},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "motor_constant", label: "Motor Constant (EMF and torque)", color: colors.angle},
-    {y: "resistance_multiplier", label: "Resistance Multiplier", color: colors_categories[2]},
-    {y: "inductance_multiplier", label: "Inductance Multiplier", color: colors_categories[3]},
-    {y: "inductance_bias_multiplier", label: "Inductance Bias Multiplier", color: colors_categories[4]},
-    {y: "motor_constant_multiplier", label: "Motor Constant Multiplier", color: colors_categories[5]},
+    {y: "resistance_x_multiplier", label: "Resistance Multiplier", color: colors_categories[2]},
+    {y: "inductance_x_multiplier", label: "Inductance Multiplier", color: colors_categories[3]},
+    {y: "inductance_saliency_multiplier", label: "Inductance Bias Multiplier", color: colors_categories[4]},
   ],
   curve,
 });
@@ -1228,6 +1246,59 @@ const monitoring_plots = {
 autosave_inputs(monitoring_plots);
 ```
 
+```js
+// Calibration Series
+// ------------------
+
+const calibration_series_frequency_plot = plot_lines({
+  data: calibration_series,
+  subtitle: "Calibration Series - Optimizing resistance & inductance",
+  description: "Calibration optimization results for each phase at various probing frequencies.",
+  width: 1200, height: 300,
+  x: "target_speed",
+  x_label: "Probing Frequency",
+  y_label: "Calibration Parameters",
+  channels: [
+    {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
+    {y: "inductance_x", label: "Phase Inductance X", color: colors_categories[1]},
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[2]},
+    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[3]},
+
+    {y: "resistance_x_multiplier", label: "Resistance X Multiplier", color: d3.color(colors_categories[0]).darker(1)},
+    {y: "inductance_x_multiplier", label: "Inductance X Multiplier", color: d3.color(colors_categories[1]).darker(1)},
+    {y: "inductance_saliency_multiplier", label: "Inductance Saliency Multiplier", color: d3.color(colors_categories[2]).darker(1)},
+  ],
+  curve,
+});
+
+const calibration_series_pwm_plot = plot_lines({
+  data: calibration_series,
+  subtitle: "Calibration Series - Optimizing resistance & inductance",
+  description: "Calibration optimization results for each phase at various probing frequencies.",
+  width: 1200, height: 300,
+  x: "target_pwm",
+  x_label: "Probing PWM",
+  y_label: "Calibration Parameters",
+  channels: [
+    {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
+    {y: "inductance_x", label: "Phase Inductance X", color: colors_categories[1]},
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[2]},
+    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[3]},
+    
+    {y: "resistance_x_multiplier", label: "Resistance X Multiplier", color: d3.color(colors_categories[0]).darker(1)},
+    {y: "inductance_x_multiplier", label: "Inductance X Multiplier", color: d3.color(colors_categories[1]).darker(1)},
+    {y: "inductance_saliency_multiplier", label: "Inductance Saliency Multiplier", color: d3.color(colors_categories[2]).darker(1)},
+  ],
+  curve,
+});
+
+const calibration_series_plots = {
+  calibration_series_frequency_plot,
+  calibration_series_pwm_plot,
+};
+
+autosave_inputs(calibration_series_plots);
+```
 
 ```js
 // Calibration
