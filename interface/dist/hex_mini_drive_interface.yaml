@@ -429,12 +429,15 @@ definitions:
       target_speed:
         type: float32
         doc: Target speed for this calibration instance.
-      drive_voltage:
+      avg_drive_voltage:
         type: float32
         doc: Drive voltage used during this calibration instance.
-      current_magnitude:
+      avg_current_magnitude:
         type: float32
         doc: Current magnitude during this calibration instance.
+      avg_square_error:
+        type: float32
+        doc: Average squared error during this calibration instance.
       resistance_x:
         type: float32
         doc: Measured resistance value for the X phase.

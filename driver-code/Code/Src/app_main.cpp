@@ -85,7 +85,7 @@ struct CalibrationInstanceSettings {
 // Track calibration settings.
 CalibrationInstanceSettings calibration_instance_settings;
 
-const uint16_t calibration_duration = max_duration / 5;
+const uint16_t calibration_duration = max_duration / 2;
 
 const float calibration_target_increment = 64.f;
 
@@ -105,50 +105,28 @@ const float calibration_speed_max = angle_base / 4.f;
 // 
 // We can also declare that we have stable calibration parameters when the learning
 // rate multiplier drops below a threshold.
-  
-const size_t batch_size = 32;
-
-const float minimum_multiplier = 0.01f;
-const float stabile_multiplier = 0.1f;
-const float maximum_multiplier = 1000.f;
-
-const float increase_factor = 1.2f;
-const float decrease_factor = 0.7f;
-
-hex_mini_drive::CalibrationInstance gradient_accumulator;
-hex_mini_drive::CalibrationInstance gradient_count;
-hex_mini_drive::CalibrationInstance update_sign;
-
+constexpr float multiplier_minimum = 0.001f;
+constexpr float multiplier_stable_threshold = std::pow(2, -5);
+constexpr float multiplier_maximum = 1'000.f;
+constexpr float multiplier_change = std::pow(2, -5);
+constexpr float multiplier_increase_factor = 1.f + multiplier_change;
+constexpr float multiplier_decrease_factor = 1.f - 2 * multiplier_change;
 
 static inline float resilient_gradient(
   const float gradient,
-  float & gradient_accumulator,
-  float & gradient_count,
-  float & update_sign,
   float & learning_rate_multiplier
 ) {
-  gradient_accumulator += gradient;
-  gradient_count += 1;
-  
-  if (gradient_count < batch_size) return 0.f;
+  // We encode the sign of the previous gradient as the sign of the multiplier.
+  const float sign = learning_rate_multiplier < 0 ? -1.f : 1.f;
+  const float abs_multiplier = sign * learning_rate_multiplier;
 
-  const float gradient_sum = gradient_accumulator;
-  gradient_accumulator = 0.f;
-  gradient_count = 0.f;
+  learning_rate_multiplier = (sign * gradient < 0) ? 
+    // Swap the sign when the gradient is counter to the previous one, we're converging.
+    -sign * max(abs_multiplier * multiplier_decrease_factor, multiplier_minimum) :
+    // Keep the sign when the gradient is consistent with the previous one, we're still moving in the right direction.
+    +sign * min(abs_multiplier * multiplier_increase_factor, multiplier_maximum);
 
-  // No way it's exactly 0 right?!
-  if (gradient_sum == 0.f) return 0.f;
-
-  const float previous_update_sign = update_sign;
-  update_sign = gradient_sum < 0 ? -1.f : 1.f;
-
-  if (previous_update_sign == update_sign) {
-    learning_rate_multiplier = min(learning_rate_multiplier * increase_factor, maximum_multiplier);
-  } else if (previous_update_sign * update_sign < 0) {
-    learning_rate_multiplier = max(learning_rate_multiplier * decrease_factor, minimum_multiplier);
-  }
-
-  return learning_rate_multiplier * gradient_sum;
+  return abs_multiplier * gradient;
 }
 
 static inline void start_calibration_series(
@@ -174,24 +152,6 @@ static inline void start_calibration_series(
     .inductance_saliency = active_calibration.inductance_bias,
     .inductance_saliency_multiplier = 1.f,
     .saliency_angle = 2 * angle,
-  };
-    
-  gradient_accumulator = {
-    .resistance_x = 0.f,
-    .inductance_x = 0.f,
-    .inductance_saliency = 0.f
-  };
-
-  gradient_count = {
-    .resistance_x = 0.f,
-    .inductance_x = 0.f,
-    .inductance_saliency = 0.f
-  };
-
-  update_sign = {
-    .resistance_x = 0.f,
-    .inductance_x = 0.f,
-    .inductance_saliency = 0.f
   };
 
   drive_state_queue.write(hex_mini_drive::DriveState{
@@ -555,6 +515,17 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // From now on we are definitely calibrating.
   calibration_instance.count += 1;
 
+  if (calibration_instance.count % 64 == 0) {
+    // Periodically check if we stablizied and move on.
+    if (
+      faster_abs(calibration_instance.resistance_x_multiplier) < multiplier_stable_threshold and
+      faster_abs(calibration_instance.inductance_x_multiplier) < multiplier_stable_threshold and
+      faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold
+    ) {
+      return finish_calibration_series();
+    }
+  }
+
 
   // Recalculate
   // -----------
@@ -615,15 +586,12 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // ! We must not condition the updates apparently...
 
   const float resistance_gradient = (
-      direct_voltage_error * direct_resistive_voltage +
-      quadrature_voltage_error * quadrature_resistive_voltage
+      direct_voltage_error * readout.direct_current +
+      quadrature_voltage_error * readout.quadrature_current
   ) * volts_per_voltage_units_square;
 
   const float resilient_resistance_gradient = resilient_gradient(
       resistance_gradient,
-      gradient_accumulator.resistance_x,
-      gradient_count.resistance_x,
-      update_sign.resistance_x,
       calibration_instance.resistance_x_multiplier
   );
   
@@ -639,9 +607,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float resilient_inductance_gradient = resilient_gradient(
     inductance_gradient,
-    gradient_accumulator.inductance_x,
-    gradient_count.inductance_x,
-    update_sign.inductance_x,
     calibration_instance.inductance_x_multiplier
   );
   
@@ -658,9 +623,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float resilient_inductance_bias_gradient = resilient_gradient(
     inductance_bias_gradient,
-    gradient_accumulator.inductance_saliency,
-    gradient_count.inductance_saliency,
-    update_sign.inductance_saliency,
     calibration_instance.inductance_saliency_multiplier
   );
   

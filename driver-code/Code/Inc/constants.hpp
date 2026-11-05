@@ -396,12 +396,11 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -8),
 
     .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -12),
-    .inductance_ki = std::pow(2, -20),
-    .inductance_bias_ki = std::pow(2, -20),
+    .resistance_ki = std::pow(2, -10),
+    .inductance_ki = std::pow(2, -22),
+    .inductance_bias_ki = std::pow(2, -24),
     .saliency_angle_ki = std::pow(2, 32+4),
-    // TODO: restore after we do our doings
-    .angle_from_saliency_ki = 0, //std::pow(2, -4),
+    .angle_from_saliency_ki = std::pow(2, -4),
 
     .motor_constant_ki = std::pow(2, -32-6),
     .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),

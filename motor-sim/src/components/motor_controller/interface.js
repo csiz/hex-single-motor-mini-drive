@@ -350,8 +350,9 @@ export function parse_calibration_instance(bare_calibration_instance){
     ...bare_calibration_instance,
     angle: angle_units_to_radians(bare_calibration_instance.angle),
     target_speed: speed_units_to_rotations_per_millisecond(bare_calibration_instance.target_speed),
-    drive_voltage: bare_calibration_instance.drive_voltage / VOLTAGE_UNITS_PER_VOLT,
-    current_magnitude: bare_calibration_instance.current_magnitude / CURRENT_UNITS_PER_AMP,
+    avg_drive_voltage: bare_calibration_instance.drive_voltage / VOLTAGE_UNITS_PER_VOLT,
+    avg_current_magnitude: bare_calibration_instance.current_magnitude / CURRENT_UNITS_PER_AMP,
+    avg_error: Math.sqrt(bare_calibration_instance.error) / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
   }
 }

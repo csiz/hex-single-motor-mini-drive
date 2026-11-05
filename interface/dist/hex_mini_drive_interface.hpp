@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.158.0";
+constexpr char const* VERSION_STRING = "0.159.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -539,9 +539,11 @@ struct CalibrationInstance {
   // Target speed for this calibration instance.
   float target_speed;
   // Drive voltage used during this calibration instance.
-  float drive_voltage;
+  float avg_drive_voltage;
   // Current magnitude during this calibration instance.
-  float current_magnitude;
+  float avg_current_magnitude;
+  // Average squared error during this calibration instance.
+  float avg_square_error;
   // Measured resistance value for the X phase.
   float resistance_x;
   // Multiplier for the X phase resistance, used to adjust the effective resistance in calculations.
@@ -574,9 +576,11 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.target_speed);;
   offset += 4;
-  write_float32(buffer + offset, value.drive_voltage);;
+  write_float32(buffer + offset, value.avg_drive_voltage);;
   offset += 4;
-  write_float32(buffer + offset, value.current_magnitude);;
+  write_float32(buffer + offset, value.avg_current_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.avg_square_error);;
   offset += 4;
   write_float32(buffer + offset, value.resistance_x);;
   offset += 4;
@@ -612,9 +616,11 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.target_speed = read_float32(buffer + offset);
   offset += 4;
-  result.drive_voltage = read_float32(buffer + offset);
+  result.avg_drive_voltage = read_float32(buffer + offset);
   offset += 4;
-  result.current_magnitude = read_float32(buffer + offset);
+  result.avg_current_magnitude = read_float32(buffer + offset);
+  offset += 4;
+  result.avg_square_error = read_float32(buffer + offset);
   offset += 4;
   result.resistance_x = read_float32(buffer + offset);
   offset += 4;
@@ -1281,7 +1287,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 34;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 66;
+    case MessageCode::CALIBRATION_INSTANCE: return 70;
     case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 182;
     case MessageCode::SET_CONTROL_PARAMETERS: return 182;
@@ -1394,9 +1400,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 64) return 0;
+      if (max_size < 2 + 68) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 66;
+      return 70;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1539,7 +1545,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 64) return false;
+      if (size != 2 + 68) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }

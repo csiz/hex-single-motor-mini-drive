@@ -1215,9 +1215,9 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[0]},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "resistance_x_multiplier", label: "Resistance Multiplier", color: colors_categories[2]},
-    {y: "inductance_x_multiplier", label: "Inductance Multiplier", color: colors_categories[3]},
-    {y: "inductance_saliency_multiplier", label: "Inductance Bias Multiplier", color: colors_categories[4]},
+    {y: (d) => Math.abs(d.resistance_x_multiplier), label: "Resistance Multiplier", color: colors_categories[2]},
+    {y: (d) => Math.abs(d.inductance_x_multiplier), label: "Inductance Multiplier", color: colors_categories[3]},
+    {y: (d) => Math.abs(d.inductance_saliency_multiplier), label: "Inductance Bias Multiplier", color: colors_categories[4]},
   ],
   curve,
 });
@@ -1260,9 +1260,10 @@ const calibration_series_resistance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
-    
+    {y: "resistance_y", label: "Phase Resistance Y", color: colors_categories[0]},
 
-    {y: "resistance_x_multiplier", label: "Resistance X Multiplier", color: d3.color(colors_categories[0]).darker(1)},
+    {y: (d) => Math.abs(d.resistance_x_multiplier), label: "Resistance X Multiplier", color: d3.color(colors_categories[0]).darker(1)},
+    {y: (d) => Math.abs(d.resistance_y_multiplier), label: "Resistance Y Multiplier", color: d3.color(colors_categories[0]).darker(1)},
     
   ],
   default_draw: draw_circles_of_size(function(d) { return Math.sqrt(d.target_pwm / 64.0); }),
@@ -1278,10 +1279,12 @@ const calibration_series_inductance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "inductance_x", label: "Phase Inductance X", color: colors_categories[1]},
-    {y: "inductance_x_multiplier", label: "Inductance X Multiplier", color: d3.color(colors_categories[1]).darker(1)},
+    {y: "inductance_y", label: "Phase Inductance Y", color: colors_categories[1]},
+    {y: (d) => Math.abs(d.inductance_x_multiplier), label: "Inductance X Multiplier", color: d3.color(colors_categories[1]).darker(1)},
+    {y: (d) => Math.abs(d.inductance_y_multiplier), label: "Inductance Y Multiplier", color: d3.color(colors_categories[1]).darker(1)},
 
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[2]},
-    {y: "inductance_saliency_multiplier", label: "Inductance Saliency Multiplier", color: d3.color(colors_categories[2]).darker(1)},
+    {y: (d) => Math.abs(d.inductance_saliency_multiplier), label: "Inductance Saliency Multiplier", color: d3.color(colors_categories[2]).darker(1)},
 
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
   ],
