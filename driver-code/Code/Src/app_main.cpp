@@ -152,6 +152,7 @@ static inline void start_calibration_series(
     .inductance_saliency = active_calibration.inductance_bias,
     .inductance_saliency_multiplier = 1.f,
     .saliency_angle = 2 * angle,
+    .saliency_angle_multiplier = 1.f,
   };
 
   drive_state_queue.write(hex_mini_drive::DriveState{
@@ -546,20 +547,24 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float cos_saliency = get_cos(calibration_instance.saliency_angle);
   const float sin_saliency = get_sin(calibration_instance.saliency_angle);
 
-  const float direct_inductance_bias_voltage = calibration_instance.inductance_saliency * (
+  const float direct_inductance_saliency = (
       -direct_diff * cos_saliency 
       -quadrature_diff * sin_saliency
   );
-  const float quadrature_inductance_bias_voltage = calibration_instance.inductance_saliency * (
+
+  const float direct_inductance_saliency_voltage = calibration_instance.inductance_saliency * direct_inductance_saliency;
+  
+  const float quadrature_inductance_saliency = (
       -direct_diff * sin_saliency
       +quadrature_diff * cos_saliency
   );
+  const float quadrature_inductance_saliency_voltage = calibration_instance.inductance_saliency * quadrature_inductance_saliency;
 
   const float direct_inductance_base_voltage = direct_diff * calibration_instance.inductance_x;
   const float quadrature_inductance_base_voltage = quadrature_diff * calibration_instance.inductance_x;
 
-  const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
-  const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
+  const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_saliency_voltage;
+  const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_saliency_voltage;
   
   // Calibrate without EMF!!!
   // ------------------------
@@ -588,7 +593,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float resistance_gradient = (
       direct_voltage_error * readout.direct_current +
       quadrature_voltage_error * readout.quadrature_current
-  ) * volts_per_voltage_units_square;
+  ) * voltage_mul_current_to_power;
 
   const float resilient_resistance_gradient = resilient_gradient(
       resistance_gradient,
@@ -601,9 +606,9 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   );
   
   const float inductance_gradient = (
-    direct_voltage_error * direct_inductance_base_voltage +
-    quadrature_voltage_error * quadrature_inductance_base_voltage
-  ) * volts_per_voltage_units_square;
+    direct_voltage_error * direct_diff +
+    quadrature_voltage_error * quadrature_diff
+  ) * voltage_mul_current_to_power;
 
   const float resilient_inductance_gradient = resilient_gradient(
     inductance_gradient,
@@ -616,28 +621,33 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     minimum_inductance
   );
 
-  const float inductance_bias_gradient = (
-    direct_voltage_error * direct_inductance_bias_voltage +
-    quadrature_voltage_error * quadrature_inductance_bias_voltage
-  ) * volts_per_voltage_units_square;
+  const float inductance_saliency_gradient = (
+    direct_voltage_error * direct_inductance_saliency +
+    quadrature_voltage_error * quadrature_inductance_saliency
+  ) * voltage_mul_current_to_power;
 
-  const float resilient_inductance_bias_gradient = resilient_gradient(
-    inductance_bias_gradient,
+  const float resilient_inductance_saliency_gradient = resilient_gradient(
+    inductance_saliency_gradient,
     calibration_instance.inductance_saliency_multiplier
   );
   
   // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
   calibration_instance.inductance_saliency = validate_parameter(
-    calibration_instance.inductance_saliency - resilient_inductance_bias_gradient * control_parameters.inductance_bias_ki,
-    minimum_inductance_bias
+    calibration_instance.inductance_saliency - resilient_inductance_saliency_gradient * control_parameters.inductance_bias_ki,
+    minimum_inductance_saliency
   );
 
   const float saliency_angle_gradient = (
-    direct_voltage_error * -quadrature_inductance_bias_voltage +
-    quadrature_voltage_error * direct_inductance_bias_voltage
-  ) * volts_per_voltage_units_square;
+    direct_voltage_error * -quadrature_inductance_saliency +
+    quadrature_voltage_error * direct_inductance_saliency
+  ) * voltage_mul_current_to_power;
 
-  const float saliency_angle_change = saliency_angle_gradient * control_parameters.saliency_angle_ki;
+  const float resilient_saliency_angle_gradient = resilient_gradient(
+    saliency_angle_gradient,
+    calibration_instance.saliency_angle_multiplier
+  );
+
+  const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
   calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
 }
 

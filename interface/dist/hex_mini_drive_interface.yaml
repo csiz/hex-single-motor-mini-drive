@@ -471,6 +471,9 @@ definitions:
       saliency_angle:
         type: int32
         doc: Saliency angle for the inductance saliency effect.
+      saliency_angle_multiplier:
+        type: float32
+        doc: Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
 
   DriveState:
     doc: |
