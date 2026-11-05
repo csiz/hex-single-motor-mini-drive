@@ -85,7 +85,7 @@ struct CalibrationInstanceSettings {
 // Track calibration settings.
 CalibrationInstanceSettings calibration_instance_settings;
 
-const uint16_t calibration_duration = max_duration / 2;
+const uint16_t calibration_duration = max_duration / 10;
 
 const float calibration_target_increment = 32.f;
 

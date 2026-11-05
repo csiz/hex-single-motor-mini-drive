@@ -52,6 +52,7 @@ export function plot_lines({
   default_shown_marks = undefined,
   default_show = true,
   include_crosshair = true,
+  default_draw = draw_line,
 }){
   const figure_options = {x_format, y_format, x_label, y_label, width, height, marginTop, marginRight, marginBottom, marginLeft};
 
@@ -139,7 +140,7 @@ export function plot_lines({
         d3.select(this).selectChildren().remove();
 
         // Draw the lines.
-        draw_line.call(this, channel_data);
+        default_draw.call(this, channel_data);
 
         channel_data.draw_extra?.call(this, channel_data);
       });
@@ -535,6 +536,20 @@ export function draw_line({data, x, y, x_scale, y_scale, curve, color}) {
   return d3.select(this).append("path")
     .style("stroke", color)
     .attr("d", make_line(data));
+}
+
+export function draw_circles_of_size(z){
+  return function({data, x, y, x_scale, y_scale, color}) {
+    // Draw a scatter plot of circles of radius z.
+    return d3.select(this)
+      .selectAll("circle")
+      .data(data)
+      .join("circle")
+        .attr("cx", (d, i, data) => x_scale(pick_value(x, d, i, data)))
+        .attr("cy", (d, i, data) => y_scale(pick_value(y, d, i, data)))
+        .attr("r", (d, i, data) => pick_value(z, d, i, data))
+        .attr("fill", color);
+  }
 }
 
 export function draw_area({data, x, y0, y1, x_scale, y_scale, curve, color}) {

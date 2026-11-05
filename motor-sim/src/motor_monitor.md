@@ -1250,7 +1250,7 @@ autosave_inputs(monitoring_plots);
 // Calibration Series
 // ------------------
 
-const calibration_series_frequency_plot = plot_lines({
+const calibration_series_resistance_plot = plot_lines({
   data: calibration_series,
   subtitle: "Calibration Series - Optimizing resistance & inductance",
   description: "Calibration optimization results for each phase at various probing frequencies.",
@@ -1260,41 +1260,37 @@ const calibration_series_frequency_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
-    {y: "inductance_x", label: "Phase Inductance X", color: colors_categories[1]},
-    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[2]},
-    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[3]},
+    
 
     {y: "resistance_x_multiplier", label: "Resistance X Multiplier", color: d3.color(colors_categories[0]).darker(1)},
-    {y: "inductance_x_multiplier", label: "Inductance X Multiplier", color: d3.color(colors_categories[1]).darker(1)},
-    {y: "inductance_saliency_multiplier", label: "Inductance Saliency Multiplier", color: d3.color(colors_categories[2]).darker(1)},
+    
   ],
-  curve,
+  default_draw: draw_circles_of_size(function(d) { return 2.0 * Math.sqrt(d.target_pwm / 32.0); }),
 });
 
-const calibration_series_pwm_plot = plot_lines({
+const calibration_series_inductance_plot = plot_lines({
   data: calibration_series,
   subtitle: "Calibration Series - Optimizing resistance & inductance",
   description: "Calibration optimization results for each phase at various probing frequencies.",
   width: 1200, height: 300,
-  x: "target_pwm",
-  x_label: "Probing PWM",
+  x: "target_speed",
+  x_label: "Probing Frequency",
   y_label: "Calibration Parameters",
   channels: [
-    {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
     {y: "inductance_x", label: "Phase Inductance X", color: colors_categories[1]},
-    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[2]},
-    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[3]},
-    
-    {y: "resistance_x_multiplier", label: "Resistance X Multiplier", color: d3.color(colors_categories[0]).darker(1)},
     {y: "inductance_x_multiplier", label: "Inductance X Multiplier", color: d3.color(colors_categories[1]).darker(1)},
+
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[2]},
     {y: "inductance_saliency_multiplier", label: "Inductance Saliency Multiplier", color: d3.color(colors_categories[2]).darker(1)},
+
+    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[3]},
   ],
-  curve,
+  default_draw: draw_circles_of_size(function(d) { return 2.0 * Math.sqrt(d.target_pwm / 32.0); }),
 });
 
 const calibration_series_plots = {
-  calibration_series_frequency_plot,
-  calibration_series_pwm_plot,
+  calibration_series_resistance_plot,
+  calibration_series_inductance_plot,
 };
 
 autosave_inputs(calibration_series_plots);
@@ -2386,7 +2382,7 @@ const unit_test_buttons = !motor_controller ? html`<p>Not connected to motor!</p
 
 import * as d3 from "d3";
 
-import {plot_lines, plot_line, setup_faint_area, horizontal_step, setup_stdev_95, draw_line} from "./components/plotting_utils.js";
+import {plot_lines, plot_line, draw_circles_of_size, setup_faint_area, horizontal_step, setup_stdev_95, draw_line} from "./components/plotting_utils.js";
 
 import {localStorage, get_stored_or_default, clear_stored_data} from "./components/local_storage.js";
 
