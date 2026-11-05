@@ -85,15 +85,15 @@ struct CalibrationInstanceSettings {
 // Track calibration settings.
 CalibrationInstanceSettings calibration_instance_settings;
 
-const uint16_t calibration_duration = max_duration / 10;
+const uint16_t calibration_duration = max_duration / 5;
 
-const float calibration_target_increment = 32.f;
+const float calibration_target_increment = 64.f;
 
-const float calibration_target_max = 256.f;
+const float calibration_target_max = 384.f;
 
 const float calibration_speed_increment = 100.f * angle_base / static_cast<float>(pwm_cycles_per_second);
 
-const float calibration_speed_max = angle_base / 2.f;
+const float calibration_speed_max = angle_base / 4.f;
 
 
 // Trying resilient backpropagation again, this time in the main loop.

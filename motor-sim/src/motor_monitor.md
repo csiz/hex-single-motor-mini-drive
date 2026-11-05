@@ -1265,7 +1265,7 @@ const calibration_series_resistance_plot = plot_lines({
     {y: "resistance_x_multiplier", label: "Resistance X Multiplier", color: d3.color(colors_categories[0]).darker(1)},
     
   ],
-  default_draw: draw_circles_of_size(function(d) { return 2.0 * Math.sqrt(d.target_pwm / 32.0); }),
+  default_draw: draw_circles_of_size(function(d) { return Math.sqrt(d.target_pwm / 64.0); }),
 });
 
 const calibration_series_inductance_plot = plot_lines({
@@ -1283,9 +1283,9 @@ const calibration_series_inductance_plot = plot_lines({
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[2]},
     {y: "inductance_saliency_multiplier", label: "Inductance Saliency Multiplier", color: d3.color(colors_categories[2]).darker(1)},
 
-    {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[3]},
+    {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
   ],
-  default_draw: draw_circles_of_size(function(d) { return 2.0 * Math.sqrt(d.target_pwm / 32.0); }),
+  default_draw: draw_circles_of_size(function(d) { return Math.sqrt(d.target_pwm / 64.0); }),
 });
 
 const calibration_series_plots = {

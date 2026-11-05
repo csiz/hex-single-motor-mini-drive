@@ -197,6 +197,10 @@ void ADC1_2_IRQHandler(void){
     // Calculate our outputs on the motor phases. The outputs kick in halfway through the PWM cycle,
     // so we average the previous and current outputs to get the effective output for this cycle.
     // 
+    // ! I've tried multiple approaches to averaging the motor outputs, the latest set value absolutely
+    // does not work. Exponentially averaging half-half or 0.75-0.25 or other alphas don't work! It must
+    // be the average of the last 2 motor output values, and we must store 2 cycles of motor outputs.
+    // 
     // Calculate the driven phase voltages from our PWM settings and the VCC voltage. We adjust our voltages
     // such that the 0 point corresponds to the voltage at the connection point of the three phases. The
     // motor stator coils are usually connected together by the manufacturer for a star configuration motor.
