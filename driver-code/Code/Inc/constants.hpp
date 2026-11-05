@@ -394,9 +394,9 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -8),
 
     .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -12),
-    .inductance_ki = std::pow(2, -34),
-    .inductance_bias_ki = std::pow(2, -40),
+    .resistance_ki = std::pow(2, -14),
+    .inductance_ki = std::pow(2, -38),
+    .inductance_bias_ki = std::pow(2, -42),
     .saliency_angle_ki = std::pow(2, 18),
     .angle_from_saliency_ki = std::pow(2, -4),
 

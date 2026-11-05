@@ -630,25 +630,35 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     inductance_saliency_gradient,
     calibration_instance.inductance_saliency_multiplier
   );
-  
+  const float new_inductance_saliency = (
+    calibration_instance.inductance_saliency - resilient_inductance_saliency_gradient * control_parameters.inductance_bias_ki
+  );
+
   // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
   calibration_instance.inductance_saliency = validate_parameter(
-    calibration_instance.inductance_saliency - resilient_inductance_saliency_gradient * control_parameters.inductance_bias_ki,
+    new_inductance_saliency,
     minimum_inductance_saliency
   );
 
-  const float saliency_angle_gradient = (
-    direct_voltage_error * -quadrature_inductance_saliency +
-    quadrature_voltage_error * direct_inductance_saliency
-  ) * voltage_mul_current_to_power;
+  if (new_inductance_saliency < minimum_inductance_saliency) {
+    // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
+    calibration_instance.saliency_angle = calibration_instance.saliency_angle + half_circle;
+    calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
+  } else {
+    // If we're normal condition, then just gradient descent the angle too.
+    const float saliency_angle_gradient = (
+      direct_voltage_error * -quadrature_inductance_saliency +
+      quadrature_voltage_error * direct_inductance_saliency
+    ) * voltage_mul_current_to_power;
 
-  const float resilient_saliency_angle_gradient = resilient_gradient(
-    saliency_angle_gradient,
-    calibration_instance.saliency_angle_multiplier
-  );
+    const float resilient_saliency_angle_gradient = resilient_gradient(
+      saliency_angle_gradient,
+      calibration_instance.saliency_angle_multiplier
+    );
 
-  const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
-  calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
+    const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
+    calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
+  }
 }
 
 static inline void process_readout(hex_mini_drive::Readout const& readout) {
