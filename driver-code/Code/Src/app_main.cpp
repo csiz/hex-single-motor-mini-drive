@@ -95,6 +95,9 @@ const float calibration_speed_increment = 100.f * angle_base / static_cast<float
 
 const float calibration_speed_max = angle_base / 4.f;
 
+const float calibration_stats_ki = std::pow(2, -6);
+
+const uint32_t calibration_stability_check_period = 64;
 
 // Trying resilient backpropagation again, this time in the main loop.
 // 
@@ -447,9 +450,17 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
 }
 
 // Keep zeroes to 0, check for nan and inifities and catch those with 0 too. Otherwise cap to minimum value.
-static inline float validate_parameter(float const& value, float const& minimum_value) {
-  if (value == 0 or not std::isfinite(value)) return 0;
-  return max(minimum_value, value);
+// Return whether the parameter was valid (true if unchanged, false if changed).
+static inline bool validate_parameter(float & value, float const& minimum_value) {
+  if (value == 0 or not std::isfinite(value)) {
+    value = 0;
+    return false;
+  } else if (value < minimum_value) {
+    value = minimum_value;
+    return false;
+  } else {
+    return true;
+  }
 }
 
 
@@ -516,12 +527,15 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // From now on we are definitely calibrating.
   calibration_instance.count += 1;
 
-  if (calibration_instance.count % 64 == 0) {
+  if (calibration_instance.count % calibration_stability_check_period == 0) {
     // Periodically check if we stablizied and move on.
     if (
       faster_abs(calibration_instance.resistance_x_multiplier) < multiplier_stable_threshold and
+      faster_abs(calibration_instance.resistance_y_multiplier) < multiplier_stable_threshold and
       faster_abs(calibration_instance.inductance_x_multiplier) < multiplier_stable_threshold and
+      faster_abs(calibration_instance.inductance_y_multiplier) < multiplier_stable_threshold and
       faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold
+      // We skip the saliency_angle_multiplier because we should be able to rely on the inductance_saliency_multiplier.
     ) {
       return finish_calibration_series();
     }
@@ -535,7 +549,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const float direct_resistive_voltage = readout.direct_current * calibration_instance.resistance_x;
-  const float quadrature_resistive_voltage = readout.quadrature_current * calibration_instance.resistance_x;
+  const float quadrature_resistive_voltage = readout.quadrature_current * calibration_instance.resistance_y;
 
   // And the current diffs for calculating inductance.
   const float direct_diff = readout.direct_current_diff * current_diff_to_voltage_units;
@@ -561,7 +575,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float quadrature_inductance_saliency_voltage = calibration_instance.inductance_saliency * quadrature_inductance_saliency;
 
   const float direct_inductance_base_voltage = direct_diff * calibration_instance.inductance_x;
-  const float quadrature_inductance_base_voltage = quadrature_diff * calibration_instance.inductance_x;
+  const float quadrature_inductance_base_voltage = quadrature_diff * calibration_instance.inductance_y;
 
   const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_saliency_voltage;
   const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_saliency_voltage;
@@ -581,7 +595,18 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
   // there isn't enough energy in the error to warrant an update.
-  // const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
+  const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
+
+  // Store stats
+  // -----------
+  // 
+  // The error is evolving during the optimization, we want to store the end-ish value after we've optimized our parameters.
+
+  const float drive_voltage = readout.vcc_voltage * readout.active_pwm * active_pwm_to_voltage_conversion;
+  
+  calibration_instance.avg_drive_voltage += (drive_voltage - calibration_instance.avg_drive_voltage) * calibration_stats_ki;
+  calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_stats_ki;
+  calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_stats_ki;
 
   // Gradients & Parameter Updates
   // -----------------------------
@@ -590,61 +615,55 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // 
   // ! We must not condition the updates apparently...
 
-  const float resistance_gradient = (
-      direct_voltage_error * readout.direct_current +
-      quadrature_voltage_error * readout.quadrature_current
-  ) * voltage_mul_current_to_power;
-
-  const float resilient_resistance_gradient = resilient_gradient(
-      resistance_gradient,
-      calibration_instance.resistance_x_multiplier
+  const float resistance_x_gradient = resilient_gradient(
+    voltage_mul_current_to_power * direct_voltage_error * readout.direct_current,
+    calibration_instance.resistance_x_multiplier
   );
   
-  calibration_instance.resistance_x = validate_parameter(
-    calibration_instance.resistance_x - resilient_resistance_gradient * control_parameters.resistance_ki,
-    minimum_resistance
-  );
-  
-  const float inductance_gradient = (
-    direct_voltage_error * direct_diff +
-    quadrature_voltage_error * quadrature_diff
-  ) * voltage_mul_current_to_power;
+  calibration_instance.resistance_x -= resistance_x_gradient * control_parameters.resistance_ki;
+  validate_parameter(calibration_instance.resistance_x, minimum_resistance);
 
-  const float resilient_inductance_gradient = resilient_gradient(
-    inductance_gradient,
+  const float resistance_y_gradient = resilient_gradient(
+    voltage_mul_current_to_power * quadrature_voltage_error * readout.quadrature_current,
+    calibration_instance.resistance_y_multiplier
+  );
+
+  calibration_instance.resistance_y -= resistance_y_gradient * control_parameters.resistance_ki;
+  validate_parameter(calibration_instance.resistance_y, minimum_resistance);
+  
+  const float inductance_x_gradient = resilient_gradient(
+    voltage_mul_current_to_power * direct_voltage_error * direct_diff,
     calibration_instance.inductance_x_multiplier
   );
   
   // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-  calibration_instance.inductance_x = validate_parameter(
-    calibration_instance.inductance_x - resilient_inductance_gradient * control_parameters.inductance_ki,
-    minimum_inductance
+  calibration_instance.inductance_x -= inductance_x_gradient * control_parameters.inductance_ki;
+  validate_parameter(calibration_instance.inductance_x, minimum_inductance);
+
+  const float inductance_y_gradient = resilient_gradient(
+    voltage_mul_current_to_power * quadrature_voltage_error * quadrature_diff,
+    calibration_instance.inductance_y_multiplier
   );
+  calibration_instance.inductance_y -= inductance_y_gradient * control_parameters.inductance_ki;
+  validate_parameter(calibration_instance.inductance_y, minimum_inductance);
 
-  const float inductance_saliency_gradient = (
-    direct_voltage_error * direct_inductance_saliency +
-    quadrature_voltage_error * quadrature_inductance_saliency
-  ) * voltage_mul_current_to_power;
 
-  const float resilient_inductance_saliency_gradient = resilient_gradient(
-    inductance_saliency_gradient,
+  const float inductance_saliency_gradient = resilient_gradient(
+    voltage_mul_current_to_power * (
+      direct_voltage_error * direct_inductance_saliency +
+      quadrature_voltage_error * quadrature_inductance_saliency
+    ),
     calibration_instance.inductance_saliency_multiplier
   );
-  const float new_inductance_saliency = (
-    calibration_instance.inductance_saliency - resilient_inductance_saliency_gradient * control_parameters.inductance_bias_ki
-  );
 
-  // Keep 0 inductance bias exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-  calibration_instance.inductance_saliency = validate_parameter(
-    new_inductance_saliency,
-    minimum_inductance_saliency
-  );
+  calibration_instance.inductance_saliency -= inductance_saliency_gradient * control_parameters.inductance_bias_ki;
+  // Keep 0 inductance saliency exactly 0 (meaning disabled), but otherwise make sure it's a minimum positive value.
+  const bool valid = validate_parameter(calibration_instance.inductance_saliency, minimum_inductance_saliency);
 
-  if (new_inductance_saliency < minimum_inductance_saliency) {
-    // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
-    calibration_instance.saliency_angle = calibration_instance.saliency_angle + half_circle;
-    calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
-  } else {
+  // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
+  // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape
+  // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
+  if (valid) {
     // If we're normal condition, then just gradient descent the angle too.
     const float saliency_angle_gradient = (
       direct_voltage_error * -quadrature_inductance_saliency +
@@ -658,6 +677,11 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
     const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
     calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
+
+  } else {
+    // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
+    calibration_instance.saliency_angle = calibration_instance.saliency_angle + half_circle;
+    calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
   }
 }
 
