@@ -127,3 +127,49 @@ Expanding ${tex`V_{\text{m}}`} back into its continuous structural components ex
 ```tex
 \frac{K_t^2}{J} = \omega_p \cdot \sqrt{R_{\text{true}}^2 + (\omega_p L_{\text{true}})^2} \cdot V_{\text{m}}
 ```
+
+
+### Vertically Aligned High-Frequency State Equations
+
+```tex
+\phi_e = \arctan\left(\frac{\omega_p L_0}{R}\right)
+```
+
+#### X-Axis Main State Equation
+
+```tex
+\begin{aligned}
+V_x(t_k) &= R \, I_{\text{mag}} \sin(\omega_p t_k - \phi_e) \\
+&\quad + \Big(L_0 - L_{\text{saliency}}\cos(2\theta_{\text{saliency}})\Big) \, \omega_p I_{\text{mag}} \cos(\omega_p t_k - \phi_e) \\
+&\quad + L_{\text{saliency}}\sin(2\theta_{\text{saliency}}) \, \omega_p I_{\text{mag}} \sin(\omega_p t_k - \phi_e) \\
+&\quad + V_m \, \omega_p L_0 I_{\text{mag}} \cos(\omega_p t_k - \theta_{\text{rotor}})
+\end{aligned}
+```
+
+#### Y-Axis Main State Equation
+
+```tex
+\begin{aligned}
+V_y(t_k) &= R \, I_{\text{mag}} \cos(\omega_p t_k - \phi_e) \\
+&\quad + L_{\text{saliency}}\sin(2\theta_{\text{saliency}}) \, \omega_p I_{\text{mag}} \cos(\omega_p t_k - \phi_e) \\
+&\quad - \Big(L_0 + L_{\text{saliency}}\cos(2\theta_{\text{saliency}})\Big) \, \omega_p I_{\text{mag}} \sin(\omega_p t_k - \phi_e) \\
+&\quad + V_m \, \omega_p L_0 I_{\text{mag}} \sin(\omega_p t_k - \theta_{\text{rotor}})
+\end{aligned}
+```
+
+### Least-Squares Cost Function
+
+```tex
+\begin{aligned}
+r_x(k) &= V_{x,\text{meas}}(k) - V_x(t_k) \\
+r_y(k) &= V_{y,\text{meas}}(k) - V_y(t_k)
+\end{aligned}
+```
+
+```tex
+\min_{\mathbf{X}} \sum_{k=1}^{N} \left[ r_x(k)^2 + r_y(k)^2 \right]
+```
+
+```tex
+\mathbf{X} = \begin{bmatrix} R & L_0 & L_{\text{saliency}} & \theta_{\text{saliency}} & \theta_{\text{rotor}} & V_m \end{bmatrix}^T
+```

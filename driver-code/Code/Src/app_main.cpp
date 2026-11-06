@@ -145,14 +145,10 @@ static inline void start_calibration_series(
     .count = 0,
     .target_pwm = target,
     .target_speed = speed,
-    .resistance_x = active_calibration.resistance,
-    .resistance_x_multiplier = 1.f,
-    .resistance_y = active_calibration.resistance,
-    .resistance_y_multiplier = 1.f,
-    .inductance_x = active_calibration.inductance,
-    .inductance_x_multiplier = 1.f,
-    .inductance_y = active_calibration.inductance,
-    .inductance_y_multiplier = 1.f,
+    .resistance = active_calibration.resistance,
+    .resistance_multiplier = 1.f,
+    .inductance = active_calibration.inductance,
+    .inductance_multiplier = 1.f,
     .inductance_saliency = active_calibration.inductance_bias,
     .inductance_saliency_multiplier = 1.f,
     .saliency_angle = 2 * angle,
@@ -553,10 +549,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
       // Let the 0 speed hold instance complete to full duration to let the physical rotor settle.
       calibration_instance.target_speed != 0.f and
       // Check if all gradient multipliers are stable.
-      faster_abs(calibration_instance.resistance_x_multiplier) < multiplier_stable_threshold and
-      faster_abs(calibration_instance.resistance_y_multiplier) < multiplier_stable_threshold and
-      faster_abs(calibration_instance.inductance_x_multiplier) < multiplier_stable_threshold and
-      faster_abs(calibration_instance.inductance_y_multiplier) < multiplier_stable_threshold and
+      faster_abs(calibration_instance.resistance_multiplier) < multiplier_stable_threshold and
+      faster_abs(calibration_instance.inductance_multiplier) < multiplier_stable_threshold and
       faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold
       // We skip the saliency_angle_multiplier because we should be able to rely on the inductance_saliency_multiplier.
     ) {
@@ -571,8 +565,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   
 
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-  const float direct_resistive_voltage = readout.direct_current * calibration_instance.resistance_x;
-  const float quadrature_resistive_voltage = readout.quadrature_current * calibration_instance.resistance_y;
+  const float direct_resistive_voltage = readout.direct_current * calibration_instance.resistance;
+  const float quadrature_resistive_voltage = readout.quadrature_current * calibration_instance.resistance;
 
   // And the current diffs for calculating inductance.
   const float direct_diff = readout.direct_current_diff * current_diff_to_voltage_units;
@@ -597,8 +591,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   );
   const float quadrature_inductance_saliency_voltage = calibration_instance.inductance_saliency * quadrature_inductance_saliency;
 
-  const float direct_inductance_base_voltage = direct_diff * calibration_instance.inductance_x;
-  const float quadrature_inductance_base_voltage = quadrature_diff * calibration_instance.inductance_y;
+  const float direct_inductance_base_voltage = direct_diff * calibration_instance.inductance;
+  const float quadrature_inductance_base_voltage = quadrature_diff * calibration_instance.inductance;
 
   const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_saliency_voltage;
   const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_saliency_voltage;
@@ -638,38 +632,29 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // 
   // ! We must not condition the updates apparently...
 
-  const float resistance_x_gradient = resilient_gradient(
-    voltage_mul_current_to_power * direct_voltage_error * readout.direct_current,
-    calibration_instance.resistance_x_multiplier
+  const float resistance_gradient = resilient_gradient(
+    voltage_mul_current_to_power * (
+      direct_voltage_error * readout.direct_current +
+      quadrature_voltage_error * readout.quadrature_current
+    ),
+    calibration_instance.resistance_multiplier
   );
   
-  calibration_instance.resistance_x -= resistance_x_gradient * control_parameters.resistance_ki;
-  validate_parameter(calibration_instance.resistance_x, minimum_resistance);
+  calibration_instance.resistance -= resistance_gradient * control_parameters.resistance_ki;
+  validate_parameter(calibration_instance.resistance, minimum_resistance);
 
-  const float resistance_y_gradient = resilient_gradient(
-    voltage_mul_current_to_power * quadrature_voltage_error * readout.quadrature_current,
-    calibration_instance.resistance_y_multiplier
-  );
 
-  calibration_instance.resistance_y -= resistance_y_gradient * control_parameters.resistance_ki;
-  validate_parameter(calibration_instance.resistance_y, minimum_resistance);
-  
-  const float inductance_x_gradient = resilient_gradient(
-    voltage_mul_current_to_power * direct_voltage_error * direct_diff,
-    calibration_instance.inductance_x_multiplier
+  const float inductance_gradient = resilient_gradient(
+    voltage_mul_current_to_power * (
+      direct_voltage_error * direct_diff +
+      quadrature_voltage_error * quadrature_diff
+    ),
+    calibration_instance.inductance_multiplier
   );
   
   // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-  calibration_instance.inductance_x -= inductance_x_gradient * control_parameters.inductance_ki;
-  validate_parameter(calibration_instance.inductance_x, minimum_inductance);
-
-  const float inductance_y_gradient = resilient_gradient(
-    voltage_mul_current_to_power * quadrature_voltage_error * quadrature_diff,
-    calibration_instance.inductance_y_multiplier
-  );
-  calibration_instance.inductance_y -= inductance_y_gradient * control_parameters.inductance_ki;
-  validate_parameter(calibration_instance.inductance_y, minimum_inductance);
-
+  calibration_instance.inductance -= inductance_gradient * control_parameters.inductance_ki;
+  validate_parameter(calibration_instance.inductance, minimum_inductance);
 
   const float inductance_saliency_gradient = resilient_gradient(
     voltage_mul_current_to_power * (

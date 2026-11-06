@@ -438,30 +438,18 @@ definitions:
       avg_square_error:
         type: float32
         doc: Average squared error during this calibration instance.
-      resistance_x:
+      resistance:
         type: float32
-        doc: Measured resistance value for the X phase.
-      resistance_x_multiplier:
+        doc: Measured resistance value for each phase.
+      resistance_multiplier:
         type: float32
-        doc: Multiplier for the X phase resistance, used to adjust the effective resistance in calculations.
-      resistance_y:
+        doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
+      inductance:
         type: float32
-        doc: Measured resistance value for the Y phase.
-      resistance_y_multiplier:
-        type: float32
-        doc: Multiplier for the Y phase resistance, used to adjust the effective resistance in calculations.
-      inductance_x:
-        type: float32
-        doc: Measured inductance value for the X phase.
-      inductance_x_multiplier:
+        doc: Measured inductance value for each phase.
+      inductance_multiplier:
         type: float32
         doc: Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
-      inductance_y:
-        type: float32
-        doc: Measured inductance value for the Y phase.
-      inductance_y_multiplier:
-        type: float32
-        doc: Multiplier for the Y phase inductance, used to adjust the effective inductance in calculations.
       inductance_saliency:
         type: float32
         doc: Measured inductance saliency bias.
@@ -474,7 +462,18 @@ definitions:
       saliency_angle_multiplier:
         type: float32
         doc: Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
-
+      mechanical_factor:
+        type: float32
+        doc: Mechanical coupling between rotor and probing frequency.
+      mechanical_factor_multiplier:
+        type: float32
+        doc: Multiplier for the mechanical factor.
+      mechanical_angle:
+        type: int32
+        doc: Mechanical angle of the rotor (aka rotor angle via micro-oscillations).
+      mechanical_angle_multiplier:
+        type: float32
+        doc: Multiplier for the mechanical angle.
   DriveState:
     doc: |
       The complete driver state, these values control the motor behaviour.

@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.160.0";
+constexpr char const* VERSION_STRING = "0.161.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -544,22 +544,14 @@ struct CalibrationInstance {
   float avg_current_magnitude;
   // Average squared error during this calibration instance.
   float avg_square_error;
-  // Measured resistance value for the X phase.
-  float resistance_x;
-  // Multiplier for the X phase resistance, used to adjust the effective resistance in calculations.
-  float resistance_x_multiplier;
-  // Measured resistance value for the Y phase.
-  float resistance_y;
-  // Multiplier for the Y phase resistance, used to adjust the effective resistance in calculations.
-  float resistance_y_multiplier;
-  // Measured inductance value for the X phase.
-  float inductance_x;
+  // Measured resistance value for each phase.
+  float resistance;
+  // Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
+  float resistance_multiplier;
+  // Measured inductance value for each phase.
+  float inductance;
   // Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
-  float inductance_x_multiplier;
-  // Measured inductance value for the Y phase.
-  float inductance_y;
-  // Multiplier for the Y phase inductance, used to adjust the effective inductance in calculations.
-  float inductance_y_multiplier;
+  float inductance_multiplier;
   // Measured inductance saliency bias.
   float inductance_saliency;
   // Multiplier for the inductance saliency, used to adjust the effective inductance saliency in calculations.
@@ -568,6 +560,14 @@ struct CalibrationInstance {
   int32_t saliency_angle;
   // Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
   float saliency_angle_multiplier;
+  // Mechanical coupling between rotor and probing frequency.
+  float mechanical_factor;
+  // Multiplier for the mechanical factor.
+  float mechanical_factor_multiplier;
+  // Mechanical angle of the rotor (aka rotor angle via micro-oscillations).
+  int32_t mechanical_angle;
+  // Multiplier for the mechanical angle.
+  float mechanical_angle_multiplier;
 };
 
 static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstance const& value) {
@@ -584,21 +584,13 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.avg_square_error);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_x);;
+  write_float32(buffer + offset, value.resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_x_multiplier);;
+  write_float32(buffer + offset, value.resistance_multiplier);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_y);;
+  write_float32(buffer + offset, value.inductance);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_y_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_x);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_x_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_y);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_y_multiplier);;
+  write_float32(buffer + offset, value.inductance_multiplier);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_saliency);;
   offset += 4;
@@ -607,6 +599,14 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   write_int32(buffer + offset, value.saliency_angle);;
   offset += 4;
   write_float32(buffer + offset, value.saliency_angle_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.mechanical_factor);;
+  offset += 4;
+  write_float32(buffer + offset, value.mechanical_factor_multiplier);;
+  offset += 4;
+  write_int32(buffer + offset, value.mechanical_angle);;
+  offset += 4;
+  write_float32(buffer + offset, value.mechanical_angle_multiplier);;
   offset += 4;
 }
 static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer) {
@@ -626,21 +626,13 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.avg_square_error = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_x = read_float32(buffer + offset);
+  result.resistance = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_x_multiplier = read_float32(buffer + offset);
+  result.resistance_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_y = read_float32(buffer + offset);
+  result.inductance = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_y_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_x = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_x_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_y = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_y_multiplier = read_float32(buffer + offset);
+  result.inductance_multiplier = read_float32(buffer + offset);
   offset += 4;
   result.inductance_saliency = read_float32(buffer + offset);
   offset += 4;
@@ -649,6 +641,14 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
   result.saliency_angle_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.mechanical_factor = read_float32(buffer + offset);
+  offset += 4;
+  result.mechanical_factor_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.mechanical_angle = read_int32(buffer + offset);
+  offset += 4;
+  result.mechanical_angle_multiplier = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
