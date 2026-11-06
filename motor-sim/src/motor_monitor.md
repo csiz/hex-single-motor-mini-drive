@@ -1288,6 +1288,8 @@ const calibration_series_inductance_plot = plot_lines({
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
 
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[4]).brighter(1)},
+    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
+    {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });

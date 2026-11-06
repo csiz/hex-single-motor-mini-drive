@@ -19,8 +19,8 @@ constexpr float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
 // Inverse for fast math.
 // constexpr float max_drive_current_inverse = 1.f / max_drive_current;
 
-// 12W max drive power.
-constexpr float max_drive_power = 12.0;
+// 32W max drive power.
+constexpr float max_drive_power = 32.0;
 
 // Inverse for fast math.
 constexpr float max_drive_power_inverse = 1.f / max_drive_power;
@@ -409,7 +409,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .emf_min_angular_speed = 25.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .emf_uncertainty_threshold = 256,
     .vcc_undervoltage = 8.0f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
-    .max_resistive_power = 8.0f,
+    .max_resistive_power = 16.0f,
     .max_power_draw = max_drive_power,
     .resistive_power_ki = std::pow(2, -12),
     .power_draw_ki = std::pow(2, -10),

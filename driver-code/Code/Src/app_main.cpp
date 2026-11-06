@@ -137,20 +137,21 @@ static inline void start_calibration_series(
   float target,
   float speed
 ) {
+  // Clear the schedule of any pending states.
+  if (drive_state_queue.read_available()) drive_state_queue.mark_all_read();
   
   // Reset the calibration instance state and initialize with the currently active calibration.
-
   calibration_instance = hex_mini_drive::CalibrationInstance {
     .count = 0,
     .target_pwm = target,
     .target_speed = speed,
     .resistance_x = active_calibration.resistance,
     .resistance_x_multiplier = 1.f,
-    .resistance_y = 0,
+    .resistance_y = active_calibration.resistance,
     .resistance_y_multiplier = 1.f,
     .inductance_x = active_calibration.inductance,
     .inductance_x_multiplier = 1.f,
-    .inductance_y = 0,
+    .inductance_y = active_calibration.inductance,
     .inductance_y_multiplier = 1.f,
     .inductance_saliency = active_calibration.inductance_bias,
     .inductance_saliency_multiplier = 1.f,
@@ -162,9 +163,9 @@ static inline void start_calibration_series(
     .motor_flags = ENABLE_ALL_OUTPUTS,
     .closed_loop = false,
     .duration = calibration_duration,
-    .target_value = target,
+    .target_value = calibration_instance.target_pwm,
     .angle_value = angle,
-    .target_speed = speed,
+    .target_speed = calibration_instance.target_speed,
     .probing_factor = 0,
     .probing_factor_modulation = 0,
     .probing_speed_modulation = 0,
@@ -500,16 +501,35 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // motor is in a stopped state. We then run the calibration at various frequencies and check the
   // response assuming the motor is stationary and not generating any EMF voltage.
 
-  
+  // Check when we naturally finish the current calibration series by seeing when the drive state has finished.
+  if (not drive_state_queue.read_available()) {
+    // Check if we've actually started.
+    if (calibration_instance.count == 0) {
+      // Hmm, we haven't started this series yet; restart it.
+      start_calibration_series(calibration, calibration_instance.target_pwm, calibration_instance.target_speed);
+      // Skip this readout since we just queued a new state.
+    } else {
+      // We started so now that drive_state is done, we are naturally ending.
+      finish_calibration_series();
+    }
+    // In either case we skip this readout.
+    return;
+  }
+
   // Stop calibration updates when we are undervoltage or overcurrent, we won't get accurate readings.
   const bool undervoltage = readout.vcc_voltage < control_parameters.vcc_undervoltage;
   const bool overcurrent = readout.current_magnitude > max_drive_current;
 
-  // Check when we finished the current calibration series by seeing when the drive state has finished.
-  const bool series_finished = not drive_state_queue.read_available();
-
-  // Finish the current calibration series if trigger any stop condition or the probing just ends naturally.
-  if (undervoltage or overcurrent or series_finished) return finish_calibration_series();
+  // Abort the calibration instance if we triggered the stop conditions.
+  if (undervoltage or overcurrent) {
+    // We already have stats, abort calibration instance.
+    if (calibration_instance.count) {
+      drive_state_queue.mark_all_read();
+      finish_calibration_series();
+    }
+    // In either case we skip this readout from calibration.
+    return;
+  }
 
   // Because our best source of voltage information is the drive_voltage we also need to make sure
   // we are driving with enough power to get any information.
@@ -530,6 +550,9 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   if (calibration_instance.count % calibration_stability_check_period == 0) {
     // Periodically check if we stablizied and move on.
     if (
+      // Let the 0 speed hold instance complete to full duration to let the physical rotor settle.
+      calibration_instance.target_speed != 0.f and
+      // Check if all gradient multipliers are stable.
       faster_abs(calibration_instance.resistance_x_multiplier) < multiplier_stable_threshold and
       faster_abs(calibration_instance.resistance_y_multiplier) < multiplier_stable_threshold and
       faster_abs(calibration_instance.inductance_x_multiplier) < multiplier_stable_threshold and
