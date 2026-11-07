@@ -290,11 +290,11 @@ void ADC1_2_IRQHandler(void){
     const float cos_saliency = get_cos(saliency_angle);
     const float sin_saliency = get_sin(saliency_angle);
 
-    const float direct_inductance_bias_voltage = calibration.inductance_bias * (
+    const float direct_inductance_saliency_voltage = calibration.inductance_saliency * (
         -direct_diff * cos_saliency 
         -quadrature_diff * sin_saliency
     );
-    const float quadrature_inductance_bias_voltage = calibration.inductance_bias * (
+    const float quadrature_inductance_saliency_voltage = calibration.inductance_saliency * (
         -direct_diff * sin_saliency
         +quadrature_diff * cos_saliency
     );
@@ -302,8 +302,8 @@ void ADC1_2_IRQHandler(void){
     const float direct_inductance_base_voltage = direct_diff * calibration.inductance;
     const float quadrature_inductance_base_voltage = quadrature_diff * calibration.inductance;
 
-    const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_bias_voltage;
-    const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_bias_voltage;
+    const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_saliency_voltage;
+    const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_saliency_voltage;
 
     const float measured_direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
     const float measured_quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;

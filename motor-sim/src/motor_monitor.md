@@ -68,7 +68,7 @@ Motor Driving Data
   <span>${timeline_position_input}</span>
 </div>
 <div class="card tight">${Object.values(monitoring_plots)}</div>
-<div class="card tight">${Object.values(calibration_series_plots)}</div>
+
 
 Calibration Procedures
 ----------------------
@@ -82,15 +82,7 @@ Calibration Procedures
 </div>
 <div class="card tight">
   <h3>Calibration Results</h3>
-  <div>${calibration_optimization_iteration_input}</div>
-  <div>
-    <p>Electrical phase properties at displayed iteration:</p>
-    <pre>${calibration_iteration_table}</pre>
-    <div>${calibration_optimizing_plot}</div>
-    <div>${calibration_angles_plot}</div>
-    <div>${calibration_angles_scatter}</div>
-    <div>${calibration_optimizing_gradients_plot}</div>
-  </div>
+  <div>${Object.values(calibration_series_plots)}</div>
 
 </div>
 
@@ -415,10 +407,6 @@ const data_request_buttons = Inputs.button(
       if (!motor_controller) return;
       motor_controller.reset_history();
       await motor_controller.send_command({message_code: MessageCode.GET_READOUTS_SNAPSHOT, stream_state: HISTORY_SIZE});
-    }],
-    ["Run calibration", async function(){
-      if (!motor_controller) return;
-      await motor_controller.send_command({message_code: MessageCode.RUN_CALIBRATION});
     }],
     ["Stream motor data", async function(){
       if (!motor_controller) return;
@@ -954,6 +942,7 @@ const plot_electric_position = plot_lines({
     {y: "predicted_angle", label: "Predicted Angle", color: d3.color(colors.angle).darker(1)},
     {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
+    {y: "iron_loss_angle", label: "Iron Loss Angle", color: colors_categories[6]},
     {y: "current_angle", label: "Current Angle", color: colors_categories[3]},
     {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {
@@ -1186,6 +1175,7 @@ const plot_resistance_calibration = plot_lines({
   y_label: "Resistance (Ohms)",
   channels: [
     {y: "resistance", label: "Phase Resistance X", color: colors.u},
+    {y: "iron_loss", label: "Iron Loss", color: colors_categories[6]},
   ],
   curve,
 });
@@ -1218,6 +1208,8 @@ const plot_motor_values = plot_lines({
     {y: (d) => Math.abs(d.inductance_multiplier), label: "Inductance Multiplier", color: colors_categories[3]},
     {y: (d) => Math.abs(d.inductance_saliency_multiplier), label: "Inductance Bias Multiplier", color: colors_categories[4]},
     {y: (d) => Math.abs(d.saliency_angle_multiplier), label: "Saliency Angle Multiplier", color: colors_categories[5]},
+    {y: (d) => Math.abs(d.iron_loss_multiplier), label: "Iron Loss Multiplier", color: colors_categories[6]},
+    {y: (d) => Math.abs(d.iron_loss_angle_multiplier), label: "Iron Loss Angle Multiplier", color: colors_categories[7]},
   ],
   curve,
 });
@@ -1244,56 +1236,6 @@ const monitoring_plots = {
 };
 
 autosave_inputs(monitoring_plots);
-```
-
-```js
-// Calibration Series
-// ------------------
-
-// TODO: make this a parameter?
-const multiplier_stable_threshold = Math.pow(2, -5);
-
-const calibration_series_resistance_plot = plot_lines({
-  data: calibration_series,
-  subtitle: "Calibration Series - Optimizing resistance & inductance",
-  description: "Calibration optimization results for each phase at various probing frequencies.",
-  width: 1200, height: 300,
-  x: "target_speed",
-  x_label: "Probing Frequency",
-  y_label: "Calibration Parameters",
-  channels: [
-    {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
-    {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
-  ],
-  default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
-});
-
-const calibration_series_inductance_plot = plot_lines({
-  data: calibration_series,
-  subtitle: "Calibration Series - Optimizing resistance & inductance",
-  description: "Calibration optimization results for each phase at various probing frequencies.",
-  width: 1200, height: 300,
-  x: "target_speed",
-  x_label: "Probing Frequency",
-  y_label: "Calibration Parameters",
-  channels: [
-    {y: "inductance", label: "Phase Inductance", color: colors_categories[2]},
-
-    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
-
-    {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[4]).brighter(1)},
-    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
-    {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
-  ],
-  default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
-});
-
-const calibration_series_plots = {
-  calibration_series_resistance_plot,
-  calibration_series_inductance_plot,
-};
-
-autosave_inputs(calibration_series_plots);
 ```
 
 ```js
@@ -1328,13 +1270,13 @@ const calibration_parameters = {
     label: "Phase Inductance", 
     description: `The inductance of the motor's phases.`
   },
-  inductance_bias: {
-    label: "Inductance Bias", 
+  inductance_saliency: {
+    label: "Inductance Saliency", 
     description: `The bias of the motor's phase inductance.`
   },
-  saturation_factor: {
-    label: "Saturation Factor", 
-    description: `The factor of the motor's saturation.`
+  iron_loss: {
+    label: "Iron Loss", 
+    description: `The iron loss from eddy currents.`
   },
   motor_constant: {
     label: "Motor Constant", 
@@ -1389,471 +1331,11 @@ const update_calibration_data = (new_value) => {
 
 ```js
 
-function run_calibration(sample) {
-  console.info("Calculating calibration...");
-
-  const enabled_parameters = get_checked_parameters();
-
-  // Test if the voltage was mostly 0.
-  const count_idle = sample.filter(({u_drive_voltage, v_drive_voltage, w_drive_voltage, angular_speed}) => 
-    Math.abs(u_drive_voltage) < 0.001 && 
-    Math.abs(v_drive_voltage) < 0.001 && 
-    Math.abs(w_drive_voltage) < 0.001 
-  ).length;
-
-  // For all 0 voltages we calibrate the baseline offset of the currents.
-  if (count_idle === sample.length) {
-    console.info("All drive voltages are zero, calibrating current baseline offsets.");
-    // Assuming the driver current_zero settings are 0.
-    const u_current_zero = sample.reduce((sum, {u_current}) => sum + u_current, 0) / sample.length;
-    const v_current_zero = sample.reduce((sum, {v_current}) => sum + v_current, 0) / sample.length;
-    const w_current_zero = sample.reduce((sum, {w_current}) => sum + w_current, 0) / sample.length; 
-  
-    return {
-      sample,
-      is_stable: true,
-      iterations: [
-        {
-          iteration: 0,
-          calibration: {
-            u_current_zero,
-            v_current_zero,
-            w_current_zero,
-          },
-          sample
-        }
-      ],
-      calibration: {
-        u_current_zero,
-        v_current_zero,
-        w_current_zero,
-      }
-    }
-  }
-
-  const max_iterations = 1000;
-  const relative_stability = 0.001;
-  const relative_min = relative_stability / 10;
-  const relative_initial = 0.1;
-  const relative_increase = 1.2;
-  const relative_decrease = 0.5;
-
-  class Parameter {
-    constructor({value, max_learning_rate}) {
-      this.value = value;
-      this.max_learning_rate = max_learning_rate;
-      this.learning_rate = max_learning_rate * relative_initial;
-      this.sign = 0;
-    }
-
-    reset(value) {
-      this.value = value;
-      this.learning_rate = this.max_learning_rate * relative_initial;
-      this.sign = 0;
-    }
-  }
-
-  let parameters = {
-    resistance: new Parameter({
-      value: 0.01,
-      max_learning_rate: 0.1,
-    }),
-    inductance: new Parameter({
-      value: 0.00001, 
-      max_learning_rate: 0.000_01,
-    }),
-    inductance_bias: new Parameter({
-      value: 0.0,
-      max_learning_rate: 0.000_01,
-    }),
-    saliency_angle: new Parameter({
-      value: 0.0,
-      max_learning_rate: Math.PI / 4,
-    }),
-    saturation_factor: new Parameter({
-      value: 0.0,
-      max_learning_rate: 0.000_01,
-    }),
-    saturation_angle: new Parameter({
-      value: 0.0,
-      max_learning_rate: Math.PI / 4,
-    }),
-    motor_constant: new Parameter({
-      value: 0.0,
-      max_learning_rate: 0.000_01,
-    }),
-  };
-
-  const angle_deltas = sample.map((d) => new Parameter({
-    value: 0.0,
-    max_learning_rate: Math.PI / 96,
-  }));
-
-
-  let is_stable = false;
-
-  let iterations = [];
-
-  for (let i = 0; !is_stable && (i < max_iterations); i++) {
-
-    const {
-      resistance,
-      inductance,
-      inductance_bias,
-      saliency_angle,
-      saturation_factor,
-      saturation_angle,
-      motor_constant,
-    } = Object.fromEntries(Object.entries(parameters).map(([key, param]) => [key, param.value]));
-
-
-    const sample_forward_pass = sample.map((readout, i) => {
-      const {
-        direct_current, quadrature_current,
-        direct_current_diff, quadrature_current_diff,
-        direct_drive_voltage, quadrature_drive_voltage,
-
-        angular_speed, angle, emf_voltage_angular_speed,
-      } = readout;
-
-      const angle_delta = angle_deltas[i].value;
-      const true_angle = normalize_radians(angle + angle_delta);
-
-      const d_di_dt = direct_current_diff * pwm_cycles_per_second;
-      const q_di_dt = quadrature_current_diff * pwm_cycles_per_second;
-
-      const direct_resistive_voltage = direct_current * resistance;
-      const quadrature_resistive_voltage = quadrature_current * resistance;
-
-      const A_saturation = direct_current * d_di_dt - quadrature_current * q_di_dt;
-      const B_saturation = quadrature_current * d_di_dt + direct_current * q_di_dt;
-
-      const K_saturation = parameters.saturation_factor.value;
-
-      const K_motor = parameters.motor_constant.value;
-
-      // Convert to radians per second.
-      const omega = normalize_radians(
-        i > 0 ? (
-          normalize_radians(angle + angle_delta) -
-          normalize_radians(sample[i - 1].angle + angle_deltas[i - 1].value)
-        ) : (
-          normalize_radians(sample[i + 1].angle + angle_deltas[i + 1].value) -
-          normalize_radians(angle + angle_delta)
-        )
-      ) * pwm_cycles_per_second;
-
-      const direct_inductance_bias_voltage = (
-        -d_di_dt * inductance_bias * Math.cos(2 * saliency_angle) +
-        -q_di_dt * inductance_bias * Math.sin(2 * saliency_angle)
-      );
-
-      const quadrature_inductance_bias_voltage = (
-        -d_di_dt * inductance_bias * Math.sin(2 * saliency_angle) +
-        +q_di_dt * inductance_bias * Math.cos(2 * saliency_angle)
-      );
-
-      const direct_inductance_saturation_voltage = (
-        K_saturation * A_saturation * Math.cos(saturation_angle) +
-        -K_saturation * B_saturation * Math.sin(saturation_angle)
-      );
-
-      const quadrature_inductance_saturation_voltage = (
-        K_saturation * A_saturation * Math.sin(saturation_angle) +
-        K_saturation * B_saturation * Math.cos(saturation_angle)
-      );
-
-      const direct_inductance_voltage = (
-        d_di_dt * inductance + 
-        direct_inductance_bias_voltage +
-        direct_inductance_saturation_voltage
-      );
-
-      const quadrature_inductance_voltage = (
-        q_di_dt * inductance +
-        quadrature_inductance_bias_voltage +
-        quadrature_inductance_saturation_voltage
-      );
-
-      const direct_emf_voltage = K_motor * omega * Math.sin(angle_delta);
-      const quadrature_emf_voltage = - K_motor * omega * Math.cos(angle_delta);
-
-      const direct_residual = direct_resistive_voltage + direct_inductance_voltage - direct_drive_voltage - direct_emf_voltage;
-      const quadrature_residual = quadrature_resistive_voltage + quadrature_inductance_voltage - quadrature_drive_voltage - quadrature_emf_voltage;
-
-      const residual_angle = Math.atan2(quadrature_residual, direct_residual);
-
-      const two_current_angle = normalize_radians(2 * (angle + Math.atan2(quadrature_current, direct_current)));
-
-
-      const loss = square(direct_residual) + square(quadrature_residual);
-
-      const sqrt_loss = Math.sqrt(loss);
-      
-
-      return {
-        ...readout,
-        
-        direct_resistive_voltage,
-        quadrature_resistive_voltage,
-
-        direct_inductance_bias_voltage,
-        quadrature_inductance_bias_voltage,
-        direct_inductance_saturation_voltage,
-        quadrature_inductance_saturation_voltage,
-
-        direct_inductance_voltage,
-        quadrature_inductance_voltage,
-        direct_emf_voltage,
-        quadrature_emf_voltage,
-
-        angle_delta,
-        true_angle,
-        d_di_dt,
-        q_di_dt,
-        A_saturation,
-        B_saturation,
-        K_saturation,
-        omega,
-
-        loss,
-        sqrt_loss,
-        
-        direct_residual,
-        quadrature_residual,
-        residual_angle,
-        two_current_angle,
-      };
-    });
-
-    const sample_gradients = sample_forward_pass.map((readout, i) => {
-      const {
-        direct_residual,
-        quadrature_residual,
-        direct_current,
-        quadrature_current,
-        
-        angle_delta,
-        d_di_dt,
-        q_di_dt,
-        A_saturation,
-        B_saturation,
-        K_saturation,
-        omega,
-      } = readout;
-      
-      const resistance_gradient = (
-        direct_residual * direct_current +
-        quadrature_residual * quadrature_current
-      );
-
-      const inductance_gradient = (
-        direct_residual * d_di_dt +
-        quadrature_residual * q_di_dt
-      );
-
-      const inductance_bias_gradient = (
-        direct_residual * (
-          -d_di_dt * Math.cos(2 * saliency_angle) +
-          -q_di_dt * Math.sin(2 * saliency_angle)
-        ) +
-        quadrature_residual * (
-          -d_di_dt * Math.sin(2 * saliency_angle) +
-          +q_di_dt * Math.cos(2 * saliency_angle)
-        )
-      );
-
-      const saliency_angle_gradient = (
-        2 * inductance_bias * direct_residual * (
-          +d_di_dt * Math.sin(2 * saliency_angle) +
-          -q_di_dt * Math.cos(2 * saliency_angle)
-        ) +
-        2 * inductance_bias * quadrature_residual * (
-          -d_di_dt * Math.cos(2 * saliency_angle) +
-          -q_di_dt * Math.sin(2 * saliency_angle)
-        )
-      );
-
-      const saturation_factor_gradient = (
-        2 * direct_residual * (
-          A_saturation * Math.cos(saturation_angle) +
-          -B_saturation * Math.sin(saturation_angle)
-        ) + 
-        2 * quadrature_residual * (
-          A_saturation * Math.sin(saturation_angle) +
-          B_saturation * Math.cos(saturation_angle)
-        )
-      );
-
-      const saturation_angle_gradient = (
-        2 * K_saturation * direct_residual * (
-          -A_saturation * Math.sin(saturation_angle) +
-          -B_saturation * Math.cos(saturation_angle)
-        ) +
-        2 * K_saturation * quadrature_residual * (
-          A_saturation * Math.cos(saturation_angle) +
-          -B_saturation * Math.sin(saturation_angle)
-        )
-      );
-
-      const motor_constant_gradient = (
-        -direct_residual * omega * Math.sin(angle_delta) +
-        quadrature_residual * omega * Math.cos(angle_delta)
-      );
-
-      const angle_delta_gradient_position = (
-        -direct_residual * omega * Math.cos(angle_delta) +
-        -quadrature_residual * omega * Math.sin(angle_delta)
-      );
-
-      const angle_delta_gradient_speed = (
-        -direct_residual * motor_constant * Math.sin(angle_delta) * pwm_cycles_per_second +
-        quadrature_residual * motor_constant * Math.cos(angle_delta) * pwm_cycles_per_second
-      );
-
-      const angle_delta_gradient = (
-        angle_delta_gradient_speed + 
-        angle_delta_gradient_position
-      );
-
-      return {
-        ...readout,
-        resistance_gradient,
-        inductance_gradient,
-        inductance_bias_gradient,
-        saliency_angle_gradient,
-        saturation_factor_gradient,
-        saturation_angle_gradient,
-        motor_constant_gradient,
-        angle_delta_gradient,
-        angle_delta_gradient_speed,
-        angle_delta_gradient_position,
-      };
-    });
-
-
-    let rotor_axis_prediction = normalize_radians(2*(parameters.saliency_angle.value + sample.slice(-1)[0].angle));
-    
-
-    iterations.push({
-      iteration: i,
-      calibration: {
-        sqrt_loss: Math.sqrt(d3.mean(sample_gradients, (d) => d.loss)),
-        resistance: parameters.resistance.value,
-        inductance: parameters.inductance.value,
-        inductance_bias: parameters.inductance_bias.value,
-        saliency_angle: normalize_radians(2*(parameters.saliency_angle.value))/2,
-        saturation_factor: parameters.saturation_factor.value,
-        saturation_angle: parameters.saturation_angle.value,
-        motor_constant: parameters.motor_constant.value,
-
-        rotor_axis_prediction,
-
-        resistance_learning_rate: parameters.resistance.learning_rate,
-        inductance_learning_rate: parameters.inductance.learning_rate,
-        inductance_bias_learning_rate: parameters.inductance_bias.learning_rate,
-        saliency_angle_learning_rate: parameters.saliency_angle.learning_rate,
-        saturation_factor_learning_rate: parameters.saturation_factor.learning_rate,
-        saturation_angle_learning_rate: parameters.saturation_angle.learning_rate,
-        motor_constant_learning_rate: parameters.motor_constant.learning_rate,
-      },
-      sample: sample_gradients,
-    });
-
-    // Resilient Backpropagation
-    // -------------------------
-    // 
-    // Update steps and learning rates using the sign of the gradient to the unexplained residual loss.
-
-
-
-    is_stable = true;
-
-    const gradients = {
-      resistance: d3.mean(sample_gradients, (d) => d.resistance_gradient),
-      inductance: d3.mean(sample_gradients, (d) => d.inductance_gradient),
-      inductance_bias: d3.mean(sample_gradients, (d) => d.inductance_bias_gradient),
-      saliency_angle: d3.mean(sample_gradients, (d) => d.saliency_angle_gradient),
-      saturation_factor: d3.mean(sample_gradients, (d) => d.saturation_factor_gradient),
-      saturation_angle: d3.mean(sample_gradients, (d) => d.saturation_angle_gradient),
-      motor_constant: d3.mean(sample_gradients, (d) => d.motor_constant_gradient),
-    }
-
-    function resilient_update(parameter, gradient) {
-      const new_sign = Math.sign(gradient);
-      if ((new_sign == 0.0) || (new_sign != parameter.sign)) {
-        parameter.learning_rate = Math.max(relative_min * parameter.max_learning_rate, parameter.learning_rate * relative_decrease);
-      } else {
-        parameter.learning_rate = Math.min(parameter.max_learning_rate, parameter.learning_rate * relative_increase);
-      }
-
-      parameter.value -= parameter.learning_rate * new_sign;
-      parameter.sign = new_sign;
-
-      return parameter.learning_rate < (parameter.max_learning_rate * relative_stability);
-    }
-
-    for (const [key, gradient] of Object.entries(gradients)) {
-      if (!enabled_parameters[key]) continue;
-
-      if (!resilient_update(parameters[key], gradient)) {
-        is_stable = false;
-      }
-    }
-
-    if (enabled_parameters.angle_delta) {
-      angle_deltas.forEach((angle_delta_parameter, i) => {
-        if (!resilient_update(angle_delta_parameter, sample_gradients[i].angle_delta_gradient)) {
-          is_stable = false;
-        }
-      });
-    }
-    
-    // Update calibration values after pushing the iteration data! The iteration should then
-    // contain the calibration values that were used to calculate the gradients and other values.
-
-    if (parameters.resistance.value < 0.0) parameters.resistance.reset(0.0);
-    if (parameters.inductance.value < 0.0) parameters.inductance.reset(0.0);
-
-    if (parameters.inductance_bias.value < 0.0) {
-      parameters.inductance_bias.reset(0.0);
-      parameters.saliency_angle.value = parameters.saliency_angle.value + Math.PI/12;
-    }
-
-    if (parameters.saturation_factor.value < 0.0) {
-      parameters.saturation_factor.reset(- 0.5 * parameters.saturation_factor.value);
-      parameters.saturation_angle.value = parameters.saturation_angle.value + Math.PI/12;
-    }
-
-    parameters.saliency_angle.value = normalize_radians(parameters.saliency_angle.value);
-    parameters.saturation_angle.value = normalize_radians(parameters.saturation_angle.value);
-    
-    if (parameters.motor_constant.value < 0.0) parameters.motor_constant.reset(0.0);
-  }
-
-  const calibration_data = {
-    sample,
-    is_stable,
-    iterations,
-    calibration: {
-      resistance: parameters.resistance.value,
-      inductance: parameters.inductance.value,
-      inductance_bias: parameters.inductance_bias.value,
-      saliency_angle: parameters.saliency_angle.value,
-      saturation_factor: parameters.saturation_factor.value,
-      saturation_angle: parameters.saturation_angle.value,
-      motor_constant: parameters.motor_constant.value,
-    }
-  };
-
-  return calibration_data;
-}
-
-
 const calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
-    ["Calculate calibration", async function(){
-      update_calibration_data(run_calibration(data));
+    ["Run calibration", async function(){
+      if (!motor_controller) return;
+      await motor_controller.send_command({message_code: MessageCode.RUN_CALIBRATION});
     }],
     ["Upload to Driver", async function(){
       if (!motor_controller) return;
@@ -1881,148 +1363,54 @@ const calibration_buttons = !motor_controller ? html`<p>Not connected to motor!<
 );
 
 d3.select(calibration_buttons).style("width", "100%");
+
+
+
+const calibration_series_resistance_plot = plot_lines({
+  data: calibration_series,
+  subtitle: "Calibration Series - Optimizing resistance & inductance",
+  description: "Calibration optimization results for each phase at various probing frequencies.",
+  width: 1200, height: 300,
+  x: "target_speed",
+  x_label: "Probing Frequency",
+  y_label: "Calibration Parameters",
+  channels: [
+    {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
+    {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
+    {y: "iron_loss", label: "Iron Loss", color: colors_categories[6]},
+  ],
+  default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
+});
+
+const calibration_series_inductance_plot = plot_lines({
+  data: calibration_series,
+  subtitle: "Calibration Series - Optimizing resistance & inductance",
+  description: "Calibration optimization results for each phase at various probing frequencies.",
+  width: 1200, height: 300,
+  x: "target_speed",
+  x_label: "Probing Frequency",
+  y_label: "Calibration Parameters",
+  channels: [
+    {y: "inductance", label: "Phase Inductance", color: colors_categories[2]},
+
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
+
+    {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[4]).brighter(1)},
+    {y: "iron_loss_angle", label: "Iron Loss Angle", color: colors_categories[7]},
+    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
+    {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
+  ],
+  default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
+});
+
+const calibration_series_plots = {
+  calibration_series_resistance_plot,
+  calibration_series_inductance_plot,
+};
+
+autosave_inputs(calibration_series_plots);
 ```
 
-
-
-```js
-const calibration_iterations = calibration_data?.iterations ?? [];
-
-// Select the optimization iteration to display.
-const calibration_optimization_iteration_input = !calibration_data ? 
-  html`<p>No optimization iterations available.</p>` : 
-  inputs_wide_range(
-    [0, calibration_iterations.length - 1], {
-    step: 1,
-    label: "Select optimization iteration to display:",
-  });
-
-const calibration_optimization_iteration = Generators.input(calibration_optimization_iteration_input);
-
-set_input_value(calibration_optimization_iteration_input, calibration_iterations?.length - 1);
-
-
-```
-
-```js
-
-const calibration_iteration = calibration_iterations[calibration_optimization_iteration];
-const calibration_gradients = calibration_iteration?.sample ?? [];
-
-// Write out the calibration results in copyable format.
-const calibration_iteration_table = `calibration = ${JSON.stringify(calibration_iterations[calibration_optimization_iteration]?.calibration, null, 2)}`;
-
-const calibration_optimizing_plot = plot_lines({
-  data: calibration_gradients,
-  subtitle: "Calibration - Optimizing resistance & inductance",
-  description: "Calibration optimization results for each phase.",
-  width: 1200, height: 300,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Voltage (V)",
-  channels: [
-    {y: "direct_drive_voltage", label: "Direct Drive Voltage", color: d3.color(colors.u).brighter(1)},
-    {y: "quadrature_drive_voltage", label: "Quadrature Drive Voltage", color: d3.color(colors.v).brighter(1)},
-
-    {y: "direct_resistive_voltage", label: "Direct Resistance Drop", color: colors.u},
-    {y: "quadrature_resistive_voltage", label: "Quadrature Resistance Drop", color: colors.v},
-
-    {y: "direct_inductance_voltage", label: "Direct Inductance Drop", color: d3.color(colors.u).darker(1)},
-    {y: "quadrature_inductance_voltage", label: "Quadrature Inductance Drop", color: d3.color(colors.v).darker(1)},
-
-    {y: "direct_emf_voltage", label: "Direct EMF Voltage", color: d3.color(colors.u).darker(1)},
-    {y: "quadrature_emf_voltage", label: "Quadrature EMF Voltage", color: d3.color(colors.v).darker(1)},
-    {y: "omega", label: "Omega", color: colors.angular_speed},
-    {y: "emf_voltage_angular_speed", label: "EMF Angular Speed", color: d3.color(colors.angular_speed).darker(1)},
-
-    {y: "direct_inductance_bias_voltage", label: "Direct Inductance Bias", color: d3.color(colors.u).darker(1)},
-    {y: "quadrature_inductance_bias_voltage", label: "Quadrature Inductance Bias", color: d3.color(colors.v).darker(1)},
-    {y: "direct_inductance_saturation_voltage", label: "Direct Inductance Saturation", color: d3.color(colors.u).darker(2)},
-    {y: "quadrature_inductance_saturation_voltage", label: "Quadrature Inductance Saturation", color: d3.color(colors.v).darker(2)},
-
-    {y: "direct_residual", label: "Direct Residual", color: d3.color(colors.u).darker(2)},
-    {y: "quadrature_residual", label: "Quadrature Residual", color: d3.color(colors.v).darker(2)},
-
-    {y: "sqrt_loss", label: "Sqrt Loss", color: d3.color(colors_categories[2]).darker(1)},
-
-  ],
-  curve,
-});
-
-
-const calibration_angles_plot = plot_lines({
-  data: calibration_gradients,
-  subtitle: "Calibration - Optimizing angles",
-  description: "Calibration optimization results for each phase.",
-  width: 1200, height: 300,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Angle (radians)",
-  channels: [
-    {y: "predicted_angle", label: "Predicted Angle", color: colors_categories[1]},
-    {y: "true_angle", label: "True Angle", color: colors_categories[2]},
-    {y: "angle_delta", label: "Angle Delta", color: colors_categories[3]},
-    {y: "residual_angle", label: "Residual Angle", color: colors_categories[2]},
-    {y: "web_current_angle", label: "Current Angle", color: colors_categories[0]},
-    {y: "two_current_angle", label: "2 x Current Angle", color: colors_categories[5]},
-    {y: "web_current_angular_speed", label: "Current Angular Speed", color: colors_categories[1]},
-    {y: "drive_voltage_angle", label: "Drive Voltage Angle", color: colors_categories[3]},
-    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.web_current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
-  ],
-  curve,
-});
-
-const calibration_angles_scatter = plot_lines({
-  data: calibration_gradients.slice(24).sort((a, b) => a.drive_voltage_angle - b.drive_voltage_angle),
-  subtitle: "Calibration - Angle Scatter",
-  description: "Scatter plot of calibration angles.",
-  width: 1200, height: 300,
-  x_domain: [-Math.PI, Math.PI],
-  x: "drive_voltage_angle",
-  x_label: "Drive Voltage Angle (radians)",
-  y_label: "Drive-Current Angle Diff (radians)",
-  channels: [
-    {y: "web_current_magnitude", label: "Current Magnitude", color: colors_categories[4]},
-    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.web_current_angle), label: "Drive-Current Angle Diff", color: colors_categories[5]},
-    {y: (d)=>normalize_radians(d.drive_voltage_angle - d.web_current_angle) / d.web_current_angular_speed, label: "Drive-Current Angle Diff / Angular Speed", color: colors_categories[6]}
-  ],
-  curve: horizontal_step,
-});
-
-const calibration_optimizing_gradients_plot = plot_lines({
-  data: calibration_gradients,
-  subtitle: "Calibration - resistance & inductance gradients",
-  description: "Calibration optimization results for each phase.",
-  width: 1200, height: 300,
-  x_domain: [0, HISTORY_SIZE * millis_per_cycle],
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Gradients (unitless)",
-  channels: [
-    {y: "resistance_gradient", label: "Resistance Gradient", color: colors_categories[0]},
-    {y: "inductance_gradient", label: "Inductance Gradient", color: colors_categories[1]},
-    {y: "inductance_bias_gradient", label: "Inductance Bias Gradient", color: colors_categories[2]},
-    {y: "saliency_angle_gradient", label: "Saliency Angle Gradient", color: colors_categories[3]},
-    {y: "saturation_angle_gradient", label: "Saturation Angle Gradient", color: colors_categories[4]},
-    {y: "saturation_factor_gradient", label: "Saturation Factor Gradient", color: colors_categories[5]},
-    {y: "motor_constant_gradient", label: "Motor Constant Gradient", color: colors_categories[6]},
-    {y: "angle_delta_gradient_speed", label: "Angle Delta Gradient Speed", color: colors_categories[7]},
-    {y: "angle_delta_gradient_position", label: "Angle Delta Gradient Position", color: colors_categories[8]},
-    {y: "angle_delta_gradient", label: "Angle Delta Gradient", color: colors_categories[9]},
-  ],
-  curve,
-});
-
-autosave_inputs({
-  calibration_optimizing_plot,
-  calibration_optimizing_gradients_plot,
-  calibration_angles_scatter,
-  calibration_angles_plot,
-  calibration_checkboxes,
-});
-```
 
 
 ```js
@@ -2234,6 +1622,14 @@ const control_parameters_input = Object.fromEntries(
     ["emf_speed_constant_confirmed_threshold", {
       label: "EMF Speed Constant Confirmed Threshold",
       description: "Threshold for confirming the EMF speed constant estimation."
+    }],
+    ["iron_loss_ki", {
+      label: "Iron Loss KI",
+      description: "Integral gain for iron loss."
+    }],
+    ["iron_loss_angle_ki", {
+      label: "Iron Loss Angle KI",
+      description: "Integral gain for iron loss angle."
     }],
   ].map(([key, {label, description}]) => {
 

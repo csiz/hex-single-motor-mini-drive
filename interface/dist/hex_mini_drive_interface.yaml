@@ -407,9 +407,13 @@ definitions:
           Estimated baseline inductance of the motor coils. Written as a conductance
           for efficient math: `conductance = delta_t/L`.
 
-      inductance_bias:
+      inductance_saliency:
         type: float32
         doc: Estimated bias of the inductance due to magnetic saliency.
+
+      iron_loss:
+        type: float32
+        doc: Iron loss coefficient.
 
       motor_constant:
         type: float32
@@ -462,18 +466,19 @@ definitions:
       saliency_angle_multiplier:
         type: float32
         doc: Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
-      mechanical_factor:
+      iron_loss:
         type: float32
-        doc: Mechanical coupling between rotor and probing frequency.
-      mechanical_factor_multiplier:
+        doc: Iron loss coefficient.
+      iron_loss_multiplier:
         type: float32
-        doc: Multiplier for the mechanical factor.
-      mechanical_angle:
+        doc: Multiplier for the iron loss.
+      iron_loss_angle:
         type: int32
-        doc: Mechanical angle of the rotor (aka rotor angle via micro-oscillations).
-      mechanical_angle_multiplier:
+        doc: Angle for the iron loss effect.
+      iron_loss_angle_multiplier:
         type: float32
-        doc: Multiplier for the mechanical angle.
+        doc: Multiplier for the iron loss angle.
+        
   DriveState:
     doc: |
       The complete driver state, these values control the motor behaviour.
@@ -800,3 +805,10 @@ definitions:
       emf_speed_constant_confirmed_threshold:
         type: float32
         doc: Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
+      
+      iron_loss_ki:
+        type: float32
+        doc: Iron loss factor integral gain.
+      iron_loss_angle_ki:
+        type: float32
+        doc: Iron loss angle integral gain.

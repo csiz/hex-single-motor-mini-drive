@@ -87,9 +87,9 @@ CalibrationInstanceSettings calibration_instance_settings;
 
 const uint16_t calibration_duration = max_duration / 2;
 
-const float calibration_target_increment = 64.f;
+const float calibration_target_increment = 128.f;
 
-const float calibration_target_max = 384.f;
+const float calibration_target_max = 512.f;
 
 const float calibration_speed_increment = 100.f * angle_base / static_cast<float>(pwm_cycles_per_second);
 
@@ -149,10 +149,14 @@ static inline void start_calibration_series(
     .resistance_multiplier = 1.f,
     .inductance = active_calibration.inductance,
     .inductance_multiplier = 1.f,
-    .inductance_saliency = active_calibration.inductance_bias,
+    .inductance_saliency = active_calibration.inductance_saliency,
     .inductance_saliency_multiplier = 1.f,
     .saliency_angle = 2 * angle,
     .saliency_angle_multiplier = 1.f,
+    .iron_loss = active_calibration.iron_loss,
+    .iron_loss_multiplier = 1.f,
+    .iron_loss_angle = 0,
+    .iron_loss_angle_multiplier = 1.f,
   };
 
   drive_state_queue.write(hex_mini_drive::DriveState{
@@ -551,8 +555,10 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
       // Check if all gradient multipliers are stable.
       faster_abs(calibration_instance.resistance_multiplier) < multiplier_stable_threshold and
       faster_abs(calibration_instance.inductance_multiplier) < multiplier_stable_threshold and
-      faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold
+      faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold and
       // We skip the saliency_angle_multiplier because we should be able to rely on the inductance_saliency_multiplier.
+      faster_abs(calibration_instance.iron_loss_multiplier) < multiplier_stable_threshold
+      // Also skip the iron_loss_angle_multiplier for same reason as saliency angle.
     ) {
       return finish_calibration_series();
     }
@@ -563,7 +569,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // -----------
   // We need to recalculate these values in the main loop as they are not the primary tracking variables.
   
-
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const float direct_resistive_voltage = readout.direct_current * calibration_instance.resistance;
   const float quadrature_resistive_voltage = readout.quadrature_current * calibration_instance.resistance;
@@ -597,6 +602,25 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_saliency_voltage;
   const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_saliency_voltage;
   
+  const float sin_iron_loss = get_sin(calibration_instance.iron_loss_angle);
+  const float cos_iron_loss = get_cos(calibration_instance.iron_loss_angle);
+
+  const float A_iron_loss = (
+    readout.direct_current * direct_inductor_voltage - 
+    readout.quadrature_current * quadrature_inductor_voltage
+  ) * voltage_mul_current_to_power;
+  const float B_iron_loss = (
+    readout.direct_current * quadrature_inductor_voltage + 
+    readout.quadrature_current * direct_inductor_voltage
+  ) * voltage_mul_current_to_power;
+
+  const float direct_iron_loss = A_iron_loss * cos_iron_loss - B_iron_loss * sin_iron_loss;
+  const float quadrature_iron_loss = A_iron_loss * sin_iron_loss + B_iron_loss * cos_iron_loss;
+
+  const float direct_iron_loss_voltage = calibration_instance.iron_loss * direct_iron_loss;
+  
+  const float quadrature_iron_loss_voltage = calibration_instance.iron_loss * quadrature_iron_loss;
+
   // Calibrate without EMF!!!
   // ------------------------
   // 
@@ -606,8 +630,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage - readout.direct_drive_voltage;
-  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage - readout.quadrature_drive_voltage;
+  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage + direct_iron_loss_voltage - readout.direct_drive_voltage;
+  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage + quadrature_iron_loss_voltage - readout.quadrature_drive_voltage;
 
   // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
@@ -673,13 +697,11 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
   if (valid) {
     // If we're normal condition, then just gradient descent the angle too.
-    const float saliency_angle_gradient = (
-      direct_voltage_error * -quadrature_inductance_saliency +
-      quadrature_voltage_error * direct_inductance_saliency
-    ) * voltage_mul_current_to_power;
-
     const float resilient_saliency_angle_gradient = resilient_gradient(
-      saliency_angle_gradient,
+      (
+        direct_voltage_error * -quadrature_inductance_saliency +
+        quadrature_voltage_error * direct_inductance_saliency
+      ) * voltage_mul_current_to_power,
       calibration_instance.saliency_angle_multiplier
     );
 
@@ -688,9 +710,34 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   } else {
     // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
-    calibration_instance.saliency_angle = calibration_instance.saliency_angle + half_circle;
+    calibration_instance.saliency_angle += half_circle;
     calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
   }
+
+  // And gradients for micro rotor vibrations.
+  const float iron_loss_gradient = resilient_gradient(
+    (
+      direct_voltage_error * direct_iron_loss + 
+      quadrature_voltage_error * quadrature_iron_loss
+    ),
+    calibration_instance.iron_loss_multiplier
+  );
+  calibration_instance.iron_loss -= iron_loss_gradient * control_parameters.iron_loss_ki;
+
+  if(validate_parameter(calibration_instance.iron_loss, minimum_iron_loss)){
+    const float iron_loss_angle_gradient = resilient_gradient(
+      (
+        direct_voltage_error * -quadrature_iron_loss + 
+        quadrature_voltage_error * direct_iron_loss
+      ),
+      calibration_instance.iron_loss_angle_multiplier
+    );
+    calibration_instance.iron_loss_angle -= static_cast<int32_t>(iron_loss_angle_gradient * control_parameters.iron_loss_angle_ki);
+  } else {
+    calibration_instance.iron_loss_angle += half_circle;
+    calibration_instance.iron_loss_angle_multiplier = 1.0f;
+  }
+
 }
 
 static inline void process_readout(hex_mini_drive::Readout const& readout) {

@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.161.0";
+constexpr char const* VERSION_STRING = "0.165.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -483,7 +483,9 @@ struct Calibration {
   // for efficient math: `conductance = delta_t/L`.
   float inductance;
   // Estimated bias of the inductance due to magnetic saliency.
-  float inductance_bias;
+  float inductance_saliency;
+  // Iron loss coefficient.
+  float iron_loss;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
 };
@@ -502,7 +504,9 @@ static inline void write_Calibration(uint8_t * buffer, Calibration const& value)
   offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_bias);;
+  write_float32(buffer + offset, value.inductance_saliency);;
+  offset += 4;
+  write_float32(buffer + offset, value.iron_loss);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
@@ -524,7 +528,9 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_bias = read_float32(buffer + offset);
+  result.inductance_saliency = read_float32(buffer + offset);
+  offset += 4;
+  result.iron_loss = read_float32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -560,14 +566,14 @@ struct CalibrationInstance {
   int32_t saliency_angle;
   // Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
   float saliency_angle_multiplier;
-  // Mechanical coupling between rotor and probing frequency.
-  float mechanical_factor;
-  // Multiplier for the mechanical factor.
-  float mechanical_factor_multiplier;
-  // Mechanical angle of the rotor (aka rotor angle via micro-oscillations).
-  int32_t mechanical_angle;
-  // Multiplier for the mechanical angle.
-  float mechanical_angle_multiplier;
+  // Iron loss coefficient.
+  float iron_loss;
+  // Multiplier for the iron loss.
+  float iron_loss_multiplier;
+  // Angle for the iron loss effect.
+  int32_t iron_loss_angle;
+  // Multiplier for the iron loss angle.
+  float iron_loss_angle_multiplier;
 };
 
 static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstance const& value) {
@@ -600,13 +606,13 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.saliency_angle_multiplier);;
   offset += 4;
-  write_float32(buffer + offset, value.mechanical_factor);;
+  write_float32(buffer + offset, value.iron_loss);;
   offset += 4;
-  write_float32(buffer + offset, value.mechanical_factor_multiplier);;
+  write_float32(buffer + offset, value.iron_loss_multiplier);;
   offset += 4;
-  write_int32(buffer + offset, value.mechanical_angle);;
+  write_int32(buffer + offset, value.iron_loss_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.mechanical_angle_multiplier);;
+  write_float32(buffer + offset, value.iron_loss_angle_multiplier);;
   offset += 4;
 }
 static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer) {
@@ -642,13 +648,13 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.saliency_angle_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.mechanical_factor = read_float32(buffer + offset);
+  result.iron_loss = read_float32(buffer + offset);
   offset += 4;
-  result.mechanical_factor_multiplier = read_float32(buffer + offset);
+  result.iron_loss_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.mechanical_angle = read_int32(buffer + offset);
+  result.iron_loss_angle = read_int32(buffer + offset);
   offset += 4;
-  result.mechanical_angle_multiplier = read_float32(buffer + offset);
+  result.iron_loss_angle_multiplier = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1018,6 +1024,10 @@ struct ControlParameters {
   float emf_angle_suspected_threshold;
   // Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
   float emf_speed_constant_confirmed_threshold;
+  // Iron loss factor integral gain.
+  float iron_loss_ki;
+  // Iron loss angle integral gain.
+  float iron_loss_angle_ki;
 };
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
@@ -1117,6 +1127,10 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.emf_angle_suspected_threshold);;
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant_confirmed_threshold);;
+  offset += 4;
+  write_float32(buffer + offset, value.iron_loss_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.iron_loss_angle_ki);;
   offset += 4;
 }
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
@@ -1220,6 +1234,10 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.emf_speed_constant_confirmed_threshold = read_float32(buffer + offset);
   offset += 4;
+  result.iron_loss_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.iron_loss_angle_ki = read_float32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Message Codes
@@ -1289,14 +1307,14 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_DRIVE_SCHEDULE: return 194;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 34;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CALIBRATION: return 34;
+    case MessageCode::CALIBRATION: return 38;
     case MessageCode::GET_CALIBRATION: return 2;
-    case MessageCode::SET_CALIBRATION: return 34;
+    case MessageCode::SET_CALIBRATION: return 38;
     case MessageCode::RESET_CALIBRATION: return 2;
     case MessageCode::CALIBRATION_INSTANCE: return 74;
     case MessageCode::RUN_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 182;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 182;
+    case MessageCode::CONTROL_PARAMETERS: return 190;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 190;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
@@ -1386,9 +1404,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION));
-      if (max_size < 2 + 32) return 0;
+      if (max_size < 2 + 36) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 34;
+      return 38;
     }
     case MessageCode::GET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CALIBRATION));
@@ -1396,9 +1414,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CALIBRATION));
-      if (max_size < 2 + 32) return 0;
+      if (max_size < 2 + 36) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 34;
+      return 38;
     }
     case MessageCode::RESET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CALIBRATION));
@@ -1416,15 +1434,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 180) return 0;
+      if (max_size < 2 + 188) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 182;
+      return 190;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 180) return 0;
+      if (max_size < 2 + 188) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 182;
+      return 190;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1531,7 +1549,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION: {
-      if (size != 2 + 32) return false;
+      if (size != 2 + 36) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }
@@ -1541,7 +1559,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_CALIBRATION: {
-      if (size != 2 + 32) return false;
+      if (size != 2 + 36) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }
@@ -1561,12 +1579,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 180) return false;
+      if (size != 2 + 188) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 180) return false;
+      if (size != 2 + 188) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

@@ -353,7 +353,8 @@ export function parse_calibration_instance(bare_calibration_instance){
     avg_current_magnitude: bare_calibration_instance.avg_current_magnitude / CURRENT_UNITS_PER_AMP,
     avg_error: Math.sqrt(bare_calibration_instance.avg_square_error) / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
-    mechanical_angle: angle_units_to_radians(bare_calibration_instance.mechanical_angle),
+    iron_loss_angle: angle_units_to_radians(bare_calibration_instance.iron_loss_angle),
+    iron_loss: bare_calibration_instance.iron_loss,
   }
 }
 
