@@ -224,7 +224,7 @@ void ADC1_2_IRQHandler(void){
 
 
     // And transform the drive voltages too.
-    const auto [direct_drive_voltage, quadrature_drive_voltage] = dq0_transform(drive_voltages);
+    const auto [x_drive_voltage, y_drive_voltage] = dq0_transform(drive_voltages);
 
     // Cast the angle speed to angle units per pwm cycle.
     const int32_t angle_traversed = readout.angular_speed;
@@ -244,10 +244,10 @@ void ADC1_2_IRQHandler(void){
     // the north pole of the rotor.
 
     // Transform the measured currents into the DQ0 frame at the fixed angle 0.
-    const auto [direct_current, quadrature_current] = dq0_transform(currents);
+    const auto [x_current, y_current] = dq0_transform(currents);
     
     // Invoke the CORDIC engine to compute atan2 and magnitude using the phase function.
-    set_cordic(direct_current, quadrature_current);
+    set_cordic(x_current, y_current);
 
     // Intermingle other calculations while the cordic calculates.
 
@@ -269,19 +269,22 @@ void ADC1_2_IRQHandler(void){
     const float cos_emf = get_cos(predicted_emf_voltage_angle);
     const float sin_emf = get_sin(predicted_emf_voltage_angle);
 
-    const float predicted_direct_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
-    const float predicted_quadrature_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
+    const float predicted_x_emf_voltage = readout.emf_voltage_magnitude * cos_emf;
+    const float predicted_y_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const float direct_resistive_voltage = direct_current * calibration.resistance;
-    const float quadrature_resistive_voltage = quadrature_current * calibration.resistance;
+    const float x_resistive_voltage = x_current * calibration.resistance;
+    const float y_resistive_voltage = y_current * calibration.resistance;
 
     // Calculate the differential of the currents; this will be the real measurement of our model's prediction.
-    const float direct_current_diff = direct_current - readout.direct_current;
-    const float quadrature_current_diff = quadrature_current - readout.quadrature_current;
+    const float x_current_diff = x_current - readout.x_current;
+    const float y_current_diff = y_current - readout.y_current;
 
-    const float direct_diff = direct_current_diff * current_diff_to_voltage_units;
-    const float quadrature_diff = quadrature_current_diff * current_diff_to_voltage_units;
+    const float x_diff = x_current_diff * current_diff_to_voltage_units;
+    const float y_diff = y_current_diff * current_diff_to_voltage_units;
+
+    const float x_current_second_diff = x_current_diff - readout.x_current_diff;
+    const float y_current_second_diff = y_current_diff - readout.y_current_diff;
 
     // Ignore the saliency_angle_offset in the tight loop and assume it is 0. The saliency
     // effect depends on the rotor position!
@@ -290,32 +293,32 @@ void ADC1_2_IRQHandler(void){
     const float cos_saliency = get_cos(saliency_angle);
     const float sin_saliency = get_sin(saliency_angle);
 
-    const float direct_inductance_saliency_voltage = calibration.inductance_saliency * (
-        -direct_diff * cos_saliency 
-        -quadrature_diff * sin_saliency
+    const float x_inductance_saliency_voltage = calibration.inductance_saliency * (
+        -x_diff * cos_saliency 
+        -y_diff * sin_saliency
     );
-    const float quadrature_inductance_saliency_voltage = calibration.inductance_saliency * (
-        -direct_diff * sin_saliency
-        +quadrature_diff * cos_saliency
+    const float y_inductance_saliency_voltage = calibration.inductance_saliency * (
+        -x_diff * sin_saliency
+        +y_diff * cos_saliency
     );
 
-    const float direct_inductance_base_voltage = direct_diff * calibration.inductance;
-    const float quadrature_inductance_base_voltage = quadrature_diff * calibration.inductance;
+    const float x_inductance_base_voltage = x_diff * calibration.inductance;
+    const float y_inductance_base_voltage = y_diff * calibration.inductance;
 
-    const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_saliency_voltage;
-    const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_saliency_voltage;
+    const float x_inductor_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
+    const float y_inductor_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
 
-    const float measured_direct_emf_voltage = direct_inductor_voltage + direct_resistive_voltage - direct_drive_voltage;
-    const float measured_quadrature_emf_voltage = quadrature_inductor_voltage + quadrature_resistive_voltage - quadrature_drive_voltage;
+    const float measured_x_emf_voltage = x_inductor_voltage + x_resistive_voltage - x_drive_voltage;
+    const float measured_y_emf_voltage = y_inductor_voltage + y_resistive_voltage - y_drive_voltage;
 
-    const float direct_emf_voltage_error = measured_direct_emf_voltage - predicted_direct_emf_voltage;
-    const float quadrature_emf_voltage_error = measured_quadrature_emf_voltage - predicted_quadrature_emf_voltage;
+    const float x_emf_voltage_error = measured_x_emf_voltage - predicted_x_emf_voltage;
+    const float y_emf_voltage_error = measured_y_emf_voltage - predicted_y_emf_voltage;
 
-    const float direct_emf_voltage = predicted_direct_emf_voltage + direct_emf_voltage_error * control_parameters.loop_fast_ki;
-    const float quadrature_emf_voltage = predicted_quadrature_emf_voltage + quadrature_emf_voltage_error * control_parameters.loop_fast_ki;
+    const float x_emf_voltage = predicted_x_emf_voltage + x_emf_voltage_error * control_parameters.loop_fast_ki;
+    const float y_emf_voltage = predicted_y_emf_voltage + y_emf_voltage_error * control_parameters.loop_fast_ki;
 
     // Send the emf values to the CORDIC asap.
-    set_cordic(direct_emf_voltage, quadrature_emf_voltage);
+    set_cordic(x_emf_voltage, y_emf_voltage);
 
     // More unrelated calculations intermingled.
 
@@ -339,8 +342,8 @@ void ADC1_2_IRQHandler(void){
     
     // For the emf voltage variance we add the errors in the frame before rotating.
     const float instant_emf_voltage_variance = (
-        square(direct_emf_voltage_error) +
-        square(quadrature_emf_voltage_error)
+        square(x_emf_voltage_error) +
+        square(y_emf_voltage_error)
     );
 
     // Use the worst of the instantaneous variance or the filtered variance to track the worst case variance.
@@ -449,8 +452,8 @@ void ADC1_2_IRQHandler(void){
 
     // Resistive power is the power dissipated in the motor coils and MOSFETs.
     const float resistive_power = (
-        direct_resistive_voltage * direct_current + 
-        quadrature_resistive_voltage * quadrature_current
+        x_resistive_voltage * x_current + 
+        y_resistive_voltage * y_current
     ) * dq0_voltage_mul_current_to_power;
 
     // EMF power is the power transferred into the rotor movement, driving the motor.
@@ -643,14 +646,16 @@ void ADC1_2_IRQHandler(void){
     readout.readout_number = readout_number;
     readout.ref_readout = adc_readings.ref_readout;
     
-    readout.direct_drive_voltage = direct_drive_voltage;
-    readout.quadrature_drive_voltage = quadrature_drive_voltage;
+    readout.x_drive_voltage = x_drive_voltage;
+    readout.y_drive_voltage = y_drive_voltage;
 
-    readout.direct_current = direct_current;
-    readout.quadrature_current = quadrature_current;
+    readout.x_current = x_current;
+    readout.y_current = y_current;
     readout.zero_current = zero_current;
-    readout.direct_current_diff = direct_current_diff;
-    readout.quadrature_current_diff = quadrature_current_diff;
+    readout.x_current_diff = x_current_diff;
+    readout.y_current_diff = y_current_diff;
+    readout.x_current_second_diff = x_current_second_diff;
+    readout.y_current_second_diff = y_current_second_diff;
     
     readout.rotations = rotations;
     readout.angle = angle;

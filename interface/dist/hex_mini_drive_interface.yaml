@@ -219,33 +219,40 @@ definitions:
           readouts as seen by the amplifier. The phase readouts are relative to this voltage
           so if this is quite noisy then the phases will also be noisy. We must track it!
 
-      direct_drive_voltage:
+      x_drive_voltage:
         type: float32
-        doc: The PWM voltage on the direct axis.
+        doc: The PWM voltage on the x axis.
 
-      quadrature_drive_voltage:
+      y_drive_voltage:
         type: float32
-        doc: The PWM voltage for the quadrature drive output.
+        doc: The PWM voltage for the y axis.
 
-      direct_current:
+      x_current:
         type: float32
-        doc: Current in DQ0 coordinates; aligned with the rotor angle.
-
-      quadrature_current:
+        doc: Current on the x axis.
+      y_current:
         type: float32
-        doc: Current in DQ0 coordinates; crossed with the rotor angle.
+        doc: Current on the y axis.
 
       zero_current:
         type: float32
         doc: The current common mode in the DQ0 transform.
 
-      direct_current_diff:
+      x_current_diff:
         type: float32
-        doc: Difference in direct current compared to the previous readout.
+        doc: Difference in x current compared to the previous readout.
 
-      quadrature_current_diff:
+      y_current_diff:
         type: float32
-        doc: Difference in quadrature current compared to the previous readout.
+        doc: Difference in y current compared to the previous readout.
+
+      x_current_second_diff:
+        type: float32
+        doc: Second difference in x current.
+
+      y_current_second_diff:
+        type: float32
+        doc: Second difference in y current.
 
       rotations:
         type: int32
@@ -397,10 +404,6 @@ definitions:
         type: float32
         doc: Estimated baseline resistance of the motor coils.
 
-      y_resistance:
-        type: float32
-        doc: The "other" resistance.
-
       inductance:
         type: float32
         doc: |
@@ -415,6 +418,10 @@ definitions:
         type: float32
         doc: Iron loss coefficient.
 
+      iron_resistance:
+        type: float32
+        doc: Iron resistance coefficient.
+
       motor_constant:
         type: float32
         doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
@@ -427,6 +434,11 @@ definitions:
       count:
         type: uint32
         doc: Number of calibration data points.
+      state_flags:
+        type: uint32
+        doc: |
+          Bit field of the calibration state. The bits turn on when we the parameters 
+          are excited and when they become stable.
       target_pwm:
         type: float32
         doc: Target PWM value for this calibration instance.
@@ -448,12 +460,18 @@ definitions:
       resistance_multiplier:
         type: float32
         doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
+      resistance_excitation_fraction:
+        type: float32
+        doc: Fraction of data points where current was high enough to meaningfully measure resistance.
       inductance:
         type: float32
         doc: Measured inductance value for each phase.
       inductance_multiplier:
         type: float32
         doc: Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
+      inductance_excitation_fraction:
+        type: float32
+        doc: Fraction of data points where current change was high enough to measure inductance.
       inductance_saliency:
         type: float32
         doc: Measured inductance saliency bias.
@@ -472,13 +490,25 @@ definitions:
       iron_loss_multiplier:
         type: float32
         doc: Multiplier for the iron loss.
+      iron_loss_excitation_fraction:
+        type: float32
+        doc: Fraction of data points with significant iron loss.
       iron_loss_angle:
         type: int32
         doc: Angle for the iron loss effect.
       iron_loss_angle_multiplier:
         type: float32
         doc: Multiplier for the iron loss angle.
-        
+      iron_resistance:
+        type: float32
+        doc: Coefficient that ties the eddy currents in the iron core to real voltage drop in the electric equation.
+      iron_resistance_multiplier:
+        type: float32
+        doc: Multiplier for the iron resistance.
+      iron_resistance_excitation_fraction:
+        type: float32
+        doc: Fraction of points where iron resistance matters.
+
   DriveState:
     doc: |
       The complete driver state, these values control the motor behaviour.

@@ -534,7 +534,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Because our best source of voltage information is the drive_voltage we also need to make sure
   // we are driving with enough power to get any information.
 
-  const float drive_voltage_square = square(readout.direct_drive_voltage) + square(readout.quadrature_drive_voltage);
+  const float drive_voltage_square = square(readout.x_drive_voltage) + square(readout.y_drive_voltage);
 
   const bool low_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
 
@@ -570,12 +570,12 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // We need to recalculate these values in the main loop as they are not the primary tracking variables.
   
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-  const float direct_resistive_voltage = readout.direct_current * calibration_instance.resistance;
-  const float quadrature_resistive_voltage = readout.quadrature_current * calibration_instance.resistance;
+  const float x_resistive_voltage = readout.x_current * calibration_instance.resistance;
+  const float y_resistive_voltage = readout.y_current * calibration_instance.resistance;
 
   // And the current diffs for calculating inductance.
-  const float direct_diff = readout.direct_current_diff * current_diff_to_voltage_units;
-  const float quadrature_diff = readout.quadrature_current_diff * current_diff_to_voltage_units;
+  const float x_diff = readout.x_current_diff * current_diff_to_voltage_units;
+  const float y_diff = readout.y_current_diff * current_diff_to_voltage_units;
 
   // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
   // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
@@ -583,43 +583,43 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float cos_saliency = get_cos(calibration_instance.saliency_angle);
   const float sin_saliency = get_sin(calibration_instance.saliency_angle);
 
-  const float direct_inductance_saliency = (
-      -direct_diff * cos_saliency 
-      -quadrature_diff * sin_saliency
+  const float x_inductance_saliency = (
+      -x_diff * cos_saliency 
+      -y_diff * sin_saliency
   );
 
-  const float direct_inductance_saliency_voltage = calibration_instance.inductance_saliency * direct_inductance_saliency;
+  const float x_inductance_saliency_voltage = calibration_instance.inductance_saliency * x_inductance_saliency;
   
-  const float quadrature_inductance_saliency = (
-      -direct_diff * sin_saliency
-      +quadrature_diff * cos_saliency
+  const float y_inductance_saliency = (
+      -x_diff * sin_saliency
+      +y_diff * cos_saliency
   );
-  const float quadrature_inductance_saliency_voltage = calibration_instance.inductance_saliency * quadrature_inductance_saliency;
+  const float y_inductance_saliency_voltage = calibration_instance.inductance_saliency * y_inductance_saliency;
 
-  const float direct_inductance_base_voltage = direct_diff * calibration_instance.inductance;
-  const float quadrature_inductance_base_voltage = quadrature_diff * calibration_instance.inductance;
+  const float x_inductance_base_voltage = x_diff * calibration_instance.inductance;
+  const float y_inductance_base_voltage = y_diff * calibration_instance.inductance;
 
-  const float direct_inductor_voltage = direct_inductance_base_voltage + direct_inductance_saliency_voltage;
-  const float quadrature_inductor_voltage = quadrature_inductance_base_voltage + quadrature_inductance_saliency_voltage;
+  const float x_inductor_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
+  const float y_inductor_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
   
   const float sin_iron_loss = get_sin(calibration_instance.iron_loss_angle);
   const float cos_iron_loss = get_cos(calibration_instance.iron_loss_angle);
 
   const float A_iron_loss = (
-    readout.direct_current * direct_inductor_voltage - 
-    readout.quadrature_current * quadrature_inductor_voltage
+    readout.x_current * x_inductor_voltage - 
+    readout.y_current * y_inductor_voltage
   ) * voltage_mul_current_to_power;
   const float B_iron_loss = (
-    readout.direct_current * quadrature_inductor_voltage + 
-    readout.quadrature_current * direct_inductor_voltage
+    readout.x_current * y_inductor_voltage + 
+    readout.y_current * x_inductor_voltage
   ) * voltage_mul_current_to_power;
 
-  const float direct_iron_loss = A_iron_loss * cos_iron_loss - B_iron_loss * sin_iron_loss;
-  const float quadrature_iron_loss = A_iron_loss * sin_iron_loss + B_iron_loss * cos_iron_loss;
+  const float x_iron_loss = A_iron_loss * cos_iron_loss - B_iron_loss * sin_iron_loss;
+  const float y_iron_loss = A_iron_loss * sin_iron_loss + B_iron_loss * cos_iron_loss;
 
-  const float direct_iron_loss_voltage = calibration_instance.iron_loss * direct_iron_loss;
+  const float x_iron_loss_voltage = calibration_instance.iron_loss * x_iron_loss;
   
-  const float quadrature_iron_loss_voltage = calibration_instance.iron_loss * quadrature_iron_loss;
+  const float y_iron_loss_voltage = calibration_instance.iron_loss * y_iron_loss;
 
   // Calibrate without EMF!!!
   // ------------------------
@@ -630,13 +630,13 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const float direct_voltage_error = direct_inductor_voltage + direct_resistive_voltage + direct_iron_loss_voltage - readout.direct_drive_voltage;
-  const float quadrature_voltage_error = quadrature_inductor_voltage + quadrature_resistive_voltage + quadrature_iron_loss_voltage - readout.quadrature_drive_voltage;
+  const float x_voltage_error = x_inductor_voltage + x_resistive_voltage + x_iron_loss_voltage - readout.x_drive_voltage;
+  const float y_voltage_error = y_inductor_voltage + y_resistive_voltage + y_iron_loss_voltage - readout.y_drive_voltage;
 
-  // Defining the loss as the square(direct_voltage_error) + square(quadrature_voltage_error) we get the derivative gradients with 
+  // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
   // there isn't enough energy in the error to warrant an update.
-  const float square_voltage_error = square(direct_voltage_error) + square(quadrature_voltage_error);
+  const float square_voltage_error = square(x_voltage_error) + square(y_voltage_error);
 
   // Store stats
   // -----------
@@ -658,8 +658,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float resistance_gradient = resilient_gradient(
     voltage_mul_current_to_power * (
-      direct_voltage_error * readout.direct_current +
-      quadrature_voltage_error * readout.quadrature_current
+      x_voltage_error * readout.x_current +
+      y_voltage_error * readout.y_current
     ),
     calibration_instance.resistance_multiplier
   );
@@ -670,8 +670,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float inductance_gradient = resilient_gradient(
     voltage_mul_current_to_power * (
-      direct_voltage_error * direct_diff +
-      quadrature_voltage_error * quadrature_diff
+      x_voltage_error * x_diff +
+      y_voltage_error * y_diff
     ),
     calibration_instance.inductance_multiplier
   );
@@ -682,8 +682,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float inductance_saliency_gradient = resilient_gradient(
     voltage_mul_current_to_power * (
-      direct_voltage_error * direct_inductance_saliency +
-      quadrature_voltage_error * quadrature_inductance_saliency
+      x_voltage_error * x_inductance_saliency +
+      y_voltage_error * y_inductance_saliency
     ),
     calibration_instance.inductance_saliency_multiplier
   );
@@ -699,8 +699,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     // If we're normal condition, then just gradient descent the angle too.
     const float resilient_saliency_angle_gradient = resilient_gradient(
       (
-        direct_voltage_error * -quadrature_inductance_saliency +
-        quadrature_voltage_error * direct_inductance_saliency
+        x_voltage_error * -y_inductance_saliency +
+        y_voltage_error * x_inductance_saliency
       ) * voltage_mul_current_to_power,
       calibration_instance.saliency_angle_multiplier
     );
@@ -717,8 +717,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // And gradients for micro rotor vibrations.
   const float iron_loss_gradient = resilient_gradient(
     (
-      direct_voltage_error * direct_iron_loss + 
-      quadrature_voltage_error * quadrature_iron_loss
+      x_voltage_error * x_iron_loss + 
+      y_voltage_error * y_iron_loss
     ),
     calibration_instance.iron_loss_multiplier
   );
@@ -727,8 +727,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   if(validate_parameter(calibration_instance.iron_loss, minimum_iron_loss)){
     const float iron_loss_angle_gradient = resilient_gradient(
       (
-        direct_voltage_error * -quadrature_iron_loss + 
-        quadrature_voltage_error * direct_iron_loss
+        x_voltage_error * -y_iron_loss + 
+        y_voltage_error * x_iron_loss
       ),
       calibration_instance.iron_loss_angle_multiplier
     );
@@ -791,7 +791,7 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
   // Only track the zero offset while there is no noticeable current being measured.
   if (not emf_detected and readout.current_magnitude < 2 * control_parameters.current_offset_maximum) {
     const auto currents = abc_transform(
-      {readout.direct_current, readout.quadrature_current}, 
+      {readout.x_current, readout.y_current}, 
       readout.zero_current
     );
 

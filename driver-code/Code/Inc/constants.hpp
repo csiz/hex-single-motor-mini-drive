@@ -354,6 +354,7 @@ constexpr float minimum_resistance = 0.005f; // This is lower than the sense res
 constexpr float minimum_inductance = 0.000'001f;
 constexpr float minimum_inductance_saliency = 0.000'000'1f;
 constexpr float minimum_iron_loss = 0.000'001f;
+constexpr float minimum_iron_resistance = 0.000'001f;
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::Calibration default_calibration = {
@@ -366,6 +367,7 @@ const hex_mini_drive::Calibration default_calibration = {
     .inductance = minimum_inductance,
     .inductance_saliency = minimum_inductance_saliency,
     .iron_loss = minimum_iron_loss,
+    .iron_resistance = minimum_iron_resistance,
 };
 
 // The default control parameters should be set to reasonable values for any motor.

@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.165.0";
+constexpr char const* VERSION_STRING = "0.168.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -196,20 +196,24 @@ struct Readout {
   // readouts as seen by the amplifier. The phase readouts are relative to this voltage
   // so if this is quite noisy then the phases will also be noisy. We must track it!
   int16_t ref_readout;
-  // The PWM voltage on the direct axis.
-  float direct_drive_voltage;
-  // The PWM voltage for the quadrature drive output.
-  float quadrature_drive_voltage;
-  // Current in DQ0 coordinates; aligned with the rotor angle.
-  float direct_current;
-  // Current in DQ0 coordinates; crossed with the rotor angle.
-  float quadrature_current;
+  // The PWM voltage on the x axis.
+  float x_drive_voltage;
+  // The PWM voltage for the y axis.
+  float y_drive_voltage;
+  // Current on the x axis.
+  float x_current;
+  // Current on the y axis.
+  float y_current;
   // The current common mode in the DQ0 transform.
   float zero_current;
-  // Difference in direct current compared to the previous readout.
-  float direct_current_diff;
-  // Difference in quadrature current compared to the previous readout.
-  float quadrature_current_diff;
+  // Difference in x current compared to the previous readout.
+  float x_current_diff;
+  // Difference in y current compared to the previous readout.
+  float y_current_diff;
+  // Second difference in x current.
+  float x_current_second_diff;
+  // Second difference in y current.
+  float y_current_second_diff;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   int32_t rotations;
   // Best estimate for the rotor magnetic angle.
@@ -276,19 +280,23 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 2;
   write_int16(buffer + offset, value.ref_readout);;
   offset += 2;
-  write_float32(buffer + offset, value.direct_drive_voltage);;
+  write_float32(buffer + offset, value.x_drive_voltage);;
   offset += 4;
-  write_float32(buffer + offset, value.quadrature_drive_voltage);;
+  write_float32(buffer + offset, value.y_drive_voltage);;
   offset += 4;
-  write_float32(buffer + offset, value.direct_current);;
+  write_float32(buffer + offset, value.x_current);;
   offset += 4;
-  write_float32(buffer + offset, value.quadrature_current);;
+  write_float32(buffer + offset, value.y_current);;
   offset += 4;
   write_float32(buffer + offset, value.zero_current);;
   offset += 4;
-  write_float32(buffer + offset, value.direct_current_diff);;
+  write_float32(buffer + offset, value.x_current_diff);;
   offset += 4;
-  write_float32(buffer + offset, value.quadrature_current_diff);;
+  write_float32(buffer + offset, value.y_current_diff);;
+  offset += 4;
+  write_float32(buffer + offset, value.x_current_second_diff);;
+  offset += 4;
+  write_float32(buffer + offset, value.y_current_second_diff);;
   offset += 4;
   write_int32(buffer + offset, value.rotations);;
   offset += 4;
@@ -348,19 +356,23 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 2;
   result.ref_readout = read_int16(buffer + offset);
   offset += 2;
-  result.direct_drive_voltage = read_float32(buffer + offset);
+  result.x_drive_voltage = read_float32(buffer + offset);
   offset += 4;
-  result.quadrature_drive_voltage = read_float32(buffer + offset);
+  result.y_drive_voltage = read_float32(buffer + offset);
   offset += 4;
-  result.direct_current = read_float32(buffer + offset);
+  result.x_current = read_float32(buffer + offset);
   offset += 4;
-  result.quadrature_current = read_float32(buffer + offset);
+  result.y_current = read_float32(buffer + offset);
   offset += 4;
   result.zero_current = read_float32(buffer + offset);
   offset += 4;
-  result.direct_current_diff = read_float32(buffer + offset);
+  result.x_current_diff = read_float32(buffer + offset);
   offset += 4;
-  result.quadrature_current_diff = read_float32(buffer + offset);
+  result.y_current_diff = read_float32(buffer + offset);
+  offset += 4;
+  result.x_current_second_diff = read_float32(buffer + offset);
+  offset += 4;
+  result.y_current_second_diff = read_float32(buffer + offset);
   offset += 4;
   result.rotations = read_int32(buffer + offset);
   offset += 4;
@@ -477,8 +489,6 @@ struct Calibration {
   float w_current_zero;
   // Estimated baseline resistance of the motor coils.
   float resistance;
-  // The "other" resistance.
-  float y_resistance;
   // Estimated baseline inductance of the motor coils. Written as a conductance
   // for efficient math: `conductance = delta_t/L`.
   float inductance;
@@ -486,6 +496,8 @@ struct Calibration {
   float inductance_saliency;
   // Iron loss coefficient.
   float iron_loss;
+  // Iron resistance coefficient.
+  float iron_resistance;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
 };
@@ -500,13 +512,13 @@ static inline void write_Calibration(uint8_t * buffer, Calibration const& value)
   offset += 4;
   write_float32(buffer + offset, value.resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.y_resistance);;
-  offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_saliency);;
   offset += 4;
   write_float32(buffer + offset, value.iron_loss);;
+  offset += 4;
+  write_float32(buffer + offset, value.iron_resistance);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
@@ -524,13 +536,13 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   offset += 4;
   result.resistance = read_float32(buffer + offset);
   offset += 4;
-  result.y_resistance = read_float32(buffer + offset);
-  offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_saliency = read_float32(buffer + offset);
   offset += 4;
   result.iron_loss = read_float32(buffer + offset);
+  offset += 4;
+  result.iron_resistance = read_float32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -540,6 +552,9 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
 struct CalibrationInstance {
   // Number of calibration data points.
   uint32_t count;
+  // Bit field of the calibration state. The bits turn on when we the parameters 
+  // are excited and when they become stable.
+  uint32_t state_flags;
   // Target PWM value for this calibration instance.
   float target_pwm;
   // Target speed for this calibration instance.
@@ -554,10 +569,14 @@ struct CalibrationInstance {
   float resistance;
   // Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
   float resistance_multiplier;
+  // Fraction of data points where current was high enough to meaningfully measure resistance.
+  float resistance_excitation_fraction;
   // Measured inductance value for each phase.
   float inductance;
   // Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
   float inductance_multiplier;
+  // Fraction of data points where current change was high enough to measure inductance.
+  float inductance_excitation_fraction;
   // Measured inductance saliency bias.
   float inductance_saliency;
   // Multiplier for the inductance saliency, used to adjust the effective inductance saliency in calculations.
@@ -570,15 +589,25 @@ struct CalibrationInstance {
   float iron_loss;
   // Multiplier for the iron loss.
   float iron_loss_multiplier;
+  // Fraction of data points with significant iron loss.
+  float iron_loss_excitation_fraction;
   // Angle for the iron loss effect.
   int32_t iron_loss_angle;
   // Multiplier for the iron loss angle.
   float iron_loss_angle_multiplier;
+  // Coefficient that ties the eddy currents in the iron core to real voltage drop in the electric equation.
+  float iron_resistance;
+  // Multiplier for the iron resistance.
+  float iron_resistance_multiplier;
+  // Fraction of points where iron resistance matters.
+  float iron_resistance_excitation_fraction;
 };
 
 static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstance const& value) {
   size_t offset = 0;
   write_uint32(buffer + offset, value.count);;
+  offset += 4;
+  write_uint32(buffer + offset, value.state_flags);;
   offset += 4;
   write_float32(buffer + offset, value.target_pwm);;
   offset += 4;
@@ -594,9 +623,13 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.resistance_multiplier);;
   offset += 4;
+  write_float32(buffer + offset, value.resistance_excitation_fraction);;
+  offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_excitation_fraction);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_saliency);;
   offset += 4;
@@ -610,9 +643,17 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.iron_loss_multiplier);;
   offset += 4;
+  write_float32(buffer + offset, value.iron_loss_excitation_fraction);;
+  offset += 4;
   write_int32(buffer + offset, value.iron_loss_angle);;
   offset += 4;
   write_float32(buffer + offset, value.iron_loss_angle_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.iron_resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.iron_resistance_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.iron_resistance_excitation_fraction);;
   offset += 4;
 }
 static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer) {
@@ -621,6 +662,8 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   CalibrationInstance result;
   
   result.count = read_uint32(buffer + offset);
+  offset += 4;
+  result.state_flags = read_uint32(buffer + offset);
   offset += 4;
   result.target_pwm = read_float32(buffer + offset);
   offset += 4;
@@ -636,9 +679,13 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.resistance_multiplier = read_float32(buffer + offset);
   offset += 4;
+  result.resistance_excitation_fraction = read_float32(buffer + offset);
+  offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
   result.inductance_saliency = read_float32(buffer + offset);
   offset += 4;
@@ -652,9 +699,17 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.iron_loss_multiplier = read_float32(buffer + offset);
   offset += 4;
+  result.iron_loss_excitation_fraction = read_float32(buffer + offset);
+  offset += 4;
   result.iron_loss_angle = read_int32(buffer + offset);
   offset += 4;
   result.iron_loss_angle_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.iron_resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.iron_resistance_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.iron_resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1296,7 +1351,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 126;
+    case MessageCode::READOUT: return 134;
     case MessageCode::INFO: return 18;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
@@ -1311,7 +1366,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 38;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 74;
+    case MessageCode::CALIBRATION_INSTANCE: return 102;
     case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 190;
     case MessageCode::SET_CONTROL_PARAMETERS: return 190;
@@ -1344,9 +1399,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 124) return 0;
+      if (max_size < 2 + 132) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 126;
+      return 134;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
@@ -1424,9 +1479,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 72) return 0;
+      if (max_size < 2 + 100) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 74;
+      return 102;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1494,7 +1549,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 124) return false;
+      if (size != 2 + 132) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }
@@ -1569,7 +1624,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 72) return false;
+      if (size != 2 + 100) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }
