@@ -317,6 +317,12 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       );
       // We should also stop the continuous streaming behaviour.
       stream_state = false;
+
+      // Pre-emptively send the current calibration instance if calibrating.
+      if (control_mode == ControlMode::CALIBRATE) queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
+        .message_data = calibration_instance
+      });
       return;
     }
 
@@ -580,8 +586,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
   // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
 
-  const float cos_saliency = get_cos(calibration_instance.saliency_angle);
   const float sin_saliency = get_sin(calibration_instance.saliency_angle);
+  const float cos_saliency = get_cos(calibration_instance.saliency_angle);
 
   const float x_inductance_saliency = (
       -x_diff * cos_saliency 

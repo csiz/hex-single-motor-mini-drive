@@ -75,7 +75,6 @@ Calibration Procedures
 
 <div class="card tight">
   <div>${calibration_buttons}</div>
-  <div>${calibration_checkboxes}</div>
   <p>Active electrical phase properties:</p>
   <pre>${active_calibration_table}</pre>
   <div>${Object.values(calibration_input)}</div>
@@ -1092,6 +1091,32 @@ const plot_dq0_voltages = plot_lines({
   curve,
 });
 
+
+const plot_inferred_voltages = plot_lines({
+  subtitle: "Calibration Voltages",
+  description: "Voltages deduced from calibration.",
+  width: 1200, height: 300,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Voltage (V)",
+  channels: [
+    {y: "x_resistive_voltage", label: "X Resistive", color: colors_categories[0]},
+    {y: "y_resistive_voltage", label: "Y Resistive", color: colors_categories[1]},
+    {y: "x_inductance_saliency_voltage", label: "X Inductance Saliency", color: colors_categories[2]},
+    {y: "y_inductance_saliency_voltage", label: "Y Inductance Saliency", color: colors_categories[3]},
+    {y: "x_inductance_base_voltage", label: "X Inductance Base", color: colors_categories[4]},
+    {y: "y_inductance_base_voltage", label: "Y Inductance Base", color: colors_categories[5]},
+    {y: "x_iron_loss_voltage", label: "X Iron Loss", color: colors_categories[6]},
+    {y: "y_iron_loss_voltage", label: "Y Iron Loss", color: colors_categories[7]},
+    {y: "x_voltage_error", label: "X Voltage Error", color: colors_categories[8]},
+    {y: "y_voltage_error", label: "Y Voltage Error", color: colors_categories[9]},
+    {y: "voltage_error", label: "Voltage Error", color: colors_categories[10]},
+    {y: "x_drive_voltage", label: "Drive Voltage on X axis", color: colors_categories[11]},
+    {y: "y_drive_voltage", label: "Drive Voltage on Y axis", color: colors_categories[12]},
+  ],
+  curve,
+});
+
 const plot_pwm_settings = plot_lines({
   subtitle: "PWM Settings",
   description: "The PWM value currently set for each phase.",
@@ -1188,6 +1213,7 @@ const monitoring_plots = {
   plot_voltages,
   plot_dq0_currents,
   plot_dq0_voltages,
+  plot_inferred_voltages,
   plot_pwm_settings,
   plot_readout_flags,
   plot_resistance_calibration,
@@ -1264,15 +1290,6 @@ const calibration_input = Object.fromEntries(
   })
 );
 
-const calibration_checkboxes = enabled_checkbox(Object.entries(calibration_parameters).map(([key, {label, description}]) => label));
-  
-function get_checked_parameters(){
-  return Object.fromEntries(
-    Object.entries(calibration_parameters).map(([key, {label}]) => {
-      return [key, calibration_checkboxes.value.includes(label)];
-    })
-  );
-}
 
 function show_active_calibration() {
   active_calibration_table.value = stringify_active_calibration();
