@@ -11,37 +11,44 @@ import {
   angle_units_to_radians, 
   radians_to_angle_units,
   speed_units_to_rotations_per_millisecond,
-  parse_state_flags,  
+  parse_state_flags, get_hall_sector,
 } from './constants.js';
 
 import {normalize_radians} from './angular_math.js';
 import {square, dq0_transform, abc_transform} from './math_utils.js';
-import { sqrt } from 'three/tsl';
 
 
-export function get_hall_sector({hall_u, hall_v, hall_w}){
-  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
-  switch(hall_state){
-    case 0b001: return 0;
-    case 0b011: return 1;
-    case 0b010: return 2;
-    case 0b110: return 3;
-    case 0b100: return 4;
-    case 0b101: return 5;
-    default: return null;
-  }
-}
 
-
+// Post process a raw readout from the motor driver. We convert to useful units, add 
+// timekeeping, and add calibration computations (that are too heavy to do on chip).
 export function parse_readout(bare_readout, previous_readout) {
-  const local_time = bare_readout.local_time;
-
 
   // Get the readout number, a counter that increments with each readout & PWM cycle.
   const readout_number = bare_readout.readout_number;
   const cycle_start_tick = bare_readout.cycle_start_tick;
   const cycle_end_tick = bare_readout.cycle_end_tick;
   const ref_readout = bare_readout.ref_readout;
+
+  // Time indexing
+  // -------------
+  const local_time = bare_readout.local_time;
+
+  // It's the first readout in the series if the previous readout is older than the timeout duration.
+  const is_first_readout = !previous_readout;
+
+  // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
+  const readout_number_diff = is_first_readout ? undefined : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
+
+  const readout_index = is_first_readout ? 0 : previous_readout.readout_index + readout_number_diff;
+
+  const time = is_first_readout ? 0 : readout_index * millis_per_cycle;
+
+  // Time units are milliseconds.
+  const dt = is_first_readout ? undefined : time - previous_readout.time;
+
+
+  // Unit Conversions
+  // ----------------
 
   // Get the raw readout values.
   const x_current = bare_readout.x_current / CURRENT_UNITS_PER_AMP;
@@ -65,13 +72,42 @@ export function parse_readout(bare_readout, previous_readout) {
   const emf_voltage_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.emf_voltage_angular_speed);
   const emf_angle_stdev = angle_units_to_radians(Math.sqrt(bare_readout.emf_angle_variance));
 
+  const x_drive_voltage = bare_readout.x_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
+  const y_drive_voltage = bare_readout.y_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
+
+  const emf_speed_constant = bare_readout.emf_speed_constant;
+  const emf_speed_constant_stdev = Math.sqrt(bare_readout.emf_speed_constant_variance);
+
+  const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
+  const current_angle = normalize_radians(predicted_angle + current_angle_offset);
+  const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
+
+  const live_max_pwm = bare_readout.live_max_pwm;
+
+  const total_power_average = bare_readout.total_power_average;
+  const resistive_power_average = bare_readout.resistive_power_average;
+
+  const rotations = bare_readout.rotations;
+  
+  const emf_stable_magnitude = bare_readout.emf_stable_magnitude / VOLTAGE_UNITS_PER_VOLT;
+
+  const active_pwm = bare_readout.active_pwm;
+
+  const active_angle = angle_units_to_radians(bare_readout.active_angle);
+
+  const probing_angle = angle_units_to_radians(bare_readout.probing_angle);
+
+
+  // Additional computations
+  // -----------------------
+
   const [u_current, v_current, w_current] = abc_transform(x_current, y_current, 0);
 
   const prev_x_current = x_current - x_current_diff;
   const prev_y_current = y_current - y_current_diff;
   const prev_current_magnitude = Math.sqrt(square(prev_x_current) + square(prev_y_current));
-
   const [prev_u_current, prev_v_current, prev_w_current] = abc_transform(prev_x_current, prev_y_current, 0);
+
   
   const u_current_diff = u_current - prev_u_current;
   const v_current_diff = v_current - prev_v_current;
@@ -80,8 +116,6 @@ export function parse_readout(bare_readout, previous_readout) {
   const x_emf_voltage = emf_voltage_magnitude * Math.cos(emf_voltage_angle);
   const y_emf_voltage = emf_voltage_magnitude * Math.sin(emf_voltage_angle);
   
-  const x_drive_voltage = bare_readout.x_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
-  const y_drive_voltage = bare_readout.y_drive_voltage / VOLTAGE_UNITS_PER_VOLT;
 
   // Get the PWM voltage commands.
   const [u_drive_voltage, v_drive_voltage, w_drive_voltage] = abc_transform(x_drive_voltage, y_drive_voltage, 0);
@@ -94,97 +128,14 @@ export function parse_readout(bare_readout, previous_readout) {
   const w_pwm = (w_drive_voltage - min_drive_voltage) / vcc_voltage * PWM_BASE;
 
 
-  const [web_x_drive_voltage, web_y_drive_voltage] = dq0_transform(u_drive_voltage, v_drive_voltage, w_drive_voltage, 0);
-
-  const drive_voltage_angle = Math.atan2(web_y_drive_voltage, web_x_drive_voltage);
+  const drive_voltage_angle = Math.atan2(y_drive_voltage, x_drive_voltage);
   const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
-  const drive_voltage_magnitude = Math.sqrt(square(web_x_drive_voltage) + square(web_y_drive_voltage));
+  const drive_voltage_magnitude = Math.sqrt(square(x_drive_voltage) + square(y_drive_voltage));
 
-  const [web_x_current, web_y_current] = dq0_transform(u_current, v_current, w_current, 0);
-  
-  const web_current_angle = Math.atan2(web_y_current, web_x_current);
-  const web_current_magnitude = Math.sqrt(web_x_current * web_x_current + web_y_current * web_y_current);
-  const web_previous_current_angle = Math.atan2(prev_y_current, prev_x_current);
-  const web_current_angular_speed = speed_units_to_rotations_per_millisecond(radians_to_angle_units(normalize_radians(web_current_angle - web_previous_current_angle)));
-
-  const resistance = bare_readout?.resistance ?? 1.0;
-
-  const u_R_voltage = resistance * u_current;
-  const v_R_voltage = resistance * v_current;
-  const w_R_voltage = resistance * w_current;
-
-  const inductance = bare_readout?.inductance ?? 0.0;
-  
-  // V = L*dI/dt + R*I; Also factor of 1000 for millisecond to second conversion.
-  const u_L_voltage = u_current_diff * inductance * pwm_cycles_per_second;
-  const v_L_voltage = v_current_diff * inductance * pwm_cycles_per_second;
-  const w_L_voltage = w_current_diff * inductance * pwm_cycles_per_second;
-
-  // We cannot ignore the inductance voltage, it's crucial for the startup sequence to work correctly.
-  const u_emf_voltage =  u_L_voltage + u_R_voltage - u_drive_voltage;
-  const v_emf_voltage =  v_L_voltage + v_R_voltage - v_drive_voltage;
-  const w_emf_voltage =  w_L_voltage + w_R_voltage - w_drive_voltage;
-  
-  // Check the effect of the inductor voltage on the EMF calculation.
-  const u_partial_voltage = u_R_voltage - u_drive_voltage;
-  const v_partial_voltage = v_R_voltage - v_drive_voltage;
-  const w_partial_voltage = w_R_voltage - w_drive_voltage;
-
-  const [web_x_emf_voltage, web_y_emf_voltage] = dq0_transform(u_emf_voltage, v_emf_voltage, w_emf_voltage, 0);
-
-  const web_emf_voltage_angle = Math.atan2(web_y_emf_voltage, web_x_emf_voltage);
-  const emf_voltage_angle_offset = normalize_radians(web_emf_voltage_angle - predicted_angle);
-
-  const web_emf_voltage_magnitude = Math.sqrt(web_x_emf_voltage * web_x_emf_voltage + web_y_emf_voltage * web_y_emf_voltage);
-
-  const web_total_power = (u_current * u_drive_voltage + v_current * v_drive_voltage + w_current * w_drive_voltage);
-  const web_emf_power = -(u_current * u_emf_voltage + v_current * v_emf_voltage + w_current * w_emf_voltage);
-  const web_resistive_power = (square(u_current) * resistance + square(v_current) * resistance + square(w_current) * resistance);
-  const web_inductive_power = (u_current * u_L_voltage + v_current * v_L_voltage + w_current * w_L_voltage);
-
-  const emf_speed_constant = bare_readout.emf_speed_constant;
-  const emf_speed_constant_stdev = Math.sqrt(bare_readout.emf_speed_constant_variance);
-
-  const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
-  const current_angle = normalize_radians(predicted_angle + current_angle_offset);
-  const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
-
-
-  const live_max_pwm = bare_readout.live_max_pwm;
-
-
-  const total_power_average = bare_readout.total_power_average;
-  const resistive_power_average = bare_readout.resistive_power_average;
-
-  const rotations = bare_readout.rotations;
-  
-  const steady_state_drive_current = drive_voltage_magnitude / resistance;
+  const emf_voltage_angle_offset = normalize_radians(emf_voltage_angle - predicted_angle);
 
   const battery_current = total_power_average / vcc_voltage;
 
-  const emf_stable_magnitude = bare_readout.emf_stable_magnitude / VOLTAGE_UNITS_PER_VOLT;
-
-  const active_pwm = bare_readout.active_pwm;
-
-  const active_angle = angle_units_to_radians(bare_readout.active_angle);
-
-  const probing_angle = angle_units_to_radians(bare_readout.probing_angle);
-
-  // Time indexing
-  // -------------
-
-  // It's the first readout in the series if the previous readout is older than the timeout duration.
-  const is_first_readout = !previous_readout;
-
-  // Accumulate the readout index across readouts because the readout number is reset every 65536 readouts (~3 seconds).
-  const readout_number_diff = is_first_readout ? undefined : (readout_base + readout_number - previous_readout.readout_number) % readout_base;
-
-  const readout_index = is_first_readout ? 0 : previous_readout.readout_index + readout_number_diff;
-
-  const time = is_first_readout ? 0 : readout_index * millis_per_cycle;
-
-  // Time units are milliseconds.
-  const dt = is_first_readout ? undefined : time - previous_readout.time;
 
   // Return the complete readout
   // ---------------------------
@@ -201,67 +152,40 @@ export function parse_readout(bare_readout, previous_readout) {
     cycle_start_tick,
     cycle_end_tick,
 
+    // Reference readout in adc units
+    ref_readout,
 
     // Readouts converted to physical dimensions
     x_current, y_current,
-    x_current_diff,
-    y_current_diff,
+    x_current_diff, y_current_diff,
     
     u_current, v_current, w_current, zero_current,
 
 
-    web_x_current, web_y_current, 
-    web_current_magnitude,
-    web_current_angle,
-    web_current_angular_speed,
-    // Reference readouts in adc units
-    ref_readout,
-    prev_u_current,
-    prev_v_current,
-    prev_w_current,
-    prev_x_current,
-    prev_y_current,
+    prev_u_current, prev_v_current, prev_w_current,
+    prev_x_current, prev_y_current,
     prev_current_magnitude,
     u_current_diff, v_current_diff, w_current_diff,
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
-    x_drive_voltage,
-    y_drive_voltage,
-    web_x_drive_voltage,
-    web_y_drive_voltage,
-    drive_voltage_angle, 
-    drive_voltage_angle_offset,
+    x_drive_voltage, y_drive_voltage,
+    drive_voltage_angle, drive_voltage_angle_offset,
     drive_voltage_magnitude,
-    steady_state_drive_current,
-    u_emf_voltage, v_emf_voltage, w_emf_voltage,
-    u_partial_voltage, v_partial_voltage, w_partial_voltage,
-    u_R_voltage, v_R_voltage, w_R_voltage,
-    u_L_voltage, v_L_voltage, w_L_voltage,
     angle,
     predicted_angle,
     angle_adjustment,
     angular_speed,
     vcc_voltage,
-    emf_voltage_angle, 
-    emf_voltage_magnitude, 
-    emf_voltage_angular_speed,
-    emf_magnitude_stdev,
+    emf_voltage_angle, emf_voltage_angle_offset,
     emf_angle_stdev,
+    emf_voltage_angular_speed,
+    emf_voltage_magnitude, 
+    emf_magnitude_stdev,
     emf_speed_constant,
     emf_speed_constant_stdev,
-    x_emf_voltage,
-    y_emf_voltage,
-    web_x_emf_voltage, web_y_emf_voltage, 
-    web_emf_voltage_magnitude,
-    web_emf_voltage_angle, 
-    emf_voltage_angle_offset,
-    web_total_power,
-    web_emf_power,
-    web_resistive_power,
-    web_inductive_power,
-
-    current_angle, current_magnitude,
-    current_angle_offset,
+    x_emf_voltage, y_emf_voltage,
+    current_angle, current_angle_offset,
+    current_magnitude,
     live_max_pwm,
     
     battery_current,
@@ -308,6 +232,7 @@ export function parse_version(bare_version) {
 }
 
 export function parse_info(bare_info) {
+  // Are we giving up on hall sensors completely?
   // const {
   //   hall_state,
   //   emf_detected,

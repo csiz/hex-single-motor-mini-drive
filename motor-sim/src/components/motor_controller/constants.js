@@ -95,6 +95,20 @@ export function parse_state_flags(state_flags){
   };
 }
 
+export function get_hall_sector({hall_u, hall_v, hall_w}){
+  const hall_state = (hall_u ? 0b001 : 0) | (hall_v ? 0b010 : 0) | (hall_w ? 0b100 : 0);
+  switch(hall_state){
+    case 0b001: return 0;
+    case 0b011: return 1;
+    case 0b010: return 2;
+    case 0b110: return 3;
+    case 0b100: return 4;
+    case 0b101: return 5;
+    default: return null;
+  }
+}
+
+
 export const ENABLE_ALL_OUTPUTS = (
   ENABLE_U_OUTPUT |
   ENABLE_V_OUTPUT |

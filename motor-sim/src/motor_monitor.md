@@ -884,12 +884,7 @@ const plot_power = plot_lines({
   y_label: "Power (W)",
   channels: [
     {y: "total_power_average", label: "Total Power (on chip average)", color: d3.color(colors.sum).darker(1)},
-    {y: "resistive_power_average", label: "Resistive Power (on chip average)", color: d3.color(colors.web_current_magnitude).darker(1)},
-    {y: "web_total_power", label: "Total Power (computed online)", color: colors_categories[3]},
-    {y: "web_emf_power", label: "EMF Power (computed online)", color: colors.u},
-    {y: "web_resistive_power", label: "Resistive Power (computed online)", color: colors.v},
-    {y: "web_inductive_power", label: "Inductive Power (computed online)", color: colors.w},
-
+    {y: "resistive_power_average", label: "Resistive Power (on chip average)", color: d3.color(colors_categories[5]).darker(1)},
   ],
   curve,
 });
@@ -944,13 +939,11 @@ const plot_electric_position = plot_lines({
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
     {y: "iron_loss_angle", label: "Iron Loss Angle", color: colors_categories[6]},
     {y: "current_angle", label: "Current Angle", color: colors_categories[3]},
-    {y: (d) => d.web_current_magnitude > 0.010 ? d.web_current_angle : null, label: "Current Angle (computed online)", color: colors.current_angle},
     {
       y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
     {y: (d) => normalize_radians(2*d.emf_voltage_angle)*0.5, label: "EMF Voltage Axis", color: d3.color(colors.voltage_angle).brighter(1)},
-    {y: "web_emf_voltage_angle", label: "EMF Voltage Angle (computed online)", color: colors.voltage_angle},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
   ],
   curve,
@@ -1020,7 +1013,7 @@ const plot_measured_temperature = plot_lines({
 });
 
 const plot_measured_current = plot_lines({
-  subtitle: "Currents",
+  subtitle: "Phase Currents",
   description: "Measured current values for each phase.",
   width: 1200, height: 400,
   x: "time",
@@ -1048,7 +1041,7 @@ const plot_measured_current = plot_lines({
 
 
 const plot_voltages = plot_lines({
-  subtitle: "Voltages",
+  subtitle: "Phase Voltages",
   description: "Measured voltage values for each phase.",
   width: 1200, height: 300,
   x: "time",
@@ -1058,34 +1051,9 @@ const plot_voltages = plot_lines({
     {y: "u_drive_voltage", label: "Drive Voltage U", color: colors.u},
     {y: "v_drive_voltage", label: "Drive Voltage V", color: colors.v},
     {y: "w_drive_voltage", label: "Drive Voltage W", color: colors.w},
-    {y: "u_R_voltage", label: "Resistive Voltage U", color: d3.color(colors.u).darker(1)},
-    {y: "v_R_voltage", label: "Resistive Voltage V", color: d3.color(colors.v).darker(1)},
-    {y: "w_R_voltage", label: "Resistive Voltage W", color: d3.color(colors.w).darker(1)},
   ],
   curve,
 });
-
-const plot_inferred_voltages = plot_lines({
-  subtitle: "Inferred Voltage",
-  description: html`Inferred EMF voltage values for each phase: ${tex`V_{emf} = IR + L(dI/dt) - V_{drive}`}.`,
-  width: 1200, height: 300,
-  x: "time",
-  x_label: "Time (ms)",
-  y_label: "Voltage (V)",
-  channels: [
-    {y: "u_emf_voltage", label: "EMF Voltage U", color: colors.u},
-    {y: "v_emf_voltage", label: "EMF Voltage V", color: colors.v},
-    {y: "w_emf_voltage", label: "EMF Voltage W", color: colors.w},
-    {y: "u_L_voltage", label: "Inductor Voltage U", color: d3.color(colors.u).brighter(1)},
-    {y: "v_L_voltage", label: "Inductor Voltage V", color: d3.color(colors.v).brighter(1)},
-    {y: "w_L_voltage", label: "Inductor Voltage W", color: d3.color(colors.w).brighter(1)},
-    {y: "u_partial_voltage", label: "Partial Voltage U", color: d3.color(colors.u).darker(1)},
-    {y: "v_partial_voltage", label: "Partial Voltage V", color: d3.color(colors.v).darker(1)},
-    {y: "w_partial_voltage", label: "Partial Voltage W", color: d3.color(colors.w).darker(1)},
-  ],
-  curve,
-});
-
 
 const plot_dq0_currents = plot_lines({
   subtitle: "DQ0 Currents",
@@ -1101,10 +1069,6 @@ const plot_dq0_currents = plot_lines({
     {y: "prev_y_current", label: "Previous Current on Y axis", color: d3.color(colors.y_current).darker(1)},
     {y: "prev_current_magnitude", label: "Previous Current Magnitude", color: d3.color(colors_categories[2]).darker(1)},
     {y: "current_magnitude", label: "Current Magnitude", color: colors_categories[2]},
-    {y: "web_x_current", label: "Current on X (computed online)", color: d3.color(colors.x_current).brighter(1)},
-    {y: "web_y_current", label: "Current on Y (computed online)", color: d3.color(colors.y_current).brighter(1)},
-    {y: "steady_state_drive_current", label: "Drive Current if stalling", color: d3.color(colors.x_current).darker(1)},
-    {y: "web_current_magnitude", label: "Current Magnitude (computed online)", color: colors.web_current_magnitude},
   ],
   curve,
 });
@@ -1119,14 +1083,11 @@ const plot_dq0_voltages = plot_lines({
   channels: [
     {y: "x_emf_voltage", label: "EMF Voltage on X", color: colors.x_current},
     {y: "y_emf_voltage", label: "EMF Voltage on Y", color: colors.y_current},
-    {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors.web_current_magnitude},
-    {y: "emf_magnitude_stdev", label: "EMF Magnitude stdev", color: d3.color(colors.web_current_magnitude).darker(1)},
+    {y: "emf_voltage_magnitude", label: "EMF Voltage Magnitude", color: colors_categories[5]},
+    {y: "emf_magnitude_stdev", label: "EMF Magnitude stdev", color: d3.color(colors_categories[9]).darker(1)},
     {y: "drive_voltage_magnitude", label: "Drive Voltage Magnitude", color: colors_categories[2]},
     {y: "x_drive_voltage", label: "Drive Voltage on X axis", color: colors.u},
     {y: "y_drive_voltage", label: "Drive Voltage on Y axis", color: colors.v},
-    {y: "web_x_emf_voltage", label: "Voltage on X axis (computed online)", color: d3.color(colors.x_current).brighter(1)},
-    {y: "web_y_emf_voltage", label: "Voltage on Y (computed online)", color: d3.color(colors.y_current).brighter(1)},
-    {y: "web_emf_voltage_magnitude", label: "Voltage Magnitude (computed online)", color: colors.web_current_magnitude},
   ],
   curve,
 });
@@ -1225,7 +1186,6 @@ const monitoring_plots = {
   plot_measured_temperature,
   plot_measured_current,
   plot_voltages,
-  plot_inferred_voltages,
   plot_dq0_currents,
   plot_dq0_voltages,
   plot_pwm_settings,
