@@ -976,6 +976,7 @@ const plot_speed = plot_lines({
   channels: [
     {y: "angular_speed", label: "Magnet Angular Speed", color: colors.angular_speed},
     {y: "emf_voltage_angular_speed", label: "EMF Voltage Angular Speed", color: colors.voltage_angle},
+    {y: "emf_angle_stdev", label: "EMF Angle stdev", color: colors.angle_driven},
   ],
   curve,
 });
@@ -1160,8 +1161,8 @@ const plot_resistance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Resistance (Ohms)",
   channels: [
-    {y: "resistance", label: "Phase Resistance X", color: colors.u},
-    {y: "iron_loss", label: "Iron Loss", color: colors_categories[6]},
+    {y: (d) => d.resistance_excitation_fraction > 0.2 ? d.resistance : null, label: "Phase Resistance X", color: colors.u},
+    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.iron_loss : null, label: "Iron Loss", color: colors_categories[6]},
   ],
   curve,
 });
@@ -1174,8 +1175,8 @@ const plot_inductance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Inductance (H)",
   channels: [
-    {y: "inductance", label: "Phase Inductance X", color: colors.v},
-    {y: "inductance_saliency", label: "Inductance Saliency", color: colors.w},
+    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance : null, label: "Phase Inductance X", color: colors.v},
+    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance_saliency : null, label: "Inductance Saliency", color: colors.w},
   ],
   curve,
 });

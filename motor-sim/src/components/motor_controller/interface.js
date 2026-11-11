@@ -188,8 +188,8 @@ export function parse_readout(bare_readout, previous_readout) {
   const x_iron_loss = A_iron_loss * cos_iron_loss - B_iron_loss * sin_iron_loss;
   const y_iron_loss = A_iron_loss * sin_iron_loss + B_iron_loss * cos_iron_loss;
 
-  const x_iron_loss_voltage = bare_readout.iron_loss * x_iron_loss / VOLTAGE_UNITS_PER_VOLT;
-  const y_iron_loss_voltage = bare_readout.iron_loss * y_iron_loss / VOLTAGE_UNITS_PER_VOLT;
+  const x_iron_loss_voltage = bare_readout.iron_loss * x_iron_loss;
+  const y_iron_loss_voltage = bare_readout.iron_loss * y_iron_loss;
 
   // Calibrate without EMF!!!
   // ------------------------
@@ -363,6 +363,7 @@ export function parse_calibration_instance(bare_calibration_instance){
     avg_drive_voltage: bare_calibration_instance.avg_drive_voltage / VOLTAGE_UNITS_PER_VOLT,
     avg_current_magnitude: bare_calibration_instance.avg_current_magnitude / CURRENT_UNITS_PER_AMP,
     avg_error: Math.sqrt(bare_calibration_instance.avg_square_error) / VOLTAGE_UNITS_PER_VOLT,
+    iron_loss: bare_calibration_instance.iron_loss / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
     iron_loss_angle: angle_units_to_radians(bare_calibration_instance.iron_loss_angle),
   }

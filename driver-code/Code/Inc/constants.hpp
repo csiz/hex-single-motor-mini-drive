@@ -16,15 +16,14 @@
 // 6A max DQ0 driving current.
 constexpr float max_drive_current = hex_mini_drive::CURRENT_UNITS_PER_AMP * 6.0;
 
-// Inverse for fast math.
-// constexpr float max_drive_current_inverse = 1.f / max_drive_current;
-
 // 32W max drive power.
 constexpr float max_drive_power = 32.0;
 
-// Inverse for fast math.
-constexpr float max_drive_power_inverse = 1.f / max_drive_power;
+// Maximum voltage we can put on the VCC line before any component is out of rating.
+constexpr float max_vcc_voltage = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * 28;
 
+// Expected VCC voltage.
+constexpr float nominal_vcc_voltage = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * 20;
 
 // Angle base is the max uint32_t + 1, so we need to express it as float: std::pow(2, angle_bit_count).
 constexpr float angle_base = 4294967296.f;
@@ -57,6 +56,13 @@ constexpr float max_angular_speed_sq = square(max_angular_speed);
 
 // Maximum drive state duration.
 constexpr uint16_t max_duration = 0xFFFF;
+
+// Inverse for fast math.
+constexpr float max_drive_current_inverse = 1.f / max_drive_current;
+
+// Inverse for fast math.
+constexpr float max_drive_power_inverse = 1.f / max_drive_power;
+
 
 // Unit definitions
 // ----------------
@@ -146,6 +152,12 @@ constexpr float adc_to_current_units = hex_mini_drive::CURRENT_UNITS_PER_AMP * a
 // Noise level of the current measurements, in current units.
 constexpr float current_measurement_noise = 8 * adc_to_current_units;
 
+// The difference between current measurements is noisier.
+constexpr float current_diff_measurement_noise = 12 * adc_to_current_units;
+
+// We need to compare with the 2axis current diff so we can quickly compute the square and we need the squared comparison.
+constexpr float current_diff_measurement_variance = square(current_diff_measurement_noise);
+
 // Maximum current we can measure per phase using our setup. This is less than
 // the total adc resolution span because the amplifier is referenced to half 3.3V while
 // the adc of the chip is referenced to its internal 2.9V voltage reference. And can
@@ -187,6 +199,9 @@ constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power 
 
 // Maximum measurable voltage by the ADC given the voltage divider and reference voltage.
 constexpr float max_measured_voltage = adc_max_value * voltage_conversion;
+
+// The noise of our applied voltage is 16/3072 from the maximum we can use.
+constexpr float voltage_signal_noise = 16.f * nominal_vcc_voltage * half_pwm_base_inverse;
 
 // Timing and PWM constants
 // ------------------------
