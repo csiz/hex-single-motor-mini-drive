@@ -942,6 +942,7 @@ const plot_electric_position = plot_lines({
       y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
+    {y: "vibration_axis", label: "Vibration Axis", color: colors_categories[7]},
     {y: (d) => normalize_radians(2*d.emf_voltage_angle)*0.5, label: "EMF Voltage Axis", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
   ],
@@ -1114,6 +1115,8 @@ const plot_inferred_voltages = plot_lines({
     {y: "voltage_error", label: "Voltage Error", color: colors_categories[10]},
     {y: "x_drive_voltage", label: "Drive Voltage on X axis", color: colors_categories[11]},
     {y: "y_drive_voltage", label: "Drive Voltage on Y axis", color: colors_categories[12]},
+    {y: "x_vibration_voltage", label: "X Vibration", color: colors_categories[13]},
+    {y: "y_vibration_voltage", label: "Y Vibration", color: colors_categories[14]},
   ],
   curve,
 });
@@ -1163,6 +1166,7 @@ const plot_resistance_calibration = plot_lines({
   channels: [
     {y: (d) => d.resistance_excitation_fraction > 0.2 ? d.resistance : null, label: "Phase Resistance X", color: colors.u},
     {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.iron_loss : null, label: "Iron Loss", color: colors_categories[6]},
+    {y: "vibration_fraction", label: "Vibration", color: colors_categories[7]},
   ],
   curve,
 });
@@ -1197,6 +1201,8 @@ const plot_motor_values = plot_lines({
     {y: (d) => Math.abs(d.saliency_angle_multiplier), label: "Saliency Angle Multiplier", color: colors_categories[5]},
     {y: (d) => Math.abs(d.iron_loss_multiplier), label: "Iron Loss Multiplier", color: colors_categories[6]},
     {y: (d) => Math.abs(d.iron_loss_angle_multiplier), label: "Iron Loss Angle Multiplier", color: colors_categories[7]},
+    {y: (d) => Math.abs(d.vibration_fraction_multiplier), label: "Vibration Fraction Multiplier", color: colors_categories[8]},
+    {y: (d) => Math.abs(d.vibration_axis_multiplier), label: "Vibration Axis Multiplier", color: colors_categories[9]},
   ],
   curve,
 });
@@ -1268,6 +1274,10 @@ const calibration_parameters = {
   iron_resistance: {
     label: "Iron Resistance", 
     description: `The resistance due to iron eddy currents (specifically the back EMF from the change in eddy currents with time).`
+  },
+  vibration_fraction: {
+    label: "Vibration Fraction", 
+    description: `The fraction voltage stolen by vibration.`
   },
   motor_constant: {
     label: "Motor Constant", 
@@ -1360,6 +1370,7 @@ const calibration_series_resistance_plot = plot_lines({
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
     {y: "iron_loss", label: "Iron Loss", color: colors_categories[6]},
+    {y: "vibration_fraction", label: "Vibration Fraction", color: colors_categories[7]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });
@@ -1379,6 +1390,7 @@ const calibration_series_inductance_plot = plot_lines({
 
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[4]).brighter(1)},
     {y: "iron_loss_angle", label: "Iron Loss Angle", color: colors_categories[7]},
+    {y: "vibration_axis", label: "Vibration Axis", color: colors_categories[8]},
     {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
   ],
@@ -1612,6 +1624,14 @@ const control_parameters_input = Object.fromEntries(
     ["iron_loss_angle_ki", {
       label: "Iron Loss Angle KI",
       description: "Integral gain for iron loss angle."
+    }],
+    ["vibration_fraction_ki", {
+      label: "Vibration Fraction KI",
+      description: "Integral gain for vibration fraction."
+    }],
+    ["vibration_axis_ki", {
+      label: "Vibration Axis KI",
+      description: "Integral gain for vibration axis."
     }],
   ].map(([key, {label, description}]) => {
 

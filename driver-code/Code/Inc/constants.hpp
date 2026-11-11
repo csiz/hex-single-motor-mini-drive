@@ -370,6 +370,7 @@ constexpr float minimum_inductance = 0.000'001f;
 constexpr float minimum_inductance_saliency = 0.000'000'1f;
 constexpr float minimum_iron_loss = 0.000'001f;
 constexpr float minimum_iron_resistance = 0.000'001f;
+constexpr float minimum_vibration_fraction = 0.000'001f;
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::Calibration default_calibration = {
@@ -383,6 +384,7 @@ const hex_mini_drive::Calibration default_calibration = {
     .inductance_saliency = minimum_inductance_saliency,
     .iron_loss = minimum_iron_loss,
     .iron_resistance = minimum_iron_resistance,
+    .vibration_fraction = minimum_vibration_fraction,
 };
 
 // The default control parameters should be set to reasonable values for any motor.
@@ -453,6 +455,9 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 
     .iron_loss_ki = std::pow(2, -6),
     .iron_loss_angle_ki = std::pow(2, +6),
+
+    .vibration_fraction_ki = std::pow(2, -16),
+    .vibration_axis_ki = std::pow(2, +16),
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

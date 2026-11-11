@@ -140,6 +140,18 @@ export function parse_readout(bare_readout, previous_readout) {
   // Recalculate calibration stuff so we can vizualize it
   // ----------------------------------------------------
 
+  const sin_vibration = Math.sin(bare_readout.vibration_axis);
+  const cos_vibration = Math.cos(bare_readout.vibration_axis);
+
+  const A_vibration = x_drive_voltage * cos_vibration + y_drive_voltage * sin_vibration;
+  const B_vibration = x_drive_voltage * sin_vibration - y_drive_voltage * cos_vibration;
+
+  const x_vibration = 0.5 * (x_drive_voltage + A_vibration);
+  const y_vibration = 0.5 * (y_drive_voltage + B_vibration);
+
+  const x_vibration_voltage = x_vibration * bare_readout.vibration_fraction;
+  const y_vibration_voltage = y_vibration * bare_readout.vibration_fraction;
+
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const x_resistive_voltage = x_current * bare_readout.resistance;
   const y_resistive_voltage = y_current * bare_readout.resistance;
@@ -280,9 +292,11 @@ export function parse_readout(bare_readout, previous_readout) {
     y_inductance_base_voltage,
     x_iron_loss_voltage,
     y_iron_loss_voltage,
+    x_vibration_voltage,
+    y_vibration_voltage,
     x_voltage_error,
     y_voltage_error,
-    voltage_error
+    voltage_error,
   };
 }
 
@@ -366,6 +380,7 @@ export function parse_calibration_instance(bare_calibration_instance){
     iron_loss: bare_calibration_instance.iron_loss / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
     iron_loss_angle: angle_units_to_radians(bare_calibration_instance.iron_loss_angle),
+    vibration_axis: angle_units_to_radians(bare_calibration_instance.vibration_axis),
   }
 }
 

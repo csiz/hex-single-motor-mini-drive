@@ -127,6 +127,10 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .iron_loss_multiplier = 1.f,
     .iron_loss_angle = 0,
     .iron_loss_angle_multiplier = 1.f,
+    .vibration_fraction = active_calibration.vibration_fraction,
+    .vibration_fraction_multiplier = 1.f,
+    .vibration_axis = 0,
+    .vibration_axis_multiplier = 1.f
   };
 }
 
@@ -587,6 +591,24 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Recalculate
   // -----------
   // We need to recalculate these values in the main loop as they are not the primary tracking variables.
+
+  const float vibration_effect = calibration_instance.vibration_fraction * (calibration_instance.target_speed != 0.f);
+
+  // Assuming the motor is oscillating with a roughly fixed angle, then... maybe...
+  // the back emf from vibrations will act in opposing phase to the drive voltage
+  // projected onto the emf axis of the rotor. The rotor, vibrating in place will
+  // produce a vibrating emf response mostly on it's own axis.
+  const float sin_vibration = get_sin(calibration_instance.vibration_axis);
+  const float cos_vibration = get_cos(calibration_instance.vibration_axis);
+
+  const float A_vibration = readout.x_drive_voltage * cos_vibration + readout.y_drive_voltage * sin_vibration;
+  const float B_vibration = readout.x_drive_voltage * sin_vibration - readout.y_drive_voltage * cos_vibration;
+
+  const float x_vibration = 0.5f * (readout.x_drive_voltage + A_vibration);
+  const float y_vibration = 0.5f * (readout.y_drive_voltage + B_vibration);
+
+  const float x_vibration_voltage = x_vibration * vibration_effect;
+  const float y_vibration_voltage = y_vibration * vibration_effect;
   
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const float x_resistive_voltage = readout.x_current * calibration_instance.resistance;
@@ -651,8 +673,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const float x_voltage_error = x_inductor_voltage + x_resistive_voltage + x_iron_loss_voltage - readout.x_drive_voltage;
-  const float y_voltage_error = y_inductor_voltage + y_resistive_voltage + y_iron_loss_voltage - readout.y_drive_voltage;
+  const float x_voltage_error = x_inductor_voltage + x_resistive_voltage + x_iron_loss_voltage + x_vibration_voltage - readout.x_drive_voltage;
+  const float y_voltage_error = y_inductor_voltage + y_resistive_voltage + y_iron_loss_voltage + y_vibration_voltage - readout.y_drive_voltage;
 
   // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
@@ -696,73 +718,101 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Also track inductance excitation.
   const bool inductance_excited = current_diff_square > current_diff_measurement_variance;
   calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_stats_ki;
-
-  const float inductance_gradient = resilient_gradient(
-    voltage_mul_current_to_power * (
-      x_voltage_error * x_diff +
-      y_voltage_error * y_diff
-    ),
-    calibration_instance.inductance_multiplier
-  );
   
-  // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-  calibration_instance.inductance -= inductance_gradient * control_parameters.inductance_ki;
-  validate_parameter(calibration_instance.inductance, minimum_inductance);
+  // Only run the dynamic calibration parameters if our our drive signal is changing.
+  if (calibration_instance.target_speed != 0.f) {
 
-  const float inductance_saliency_gradient = resilient_gradient(
-    voltage_mul_current_to_power * (
-      x_voltage_error * x_inductance_saliency +
-      y_voltage_error * y_inductance_saliency
-    ),
-    calibration_instance.inductance_saliency_multiplier
-  );
-
-  calibration_instance.inductance_saliency -= inductance_saliency_gradient * control_parameters.inductance_bias_ki;
-
-  // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
-  // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape
-  // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
-  if (validate_parameter(calibration_instance.inductance_saliency, minimum_inductance_saliency)) {
-    // If we're normal condition, then just gradient descent the angle too.
-    const float resilient_saliency_angle_gradient = resilient_gradient(
-      (
-        x_voltage_error * -y_inductance_saliency +
-        y_voltage_error * x_inductance_saliency
-      ) * voltage_mul_current_to_power,
-      calibration_instance.saliency_angle_multiplier
-    );
-
-    const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
-    calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
-
-  } else {
-    // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
-    calibration_instance.saliency_angle += half_circle;
-    calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
-  }
-
-  // And gradients for micro rotor vibrations.
-  const float iron_loss_gradient = resilient_gradient(
-    (
-      x_voltage_error * x_iron_loss + 
-      y_voltage_error * y_iron_loss
-    ),
-    calibration_instance.iron_loss_multiplier
-  );
-  calibration_instance.iron_loss -= iron_loss_gradient * control_parameters.iron_loss_ki;
-
-  if(validate_parameter(calibration_instance.iron_loss, minimum_iron_loss)){
-    const float iron_loss_angle_gradient = resilient_gradient(
-      (
-        x_voltage_error * -y_iron_loss + 
-        y_voltage_error * x_iron_loss
+    const float inductance_gradient = resilient_gradient(
+      voltage_mul_current_to_power * (
+        x_voltage_error * x_diff +
+        y_voltage_error * y_diff
       ),
-      calibration_instance.iron_loss_angle_multiplier
+      calibration_instance.inductance_multiplier
     );
-    calibration_instance.iron_loss_angle -= static_cast<int32_t>(iron_loss_angle_gradient * control_parameters.iron_loss_angle_ki);
-  } else {
-    calibration_instance.iron_loss_angle += half_circle;
-    calibration_instance.iron_loss_angle_multiplier = 1.0f;
+    
+    // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
+    calibration_instance.inductance -= inductance_gradient * control_parameters.inductance_ki;
+    validate_parameter(calibration_instance.inductance, minimum_inductance);
+
+    const float inductance_saliency_gradient = resilient_gradient(
+      voltage_mul_current_to_power * (
+        x_voltage_error * x_inductance_saliency +
+        y_voltage_error * y_inductance_saliency
+      ),
+      calibration_instance.inductance_saliency_multiplier
+    );
+
+    calibration_instance.inductance_saliency -= inductance_saliency_gradient * control_parameters.inductance_bias_ki;
+
+    // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
+    // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape
+    // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
+    if (validate_parameter(calibration_instance.inductance_saliency, minimum_inductance_saliency)) {
+      // If we're normal condition, then just gradient descent the angle too.
+      const float resilient_saliency_angle_gradient = resilient_gradient(
+        (
+          x_voltage_error * -y_inductance_saliency +
+          y_voltage_error * x_inductance_saliency
+        ) * voltage_mul_current_to_power,
+        calibration_instance.saliency_angle_multiplier
+      );
+
+      const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
+      calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
+
+    } else {
+      // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
+      calibration_instance.saliency_angle += half_circle;
+      calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
+    }
+
+    // And gradients for micro rotor vibrations.
+    const float iron_loss_gradient = resilient_gradient(
+      (
+        x_voltage_error * x_iron_loss + 
+        y_voltage_error * y_iron_loss
+      ),
+      calibration_instance.iron_loss_multiplier
+    );
+    calibration_instance.iron_loss -= iron_loss_gradient * control_parameters.iron_loss_ki;
+
+    if(validate_parameter(calibration_instance.iron_loss, minimum_iron_loss)){
+      const float iron_loss_angle_gradient = resilient_gradient(
+        (
+          x_voltage_error * -y_iron_loss + 
+          y_voltage_error * x_iron_loss
+        ),
+        calibration_instance.iron_loss_angle_multiplier
+      );
+      calibration_instance.iron_loss_angle -= static_cast<int32_t>(iron_loss_angle_gradient * control_parameters.iron_loss_angle_ki);
+    } else {
+      calibration_instance.iron_loss_angle += half_circle;
+      calibration_instance.iron_loss_angle_multiplier = 1.0f;
+    }
+
+    const float vibration_factor_gradient = resilient_gradient(
+      voltage_mul_current_to_power * (
+        x_voltage_error * x_vibration + 
+        y_voltage_error * y_vibration
+      ),
+      calibration_instance.vibration_fraction_multiplier
+    );
+
+    calibration_instance.vibration_fraction -= vibration_factor_gradient * control_parameters.vibration_fraction_ki;
+
+    // if (validate_parameter(calibration_instance.vibration_fraction, minimum_vibration_fraction)) {
+    const float vibration_axis_gradient = resilient_gradient(
+      voltage_mul_current_to_power * (
+        x_voltage_error * -B_vibration + 
+        y_voltage_error * A_vibration
+      ),
+      calibration_instance.vibration_axis_multiplier
+    );
+    calibration_instance.vibration_axis -= static_cast<int32_t>(vibration_axis_gradient * control_parameters.vibration_axis_ki);
+  //   } else {
+  //     calibration_instance.vibration_axis += half_circle;
+  //     calibration_instance.vibration_axis_multiplier = 1.0f;
+  //   }
   }
 
 
@@ -784,7 +834,9 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
         // We skip the saliency_angle_multiplier because we should be able to rely on the inductance_saliency_multiplier.
         faster_abs(calibration_instance.iron_loss_multiplier) < multiplier_stable_threshold
         // Also skip the iron_loss_angle_multiplier for same reason as saliency angle.
-      ))
+      )) and
+      faster_abs(calibration_instance.vibration_axis_multiplier) < multiplier_stable_threshold
+      // Skip vibration axis multiplier.
     );
 
     // Periodically check if we stablizied and move on.
