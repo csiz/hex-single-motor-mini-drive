@@ -259,6 +259,27 @@ void ADC1_2_IRQHandler(void){
 
     const int32_t current_angle_offset = current_angle - predicted_angle;
 
+    // Instantaneous current angular speed is the change in current angle per timestep.
+    const float current_angular_speed = current_angle - (readout.current_angle_offset + readout.predicted_angle);
+
+    const float current_magnitude_diff = current_magnitude - readout.current_magnitude;
+
+
+    // We can't calibrate this one because we have to do it for steady state while also changing the frequency.
+    // Obviously, we can't really get a "steady state" while changing frequency, I mean we can barely call it
+    // steady state at constant frequency. Anyway, there's an effect that makes resistance increase with the
+    // driving speed. The magnitude of the effect is linear with angular speed, so we account for it via
+    // what we call eddy_resistance which acts at the same angle as the current but is proportional to both
+    // speed and current magnitude.
+    
+    // const float eddy_effect = calibration.eddy_resistance * (
+    //     readout.current_magnitude * faster_abs(readout.current_angular_speed) * angle_units_to_radians + 
+    //     readout.current_magnitude_diff
+    // );
+
+    // const float x_eddy_voltage = get_sin(current_angle) * eddy_effect;
+    // const float y_eddy_voltage = get_cos(current_angle) * eddy_effect;
+
 
     // Using DQ0 coordinates
     // ---------------------
@@ -282,9 +303,6 @@ void ADC1_2_IRQHandler(void){
 
     const float x_diff = x_current_diff * current_diff_to_voltage_units;
     const float y_diff = y_current_diff * current_diff_to_voltage_units;
-
-    const float x_current_second_diff = x_current_diff - readout.x_current_diff;
-    const float y_current_second_diff = y_current_diff - readout.y_current_diff;
 
     // Ignore the saliency_angle_offset in the tight loop and assume it is 0. The saliency
     // effect depends on the rotor position!
@@ -654,8 +672,6 @@ void ADC1_2_IRQHandler(void){
     readout.zero_current = zero_current;
     readout.x_current_diff = x_current_diff;
     readout.y_current_diff = y_current_diff;
-    readout.x_current_second_diff = x_current_second_diff;
-    readout.y_current_second_diff = y_current_second_diff;
     
     readout.rotations = rotations;
     readout.angle = angle;
@@ -675,6 +691,8 @@ void ADC1_2_IRQHandler(void){
 
     readout.current_angle_offset = current_angle_offset;
     readout.current_magnitude = current_magnitude;
+    readout.current_angular_speed = current_angular_speed;
+    readout.current_magnitude_diff = current_magnitude_diff;
 
     readout.live_max_pwm = live_max_pwm;
     readout.total_power_average = total_power_average;

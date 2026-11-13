@@ -88,17 +88,16 @@ CalibrationInstanceSettings calibration_instance_settings;
 
 const uint16_t calibration_duration = max_duration;
 
-// TODO: high increment for quicker tuning we need to make these into a parameter tho.
-const float calibration_target_increment = 256.f;
+const float calibration_target_increment = 128.f;
 
-const float calibration_target_max = 512.f;
+const float calibration_target_max = calibration_target_increment * 3;
 
 // TODO: let's make sure high frequencies work nice before going lower.
 const float calibration_speed_base = 4 * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 
-const float calibration_speed_multiplier = std::pow(2, 1.f / 6.f); // An octave has 12 steps, but we'll shorten it to 6 notes.
+const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
 
-const float calibration_speed_max = angle_base / 4.f;
+const float calibration_speed_max = angle_base / 6.f;
 
 const float calibration_stats_ki = std::pow(2, -6);
 
@@ -516,7 +515,6 @@ static inline hex_mini_drive::Calibration make_calibration_from_instance(hex_min
     .inductance = calibration_instance.inductance,
     .inductance_saliency = calibration_instance.inductance_saliency,
     .hysteresis_loss = calibration_instance.hysteresis_loss,
-    .eddy_resistance = calibration_instance.eddy_resistance,
     .vibration_fraction = calibration_instance.vibration_fraction,
   };
 }
@@ -714,8 +712,20 @@ static inline void calibrate_from_readout(
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const float x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_hysteresis_loss_voltage + x_vibration_voltage - readout.x_drive_voltage;
-  const float y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_hysteresis_loss_voltage + y_vibration_voltage - readout.y_drive_voltage;
+  const float x_voltage_error = (
+    x_inductance_voltage + 
+    x_resistive_voltage + 
+    x_hysteresis_loss_voltage + 
+    x_vibration_voltage + 
+    -readout.x_drive_voltage
+  );
+  const float y_voltage_error = (
+    y_inductance_voltage + 
+    y_resistive_voltage + 
+    y_hysteresis_loss_voltage + 
+    y_vibration_voltage + 
+    -readout.y_drive_voltage
+  );
 
   // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
@@ -854,6 +864,7 @@ static inline void calibrate_from_readout(
       // Not sure it's correct to flip vibration axis by 180 degrees.
       calibration_instance.vibration_axis_multiplier = 1.0f;
     }
+
   }
 
 

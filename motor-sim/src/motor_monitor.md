@@ -1370,7 +1370,6 @@ const calibration_series_resistance_plot = plot_lines({
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
-
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
     {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration Fraction", color: colors_categories[7]},

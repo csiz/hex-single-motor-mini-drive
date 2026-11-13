@@ -246,14 +246,6 @@ definitions:
         type: float32
         doc: Difference in y current compared to the previous readout.
 
-      x_current_second_diff:
-        type: float32
-        doc: Second difference in x current.
-
-      y_current_second_diff:
-        type: float32
-        doc: Second difference in y current.
-
       rotations:
         type: int32
         doc: Integrated number of EMF deduced rotor angle rotations since startup.
@@ -325,6 +317,14 @@ definitions:
       current_magnitude:
         type: float32
         doc: Magnitude of the current vector.
+
+      current_angular_speed:
+        type: float32
+        doc: Angular speed of the current vector.
+      
+      current_magnitude_diff:
+        type: float32
+        doc: Change in current magnitude.
 
       live_max_pwm:
         type: float32
@@ -503,15 +503,6 @@ definitions:
       hysteresis_loss_angle_multiplier:
         type: float32
         doc: Multiplier for the iron loss angle.
-      eddy_resistance:
-        type: float32
-        doc: Coefficient that ties the eddy currents in the iron core to real voltage drop in the electric equation.
-      eddy_resistance_multiplier:
-        type: float32
-        doc: Multiplier for the iron resistance.
-      eddy_resistance_excitation_fraction:
-        type: float32
-        doc: Fraction of points where iron resistance matters.
       vibration_fraction:
         type: float32
         doc: Fraction of drive voltage reflected due to vibrations.
@@ -866,3 +857,7 @@ definitions:
       vibration_axis_ki:
         type: float32
         doc: Vibration axis integral gain.
+
+      eddy_resistance_ki:
+        type: float32
+        doc: Eddy current integral gain.

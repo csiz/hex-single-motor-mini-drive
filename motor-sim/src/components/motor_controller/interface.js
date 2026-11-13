@@ -81,6 +81,8 @@ export function parse_readout(bare_readout, previous_readout) {
   const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
   const current_angle = normalize_radians(predicted_angle + current_angle_offset);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
+  const current_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.current_angular_speed);
+  const current_magnitude_diff = bare_readout.current_magnitude_diff / CURRENT_UNITS_PER_AMP;
 
   const live_max_pwm = bare_readout.live_max_pwm;
 
@@ -254,6 +256,7 @@ export function parse_readout(bare_readout, previous_readout) {
     prev_x_current, prev_y_current,
     prev_current_magnitude,
     u_current_diff, v_current_diff, w_current_diff,
+
     u_pwm, v_pwm, w_pwm,
     u_drive_voltage, v_drive_voltage, w_drive_voltage,
     x_drive_voltage, y_drive_voltage,
@@ -274,6 +277,8 @@ export function parse_readout(bare_readout, previous_readout) {
     x_emf_voltage, y_emf_voltage,
     current_angle, current_angle_offset,
     current_magnitude,
+    current_angular_speed,
+    current_magnitude_diff,
     live_max_pwm,
     
     battery_current,

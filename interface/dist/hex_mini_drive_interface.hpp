@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.172.0";
+constexpr char const* VERSION_STRING = "0.175.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -210,10 +210,6 @@ struct Readout {
   float x_current_diff;
   // Difference in y current compared to the previous readout.
   float y_current_diff;
-  // Second difference in x current.
-  float x_current_second_diff;
-  // Second difference in y current.
-  float y_current_second_diff;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   int32_t rotations;
   // Best estimate for the rotor magnetic angle.
@@ -254,6 +250,10 @@ struct Readout {
   int32_t current_angle_offset;
   // Magnitude of the current vector.
   float current_magnitude;
+  // Angular speed of the current vector.
+  float current_angular_speed;
+  // Change in current magnitude.
+  float current_magnitude_diff;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
   // Long duration average of the total power; used to limit the maximum power draw.
@@ -294,10 +294,6 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.y_current_diff);;
   offset += 4;
-  write_float32(buffer + offset, value.x_current_second_diff);;
-  offset += 4;
-  write_float32(buffer + offset, value.y_current_second_diff);;
-  offset += 4;
   write_int32(buffer + offset, value.rotations);;
   offset += 4;
   write_int32(buffer + offset, value.angle);;
@@ -327,6 +323,10 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   write_int32(buffer + offset, value.current_angle_offset);;
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.current_angular_speed);;
+  offset += 4;
+  write_float32(buffer + offset, value.current_magnitude_diff);;
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
@@ -370,10 +370,6 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.y_current_diff = read_float32(buffer + offset);
   offset += 4;
-  result.x_current_second_diff = read_float32(buffer + offset);
-  offset += 4;
-  result.y_current_second_diff = read_float32(buffer + offset);
-  offset += 4;
   result.rotations = read_int32(buffer + offset);
   offset += 4;
   result.angle = read_int32(buffer + offset);
@@ -403,6 +399,10 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   result.current_angle_offset = read_int32(buffer + offset);
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
+  offset += 4;
+  result.current_angular_speed = read_float32(buffer + offset);
+  offset += 4;
+  result.current_magnitude_diff = read_float32(buffer + offset);
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
@@ -601,12 +601,6 @@ struct CalibrationInstance {
   int32_t hysteresis_loss_angle;
   // Multiplier for the iron loss angle.
   float hysteresis_loss_angle_multiplier;
-  // Coefficient that ties the eddy currents in the iron core to real voltage drop in the electric equation.
-  float eddy_resistance;
-  // Multiplier for the iron resistance.
-  float eddy_resistance_multiplier;
-  // Fraction of points where iron resistance matters.
-  float eddy_resistance_excitation_fraction;
   // Fraction of drive voltage reflected due to vibrations.
   float vibration_fraction;
   // Multiplier for the vibration fraction.
@@ -662,12 +656,6 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   write_int32(buffer + offset, value.hysteresis_loss_angle);;
   offset += 4;
   write_float32(buffer + offset, value.hysteresis_loss_angle_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.eddy_resistance);;
-  offset += 4;
-  write_float32(buffer + offset, value.eddy_resistance_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.eddy_resistance_excitation_fraction);;
   offset += 4;
   write_float32(buffer + offset, value.vibration_fraction);;
   offset += 4;
@@ -726,12 +714,6 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   result.hysteresis_loss_angle = read_int32(buffer + offset);
   offset += 4;
   result.hysteresis_loss_angle_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.eddy_resistance = read_float32(buffer + offset);
-  offset += 4;
-  result.eddy_resistance_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.eddy_resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
   result.vibration_fraction = read_float32(buffer + offset);
   offset += 4;
@@ -1117,6 +1099,8 @@ struct ControlParameters {
   float vibration_fraction_ki;
   // Vibration axis integral gain.
   float vibration_axis_ki;
+  // Eddy current integral gain.
+  float eddy_resistance_ki;
 };
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
@@ -1224,6 +1208,8 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.vibration_fraction_ki);;
   offset += 4;
   write_float32(buffer + offset, value.vibration_axis_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.eddy_resistance_ki);;
   offset += 4;
 }
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
@@ -1335,6 +1321,8 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.vibration_axis_ki = read_float32(buffer + offset);
   offset += 4;
+  result.eddy_resistance_ki = read_float32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Message Codes
@@ -1408,10 +1396,10 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 42;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 118;
+    case MessageCode::CALIBRATION_INSTANCE: return 106;
     case MessageCode::RUN_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 198;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 198;
+    case MessageCode::CONTROL_PARAMETERS: return 202;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 202;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
@@ -1521,9 +1509,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 116) return 0;
+      if (max_size < 2 + 104) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 118;
+      return 106;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1531,15 +1519,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 196) return 0;
+      if (max_size < 2 + 200) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 198;
+      return 202;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 196) return 0;
+      if (max_size < 2 + 200) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 198;
+      return 202;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1666,7 +1654,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 116) return false;
+      if (size != 2 + 104) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }
@@ -1676,12 +1664,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 196) return false;
+      if (size != 2 + 200) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 196) return false;
+      if (size != 2 + 200) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

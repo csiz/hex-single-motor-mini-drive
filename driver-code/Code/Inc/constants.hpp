@@ -369,7 +369,6 @@ constexpr float minimum_resistance = 0.005f; // This is lower than the sense res
 constexpr float minimum_inductance = 0.000'001f;
 constexpr float minimum_inductance_saliency = 0.000'1f;
 constexpr float minimum_hysteresis_loss = 0.000'001f;
-constexpr float minimum_eddy_resistance = 0.000'001f;
 constexpr float minimum_vibration_fraction = 0.000'001f;
 
 // Default to a the planetary 3 phase motor.
@@ -383,7 +382,7 @@ const hex_mini_drive::Calibration default_calibration = {
     .inductance = minimum_inductance,
     .inductance_saliency = minimum_inductance_saliency,
     .hysteresis_loss = minimum_hysteresis_loss,
-    .eddy_resistance = minimum_eddy_resistance,
+    .eddy_resistance = 0.f,
     .vibration_fraction = minimum_vibration_fraction,
 };
 
