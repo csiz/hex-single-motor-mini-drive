@@ -414,11 +414,11 @@ definitions:
         type: float32
         doc: Estimated bias of the inductance due to magnetic saliency.
 
-      iron_loss:
+      hysteresis_loss:
         type: float32
         doc: Iron loss coefficient.
 
-      iron_resistance:
+      eddy_resistance:
         type: float32
         doc: Iron resistance coefficient.
 
@@ -488,28 +488,28 @@ definitions:
       saliency_angle_multiplier:
         type: float32
         doc: Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
-      iron_loss:
+      hysteresis_loss:
         type: float32
         doc: Iron loss coefficient.
-      iron_loss_multiplier:
+      hysteresis_loss_multiplier:
         type: float32
         doc: Multiplier for the iron loss.
-      iron_loss_excitation_fraction:
+      hysteresis_loss_excitation_fraction:
         type: float32
         doc: Fraction of data points with significant iron loss.
-      iron_loss_angle:
+      hysteresis_loss_angle:
         type: int32
         doc: Angle for the iron loss effect.
-      iron_loss_angle_multiplier:
+      hysteresis_loss_angle_multiplier:
         type: float32
         doc: Multiplier for the iron loss angle.
-      iron_resistance:
+      eddy_resistance:
         type: float32
         doc: Coefficient that ties the eddy currents in the iron core to real voltage drop in the electric equation.
-      iron_resistance_multiplier:
+      eddy_resistance_multiplier:
         type: float32
         doc: Multiplier for the iron resistance.
-      iron_resistance_excitation_fraction:
+      eddy_resistance_excitation_fraction:
         type: float32
         doc: Fraction of points where iron resistance matters.
       vibration_fraction:
@@ -852,10 +852,10 @@ definitions:
         type: float32
         doc: Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
       
-      iron_loss_ki:
+      hysteresis_loss_ki:
         type: float32
         doc: Iron loss factor integral gain.
-      iron_loss_angle_ki:
+      hysteresis_loss_angle_ki:
         type: float32
         doc: Iron loss angle integral gain.
 

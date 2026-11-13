@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.169.0";
+constexpr char const* VERSION_STRING = "0.172.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -495,9 +495,9 @@ struct Calibration {
   // Estimated bias of the inductance due to magnetic saliency.
   float inductance_saliency;
   // Iron loss coefficient.
-  float iron_loss;
+  float hysteresis_loss;
   // Iron resistance coefficient.
-  float iron_resistance;
+  float eddy_resistance;
   // Fraction of drive voltage reflected because of back EMF from vibrations.
   float vibration_fraction;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
@@ -518,9 +518,9 @@ static inline void write_Calibration(uint8_t * buffer, Calibration const& value)
   offset += 4;
   write_float32(buffer + offset, value.inductance_saliency);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_loss);;
+  write_float32(buffer + offset, value.hysteresis_loss);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_resistance);;
+  write_float32(buffer + offset, value.eddy_resistance);;
   offset += 4;
   write_float32(buffer + offset, value.vibration_fraction);;
   offset += 4;
@@ -544,9 +544,9 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   offset += 4;
   result.inductance_saliency = read_float32(buffer + offset);
   offset += 4;
-  result.iron_loss = read_float32(buffer + offset);
+  result.hysteresis_loss = read_float32(buffer + offset);
   offset += 4;
-  result.iron_resistance = read_float32(buffer + offset);
+  result.eddy_resistance = read_float32(buffer + offset);
   offset += 4;
   result.vibration_fraction = read_float32(buffer + offset);
   offset += 4;
@@ -592,21 +592,21 @@ struct CalibrationInstance {
   // Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
   float saliency_angle_multiplier;
   // Iron loss coefficient.
-  float iron_loss;
+  float hysteresis_loss;
   // Multiplier for the iron loss.
-  float iron_loss_multiplier;
+  float hysteresis_loss_multiplier;
   // Fraction of data points with significant iron loss.
-  float iron_loss_excitation_fraction;
+  float hysteresis_loss_excitation_fraction;
   // Angle for the iron loss effect.
-  int32_t iron_loss_angle;
+  int32_t hysteresis_loss_angle;
   // Multiplier for the iron loss angle.
-  float iron_loss_angle_multiplier;
+  float hysteresis_loss_angle_multiplier;
   // Coefficient that ties the eddy currents in the iron core to real voltage drop in the electric equation.
-  float iron_resistance;
+  float eddy_resistance;
   // Multiplier for the iron resistance.
-  float iron_resistance_multiplier;
+  float eddy_resistance_multiplier;
   // Fraction of points where iron resistance matters.
-  float iron_resistance_excitation_fraction;
+  float eddy_resistance_excitation_fraction;
   // Fraction of drive voltage reflected due to vibrations.
   float vibration_fraction;
   // Multiplier for the vibration fraction.
@@ -653,21 +653,21 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.saliency_angle_multiplier);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_loss);;
+  write_float32(buffer + offset, value.hysteresis_loss);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_loss_multiplier);;
+  write_float32(buffer + offset, value.hysteresis_loss_multiplier);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_loss_excitation_fraction);;
+  write_float32(buffer + offset, value.hysteresis_loss_excitation_fraction);;
   offset += 4;
-  write_int32(buffer + offset, value.iron_loss_angle);;
+  write_int32(buffer + offset, value.hysteresis_loss_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_loss_angle_multiplier);;
+  write_float32(buffer + offset, value.hysteresis_loss_angle_multiplier);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_resistance);;
+  write_float32(buffer + offset, value.eddy_resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_resistance_multiplier);;
+  write_float32(buffer + offset, value.eddy_resistance_multiplier);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_resistance_excitation_fraction);;
+  write_float32(buffer + offset, value.eddy_resistance_excitation_fraction);;
   offset += 4;
   write_float32(buffer + offset, value.vibration_fraction);;
   offset += 4;
@@ -717,21 +717,21 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.saliency_angle_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.iron_loss = read_float32(buffer + offset);
+  result.hysteresis_loss = read_float32(buffer + offset);
   offset += 4;
-  result.iron_loss_multiplier = read_float32(buffer + offset);
+  result.hysteresis_loss_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.iron_loss_excitation_fraction = read_float32(buffer + offset);
+  result.hysteresis_loss_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
-  result.iron_loss_angle = read_int32(buffer + offset);
+  result.hysteresis_loss_angle = read_int32(buffer + offset);
   offset += 4;
-  result.iron_loss_angle_multiplier = read_float32(buffer + offset);
+  result.hysteresis_loss_angle_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.iron_resistance = read_float32(buffer + offset);
+  result.eddy_resistance = read_float32(buffer + offset);
   offset += 4;
-  result.iron_resistance_multiplier = read_float32(buffer + offset);
+  result.eddy_resistance_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.iron_resistance_excitation_fraction = read_float32(buffer + offset);
+  result.eddy_resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
   result.vibration_fraction = read_float32(buffer + offset);
   offset += 4;
@@ -1110,9 +1110,9 @@ struct ControlParameters {
   // Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
   float emf_speed_constant_confirmed_threshold;
   // Iron loss factor integral gain.
-  float iron_loss_ki;
+  float hysteresis_loss_ki;
   // Iron loss angle integral gain.
-  float iron_loss_angle_ki;
+  float hysteresis_loss_angle_ki;
   // Vibration integral gain.
   float vibration_fraction_ki;
   // Vibration axis integral gain.
@@ -1217,9 +1217,9 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant_confirmed_threshold);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_loss_ki);;
+  write_float32(buffer + offset, value.hysteresis_loss_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.iron_loss_angle_ki);;
+  write_float32(buffer + offset, value.hysteresis_loss_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.vibration_fraction_ki);;
   offset += 4;
@@ -1327,9 +1327,9 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.emf_speed_constant_confirmed_threshold = read_float32(buffer + offset);
   offset += 4;
-  result.iron_loss_ki = read_float32(buffer + offset);
+  result.hysteresis_loss_ki = read_float32(buffer + offset);
   offset += 4;
-  result.iron_loss_angle_ki = read_float32(buffer + offset);
+  result.hysteresis_loss_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.vibration_fraction_ki = read_float32(buffer + offset);
   offset += 4;

@@ -125,10 +125,10 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .inductance_saliency_multiplier = 1.f,
     .saliency_angle = 2 * angle,
     .saliency_angle_multiplier = 1.f,
-    .iron_loss = active_calibration.iron_loss,
-    .iron_loss_multiplier = 1.f,
-    .iron_loss_angle = 0,
-    .iron_loss_angle_multiplier = 1.f,
+    .hysteresis_loss = active_calibration.hysteresis_loss,
+    .hysteresis_loss_multiplier = 1.f,
+    .hysteresis_loss_angle = 0,
+    .hysteresis_loss_angle_multiplier = 1.f,
     .vibration_fraction = active_calibration.vibration_fraction,
     .vibration_fraction_multiplier = 1.f,
     .vibration_axis = 0,
@@ -199,8 +199,8 @@ static inline bool check_calibration_stability(){
         faster_abs(calibration_instance.inductance_multiplier) < multiplier_stable_threshold and
         faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold and
         // We skip the saliency_angle_multiplier because we should be able to rely on the inductance_saliency_multiplier.
-        faster_abs(calibration_instance.iron_loss_multiplier) < multiplier_stable_threshold
-        // Also skip the iron_loss_angle_multiplier for same reason as saliency angle.
+        faster_abs(calibration_instance.hysteresis_loss_multiplier) < multiplier_stable_threshold
+        // Also skip the hysteresis_loss_angle_multiplier for same reason as saliency angle.
       )) and
       (
         zero_speed or 
@@ -515,8 +515,8 @@ static inline hex_mini_drive::Calibration make_calibration_from_instance(hex_min
     .resistance = calibration_instance.resistance,
     .inductance = calibration_instance.inductance,
     .inductance_saliency = calibration_instance.inductance_saliency,
-    .iron_loss = calibration_instance.iron_loss,
-    .iron_resistance = calibration_instance.iron_resistance,
+    .hysteresis_loss = calibration_instance.hysteresis_loss,
+    .eddy_resistance = calibration_instance.eddy_resistance,
     .vibration_fraction = calibration_instance.vibration_fraction,
   };
 }
@@ -686,24 +686,24 @@ static inline void calibrate_from_readout(
   const float x_inductance_voltage = calibration_instance.inductance * x_inductance;
   const float y_inductance_voltage = calibration_instance.inductance * y_inductance;
   
-  const float sin_iron_loss = get_sin(calibration_instance.iron_loss_angle);
-  const float cos_iron_loss = get_cos(calibration_instance.iron_loss_angle);
+  const float sin_hysteresis_loss = get_sin(calibration_instance.hysteresis_loss_angle);
+  const float cos_hysteresis_loss = get_cos(calibration_instance.hysteresis_loss_angle);
 
-  const float A_iron_loss = (
+  const float A_hysteresis_loss = (
     readout.x_current * x_inductance_voltage - 
     readout.y_current * y_inductance_voltage
   ) * voltage_mul_current_to_power;
-  const float B_iron_loss = (
+  const float B_hysteresis_loss = (
     readout.x_current * y_inductance_voltage + 
     readout.y_current * x_inductance_voltage
   ) * voltage_mul_current_to_power;
 
-  const float x_iron_loss = A_iron_loss * cos_iron_loss - B_iron_loss * sin_iron_loss;
-  const float y_iron_loss = A_iron_loss * sin_iron_loss + B_iron_loss * cos_iron_loss;
+  const float x_hysteresis_loss = A_hysteresis_loss * cos_hysteresis_loss - B_hysteresis_loss * sin_hysteresis_loss;
+  const float y_hysteresis_loss = A_hysteresis_loss * sin_hysteresis_loss + B_hysteresis_loss * cos_hysteresis_loss;
 
-  const float x_iron_loss_voltage = calibration_instance.iron_loss * x_iron_loss;
+  const float x_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * x_hysteresis_loss;
   
-  const float y_iron_loss_voltage = calibration_instance.iron_loss * y_iron_loss;
+  const float y_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * y_hysteresis_loss;
 
   // Calibrate without EMF!!!
   // ------------------------
@@ -714,8 +714,8 @@ static inline void calibrate_from_readout(
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const float x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_iron_loss_voltage + x_vibration_voltage - readout.x_drive_voltage;
-  const float y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_iron_loss_voltage + y_vibration_voltage - readout.y_drive_voltage;
+  const float x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_hysteresis_loss_voltage + x_vibration_voltage - readout.x_drive_voltage;
+  const float y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_hysteresis_loss_voltage + y_vibration_voltage - readout.y_drive_voltage;
 
   // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
@@ -808,27 +808,27 @@ static inline void calibrate_from_readout(
     }
 
     // And gradients for micro rotor vibrations.
-    const float iron_loss_gradient = resilient_gradient(
+    const float hysteresis_loss_gradient = resilient_gradient(
       (
-        x_voltage_error * x_iron_loss + 
-        y_voltage_error * y_iron_loss
+        x_voltage_error * x_hysteresis_loss + 
+        y_voltage_error * y_hysteresis_loss
       ),
-      calibration_instance.iron_loss_multiplier
+      calibration_instance.hysteresis_loss_multiplier
     );
-    calibration_instance.iron_loss -= iron_loss_gradient * control_parameters.iron_loss_ki;
+    calibration_instance.hysteresis_loss -= hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki;
 
-    if(validate_parameter(calibration_instance.iron_loss, minimum_iron_loss)){
-      const float iron_loss_angle_gradient = resilient_gradient(
+    if(validate_parameter(calibration_instance.hysteresis_loss, minimum_hysteresis_loss)){
+      const float hysteresis_loss_angle_gradient = resilient_gradient(
         (
-          x_voltage_error * -y_iron_loss + 
-          y_voltage_error * x_iron_loss
+          x_voltage_error * -y_hysteresis_loss + 
+          y_voltage_error * x_hysteresis_loss
         ),
-        calibration_instance.iron_loss_angle_multiplier
+        calibration_instance.hysteresis_loss_angle_multiplier
       );
-      calibration_instance.iron_loss_angle -= static_cast<int32_t>(iron_loss_angle_gradient * control_parameters.iron_loss_angle_ki);
+      calibration_instance.hysteresis_loss_angle -= static_cast<int32_t>(hysteresis_loss_angle_gradient * control_parameters.hysteresis_loss_angle_ki);
     } else {
-      calibration_instance.iron_loss_angle += half_circle;
-      calibration_instance.iron_loss_angle_multiplier = 1.0f;
+      calibration_instance.hysteresis_loss_angle += half_circle;
+      calibration_instance.hysteresis_loss_angle_multiplier = 1.0f;
     }
 
     const float vibration_factor_gradient = resilient_gradient(

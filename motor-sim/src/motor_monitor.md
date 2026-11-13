@@ -936,7 +936,7 @@ const plot_electric_position = plot_lines({
     {y: "predicted_angle", label: "Predicted Angle", color: d3.color(colors.angle).darker(1)},
     {y: "saliency_angle", label: "Saliency Angle", color: colors_categories[5]},
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
-    {y: "iron_loss_angle", label: "Iron Loss Angle", color: colors_categories[6]},
+    {y: "hysteresis_loss_angle", label: "Hysteresis Loss Angle", color: colors_categories[6]},
     {y: "current_angle", label: "Current Angle", color: colors_categories[3]},
     {
       y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle,
@@ -1108,8 +1108,8 @@ const plot_inferred_voltages = plot_lines({
     {y: "y_inductance_saliency_voltage", label: "Y Inductance Saliency", color: colors_categories[3]},
     {y: "x_inductance_base_voltage", label: "X Inductance Base", color: colors_categories[4]},
     {y: "y_inductance_base_voltage", label: "Y Inductance Base", color: colors_categories[5]},
-    {y: "x_iron_loss_voltage", label: "X Iron Loss", color: colors_categories[6]},
-    {y: "y_iron_loss_voltage", label: "Y Iron Loss", color: colors_categories[7]},
+    {y: "x_hysteresis_loss_voltage", label: "X Hysteresis Loss", color: colors_categories[6]},
+    {y: "y_hysteresis_loss_voltage", label: "Y Hysteresis Loss", color: colors_categories[7]},
     {y: "x_voltage_error", label: "X Voltage Error", color: colors_categories[8]},
     {y: "y_voltage_error", label: "Y Voltage Error", color: colors_categories[9]},
     {y: "voltage_error", label: "Voltage Error", color: colors_categories[10]},
@@ -1166,7 +1166,7 @@ const plot_resistance_calibration = plot_lines({
   channels: [
     {y: (d) => d.resistance_excitation_fraction > 0.2 ? d.resistance : null, label: "Phase Resistance X", color: colors.u},
     {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance_saliency : null, label: "Inductance Saliency", color: colors.w},
-    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.iron_loss : null, label: "Iron Loss", color: colors_categories[6]},
+    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.hysteresis_loss : null, label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration", color: colors_categories[7]},
   ],
   curve,
@@ -1181,7 +1181,7 @@ const plot_inductance_calibration = plot_lines({
   y_label: "Inductance (H)",
   channels: [
     {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance : null, label: "Phase Inductance X", color: colors.v},
-    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.iron_loss : null, label: "Iron Loss", color: colors.w},
+    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.hysteresis_loss : null, label: "Hysteresis Loss", color: colors.w},
   ],
   curve,
 });
@@ -1200,8 +1200,8 @@ const plot_motor_values = plot_lines({
     {y: (d) => Math.abs(d.inductance_multiplier), label: "Inductance Multiplier", color: colors_categories[3]},
     {y: (d) => Math.abs(d.inductance_saliency_multiplier), label: "Inductance Bias Multiplier", color: colors_categories[4]},
     {y: (d) => Math.abs(d.saliency_angle_multiplier), label: "Saliency Angle Multiplier", color: colors_categories[5]},
-    {y: (d) => Math.abs(d.iron_loss_multiplier), label: "Iron Loss Multiplier", color: colors_categories[6]},
-    {y: (d) => Math.abs(d.iron_loss_angle_multiplier), label: "Iron Loss Angle Multiplier", color: colors_categories[7]},
+    {y: (d) => Math.abs(d.hysteresis_loss_multiplier), label: "Hysteresis Loss Multiplier", color: colors_categories[6]},
+    {y: (d) => Math.abs(d.hysteresis_loss_angle_multiplier), label: "Hysteresis Loss Angle Multiplier", color: colors_categories[7]},
     {y: (d) => Math.abs(d.vibration_fraction_multiplier), label: "Vibration Fraction Multiplier", color: colors_categories[8]},
     {y: (d) => Math.abs(d.vibration_axis_multiplier), label: "Vibration Axis Multiplier", color: colors_categories[9]},
   ],
@@ -1268,12 +1268,12 @@ const calibration_parameters = {
     label: "Inductance Saliency", 
     description: `The bias of the motor's phase inductance.`
   },
-  iron_loss: {
-    label: "Iron Loss", 
-    description: `The iron loss from eddy currents.`
+  hysteresis_loss: {
+    label: "Hysteresis Loss", 
+    description: `The hysteresis loss from eddy currents.`
   },
-  iron_resistance: {
-    label: "Iron Resistance", 
+  eddy_resistance: {
+    label: "Eddy Current Resistance", 
     description: `The resistance due to iron eddy currents (specifically the back EMF from the change in eddy currents with time).`
   },
   vibration_fraction: {
@@ -1372,7 +1372,7 @@ const calibration_series_resistance_plot = plot_lines({
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
 
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
-    {y: "iron_loss", label: "Iron Loss", color: colors_categories[6]},
+    {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration Fraction", color: colors_categories[7]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
@@ -1391,7 +1391,7 @@ const calibration_series_inductance_plot = plot_lines({
 
 
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[4]).brighter(1)},
-    {y: "iron_loss_angle", label: "Iron Loss Angle", color: colors_categories[7]},
+    {y: "hysteresis_loss_angle", label: "Hysteresis Loss Angle", color: colors_categories[7]},
     {y: "vibration_axis", label: "Vibration Axis", color: colors_categories[8]},
     {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
@@ -1619,13 +1619,13 @@ const control_parameters_input = Object.fromEntries(
       label: "EMF Speed Constant Confirmed Threshold",
       description: "Threshold for confirming the EMF speed constant estimation."
     }],
-    ["iron_loss_ki", {
-      label: "Iron Loss KI",
-      description: "Integral gain for iron loss."
+    ["hysteresis_loss_ki", {
+      label: "Hysteresis Loss KI",
+      description: "Integral gain for hysteresis loss."
     }],
-    ["iron_loss_angle_ki", {
-      label: "Iron Loss Angle KI",
-      description: "Integral gain for iron loss angle."
+    ["hysteresis_loss_angle_ki", {
+      label: "Hysteresis Loss Angle KI",
+      description: "Integral gain for hysteresis loss angle."
     }],
     ["vibration_fraction_ki", {
       label: "Vibration Fraction KI",

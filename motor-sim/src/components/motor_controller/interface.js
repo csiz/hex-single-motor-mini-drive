@@ -188,23 +188,23 @@ export function parse_readout(bare_readout, previous_readout) {
   const x_inductance_voltage = bare_readout.inductance * x_inductance;
   const y_inductance_voltage = bare_readout.inductance * y_inductance;
   
-  const sin_iron_loss = Math.sin(bare_readout.iron_loss_angle);
-  const cos_iron_loss = Math.cos(bare_readout.iron_loss_angle);
+  const sin_hysteresis_loss = Math.sin(bare_readout.hysteresis_loss_angle);
+  const cos_hysteresis_loss = Math.cos(bare_readout.hysteresis_loss_angle);
 
-  const A_iron_loss = (
+  const A_hysteresis_loss = (
     x_current * x_inductance_voltage - 
     y_current * y_inductance_voltage
   );
-  const B_iron_loss = (
+  const B_hysteresis_loss = (
     x_current * y_inductance_voltage + 
     y_current * x_inductance_voltage
   );
 
-  const x_iron_loss = A_iron_loss * cos_iron_loss - B_iron_loss * sin_iron_loss;
-  const y_iron_loss = A_iron_loss * sin_iron_loss + B_iron_loss * cos_iron_loss;
+  const x_hysteresis_loss = A_hysteresis_loss * cos_hysteresis_loss - B_hysteresis_loss * sin_hysteresis_loss;
+  const y_hysteresis_loss = A_hysteresis_loss * sin_hysteresis_loss + B_hysteresis_loss * cos_hysteresis_loss;
 
-  const x_iron_loss_voltage = bare_readout.iron_loss * x_iron_loss;
-  const y_iron_loss_voltage = bare_readout.iron_loss * y_iron_loss;
+  const x_hysteresis_loss_voltage = bare_readout.hysteresis_loss * x_hysteresis_loss;
+  const y_hysteresis_loss_voltage = bare_readout.hysteresis_loss * y_hysteresis_loss;
 
   // Calibrate without EMF!!!
   // ------------------------
@@ -215,9 +215,9 @@ export function parse_readout(bare_readout, previous_readout) {
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_iron_loss_voltage + x_vibration_voltage - x_drive_voltage;
-  const y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_iron_loss_voltage + y_vibration_voltage - y_drive_voltage;
-  
+  const x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_hysteresis_loss_voltage + x_vibration_voltage - x_drive_voltage;
+  const y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_hysteresis_loss_voltage + y_vibration_voltage - y_drive_voltage;
+
 
   // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
@@ -294,8 +294,8 @@ export function parse_readout(bare_readout, previous_readout) {
     y_inductance_saliency_voltage,
     x_inductance_base_voltage,
     y_inductance_base_voltage,
-    x_iron_loss_voltage,
-    y_iron_loss_voltage,
+    x_hysteresis_loss_voltage,
+    y_hysteresis_loss_voltage,
     x_vibration_voltage,
     y_vibration_voltage,
     x_voltage_error,
@@ -381,9 +381,9 @@ export function parse_calibration_instance(bare_calibration_instance){
     avg_drive_voltage: bare_calibration_instance.avg_drive_voltage / VOLTAGE_UNITS_PER_VOLT,
     avg_current_magnitude: bare_calibration_instance.avg_current_magnitude / CURRENT_UNITS_PER_AMP,
     avg_error: Math.sqrt(bare_calibration_instance.avg_square_error) / VOLTAGE_UNITS_PER_VOLT,
-    iron_loss: bare_calibration_instance.iron_loss / VOLTAGE_UNITS_PER_VOLT,
+    hysteresis_loss: bare_calibration_instance.hysteresis_loss / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
-    iron_loss_angle: angle_units_to_radians(bare_calibration_instance.iron_loss_angle),
+    hysteresis_loss_angle: angle_units_to_radians(bare_calibration_instance.hysteresis_loss_angle),
     vibration_axis: angle_units_to_radians(bare_calibration_instance.vibration_axis),
   }
 }
