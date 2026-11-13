@@ -1165,6 +1165,7 @@ const plot_resistance_calibration = plot_lines({
   y_label: "Resistance (Ohms)",
   channels: [
     {y: (d) => d.resistance_excitation_fraction > 0.2 ? d.resistance : null, label: "Phase Resistance X", color: colors.u},
+    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance_saliency : null, label: "Inductance Saliency", color: colors.w},
     {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.iron_loss : null, label: "Iron Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration", color: colors_categories[7]},
   ],
@@ -1180,7 +1181,7 @@ const plot_inductance_calibration = plot_lines({
   y_label: "Inductance (H)",
   channels: [
     {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance : null, label: "Phase Inductance X", color: colors.v},
-    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance_saliency : null, label: "Inductance Saliency", color: colors.w},
+    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.iron_loss : null, label: "Iron Loss", color: colors.w},
   ],
   curve,
 });
@@ -1368,6 +1369,8 @@ const calibration_series_resistance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
+
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
     {y: "iron_loss", label: "Iron Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration Fraction", color: colors_categories[7]},
@@ -1386,7 +1389,6 @@ const calibration_series_inductance_plot = plot_lines({
   channels: [
     {y: "inductance", label: "Phase Inductance", color: colors_categories[2]},
 
-    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
 
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[4]).brighter(1)},
     {y: "iron_loss_angle", label: "Iron Loss Angle", color: colors_categories[7]},

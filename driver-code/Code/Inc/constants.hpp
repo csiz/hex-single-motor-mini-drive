@@ -367,7 +367,7 @@ const hex_mini_drive::DriveState freewheel_drive_state = {
 
 constexpr float minimum_resistance = 0.005f; // This is lower than the sense resistors, something definitely wrong if we reach here.
 constexpr float minimum_inductance = 0.000'001f;
-constexpr float minimum_inductance_saliency = 0.000'000'1f;
+constexpr float minimum_inductance_saliency = 0.000'1f;
 constexpr float minimum_iron_loss = 0.000'001f;
 constexpr float minimum_iron_resistance = 0.000'001f;
 constexpr float minimum_vibration_fraction = 0.000'001f;
@@ -416,9 +416,9 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 
     .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -14),
-    .inductance_ki = std::pow(2, -38),
-    .inductance_bias_ki = std::pow(2, -42),
-    .saliency_angle_ki = std::pow(2, 18),
+    .inductance_ki = std::pow(2, -40),
+    .inductance_bias_ki = std::pow(2, -30),
+    .saliency_angle_ki = std::pow(2, +16),
     .angle_from_saliency_ki = std::pow(2, -4),
 
     .motor_constant_ki = std::pow(2, -32-6),
@@ -453,10 +453,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .emf_angle_suspected_threshold = square(quarter_circle / 3),
     .emf_speed_constant_confirmed_threshold = 16.0f,
 
-    .iron_loss_ki = std::pow(2, -6),
-    .iron_loss_angle_ki = std::pow(2, +6),
+    .iron_loss_ki = std::pow(2, -22),
+    .iron_loss_angle_ki = std::pow(2, +10),
 
-    .vibration_fraction_ki = std::pow(2, -16),
+    .vibration_fraction_ki = std::pow(2, -22),
     .vibration_axis_ki = std::pow(2, +16),
 };
 

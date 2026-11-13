@@ -170,31 +170,34 @@ export function parse_readout(bare_readout, previous_readout) {
       -x_diff * cos_saliency 
       -y_diff * sin_saliency
   );
-
-  const x_inductance_saliency_voltage = bare_readout.inductance_saliency * x_inductance_saliency;
   
   const y_inductance_saliency = (
-      -x_diff * sin_saliency
-      +y_diff * cos_saliency
+    -x_diff * sin_saliency
+    +y_diff * cos_saliency
   );
-  const y_inductance_saliency_voltage = bare_readout.inductance_saliency * y_inductance_saliency;
+
+  const x_inductance_saliency_voltage = bare_readout.inductance * bare_readout.inductance_saliency * x_inductance_saliency;
+  const y_inductance_saliency_voltage = bare_readout.inductance * bare_readout.inductance_saliency * y_inductance_saliency;
 
   const x_inductance_base_voltage = x_diff * bare_readout.inductance;
   const y_inductance_base_voltage = y_diff * bare_readout.inductance;
 
-  const x_inductor_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
-  const y_inductor_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
+  const x_inductance = x_diff + bare_readout.inductance_saliency * x_inductance_saliency;
+  const y_inductance = y_diff + bare_readout.inductance_saliency * y_inductance_saliency;
+
+  const x_inductance_voltage = bare_readout.inductance * x_inductance;
+  const y_inductance_voltage = bare_readout.inductance * y_inductance;
   
   const sin_iron_loss = Math.sin(bare_readout.iron_loss_angle);
   const cos_iron_loss = Math.cos(bare_readout.iron_loss_angle);
 
   const A_iron_loss = (
-    x_current * x_inductor_voltage - 
-    y_current * y_inductor_voltage
+    x_current * x_inductance_voltage - 
+    y_current * y_inductance_voltage
   );
   const B_iron_loss = (
-    x_current * y_inductor_voltage + 
-    y_current * x_inductor_voltage
+    x_current * y_inductance_voltage + 
+    y_current * x_inductance_voltage
   );
 
   const x_iron_loss = A_iron_loss * cos_iron_loss - B_iron_loss * sin_iron_loss;
@@ -212,8 +215,9 @@ export function parse_readout(bare_readout, previous_readout) {
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const x_voltage_error = x_inductor_voltage + x_resistive_voltage + x_iron_loss_voltage - x_drive_voltage;
-  const y_voltage_error = y_inductor_voltage + y_resistive_voltage + y_iron_loss_voltage - y_drive_voltage;
+  const x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_iron_loss_voltage + x_vibration_voltage - x_drive_voltage;
+  const y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_iron_loss_voltage + y_vibration_voltage - y_drive_voltage;
+  
 
   // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
   // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
