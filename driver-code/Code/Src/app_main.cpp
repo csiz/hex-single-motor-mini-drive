@@ -66,7 +66,6 @@ uint32_t stream_state = 0;
 uint32_t readouts_to_send = 0;
 
 
-
 // Calibration state
 // -----------------
 
@@ -93,17 +92,28 @@ const float calibration_target_increment = 128.f;
 const float calibration_target_max = calibration_target_increment * 3;
 
 // TODO: let's make sure high frequencies work nice before going lower.
-const float calibration_speed_base = 4 * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
+const float calibration_speed_base = 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 
 const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
 
-const float calibration_speed_max = angle_base / 6.f;
+const float calibration_speed_max = angle_base / 10.f;
 
 const float calibration_stats_ki = std::pow(2, -6);
 
 const uint32_t calibration_stability_check_period = 64;
 
 const float excitation_fraction_threshold = 0.2f;
+
+
+enum struct CalibrationTarget : uint8_t {
+  RESISTANCE,
+  INDUCTANCE,
+  SALIENCY,
+  HYSTERESIS_LOSS,
+  VIBRATION
+};
+
+CalibrationTarget calibration_target = CalibrationTarget::RESISTANCE;
 
 static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   hex_mini_drive::Calibration const& active_calibration,
@@ -186,30 +196,6 @@ static inline void start_calibration_series() {
   });
 }
 
-static inline bool check_calibration_stability(){
-    const bool unexcited_resistance = calibration_instance.resistance_excitation_fraction < excitation_fraction_threshold;
-    const bool unexcited_inductance = calibration_instance.inductance_excitation_fraction < excitation_fraction_threshold;
-    const bool zero_speed = calibration_instance.target_speed == 0.f;
-
-    return (
-      // Check if all gradient multipliers are stable; but we may ignore values that aren't being excited enough to stabilize.
-      (unexcited_resistance or (faster_abs(calibration_instance.resistance_multiplier) < multiplier_stable_threshold)) and
-      (unexcited_inductance or (
-        faster_abs(calibration_instance.inductance_multiplier) < multiplier_stable_threshold and
-        faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold and
-        // We skip the saliency_angle_multiplier because we should be able to rely on the inductance_saliency_multiplier.
-        faster_abs(calibration_instance.hysteresis_loss_multiplier) < multiplier_stable_threshold
-        // Also skip the hysteresis_loss_angle_multiplier for same reason as saliency angle.
-      )) and
-      (
-        zero_speed or 
-        (faster_abs(calibration_instance.vibration_axis_multiplier) < multiplier_stable_threshold) or
-        (calibration_instance.vibration_fraction <= 2 * minimum_vibration_fraction)
-      )
-      // Skip vibration axis multiplier.
-    );
-}
-
 
 // Main loop control modes
 // -----------------------
@@ -251,6 +237,7 @@ static inline void control_mode_drive_schedule(hex_mini_drive::DriveSchedule con
 
 static inline void control_mode_calibrate(hex_mini_drive::Calibration const& active_calibration){
   control_mode_idle();
+  calibration_target = CalibrationTarget::RESISTANCE;
   calibration_instance = init_calibration_instance(active_calibration, calibration_target_increment, 0.f);
   start_calibration_series();
   control_mode = ControlMode::CALIBRATE;
@@ -754,117 +741,126 @@ static inline void calibrate_from_readout(
   const bool resistance_excited = readout.current_magnitude > current_measurement_noise;
   calibration_instance.resistance_excitation_fraction += (resistance_excited - calibration_instance.resistance_excitation_fraction) * calibration_stats_ki;
 
-  const float resistance_gradient = resilient_gradient(
-    voltage_mul_current_to_power * (
-      x_voltage_error * readout.x_current +
-      y_voltage_error * readout.y_current
-    ),
-    calibration_instance.resistance_multiplier
-  );
-  
-  calibration_instance.resistance -= resistance_gradient * control_parameters.resistance_ki;
-  validate_parameter(calibration_instance.resistance, minimum_resistance);
-
-
   // Also track inductance excitation.
   const bool inductance_excited = current_diff_square > current_diff_measurement_variance;
   calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_stats_ki;
   
-  // Only run the dynamic calibration parameters if our our drive signal is changing.
-  if (calibration_instance.target_speed != 0.f) {
 
-    const float inductance_gradient = resilient_gradient(
-      voltage_mul_current_to_power * (
-        x_voltage_error * x_inductance +
-        y_voltage_error * y_inductance
-      ),
-      calibration_instance.inductance_multiplier
-    );
-    
-    // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-    calibration_instance.inductance -= inductance_gradient * control_parameters.inductance_ki;
-    validate_parameter(calibration_instance.inductance, minimum_inductance);
-
-    const float inductance_saliency_gradient = resilient_gradient(
-      voltage_mul_current_to_power * (
-        x_voltage_error * x_inductance_saliency +
-        y_voltage_error * y_inductance_saliency
-      ),
-      calibration_instance.inductance_saliency_multiplier
-    );
-
-    calibration_instance.inductance_saliency -= inductance_saliency_gradient * control_parameters.inductance_bias_ki;
-
-    // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
-    // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape
-    // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
-    if (validate_parameter(calibration_instance.inductance_saliency, minimum_inductance_saliency)) {
-      // If we're normal condition, then just gradient descent the angle too.
-      const float resilient_saliency_angle_gradient = resilient_gradient(
-        (
-          x_voltage_error * -y_inductance_saliency +
-          y_voltage_error * x_inductance_saliency
-        ) * voltage_mul_current_to_power,
-        calibration_instance.saliency_angle_multiplier
-      );
-
-      const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
-      calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
-
-    } else {
-      // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
-      calibration_instance.saliency_angle += half_circle;
-      calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
-    }
-
-    // And gradients for micro rotor vibrations.
-    const float hysteresis_loss_gradient = resilient_gradient(
-      (
-        x_voltage_error * x_hysteresis_loss + 
-        y_voltage_error * y_hysteresis_loss
-      ),
-      calibration_instance.hysteresis_loss_multiplier
-    );
-    calibration_instance.hysteresis_loss -= hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki;
-
-    if(validate_parameter(calibration_instance.hysteresis_loss, minimum_hysteresis_loss)){
-      const float hysteresis_loss_angle_gradient = resilient_gradient(
-        (
-          x_voltage_error * -y_hysteresis_loss + 
-          y_voltage_error * x_hysteresis_loss
-        ),
-        calibration_instance.hysteresis_loss_angle_multiplier
-      );
-      calibration_instance.hysteresis_loss_angle -= static_cast<int32_t>(hysteresis_loss_angle_gradient * control_parameters.hysteresis_loss_angle_ki);
-    } else {
-      calibration_instance.hysteresis_loss_angle += half_circle;
-      calibration_instance.hysteresis_loss_angle_multiplier = 1.0f;
-    }
-
-    const float vibration_factor_gradient = resilient_gradient(
-      voltage_mul_current_to_power * (
-        x_voltage_error * x_vibration + 
-        y_voltage_error * y_vibration
-      ),
-      calibration_instance.vibration_fraction_multiplier
-    );
-
-    calibration_instance.vibration_fraction -= vibration_factor_gradient * control_parameters.vibration_fraction_ki;
-
-    if (validate_parameter(calibration_instance.vibration_fraction, minimum_vibration_fraction)) {
-      const float vibration_axis_gradient = resilient_gradient(
+  // Do round-robit updates to the calibration parameters.
+  switch (calibration_target) {
+    case CalibrationTarget::RESISTANCE: {
+      const float resistance_gradient = resilient_gradient(
         voltage_mul_current_to_power * (
-          x_voltage_error * -B_vibration + 
-          y_voltage_error * A_vibration
+          x_voltage_error * readout.x_current +
+          y_voltage_error * readout.y_current
         ),
-        calibration_instance.vibration_axis_multiplier
+        calibration_instance.resistance_multiplier
       );
-      calibration_instance.vibration_axis -= static_cast<int32_t>(vibration_axis_gradient * control_parameters.vibration_axis_ki);
-    } else {
-      // Not sure it's correct to flip vibration axis by 180 degrees.
-      calibration_instance.vibration_axis_multiplier = 1.0f;
+      
+      calibration_instance.resistance -= resistance_gradient * control_parameters.resistance_ki;
+      validate_parameter(calibration_instance.resistance, minimum_resistance);
+      break;
     }
+    case CalibrationTarget::INDUCTANCE: {
+      const float inductance_gradient = resilient_gradient(
+        voltage_mul_current_to_power * (
+          x_voltage_error * x_inductance +
+          y_voltage_error * y_inductance
+        ),
+        calibration_instance.inductance_multiplier
+      );
+      
+      // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
+      calibration_instance.inductance -= inductance_gradient * control_parameters.inductance_ki;
+      validate_parameter(calibration_instance.inductance, minimum_inductance);
+      break;
+    }
+    case CalibrationTarget::SALIENCY: {
+      const float inductance_saliency_gradient = resilient_gradient(
+        voltage_mul_current_to_power * (
+          x_voltage_error * x_inductance_saliency +
+          y_voltage_error * y_inductance_saliency
+        ),
+        calibration_instance.inductance_saliency_multiplier
+      );
 
+      calibration_instance.inductance_saliency -= inductance_saliency_gradient * control_parameters.inductance_bias_ki;
+
+      // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
+      // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape
+      // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
+      if (validate_parameter(calibration_instance.inductance_saliency, minimum_inductance_saliency)) {
+        // If we're normal condition, then just gradient descent the angle too.
+        const float resilient_saliency_angle_gradient = resilient_gradient(
+          (
+            x_voltage_error * -y_inductance_saliency +
+            y_voltage_error * x_inductance_saliency
+          ) * voltage_mul_current_to_power,
+          calibration_instance.saliency_angle_multiplier
+        );
+
+        const float saliency_angle_change = resilient_saliency_angle_gradient * control_parameters.saliency_angle_ki;
+        calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_change);
+
+      } else {
+        // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
+        calibration_instance.saliency_angle += half_circle;
+        calibration_instance.saliency_angle_multiplier = 1.0f; // Reset the multiplier to default after flipping the angle.
+      }
+      break;
+    }
+    case CalibrationTarget::HYSTERESIS_LOSS: {
+      // And gradients for micro rotor vibrations.
+      const float hysteresis_loss_gradient = resilient_gradient(
+        (
+          x_voltage_error * x_hysteresis_loss + 
+          y_voltage_error * y_hysteresis_loss
+        ),
+        calibration_instance.hysteresis_loss_multiplier
+      );
+      calibration_instance.hysteresis_loss -= hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki;
+
+      if(validate_parameter(calibration_instance.hysteresis_loss, minimum_hysteresis_loss)){
+        const float hysteresis_loss_angle_gradient = resilient_gradient(
+          (
+            x_voltage_error * -y_hysteresis_loss + 
+            y_voltage_error * x_hysteresis_loss
+          ),
+          calibration_instance.hysteresis_loss_angle_multiplier
+        );
+        calibration_instance.hysteresis_loss_angle -= static_cast<int32_t>(hysteresis_loss_angle_gradient * control_parameters.hysteresis_loss_angle_ki);
+      } else {
+        calibration_instance.hysteresis_loss_angle += half_circle;
+        calibration_instance.hysteresis_loss_angle_multiplier = 1.0f;
+      }
+      break;
+    }
+    case CalibrationTarget::VIBRATION: {
+      const float vibration_factor_gradient = resilient_gradient(
+        voltage_mul_current_to_power * (
+          x_voltage_error * x_vibration + 
+          y_voltage_error * y_vibration
+        ),
+        calibration_instance.vibration_fraction_multiplier
+      );
+
+      calibration_instance.vibration_fraction -= vibration_factor_gradient * control_parameters.vibration_fraction_ki;
+
+      if (validate_parameter(calibration_instance.vibration_fraction, minimum_vibration_fraction)) {
+        const float vibration_axis_gradient = resilient_gradient(
+          voltage_mul_current_to_power * (
+            x_voltage_error * -B_vibration + 
+            y_voltage_error * A_vibration
+          ),
+          calibration_instance.vibration_axis_multiplier
+        );
+        calibration_instance.vibration_axis -= static_cast<int32_t>(vibration_axis_gradient * control_parameters.vibration_axis_ki);
+      } else {
+        // Not sure it's correct to flip vibration axis by 180 degrees.
+        calibration_instance.vibration_axis_multiplier = 1.0f;
+      }
+      break;
+    }
   }
 
 
@@ -873,7 +869,42 @@ static inline void calibrate_from_readout(
 
   // Periodically check if we stablizied and move on.
   if (calibration_instance.count % calibration_stability_check_period == 0) {
-    if (check_calibration_stability()) finish_calibration_series();
+    const bool unexcited_resistance = calibration_instance.resistance_excitation_fraction < excitation_fraction_threshold;
+    const bool unexcited_inductance = calibration_instance.inductance_excitation_fraction < excitation_fraction_threshold;
+    const bool zero_speed = calibration_instance.target_speed == 0.f;
+
+    const bool stable = (
+      // Check if all gradient multipliers are stable; but we may ignore values that aren't being excited enough to stabilize.
+      (unexcited_resistance or (faster_abs(calibration_instance.resistance_multiplier) < multiplier_stable_threshold)) and
+      (unexcited_inductance or (
+        faster_abs(calibration_instance.inductance_multiplier) < multiplier_stable_threshold and
+        faster_abs(calibration_instance.inductance_saliency_multiplier) < multiplier_stable_threshold and
+        // We skip the saliency_angle_multiplier because we should be able to rely on the inductance_saliency_multiplier.
+        faster_abs(calibration_instance.hysteresis_loss_multiplier) < multiplier_stable_threshold
+        // Also skip the hysteresis_loss_angle_multiplier for same reason as saliency angle.
+      )) and
+      (
+        zero_speed or 
+        (faster_abs(calibration_instance.vibration_axis_multiplier) < multiplier_stable_threshold) or
+        (calibration_instance.vibration_fraction <= 2 * minimum_vibration_fraction)
+      )
+      // Skip vibration axis multiplier.
+    );
+
+    if (stable) {
+      finish_calibration_series();
+      calibration_target = CalibrationTarget::RESISTANCE;
+    } else if (unexcited_inductance) {
+      calibration_target = CalibrationTarget::RESISTANCE;
+    } else {
+      switch (calibration_target) {
+        case CalibrationTarget::RESISTANCE: calibration_target = CalibrationTarget::INDUCTANCE; break;
+        case CalibrationTarget::INDUCTANCE: calibration_target = CalibrationTarget::SALIENCY; break;
+        case CalibrationTarget::SALIENCY: calibration_target = CalibrationTarget::HYSTERESIS_LOSS; break;
+        case CalibrationTarget::HYSTERESIS_LOSS: calibration_target = CalibrationTarget::VIBRATION; break;
+        case CalibrationTarget::VIBRATION: calibration_target = CalibrationTarget::RESISTANCE; break;
+      }
+    }
   }
 }
 
