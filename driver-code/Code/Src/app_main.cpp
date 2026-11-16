@@ -784,7 +784,7 @@ static inline void calibrate_from_readout(
         calibration_instance.inductance_saliency_multiplier
       );
 
-      calibration_instance.inductance_saliency -= inductance_saliency_gradient * control_parameters.inductance_bias_ki;
+      calibration_instance.inductance_saliency -= inductance_saliency_gradient * control_parameters.inductance_saliency_ki;
 
       // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
       // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape

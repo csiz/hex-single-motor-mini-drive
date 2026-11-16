@@ -1464,6 +1464,26 @@ const control_parameters_input = Object.fromEntries(
       label: "Z PWM Floor",
       description: "Minimum PWM value for the voltage applied to the Z motor phase (below this value the switch doesn't turn on).",
     }],
+    ["vcc_undervoltage", {
+      label: "VCC Undervoltage Threshold",
+      description: "Threshold for VCC undervoltage detection. Below this voltage we consider the supply to be too low."
+    }],
+    ["max_resistive_power", {
+      label: "Maximum Resistive Power",
+      description: "Maximum resistive power allowed. This is a proxy for the maximum temperature of the motor coils."
+    }],
+    ["max_power_draw", {
+      label: "Max Power Draw",
+      description: "Maximum power draw allowed. This is a proxy for the maximum current draw at constant supply voltage."
+    }],
+    ["resistive_power_ki", {
+      label: "Resistive Power KI",
+      description: "Resistive power integral gain. How fast we average the resistive power to avoid spikes."
+    }],
+    ["power_draw_ki", {
+      label: "Power Draw KI",
+      description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
+    }],
     ["angle_from_emf_ki", {
       label: "Angle from EMF KI",
       description: "Integral gain for the angle and angular speed estimated from EMF."
@@ -1484,33 +1504,9 @@ const control_parameters_input = Object.fromEntries(
       label: "Lead Angle Control KI",
       description: "Lead angle control gain. The lead angle controls how far ahead we drive the voltage for maximum torque/efficiency."
     }],
-    ["zero_current_ki", {
-      label: "Zero Current KI", 
-      description: "Integral gain for the zero current observer; helps in accurately estimating the zero current offset for each motor phase."
-    }],
-    ["resistance_ki", {
-      label: "Phase Resistance KI",
-      description: "Integral gain for phase resistance estimation. Helps in accurately estimating the resistance of each motor phase in star configuration."
-    }],
-    ["inductance_ki", {
-      label: "Phase Inductance KI",
-      description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
-    }],
-    ["inductance_bias_ki", {
-      label: "Inductance Bias KI",
-      description: "Integral gain for the inductance bias observer; helps in accurately estimating the bias in the inductance measurement."
-    }],
-    ["saliency_angle_ki", {
-      label: "Saliency Angle KI",
-      description: "Integral gain for saliency angle estimation. To be explained later..."
-    }],
     ["angle_from_saliency_ki", {
       label: "Angle from Saliency KI",
       description: "Integral gain for the angle estimated from the saliency effect. Controls how fast we adjust the PWM to compensate for the saliency angle."
-    }],
-    ["motor_constant_ki", {
-      label: "Motor Constant KI", 
-      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
     }],
     ["current_measurement_minimum", {
       label: "Current Measurement Minimum",
@@ -1546,26 +1542,7 @@ const control_parameters_input = Object.fromEntries(
         resistance or inductance from the observed EMF measurements. We use a counter for
         each inconsistent reading and this threshold determines when we must act.`
     }],
-    ["vcc_undervoltage", {
-      label: "VCC Undervoltage Threshold",
-      description: "Threshold for VCC undervoltage detection. Below this voltage we consider the supply to be too low."
-    }],
-    ["max_resistive_power", {
-      label: "Maximum Resistive Power",
-      description: "Maximum resistive power allowed. This is a proxy for the maximum temperature of the motor coils."
-    }],
-    ["max_power_draw", {
-      label: "Max Power Draw",
-      description: "Maximum power draw allowed. This is a proxy for the maximum current draw at constant supply voltage."
-    }],
-    ["resistive_power_ki", {
-      label: "Resistive Power KI",
-      description: "Resistive power integral gain. How fast we average the resistive power to avoid spikes."
-    }],
-    ["power_draw_ki", {
-      label: "Power Draw KI",
-      description: "Power draw integral gain. How fast we average the power draw to avoid spikes."
-    }],
+    
     ["torque_control_ki", {
       label: "Torque Control KI",
       description: "Torque control gain. Controls how fast we adjust the PWM to achieve the desired torque."
@@ -1618,6 +1595,26 @@ const control_parameters_input = Object.fromEntries(
       label: "EMF Speed Constant Confirmed Threshold",
       description: "Threshold for confirming the EMF speed constant estimation."
     }],
+    ["zero_current_ki", {
+      label: "Zero Current KI", 
+      description: "Integral gain for the zero current observer; helps in accurately estimating the zero current offset for each motor phase."
+    }],
+    ["resistance_ki", {
+      label: "Phase Resistance KI",
+      description: "Integral gain for phase resistance estimation. Helps in accurately estimating the resistance of each motor phase in star configuration."
+    }],
+    ["inductance_ki", {
+      label: "Phase Inductance KI",
+      description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
+    }],
+    ["inductance_saliency_ki", {
+      label: "Inductance Bias KI",
+      description: "Integral gain for the inductance bias observer; helps in accurately estimating the bias in the inductance measurement."
+    }],
+    ["saliency_angle_ki", {
+      label: "Saliency Angle KI",
+      description: "Integral gain for saliency angle estimation. To be explained later..."
+    }],
     ["hysteresis_loss_ki", {
       label: "Hysteresis Loss KI",
       description: "Integral gain for hysteresis loss."
@@ -1633,6 +1630,10 @@ const control_parameters_input = Object.fromEntries(
     ["vibration_axis_ki", {
       label: "Vibration Axis KI",
       description: "Integral gain for vibration axis."
+    }],
+    ["motor_constant_ki", {
+      label: "Motor Constant KI", 
+      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
     }],
   ].map(([key, {label, description}]) => {
 

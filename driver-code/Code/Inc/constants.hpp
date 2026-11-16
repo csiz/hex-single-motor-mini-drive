@@ -403,24 +403,23 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .v_pwm_floor = 14,
     .w_pwm_floor = 12,
     .z_pwm_floor = 0,
+
+    .vcc_undervoltage = 8.0f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
+    .max_resistive_power = 16.0f,
+    .max_power_draw = max_drive_power,
+    .resistive_power_ki = std::pow(2, -12),
+    .power_draw_ki = std::pow(2, -10),
+
     // Rotor control gains.
     .angle_from_emf_ki = std::pow(2, -4),
     // Gain for the angular speed, it should be much lower than the angle gain to average out the noise.
     .loop_fast_ki = std::pow(2, -3),
     .loop_slow_ki = std::pow(2, -6),
-
     // Gain for angle adjustments from hall sensors.
     .angle_from_hall_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -8),
-
-    .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -14),
-    .inductance_ki = std::pow(2, -40),
-    .inductance_bias_ki = std::pow(2, -30),
-    .saliency_angle_ki = std::pow(2, +16),
     .angle_from_saliency_ki = std::pow(2, -4),
 
-    .motor_constant_ki = std::pow(2, -32-6),
     .current_measurement_minimum = static_cast<int32_t>(current_measurement_noise * 2.0f),
     .voltage_measurement_variance = square(0.1f * current_measurement_noise * current_to_voltage_units),
     .resistance_current_minimum = 4.f * current_measurement_noise,
@@ -428,11 +427,6 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .current_offset_maximum = 16 * adc_to_current_units,
     .emf_min_angular_speed = 25.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .emf_uncertainty_threshold = 256,
-    .vcc_undervoltage = 8.0f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
-    .max_resistive_power = 16.0f,
-    .max_power_draw = max_drive_power,
-    .resistive_power_ki = std::pow(2, -12),
-    .power_draw_ki = std::pow(2, -10),
 
     .torque_control_ki = 2.0f * amps_per_current_units,
     .torque_control_kff = 0.1f,
@@ -452,11 +446,16 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .emf_angle_suspected_threshold = square(quarter_circle / 3),
     .emf_speed_constant_confirmed_threshold = 16.0f,
 
+    .zero_current_ki = std::pow(2, -16),
+    .resistance_ki = std::pow(2, -14),
+    .inductance_ki = std::pow(2, -40),
+    .inductance_saliency_ki = std::pow(2, -30),
+    .saliency_angle_ki = std::pow(2, +16),
     .hysteresis_loss_ki = std::pow(2, -22),
     .hysteresis_loss_angle_ki = std::pow(2, +10),
-
     .vibration_fraction_ki = std::pow(2, -22),
     .vibration_axis_ki = std::pow(2, +16),
+    .motor_constant_ki = std::pow(2, -32-6),
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

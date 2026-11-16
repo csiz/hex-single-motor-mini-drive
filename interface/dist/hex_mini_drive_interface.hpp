@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.175.0";
+constexpr char const* VERSION_STRING = "0.177.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -1007,6 +1007,17 @@ struct ControlParameters {
   uint16_t w_pwm_floor;
   // Minimum PWM value for the Z phase (below this, the line doesn't fully turn on).
   uint16_t z_pwm_floor;
+  // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
+  // also set this as the minimum battery voltage to not damage the Li-ion battery pack.
+  float vcc_undervoltage;
+  // Maximum resistive power that can be dissipated in the motor coils.
+  float max_resistive_power;
+  // Maximum power draw from the battery (proxy for maximum current).
+  float max_power_draw;
+  // Resistive power long duration average observer gain.
+  float resistive_power_ki;
+  // Power draw long duration average observer gain.
+  float power_draw_ki;
   // Integral gain for the angle and angular speed estimated from EMF.
   float angle_from_emf_ki;
   // Integral gain for fast changing values in the tight control loop. It is the same
@@ -1020,20 +1031,8 @@ struct ControlParameters {
   float angle_from_hall_ki;
   // Lead angle integral gain for efficient driving.
   float lead_angle_control_ki;
-  // Integral gain for the zero current adjustment.
-  float zero_current_ki;
-  // Integral gain for the phase resistance observer.
-  float resistance_ki;
-  // Integral gain for the phase inductance observer.
-  float inductance_ki;
-  // Integral gain for the inductance bias observer.
-  float inductance_bias_ki;
-  // Integral gain for the saliency angle observer.
-  float saliency_angle_ki;
   // Integral gain for the influence of the saliency angle on the rotor_angle.
   float angle_from_saliency_ki;
-  // Motor constant integral gain.
-  float motor_constant_ki;
   // The measurement noise for the current sensing, values under this threshold are likely 0.
   int32_t current_measurement_minimum;
   // We want our measurement error to be above this noise variance to count as a signal.
@@ -1054,17 +1053,6 @@ struct ControlParameters {
   // resistance or inductance from the observed EMF measurements. We use a counter for
   // each inconsistent reading and this threshold determines when we must act.
   int32_t emf_uncertainty_threshold;
-  // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
-  // also set this as the minimum battery voltage to not damage the Li-ion battery pack.
-  float vcc_undervoltage;
-  // Maximum resistive power that can be dissipated in the motor coils.
-  float max_resistive_power;
-  // Maximum power draw from the battery (proxy for maximum current).
-  float max_power_draw;
-  // Resistive power long duration average observer gain.
-  float resistive_power_ki;
-  // Power draw long duration average observer gain.
-  float power_draw_ki;
   // Torque control gain.
   float torque_control_ki;
   // Torque control feedforward gain.
@@ -1091,6 +1079,16 @@ struct ControlParameters {
   float emf_angle_suspected_threshold;
   // Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
   float emf_speed_constant_confirmed_threshold;
+  // Integral gain for the zero current adjustment.
+  float zero_current_ki;
+  // Integral gain for the phase resistance observer.
+  float resistance_ki;
+  // Integral gain for the phase inductance observer.
+  float inductance_ki;
+  // Integral gain for the inductance saliency observer.
+  float inductance_saliency_ki;
+  // Integral gain for the saliency angle observer.
+  float saliency_angle_ki;
   // Iron loss factor integral gain.
   float hysteresis_loss_ki;
   // Iron loss angle integral gain.
@@ -1101,6 +1099,8 @@ struct ControlParameters {
   float vibration_axis_ki;
   // Eddy current integral gain.
   float eddy_resistance_ki;
+  // Motor constant integral gain.
+  float motor_constant_ki;
 };
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
@@ -1127,6 +1127,16 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 2;
   write_uint16(buffer + offset, value.z_pwm_floor);;
   offset += 2;
+  write_float32(buffer + offset, value.vcc_undervoltage);;
+  offset += 4;
+  write_float32(buffer + offset, value.max_resistive_power);;
+  offset += 4;
+  write_float32(buffer + offset, value.max_power_draw);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistive_power_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.power_draw_ki);;
+  offset += 4;
   write_float32(buffer + offset, value.angle_from_emf_ki);;
   offset += 4;
   write_float32(buffer + offset, value.loop_fast_ki);;
@@ -1137,19 +1147,7 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.lead_angle_control_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.zero_current_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_bias_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.saliency_angle_ki);;
-  offset += 4;
   write_float32(buffer + offset, value.angle_from_saliency_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.motor_constant_ki);;
   offset += 4;
   write_int32(buffer + offset, value.current_measurement_minimum);;
   offset += 4;
@@ -1164,16 +1162,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.emf_min_angular_speed);;
   offset += 4;
   write_int32(buffer + offset, value.emf_uncertainty_threshold);;
-  offset += 4;
-  write_float32(buffer + offset, value.vcc_undervoltage);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_resistive_power);;
-  offset += 4;
-  write_float32(buffer + offset, value.max_power_draw);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistive_power_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.power_draw_ki);;
   offset += 4;
   write_float32(buffer + offset, value.torque_control_ki);;
   offset += 4;
@@ -1201,6 +1189,16 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant_confirmed_threshold);;
   offset += 4;
+  write_float32(buffer + offset, value.zero_current_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_saliency_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.saliency_angle_ki);;
+  offset += 4;
   write_float32(buffer + offset, value.hysteresis_loss_ki);;
   offset += 4;
   write_float32(buffer + offset, value.hysteresis_loss_angle_ki);;
@@ -1210,6 +1208,8 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.vibration_axis_ki);;
   offset += 4;
   write_float32(buffer + offset, value.eddy_resistance_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.motor_constant_ki);;
   offset += 4;
 }
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
@@ -1239,6 +1239,16 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 2;
   result.z_pwm_floor = read_uint16(buffer + offset);
   offset += 2;
+  result.vcc_undervoltage = read_float32(buffer + offset);
+  offset += 4;
+  result.max_resistive_power = read_float32(buffer + offset);
+  offset += 4;
+  result.max_power_draw = read_float32(buffer + offset);
+  offset += 4;
+  result.resistive_power_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.power_draw_ki = read_float32(buffer + offset);
+  offset += 4;
   result.angle_from_emf_ki = read_float32(buffer + offset);
   offset += 4;
   result.loop_fast_ki = read_float32(buffer + offset);
@@ -1249,19 +1259,7 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.lead_angle_control_ki = read_float32(buffer + offset);
   offset += 4;
-  result.zero_current_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_bias_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.saliency_angle_ki = read_float32(buffer + offset);
-  offset += 4;
   result.angle_from_saliency_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.motor_constant_ki = read_float32(buffer + offset);
   offset += 4;
   result.current_measurement_minimum = read_int32(buffer + offset);
   offset += 4;
@@ -1276,16 +1274,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   result.emf_min_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.emf_uncertainty_threshold = read_int32(buffer + offset);
-  offset += 4;
-  result.vcc_undervoltage = read_float32(buffer + offset);
-  offset += 4;
-  result.max_resistive_power = read_float32(buffer + offset);
-  offset += 4;
-  result.max_power_draw = read_float32(buffer + offset);
-  offset += 4;
-  result.resistive_power_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.power_draw_ki = read_float32(buffer + offset);
   offset += 4;
   result.torque_control_ki = read_float32(buffer + offset);
   offset += 4;
@@ -1313,6 +1301,16 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.emf_speed_constant_confirmed_threshold = read_float32(buffer + offset);
   offset += 4;
+  result.zero_current_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_saliency_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.saliency_angle_ki = read_float32(buffer + offset);
+  offset += 4;
   result.hysteresis_loss_ki = read_float32(buffer + offset);
   offset += 4;
   result.hysteresis_loss_angle_ki = read_float32(buffer + offset);
@@ -1322,6 +1320,8 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   result.vibration_axis_ki = read_float32(buffer + offset);
   offset += 4;
   result.eddy_resistance_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.motor_constant_ki = read_float32(buffer + offset);
   offset += 4;
   return result;
 }

@@ -680,6 +680,28 @@ definitions:
         type: uint16
         doc: Minimum PWM value for the Z phase (below this, the line doesn't fully turn on).
 
+      vcc_undervoltage:
+        type: float32
+        doc: |
+          Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
+          also set this as the minimum battery voltage to not damage the Li-ion battery pack.
+
+      max_resistive_power:
+        type: float32
+        doc: Maximum resistive power that can be dissipated in the motor coils.
+
+      max_power_draw:
+        type: float32
+        doc: Maximum power draw from the battery (proxy for maximum current).
+      
+      resistive_power_ki:
+        type: float32
+        doc: Resistive power long duration average observer gain.
+
+      power_draw_ki:
+        type: float32
+        doc: Power draw long duration average observer gain.
+
       angle_from_emf_ki:
         type: float32
         doc: Integral gain for the angle and angular speed estimated from EMF.
@@ -705,33 +727,9 @@ definitions:
         type: float32
         doc: Lead angle integral gain for efficient driving.
 
-      zero_current_ki:
-        type: float32
-        doc: Integral gain for the zero current adjustment.
-
-      resistance_ki:
-        type: float32
-        doc: Integral gain for the phase resistance observer.
-
-      inductance_ki:
-        type: float32
-        doc: Integral gain for the phase inductance observer.
-
-      inductance_bias_ki:
-        type: float32
-        doc: Integral gain for the inductance bias observer.
-
-      saliency_angle_ki:
-        type: float32
-        doc: Integral gain for the saliency angle observer.
-      
       angle_from_saliency_ki:
         type: float32
         doc: Integral gain for the influence of the saliency angle on the rotor_angle.
-
-      motor_constant_ki:
-        type: float32
-        doc: Motor constant integral gain.
 
       current_measurement_minimum:
         type: int32
@@ -769,28 +767,7 @@ definitions:
           resistance or inductance from the observed EMF measurements. We use a counter for
           each inconsistent reading and this threshold determines when we must act.
 
-      vcc_undervoltage:
-        type: float32
-        doc: |
-          Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
-          also set this as the minimum battery voltage to not damage the Li-ion battery pack.
 
-      max_resistive_power:
-        type: float32
-        doc: Maximum resistive power that can be dissipated in the motor coils.
-
-      max_power_draw:
-        type: float32
-        doc: Maximum power draw from the battery (proxy for maximum current).
-      
-      resistive_power_ki:
-        type: float32
-        doc: Resistive power long duration average observer gain.
-
-      power_draw_ki:
-        type: float32
-        doc: Power draw long duration average observer gain.
-      
       torque_control_ki:
         type: float32
         doc: Torque control gain.
@@ -842,6 +819,26 @@ definitions:
       emf_speed_constant_confirmed_threshold:
         type: float32
         doc: Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
+             
+      zero_current_ki:
+        type: float32
+        doc: Integral gain for the zero current adjustment.
+ 
+      resistance_ki:
+        type: float32
+        doc: Integral gain for the phase resistance observer.
+
+      inductance_ki:
+        type: float32
+        doc: Integral gain for the phase inductance observer.
+
+      inductance_saliency_ki:
+        type: float32
+        doc: Integral gain for the inductance saliency observer.
+
+      saliency_angle_ki:
+        type: float32
+        doc: Integral gain for the saliency angle observer.
       
       hysteresis_loss_ki:
         type: float32
@@ -861,3 +858,7 @@ definitions:
       eddy_resistance_ki:
         type: float32
         doc: Eddy current integral gain.
+
+      motor_constant_ki:
+        type: float32
+        doc: Motor constant integral gain.
