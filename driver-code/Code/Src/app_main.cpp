@@ -92,15 +92,15 @@ const float calibration_target_increment = 128.f;
 const float calibration_target_max = calibration_target_increment * 3;
 
 // TODO: let's make sure high frequencies work nice before going lower.
-const float calibration_speed_base = 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
+const float calibration_speed_base = 4 * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 
 const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
 
 const float calibration_speed_max = angle_base / 10.f;
 
-const float calibration_stats_ki = std::pow(2, -6);
+const float calibration_stats_ki = std::pow(2, -8);
 
-const uint32_t calibration_stability_check_period = 64;
+const uint32_t calibration_stability_check_period = 128;
 
 const float excitation_fraction_threshold = 0.2f;
 
@@ -238,7 +238,7 @@ static inline void control_mode_drive_schedule(hex_mini_drive::DriveSchedule con
 static inline void control_mode_calibrate(hex_mini_drive::Calibration const& active_calibration){
   control_mode_idle();
   calibration_target = CalibrationTarget::RESISTANCE;
-  calibration_instance = init_calibration_instance(active_calibration, calibration_target_increment, 0.f);
+  calibration_instance = init_calibration_instance(active_calibration, calibration_target_increment, calibration_speed_base);
   start_calibration_series();
   control_mode = ControlMode::CALIBRATE;
 }
@@ -523,7 +523,7 @@ static inline void finish_calibration_series(const bool remember_last_calibratio
 
   if (speed > calibration_speed_max) {
     // Increment target pwm if we reach the end of the speed scanning.
-    speed = 0;
+    speed = calibration_speed_base;
     target += calibration_target_increment;
 
     // Finish calibration mode and return to idle when we have scanned through all target PWM values.
