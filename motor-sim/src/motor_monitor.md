@@ -1171,7 +1171,8 @@ const plot_resistance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Resistance (Ohms)",
   channels: [
-    {y: "resistance", label: "Phase Resistance", color: colors.u},
+    {y: "resistance_x", label: "Phase Resistance X", color: colors.u},
+    {y: "resistance_y", label: "Phase Resistance Y", color: colors.v},
     {y: "vibration_fraction", label: "Vibration", color: colors_categories[7]},
   ],
   curve,
@@ -1223,7 +1224,6 @@ const plot_motor_values = plot_lines({
     {y: "inductance_sensitivity", label: "Inductance Sensitivity", color: colors_categories[3]},
     {y: "inductance_saliency_sensitivity", label: "Inductance Saliency Sensitivity", color: colors_categories[4]},
     {y: "hysteresis_loss_sensitivity", label: "Hysteresis Loss Sensitivity", color: colors_categories[6]},
-    {y: "vibration_fraction_sensitivity", label: "Vibration Fraction Sensitivity", color: colors_categories[8]},
     {y: "learning_rate_multiplier", label: "Learning Rate Multiplier", color: colors_categories[9]},
   ],
   curve,
@@ -1389,12 +1389,13 @@ const calibration_series_resistance_plot = plot_lines({
   x_label: "Probing Frequency",
   y_label: "Calibration Parameters",
   channels: [
-    {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
+    {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
+    {y: "resistance_y", label: "Phase Resistance Y", color: colors_categories[1]},
+    {y: (d) => 0.5*(d.resistance_x + d.resistance_y), label: "Avg Resistance", color: colors_categories[2]},
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
     {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration Fraction", color: colors_categories[7]},
-    {y: (d)=>d.resistance + 0.5*d.vibration_fraction, label: "Res+Vib", color: colors_categories[8]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });

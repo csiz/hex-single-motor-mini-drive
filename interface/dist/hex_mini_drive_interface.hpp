@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.178.0";
+constexpr char const* VERSION_STRING = "0.179.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -579,8 +579,10 @@ struct CalibrationInstance {
   float resistance_excitation_fraction;
   // Fraction of data points where current change was high enough to measure inductance.
   float inductance_excitation_fraction;
-  // Measured resistance value for each phase.
-  float resistance;
+  // Resistance in the X phase.
+  float resistance_x;
+  // Resistance in the Y phase.
+  float resistance_y;
   // Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
   float resistance_sensitivity;
   // Measured inductance value for each phase.
@@ -601,8 +603,6 @@ struct CalibrationInstance {
   int32_t hysteresis_loss_angle;
   // Fraction of drive voltage reflected due to vibrations.
   float vibration_fraction;
-  // Multiplier for the vibration fraction.
-  float vibration_fraction_sensitivity;
   // Axis of vibration.
   int32_t vibration_axis;
 };
@@ -631,7 +631,9 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.inductance_excitation_fraction);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance);;
+  write_float32(buffer + offset, value.resistance_x);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_y);;
   offset += 4;
   write_float32(buffer + offset, value.resistance_sensitivity);;
   offset += 4;
@@ -652,8 +654,6 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   write_int32(buffer + offset, value.hysteresis_loss_angle);;
   offset += 4;
   write_float32(buffer + offset, value.vibration_fraction);;
-  offset += 4;
-  write_float32(buffer + offset, value.vibration_fraction_sensitivity);;
   offset += 4;
   write_int32(buffer + offset, value.vibration_axis);;
   offset += 4;
@@ -685,7 +685,9 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.inductance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
-  result.resistance = read_float32(buffer + offset);
+  result.resistance_x = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_y = read_float32(buffer + offset);
   offset += 4;
   result.resistance_sensitivity = read_float32(buffer + offset);
   offset += 4;
@@ -706,8 +708,6 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   result.hysteresis_loss_angle = read_int32(buffer + offset);
   offset += 4;
   result.vibration_fraction = read_float32(buffer + offset);
-  offset += 4;
-  result.vibration_fraction_sensitivity = read_float32(buffer + offset);
   offset += 4;
   result.vibration_axis = read_int32(buffer + offset);
   offset += 4;

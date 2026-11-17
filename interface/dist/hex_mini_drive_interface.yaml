@@ -470,9 +470,12 @@ definitions:
       inductance_excitation_fraction:
         type: float32
         doc: Fraction of data points where current change was high enough to measure inductance.
-      resistance:
+      resistance_x:
         type: float32
-        doc: Measured resistance value for each phase.
+        doc: Resistance in the X phase.
+      resistance_y:
+        type: float32
+        doc: Resistance in the Y phase.
       resistance_sensitivity:
         type: float32
         doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
@@ -503,9 +506,6 @@ definitions:
       vibration_fraction:
         type: float32
         doc: Fraction of drive voltage reflected due to vibrations.
-      vibration_fraction_sensitivity:
-        type: float32
-        doc: Multiplier for the vibration fraction.
       vibration_axis:
         type: int32
         doc: Axis of vibration.
