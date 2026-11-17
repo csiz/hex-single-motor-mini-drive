@@ -453,8 +453,8 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .saliency_angle_ki = std::pow(2, -8),
     .hysteresis_loss_ki = std::pow(2, -10),
     .hysteresis_loss_angle_ki = std::pow(2, -10),
-    .vibration_fraction_ki = std::pow(2, -18),
-    .vibration_axis_ki = std::pow(2, -24),
+    .vibration_fraction_ki = std::pow(2, -12),
+    .vibration_axis_ki = std::pow(2, -12),
     .eddy_resistance_ki = 0,
     .motor_constant_ki = std::pow(2, -10),
 };

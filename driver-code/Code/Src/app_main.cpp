@@ -837,7 +837,7 @@ static inline void calibrate_from_readout(
     calibration_instance.hysteresis_loss_angle += half_circle;
   }
 
-  calibration_instance.vibration_fraction_sensitivity = square(x_vibration) + square(y_vibration) + epsilon_sensitivity;
+  calibration_instance.vibration_fraction_sensitivity = square(A_vibration) + square(B_vibration) + epsilon_sensitivity;
   
   const float vibration_scaling = 1.f / calibration_instance.vibration_fraction_sensitivity;
 
