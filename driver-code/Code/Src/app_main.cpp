@@ -146,9 +146,9 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
 // 
 // We can also declare that we have stable calibration parameters when the learning
 // rate multiplier drops below a threshold.
-constexpr float multiplier_minimum = 0.000'1f;
-constexpr float multiplier_stable_threshold = 0.01f;
-constexpr float multiplier_maximum = 100.f;
+constexpr float multiplier_minimum = 0.000'01f;
+constexpr float multiplier_stable_threshold = 0.000'1f;
+constexpr float multiplier_maximum = 10.f;
 constexpr float multiplier_change = std::pow(2, -8);
 constexpr float multiplier_increase_factor = 1.f + multiplier_change;
 constexpr float multiplier_decrease_factor = 1.f - 2 * multiplier_change;
@@ -525,8 +525,8 @@ static inline void finish_calibration_series(const bool remember_intermediate = 
 
 static inline void calibrate_from_readout(
   hex_mini_drive::Readout const& readout, 
-  const bool remember_intermediate = true, 
-  const bool repeat_until_stable = false
+  const bool remember_intermediate = false, 
+  const bool repeat_until_stable = true
 ) {
   // Calibration checks
   // ------------------
@@ -549,8 +549,7 @@ static inline void calibrate_from_readout(
       start_calibration_series();
       // Skip this readout since we just queued a new state.
     } else {
-      // Only run the 0 speed calibration once, it's toasty.
-      if (repeat_until_stable and calibration_instance.target_speed != 0.f) {
+      if (repeat_until_stable) {
         queue_message(hex_mini_drive::Message{
           .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
           .message_data = calibration_instance
@@ -609,11 +608,11 @@ static inline void calibrate_from_readout(
   const float sin_vibration = get_sin(calibration_instance.vibration_axis);
   const float cos_vibration = get_cos(calibration_instance.vibration_axis);
 
-  const float A_vibration = readout.x_drive_voltage * cos_vibration + readout.y_drive_voltage * sin_vibration;
-  const float B_vibration = readout.x_drive_voltage * sin_vibration - readout.y_drive_voltage * cos_vibration;
+  const float A_vibration = readout.x_current * cos_vibration + readout.y_current * sin_vibration;
+  const float B_vibration = readout.x_current * sin_vibration - readout.y_current * cos_vibration;
 
-  const float x_vibration = 0.5f * (readout.x_drive_voltage + A_vibration);
-  const float y_vibration = 0.5f * (readout.y_drive_voltage + B_vibration);
+  const float x_vibration = 0.5f * (readout.x_current + A_vibration);
+  const float y_vibration = 0.5f * (readout.y_current + B_vibration);
 
   const float x_vibration_voltage = x_vibration * calibration_instance.vibration_fraction;
   const float y_vibration_voltage = y_vibration * calibration_instance.vibration_fraction;
@@ -743,12 +742,13 @@ static inline void calibrate_from_readout(
 
 
   calibration_instance.resistance_sensitivity = square(readout.x_current) + square(readout.y_current) + epsilon_sensitivity;
+  const float resistance_scaling = 1.f / calibration_instance.resistance_sensitivity;
 
   const float resistance_gradient = (
     (
       x_voltage_error * readout.x_current +
       y_voltage_error * readout.y_current
-    ) / calibration_instance.resistance_sensitivity
+    ) * resistance_scaling
   );
   
   validate_parameter_update(

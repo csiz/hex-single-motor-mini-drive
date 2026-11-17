@@ -1288,7 +1288,7 @@ const calibration_parameters = {
   },
   inductance_saliency: {
     label: "Inductance Saliency", 
-    description: `The bias of the motor's phase inductance.`
+    description: `The saliency of the motor's phase inductance.`
   },
   hysteresis_loss: {
     label: "Hysteresis Loss", 
@@ -1394,6 +1394,7 @@ const calibration_series_resistance_plot = plot_lines({
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
     {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration Fraction", color: colors_categories[7]},
+    {y: (d)=>d.resistance + 0.5*d.vibration_fraction, label: "Res+Vib", color: colors_categories[8]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });
@@ -1642,8 +1643,8 @@ const control_parameters_input = Object.fromEntries(
       description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
     }],
     ["inductance_saliency_ki", {
-      label: "Inductance Bias KI",
-      description: "Integral gain for the inductance bias observer; helps in accurately estimating the bias in the inductance measurement."
+      label: "Inductance Saliency KI",
+      description: "Integral gain for the inductance saliency observer; helps in accurately estimating the saliency in the inductance measurement."
     }],
     ["saliency_angle_ki", {
       label: "Saliency Angle KI",
