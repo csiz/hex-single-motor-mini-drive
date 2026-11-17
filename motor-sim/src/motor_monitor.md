@@ -871,6 +871,13 @@ Object.values(monitoring_plots).forEach((plot) => plot.update({
 
 
 ```js
+Object.values(calibration_series_plots).forEach((plot) => plot.update({
+  data: calibration_series,
+}));
+```
+
+
+```js
 
 const curve = plot_curve;
 
@@ -1164,9 +1171,7 @@ const plot_resistance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Resistance (Ohms)",
   channels: [
-    {y: (d) => d.resistance_excitation_fraction > 0.2 ? d.resistance : null, label: "Phase Resistance X", color: colors.u},
-    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance_saliency : null, label: "Inductance Saliency", color: colors.w},
-    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.hysteresis_loss : null, label: "Hysteresis Loss", color: colors_categories[6]},
+    {y: "resistance", label: "Phase Resistance", color: colors.u},
     {y: "vibration_fraction", label: "Vibration", color: colors_categories[7]},
   ],
   curve,
@@ -1180,8 +1185,26 @@ const plot_inductance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Inductance (H)",
   channels: [
-    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.inductance : null, label: "Phase Inductance X", color: colors.v},
-    {y: (d) => d.inductance_excitation_fraction > 0.2 ? d.hysteresis_loss : null, label: "Hysteresis Loss", color: colors.w},
+    {y: "inductance", label: "Phase Inductance", color: colors.v},
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors.w},
+    {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors.w},
+  ],
+  curve,
+});
+
+const plot_angles_calibration = plot_lines({
+  subtitle: "Angles Calibration",
+  description: "Calibration of motor angles.",
+  width: 1200, height: 300,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Angle (-pi to +pi)",
+  y_domain: [-Math.PI, Math.PI],
+  channels: [
+    {y: "angle", label: "Angle", color: colors.u},
+    {y: "saliency_angle", label: "Inductance Saliency Angle", color: colors.v},
+    {y: "hysteresis_loss_angle", label: "Hysteresis Loss Angle", color: colors.w},
+    {y: "vibration_axis", label: "Vibration Axis", color: colors_categories[7]},
   ],
   curve,
 });
@@ -1196,14 +1219,12 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[0]},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: (d) => Math.abs(d.resistance_multiplier), label: "Resistance Multiplier", color: colors_categories[2]},
-    {y: (d) => Math.abs(d.inductance_multiplier), label: "Inductance Multiplier", color: colors_categories[3]},
-    {y: (d) => Math.abs(d.inductance_saliency_multiplier), label: "Inductance Bias Multiplier", color: colors_categories[4]},
-    {y: (d) => Math.abs(d.saliency_angle_multiplier), label: "Saliency Angle Multiplier", color: colors_categories[5]},
-    {y: (d) => Math.abs(d.hysteresis_loss_multiplier), label: "Hysteresis Loss Multiplier", color: colors_categories[6]},
-    {y: (d) => Math.abs(d.hysteresis_loss_angle_multiplier), label: "Hysteresis Loss Angle Multiplier", color: colors_categories[7]},
-    {y: (d) => Math.abs(d.vibration_fraction_multiplier), label: "Vibration Fraction Multiplier", color: colors_categories[8]},
-    {y: (d) => Math.abs(d.vibration_axis_multiplier), label: "Vibration Axis Multiplier", color: colors_categories[9]},
+    {y: "resistance_sensitivity", label: "Resistance Sensitivity", color: colors_categories[2]},
+    {y: "inductance_sensitivity", label: "Inductance Sensitivity", color: colors_categories[3]},
+    {y: "inductance_saliency_sensitivity", label: "Inductance Saliency Sensitivity", color: colors_categories[4]},
+    {y: "hysteresis_loss_sensitivity", label: "Hysteresis Loss Sensitivity", color: colors_categories[6]},
+    {y: "vibration_fraction_sensitivity", label: "Vibration Fraction Sensitivity", color: colors_categories[8]},
+    {y: "learning_rate_multiplier", label: "Learning Rate Multiplier", color: colors_categories[9]},
   ],
   curve,
 });
@@ -1226,6 +1247,7 @@ const monitoring_plots = {
   plot_readout_flags,
   plot_resistance_calibration,
   plot_inductance_calibration,
+  plot_angles_calibration,
   plot_motor_values,
 };
 
@@ -1360,7 +1382,6 @@ d3.select(calibration_buttons).style("width", "100%");
 
 
 const calibration_series_resistance_plot = plot_lines({
-  data: calibration_series,
   subtitle: "Calibration Series - Optimizing resistance & inductance",
   description: "Calibration optimization results for each phase at various probing frequencies.",
   width: 1200, height: 300,
@@ -1378,7 +1399,6 @@ const calibration_series_resistance_plot = plot_lines({
 });
 
 const calibration_series_inductance_plot = plot_lines({
-  data: calibration_series,
   subtitle: "Calibration Series - Optimizing resistance & inductance",
   description: "Calibration optimization results for each phase at various probing frequencies.",
   width: 1200, height: 300,
@@ -1387,13 +1407,26 @@ const calibration_series_inductance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "inductance", label: "Phase Inductance", color: colors_categories[2]},
-
-
-    {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[4]).brighter(1)},
-    {y: "hysteresis_loss_angle", label: "Hysteresis Loss Angle", color: colors_categories[7]},
-    {y: "vibration_axis", label: "Vibration Axis", color: colors_categories[8]},
     {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
+  ],
+  default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
+});
+
+
+const calibration_series_angles_plot = plot_lines({
+  subtitle: "Angles Calibration",
+  description: "Calibration of motor angles.",
+  width: 1200, height: 300,
+  x: "target_speed",
+  x_label: "Probing Frequency",
+  y_label: "Angle (-pi to +pi)",
+  y_domain: [-Math.PI, Math.PI],
+  channels: [
+    {y: "angle", label: "Angle", color: colors.u},
+    {y: "saliency_angle", label: "Inductance Saliency Angle", color: colors.v},
+    {y: "hysteresis_loss_angle", label: "Hysteresis Loss Angle", color: colors.w},
+    {y: "vibration_axis", label: "Vibration Axis", color: colors_categories[7]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });
@@ -1401,6 +1434,7 @@ const calibration_series_inductance_plot = plot_lines({
 const calibration_series_plots = {
   calibration_series_resistance_plot,
   calibration_series_inductance_plot,
+  calibration_series_angles_plot,
 };
 
 autosave_inputs(calibration_series_plots);
@@ -1630,6 +1664,10 @@ const control_parameters_input = Object.fromEntries(
     ["vibration_axis_ki", {
       label: "Vibration Axis KI",
       description: "Integral gain for vibration axis."
+    }],
+    ["eddy_resistance_ki", {
+      label: "Eddy Resistance KI",
+      description: "Integral gain for eddy resistance."
     }],
     ["motor_constant_ki", {
       label: "Motor Constant KI", 

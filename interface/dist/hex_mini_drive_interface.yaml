@@ -458,63 +458,58 @@ definitions:
       avg_square_error:
         type: float32
         doc: Average squared error during this calibration instance.
-      resistance:
+      learning_rate_multiplier:
         type: float32
-        doc: Measured resistance value for each phase.
-      resistance_multiplier:
+        doc: Multiplier for the learning rate.
+      learning_rate_resilience_sign:
         type: float32
-        doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
+        doc: We need to store the last sign (of something) to apply resilient gradient descent.
       resistance_excitation_fraction:
         type: float32
         doc: Fraction of data points where current was high enough to meaningfully measure resistance.
-      inductance:
-        type: float32
-        doc: Measured inductance value for each phase.
-      inductance_multiplier:
-        type: float32
-        doc: Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
       inductance_excitation_fraction:
         type: float32
         doc: Fraction of data points where current change was high enough to measure inductance.
+      resistance:
+        type: float32
+        doc: Measured resistance value for each phase.
+      resistance_sensitivity:
+        type: float32
+        doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
+      inductance:
+        type: float32
+        doc: Measured inductance value for each phase.
+      inductance_sensitivity:
+        type: float32
+        doc: Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
       inductance_saliency:
         type: float32
         doc: Measured inductance saliency bias.
-      inductance_saliency_multiplier:
+      inductance_saliency_sensitivity:
         type: float32
         doc: Multiplier for the inductance saliency, used to adjust the effective inductance saliency in calculations.
       saliency_angle:
         type: int32
         doc: Saliency angle for the inductance saliency effect.
-      saliency_angle_multiplier:
-        type: float32
-        doc: Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
       hysteresis_loss:
         type: float32
         doc: Iron loss coefficient.
-      hysteresis_loss_multiplier:
+      hysteresis_loss_sensitivity:
         type: float32
         doc: Multiplier for the iron loss.
-      hysteresis_loss_excitation_fraction:
-        type: float32
-        doc: Fraction of data points with significant iron loss.
       hysteresis_loss_angle:
         type: int32
         doc: Angle for the iron loss effect.
-      hysteresis_loss_angle_multiplier:
-        type: float32
-        doc: Multiplier for the iron loss angle.
       vibration_fraction:
         type: float32
         doc: Fraction of drive voltage reflected due to vibrations.
-      vibration_fraction_multiplier:
+      vibration_fraction_sensitivity:
         type: float32
         doc: Multiplier for the vibration fraction.
       vibration_axis:
         type: int32
         doc: Axis of vibration.
-      vibration_axis_multiplier:
-        type: float32
-        doc: Multiplier for the vibration axis.
+
 
   DriveState:
     doc: |

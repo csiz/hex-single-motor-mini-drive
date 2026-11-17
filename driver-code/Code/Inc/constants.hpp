@@ -369,7 +369,7 @@ constexpr float minimum_resistance = 0.005f; // This is lower than the sense res
 constexpr float minimum_inductance = 0.000'001f;
 constexpr float minimum_inductance_saliency = 0.000'1f;
 constexpr float minimum_hysteresis_loss = 0.000'001f;
-constexpr float minimum_vibration_fraction = 0.000'001f;
+constexpr float minimum_vibration_fraction = 0.000'1f;
 
 // Default to a the planetary 3 phase motor.
 const hex_mini_drive::Calibration default_calibration = {
@@ -447,15 +447,16 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .emf_speed_constant_confirmed_threshold = 16.0f,
 
     .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -14),
-    .inductance_ki = std::pow(2, -40),
-    .inductance_saliency_ki = std::pow(2, -30),
-    .saliency_angle_ki = std::pow(2, +16),
-    .hysteresis_loss_ki = std::pow(2, -22),
-    .hysteresis_loss_angle_ki = std::pow(2, +10),
-    .vibration_fraction_ki = std::pow(2, -22),
-    .vibration_axis_ki = std::pow(2, +16),
-    .motor_constant_ki = std::pow(2, -32-6),
+    .resistance_ki = std::pow(2, -8),
+    .inductance_ki = std::pow(2, -8),
+    .inductance_saliency_ki = std::pow(2, -8),
+    .saliency_angle_ki = std::pow(2, -8),
+    .hysteresis_loss_ki = std::pow(2, -10),
+    .hysteresis_loss_angle_ki = std::pow(2, -10),
+    .vibration_fraction_ki = std::pow(2, -18),
+    .vibration_axis_ki = std::pow(2, -24),
+    .eddy_resistance_ki = 0,
+    .motor_constant_ki = std::pow(2, -10),
 };
 
 // Maximum value for the lead angle control; we won't lead more than 60degrees ahead of the quadrature angle.

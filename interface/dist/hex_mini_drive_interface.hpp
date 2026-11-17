@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.177.0";
+constexpr char const* VERSION_STRING = "0.178.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -571,44 +571,40 @@ struct CalibrationInstance {
   float avg_current_magnitude;
   // Average squared error during this calibration instance.
   float avg_square_error;
+  // Multiplier for the learning rate.
+  float learning_rate_multiplier;
+  // We need to store the last sign (of something) to apply resilient gradient descent.
+  float learning_rate_resilience_sign;
+  // Fraction of data points where current was high enough to meaningfully measure resistance.
+  float resistance_excitation_fraction;
+  // Fraction of data points where current change was high enough to measure inductance.
+  float inductance_excitation_fraction;
   // Measured resistance value for each phase.
   float resistance;
   // Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
-  float resistance_multiplier;
-  // Fraction of data points where current was high enough to meaningfully measure resistance.
-  float resistance_excitation_fraction;
+  float resistance_sensitivity;
   // Measured inductance value for each phase.
   float inductance;
   // Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
-  float inductance_multiplier;
-  // Fraction of data points where current change was high enough to measure inductance.
-  float inductance_excitation_fraction;
+  float inductance_sensitivity;
   // Measured inductance saliency bias.
   float inductance_saliency;
   // Multiplier for the inductance saliency, used to adjust the effective inductance saliency in calculations.
-  float inductance_saliency_multiplier;
+  float inductance_saliency_sensitivity;
   // Saliency angle for the inductance saliency effect.
   int32_t saliency_angle;
-  // Multiplier for the saliency angle, used to adjust the effective saliency angle in calculations.
-  float saliency_angle_multiplier;
   // Iron loss coefficient.
   float hysteresis_loss;
   // Multiplier for the iron loss.
-  float hysteresis_loss_multiplier;
-  // Fraction of data points with significant iron loss.
-  float hysteresis_loss_excitation_fraction;
+  float hysteresis_loss_sensitivity;
   // Angle for the iron loss effect.
   int32_t hysteresis_loss_angle;
-  // Multiplier for the iron loss angle.
-  float hysteresis_loss_angle_multiplier;
   // Fraction of drive voltage reflected due to vibrations.
   float vibration_fraction;
   // Multiplier for the vibration fraction.
-  float vibration_fraction_multiplier;
+  float vibration_fraction_sensitivity;
   // Axis of vibration.
   int32_t vibration_axis;
-  // Multiplier for the vibration axis.
-  float vibration_axis_multiplier;
 };
 
 static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstance const& value) {
@@ -627,43 +623,39 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.avg_square_error);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance);;
+  write_float32(buffer + offset, value.learning_rate_multiplier);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_multiplier);;
+  write_float32(buffer + offset, value.learning_rate_resilience_sign);;
   offset += 4;
   write_float32(buffer + offset, value.resistance_excitation_fraction);;
   offset += 4;
+  write_float32(buffer + offset, value.inductance_excitation_fraction);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_sensitivity);;
+  offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_excitation_fraction);;
+  write_float32(buffer + offset, value.inductance_sensitivity);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_saliency);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_saliency_multiplier);;
+  write_float32(buffer + offset, value.inductance_saliency_sensitivity);;
   offset += 4;
   write_int32(buffer + offset, value.saliency_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.saliency_angle_multiplier);;
-  offset += 4;
   write_float32(buffer + offset, value.hysteresis_loss);;
   offset += 4;
-  write_float32(buffer + offset, value.hysteresis_loss_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.hysteresis_loss_excitation_fraction);;
+  write_float32(buffer + offset, value.hysteresis_loss_sensitivity);;
   offset += 4;
   write_int32(buffer + offset, value.hysteresis_loss_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.hysteresis_loss_angle_multiplier);;
-  offset += 4;
   write_float32(buffer + offset, value.vibration_fraction);;
   offset += 4;
-  write_float32(buffer + offset, value.vibration_fraction_multiplier);;
+  write_float32(buffer + offset, value.vibration_fraction_sensitivity);;
   offset += 4;
   write_int32(buffer + offset, value.vibration_axis);;
-  offset += 4;
-  write_float32(buffer + offset, value.vibration_axis_multiplier);;
   offset += 4;
 }
 static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer) {
@@ -685,43 +677,39 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.avg_square_error = read_float32(buffer + offset);
   offset += 4;
-  result.resistance = read_float32(buffer + offset);
+  result.learning_rate_multiplier = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_multiplier = read_float32(buffer + offset);
+  result.learning_rate_resilience_sign = read_float32(buffer + offset);
   offset += 4;
   result.resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
+  result.inductance_excitation_fraction = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_sensitivity = read_float32(buffer + offset);
+  offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_excitation_fraction = read_float32(buffer + offset);
+  result.inductance_sensitivity = read_float32(buffer + offset);
   offset += 4;
   result.inductance_saliency = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_saliency_multiplier = read_float32(buffer + offset);
+  result.inductance_saliency_sensitivity = read_float32(buffer + offset);
   offset += 4;
   result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
-  result.saliency_angle_multiplier = read_float32(buffer + offset);
-  offset += 4;
   result.hysteresis_loss = read_float32(buffer + offset);
   offset += 4;
-  result.hysteresis_loss_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.hysteresis_loss_excitation_fraction = read_float32(buffer + offset);
+  result.hysteresis_loss_sensitivity = read_float32(buffer + offset);
   offset += 4;
   result.hysteresis_loss_angle = read_int32(buffer + offset);
   offset += 4;
-  result.hysteresis_loss_angle_multiplier = read_float32(buffer + offset);
-  offset += 4;
   result.vibration_fraction = read_float32(buffer + offset);
   offset += 4;
-  result.vibration_fraction_multiplier = read_float32(buffer + offset);
+  result.vibration_fraction_sensitivity = read_float32(buffer + offset);
   offset += 4;
   result.vibration_axis = read_int32(buffer + offset);
-  offset += 4;
-  result.vibration_axis_multiplier = read_float32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1396,7 +1384,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 42;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 106;
+    case MessageCode::CALIBRATION_INSTANCE: return 98;
     case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 202;
     case MessageCode::SET_CONTROL_PARAMETERS: return 202;
@@ -1509,9 +1497,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 104) return 0;
+      if (max_size < 2 + 96) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 106;
+      return 98;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1654,7 +1642,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 104) return false;
+      if (size != 2 + 96) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }
