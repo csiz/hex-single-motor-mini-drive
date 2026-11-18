@@ -422,7 +422,7 @@ definitions:
         type: float32
         doc: Iron resistance coefficient.
 
-      vibration_fraction:
+      vibration_resistance:
         type: float32
         doc: Fraction of drive voltage reflected because of back EMF from vibrations.
 
@@ -458,52 +458,82 @@ definitions:
       avg_square_error:
         type: float32
         doc: Average squared error during this calibration instance.
+
       learning_rate_multiplier:
         type: float32
         doc: Multiplier for the learning rate.
       learning_rate_resilience_sign:
         type: float32
         doc: We need to store the last sign (of something) to apply resilient gradient descent.
+
+      gradients_dot:
+        type: float32
+        doc: Dot product of gradients.
+      gradients_dot_variance:
+        type: float32
+        doc: Variance of the dot product of gradients.
+
       resistance_excitation_fraction:
         type: float32
         doc: Fraction of data points where current was high enough to meaningfully measure resistance.
       inductance_excitation_fraction:
         type: float32
         doc: Fraction of data points where current change was high enough to measure inductance.
-      resistance_x:
-        type: float32
-        doc: Resistance in the X phase.
-      resistance_y:
-        type: float32
-        doc: Resistance in the Y phase.
+        
       resistance_sensitivity:
         type: float32
         doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
-      inductance:
-        type: float32
-        doc: Measured inductance value for each phase.
       inductance_sensitivity:
         type: float32
         doc: Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
+      hysteresis_loss_sensitivity:
+        type: float32
+        doc: Multiplier for the iron loss.
+
+      resistance_x:
+        type: float32
+        doc: Resistance in the X phase.
+      resistance_x_gradient:
+        type: float32
+        doc: Gradient of X phase resistance.
+      resistance_y:
+        type: float32
+        doc: Resistance in the Y phase.
+      resistance_y_gradient:
+        type: float32
+        doc: Gradient of Y phase resistance.
+
+      inductance:
+        type: float32
+        doc: Measured inductance value for each phase.
+      inductance_gradient:
+        type: float32
+        doc: Gradient of inductance.
       inductance_saliency:
         type: float32
         doc: Measured inductance saliency bias.
+      inductance_saliency_gradient:
+        type: float32
+        doc: Gradient of inductance saliency.
       saliency_angle:
         type: int32
         doc: Saliency angle for the inductance saliency effect.
       hysteresis_loss:
         type: float32
         doc: Iron loss coefficient.
-      hysteresis_loss_sensitivity:
+      hysteresis_loss_gradient:
         type: float32
-        doc: Multiplier for the iron loss.
-      hysteresis_loss_angle:
+        doc: Gradient of iron loss.
+      hysteresis_angle:
         type: int32
         doc: Angle for the iron loss effect.
-      vibration_fraction:
+      vibration_resistance:
         type: float32
         doc: Fraction of drive voltage reflected due to vibrations.
-      vibration_axis:
+      vibration_resistance_gradient:
+        type: float32
+        doc: Gradient of vibration fraction.
+      vibration_angle:
         type: int32
         doc: Axis of vibration.
 
@@ -835,15 +865,15 @@ definitions:
       hysteresis_loss_ki:
         type: float32
         doc: Iron loss factor integral gain.
-      hysteresis_loss_angle_ki:
+      hysteresis_angle_ki:
         type: float32
         doc: Iron loss angle integral gain.
 
-      vibration_fraction_ki:
+      vibration_resistance_ki:
         type: float32
         doc: Vibration integral gain.
 
-      vibration_axis_ki:
+      vibration_angle_ki:
         type: float32
         doc: Vibration axis integral gain.
 

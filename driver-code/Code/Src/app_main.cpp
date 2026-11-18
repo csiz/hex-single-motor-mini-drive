@@ -118,20 +118,28 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .target_speed = speed,
     .learning_rate_multiplier = 1.f,
     .learning_rate_resilience_sign = +1.f,
+    .gradients_dot = 0.f,
+    .gradients_dot_variance = 0.f,
     .resistance_excitation_fraction = 0.f,
     .inductance_excitation_fraction = 0.f,
-    .resistance_x = active_calibration.resistance_x,
-    .resistance_y = active_calibration.resistance_y,
     .resistance_sensitivity = current_variance,
-    .inductance = active_calibration.inductance,
     .inductance_sensitivity = inductance_variance,
+    .hysteresis_loss_sensitivity = power_variance,
+    .resistance_x = active_calibration.resistance_x,
+    .resistance_x_gradient = 0.f,
+    .resistance_y = active_calibration.resistance_y,
+    .resistance_y_gradient = 0.f,
+    .inductance = active_calibration.inductance,
+    .inductance_gradient = 0.f,
     .inductance_saliency = active_calibration.inductance_saliency,
+    .inductance_saliency_gradient = 0.f,
     .saliency_angle = active_calibration.saliency_angle,
     .hysteresis_loss = active_calibration.hysteresis_loss,
-    .hysteresis_loss_sensitivity = power_variance,
-    .hysteresis_loss_angle = active_calibration.hysteresis_loss_angle,
-    .vibration_fraction = active_calibration.vibration_fraction,
-    .vibration_axis = active_calibration.vibration_axis,
+    .hysteresis_loss_gradient = 0.f,
+    .hysteresis_angle = active_calibration.hysteresis_angle,
+    .vibration_resistance = active_calibration.vibration_resistance,
+    .vibration_resistance_gradient = 0.f,
+    .vibration_angle = active_calibration.vibration_angle,
   };
 }
 
@@ -216,7 +224,7 @@ static inline hex_mini_drive::CalibrationInstance make_calibration_instance(hex_
     .inductance = calibration.inductance,
     .inductance_saliency = calibration.inductance_saliency,
     .hysteresis_loss = calibration.hysteresis_loss,
-    .vibration_fraction = calibration.vibration_fraction
+    .vibration_resistance = calibration.vibration_resistance
   };
 }
 
@@ -608,8 +616,8 @@ static inline void calibrate_from_readout(
   // the back emf from vibrations will act in opposing phase to the drive voltage
   // projected onto the emf axis of the rotor. The rotor, vibrating in place will
   // produce a vibrating emf response mostly on it's own axis.
-  const float sin_vibration = get_sin(calibration_instance.vibration_axis);
-  const float cos_vibration = get_cos(calibration_instance.vibration_axis);
+  const float sin_vibration = get_sin(calibration_instance.vibration_angle);
+  const float cos_vibration = get_cos(calibration_instance.vibration_angle);
 
   const float A_vibration = readout.x_current * cos_vibration + readout.y_current * sin_vibration;
   const float B_vibration = readout.x_current * sin_vibration - readout.y_current * cos_vibration;
@@ -617,8 +625,8 @@ static inline void calibrate_from_readout(
   const float x_vibration = 0.5f * (readout.x_current + A_vibration);
   const float y_vibration = 0.5f * (readout.y_current + B_vibration);
 
-  const float x_vibration_voltage = x_vibration * calibration_instance.vibration_fraction;
-  const float y_vibration_voltage = y_vibration * calibration_instance.vibration_fraction;
+  const float x_vibration_voltage = x_vibration * calibration_instance.vibration_resistance;
+  const float y_vibration_voltage = y_vibration * calibration_instance.vibration_resistance;
   
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const float x_resistive_voltage = readout.x_current * calibration_instance.resistance_x;
@@ -653,8 +661,8 @@ static inline void calibrate_from_readout(
   const float x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
   const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
   
-  const float sin_hysteresis_loss = get_sin(calibration_instance.hysteresis_loss_angle);
-  const float cos_hysteresis_loss = get_cos(calibration_instance.hysteresis_loss_angle);
+  const float sin_hysteresis_loss = get_sin(calibration_instance.hysteresis_angle);
+  const float cos_hysteresis_loss = get_cos(calibration_instance.hysteresis_angle);
 
   const float A_hysteresis_loss = (
     readout.x_current * x_inductance_voltage - 
@@ -823,14 +831,14 @@ static inline void calibrate_from_readout(
     calibration_instance.hysteresis_loss,
     -hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki * calibration_instance.learning_rate_multiplier
   )){
-    const float hysteresis_loss_angle_gradient = hysteresis_loss_scaling * (
+    const float hysteresis_angle_gradient = hysteresis_loss_scaling * (
       x_voltage_error * -y_hysteresis_loss + 
       y_voltage_error * x_hysteresis_loss
     ) * radians_to_angle_units / calibration_instance.hysteresis_loss;
 
-    calibration_instance.hysteresis_loss_angle -= static_cast<int32_t>(hysteresis_loss_angle_gradient * control_parameters.hysteresis_loss_angle_ki);
+    calibration_instance.hysteresis_angle -= static_cast<int32_t>(hysteresis_angle_gradient * control_parameters.hysteresis_angle_ki);
   } else {
-    calibration_instance.hysteresis_loss_angle += half_circle;
+    calibration_instance.hysteresis_angle += half_circle;
   }
 
   const float vibration_factor_gradient = resistance_scaling * (
@@ -839,15 +847,15 @@ static inline void calibrate_from_readout(
   );
 
   if (validate_parameter_update(
-    minimum_vibration_fraction,
-    calibration_instance.vibration_fraction,
-    -vibration_factor_gradient * control_parameters.vibration_fraction_ki * calibration_instance.learning_rate_multiplier
+    minimum_vibration_resistance,
+    calibration_instance.vibration_resistance,
+    -vibration_factor_gradient * control_parameters.vibration_resistance_ki * calibration_instance.learning_rate_multiplier
   )) {
-    const float vibration_axis_gradient = resistance_scaling * (
+    const float vibration_angle_gradient = resistance_scaling * (
       x_voltage_error * -B_vibration + 
       y_voltage_error * A_vibration
-    ) * radians_to_angle_units / calibration_instance.vibration_fraction;
-    calibration_instance.vibration_axis -= static_cast<int32_t>(vibration_axis_gradient * control_parameters.vibration_axis_ki);
+    ) * radians_to_angle_units / calibration_instance.vibration_resistance;
+    calibration_instance.vibration_angle -= static_cast<int32_t>(vibration_angle_gradient * control_parameters.vibration_angle_ki);
   } else {
     // Not sure it's correct to flip vibration axis by 180 degrees.
   }

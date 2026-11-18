@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.180.0";
+constexpr char const* VERSION_STRING = "0.181.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -499,7 +499,7 @@ struct Calibration {
   // Iron resistance coefficient.
   float eddy_resistance;
   // Fraction of drive voltage reflected because of back EMF from vibrations.
-  float vibration_fraction;
+  float vibration_resistance;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
 };
@@ -522,7 +522,7 @@ static inline void write_Calibration(uint8_t * buffer, Calibration const& value)
   offset += 4;
   write_float32(buffer + offset, value.eddy_resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.vibration_fraction);;
+  write_float32(buffer + offset, value.vibration_resistance);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
   offset += 4;
@@ -548,7 +548,7 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   offset += 4;
   result.eddy_resistance = read_float32(buffer + offset);
   offset += 4;
-  result.vibration_fraction = read_float32(buffer + offset);
+  result.vibration_resistance = read_float32(buffer + offset);
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
@@ -575,34 +575,50 @@ struct CalibrationInstance {
   float learning_rate_multiplier;
   // We need to store the last sign (of something) to apply resilient gradient descent.
   float learning_rate_resilience_sign;
+  // Dot product of gradients.
+  float gradients_dot;
+  // Variance of the dot product of gradients.
+  float gradients_dot_variance;
   // Fraction of data points where current was high enough to meaningfully measure resistance.
   float resistance_excitation_fraction;
   // Fraction of data points where current change was high enough to measure inductance.
   float inductance_excitation_fraction;
-  // Resistance in the X phase.
-  float resistance_x;
-  // Resistance in the Y phase.
-  float resistance_y;
   // Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
   float resistance_sensitivity;
-  // Measured inductance value for each phase.
-  float inductance;
   // Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
   float inductance_sensitivity;
+  // Multiplier for the iron loss.
+  float hysteresis_loss_sensitivity;
+  // Resistance in the X phase.
+  float resistance_x;
+  // Gradient of X phase resistance.
+  float resistance_x_gradient;
+  // Resistance in the Y phase.
+  float resistance_y;
+  // Gradient of Y phase resistance.
+  float resistance_y_gradient;
+  // Measured inductance value for each phase.
+  float inductance;
+  // Gradient of inductance.
+  float inductance_gradient;
   // Measured inductance saliency bias.
   float inductance_saliency;
+  // Gradient of inductance saliency.
+  float inductance_saliency_gradient;
   // Saliency angle for the inductance saliency effect.
   int32_t saliency_angle;
   // Iron loss coefficient.
   float hysteresis_loss;
-  // Multiplier for the iron loss.
-  float hysteresis_loss_sensitivity;
+  // Gradient of iron loss.
+  float hysteresis_loss_gradient;
   // Angle for the iron loss effect.
-  int32_t hysteresis_loss_angle;
+  int32_t hysteresis_angle;
   // Fraction of drive voltage reflected due to vibrations.
-  float vibration_fraction;
+  float vibration_resistance;
+  // Gradient of vibration fraction.
+  float vibration_resistance_gradient;
   // Axis of vibration.
-  int32_t vibration_axis;
+  int32_t vibration_angle;
 };
 
 static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstance const& value) {
@@ -625,33 +641,49 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.learning_rate_resilience_sign);;
   offset += 4;
+  write_float32(buffer + offset, value.gradients_dot);;
+  offset += 4;
+  write_float32(buffer + offset, value.gradients_dot_variance);;
+  offset += 4;
   write_float32(buffer + offset, value.resistance_excitation_fraction);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_excitation_fraction);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_x);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance_y);;
-  offset += 4;
   write_float32(buffer + offset, value.resistance_sensitivity);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_sensitivity);;
   offset += 4;
+  write_float32(buffer + offset, value.hysteresis_loss_sensitivity);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_x);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_x_gradient);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_y);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_y_gradient);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_gradient);;
+  offset += 4;
   write_float32(buffer + offset, value.inductance_saliency);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_saliency_gradient);;
   offset += 4;
   write_int32(buffer + offset, value.saliency_angle);;
   offset += 4;
   write_float32(buffer + offset, value.hysteresis_loss);;
   offset += 4;
-  write_float32(buffer + offset, value.hysteresis_loss_sensitivity);;
+  write_float32(buffer + offset, value.hysteresis_loss_gradient);;
   offset += 4;
-  write_int32(buffer + offset, value.hysteresis_loss_angle);;
+  write_int32(buffer + offset, value.hysteresis_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.vibration_fraction);;
+  write_float32(buffer + offset, value.vibration_resistance);;
   offset += 4;
-  write_int32(buffer + offset, value.vibration_axis);;
+  write_float32(buffer + offset, value.vibration_resistance_gradient);;
+  offset += 4;
+  write_int32(buffer + offset, value.vibration_angle);;
   offset += 4;
 }
 static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer) {
@@ -677,33 +709,49 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.learning_rate_resilience_sign = read_float32(buffer + offset);
   offset += 4;
+  result.gradients_dot = read_float32(buffer + offset);
+  offset += 4;
+  result.gradients_dot_variance = read_float32(buffer + offset);
+  offset += 4;
   result.resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
   result.inductance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_x = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance_y = read_float32(buffer + offset);
-  offset += 4;
   result.resistance_sensitivity = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance = read_float32(buffer + offset);
   offset += 4;
   result.inductance_sensitivity = read_float32(buffer + offset);
   offset += 4;
+  result.hysteresis_loss_sensitivity = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_x = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_x_gradient = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_y = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_y_gradient = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_gradient = read_float32(buffer + offset);
+  offset += 4;
   result.inductance_saliency = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_saliency_gradient = read_float32(buffer + offset);
   offset += 4;
   result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
   result.hysteresis_loss = read_float32(buffer + offset);
   offset += 4;
-  result.hysteresis_loss_sensitivity = read_float32(buffer + offset);
+  result.hysteresis_loss_gradient = read_float32(buffer + offset);
   offset += 4;
-  result.hysteresis_loss_angle = read_int32(buffer + offset);
+  result.hysteresis_angle = read_int32(buffer + offset);
   offset += 4;
-  result.vibration_fraction = read_float32(buffer + offset);
+  result.vibration_resistance = read_float32(buffer + offset);
   offset += 4;
-  result.vibration_axis = read_int32(buffer + offset);
+  result.vibration_resistance_gradient = read_float32(buffer + offset);
+  offset += 4;
+  result.vibration_angle = read_int32(buffer + offset);
   offset += 4;
   return result;
 }
@@ -1074,11 +1122,11 @@ struct ControlParameters {
   // Iron loss factor integral gain.
   float hysteresis_loss_ki;
   // Iron loss angle integral gain.
-  float hysteresis_loss_angle_ki;
+  float hysteresis_angle_ki;
   // Vibration integral gain.
-  float vibration_fraction_ki;
+  float vibration_resistance_ki;
   // Vibration axis integral gain.
-  float vibration_axis_ki;
+  float vibration_angle_ki;
   // Eddy current integral gain.
   float eddy_resistance_ki;
   // Motor constant integral gain.
@@ -1183,11 +1231,11 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.hysteresis_loss_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.hysteresis_loss_angle_ki);;
+  write_float32(buffer + offset, value.hysteresis_angle_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.vibration_fraction_ki);;
+  write_float32(buffer + offset, value.vibration_resistance_ki);;
   offset += 4;
-  write_float32(buffer + offset, value.vibration_axis_ki);;
+  write_float32(buffer + offset, value.vibration_angle_ki);;
   offset += 4;
   write_float32(buffer + offset, value.eddy_resistance_ki);;
   offset += 4;
@@ -1295,11 +1343,11 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.hysteresis_loss_ki = read_float32(buffer + offset);
   offset += 4;
-  result.hysteresis_loss_angle_ki = read_float32(buffer + offset);
+  result.hysteresis_angle_ki = read_float32(buffer + offset);
   offset += 4;
-  result.vibration_fraction_ki = read_float32(buffer + offset);
+  result.vibration_resistance_ki = read_float32(buffer + offset);
   offset += 4;
-  result.vibration_axis_ki = read_float32(buffer + offset);
+  result.vibration_angle_ki = read_float32(buffer + offset);
   offset += 4;
   result.eddy_resistance_ki = read_float32(buffer + offset);
   offset += 4;
@@ -1378,7 +1426,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 42;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 94;
+    case MessageCode::CALIBRATION_INSTANCE: return 126;
     case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 202;
     case MessageCode::SET_CONTROL_PARAMETERS: return 202;
@@ -1491,9 +1539,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 92) return 0;
+      if (max_size < 2 + 124) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 94;
+      return 126;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1636,7 +1684,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 92) return false;
+      if (size != 2 + 124) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }
