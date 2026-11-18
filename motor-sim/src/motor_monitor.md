@@ -1222,7 +1222,6 @@ const plot_motor_values = plot_lines({
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
     {y: "resistance_sensitivity", label: "Resistance Sensitivity", color: colors_categories[2]},
     {y: "inductance_sensitivity", label: "Inductance Sensitivity", color: colors_categories[3]},
-    {y: "inductance_saliency_sensitivity", label: "Inductance Saliency Sensitivity", color: colors_categories[4]},
     {y: "hysteresis_loss_sensitivity", label: "Hysteresis Loss Sensitivity", color: colors_categories[6]},
     {y: "learning_rate_multiplier", label: "Learning Rate Multiplier", color: colors_categories[9]},
   ],
@@ -1392,7 +1391,6 @@ const calibration_series_resistance_plot = plot_lines({
     {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
     {y: "resistance_y", label: "Phase Resistance Y", color: colors_categories[1]},
     {y: (d) => 0.5*(d.resistance_x + d.resistance_y), label: "Avg Resistance", color: colors_categories[2]},
-    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
     {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_fraction", label: "Vibration Fraction", color: colors_categories[7]},
@@ -1409,6 +1407,7 @@ const calibration_series_inductance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "inductance", label: "Phase Inductance", color: colors_categories[2]},
+    {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
     {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
   ],

@@ -488,9 +488,6 @@ definitions:
       inductance_saliency:
         type: float32
         doc: Measured inductance saliency bias.
-      inductance_saliency_sensitivity:
-        type: float32
-        doc: Multiplier for the inductance saliency, used to adjust the effective inductance saliency in calculations.
       saliency_angle:
         type: int32
         doc: Saliency angle for the inductance saliency effect.

@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.179.0";
+constexpr char const* VERSION_STRING = "0.180.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -591,8 +591,6 @@ struct CalibrationInstance {
   float inductance_sensitivity;
   // Measured inductance saliency bias.
   float inductance_saliency;
-  // Multiplier for the inductance saliency, used to adjust the effective inductance saliency in calculations.
-  float inductance_saliency_sensitivity;
   // Saliency angle for the inductance saliency effect.
   int32_t saliency_angle;
   // Iron loss coefficient.
@@ -642,8 +640,6 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   write_float32(buffer + offset, value.inductance_sensitivity);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_saliency);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_saliency_sensitivity);;
   offset += 4;
   write_int32(buffer + offset, value.saliency_angle);;
   offset += 4;
@@ -696,8 +692,6 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   result.inductance_sensitivity = read_float32(buffer + offset);
   offset += 4;
   result.inductance_saliency = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_saliency_sensitivity = read_float32(buffer + offset);
   offset += 4;
   result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
@@ -1384,7 +1378,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 42;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 98;
+    case MessageCode::CALIBRATION_INSTANCE: return 94;
     case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 202;
     case MessageCode::SET_CONTROL_PARAMETERS: return 202;
@@ -1497,9 +1491,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 96) return 0;
+      if (max_size < 2 + 92) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 98;
+      return 94;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1642,7 +1636,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 96) return false;
+      if (size != 2 + 92) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }

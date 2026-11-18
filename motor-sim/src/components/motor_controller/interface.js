@@ -159,8 +159,8 @@ export function parse_readout(bare_readout, previous_readout) {
   const y_resistive_voltage = y_current * bare_readout.resistance_y;
 
   // And the current diffs for calculating inductance.
-  const x_diff = x_current_diff * pwm_cycles_per_second;
-  const y_diff = y_current_diff * pwm_cycles_per_second;
+  const x_inductance = x_current_diff * pwm_cycles_per_second;
+  const y_inductance = y_current_diff * pwm_cycles_per_second;
 
   // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
   // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
@@ -169,26 +169,23 @@ export function parse_readout(bare_readout, previous_readout) {
   const cos_saliency = Math.cos(bare_readout.saliency_angle);
 
   const x_inductance_saliency = (
-      -x_diff * cos_saliency 
-      -y_diff * sin_saliency
+      -x_inductance * cos_saliency 
+      -y_inductance * sin_saliency
   );
   
   const y_inductance_saliency = (
-    -x_diff * sin_saliency
-    +y_diff * cos_saliency
+    -x_inductance * sin_saliency
+    +y_inductance * cos_saliency
   );
 
-  const x_inductance_saliency_voltage = bare_readout.inductance * bare_readout.inductance_saliency * x_inductance_saliency;
-  const y_inductance_saliency_voltage = bare_readout.inductance * bare_readout.inductance_saliency * y_inductance_saliency;
+  const x_inductance_saliency_voltage = bare_readout.inductance_saliency * x_inductance_saliency;
+  const y_inductance_saliency_voltage = bare_readout.inductance_saliency * y_inductance_saliency;
 
-  const x_inductance_base_voltage = x_diff * bare_readout.inductance;
-  const y_inductance_base_voltage = y_diff * bare_readout.inductance;
+  const x_inductance_base_voltage = x_inductance * bare_readout.inductance;
+  const y_inductance_base_voltage = y_inductance * bare_readout.inductance;
 
-  const x_inductance = x_diff + bare_readout.inductance_saliency * x_inductance_saliency;
-  const y_inductance = y_diff + bare_readout.inductance_saliency * y_inductance_saliency;
-
-  const x_inductance_voltage = bare_readout.inductance * x_inductance;
-  const y_inductance_voltage = bare_readout.inductance * y_inductance;
+  const x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
+  const y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
   
   const sin_hysteresis_loss = Math.sin(bare_readout.hysteresis_loss_angle);
   const cos_hysteresis_loss = Math.cos(bare_readout.hysteresis_loss_angle);
