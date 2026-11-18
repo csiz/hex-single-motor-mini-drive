@@ -155,8 +155,8 @@ export function parse_readout(bare_readout, previous_readout) {
   const y_vibration_voltage = y_vibration * bare_readout.vibration_resistance;
 
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-  const x_resistive_voltage = x_current * bare_readout.resistance_x;
-  const y_resistive_voltage = y_current * bare_readout.resistance_y;
+  const x_resistive_voltage = x_current * bare_readout.resistance;
+  const y_resistive_voltage = y_current * bare_readout.resistance;
 
   // And the current diffs for calculating inductance.
   const x_inductance = x_current_diff * pwm_cycles_per_second;

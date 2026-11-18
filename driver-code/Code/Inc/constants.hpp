@@ -407,8 +407,8 @@ const hex_mini_drive::DriveState freewheel_drive_state = {
 
 constexpr float minimum_resistance = 0.005f; // This is lower than the sense resistors, something definitely wrong if we reach here.
 constexpr float minimum_inductance = 0.000'001f;
-constexpr float minimum_inductance_saliency = 0.000'000'1f;
-constexpr float minimum_hysteresis_loss = 0.000'1f;
+constexpr float minimum_inductance_saliency = 0.000'001'0f;
+constexpr float minimum_hysteresis_loss = 0.001'0f;
 constexpr float minimum_vibration_resistance = 0.000'1f;
 
 // Default to a the planetary 3 phase motor.
@@ -489,12 +489,12 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -10),
     .inductance_ki = std::pow(2, -10),
-    .inductance_saliency_ki = std::pow(2, -12),
-    .saliency_angle_ki = std::pow(2, -10),
+    .inductance_saliency_ki = std::pow(2, -11),
+    .saliency_angle_ki = std::pow(2, -12),
     .hysteresis_loss_ki = std::pow(2, -16),
-    .hysteresis_angle_ki = std::pow(2, -10),
+    .hysteresis_angle_ki = std::pow(2, -12),
     .vibration_resistance_ki = std::pow(2, -16),
-    .vibration_angle_ki = std::pow(2, -10),
+    .vibration_angle_ki = std::pow(2, -14),
     .eddy_resistance_ki = 0,
     .motor_constant_ki = std::pow(2, -10),
 };

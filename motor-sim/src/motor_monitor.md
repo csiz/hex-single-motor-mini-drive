@@ -1171,10 +1171,8 @@ const plot_resistance_calibration = plot_lines({
   x_label: "Time (ms)",
   y_label: "Resistance (Ohms)",
   channels: [
-    {y: "resistance_x", label: "Phase Resistance X", color: colors.u},
-    {y: "resistance_y", label: "Phase Resistance Y", color: colors.v},
-    {y: (d) => 0.5 * (d.resistance_x + d.resistance_y), label: "Avg Resistance", color: colors_categories[5]},
-    {y: "vibration_resistance", label: "Vibration", color: colors_categories[7]},
+    {y: "resistance", label: "Phase Resistance", color: colors.u},
+    {y: "vibration_resistance", label: "Vibration 'Resistance'", color: colors_categories[7]},
   ],
   curve,
 });
@@ -1239,8 +1237,7 @@ const plot_gradients = plot_lines({
   y_label: "Value",
   channels: [
 
-    {y: "resistance_x_gradient", label: "Resistance X Gradient", color: colors_categories[2]},
-    {y: "resistance_y_gradient", label: "Resistance Y Gradient", color: colors_categories[3]},
+    {y: "resistance_gradient", label: "Resistance Gradient", color: colors_categories[2]},
     {y: "vibration_resistance_gradient", label: "Vibration Resistance Gradient", color: colors_categories[4]},
     {y: "inductance_gradient", label: "Inductance Gradient", color: colors_categories[5]},
     {y: "inductance_saliency_gradient", label: "Inductance Saliency Gradient", color: colors_categories[6]},
@@ -1412,10 +1409,7 @@ const calibration_series_resistance_plot = plot_lines({
   x_label: "Probing Frequency",
   y_label: "Calibration Parameters",
   channels: [
-    {y: "resistance_x", label: "Phase Resistance X", color: colors_categories[0]},
-    {y: "resistance_y", label: "Phase Resistance Y", color: colors_categories[1]},
-    {y: (d) => 0.5*(d.resistance_x + d.resistance_y), label: "Avg Resistance", color: colors_categories[2]},
-    {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[5]},
+    {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
     {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_resistance", label: "Vibration Resistance", color: colors_categories[7]},
   ],
@@ -1432,8 +1426,7 @@ const calibration_series_inductance_plot = plot_lines({
   channels: [
     {y: "inductance", label: "Phase Inductance", color: colors_categories[2]},
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
-    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
-    {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
+
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });
@@ -1456,10 +1449,27 @@ const calibration_series_angles_plot = plot_lines({
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });
 
+const calibration_series_stats_plot = plot_lines({
+  subtitle: "Stats",
+  description: "Calibration stats.",
+  width: 1200, height: 300,
+  x: "target_speed",
+  x_label: "Probing Frequency",
+  y_label: "Value",
+  channels: [
+    {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[4]},
+    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
+    {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
+  ],
+  default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
+});
+
+
 const calibration_series_plots = {
   calibration_series_resistance_plot,
   calibration_series_inductance_plot,
   calibration_series_angles_plot,
+  calibration_series_stats_plot,
 };
 
 autosave_inputs(calibration_series_plots);

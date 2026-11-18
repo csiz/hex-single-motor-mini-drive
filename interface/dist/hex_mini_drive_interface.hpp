@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.181.0";
+constexpr char const* VERSION_STRING = "0.182.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -571,14 +571,14 @@ struct CalibrationInstance {
   float avg_current_magnitude;
   // Average squared error during this calibration instance.
   float avg_square_error;
-  // Multiplier for the learning rate.
-  float learning_rate_multiplier;
-  // We need to store the last sign (of something) to apply resilient gradient descent.
-  float learning_rate_resilience_sign;
+  // Variance of the squared error.
+  float avg_square_error_variance;
   // Dot product of gradients.
   float gradients_dot;
   // Variance of the dot product of gradients.
   float gradients_dot_variance;
+  // Multiplier for the learning rate.
+  float learning_rate_multiplier;
   // Fraction of data points where current was high enough to meaningfully measure resistance.
   float resistance_excitation_fraction;
   // Fraction of data points where current change was high enough to measure inductance.
@@ -589,14 +589,10 @@ struct CalibrationInstance {
   float inductance_sensitivity;
   // Multiplier for the iron loss.
   float hysteresis_loss_sensitivity;
-  // Resistance in the X phase.
-  float resistance_x;
-  // Gradient of X phase resistance.
-  float resistance_x_gradient;
-  // Resistance in the Y phase.
-  float resistance_y;
-  // Gradient of Y phase resistance.
-  float resistance_y_gradient;
+  // Measured phase resistance.
+  float resistance;
+  // Gradient of resistance.
+  float resistance_gradient;
   // Measured inductance value for each phase.
   float inductance;
   // Gradient of inductance.
@@ -637,13 +633,13 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.avg_square_error);;
   offset += 4;
-  write_float32(buffer + offset, value.learning_rate_multiplier);;
-  offset += 4;
-  write_float32(buffer + offset, value.learning_rate_resilience_sign);;
+  write_float32(buffer + offset, value.avg_square_error_variance);;
   offset += 4;
   write_float32(buffer + offset, value.gradients_dot);;
   offset += 4;
   write_float32(buffer + offset, value.gradients_dot_variance);;
+  offset += 4;
+  write_float32(buffer + offset, value.learning_rate_multiplier);;
   offset += 4;
   write_float32(buffer + offset, value.resistance_excitation_fraction);;
   offset += 4;
@@ -655,13 +651,9 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.hysteresis_loss_sensitivity);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_x);;
+  write_float32(buffer + offset, value.resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_x_gradient);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance_y);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance_y_gradient);;
+  write_float32(buffer + offset, value.resistance_gradient);;
   offset += 4;
   write_float32(buffer + offset, value.inductance);;
   offset += 4;
@@ -705,13 +697,13 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.avg_square_error = read_float32(buffer + offset);
   offset += 4;
-  result.learning_rate_multiplier = read_float32(buffer + offset);
-  offset += 4;
-  result.learning_rate_resilience_sign = read_float32(buffer + offset);
+  result.avg_square_error_variance = read_float32(buffer + offset);
   offset += 4;
   result.gradients_dot = read_float32(buffer + offset);
   offset += 4;
   result.gradients_dot_variance = read_float32(buffer + offset);
+  offset += 4;
+  result.learning_rate_multiplier = read_float32(buffer + offset);
   offset += 4;
   result.resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
@@ -723,13 +715,9 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.hysteresis_loss_sensitivity = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_x = read_float32(buffer + offset);
+  result.resistance = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_x_gradient = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance_y = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance_y_gradient = read_float32(buffer + offset);
+  result.resistance_gradient = read_float32(buffer + offset);
   offset += 4;
   result.inductance = read_float32(buffer + offset);
   offset += 4;
@@ -1426,7 +1414,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 42;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 126;
+    case MessageCode::CALIBRATION_INSTANCE: return 118;
     case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 202;
     case MessageCode::SET_CONTROL_PARAMETERS: return 202;
@@ -1539,9 +1527,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 124) return 0;
+      if (max_size < 2 + 116) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 126;
+      return 118;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1684,7 +1672,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 124) return false;
+      if (size != 2 + 116) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }
