@@ -3,12 +3,12 @@
 // Square a number.
 #include <cstdint>
 
-static inline constexpr void ewma(float & value, float const& new_value, float const& alpha) {
-    value += alpha * (new_value - value);
+static inline constexpr float ewma(float const& previous, float const& value, float const& alpha) {
+    return previous + alpha * (value - previous);
 }
 
-static inline constexpr void ewma_int32(int32_t & value, int32_t const& new_value, float const& alpha) {
-    value += static_cast<int32_t>(alpha * (new_value - value));
+static inline constexpr int32_t ewma_int32(int32_t const& previous, int32_t const& value, float const& alpha) {
+    return previous + static_cast<int32_t>(alpha * (value - previous));
 }
 
 static inline constexpr float square(float x){

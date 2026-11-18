@@ -1173,6 +1173,7 @@ const plot_resistance_calibration = plot_lines({
   channels: [
     {y: "resistance_x", label: "Phase Resistance X", color: colors.u},
     {y: "resistance_y", label: "Phase Resistance Y", color: colors.v},
+    {y: (d) => 0.5 * (d.resistance_x + d.resistance_y), label: "Avg Resistance", color: colors_categories[5]},
     {y: "vibration_resistance", label: "Vibration", color: colors_categories[7]},
   ],
   curve,
@@ -1244,6 +1245,8 @@ const plot_gradients = plot_lines({
     {y: "inductance_gradient", label: "Inductance Gradient", color: colors_categories[5]},
     {y: "inductance_saliency_gradient", label: "Inductance Saliency Gradient", color: colors_categories[6]},
     {y: "hysteresis_loss_gradient", label: "Hysteresis Loss Gradient", color: colors_categories[7]},
+    {y: "gradients_dot", label: "Gradients Dot", color: colors_categories[8]},
+    {y: "gradients_dot_variance", label: "Gradients Dot Variance", color: colors_categories[9]},
   ],
   curve,
 });

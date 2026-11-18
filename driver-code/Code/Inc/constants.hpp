@@ -166,27 +166,27 @@ static_assert(max_drive_current < max_measured_current, "We must be able to meas
 
 
 // Voltage divider between VCC and the ADC reference voltage: 10kohm/110kohm divider
-constexpr float vcc_divider = 10.0/110.0;
+constexpr float vcc_divider = 10.0f/110.0f;
 
 // Conversion factor for the voltage readout from the ADC.
 constexpr float voltage_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * adc_voltage_reference / (adc_max_value * vcc_divider);
 
 // Current conversion back to amps.
-constexpr float amps_per_current_units = 1.0 / hex_mini_drive::CURRENT_UNITS_PER_AMP;
+constexpr float amps_per_current_units = 1.0f / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
 constexpr float amps_per_current_units_square = square(amps_per_current_units);
 
 // Voltage conversion back to volts.
-constexpr float volts_per_voltage_units = 1.0 / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+constexpr float volts_per_voltage_units = 1.0f / hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
 
 // Conversion factor between current and phase resistance voltage.
 constexpr float current_to_voltage_units = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
 // Directly convert voltage * current to power in Watts.
-constexpr float voltage_mul_current_to_power = 1.0 / (hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * hex_mini_drive::CURRENT_UNITS_PER_AMP);
+constexpr float voltage_mul_current_to_power = 1.0f / (hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * hex_mini_drive::CURRENT_UNITS_PER_AMP);
 
 // Our dq0 transformation is the power variant form which needs to be corrected by a factor of 3/2.
-constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 3.0 / 2.0;
+constexpr float dq0_voltage_mul_current_to_power = voltage_mul_current_to_power * 3.0f / 2.0f;
 
 // Maximum measurable voltage by the ADC given the voltage divider and reference voltage.
 constexpr float max_measured_voltage = adc_max_value * voltage_conversion;
@@ -203,10 +203,10 @@ constexpr float max_measured_voltage = adc_max_value * voltage_conversion;
 // Note ADC conversion time is = sample time + 12.5 cycles. The ADC clock is 144MHz / 4.
 
 // Temperature ADC conversion time: 12.5 cycles + 92.5 cycles = 105 cycles = 420 ticks.
-constexpr int32_t temperature_sample_time = (6.5 + 12.5 + 1)*4;
+constexpr int32_t temperature_sample_time = (6.5f + 12.5f + 1)*4;
 
 // Current ADC conversion time: 12.5 cycles + 6.5 cycles = 19 cycles = 76 ticks.
-constexpr int32_t current_sample_time = (6.5 + 12.5 + 1)*4;
+constexpr int32_t current_sample_time = (6.5f + 12.5f + 1)*4;
 
 // The ADC will read the temperature and reference first then 2 phase currents (for each ADC).
 // Try to time the sampling  time of the phase currents symmetrically around the peak of the PWM cycle.
@@ -364,8 +364,8 @@ constexpr float current_measurement_stdev = 8 * adc_to_current_units;
 // The difference between current measurements is noisier. Units of voltage per current (difference) per time step.
 constexpr float inductance_measurement_stdev = 12 * adc_to_current_units * current_diff_to_voltage_units;
 
-// The noise of our applied voltage is 8/3072 from the maximum we can use.
-constexpr float voltage_output_stdev = 8.f * nominal_vcc_voltage * half_pwm_base_inverse;
+// The noise of our applied voltage is a few units from the maximum we can use.
+constexpr float voltage_output_stdev = 4.f * nominal_vcc_voltage * half_pwm_base_inverse;
 
 // Base noise of power measurements.
 constexpr float power_measurement_stdev = voltage_output_stdev * current_measurement_stdev * voltage_mul_current_to_power;
@@ -487,14 +487,14 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .emf_speed_constant_confirmed_threshold = 16.0f,
 
     .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -12),
-    .inductance_ki = std::pow(2, -12),
-    .inductance_saliency_ki = std::pow(2, -14),
-    .saliency_angle_ki = std::pow(2, -12),
-    .hysteresis_loss_ki = std::pow(2, -20),
-    .hysteresis_angle_ki = std::pow(2, -12),
+    .resistance_ki = std::pow(2, -10),
+    .inductance_ki = std::pow(2, -10),
+    .inductance_saliency_ki = std::pow(2, -12),
+    .saliency_angle_ki = std::pow(2, -10),
+    .hysteresis_loss_ki = std::pow(2, -16),
+    .hysteresis_angle_ki = std::pow(2, -10),
     .vibration_resistance_ki = std::pow(2, -16),
-    .vibration_angle_ki = std::pow(2, -12),
+    .vibration_angle_ki = std::pow(2, -10),
     .eddy_resistance_ki = 0,
     .motor_constant_ki = std::pow(2, -10),
 };
