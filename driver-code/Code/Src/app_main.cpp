@@ -6,6 +6,7 @@
 #include "parameters_store.hpp"
 #include "math_utils.hpp"
 #include "constants.hpp"
+#include "sine_tables.hpp"
 #include "dq0_transform.hpp"
 
 #include <cmath>
@@ -93,7 +94,7 @@ const float calibration_target_increment = 128.f;
 const float calibration_target_max = calibration_target_increment * 3;
 
 // TODO: let's make sure high frequencies work nice before going lower.
-const float calibration_speed_base = 2 * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
+const float calibration_speed_base = 4 * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 
 const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
 
@@ -104,8 +105,6 @@ const float calibration_stats_ki = std::pow(2, -8);
 const uint32_t calibration_stability_check_period = 128;
 
 const float excitation_fraction_threshold = 0.2f;
-
-const float epsilon_sensitivity = std::pow(2, -126);
 
 
 static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
@@ -123,13 +122,13 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .inductance_excitation_fraction = 0.f,
     .resistance_x = active_calibration.resistance_x,
     .resistance_y = active_calibration.resistance_y,
-    .resistance_sensitivity = 0.f,
+    .resistance_sensitivity = current_variance,
     .inductance = active_calibration.inductance,
-    .inductance_sensitivity = 0.f,
+    .inductance_sensitivity = inductance_variance,
     .inductance_saliency = active_calibration.inductance_saliency,
     .saliency_angle = active_calibration.saliency_angle,
     .hysteresis_loss = active_calibration.hysteresis_loss,
-    .hysteresis_loss_sensitivity = 0.f,
+    .hysteresis_loss_sensitivity = power_variance,
     .hysteresis_loss_angle = active_calibration.hysteresis_loss_angle,
     .vibration_fraction = active_calibration.vibration_fraction,
     .vibration_axis = active_calibration.vibration_axis,
@@ -629,8 +628,6 @@ static inline void calibrate_from_readout(
   const float x_inductance = readout.x_current_diff * current_diff_to_voltage_units;
   const float y_inductance = readout.y_current_diff * current_diff_to_voltage_units;
 
-  const float current_diff_square = square(readout.x_current_diff) + square(readout.y_current_diff);
-
   // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
   // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
 
@@ -705,6 +702,11 @@ static inline void calibrate_from_readout(
   // there isn't enough energy in the error to warrant an update.
   const float square_voltage_error = square(x_voltage_error) + square(y_voltage_error);
 
+  const float square_current = square(readout.current_magnitude);
+
+  const float square_inductance = square(x_inductance) + square(y_inductance);
+
+
   // Store stats
   // -----------
   // 
@@ -717,7 +719,7 @@ static inline void calibrate_from_readout(
 
   const float square_error_change = square_voltage_error - calibration_instance.avg_square_error;
   calibration_instance.avg_square_error += square_error_change * calibration_stats_ki;
-
+  
   // Gradients & Parameter Updates
   // -----------------------------
   // 
@@ -726,11 +728,11 @@ static inline void calibrate_from_readout(
   // ! We must not condition the updates apparently...
 
   // Count how often we see enough current to meaningfully calibrate resistance (we still have to do it, but we mark it as uncertain).
-  const bool resistance_excited = readout.current_magnitude > current_measurement_noise;
+  const bool resistance_excited = square_current > current_variance;
   calibration_instance.resistance_excitation_fraction += (resistance_excited - calibration_instance.resistance_excitation_fraction) * calibration_stats_ki;
 
   // Also track inductance excitation.
-  const bool inductance_excited = current_diff_square > current_diff_measurement_variance;
+  const bool inductance_excited = square_inductance > inductance_variance;
   calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_stats_ki;
   
   // Compute the group learning rate multiplier based on the sign of the change of our average error.
@@ -748,7 +750,7 @@ static inline void calibrate_from_readout(
   }
 
 
-  calibration_instance.resistance_sensitivity = square(readout.x_current) + square(readout.y_current) + epsilon_sensitivity;
+  calibration_instance.resistance_sensitivity = square_current + current_variance;
   const float resistance_scaling = 1.f / calibration_instance.resistance_sensitivity;
 
   const float resistance_x_gradient = resistance_scaling * x_voltage_error * readout.x_current;
@@ -765,7 +767,7 @@ static inline void calibrate_from_readout(
     -resistance_y_gradient * control_parameters.resistance_ki * calibration_instance.learning_rate_multiplier
   );
 
-  calibration_instance.inductance_sensitivity = square(x_inductance) + square(y_inductance) + epsilon_sensitivity;
+  calibration_instance.inductance_sensitivity = square_inductance + inductance_variance;
   const float inductance_scaling = 1.f / calibration_instance.inductance_sensitivity;
 
   const float inductance_gradient = inductance_scaling * (
@@ -806,7 +808,7 @@ static inline void calibrate_from_readout(
     calibration_instance.saliency_angle += half_circle;
   }
 
-  calibration_instance.hysteresis_loss_sensitivity = square(x_hysteresis_loss) + square(y_hysteresis_loss) + epsilon_sensitivity;
+  calibration_instance.hysteresis_loss_sensitivity = square(x_hysteresis_loss) + square(y_hysteresis_loss) + power_variance;
   
   const float hysteresis_loss_scaling = 1.f / calibration_instance.hysteresis_loss_sensitivity;
 

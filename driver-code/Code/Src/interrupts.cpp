@@ -6,6 +6,7 @@
 #include "math_utils.hpp"
 #include "io.hpp"
 #include "constants.hpp"
+#include "sine_tables.hpp"
 #include "dq0_transform.hpp"
 #include "circular_buffer.hpp"
 
