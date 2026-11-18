@@ -536,7 +536,7 @@ static inline void finish_calibration_series(const bool remember_intermediate = 
 
 static inline void calibrate_from_readout(
   hex_mini_drive::Readout const& readout, 
-  const bool remember_intermediate = true, 
+  const bool remember_intermediate = false, 
   const bool repeat_until_stable = true
 ) {
   // Calibration checks
@@ -761,38 +761,54 @@ static inline void calibrate_from_readout(
   calibration_instance.resistance_sensitivity = square_current + current_variance;
   const float resistance_scaling = 1.f / calibration_instance.resistance_sensitivity;
 
-  const float resistance_x_gradient = resistance_scaling * x_voltage_error * readout.x_current;
-  const float resistance_y_gradient = resistance_scaling * y_voltage_error * readout.y_current;
+  ewma(
+    calibration_instance.resistance_x_gradient,
+    resistance_scaling * x_voltage_error * readout.x_current,
+    calibration_stats_ki
+  );
+  ewma(
+    calibration_instance.resistance_y_gradient,
+    resistance_scaling * y_voltage_error * readout.y_current,
+    calibration_stats_ki
+  );
   
   validate_parameter_update(
     minimum_resistance, 
     calibration_instance.resistance_x,
-    -resistance_x_gradient * control_parameters.resistance_ki * calibration_instance.learning_rate_multiplier
+    -calibration_instance.resistance_x_gradient * control_parameters.resistance_ki * calibration_instance.learning_rate_multiplier
   );
   validate_parameter_update(
     minimum_resistance, 
     calibration_instance.resistance_y,
-    -resistance_y_gradient * control_parameters.resistance_ki * calibration_instance.learning_rate_multiplier
+    -calibration_instance.resistance_y_gradient * control_parameters.resistance_ki * calibration_instance.learning_rate_multiplier
   );
 
   calibration_instance.inductance_sensitivity = square_inductance + inductance_variance;
   const float inductance_scaling = 1.f / calibration_instance.inductance_sensitivity;
-
-  const float inductance_gradient = inductance_scaling * (
-    x_voltage_error * x_inductance +
-    y_voltage_error * y_inductance
+  
+  ewma(
+    calibration_instance.inductance_gradient,
+    inductance_scaling * (
+      x_voltage_error * x_inductance +
+      y_voltage_error * y_inductance
+    ),
+    calibration_stats_ki
   );
   
   // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
   validate_parameter_update(
     minimum_inductance, 
     calibration_instance.inductance, 
-    -inductance_gradient * control_parameters.inductance_ki * calibration_instance.learning_rate_multiplier
+    -calibration_instance.inductance_gradient * control_parameters.inductance_ki * calibration_instance.learning_rate_multiplier
   );
 
-  const float inductance_saliency_gradient = inductance_scaling * (
-    x_voltage_error * x_inductance_saliency +
-    y_voltage_error * y_inductance_saliency
+  ewma(
+    calibration_instance.inductance_saliency_gradient,
+    inductance_scaling * (
+      x_voltage_error * x_inductance_saliency +
+      y_voltage_error * y_inductance_saliency
+    ),
+    calibration_stats_ki
   );
 
 
@@ -802,7 +818,7 @@ static inline void calibrate_from_readout(
   if (validate_parameter_update(
     minimum_inductance_saliency,
     calibration_instance.inductance_saliency, 
-    -inductance_saliency_gradient * control_parameters.inductance_saliency_ki * calibration_instance.learning_rate_multiplier
+    -calibration_instance.inductance_saliency_gradient * control_parameters.inductance_saliency_ki * calibration_instance.learning_rate_multiplier
   )) {
     // If we're normal condition, then just gradient descent the angle too.
     const float saliency_angle_gradient = inductance_scaling * (
@@ -812,8 +828,8 @@ static inline void calibrate_from_readout(
 
     calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
   } else {
-    // If we went negative/below minimum it's likely the angle converged to the opposite pole. Flip and reset the angle state.
-    calibration_instance.saliency_angle += half_circle;
+    // Try a different angle if we converged on the negative side.
+    calibration_instance.saliency_angle += eight_circle;
   }
 
   calibration_instance.hysteresis_loss_sensitivity = square(x_hysteresis_loss) + square(y_hysteresis_loss) + power_variance;
@@ -821,15 +837,19 @@ static inline void calibrate_from_readout(
   const float hysteresis_loss_scaling = 1.f / calibration_instance.hysteresis_loss_sensitivity;
 
   // And gradients for micro rotor vibrations.
-  const float hysteresis_loss_gradient = hysteresis_loss_scaling * (
-    x_voltage_error * x_hysteresis_loss + 
-    y_voltage_error * y_hysteresis_loss
+  ewma(
+    calibration_instance.hysteresis_loss_gradient,
+    hysteresis_loss_scaling * (
+      x_voltage_error * x_hysteresis_loss + 
+      y_voltage_error * y_hysteresis_loss
+    ),
+    calibration_stats_ki
   );
 
   if(validate_parameter_update(
     minimum_hysteresis_loss,
     calibration_instance.hysteresis_loss,
-    -hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki * calibration_instance.learning_rate_multiplier
+    -calibration_instance.hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki * calibration_instance.learning_rate_multiplier
   )){
     const float hysteresis_angle_gradient = hysteresis_loss_scaling * (
       x_voltage_error * -y_hysteresis_loss + 
@@ -838,18 +858,22 @@ static inline void calibrate_from_readout(
 
     calibration_instance.hysteresis_angle -= static_cast<int32_t>(hysteresis_angle_gradient * control_parameters.hysteresis_angle_ki);
   } else {
-    calibration_instance.hysteresis_angle += half_circle;
+    // Try a different angle if we are going negative.
+    calibration_instance.hysteresis_angle += eight_circle;
   }
-
-  const float vibration_factor_gradient = resistance_scaling * (
-    x_voltage_error * x_vibration + 
-    y_voltage_error * y_vibration
+  ewma(
+    calibration_instance.vibration_resistance_gradient,
+    resistance_scaling * (
+      x_voltage_error * x_vibration + 
+      y_voltage_error * y_vibration
+    ),
+    calibration_stats_ki
   );
 
   if (validate_parameter_update(
     minimum_vibration_resistance,
     calibration_instance.vibration_resistance,
-    -vibration_factor_gradient * control_parameters.vibration_resistance_ki * calibration_instance.learning_rate_multiplier
+    -calibration_instance.vibration_resistance_gradient * control_parameters.vibration_resistance_ki * calibration_instance.learning_rate_multiplier
   )) {
     const float vibration_angle_gradient = resistance_scaling * (
       x_voltage_error * -B_vibration + 
@@ -857,7 +881,8 @@ static inline void calibrate_from_readout(
     ) * radians_to_angle_units / calibration_instance.vibration_resistance;
     calibration_instance.vibration_angle -= static_cast<int32_t>(vibration_angle_gradient * control_parameters.vibration_angle_ki);
   } else {
-    // Not sure it's correct to flip vibration axis by 180 degrees.
+    // Try a different angle if we are going negative.
+    calibration_instance.vibration_angle += eight_circle;
   }
 
 

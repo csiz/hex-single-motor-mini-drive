@@ -1228,6 +1228,26 @@ const plot_motor_values = plot_lines({
   curve,
 });
 
+
+const plot_gradients = plot_lines({
+  subtitle: "Gradients",
+  description: "Calibration gradients.",
+  width: 1200, height: 400,
+  x: "time",
+  x_label: "Time (ms)",
+  y_label: "Value",
+  channels: [
+
+    {y: "resistance_x_gradient", label: "Resistance X Gradient", color: colors_categories[2]},
+    {y: "resistance_y_gradient", label: "Resistance Y Gradient", color: colors_categories[3]},
+    {y: "vibration_resistance_gradient", label: "Vibration Resistance Gradient", color: colors_categories[4]},
+    {y: "inductance_gradient", label: "Inductance Gradient", color: colors_categories[5]},
+    {y: "inductance_saliency_gradient", label: "Inductance Saliency Gradient", color: colors_categories[6]},
+    {y: "hysteresis_loss_gradient", label: "Hysteresis Loss Gradient", color: colors_categories[7]},
+  ],
+  curve,
+});
+
 const monitoring_plots = {
   plot_power,
   plot_runtime_stats,
@@ -1248,6 +1268,7 @@ const monitoring_plots = {
   plot_inductance_calibration,
   plot_angles_calibration,
   plot_motor_values,
+  plot_gradients,
 };
 
 autosave_inputs(monitoring_plots);
