@@ -621,8 +621,7 @@ static inline void calibrate_from_readout(
   // the back emf from vibrations will act in opposing phase to the drive voltage
   // projected onto the emf axis of the rotor. The rotor, vibrating in place will
   // produce a vibrating emf response mostly on it's own axis.
-  const int32_t current_angle = readout.current_angle_offset + readout.predicted_angle;
-  const int32_t vibration_angle_to_current = calibration_instance.vibration_angle - current_angle;
+  const int32_t vibration_angle_to_current = calibration_instance.vibration_angle - readout.current_angle;
   const float sin_vibration_projection = get_sin(vibration_angle_to_current);
   const float cos_vibration_projection = get_cos(vibration_angle_to_current);
 
@@ -669,13 +668,13 @@ static inline void calibrate_from_readout(
   const float cos_hysteresis_loss = get_cos(calibration_instance.hysteresis_angle);
 
   const float A_hysteresis_loss = (
-    readout.x_current * x_inductance_voltage - 
-    readout.y_current * y_inductance_voltage
+    readout.x_current * x_inductance_base_voltage - 
+    readout.y_current * y_inductance_base_voltage
   ) * voltage_mul_current_to_power;
 
   const float B_hysteresis_loss = (
-    readout.x_current * y_inductance_voltage + 
-    readout.y_current * x_inductance_voltage
+    readout.x_current * y_inductance_base_voltage + 
+    readout.y_current * x_inductance_base_voltage
   ) * voltage_mul_current_to_power;
 
   const float x_hysteresis_loss = A_hysteresis_loss * cos_hysteresis_loss - B_hysteresis_loss * sin_hysteresis_loss;
@@ -809,7 +808,8 @@ static inline void calibrate_from_readout(
 
     calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
   } else {
-    // Don't update angle when we flip to negatives.
+    // Rotate the angle very slowly to get out of bad states.
+    calibration_instance.saliency_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
 
   const float square_inductance_power = square(x_hysteresis_loss) + square(y_hysteresis_loss);
@@ -840,7 +840,8 @@ static inline void calibrate_from_readout(
 
     calibration_instance.hysteresis_angle -= static_cast<int32_t>(hysteresis_angle_gradient * control_parameters.hysteresis_angle_ki);
   } else {
-    // Don't update angle when we flip to negatives.
+    // Rotate the angle very slowly to get out of bad states.
+    calibration_instance.hysteresis_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
 
   const float vibration_resistance_gradient = ewma(
@@ -863,7 +864,8 @@ static inline void calibrate_from_readout(
     ) * radians_to_angle_units / calibration_instance.vibration_resistance;
     calibration_instance.vibration_angle -= static_cast<int32_t>(vibration_angle_gradient * control_parameters.vibration_angle_ki);
   } else {
-    // Don't update angle when we flip to negatives.
+    // Rotate the angle very slowly to get out of bad states.
+    calibration_instance.vibration_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
 
   // Aggregate checks

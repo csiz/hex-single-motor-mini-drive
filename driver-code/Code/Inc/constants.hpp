@@ -34,6 +34,8 @@ constexpr int32_t pwm_period = 2 * hex_mini_drive::PWM_BASE;
 // Number of PWM cycles per second.
 constexpr int32_t pwm_cycles_per_second = hex_mini_drive::CLOCK_FREQUENCY / pwm_period;
 
+constexpr float seconds_per_pwm = 1.f / static_cast<float>(pwm_cycles_per_second);
+
 // We define the maximum drive/measurable electrical rotation frequency as slightly less than
 // 12 x the sampling rate. At this speed we move 30degrees around the circle per PWM cycle,
 // but not exactly 30degrees so we can sample all angles.
@@ -423,7 +425,8 @@ const hex_mini_drive::Calibration default_calibration = {
     .inductance_saliency = minimum_inductance_saliency,
     .hysteresis_loss = minimum_hysteresis_loss,
     .eddy_resistance = 0.f,
-    .vibration_resistance = minimum_vibration_resistance,
+    // TODO: disable vibration until we get back to low frequency.
+    .vibration_resistance = 0.f, //minimum_vibration_resistance,
 };
 
 // The default control parameters should be set to reasonable values for any motor.

@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.182.0";
+constexpr char const* VERSION_STRING = "0.183.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -246,14 +246,18 @@ struct Readout {
   float emf_speed_constant;
   // Variance of the instantaneous emf speed constant; used to determine if the estimate is reliable.
   float emf_speed_constant_variance;
-  // Angle of the current vector relative to the rotor angle.
-  int32_t current_angle_offset;
+  // Angle of the current vector.
+  int32_t current_angle;
   // Magnitude of the current vector.
   float current_magnitude;
   // Angular speed of the current vector.
   float current_angular_speed;
   // Change in current magnitude.
   float current_magnitude_diff;
+  // Angle of the current change vector (inductance).
+  int32_t inductance_angle;
+  // Magnitude of the current change vector (inductance).
+  float inductance_magnitude;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
   // Long duration average of the total power; used to limit the maximum power draw.
@@ -320,13 +324,17 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant_variance);;
   offset += 4;
-  write_int32(buffer + offset, value.current_angle_offset);;
+  write_int32(buffer + offset, value.current_angle);;
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude);;
   offset += 4;
   write_float32(buffer + offset, value.current_angular_speed);;
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude_diff);;
+  offset += 4;
+  write_int32(buffer + offset, value.inductance_angle);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_magnitude);;
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
@@ -396,13 +404,17 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.emf_speed_constant_variance = read_float32(buffer + offset);
   offset += 4;
-  result.current_angle_offset = read_int32(buffer + offset);
+  result.current_angle = read_int32(buffer + offset);
   offset += 4;
   result.current_magnitude = read_float32(buffer + offset);
   offset += 4;
   result.current_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.current_magnitude_diff = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_angle = read_int32(buffer + offset);
+  offset += 4;
+  result.inductance_magnitude = read_float32(buffer + offset);
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
@@ -1399,7 +1411,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 134;
+    case MessageCode::READOUT: return 142;
     case MessageCode::INFO: return 18;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
@@ -1447,9 +1459,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 132) return 0;
+      if (max_size < 2 + 140) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 134;
+      return 142;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
@@ -1597,7 +1609,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 132) return false;
+      if (size != 2 + 140) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }

@@ -261,7 +261,7 @@ void ADC1_2_IRQHandler(void){
     const int32_t current_angle_offset = current_angle - predicted_angle;
 
     // Instantaneous current angular speed is the change in current angle per timestep.
-    const float current_angular_speed = current_angle - (readout.current_angle_offset + readout.predicted_angle);
+    const float current_angular_speed = current_angle - readout.current_angle;
 
     const float current_magnitude_diff = current_magnitude - readout.current_magnitude;
 
@@ -302,8 +302,11 @@ void ADC1_2_IRQHandler(void){
     const float x_current_diff = x_current - readout.x_current;
     const float y_current_diff = y_current - readout.y_current;
 
-    const float x_diff = x_current_diff * current_diff_to_voltage_units;
-    const float y_diff = y_current_diff * current_diff_to_voltage_units;
+    const float x_inductance = x_current_diff * current_diff_to_voltage_units;
+    const float y_inductance = y_current_diff * current_diff_to_voltage_units;
+
+    // We need the inductance as an angle for saliency calculations.
+    set_cordic(x_inductance, y_inductance);
 
     // Ignore the saliency_angle_offset in the tight loop and assume it is 0. The saliency
     // effect depends on the rotor position!
@@ -313,16 +316,18 @@ void ADC1_2_IRQHandler(void){
     const float sin_saliency = get_sin(saliency_angle);
 
     const float x_inductance_saliency_voltage = calibration.inductance_saliency * (
-        -x_diff * cos_saliency 
-        -y_diff * sin_saliency
+        -x_inductance * cos_saliency 
+        -y_inductance * sin_saliency
     );
     const float y_inductance_saliency_voltage = calibration.inductance_saliency * (
-        -x_diff * sin_saliency
-        +y_diff * cos_saliency
+        -x_inductance * sin_saliency
+        +y_inductance * cos_saliency
     );
 
-    const float x_inductance_base_voltage = x_diff * calibration.inductance;
-    const float y_inductance_base_voltage = y_diff * calibration.inductance;
+    const auto [inductance_angle, inductance_magnitude] = get_cordic();
+
+    const float x_inductance_base_voltage = x_inductance * calibration.inductance;
+    const float y_inductance_base_voltage = y_inductance * calibration.inductance;
 
     const float x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
     const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
@@ -690,11 +695,13 @@ void ADC1_2_IRQHandler(void){
     readout.emf_speed_constant = emf_speed_constant;
     readout.emf_speed_constant_variance = emf_speed_constant_variance;
 
-    readout.current_angle_offset = current_angle_offset;
+    readout.current_angle = current_angle;
     readout.current_magnitude = current_magnitude;
     readout.current_angular_speed = current_angular_speed;
     readout.current_magnitude_diff = current_magnitude_diff;
-
+    readout.inductance_angle = inductance_angle;
+    readout.inductance_magnitude = inductance_magnitude;
+    
     readout.live_max_pwm = live_max_pwm;
     readout.total_power_average = total_power_average;
     readout.resistive_power_average = resistive_power_average;

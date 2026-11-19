@@ -78,11 +78,13 @@ export function parse_readout(bare_readout, previous_readout) {
   const emf_speed_constant = bare_readout.emf_speed_constant;
   const emf_speed_constant_stdev = Math.sqrt(bare_readout.emf_speed_constant_variance);
 
-  const current_angle_offset = angle_units_to_radians(bare_readout.current_angle_offset);
-  const current_angle = normalize_radians(predicted_angle + current_angle_offset);
+  const current_angle = angle_units_to_radians(bare_readout.current_angle);
+  const current_angle_offset = normalize_radians(current_angle - predicted_angle);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
   const current_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.current_angular_speed);
   const current_magnitude_diff = bare_readout.current_magnitude_diff / CURRENT_UNITS_PER_AMP;
+  const inductance_angle = angle_units_to_radians(bare_readout.inductance_angle);
+  const inductance_magnitude = bare_readout.inductance_magnitude / VOLTAGE_UNITS_PER_VOLT;
 
   const live_max_pwm = bare_readout.live_max_pwm;
 
@@ -276,6 +278,8 @@ export function parse_readout(bare_readout, previous_readout) {
     current_magnitude,
     current_angular_speed,
     current_magnitude_diff,
+    inductance_angle,
+    inductance_magnitude,
     live_max_pwm,
     
     battery_current,

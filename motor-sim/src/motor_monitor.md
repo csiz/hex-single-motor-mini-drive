@@ -945,6 +945,7 @@ const plot_electric_position = plot_lines({
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
     {y: "hysteresis_angle", label: "Hysteresis Loss Angle", color: colors_categories[6]},
     {y: "current_angle", label: "Current Angle", color: colors_categories[3]},
+    {y: "inductance_angle", label: "Inductance Angle", color: colors_categories[4]},
     {
       y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),

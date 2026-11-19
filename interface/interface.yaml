@@ -310,9 +310,9 @@ definitions:
         type: float32
         doc: Variance of the instantaneous emf speed constant; used to determine if the estimate is reliable.
 
-      current_angle_offset:
+      current_angle:
         type: int32
-        doc: Angle of the current vector relative to the rotor angle.
+        doc: Angle of the current vector.
 
       current_magnitude:
         type: float32
@@ -325,6 +325,14 @@ definitions:
       current_magnitude_diff:
         type: float32
         doc: Change in current magnitude.
+
+      inductance_angle:
+        type: int32
+        doc: Angle of the current change vector (inductance).
+      
+      inductance_magnitude:
+        type: float32
+        doc: Magnitude of the current change vector (inductance).
 
       live_max_pwm:
         type: float32
