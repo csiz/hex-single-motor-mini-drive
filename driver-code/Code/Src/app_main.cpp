@@ -621,14 +621,13 @@ static inline void calibrate_from_readout(
   // the back emf from vibrations will act in opposing phase to the drive voltage
   // projected onto the emf axis of the rotor. The rotor, vibrating in place will
   // produce a vibrating emf response mostly on it's own axis.
-  const float sin_vibration = get_sin(calibration_instance.vibration_angle);
-  const float cos_vibration = get_cos(calibration_instance.vibration_angle);
+  const int32_t current_angle = readout.current_angle_offset + readout.predicted_angle;
+  const int32_t vibration_angle_to_current = calibration_instance.vibration_angle - current_angle;
+  const float sin_vibration_projection = get_sin(vibration_angle_to_current);
+  const float cos_vibration_projection = get_cos(vibration_angle_to_current);
 
-  const float A_vibration = readout.x_current * cos_vibration + readout.y_current * sin_vibration;
-  const float B_vibration = readout.x_current * sin_vibration - readout.y_current * cos_vibration;
-
-  const float x_vibration = 0.5f * (readout.x_current + A_vibration);
-  const float y_vibration = 0.5f * (readout.y_current + B_vibration);
+  const float x_vibration = readout.current_magnitude * cos_vibration_projection;
+  const float y_vibration = readout.current_magnitude * sin_vibration_projection;
 
   const float x_vibration_voltage = x_vibration * calibration_instance.vibration_resistance;
   const float y_vibration_voltage = y_vibration * calibration_instance.vibration_resistance;
@@ -859,8 +858,8 @@ static inline void calibrate_from_readout(
     -vibration_resistance_gradient * control_parameters.vibration_resistance_ki * calibration_instance.learning_rate_multiplier
   )) {
     const float vibration_angle_gradient = resistance_scaling * (
-      x_voltage_error * -B_vibration + 
-      y_voltage_error * A_vibration
+      x_voltage_error * -y_vibration + 
+      y_voltage_error * x_vibration
     ) * radians_to_angle_units / calibration_instance.vibration_resistance;
     calibration_instance.vibration_angle -= static_cast<int32_t>(vibration_angle_gradient * control_parameters.vibration_angle_ki);
   } else {
