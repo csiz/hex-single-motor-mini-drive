@@ -144,14 +144,12 @@ export function parse_readout(bare_readout, previous_readout) {
   // Recalculate calibration stuff so we can vizualize it
   // ----------------------------------------------------
 
-  const sin_vibration = Math.sin(bare_readout.vibration_angle);
-  const cos_vibration = Math.cos(bare_readout.vibration_angle);
+  const vibration_angle_to_current = normalize_radians(bare_readout.vibration_angle - current_angle);
+  const sin_vibration_projection = Math.sin(vibration_angle_to_current);
+  const cos_vibration_projection = Math.cos(vibration_angle_to_current);
 
-  const A_vibration = x_drive_voltage * cos_vibration + y_drive_voltage * sin_vibration;
-  const B_vibration = x_drive_voltage * sin_vibration - y_drive_voltage * cos_vibration;
-
-  const x_vibration = 0.5 * (x_drive_voltage + A_vibration);
-  const y_vibration = 0.5 * (y_drive_voltage + B_vibration);
+  const x_vibration = current_magnitude * cos_vibration_projection;
+  const y_vibration = current_magnitude * sin_vibration_projection;
 
   const x_vibration_voltage = x_vibration * bare_readout.vibration_resistance;
   const y_vibration_voltage = y_vibration * bare_readout.vibration_resistance;
@@ -189,23 +187,25 @@ export function parse_readout(bare_readout, previous_readout) {
   const x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
   const y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
   
-  const sin_hysteresis_loss = Math.sin(bare_readout.hysteresis_angle);
-  const cos_hysteresis_loss = Math.cos(bare_readout.hysteresis_angle);
 
-  const A_hysteresis_loss = (
-    x_current * x_inductance_voltage - 
-    y_current * y_inductance_voltage
-  );
-  const B_hysteresis_loss = (
-    x_current * y_inductance_voltage + 
-    y_current * x_inductance_voltage
-  );
+  // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
+  const hysteresis_angle_thing = normalize_radians(bare_readout.hysteresis_angle + current_angle + inductance_angle);
+  const sin_hysteresis_loss = Math.sin(hysteresis_angle_thing);
+  const cos_hysteresis_loss = Math.cos(hysteresis_angle_thing);
 
-  const x_hysteresis_loss = A_hysteresis_loss * cos_hysteresis_loss - B_hysteresis_loss * sin_hysteresis_loss;
-  const y_hysteresis_loss = A_hysteresis_loss * sin_hysteresis_loss + B_hysteresis_loss * cos_hysteresis_loss;
+  const hysteresis_scaling = (
+    current_magnitude * 
+    inductance_magnitude * 
+    bare_readout.inductance
+  );
+  
+  const x_hysteresis_loss = cos_hysteresis_loss * hysteresis_scaling;
+  const y_hysteresis_loss = sin_hysteresis_loss * hysteresis_scaling;
 
   const x_hysteresis_loss_voltage = bare_readout.hysteresis_loss * x_hysteresis_loss;
+  
   const y_hysteresis_loss_voltage = bare_readout.hysteresis_loss * y_hysteresis_loss;
+
 
   // Calibrate without EMF!!!
   // ------------------------

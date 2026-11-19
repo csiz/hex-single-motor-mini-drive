@@ -664,21 +664,20 @@ static inline void calibrate_from_readout(
   const float x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
   const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
   
-  const float sin_hysteresis_loss = get_sin(calibration_instance.hysteresis_angle);
-  const float cos_hysteresis_loss = get_cos(calibration_instance.hysteresis_angle);
+  // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
+  const int32_t hysteresis_angle_thing = calibration_instance.hysteresis_angle + readout.current_angle + readout.inductance_angle;
+  const float sin_hysteresis_loss = get_sin(hysteresis_angle_thing);
+  const float cos_hysteresis_loss = get_cos(hysteresis_angle_thing);
 
-  const float A_hysteresis_loss = (
-    readout.x_current * x_inductance_base_voltage - 
-    readout.y_current * y_inductance_base_voltage
-  ) * voltage_mul_current_to_power;
-
-  const float B_hysteresis_loss = (
-    readout.x_current * y_inductance_base_voltage + 
-    readout.y_current * x_inductance_base_voltage
-  ) * voltage_mul_current_to_power;
-
-  const float x_hysteresis_loss = A_hysteresis_loss * cos_hysteresis_loss - B_hysteresis_loss * sin_hysteresis_loss;
-  const float y_hysteresis_loss = A_hysteresis_loss * sin_hysteresis_loss + B_hysteresis_loss * cos_hysteresis_loss;
+  const float hysteresis_scaling = (
+    readout.current_magnitude * 
+    readout.inductance_magnitude * 
+    calibration_instance.inductance * 
+    voltage_mul_current_to_power
+  );
+  
+  const float x_hysteresis_loss = cos_hysteresis_loss * hysteresis_scaling;
+  const float y_hysteresis_loss = sin_hysteresis_loss * hysteresis_scaling;
 
   const float x_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * x_hysteresis_loss;
   
