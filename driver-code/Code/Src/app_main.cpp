@@ -146,9 +146,6 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .hysteresis_loss = active_calibration.hysteresis_loss,
     .hysteresis_loss_gradient = 0.f,
     .hysteresis_angle = active_calibration.hysteresis_angle,
-    .vibration_resistance = active_calibration.vibration_resistance,
-    .vibration_resistance_gradient = 0.f,
-    .vibration_angle = active_calibration.vibration_angle,
   };
 }
 
@@ -232,8 +229,7 @@ static inline hex_mini_drive::CalibrationInstance make_calibration_instance(hex_
     .resistance = calibration.resistance,
     .inductance = calibration.inductance,
     .inductance_saliency = calibration.inductance_saliency,
-    .hysteresis_loss = calibration.hysteresis_loss,
-    .vibration_resistance = calibration.vibration_resistance
+    .hysteresis_loss = calibration.hysteresis_loss
   };
 }
 
@@ -616,22 +612,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // -----------
   // We need to recalculate these values in the main loop as they are not the primary tracking variables.
 
-  const float drive_voltage = readout.vcc_voltage * readout.active_pwm * active_pwm_to_voltage_conversion;
-
-  // Assuming the motor is oscillating with a roughly fixed angle, then... maybe...
-  // the back emf from vibrations will act in opposing phase to the drive voltage
-  // projected onto the emf axis of the rotor. The rotor, vibrating in place will
-  // produce a vibrating emf response mostly on it's own axis.
-  const int32_t vibration_angle_thing = calibration_instance.vibration_angle - readout.current_angle - readout.current_angle + readout.current_diff_angle;
-  const float sin_vibration_projection = get_sin(vibration_angle_thing);
-  const float cos_vibration_projection = get_cos(vibration_angle_thing);
-
-  const float x_vibration = readout.current_magnitude * cos_vibration_projection;
-  const float y_vibration = readout.current_magnitude * sin_vibration_projection;
-
-  const float x_vibration_voltage = x_vibration * calibration_instance.vibration_resistance;
-  const float y_vibration_voltage = y_vibration * calibration_instance.vibration_resistance;
-  
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const float x_resistive_voltage = readout.x_current * calibration_instance.resistance;
   const float y_resistive_voltage = readout.y_current * calibration_instance.resistance;
@@ -696,14 +676,12 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     x_inductance_voltage + 
     x_resistive_voltage + 
     x_hysteresis_loss_voltage + 
-    x_vibration_voltage + 
     -readout.x_drive_voltage
   );
   const float y_voltage_error = (
     y_inductance_voltage + 
     y_resistive_voltage + 
     y_hysteresis_loss_voltage + 
-    y_vibration_voltage + 
     -readout.y_drive_voltage
   );
 
@@ -721,6 +699,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // -----------
   // 
   // The error is evolving during the optimization, we want to store the end-ish value after we've optimized our parameters.
+
+  const float drive_voltage = readout.vcc_voltage * readout.active_pwm * active_pwm_to_voltage_conversion;
 
   calibration_instance.avg_drive_voltage += (drive_voltage - calibration_instance.avg_drive_voltage) * calibration_stats_ki;
   calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_stats_ki;
@@ -842,39 +822,13 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     calibration_instance.hysteresis_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
 
-
-  const float vibration_resistance_gradient = ewma(
-    calibration_instance.vibration_resistance_gradient,
-    resistance_scaling * (
-      x_voltage_error * x_vibration + 
-      y_voltage_error * y_vibration
-    ),
-    calibration_stats_ki
-  );
-
-  if (validate_parameter_update(
-    minimum_vibration_resistance,
-    calibration_instance.vibration_resistance,
-    -vibration_resistance_gradient * control_parameters.vibration_resistance_ki * calibration_instance.learning_rate_multiplier
-  )) {
-    const float vibration_angle_gradient = resistance_scaling * (
-      x_voltage_error * -y_vibration + 
-      y_voltage_error * x_vibration
-    ) * radians_to_angle_units / calibration_instance.vibration_resistance;
-    calibration_instance.vibration_angle -= static_cast<int32_t>(vibration_angle_gradient * control_parameters.vibration_angle_ki);
-  } else {
-    // Rotate the angle very slowly to get out of bad states.
-    calibration_instance.vibration_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
-  }
-
   // Aggregate checks
   // ----------------
 
   // Compute the dot product between the new gradients and the previous gradients.
   const float gradients_dot = (
     (
-      resistance_gradient * calibration_instance.resistance_gradient +
-      vibration_resistance_gradient * calibration_instance.vibration_resistance_gradient * (calibration_instance.vibration_resistance != 0.0f)
+      resistance_gradient * calibration_instance.resistance_gradient
     ) * square_current +
     (
       inductance_gradient * calibration_instance.inductance_gradient +
@@ -899,7 +853,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   calibration_instance.inductance_gradient = inductance_gradient;
   calibration_instance.inductance_saliency_gradient = inductance_saliency_gradient;
   calibration_instance.hysteresis_loss_gradient = hysteresis_loss_gradient;
-  calibration_instance.vibration_resistance_gradient = vibration_resistance_gradient;
 
   // Check for stability
   // -------------------

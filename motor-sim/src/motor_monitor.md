@@ -950,7 +950,6 @@ const plot_electric_position = plot_lines({
       y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
     },
-    {y: "vibration_angle", label: "Vibration Angle", color: colors_categories[7]},
     {y: (d) => normalize_radians(2*d.emf_voltage_angle)*0.5, label: "EMF Voltage Axis", color: d3.color(colors.voltage_angle).brighter(1)},
     {y: (d) => d.drive_voltage_magnitude > 0 ? d.drive_voltage_angle : null, label: "Drive Voltage Angle", color: colors_categories[2]},
   ],
@@ -1124,8 +1123,6 @@ const plot_inferred_voltages = plot_lines({
     {y: "voltage_error", label: "Voltage Error", color: colors_categories[10]},
     {y: "x_drive_voltage", label: "Drive Voltage on X axis", color: colors_categories[11]},
     {y: "y_drive_voltage", label: "Drive Voltage on Y axis", color: colors_categories[12]},
-    {y: "x_vibration_voltage", label: "X Vibration", color: colors_categories[13]},
-    {y: "y_vibration_voltage", label: "Y Vibration", color: colors_categories[14]},
   ],
   curve,
 });
@@ -1174,7 +1171,6 @@ const plot_resistance_calibration = plot_lines({
   y_label: "Resistance (Ohms)",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors.u},
-    {y: "vibration_resistance", label: "Vibration 'Resistance'", color: colors_categories[7]},
   ],
   curve,
 });
@@ -1206,9 +1202,7 @@ const plot_angles_calibration = plot_lines({
     {y: "angle", label: "Angle", color: colors.u},
     {y: "saliency_angle", label: "Saliency Angle", color: colors.v},
     {y: "hysteresis_angle", label: "Hysteresis Angle", color: colors.w},
-    {y: "vibration_angle", label: "Vibration Angle", color: colors_categories[7]},
     {y: (d) => d.saliency_angle * 0.5, label: "Saliency axis", color: colors_categories[8]},
-    {y: (d) => d.vibration_angle * 0.5, label: "Vibration axis", color: colors_categories[10]},
     {y: (d) => normalize_radians(2.0 * d.hysteresis_angle) * 0.5, label: "Hysteresis axis", color: colors_categories[9]},
   ],
   curve,
@@ -1243,7 +1237,6 @@ const plot_gradients = plot_lines({
   channels: [
 
     {y: "resistance_gradient", label: "Resistance Gradient", color: colors_categories[2]},
-    {y: "vibration_resistance_gradient", label: "Vibration Resistance Gradient", color: colors_categories[4]},
     {y: "inductance_gradient", label: "Inductance Gradient", color: colors_categories[5]},
     {y: "inductance_saliency_gradient", label: "Inductance Saliency Gradient", color: colors_categories[6]},
     {y: "hysteresis_loss_gradient", label: "Hysteresis Loss Gradient", color: colors_categories[7]},
@@ -1322,10 +1315,6 @@ const calibration_parameters = {
   eddy_resistance: {
     label: "Eddy Current Resistance", 
     description: `The resistance due to iron eddy currents (specifically the back EMF from the change in eddy currents with time).`
-  },
-  vibration_resistance: {
-    label: "Vibration Resistance", 
-    description: `The fraction voltage stolen by vibration.`
   },
   motor_constant: {
     label: "Motor Constant", 
@@ -1415,7 +1404,6 @@ const calibration_series_resistance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
-    {y: "vibration_resistance", label: "Vibration Resistance", color: colors_categories[7]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });
@@ -1448,9 +1436,7 @@ const calibration_series_angles_plot = plot_lines({
   channels: [
     {y: "saliency_angle", label: "Saliency Angle", color: colors.v},
     {y: "hysteresis_angle", label: "Hysteresis Angle", color: colors.w},
-    {y: "vibration_angle", label: "Vibration Angle", color: colors_categories[7]},
     {y: (d) => d.saliency_angle * 0.5, label: "Saliency axis", color: colors_categories[8]},
-    {y: (d) => d.vibration_angle * 0.5, label: "Vibration axis", color: colors_categories[10]},
     {y: (d) => normalize_radians(2.0 * d.hysteresis_angle) * 0.5, label: "Hysteresis axis", color: colors_categories[9]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
@@ -1698,14 +1684,6 @@ const control_parameters_input = Object.fromEntries(
     ["hysteresis_angle_ki", {
       label: "Hysteresis Loss Angle KI",
       description: "Integral gain for hysteresis loss angle."
-    }],
-    ["vibration_resistance_ki", {
-      label: "Vibration Resistance KI",
-      description: "Integral gain for vibration resistance."
-    }],
-    ["vibration_angle_ki", {
-      label: "Vibration Angle KI",
-      description: "Integral gain for vibration angle."
     }],
     ["eddy_resistance_ki", {
       label: "Eddy Resistance KI",

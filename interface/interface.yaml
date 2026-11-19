@@ -430,10 +430,6 @@ definitions:
         type: float32
         doc: Iron resistance coefficient.
 
-      vibration_resistance:
-        type: float32
-        doc: Fraction of drive voltage reflected because of back EMF from vibrations.
-
       motor_constant:
         type: float32
         doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
@@ -526,15 +522,6 @@ definitions:
       hysteresis_angle:
         type: int32
         doc: Angle for the iron loss effect.
-      vibration_resistance:
-        type: float32
-        doc: Fraction of drive voltage reflected due to vibrations.
-      vibration_resistance_gradient:
-        type: float32
-        doc: Gradient of vibration fraction.
-      vibration_angle:
-        type: int32
-        doc: Axis of vibration.
 
 
   DriveState:
@@ -867,14 +854,6 @@ definitions:
       hysteresis_angle_ki:
         type: float32
         doc: Iron loss angle integral gain.
-
-      vibration_resistance_ki:
-        type: float32
-        doc: Vibration integral gain.
-
-      vibration_angle_ki:
-        type: float32
-        doc: Vibration axis integral gain.
 
       eddy_resistance_ki:
         type: float32

@@ -144,15 +144,6 @@ export function parse_readout(bare_readout, previous_readout) {
   // Recalculate calibration stuff so we can vizualize it
   // ----------------------------------------------------
 
-  const vibration_angle_thing = normalize_radians(bare_readout.vibration_angle - current_angle - current_angle + current_diff_angle);
-  const sin_vibration_projection = Math.sin(vibration_angle_thing);
-  const cos_vibration_projection = Math.cos(vibration_angle_thing);
-
-  const x_vibration = current_magnitude * cos_vibration_projection;
-  const y_vibration = current_magnitude * sin_vibration_projection;
-
-  const x_vibration_voltage = x_vibration * bare_readout.vibration_resistance;
-  const y_vibration_voltage = y_vibration * bare_readout.vibration_resistance;
 
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
   const x_resistive_voltage = x_current * bare_readout.resistance;
@@ -215,8 +206,8 @@ export function parse_readout(bare_readout, previous_readout) {
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_hysteresis_loss_voltage + x_vibration_voltage - x_drive_voltage;
-  const y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_hysteresis_loss_voltage + y_vibration_voltage - y_drive_voltage;
+  const x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_hysteresis_loss_voltage - x_drive_voltage;
+  const y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_hysteresis_loss_voltage - y_drive_voltage;
 
 
   // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
@@ -301,8 +292,6 @@ export function parse_readout(bare_readout, previous_readout) {
     y_inductance_base_voltage,
     x_hysteresis_loss_voltage,
     y_hysteresis_loss_voltage,
-    x_vibration_voltage,
-    y_vibration_voltage,
     x_voltage_error,
     y_voltage_error,
     voltage_error,
@@ -389,7 +378,6 @@ export function parse_calibration_instance(bare_calibration_instance){
     hysteresis_loss: bare_calibration_instance.hysteresis_loss / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
     hysteresis_angle: angle_units_to_radians(bare_calibration_instance.hysteresis_angle),
-    vibration_angle: angle_units_to_radians(bare_calibration_instance.vibration_angle),
     gradients_dot: Math.sign(bare_calibration_instance.gradients_dot) * Math.sqrt(Math.abs(bare_calibration_instance.gradients_dot)) / VOLTAGE_UNITS_PER_VOLT,
     gradients_dot_variance: Math.sqrt(Math.sqrt(bare_calibration_instance.gradients_dot_variance)) / VOLTAGE_UNITS_PER_VOLT,
   }
