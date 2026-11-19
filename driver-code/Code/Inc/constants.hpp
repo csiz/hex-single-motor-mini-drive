@@ -241,7 +241,6 @@ constexpr float pwm_max = hex_mini_drive::PWM_BASE - max(sample_reserve_time, mi
 constexpr int32_t max_timeout = 0xFFFF;
 
 
-
 // Motor control tables
 // --------------------
 
@@ -492,10 +491,10 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -10),
     .inductance_ki = std::pow(2, -10),
-    .inductance_saliency_ki = std::pow(2, -11),
-    .saliency_angle_ki = std::pow(2, -12),
-    .hysteresis_loss_ki = std::pow(2, -16),
-    .hysteresis_angle_ki = std::pow(2, -12),
+    .inductance_saliency_ki = std::pow(2, -10),
+    .saliency_angle_ki = std::pow(2, -10),
+    .hysteresis_loss_ki = std::pow(2, -10),
+    .hysteresis_angle_ki = std::pow(2, -10),
     .vibration_resistance_ki = std::pow(2, -16),
     .vibration_angle_ki = std::pow(2, -14),
     .eddy_resistance_ki = 0,

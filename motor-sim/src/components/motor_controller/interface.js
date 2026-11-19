@@ -83,8 +83,8 @@ export function parse_readout(bare_readout, previous_readout) {
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
   const current_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.current_angular_speed);
   const current_magnitude_diff = bare_readout.current_magnitude_diff / CURRENT_UNITS_PER_AMP;
-  const inductance_angle = angle_units_to_radians(bare_readout.inductance_angle);
-  const inductance_magnitude = bare_readout.inductance_magnitude / VOLTAGE_UNITS_PER_VOLT;
+  const current_diff_angle = angle_units_to_radians(bare_readout.current_diff_angle);
+  const current_diff_magnitude = bare_readout.current_diff_magnitude / CURRENT_UNITS_PER_AMP;
 
   const live_max_pwm = bare_readout.live_max_pwm;
 
@@ -189,13 +189,13 @@ export function parse_readout(bare_readout, previous_readout) {
   
 
   // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
-  const hysteresis_angle_thing = normalize_radians(bare_readout.hysteresis_angle + current_angle + inductance_angle);
+  const hysteresis_angle_thing = normalize_radians(bare_readout.hysteresis_angle + current_angle + current_diff_angle);
   const sin_hysteresis_loss = Math.sin(hysteresis_angle_thing);
   const cos_hysteresis_loss = Math.cos(hysteresis_angle_thing);
 
   const hysteresis_scaling = (
     current_magnitude * 
-    inductance_magnitude * 
+    current_diff_magnitude * pwm_cycles_per_second *
     bare_readout.inductance
   );
   
@@ -278,8 +278,8 @@ export function parse_readout(bare_readout, previous_readout) {
     current_magnitude,
     current_angular_speed,
     current_magnitude_diff,
-    inductance_angle,
-    inductance_magnitude,
+    current_diff_angle,
+    current_diff_magnitude,
     live_max_pwm,
     
     battery_current,

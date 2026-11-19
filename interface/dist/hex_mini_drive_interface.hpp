@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.183.0";
+constexpr char const* VERSION_STRING = "0.184.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -255,9 +255,9 @@ struct Readout {
   // Change in current magnitude.
   float current_magnitude_diff;
   // Angle of the current change vector (inductance).
-  int32_t inductance_angle;
+  int32_t current_diff_angle;
   // Magnitude of the current change vector (inductance).
-  float inductance_magnitude;
+  float current_diff_magnitude;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
   // Long duration average of the total power; used to limit the maximum power draw.
@@ -332,9 +332,9 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.current_magnitude_diff);;
   offset += 4;
-  write_int32(buffer + offset, value.inductance_angle);;
+  write_int32(buffer + offset, value.current_diff_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_magnitude);;
+  write_float32(buffer + offset, value.current_diff_magnitude);;
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
@@ -412,9 +412,9 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.current_magnitude_diff = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_angle = read_int32(buffer + offset);
+  result.current_diff_angle = read_int32(buffer + offset);
   offset += 4;
-  result.inductance_magnitude = read_float32(buffer + offset);
+  result.current_diff_magnitude = read_float32(buffer + offset);
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;

@@ -302,11 +302,13 @@ void ADC1_2_IRQHandler(void){
     const float x_current_diff = x_current - readout.x_current;
     const float y_current_diff = y_current - readout.y_current;
 
+    // We need the inductance as an angle for saliency calculations.
+    set_cordic(x_current_diff, y_current_diff);
+
     const float x_inductance = x_current_diff * current_diff_to_voltage_units;
     const float y_inductance = y_current_diff * current_diff_to_voltage_units;
 
-    // We need the inductance as an angle for saliency calculations.
-    set_cordic(x_inductance, y_inductance);
+    const auto [current_diff_angle, current_diff_magnitude] = get_cordic();
 
     // Ignore the saliency_angle_offset in the tight loop and assume it is 0. The saliency
     // effect depends on the rotor position!
@@ -323,8 +325,6 @@ void ADC1_2_IRQHandler(void){
         -x_inductance * sin_saliency
         +y_inductance * cos_saliency
     );
-
-    const auto [inductance_angle, inductance_magnitude] = get_cordic();
 
     const float x_inductance_base_voltage = x_inductance * calibration.inductance;
     const float y_inductance_base_voltage = y_inductance * calibration.inductance;
@@ -699,9 +699,9 @@ void ADC1_2_IRQHandler(void){
     readout.current_magnitude = current_magnitude;
     readout.current_angular_speed = current_angular_speed;
     readout.current_magnitude_diff = current_magnitude_diff;
-    readout.inductance_angle = inductance_angle;
-    readout.inductance_magnitude = inductance_magnitude;
-    
+    readout.current_diff_angle = current_diff_angle;
+    readout.current_diff_magnitude = current_diff_magnitude;
+
     readout.live_max_pwm = live_max_pwm;
     readout.total_power_average = total_power_average;
     readout.resistive_power_average = resistive_power_average;

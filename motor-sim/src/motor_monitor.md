@@ -945,7 +945,7 @@ const plot_electric_position = plot_lines({
     {y: (d) => d.saliency_angle * 0.5, label: "Half Saliency Angle", color: d3.color(colors_categories[5]).brighter(1)},
     {y: "hysteresis_angle", label: "Hysteresis Loss Angle", color: colors_categories[6]},
     {y: "current_angle", label: "Current Angle", color: colors_categories[3]},
-    {y: "inductance_angle", label: "Inductance Angle", color: colors_categories[4]},
+    {y: "current_diff_angle", label: "Inductance Angle", color: colors_categories[4]},
     {
       y: "emf_voltage_angle", label: "EMF Voltage Angle", color: colors.voltage_angle,
       draw_extra: setup_stdev_95({stdev: (d) => d.emf_angle_stdev}),
@@ -1078,6 +1078,7 @@ const plot_dq0_currents = plot_lines({
     {y: "prev_y_current", label: "Previous Current on Y axis", color: d3.color(colors.y_current).darker(1)},
     {y: "prev_current_magnitude", label: "Previous Current Magnitude", color: d3.color(colors_categories[2]).darker(1)},
     {y: "current_magnitude", label: "Current Magnitude", color: colors_categories[2]},
+    {y: "current_diff_magnitude", label: "Current Diff Magnitude", color: colors_categories[3]},
   ],
   curve,
 });

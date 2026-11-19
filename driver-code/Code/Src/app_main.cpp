@@ -87,7 +87,7 @@ struct CalibrationInstanceSettings {
 // Track calibration settings.
 CalibrationInstanceSettings calibration_instance_settings;
 
-const uint16_t calibration_duration = max_duration / 2;
+const uint16_t calibration_duration = max_duration;
 
 
 const float calibration_target_increment = 128.f;
@@ -154,12 +154,17 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
 // 
 // We can also declare that we have stable calibration parameters when the learning
 // rate multiplier drops below a threshold.
-constexpr float multiplier_minimum = 0.010'0f;
-constexpr float multiplier_stable_threshold = 0.010'0f;
+constexpr float multiplier_minimum = 0.001f;
+constexpr float multiplier_stable_threshold = 0.001f;
 constexpr float multiplier_maximum = 10.f;
 constexpr float multiplier_change = std::pow(2, -10);
 constexpr float multiplier_increase_factor = 1.f + multiplier_change;
 constexpr float multiplier_decrease_factor = 1.f - multiplier_change;
+
+const bool remember_intermediate = true;
+const bool continuous_calibration = false;
+const bool advance_when_stable = true;
+const bool adjust_learning_rate = true;
 
 
 static inline void start_calibration_series() {
@@ -500,10 +505,7 @@ static inline bool validate_parameter_update(float const& minimum_value, float &
 }
 
 
-static inline void finish_calibration_series(
-  const bool remember_intermediate, 
-  const bool continuous_calibration
-){
+static inline void finish_calibration_series(){
   queue_message(hex_mini_drive::Message{
     .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
     .message_data = calibration_instance
@@ -546,13 +548,7 @@ static inline void finish_calibration_series(
   start_calibration_series();
 }
 
-static inline void calibrate_from_readout(
-  hex_mini_drive::Readout const& readout, 
-  const bool remember_intermediate = false, 
-  const bool continuous_calibration = false,
-  const bool advance_when_stable = true,
-  const bool adjust_learning_rate = true
-) {
+static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout) {
   // Calibration checks
   // ------------------
   // 
@@ -575,7 +571,7 @@ static inline void calibrate_from_readout(
       // Skip this readout since we just queued a new state.
     } else {
       // We started so now that drive_state is done, we are naturally ending, without reaching stability.
-      finish_calibration_series(remember_intermediate, continuous_calibration);
+      finish_calibration_series();
     }
     // In either case we skip this readout.
     return;
@@ -590,7 +586,7 @@ static inline void calibrate_from_readout(
     // We already have stats, abort calibration instance.
     if (calibration_instance.count) {
       drive_state_queue.mark_all_read();
-      finish_calibration_series(false, continuous_calibration);
+      finish_calibration_series();
     }
     // In either case we skip this readout from calibration.
     return;
@@ -665,13 +661,13 @@ static inline void calibrate_from_readout(
   const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
   
   // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
-  const int32_t hysteresis_angle_thing = calibration_instance.hysteresis_angle + readout.current_angle + readout.inductance_angle;
+  const int32_t hysteresis_angle_thing = calibration_instance.hysteresis_angle + readout.current_angle + readout.current_diff_angle;
   const float sin_hysteresis_loss = get_sin(hysteresis_angle_thing);
   const float cos_hysteresis_loss = get_cos(hysteresis_angle_thing);
 
   const float hysteresis_scaling = (
     readout.current_magnitude * 
-    readout.inductance_magnitude * 
+    readout.current_diff_magnitude * current_diff_to_voltage_units *
     calibration_instance.inductance * 
     voltage_mul_current_to_power
   );
@@ -917,7 +913,7 @@ static inline void calibrate_from_readout(
     // Periodically check if we stablizied and move on.
     if (advance_when_stable and (calibration_instance.count % calibration_stability_check_period == 0)) {
       if (calibration_instance.learning_rate_multiplier <= multiplier_stable_threshold) {
-        finish_calibration_series(remember_intermediate, continuous_calibration);
+        finish_calibration_series();
       }
     }
   }
