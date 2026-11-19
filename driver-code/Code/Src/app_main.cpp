@@ -89,13 +89,14 @@ CalibrationInstanceSettings calibration_instance_settings;
 
 const uint16_t calibration_duration = max_duration;
 
+const float calibration_target_base = 128.f;
 const float calibration_target_increment = 64.f;
-const float calibration_target_max = calibration_target_increment * 4;
-const float calibration_speed_base = 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
-const float calibration_speed_max = angle_base / 10.f;
 
-// const float calibration_target_increment = 128.f;
-// const float calibration_target_max = calibration_target_increment * 1;
+const float calibration_target_max = calibration_target_base + calibration_target_increment * 2;
+const float calibration_speed_base = 0.5f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
+const float calibration_speed_max = angle_base / 12.f;
+
+// const float calibration_target_max = calibration_target_base;
 // const float calibration_speed_base = 440.f * angle_base / static_cast<float>(pwm_cycles_per_second);
 // const float calibration_speed_max = calibration_speed_base;
 
@@ -134,7 +135,7 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .inductance_excitation_fraction = 0.f,
     .resistance_sensitivity = current_variance,
     .inductance_sensitivity = inductance_variance,
-    .hysteresis_loss_sensitivity = power_variance,
+    .hysteresis_loss_sensitivity = current_cross_inductance_variance,
     .resistance = active_calibration.resistance,
     .resistance_gradient = 0.f,
     .inductance = active_calibration.inductance,
@@ -240,7 +241,7 @@ static inline void control_mode_calibrate(hex_mini_drive::Calibration const& act
   control_mode_idle();
   calibration_instance = init_calibration_instance(
     make_calibration_instance(active_calibration), 
-    calibration_target_increment, 
+    calibration_target_base, 
     calibration_speed_base
   );
   start_calibration_series();
@@ -531,7 +532,7 @@ static inline void finish_calibration_series(){
       if (continuous_calibration) {
         // Restart calibrating from the base speed and first target.
         speed = calibration_speed_base;
-        target = calibration_target_increment;
+        target = calibration_target_base;
       } else {
         return control_mode_idle();
       }
@@ -672,7 +673,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float hysteresis_scaling = (
     readout.current_magnitude * 
     readout.current_diff_magnitude * current_diff_to_voltage_units *
-    calibration_instance.inductance * 
     voltage_mul_current_to_power
   );
   
@@ -809,9 +809,9 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     calibration_instance.saliency_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
 
-  const float square_inductance_power = square(hysteresis_scaling);
+  const float square_current_cross_inductance = square(hysteresis_scaling);
 
-  calibration_instance.hysteresis_loss_sensitivity = square_inductance_power + power_variance;
+  calibration_instance.hysteresis_loss_sensitivity = square_current_cross_inductance + current_cross_inductance_variance;
   
   const float hysteresis_loss_scaling = 1.f / calibration_instance.hysteresis_loss_sensitivity;
 
@@ -873,16 +873,16 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Compute the dot product between the new gradients and the previous gradients.
   const float gradients_dot = (
     (
-      resistance_gradient * calibration_instance.resistance_gradient
+      resistance_gradient * calibration_instance.resistance_gradient +
+      vibration_resistance_gradient * calibration_instance.vibration_resistance_gradient * (calibration_instance.vibration_resistance != 0.0f)
     ) * square_current +
     (
       inductance_gradient * calibration_instance.inductance_gradient +
       inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient * (calibration_instance.inductance_saliency != 0.0f)
     ) * square_inductance +
     (
-      hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f) +
-      vibration_resistance_gradient * calibration_instance.vibration_resistance_gradient * (calibration_instance.vibration_resistance != 0.0f)
-    ) * square_inductance_power
+      hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f)
+    ) * square_current_cross_inductance
   );
 
   const float gradients_dot_change = gradients_dot - calibration_instance.gradients_dot;

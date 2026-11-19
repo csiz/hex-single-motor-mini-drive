@@ -365,6 +365,8 @@ constexpr float current_measurement_stdev = 8 * adc_to_current_units;
 // The difference between current measurements is noisier. Units of voltage per current (difference) per time step.
 constexpr float inductance_measurement_stdev = 12 * adc_to_current_units * current_diff_to_voltage_units;
 
+constexpr float current_cross_inductance_measurement_stdev = current_measurement_stdev * inductance_measurement_stdev * voltage_mul_current_to_power;
+
 // The noise of our applied voltage is a few units from the maximum we can use.
 constexpr float voltage_output_stdev = 4.f * nominal_vcc_voltage * half_pwm_base_inverse;
 
@@ -377,6 +379,7 @@ constexpr float current_variance = square(current_measurement_stdev);
 constexpr float inductance_variance = square(inductance_measurement_stdev);
 constexpr float voltage_variance = square(voltage_output_stdev);
 constexpr float power_variance = square(power_measurement_stdev);
+constexpr float current_cross_inductance_variance = square(current_cross_inductance_measurement_stdev);
 
 // Driver state
 // ------------
@@ -409,7 +412,7 @@ const hex_mini_drive::DriveState freewheel_drive_state = {
 constexpr float minimum_resistance = 0.005f; // This is lower than the sense resistors, something definitely wrong if we reach here.
 constexpr float minimum_inductance = 0.000'001f;
 constexpr float minimum_inductance_saliency = 0.000'001'0f;
-constexpr float minimum_hysteresis_loss = 0.001'0f;
+constexpr float minimum_hysteresis_loss = 0.000'000'001f;
 constexpr float minimum_vibration_resistance = 0.000'1f;
 
 // Default to a the planetary 3 phase motor.

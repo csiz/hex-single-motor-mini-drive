@@ -1415,7 +1415,6 @@ const calibration_series_resistance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
-    {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_resistance", label: "Vibration Resistance", color: colors_categories[7]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
@@ -1431,6 +1430,7 @@ const calibration_series_inductance_plot = plot_lines({
   channels: [
     {y: "inductance", label: "Phase Inductance", color: colors_categories[2]},
     {y: "inductance_saliency", label: "Inductance Saliency", color: colors_categories[4]},
+    {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
 
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),

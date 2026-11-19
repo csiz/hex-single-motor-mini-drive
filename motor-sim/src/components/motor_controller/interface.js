@@ -195,8 +195,7 @@ export function parse_readout(bare_readout, previous_readout) {
 
   const hysteresis_scaling = (
     current_magnitude * 
-    current_diff_magnitude * pwm_cycles_per_second *
-    bare_readout.inductance
+    current_diff_magnitude * pwm_cycles_per_second
   );
   
   const x_hysteresis_loss = cos_hysteresis_loss * hysteresis_scaling;
