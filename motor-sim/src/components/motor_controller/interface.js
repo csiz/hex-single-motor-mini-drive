@@ -144,9 +144,9 @@ export function parse_readout(bare_readout, previous_readout) {
   // Recalculate calibration stuff so we can vizualize it
   // ----------------------------------------------------
 
-  const vibration_angle_to_current = normalize_radians(bare_readout.vibration_angle - current_angle);
-  const sin_vibration_projection = Math.sin(vibration_angle_to_current);
-  const cos_vibration_projection = Math.cos(vibration_angle_to_current);
+  const vibration_angle_thing = normalize_radians(bare_readout.vibration_angle - current_angle - current_angle + current_diff_angle);
+  const sin_vibration_projection = Math.sin(vibration_angle_thing);
+  const cos_vibration_projection = Math.cos(vibration_angle_thing);
 
   const x_vibration = current_magnitude * cos_vibration_projection;
   const y_vibration = current_magnitude * sin_vibration_projection;
@@ -189,7 +189,7 @@ export function parse_readout(bare_readout, previous_readout) {
   
 
   // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
-  const hysteresis_angle_thing = normalize_radians(bare_readout.hysteresis_angle + current_angle + current_diff_angle);
+  const hysteresis_angle_thing = normalize_radians(-bare_readout.hysteresis_angle + current_angle + current_diff_angle);
   const sin_hysteresis_loss = Math.sin(hysteresis_angle_thing);
   const cos_hysteresis_loss = Math.cos(hysteresis_angle_thing);
 

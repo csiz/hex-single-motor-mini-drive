@@ -89,14 +89,14 @@ CalibrationInstanceSettings calibration_instance_settings;
 
 const uint16_t calibration_duration = max_duration;
 
-const float calibration_target_increment = 128.f;
-const float calibration_target_max = calibration_target_increment * 3;
+const float calibration_target_increment = 64.f;
+const float calibration_target_max = calibration_target_increment * 4;
 const float calibration_speed_base = 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 const float calibration_speed_max = angle_base / 10.f;
 
 // const float calibration_target_increment = 128.f;
 // const float calibration_target_max = calibration_target_increment * 1;
-// const float calibration_speed_base = 1200.f * angle_base / static_cast<float>(pwm_cycles_per_second);
+// const float calibration_speed_base = 440.f * angle_base / static_cast<float>(pwm_cycles_per_second);
 // const float calibration_speed_max = calibration_speed_base;
 
 // TODO: get rid of these flags and if we need them use a proper configurable mode.
@@ -106,7 +106,7 @@ const bool advance_when_stable = true;
 const bool adjust_learning_rate = true;
 
 
-const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
+const float calibration_speed_multiplier = std::pow(2, 1.f / 24.f); // An octave has 12 notes.
 
 const float calibration_stats_ki = std::pow(2, -8);
 
@@ -615,15 +615,16 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // -----------
   // We need to recalculate these values in the main loop as they are not the primary tracking variables.
 
+  const float drive_voltage = readout.vcc_voltage * readout.active_pwm * active_pwm_to_voltage_conversion;
+
   // Assuming the motor is oscillating with a roughly fixed angle, then... maybe...
   // the back emf from vibrations will act in opposing phase to the drive voltage
   // projected onto the emf axis of the rotor. The rotor, vibrating in place will
   // produce a vibrating emf response mostly on it's own axis.
-  const int32_t vibration_angle_to_current = calibration_instance.vibration_angle - readout.current_angle;
-  const float sin_vibration_projection = get_sin(vibration_angle_to_current);
-  const float cos_vibration_projection = get_cos(vibration_angle_to_current);
+  const int32_t vibration_angle_thing = calibration_instance.vibration_angle - readout.current_angle - readout.current_angle + readout.current_diff_angle;
+  const float sin_vibration_projection = get_sin(vibration_angle_thing);
+  const float cos_vibration_projection = get_cos(vibration_angle_thing);
 
-  // TODO: by golly it looks like vibration depends on power.
   const float x_vibration = readout.current_magnitude * cos_vibration_projection;
   const float y_vibration = readout.current_magnitude * sin_vibration_projection;
 
@@ -721,8 +722,6 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // 
   // The error is evolving during the optimization, we want to store the end-ish value after we've optimized our parameters.
 
-  const float drive_voltage = readout.vcc_voltage * readout.active_pwm * active_pwm_to_voltage_conversion;
-  
   calibration_instance.avg_drive_voltage += (drive_voltage - calibration_instance.avg_drive_voltage) * calibration_stats_ki;
   calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_stats_ki;
   calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_stats_ki;
@@ -843,6 +842,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     calibration_instance.hysteresis_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
 
+
   const float vibration_resistance_gradient = ewma(
     calibration_instance.vibration_resistance_gradient,
     resistance_scaling * (
@@ -873,15 +873,15 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Compute the dot product between the new gradients and the previous gradients.
   const float gradients_dot = (
     (
-      resistance_gradient * calibration_instance.resistance_gradient +
-      vibration_resistance_gradient * calibration_instance.vibration_resistance_gradient * (calibration_instance.vibration_resistance != 0.0f)
+      resistance_gradient * calibration_instance.resistance_gradient
     ) * square_current +
     (
       inductance_gradient * calibration_instance.inductance_gradient +
       inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient * (calibration_instance.inductance_saliency != 0.0f)
     ) * square_inductance +
     (
-      hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f)
+      hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f) +
+      vibration_resistance_gradient * calibration_instance.vibration_resistance_gradient * (calibration_instance.vibration_resistance != 0.0f)
     ) * square_inductance_power
   );
 

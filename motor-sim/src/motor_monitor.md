@@ -1174,7 +1174,6 @@ const plot_resistance_calibration = plot_lines({
   y_label: "Resistance (Ohms)",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors.u},
-    {y: (d) => d.resistance + d.vibration_resistance, label: "Unbiased Phase Resistance", color: colors_categories[1]},
     {y: "vibration_resistance", label: "Vibration 'Resistance'", color: colors_categories[7]},
   ],
   curve,
@@ -1416,7 +1415,6 @@ const calibration_series_resistance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
-    {y: (d) => d.resistance + d.vibration_resistance, label: "Unbiased Phase Resistance", color: colors_categories[1]},
     {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_resistance", label: "Vibration Resistance", color: colors_categories[7]},
   ],
