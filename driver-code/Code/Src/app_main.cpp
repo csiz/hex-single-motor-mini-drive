@@ -89,16 +89,22 @@ CalibrationInstanceSettings calibration_instance_settings;
 
 const uint16_t calibration_duration = max_duration;
 
-
 const float calibration_target_increment = 128.f;
 const float calibration_target_max = calibration_target_increment * 3;
-const float calibration_speed_base = 2 * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
+const float calibration_speed_base = 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 const float calibration_speed_max = angle_base / 10.f;
 
 // const float calibration_target_increment = 128.f;
 // const float calibration_target_max = calibration_target_increment * 1;
 // const float calibration_speed_base = 1200.f * angle_base / static_cast<float>(pwm_cycles_per_second);
 // const float calibration_speed_max = calibration_speed_base;
+
+// TODO: get rid of these flags and if we need them use a proper configurable mode.
+const bool remember_intermediate = true;
+const bool continuous_calibration = false;
+const bool advance_when_stable = true;
+const bool adjust_learning_rate = true;
+
 
 const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
 
@@ -161,10 +167,6 @@ constexpr float multiplier_change = std::pow(2, -10);
 constexpr float multiplier_increase_factor = 1.f + multiplier_change;
 constexpr float multiplier_decrease_factor = 1.f - multiplier_change;
 
-const bool remember_intermediate = true;
-const bool continuous_calibration = false;
-const bool advance_when_stable = true;
-const bool adjust_learning_rate = true;
 
 
 static inline void start_calibration_series() {
@@ -621,6 +623,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float sin_vibration_projection = get_sin(vibration_angle_to_current);
   const float cos_vibration_projection = get_cos(vibration_angle_to_current);
 
+  // TODO: by golly it looks like vibration depends on power.
   const float x_vibration = readout.current_magnitude * cos_vibration_projection;
   const float y_vibration = readout.current_magnitude * sin_vibration_projection;
 
@@ -661,7 +664,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
   
   // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
-  const int32_t hysteresis_angle_thing = calibration_instance.hysteresis_angle + readout.current_angle + readout.current_diff_angle;
+  const int32_t hysteresis_angle_thing = -calibration_instance.hysteresis_angle + readout.current_angle + readout.current_diff_angle;
   const float sin_hysteresis_loss = get_sin(hysteresis_angle_thing);
   const float cos_hysteresis_loss = get_cos(hysteresis_angle_thing);
 
@@ -807,7 +810,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     calibration_instance.saliency_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
 
-  const float square_inductance_power = square(x_hysteresis_loss) + square(y_hysteresis_loss);
+  const float square_inductance_power = square(hysteresis_scaling);
 
   calibration_instance.hysteresis_loss_sensitivity = square_inductance_power + power_variance;
   
@@ -828,7 +831,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     calibration_instance.hysteresis_loss,
     -hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki * calibration_instance.learning_rate_multiplier
   )){
-    const float hysteresis_angle_gradient = hysteresis_loss_scaling * (
+    // An extra negative sign because it enters our equation as a negative term.
+    const float hysteresis_angle_gradient = -hysteresis_loss_scaling * (
       x_voltage_error * -y_hysteresis_loss + 
       y_voltage_error * x_hysteresis_loss
     ) * radians_to_angle_units / calibration_instance.hysteresis_loss;

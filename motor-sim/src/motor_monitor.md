@@ -1174,6 +1174,7 @@ const plot_resistance_calibration = plot_lines({
   y_label: "Resistance (Ohms)",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors.u},
+    {y: (d) => d.resistance + d.vibration_resistance, label: "Unbiased Phase Resistance", color: colors_categories[1]},
     {y: "vibration_resistance", label: "Vibration 'Resistance'", color: colors_categories[7]},
   ],
   curve,
@@ -1204,9 +1205,12 @@ const plot_angles_calibration = plot_lines({
   y_domain: [-Math.PI, Math.PI],
   channels: [
     {y: "angle", label: "Angle", color: colors.u},
-    {y: "saliency_angle", label: "Inductance Saliency Angle", color: colors.v},
-    {y: "hysteresis_angle", label: "Hysteresis Loss Angle", color: colors.w},
+    {y: "saliency_angle", label: "Saliency Angle", color: colors.v},
+    {y: "hysteresis_angle", label: "Hysteresis Angle", color: colors.w},
     {y: "vibration_angle", label: "Vibration Angle", color: colors_categories[7]},
+    {y: (d) => d.saliency_angle * 0.5, label: "Saliency axis", color: colors_categories[8]},
+    {y: (d) => d.vibration_angle * 0.5, label: "Vibration axis", color: colors_categories[10]},
+    {y: (d) => normalize_radians(2.0 * d.hysteresis_angle) * 0.5, label: "Hysteresis axis", color: colors_categories[9]},
   ],
   curve,
 });
@@ -1412,6 +1416,7 @@ const calibration_series_resistance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
+    {y: (d) => d.resistance + d.vibration_resistance, label: "Unbiased Phase Resistance", color: colors_categories[1]},
     {y: "hysteresis_loss", label: "Hysteresis Loss", color: colors_categories[6]},
     {y: "vibration_resistance", label: "Vibration Resistance", color: colors_categories[7]},
   ],
@@ -1443,10 +1448,12 @@ const calibration_series_angles_plot = plot_lines({
   y_label: "Angle (-pi to +pi)",
   y_domain: [-Math.PI, Math.PI],
   channels: [
-    {y: "angle", label: "Angle", color: colors.u},
-    {y: "saliency_angle", label: "Inductance Saliency Angle", color: colors.v},
-    {y: "hysteresis_angle", label: "Hysteresis Loss Angle", color: colors.w},
+    {y: "saliency_angle", label: "Saliency Angle", color: colors.v},
+    {y: "hysteresis_angle", label: "Hysteresis Angle", color: colors.w},
     {y: "vibration_angle", label: "Vibration Angle", color: colors_categories[7]},
+    {y: (d) => d.saliency_angle * 0.5, label: "Saliency axis", color: colors_categories[8]},
+    {y: (d) => d.vibration_angle * 0.5, label: "Vibration axis", color: colors_categories[10]},
+    {y: (d) => normalize_radians(2.0 * d.hysteresis_angle) * 0.5, label: "Hysteresis axis", color: colors_categories[9]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });

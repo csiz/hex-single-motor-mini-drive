@@ -424,8 +424,7 @@ const hex_mini_drive::Calibration default_calibration = {
     .inductance_saliency = minimum_inductance_saliency,
     .hysteresis_loss = minimum_hysteresis_loss,
     .eddy_resistance = 0.f,
-    // TODO: disable vibration until we get back to low frequency.
-    .vibration_resistance = 0.f, //minimum_vibration_resistance,
+    .vibration_resistance = minimum_vibration_resistance,
 };
 
 // The default control parameters should be set to reasonable values for any motor.
@@ -493,9 +492,9 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .inductance_ki = std::pow(2, -10),
     .inductance_saliency_ki = std::pow(2, -10),
     .saliency_angle_ki = std::pow(2, -10),
-    .hysteresis_loss_ki = std::pow(2, -10),
-    .hysteresis_angle_ki = std::pow(2, -10),
-    .vibration_resistance_ki = std::pow(2, -16),
+    .hysteresis_loss_ki = std::pow(2, -12),
+    .hysteresis_angle_ki = std::pow(2, -12),
+    .vibration_resistance_ki = std::pow(2, -12),
     .vibration_angle_ki = std::pow(2, -14),
     .eddy_resistance_ki = 0,
     .motor_constant_ki = std::pow(2, -10),
