@@ -333,6 +333,9 @@ constexpr float radians_per_second_to_speed_units = 1.f / speed_units_to_radians
 constexpr float current_diff_to_voltage_units = pwm_cycles_per_second *
     hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
+// Conversion factor to hysteresis effect; hysteresis is Ohm*Henri and we multiply with current and current_diff units and want voltage.
+constexpr float hysteresis_conversion = current_diff_to_voltage_units * voltage_mul_current_to_power * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+
 // Conversion factor from speed units to voltage units prefix for motor constant.
 constexpr float emf_motor_constant_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * speed_units_to_radians_per_second;
 
@@ -362,10 +365,13 @@ constexpr float min_speed_constant_sq = square(min_speed_constant);
 // Noise level of the current measurements, in current units.
 constexpr float current_measurement_stdev = 8 * adc_to_current_units;
 
-// The difference between current measurements is noisier. Units of voltage per current (difference) per time step.
-constexpr float inductance_measurement_stdev = 12 * adc_to_current_units * current_diff_to_voltage_units;
+// The difference between current measurements is noisier.
+constexpr float current_diff_measurement_stdev = 12 * adc_to_current_units;
 
-constexpr float current_cross_inductance_measurement_stdev = current_measurement_stdev * inductance_measurement_stdev * voltage_mul_current_to_power;
+// Precomputed conversion for inductance noise. Units of voltage per current (difference) per time step.
+constexpr float inductance_measurement_stdev = current_diff_measurement_stdev * current_diff_to_voltage_units;
+
+constexpr float current_cross_inductance_measurement_stdev = current_measurement_stdev * current_diff_measurement_stdev * hysteresis_conversion;
 
 // The noise of our applied voltage is a few units from the maximum we can use.
 constexpr float voltage_output_stdev = 4.f * nominal_vcc_voltage * half_pwm_base_inverse;

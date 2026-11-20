@@ -647,8 +647,8 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float hysteresis_scaling = (
     readout.current_magnitude * 
-    readout.current_diff_magnitude * current_diff_to_voltage_units *
-    voltage_mul_current_to_power
+    readout.current_diff_magnitude * 
+    hysteresis_conversion
   );
   
   const float x_hysteresis_loss = cos_hysteresis_loss * hysteresis_scaling;
