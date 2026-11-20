@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.185.0";
+constexpr char const* VERSION_STRING = "0.189.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -564,27 +564,30 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
 struct CalibrationInstance {
   // Number of calibration data points.
   uint32_t count;
-  // Bit field of the calibration state. The bits turn on when we the parameters 
-  // are excited and when they become stable.
-  uint32_t state_flags;
   // Target PWM value for this calibration instance.
   float target_pwm;
   // Target speed for this calibration instance.
   float target_speed;
+  // Whether the calibration is stable.
+  uint8_t stable;
+  // Whether the calibration values make sense with each other (angles align and magnitudes are reasonable).
+  uint8_t consistent;
+  // Whether resistance was excited.
+  uint8_t resistance_excited;
+  // Whether inductance was excited.
+  uint8_t inductance_excited;
   // Drive voltage used during this calibration instance.
   float avg_drive_voltage;
   // Current magnitude during this calibration instance.
   float avg_current_magnitude;
   // Average squared error during this calibration instance.
   float avg_square_error;
-  // Variance of the squared error.
-  float avg_square_error_variance;
   // Dot product of gradients.
   float gradients_dot;
-  // Variance of the dot product of gradients.
-  float gradients_dot_variance;
   // Multiplier for the learning rate.
   float learning_rate_multiplier;
+  // Cap for the learning rate multiplier.
+  float learning_rate_cap;
   // Fraction of data points where current was high enough to meaningfully measure resistance.
   float resistance_excitation_fraction;
   // Fraction of data points where current change was high enough to measure inductance.
@@ -621,25 +624,29 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   size_t offset = 0;
   write_uint32(buffer + offset, value.count);;
   offset += 4;
-  write_uint32(buffer + offset, value.state_flags);;
-  offset += 4;
   write_float32(buffer + offset, value.target_pwm);;
   offset += 4;
   write_float32(buffer + offset, value.target_speed);;
   offset += 4;
+  write_uint8(buffer + offset, value.stable);;
+  offset += 1;
+  write_uint8(buffer + offset, value.consistent);;
+  offset += 1;
+  write_uint8(buffer + offset, value.resistance_excited);;
+  offset += 1;
+  write_uint8(buffer + offset, value.inductance_excited);;
+  offset += 1;
   write_float32(buffer + offset, value.avg_drive_voltage);;
   offset += 4;
   write_float32(buffer + offset, value.avg_current_magnitude);;
   offset += 4;
   write_float32(buffer + offset, value.avg_square_error);;
   offset += 4;
-  write_float32(buffer + offset, value.avg_square_error_variance);;
-  offset += 4;
   write_float32(buffer + offset, value.gradients_dot);;
   offset += 4;
-  write_float32(buffer + offset, value.gradients_dot_variance);;
-  offset += 4;
   write_float32(buffer + offset, value.learning_rate_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.learning_rate_cap);;
   offset += 4;
   write_float32(buffer + offset, value.resistance_excitation_fraction);;
   offset += 4;
@@ -679,25 +686,29 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   
   result.count = read_uint32(buffer + offset);
   offset += 4;
-  result.state_flags = read_uint32(buffer + offset);
-  offset += 4;
   result.target_pwm = read_float32(buffer + offset);
   offset += 4;
   result.target_speed = read_float32(buffer + offset);
   offset += 4;
+  result.stable = read_uint8(buffer + offset);
+  offset += 1;
+  result.consistent = read_uint8(buffer + offset);
+  offset += 1;
+  result.resistance_excited = read_uint8(buffer + offset);
+  offset += 1;
+  result.inductance_excited = read_uint8(buffer + offset);
+  offset += 1;
   result.avg_drive_voltage = read_float32(buffer + offset);
   offset += 4;
   result.avg_current_magnitude = read_float32(buffer + offset);
   offset += 4;
   result.avg_square_error = read_float32(buffer + offset);
   offset += 4;
-  result.avg_square_error_variance = read_float32(buffer + offset);
-  offset += 4;
   result.gradients_dot = read_float32(buffer + offset);
   offset += 4;
-  result.gradients_dot_variance = read_float32(buffer + offset);
-  offset += 4;
   result.learning_rate_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.learning_rate_cap = read_float32(buffer + offset);
   offset += 4;
   result.resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
@@ -1390,7 +1401,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 38;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 106;
+    case MessageCode::CALIBRATION_INSTANCE: return 102;
     case MessageCode::RUN_CALIBRATION: return 2;
     case MessageCode::CONTROL_PARAMETERS: return 194;
     case MessageCode::SET_CONTROL_PARAMETERS: return 194;
@@ -1503,9 +1514,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 104) return 0;
+      if (max_size < 2 + 100) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 106;
+      return 102;
     }
     case MessageCode::RUN_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
@@ -1648,7 +1659,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 104) return false;
+      if (size != 2 + 100) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }

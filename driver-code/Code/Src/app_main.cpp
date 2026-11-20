@@ -93,7 +93,7 @@ const float calibration_target_base = 128.f;
 const float calibration_target_increment = 64.f;
 
 const float calibration_target_max = calibration_target_base + calibration_target_increment * 2;
-const float calibration_speed_base = 0.5f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
+const float calibration_speed_base = 0.125f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 const float calibration_speed_max = angle_base / 12.f;
 
 // const float calibration_target_max = calibration_target_base;
@@ -107,13 +107,24 @@ const bool advance_when_stable = true;
 const bool adjust_learning_rate = true;
 
 
-const float calibration_speed_multiplier = std::pow(2, 1.f / 24.f); // An octave has 12 notes.
+const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
 
 const float calibration_stats_ki = std::pow(2, -8);
 
 
 const uint32_t calibration_stability_check_period = 128;
 
+
+
+constexpr float multiplier_minimum = 0.001f;
+constexpr float multiplier_stable_threshold = 0.001f;
+constexpr float multiplier_maximum = 10.f;
+constexpr float multiplier_change = std::pow(2, -10);
+constexpr float multiplier_cap_decay = std::pow(2, -14);
+constexpr float multiplier_increase_factor = 1.f + multiplier_change;
+constexpr float multiplier_decrease_factor = 1.f - multiplier_change;
+
+constexpr float excitation_threshold = 0.2f;
 
 static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   hex_mini_drive::CalibrationInstance const& active_calibration,
@@ -124,13 +135,16 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .count = 0,
     .target_pwm = target,
     .target_speed = speed,
+    .stable = false,
+    .consistent = false,
+    .resistance_excited = false,
+    .inductance_excited = false,
     .avg_drive_voltage = 0.f,
     .avg_current_magnitude = 0.f,
     .avg_square_error = 0.f,
-    .avg_square_error_variance = 0.f,
     .gradients_dot = 0.f,
-    .gradients_dot_variance = 0.f,
     .learning_rate_multiplier = 1.f,
+    .learning_rate_cap = multiplier_maximum,
     .resistance_excitation_fraction = 0.f,
     .inductance_excitation_fraction = 0.f,
     .resistance_sensitivity = current_variance,
@@ -148,23 +162,6 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .hysteresis_angle = active_calibration.hysteresis_angle,
   };
 }
-
-// Trying resilient backpropagation again, this time in the main loop.
-// 
-// We multiply the learning rates when we see consecutive updates with the same sign.
-// And we decrease the mutliplier when the sign oscillates, this is called resilient
-// backpropagation and it's relatively robust to the choice of initial learning rate
-// but also really fast!
-// 
-// We can also declare that we have stable calibration parameters when the learning
-// rate multiplier drops below a threshold.
-constexpr float multiplier_minimum = 0.001f;
-constexpr float multiplier_stable_threshold = 0.001f;
-constexpr float multiplier_maximum = 10.f;
-constexpr float multiplier_change = std::pow(2, -10);
-constexpr float multiplier_increase_factor = 1.f + multiplier_change;
-constexpr float multiplier_decrease_factor = 1.f - multiplier_change;
-
 
 
 static inline void start_calibration_series() {
@@ -788,6 +785,9 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     // Rotate the angle very slowly to get out of bad states.
     calibration_instance.saliency_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
   }
+  // Note that if inductance_saliency is greater than inductance, total inductance can go negative, whatever that means.
+  // This usually happens when the motor is being super noisy and has to be held down, so it's clearly an error from emf,
+  // but I do not know how to combine the calibration terms to extract a meaningful value from them in that case.
 
   const float square_current_cross_inductance = square(hysteresis_scaling);
 
@@ -839,12 +839,9 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     ) * square_current_cross_inductance
   );
 
-  const float gradients_dot_change = gradients_dot - calibration_instance.gradients_dot;
-
-  calibration_instance.gradients_dot += gradients_dot_change * calibration_stats_ki;
-  calibration_instance.gradients_dot_variance = ewma(
-    calibration_instance.gradients_dot_variance,
-    square(gradients_dot_change),
+  calibration_instance.gradients_dot = ewma(
+    calibration_instance.gradients_dot,
+    gradients_dot,
     calibration_stats_ki
   );
 
@@ -862,16 +859,34 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
     // otherwise if the gradients are negative or below the expected variance we should lower
     // the learning rate and see if we can optimize more.
     if(calibration_instance.gradients_dot > voltage_variance) {
-      calibration_instance.learning_rate_multiplier = min(calibration_instance.learning_rate_multiplier * multiplier_increase_factor, multiplier_maximum);
+      calibration_instance.learning_rate_multiplier *= multiplier_increase_factor;
+      if (calibration_instance.learning_rate_multiplier > calibration_instance.learning_rate_cap) {
+        calibration_instance.learning_rate_multiplier = calibration_instance.learning_rate_cap;
+        // Slowly decrease the cap to 1 so we don't get stuck oscillating at high error.
+        calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, 1.0f, multiplier_cap_decay);
+      } else {
+        calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, multiplier_maximum, multiplier_cap_decay);
+      }
     } else {
       calibration_instance.learning_rate_multiplier = max(calibration_instance.learning_rate_multiplier * multiplier_decrease_factor, multiplier_minimum);
+      calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, multiplier_maximum, multiplier_cap_decay);
     }
 
-    // Periodically check if we stablizied and move on.
-    if (advance_when_stable and (calibration_instance.count % calibration_stability_check_period == 0)) {
-      if (calibration_instance.learning_rate_multiplier <= multiplier_stable_threshold) {
-        finish_calibration_series();
-      }
+  }
+  
+  // Periodically run checks then move on.
+  if (calibration_instance.count % calibration_stability_check_period == 0){
+    calibration_instance.stable = calibration_instance.learning_rate_multiplier <= multiplier_stable_threshold;
+    calibration_instance.resistance_excited = calibration_instance.resistance_excitation_fraction > excitation_threshold;
+    calibration_instance.inductance_excited = calibration_instance.inductance_excitation_fraction > excitation_threshold;
+    calibration_instance.consistent = (
+      calibration_instance.resistance_excited and
+      calibration_instance.inductance_excited and
+      (calibration_instance.inductance_saliency < 0.5f * calibration_instance.inductance) and
+      (faster_abs((calibration_instance.saliency_angle / 2) - ((2 * calibration_instance.hysteresis_angle) / 2)) < eight_circle)
+    );
+    if (advance_when_stable and calibration_instance.stable) {
+      finish_calibration_series();
     }
   }
 }

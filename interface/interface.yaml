@@ -442,17 +442,24 @@ definitions:
       count:
         type: uint32
         doc: Number of calibration data points.
-      state_flags:
-        type: uint32
-        doc: |
-          Bit field of the calibration state. The bits turn on when we the parameters 
-          are excited and when they become stable.
       target_pwm:
         type: float32
         doc: Target PWM value for this calibration instance.
       target_speed:
         type: float32
         doc: Target speed for this calibration instance.
+      stable:
+        type: uint8
+        doc: Whether the calibration is stable.
+      consistent:
+        type: uint8
+        doc: Whether the calibration values make sense with each other (angles align and magnitudes are reasonable).
+      resistance_excited:
+        type: uint8
+        doc: Whether resistance was excited.
+      inductance_excited:
+        type: uint8
+        doc: Whether inductance was excited.
       avg_drive_voltage:
         type: float32
         doc: Drive voltage used during this calibration instance.
@@ -462,19 +469,15 @@ definitions:
       avg_square_error:
         type: float32
         doc: Average squared error during this calibration instance.
-      avg_square_error_variance:
-        type: float32
-        doc: Variance of the squared error.
       gradients_dot:
         type: float32
         doc: Dot product of gradients.
-      gradients_dot_variance:
-        type: float32
-        doc: Variance of the dot product of gradients.
-        
       learning_rate_multiplier:
         type: float32
         doc: Multiplier for the learning rate.
+      learning_rate_cap:
+        type: float32
+        doc: Cap for the learning rate multiplier.
       resistance_excitation_fraction:
         type: float32
         doc: Fraction of data points where current was high enough to meaningfully measure resistance.

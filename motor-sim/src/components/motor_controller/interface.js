@@ -379,7 +379,6 @@ export function parse_calibration_instance(bare_calibration_instance){
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
     hysteresis_angle: angle_units_to_radians(bare_calibration_instance.hysteresis_angle),
     gradients_dot: Math.sign(bare_calibration_instance.gradients_dot) * Math.sqrt(Math.abs(bare_calibration_instance.gradients_dot)) / VOLTAGE_UNITS_PER_VOLT,
-    gradients_dot_variance: Math.sqrt(Math.sqrt(bare_calibration_instance.gradients_dot_variance)) / VOLTAGE_UNITS_PER_VOLT,
   }
 }
 

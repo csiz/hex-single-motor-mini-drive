@@ -1241,7 +1241,6 @@ const plot_gradients = plot_lines({
     {y: "inductance_saliency_gradient", label: "Inductance Saliency Gradient", color: colors_categories[6]},
     {y: "hysteresis_loss_gradient", label: "Hysteresis Loss Gradient", color: colors_categories[7]},
     {y: "gradients_dot", label: "Gradients Dot", color: colors_categories[8]},
-    {y: "gradients_dot_variance", label: "Gradients Dot Variance", color: colors_categories[9]},
   ],
   curve,
 });
