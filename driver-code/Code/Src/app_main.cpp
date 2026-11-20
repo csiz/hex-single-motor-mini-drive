@@ -81,7 +81,7 @@ const float calibration_speed_base = 0.125f * 110.f * angle_base / static_cast<f
 const float calibration_speed_max = angle_base / 12.f;
 
 // const float calibration_target_max = calibration_target_base;
-// const float calibration_speed_base = 440.f * angle_base / static_cast<float>(pwm_cycles_per_second);
+// const float calibration_speed_base = 0.125f * 0.125f * 0.125f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second);
 // const float calibration_speed_max = calibration_speed_base;
 
 // TODO: get rid of these flags and if we need them use a proper configurable mode.
@@ -90,7 +90,7 @@ const bool continuous_calibration = false;
 const bool advance_when_stable = true;
 const bool adjust_learning_rate = true;
 
-const float calibration_nominal_speed = 8.f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second);
+const float calibration_nominal_speed = /* 0.125f * 0.125f *  */8.f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second);
 const float calibration_nominal_speed_inverse = 1.0f / calibration_nominal_speed;
 
 const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
@@ -498,37 +498,41 @@ static inline void finish_calibration_series(){
 
   const bool zero_speed = calibration_instance.target_speed == 0.f;
   
-  float target_pwm = calibration_instance.target_pwm;
   // Go the the base frequency or multiply along an octave until the max frequency.
-  float target_speed = (zero_speed ? calibration_speed_base : 
+  calibration_instance.target_speed = (zero_speed ? calibration_speed_base : 
     (calibration_instance.target_speed * calibration_speed_multiplier)
   );
 
-  if (faster_abs(target_speed) > calibration_speed_max) {
+  if (faster_abs(calibration_instance.target_speed) > calibration_speed_max) {
     // Increment target pwm if we reach the end of the speed scanning.
-    target_speed = calibration_speed_base;
-    target_pwm += calibration_target_increment;
+    calibration_instance.target_speed = calibration_speed_base;
+    calibration_instance.target_pwm += calibration_target_increment;
 
     // Finish calibration mode and return to idle when we have scanned through all target PWM values.
-    if (target_pwm > calibration_target_max) {
+    if (calibration_instance.target_pwm > calibration_target_max) {
       if (continuous_calibration) {
         // Restart calibrating from the base speed and first target.
-        target_speed = calibration_speed_base;
-        target_pwm = calibration_target_base;
+        calibration_instance.target_speed = calibration_speed_base;
+        calibration_instance.target_pwm = calibration_target_base;
       } else {
         return control_mode_idle();
       }
     }
   }
 
-
+  
   // We have another series to run if we've reach this spot, set it up and go!
-  calibration_instance = init_calibration_instance(
-    // Carry over the current calibration otherwise default to active calibration.
-    remember_intermediate ? calibration_instance : make_calibration_instance(calibration), 
-    target_pwm, 
-    target_speed
-  );
+  if (remember_intermediate) {
+    calibration_instance.count = 0; // Reset the series count and the learning rates.
+    calibration_instance.learning_rate_multiplier = 1.f;
+  } else {
+    calibration_instance = init_calibration_instance(
+      // Carry over the current calibration otherwise default to active calibration.
+      make_calibration_instance(calibration), 
+      calibration_instance.target_pwm, 
+      calibration_instance.target_speed
+    );
+  }
 
   start_calibration_series();
 }
