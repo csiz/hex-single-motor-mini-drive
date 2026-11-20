@@ -677,20 +677,6 @@ definitions:
         type: int32
         doc: Angular speed used for HFI probing (in integer angle units per pwm cycle).
         
-
-      u_pwm_floor:
-        type: uint16
-        doc: Minimum PWM value for the U phase (below this, the line doesn't fully turn on).
-      v_pwm_floor:
-        type: uint16
-        doc: Minimum PWM value for the V phase (below this, the line doesn't fully turn on).
-      w_pwm_floor:
-        type: uint16
-        doc: Minimum PWM value for the W phase (below this, the line doesn't fully turn on).
-      z_pwm_floor:
-        type: uint16
-        doc: Minimum PWM value for the Z phase (below this, the line doesn't fully turn on).
-
       vcc_undervoltage:
         type: float32
         doc: |

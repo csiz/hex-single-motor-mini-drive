@@ -1509,22 +1509,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Angle Probing Angular Speed",
       description: "Angular speed used during angle probing."
     }],
-    ["u_pwm_floor", {
-      label: "U PWM Floor",
-      description: "Minimum PWM value for the voltage applied to the U motor phase (below this value the switch doesn't turn on).",
-    }],
-    ["v_pwm_floor", {
-      label: "V PWM Floor",
-      description: "Minimum PWM value for the voltage applied to the V motor phase (below this value the switch doesn't turn on).",
-    }],
-    ["w_pwm_floor", {
-      label: "W PWM Floor",
-      description: "Minimum PWM value for the voltage applied to the W motor phase (below this value the switch doesn't turn on).",
-    }],
-    ["z_pwm_floor", {
-      label: "Z PWM Floor",
-      description: "Minimum PWM value for the voltage applied to the Z motor phase (below this value the switch doesn't turn on).",
-    }],
     ["vcc_undervoltage", {
       label: "VCC Undervoltage Threshold",
       description: "Threshold for VCC undervoltage detection. Below this voltage we consider the supply to be too low."

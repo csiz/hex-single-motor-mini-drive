@@ -631,19 +631,12 @@ void ADC1_2_IRQHandler(void){
     // is set so we can properly track the value for the next cycle. There's a half cycle delay if
     // we set the output registers too late in the cycle.
     // 
-    // We also need to compensate for the turn on delay on each motor phase.
-    // 
-    // Note that we mustn't add the floor compensation to our calculation; it represents 
-    // the 0 point for the PWM duty cycle. That's why we store the desired PWM setting in motor_outputs
-    // but we add the floor compensation only when writing to the actual hardware registers.
+    // ! We do not need to compensate for the turn on delay on each motor phase. The MOSFETs switch
+    // proportionally to the PWM frequency even at very low values. Very reliable!
     // 
     // Also note that we want to write all zeroes when the motor is actually breaking so we don't
     // drain extra power trying to half-switch the mosfets for a tiny amount of time.
-    set_motor_outputs(MotorOutputs{
-        motor_outputs.u_duty ? motor_outputs.u_duty + control_parameters.u_pwm_floor : 0,
-        motor_outputs.v_duty ? motor_outputs.v_duty + control_parameters.v_pwm_floor : 0,
-        motor_outputs.w_duty ? motor_outputs.w_duty + control_parameters.w_pwm_floor : 0
-    });
+    set_motor_outputs(motor_outputs);
 
     // Enable phases based on the motor_flags settings.
     set_motor_status(drive_state.motor_flags);

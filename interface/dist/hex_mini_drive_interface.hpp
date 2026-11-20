@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.189.0";
+constexpr char const* VERSION_STRING = "0.190.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -1016,14 +1016,6 @@ struct ControlParameters {
   uint32_t angle_probing_sweep_duration;
   // Angular speed used for HFI probing (in integer angle units per pwm cycle).
   int32_t angle_probing_angular_speed;
-  // Minimum PWM value for the U phase (below this, the line doesn't fully turn on).
-  uint16_t u_pwm_floor;
-  // Minimum PWM value for the V phase (below this, the line doesn't fully turn on).
-  uint16_t v_pwm_floor;
-  // Minimum PWM value for the W phase (below this, the line doesn't fully turn on).
-  uint16_t w_pwm_floor;
-  // Minimum PWM value for the Z phase (below this, the line doesn't fully turn on).
-  uint16_t z_pwm_floor;
   // Minimum VCC voltage for the MOSFETs (including the MOSFET driver) to work properly. We may
   // also set this as the minimum battery voltage to not damage the Li-ion battery pack.
   float vcc_undervoltage;
@@ -1132,14 +1124,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_int32(buffer + offset, value.angle_probing_angular_speed);;
   offset += 4;
-  write_uint16(buffer + offset, value.u_pwm_floor);;
-  offset += 2;
-  write_uint16(buffer + offset, value.v_pwm_floor);;
-  offset += 2;
-  write_uint16(buffer + offset, value.w_pwm_floor);;
-  offset += 2;
-  write_uint16(buffer + offset, value.z_pwm_floor);;
-  offset += 2;
   write_float32(buffer + offset, value.vcc_undervoltage);;
   offset += 4;
   write_float32(buffer + offset, value.max_resistive_power);;
@@ -1240,14 +1224,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.angle_probing_angular_speed = read_int32(buffer + offset);
   offset += 4;
-  result.u_pwm_floor = read_uint16(buffer + offset);
-  offset += 2;
-  result.v_pwm_floor = read_uint16(buffer + offset);
-  offset += 2;
-  result.w_pwm_floor = read_uint16(buffer + offset);
-  offset += 2;
-  result.z_pwm_floor = read_uint16(buffer + offset);
-  offset += 2;
   result.vcc_undervoltage = read_float32(buffer + offset);
   offset += 4;
   result.max_resistive_power = read_float32(buffer + offset);
@@ -1403,8 +1379,8 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::RESET_CALIBRATION: return 2;
     case MessageCode::CALIBRATION_INSTANCE: return 102;
     case MessageCode::RUN_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 194;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 194;
+    case MessageCode::CONTROL_PARAMETERS: return 186;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 186;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
@@ -1524,15 +1500,15 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 192) return 0;
+      if (max_size < 2 + 184) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 194;
+      return 186;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 192) return 0;
+      if (max_size < 2 + 184) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 194;
+      return 186;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1669,12 +1645,12 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 192) return false;
+      if (size != 2 + 184) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 192) return false;
+      if (size != 2 + 184) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }

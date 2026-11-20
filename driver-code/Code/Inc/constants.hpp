@@ -441,11 +441,6 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .angle_probing_sweep_duration = 48,
     .angle_probing_angular_speed = angle_base / 12,
 
-    .u_pwm_floor = 14,
-    .v_pwm_floor = 14,
-    .w_pwm_floor = 12,
-    .z_pwm_floor = 0,
-
     .vcc_undervoltage = 8.0f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT,
     .max_resistive_power = 16.0f,
     .max_power_draw = max_drive_power,
