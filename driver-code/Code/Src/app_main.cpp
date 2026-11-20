@@ -71,28 +71,12 @@ uint32_t readouts_to_send = 0;
 // Calibration state
 // -----------------
 
-
-// Current calibration result.
-hex_mini_drive::CalibrationInstance calibration_instance = {};
-
-struct CalibrationInstanceSettings {
-  // Number of calibration steps remaining.
-  size_t steps_remaining;
-  // Target value for the series.
-  float target;
-  // Speed for the series.
-  float speed;
-};
-
-// Track calibration settings.
-CalibrationInstanceSettings calibration_instance_settings;
-
 const uint16_t calibration_duration = max_duration;
 
-const float calibration_target_base = 128.f;
+const float calibration_target_base = 64.f;
 const float calibration_target_increment = 64.f;
 
-const float calibration_target_max = calibration_target_base + calibration_target_increment * 2;
+const float calibration_target_max = calibration_target_base + calibration_target_increment * 3;
 const float calibration_speed_base = 0.125f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
 const float calibration_speed_max = angle_base / 12.f;
 
@@ -106,6 +90,8 @@ const bool continuous_calibration = false;
 const bool advance_when_stable = true;
 const bool adjust_learning_rate = true;
 
+const float calibration_nominal_speed = 8.f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second);
+const float calibration_nominal_speed_inverse = 1.0f / calibration_nominal_speed;
 
 const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
 
@@ -126,15 +112,18 @@ constexpr float multiplier_decrease_factor = 1.f - multiplier_change;
 
 constexpr float excitation_threshold = 0.2f;
 
+// Current calibration result.
+hex_mini_drive::CalibrationInstance calibration_instance = {};
+
 static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   hex_mini_drive::CalibrationInstance const& active_calibration,
-  float target,
-  float speed
+  float target_pwm,
+  float target_speed
 ) {
   return hex_mini_drive::CalibrationInstance {
     .count = 0,
-    .target_pwm = target,
-    .target_speed = speed,
+    .target_pwm = target_pwm,
+    .target_speed = target_speed,
     .stable = false,
     .consistent = false,
     .resistance_excited = false,
@@ -509,23 +498,23 @@ static inline void finish_calibration_series(){
 
   const bool zero_speed = calibration_instance.target_speed == 0.f;
   
-  float target = calibration_instance.target_pwm;
+  float target_pwm = calibration_instance.target_pwm;
   // Go the the base frequency or multiply along an octave until the max frequency.
-  float speed = (zero_speed ? calibration_speed_base : 
+  float target_speed = (zero_speed ? calibration_speed_base : 
     (calibration_instance.target_speed * calibration_speed_multiplier)
   );
 
-  if (speed > calibration_speed_max) {
+  if (faster_abs(target_speed) > calibration_speed_max) {
     // Increment target pwm if we reach the end of the speed scanning.
-    speed = calibration_speed_base;
-    target += calibration_target_increment;
+    target_speed = calibration_speed_base;
+    target_pwm += calibration_target_increment;
 
     // Finish calibration mode and return to idle when we have scanned through all target PWM values.
-    if (target > calibration_target_max) {
+    if (target_pwm > calibration_target_max) {
       if (continuous_calibration) {
         // Restart calibrating from the base speed and first target.
-        speed = calibration_speed_base;
-        target = calibration_target_base;
+        target_speed = calibration_speed_base;
+        target_pwm = calibration_target_base;
       } else {
         return control_mode_idle();
       }
@@ -537,8 +526,8 @@ static inline void finish_calibration_series(){
   calibration_instance = init_calibration_instance(
     // Carry over the current calibration otherwise default to active calibration.
     remember_intermediate ? calibration_instance : make_calibration_instance(calibration), 
-    target, 
-    speed
+    target_pwm, 
+    target_speed
   );
 
   start_calibration_series();
@@ -604,6 +593,11 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   // From now on we are definitely calibrating.
   calibration_instance.count += 1;
 
+  const float learning_rate_multiplier = (
+    calibration_instance.learning_rate_multiplier * 
+    faster_abs(calibration_instance.target_speed) *
+    calibration_nominal_speed_inverse
+  );
 
   // Recalculate
   // -----------
@@ -734,7 +728,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   validate_parameter_update(
     minimum_resistance, 
     calibration_instance.resistance,
-    -resistance_gradient * control_parameters.resistance_ki * calibration_instance.learning_rate_multiplier
+    -resistance_gradient * control_parameters.resistance_ki * learning_rate_multiplier
   );
 
   calibration_instance.inductance_sensitivity = square_inductance + inductance_variance;
@@ -753,7 +747,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   validate_parameter_update(
     minimum_inductance, 
     calibration_instance.inductance, 
-    -inductance_gradient * control_parameters.inductance_ki * calibration_instance.learning_rate_multiplier
+    -inductance_gradient * control_parameters.inductance_ki * learning_rate_multiplier
   );
 
   const float inductance_saliency_gradient = ewma(
@@ -772,7 +766,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   if (validate_parameter_update(
     minimum_inductance_saliency,
     calibration_instance.inductance_saliency, 
-    -inductance_saliency_gradient * control_parameters.inductance_saliency_ki * calibration_instance.learning_rate_multiplier
+    -inductance_saliency_gradient * control_parameters.inductance_saliency_ki * learning_rate_multiplier
   )) {
     // If we're normal condition, then just gradient descent the angle too.
     const float saliency_angle_gradient = inductance_scaling * (
@@ -808,7 +802,7 @@ static inline void calibrate_from_readout(hex_mini_drive::Readout const& readout
   if(validate_parameter_update(
     minimum_hysteresis_loss,
     calibration_instance.hysteresis_loss,
-    -hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki * calibration_instance.learning_rate_multiplier
+    -hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki * learning_rate_multiplier
   )){
     // An extra negative sign because it enters our equation as a negative term.
     const float hysteresis_angle_gradient = -hysteresis_loss_scaling * (

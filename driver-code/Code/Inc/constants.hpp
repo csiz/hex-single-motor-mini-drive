@@ -490,11 +490,11 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
 
     .zero_current_ki = std::pow(2, -16),
     .resistance_ki = std::pow(2, -10),
-    .inductance_ki = std::pow(2, -9),
-    .inductance_saliency_ki = std::pow(2, -8),
-    .saliency_angle_ki = std::pow(2, -10),
-    .hysteresis_loss_ki = std::pow(2, -14),
-    .hysteresis_angle_ki = std::pow(2, -12),
+    .inductance_ki = std::pow(2, -11),
+    .inductance_saliency_ki = std::pow(2, -11),
+    .saliency_angle_ki = std::pow(2, -11),
+    .hysteresis_loss_ki = std::pow(2, -15),
+    .hysteresis_angle_ki = std::pow(2, -15),
     .eddy_resistance_ki = 0,
     .motor_constant_ki = std::pow(2, -10),
 };
