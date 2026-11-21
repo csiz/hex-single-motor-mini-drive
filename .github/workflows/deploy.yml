@@ -9,17 +9,15 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     env:
       PAGES_ARTIFACT_NAME: github-pages-${{ github.run_attempt }}
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      pages: read
+    outputs:
+      artifact_name: github-pages-${{ github.run_attempt }}
     defaults:
       run: 
         working-directory: motor-sim
@@ -33,12 +31,23 @@ jobs:
       - run: npm ci --install-links
       - run: npm run build
       - uses: actions/configure-pages@v4
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-pages-artifact@v3
         with:
           name: ${{ env.PAGES_ARTIFACT_NAME }}
           path: motor-sim/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
         with:
-          artifact_name: ${{ env.PAGES_ARTIFACT_NAME }}
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
