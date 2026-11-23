@@ -2,7 +2,7 @@
 
 #include "hex_mini_drive_interface.hpp"
 
-#include "parameters_store.hpp"
+#include "shared_data.hpp"
 #include "math_utils.hpp"
 #include "io.hpp"
 #include "constants.hpp"
@@ -52,46 +52,10 @@ MotorOutputs motor_outputs = breaking_motor_outputs;
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
-// Angle adjustment from the main loop.
-volatile int32_t external_angle_adjustment = 0;
-
-// Average out temperature reading for the main loop to calculate.
-float temperature_reading = 0.f;
-
 // Default drive state to use when no command is available.
 hex_mini_drive::DriveState default_drive_state = breaking_drive_state;
 
 
-// Interrupt Data Interface
-// ------------------------
-
-// Initialize the loop control parameters and the calibration data. Either load 
-// them from the flash or use the defaults. Docstrings are in the header file.
-
-hex_mini_drive::Info info = {/* all default to 0 */};
-
-hex_mini_drive::Calibration calibration = get_calibration();
-
-hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
-
-CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
-
-CircularQueue<hex_mini_drive::DriveState, hex_mini_drive::DRIVE_SCHEDULE_SIZE + 1> drive_state_queue = {};
-
-bool is_motor_safed(){
-    // Consider both motor breaking and freewheeling as safe states.
-    return (readout.active_pwm == 0.f);
-}
-
-bool set_angle_adjustment(int32_t const& adjustment){
-    if (external_angle_adjustment) return false;
-    external_angle_adjustment = adjustment;
-    return true;
-}
-
-float get_temperature(){
-    return temperature_reading;
-}
 
 // Critical functions!! 23KHz PWM cycle
 // ====================================

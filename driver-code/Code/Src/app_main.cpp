@@ -1,5 +1,6 @@
 #include "app_main.hpp"
 
+#include "shared_data.hpp"
 #include "interrupts.hpp"
 #include "io.hpp"
 #include "usb_com.hpp"
@@ -22,6 +23,7 @@
 
 int32_t angle = 0;
 int32_t active_angle = 0;
+float active_pwm = 0;
 
 // Main loop stats tracking
 // ------------------------
@@ -443,7 +445,7 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       return;
 
     case SAVE_SETTINGS_TO_FLASH:
-      if(is_motor_safed()){
+      if(active_pwm == 0.0f){
         save_settings_to_flash(calibration, control_parameters);
 
         calibration = get_calibration();
@@ -897,6 +899,7 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   angle = readout.angle;
   active_angle = readout.active_angle;
+  active_pwm = readout.active_pwm;
 
   // TODO: redo the saliency angle adjustments (we might wanna do this in the drive loop i reckon, and leave the rest of the calibration logic here).
   // // Accumulate angle adjustments and send over until we reduce the saliency_angle_offset to 0.
