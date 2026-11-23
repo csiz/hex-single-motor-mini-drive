@@ -8,21 +8,11 @@
 #include "constants.hpp"
 #include "sine_tables.hpp"
 #include "dq0_transform.hpp"
-#include "circular_buffer.hpp"
 
-#include <cmath>
 #include <stm32g4xx_ll_adc.h>
 #include <stm32g4xx_ll_tim.h>
 #include <stm32g4xx_ll_gpio.h>
 #include <stm32g4xx_ll_cordic.h>
-
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <bit>
-#include <tuple>
-
-#include "hex_mini_drive_interface.hpp"
 
 // Interrupt loop
 // ==============
