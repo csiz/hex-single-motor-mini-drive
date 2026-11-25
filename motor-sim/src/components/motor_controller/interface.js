@@ -382,6 +382,18 @@ export function parse_calibration_instance(bare_calibration_instance){
   }
 }
 
+export function parse_calibration_parameters(bare_calibration_parameters){
+  return {
+    ...bare_calibration_parameters,
+  };
+}
+
+export function make_calibration_parameters(calibration_parameters){
+  return {
+    ...calibration_parameters,
+  };
+}
+
 export function parse_control_parameters(bare_control_parameters){
   return {
     ...bare_control_parameters,

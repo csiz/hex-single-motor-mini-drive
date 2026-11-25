@@ -557,10 +557,9 @@ void ADC1_2_IRQHandler(void){
     // Drive in open loop control.
     } else {
         // Drive the inductors around a circle at the specified PWM and speed. And apply the initial offset.
-        readout.active_angle = readout.active_angle + static_cast<int32_t>(drive_state.target_speed)/*  + drive_state.angle_value */;
+        readout.active_angle = readout.active_angle + static_cast<int32_t>(drive_state.target_speed) + drive_state.angle_value;
         // Zero out the offset so we don't apply it again in the next control cycle.
-        // TODO: fix intial angle setting, maybe there's a better way, hmm.
-        // drive_state.angle_value = 0;
+        drive_state.angle_value = 0;
         // Copy the commanded PWM value from the drive command to our readout state.
         readout.active_pwm = clip_to(0, live_max_pwm, drive_state.target_value);
     }

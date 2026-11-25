@@ -371,21 +371,17 @@ constexpr float current_diff_measurement_stdev = 12 * adc_to_current_units;
 // Precomputed conversion for inductance noise. Units of voltage per current (difference) per time step.
 constexpr float inductance_measurement_stdev = current_diff_measurement_stdev * current_diff_to_voltage_units;
 
-constexpr float current_cross_inductance_measurement_stdev = current_measurement_stdev * current_diff_measurement_stdev * hysteresis_conversion;
+constexpr float hysteresis_stdev = current_measurement_stdev * current_diff_measurement_stdev * hysteresis_conversion;
 
 // The noise of our applied voltage is a few units from the maximum we can use.
 constexpr float voltage_output_stdev = 4.f * nominal_vcc_voltage * half_pwm_base_inverse;
 
-// Base noise of power measurements.
-constexpr float power_measurement_stdev = voltage_output_stdev * current_measurement_stdev * voltage_mul_current_to_power;
-
 
 // We also need the squares.
-constexpr float current_variance = square(current_measurement_stdev);
-constexpr float inductance_variance = square(inductance_measurement_stdev);
-constexpr float voltage_variance = square(voltage_output_stdev);
-constexpr float power_variance = square(power_measurement_stdev);
-constexpr float current_cross_inductance_variance = square(current_cross_inductance_measurement_stdev);
+constexpr float default_current_variance = square(current_measurement_stdev);
+constexpr float default_inductance_variance = square(inductance_measurement_stdev);
+constexpr float default_voltage_variance = square(voltage_output_stdev);
+constexpr float default_hysteresis_variance = square(hysteresis_stdev);
 
 // Driver state
 // ------------
@@ -434,6 +430,38 @@ const hex_mini_drive::Calibration default_calibration = {
     .eddy_resistance = 0.f,
 };
 
+const hex_mini_drive::CalibrationParameters default_calibration_parameters = {
+    .current_variance = default_current_variance,
+    .inductance_variance = default_inductance_variance,
+    .voltage_variance = default_voltage_variance,
+    .hysteresis_variance = default_hysteresis_variance,
+    .multiplier_stable_threshold = 0.001f,
+    .multiplier_change = std::pow(2, -10),
+    .multiplier_cap_decay = std::pow(2, -14),
+    .excitation_threshold = 0.2f,
+    .current_offset_maximum = 16 * adc_to_current_units,
+    .zero_current_ki = std::pow(2, -16),
+    .resistance_ki = std::pow(2, -10),
+    .inductance_ki = std::pow(2, -11),
+    .inductance_saliency_ki = std::pow(2, -11),
+    .saliency_angle_ki = std::pow(2, -11),
+    .hysteresis_loss_ki = std::pow(2, -15),
+    .hysteresis_angle_ki = std::pow(2, -15),
+    .eddy_resistance_ki = 0,
+    .motor_constant_ki = std::pow(2, -10),
+    .stats_ki = std::pow(2, -8),
+    .instance_duration = max_duration,
+    .remember_intermediate = true,
+    .advance_when_stable = true,
+    .target_pwm_base = 64.f,
+    .target_pwm_increment = 2.f,
+    .target_pwm_max = 128.f,
+    .speed_base = 4.f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second),
+    .speed_multiplier = std::pow(2, 1.f / 12.f),
+    .speed_max = angle_base / 12.f,
+    .nominal_speed_inverse = 1.0f / (4.f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second)),
+};
+
 // The default control parameters should be set to reasonable values for any motor.
 // 
 // The reset button will reload these values.
@@ -463,11 +491,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .lead_angle_control_ki = std::pow(2, -8),
     .angle_from_saliency_ki = std::pow(2, -4),
 
-    .current_measurement_minimum = static_cast<int32_t>(current_measurement_stdev * 2.0f),
-    .voltage_measurement_variance = square(0.1f * current_measurement_stdev * current_to_voltage_units),
-    .resistance_current_minimum = 4.f * current_measurement_stdev,
-    .inductance_excitation_minimum_square = square(0.020f * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT),
-    .current_offset_maximum = 16 * adc_to_current_units,
+
     .emf_min_angular_speed = 25.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .emf_uncertainty_threshold = 256,
 
@@ -489,13 +513,4 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .emf_angle_suspected_threshold = square(quarter_circle / 3),
     .emf_speed_constant_confirmed_threshold = 16.0f,
 
-    .zero_current_ki = std::pow(2, -16),
-    .resistance_ki = std::pow(2, -10),
-    .inductance_ki = std::pow(2, -11),
-    .inductance_saliency_ki = std::pow(2, -11),
-    .saliency_angle_ki = std::pow(2, -11),
-    .hysteresis_loss_ki = std::pow(2, -15),
-    .hysteresis_angle_ki = std::pow(2, -15),
-    .eddy_resistance_ki = 0,
-    .motor_constant_ki = std::pow(2, -10),
 };

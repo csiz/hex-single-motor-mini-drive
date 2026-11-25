@@ -16,10 +16,13 @@ uint8_t user_data[user_data_size];
 
 uint8_t page_buffer[FLASH_PAGE_SIZE] = {0};
 
-const size_t calibration_offset = 0x00;
-const size_t control_parameters_offset = 0xA0;
+const size_t calibration_offset = 0x0000;
+const size_t calibration_parameters_offset = 0x0100;
+const size_t control_parameters_offset = 0x0200;
+
 
 const uint8_t * const current_calibration_address = user_data + calibration_offset;
+const uint8_t * const calibration_parameters_address = user_data + calibration_parameters_offset;
 const uint8_t * const control_parameters_address = user_data + control_parameters_offset;
 
 
@@ -30,6 +33,16 @@ Calibration get_calibration(){
         return std::get<Calibration>(stored_data.message_data);
     } else {
         return default_calibration;
+    }
+}
+
+CalibrationParameters get_calibration_parameters() {
+    Message stored_data;
+    read_message(stored_data, calibration_parameters_address, message_size(CALIBRATION_PARAMETERS));
+    if (stored_data.message_code == MessageCode::CALIBRATION_PARAMETERS) {
+        return std::get<CalibrationParameters>(stored_data.message_data);
+    } else {
+        return default_calibration_parameters;
     }
 }
 
@@ -108,6 +121,7 @@ uint32_t write_to_flash(uint32_t * flash_address, uint8_t * data, size_t len)
 
 void save_settings_to_flash(
     Calibration const& calibration, 
+    CalibrationParameters const& calibration_parameters,
     ControlParameters const& control_parameters
 ) {
     write_message(page_buffer + calibration_offset, message_size(CALIBRATION), Message{
@@ -115,6 +129,11 @@ void save_settings_to_flash(
         .message_data = calibration
     });
 
+    write_message(page_buffer + calibration_parameters_offset, message_size(CALIBRATION_PARAMETERS), Message{
+        .message_code = MessageCode::CALIBRATION_PARAMETERS,
+        .message_data = calibration_parameters
+    });
+    
     write_message(page_buffer + control_parameters_offset, message_size(CONTROL_PARAMETERS), Message{
         .message_code = MessageCode::CONTROL_PARAMETERS,
         .message_data = control_parameters

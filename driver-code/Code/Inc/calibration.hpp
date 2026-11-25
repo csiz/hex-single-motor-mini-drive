@@ -8,46 +8,15 @@
 // Calibration state
 // -----------------
 
-const uint16_t calibration_duration = max_duration;
+// Calibration parameters in use.
+extern hex_mini_drive::CalibrationParameters calibration_parameters;
 
-const float calibration_target_base = 64.f;
-const float calibration_target_increment = 64.f;
+// Current calibration result.
+extern hex_mini_drive::CalibrationInstance calibration_instance;
 
-const float calibration_target_max = calibration_target_base + calibration_target_increment * 3;
-const float calibration_speed_base = 0.125f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second); // Note A2 at 110 Hz.
-const float calibration_speed_max = angle_base / 12.f;
-
-// const float calibration_target_max = calibration_target_base;
-// const float calibration_speed_base = 0.125f * 0.125f * 0.125f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second);
-// const float calibration_speed_max = calibration_speed_base;
-
-// TODO: get rid of these flags and if we need them use a proper configurable mode.
-const bool remember_intermediate = true;
-const bool continuous_calibration = false;
-const bool advance_when_stable = true;
-const bool adjust_learning_rate = true;
-
-const float calibration_nominal_speed = /* 0.125f * 0.125f *  */8.f * 110.f * angle_base / static_cast<float>(pwm_cycles_per_second);
-const float calibration_nominal_speed_inverse = 1.0f / calibration_nominal_speed;
-
-const float calibration_speed_multiplier = std::pow(2, 1.f / 12.f); // An octave has 12 notes.
-
-const float calibration_stats_ki = std::pow(2, -8);
-
-
-const uint32_t calibration_stability_check_period = 128;
-
-
-
-constexpr float multiplier_minimum = 0.001f;
-constexpr float multiplier_stable_threshold = 0.001f;
+constexpr uint32_t calibration_stability_check_period = 128;
+constexpr float multiplier_minimum = 0.000'1f;
 constexpr float multiplier_maximum = 10.f;
-constexpr float multiplier_change = std::pow(2, -10);
-constexpr float multiplier_cap_decay = std::pow(2, -14);
-constexpr float multiplier_increase_factor = 1.f + multiplier_change;
-constexpr float multiplier_decrease_factor = 1.f - multiplier_change;
-
-constexpr float excitation_threshold = 0.2f;
 
 
 static inline hex_mini_drive::CalibrationInstance make_calibration_instance(hex_mini_drive::Calibration const& calibration){
@@ -81,9 +50,9 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .learning_rate_cap = multiplier_maximum,
     .resistance_excitation_fraction = 0.f,
     .inductance_excitation_fraction = 0.f,
-    .resistance_sensitivity = current_variance,
-    .inductance_sensitivity = inductance_variance,
-    .hysteresis_loss_sensitivity = current_cross_inductance_variance,
+    .resistance_sensitivity = calibration_parameters.current_variance,
+    .inductance_sensitivity = calibration_parameters.inductance_variance,
+    .hysteresis_loss_sensitivity = calibration_parameters.hysteresis_variance,
     .resistance = active_calibration.resistance,
     .resistance_gradient = 0.f,
     .inductance = active_calibration.inductance,
@@ -97,9 +66,6 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   };
 }
 
-// Current calibration result.
-extern hex_mini_drive::CalibrationInstance calibration_instance;
-
 
 static inline void start_calibration_series() {
   // Clear the schedule of any pending states.
@@ -108,7 +74,7 @@ static inline void start_calibration_series() {
   drive_state_queue.write(hex_mini_drive::DriveState{
     .motor_flags = ENABLE_ALL_OUTPUTS,
     .closed_loop = false,
-    .duration = calibration_duration,
+    .duration = calibration_parameters.instance_duration,
     .target_value = calibration_instance.target_pwm,
     .target_speed = calibration_instance.target_speed,
     .probing_factor = 0,
@@ -189,21 +155,21 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float drive_voltage_square = square(readout.x_drive_voltage) + square(readout.y_drive_voltage);
 
-  const bool low_drive = drive_voltage_square < control_parameters.voltage_measurement_variance;
+  const bool low_drive = drive_voltage_square < calibration_parameters.voltage_variance;
 
   // The rest of the calibration can only be done if we're actively driving the motor phases as that
   // is our only source of reference scale for the phase voltages. In any case, idle driving isn't an
   // error so we continue the calibration, we just ignore this readout.
   if (low_drive) return false;
 
+  const bool zero_speed = calibration_instance.target_speed == 0.0f;
 
   // From now on we are definitely calibrating.
   calibration_instance.count += 1;
 
   const float learning_rate_multiplier = (
     calibration_instance.learning_rate_multiplier * 
-    faster_abs(calibration_instance.target_speed) *
-    calibration_nominal_speed_inverse
+    (zero_speed ? 1.0f : (faster_abs(calibration_instance.target_speed) * calibration_parameters.nominal_speed_inverse))
   );
 
   // Recalculate
@@ -300,27 +266,30 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float drive_voltage = readout.vcc_voltage * readout.active_pwm * active_pwm_to_voltage_conversion;
 
-  calibration_instance.avg_drive_voltage += (drive_voltage - calibration_instance.avg_drive_voltage) * calibration_stats_ki;
-  calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_stats_ki;
-  calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_stats_ki;
+  calibration_instance.avg_drive_voltage += (drive_voltage - calibration_instance.avg_drive_voltage) * calibration_parameters.stats_ki;
+  calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_parameters.stats_ki;
+  calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_parameters.stats_ki;
   
   // Gradients & Parameter Updates
   // -----------------------------
   // 
   // Compute the gradients of the loss with respect to each of the tracked parameters.
   // 
-  // ! We must not condition the updates apparently...
+  // We must not condition the updates when they are under a threshold, apparently it helps to update
+  // all the time for a known driving condition.
+  // 
+  // However we can condition to update only resistance when driving statically.
 
   // Count how often we see enough current to meaningfully calibrate resistance (we still have to do it, but we mark it as uncertain).
-  const bool resistance_excited = square_current > current_variance;
-  calibration_instance.resistance_excitation_fraction += (resistance_excited - calibration_instance.resistance_excitation_fraction) * calibration_stats_ki;
+  const bool resistance_excited = square_current >  calibration_parameters.current_variance;
+  calibration_instance.resistance_excitation_fraction += (resistance_excited - calibration_instance.resistance_excitation_fraction) * calibration_parameters.stats_ki;
 
   // Also track inductance excitation.
-  const bool inductance_excited = square_inductance > inductance_variance;
-  calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_stats_ki;
+  const bool inductance_excited = square_inductance >  calibration_parameters.inductance_variance;
+  calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_parameters.stats_ki;
   
 
-  calibration_instance.resistance_sensitivity = square_current + current_variance;
+  calibration_instance.resistance_sensitivity = square_current + calibration_parameters.current_variance;
   const float resistance_scaling = 1.f / calibration_instance.resistance_sensitivity;
 
   const float resistance_gradient = ewma(
@@ -329,164 +298,173 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
       x_voltage_error * readout.x_current +
       y_voltage_error * readout.y_current
     ),
-    calibration_stats_ki
+    calibration_parameters.stats_ki
   );
 
   validate_parameter_update(
     minimum_resistance, 
     calibration_instance.resistance,
-    -resistance_gradient * control_parameters.resistance_ki * learning_rate_multiplier
+    -resistance_gradient * calibration_parameters.resistance_ki * learning_rate_multiplier
   );
 
-  calibration_instance.inductance_sensitivity = square_inductance + inductance_variance;
-  const float inductance_scaling = 1.f / calibration_instance.inductance_sensitivity;
-  
-  const float inductance_gradient = ewma(
-    calibration_instance.inductance_gradient,
-    inductance_scaling * (
-      x_voltage_error * x_inductance +
-      y_voltage_error * y_inductance
-    ),
-    calibration_stats_ki
-  );
-  
-  // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
-  validate_parameter_update(
-    minimum_inductance, 
-    calibration_instance.inductance, 
-    -inductance_gradient * control_parameters.inductance_ki * learning_rate_multiplier
-  );
-
-  const float inductance_saliency_gradient = ewma(
-    calibration_instance.inductance_saliency_gradient,
-    inductance_scaling * (
-      x_voltage_error * x_inductance_saliency +
-      y_voltage_error * y_inductance_saliency
-    ),
-    calibration_stats_ki
-  );
-
-
-  // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
-  // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape
-  // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
-  if (validate_parameter_update(
-    minimum_inductance_saliency,
-    calibration_instance.inductance_saliency, 
-    -inductance_saliency_gradient * control_parameters.inductance_saliency_ki * learning_rate_multiplier
-  )) {
-    // If we're normal condition, then just gradient descent the angle too.
-    const float saliency_angle_gradient = inductance_scaling * (
-      x_voltage_error * -y_inductance_saliency +
-      y_voltage_error * x_inductance_saliency
-    ) * radians_to_angle_units / calibration_instance.inductance_saliency;
-
-    calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * control_parameters.saliency_angle_ki);
-  } else {
-    // Rotate the angle very slowly to get out of bad states.
-    calibration_instance.saliency_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
-  }
-  // Note that if inductance_saliency is greater than inductance, total inductance can go negative, whatever that means.
-  // This usually happens when the motor is being super noisy and has to be held down, so it's clearly an error from emf,
-  // but I do not know how to combine the calibration terms to extract a meaningful value from them in that case.
-
-  const float square_current_cross_inductance = square(hysteresis_scaling);
-
-  calibration_instance.hysteresis_loss_sensitivity = square_current_cross_inductance + current_cross_inductance_variance;
-  
-  const float hysteresis_loss_scaling = 1.f / calibration_instance.hysteresis_loss_sensitivity;
-
-  // And gradients for micro rotor vibrations.
-   const float hysteresis_loss_gradient = ewma(
-    calibration_instance.hysteresis_loss_gradient,
-    hysteresis_loss_scaling * (
-      x_voltage_error * x_hysteresis_loss + 
-      y_voltage_error * y_hysteresis_loss
-    ),
-    calibration_stats_ki
-  );
-
-  if(validate_parameter_update(
-    minimum_hysteresis_loss,
-    calibration_instance.hysteresis_loss,
-    -hysteresis_loss_gradient * control_parameters.hysteresis_loss_ki * learning_rate_multiplier
-  )){
-    // An extra negative sign because it enters our equation as a negative term.
-    const float hysteresis_angle_gradient = -hysteresis_loss_scaling * (
-      x_voltage_error * -y_hysteresis_loss + 
-      y_voltage_error * x_hysteresis_loss
-    ) * radians_to_angle_units / calibration_instance.hysteresis_loss;
-
-    calibration_instance.hysteresis_angle -= static_cast<int32_t>(hysteresis_angle_gradient * control_parameters.hysteresis_angle_ki);
-  } else {
-    // Rotate the angle very slowly to get out of bad states.
-    calibration_instance.hysteresis_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
-  }
-
-  // Aggregate checks
-  // ----------------
-
-  // Compute the dot product between the new gradients and the previous gradients.
-  const float gradients_dot = (
-    (
+  if (calibration_instance.target_speed == 0.0f) {
+    // Compute the dot product between the new gradients and the previous gradients.
+    const float gradients_dot = (
       resistance_gradient * calibration_instance.resistance_gradient
-    ) * square_current +
-    (
-      inductance_gradient * calibration_instance.inductance_gradient +
-      inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient * (calibration_instance.inductance_saliency != 0.0f)
-    ) * square_inductance +
-    (
-      hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f)
-    ) * square_current_cross_inductance
-  );
+    ) * square_current;
 
-  calibration_instance.gradients_dot = ewma(
-    calibration_instance.gradients_dot,
-    gradients_dot,
-    calibration_stats_ki
-  );
+    calibration_instance.gradients_dot = ewma(calibration_instance.gradients_dot, gradients_dot, calibration_parameters.stats_ki);
 
-  // Update all stored gradients.
-  calibration_instance.resistance_gradient = resistance_gradient;
-  calibration_instance.inductance_gradient = inductance_gradient;
-  calibration_instance.inductance_saliency_gradient = inductance_saliency_gradient;
-  calibration_instance.hysteresis_loss_gradient = hysteresis_loss_gradient;
+    // Update all stored gradients.
+    calibration_instance.resistance_gradient = resistance_gradient;
+  } else {
+
+    calibration_instance.inductance_sensitivity = square_inductance + calibration_parameters.inductance_variance;
+    const float inductance_scaling = 1.f / calibration_instance.inductance_sensitivity;
+    
+    const float inductance_gradient = ewma(
+      calibration_instance.inductance_gradient,
+      inductance_scaling * (
+        x_voltage_error * x_inductance +
+        y_voltage_error * y_inductance
+      ),
+      calibration_parameters.stats_ki
+    );
+    
+    // Keep 0 inductance exactly 0 (meaning disabled), but otherwise make sure it's minimum positive value.
+    validate_parameter_update(
+      minimum_inductance, 
+      calibration_instance.inductance, 
+      -inductance_gradient * calibration_parameters.inductance_ki * learning_rate_multiplier
+    );
+
+    const float inductance_saliency_gradient = ewma(
+      calibration_instance.inductance_saliency_gradient,
+      inductance_scaling * (
+        x_voltage_error * x_inductance_saliency +
+        y_voltage_error * y_inductance_saliency
+      ),
+      calibration_parameters.stats_ki
+    );
+
+
+    // It was valid if above minimum, otherwise it got capped before going negative. This value is mediated by a directional
+    // angle that we are also optimizing, it will go negative if we are stuck at 180 degree flip. In that case we can escape
+    // the false equilibrium quickly by flipping the angle (and resetting the resilience multiplier).
+    if (validate_parameter_update(
+      minimum_inductance_saliency,
+      calibration_instance.inductance_saliency, 
+      -inductance_saliency_gradient * calibration_parameters.inductance_saliency_ki * learning_rate_multiplier
+    )) {
+      // If we're normal condition, then just gradient descent the angle too.
+      const float saliency_angle_gradient = inductance_scaling * (
+        x_voltage_error * -y_inductance_saliency +
+        y_voltage_error * x_inductance_saliency
+      ) * radians_to_angle_units / calibration_instance.inductance_saliency;
+
+      calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * calibration_parameters.saliency_angle_ki);
+    } else {
+      // Rotate the angle very slowly to get out of bad states.
+      calibration_instance.saliency_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
+    }
+    // Note that if inductance_saliency is greater than inductance, total inductance can go negative, whatever that means.
+    // This usually happens when the motor is being super noisy and has to be held down, so it's clearly an error from emf,
+    // but I do not know how to combine the calibration terms to extract a meaningful value from them in that case.
+
+    const float square_current_cross_inductance = square(hysteresis_scaling);
+
+    calibration_instance.hysteresis_loss_sensitivity = square_current_cross_inductance +  calibration_parameters.hysteresis_variance;
+    
+    const float hysteresis_loss_scaling = 1.f / calibration_instance.hysteresis_loss_sensitivity;
+
+    // And gradients for micro rotor vibrations.
+    const float hysteresis_loss_gradient = ewma(
+      calibration_instance.hysteresis_loss_gradient,
+      hysteresis_loss_scaling * (
+        x_voltage_error * x_hysteresis_loss + 
+        y_voltage_error * y_hysteresis_loss
+      ),
+      calibration_parameters.stats_ki
+    );
+
+    if(validate_parameter_update(
+      minimum_hysteresis_loss,
+      calibration_instance.hysteresis_loss,
+      -hysteresis_loss_gradient * calibration_parameters.hysteresis_loss_ki * learning_rate_multiplier
+    )){
+      // An extra negative sign because it enters our equation as a negative term.
+      const float hysteresis_angle_gradient = -hysteresis_loss_scaling * (
+        x_voltage_error * -y_hysteresis_loss + 
+        y_voltage_error * x_hysteresis_loss
+      ) * radians_to_angle_units / calibration_instance.hysteresis_loss;
+
+      calibration_instance.hysteresis_angle -= static_cast<int32_t>(hysteresis_angle_gradient * calibration_parameters.hysteresis_angle_ki);
+    } else {
+      // Rotate the angle very slowly to get out of bad states.
+      calibration_instance.hysteresis_angle += static_cast<int32_t>(angle_base * seconds_per_pwm);
+    }
+
+    // Aggregate checks
+    // ----------------
+
+    // Compute the dot product between the new gradients and the previous gradients.
+    const float gradients_dot = (
+      (
+        resistance_gradient * calibration_instance.resistance_gradient
+      ) * square_current +
+      (
+        inductance_gradient * calibration_instance.inductance_gradient +
+        inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient * (calibration_instance.inductance_saliency != 0.0f)
+      ) * square_inductance +
+      (
+        hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f)
+      ) * square_current_cross_inductance
+    );
+
+    calibration_instance.gradients_dot = ewma(calibration_instance.gradients_dot, gradients_dot, calibration_parameters.stats_ki);
+
+
+    // Update all stored gradients.
+    calibration_instance.resistance_gradient = resistance_gradient;
+    calibration_instance.inductance_gradient = inductance_gradient;
+    calibration_instance.inductance_saliency_gradient = inductance_saliency_gradient;
+    calibration_instance.hysteresis_loss_gradient = hysteresis_loss_gradient;
+  }
 
   // Check for stability
   // -------------------
 
-  if (adjust_learning_rate) {
-    // If our gradients are aligned over many steps than we should increase the learning rate;
-    // otherwise if the gradients are negative or below the expected variance we should lower
-    // the learning rate and see if we can optimize more.
-    if(calibration_instance.gradients_dot > voltage_variance) {
-      calibration_instance.learning_rate_multiplier *= multiplier_increase_factor;
-      if (calibration_instance.learning_rate_multiplier > calibration_instance.learning_rate_cap) {
-        calibration_instance.learning_rate_multiplier = calibration_instance.learning_rate_cap;
-        // Slowly decrease the cap to 1 so we don't get stuck oscillating at high error.
-        calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, 1.0f, multiplier_cap_decay);
-      } else {
-        calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, multiplier_maximum, multiplier_cap_decay);
-      }
-    } else {
-      calibration_instance.learning_rate_multiplier = max(calibration_instance.learning_rate_multiplier * multiplier_decrease_factor, multiplier_minimum);
-      calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, multiplier_maximum, multiplier_cap_decay);
-    }
 
+  // If our gradients are aligned over many steps than we should increase the learning rate;
+  // otherwise if the gradients are negative or below the expected variance we should lower
+  // the learning rate and see if we can optimize more.
+  if(calibration_instance.gradients_dot > calibration_parameters.voltage_variance) {
+    calibration_instance.learning_rate_multiplier *= 1.f + calibration_parameters.multiplier_change;
+    if (calibration_instance.learning_rate_multiplier > calibration_instance.learning_rate_cap) {
+      calibration_instance.learning_rate_multiplier = calibration_instance.learning_rate_cap;
+      // Slowly decrease the cap to 1 so we don't get stuck oscillating at high error.
+      calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, 1.0f, calibration_parameters.multiplier_cap_decay);
+    } else {
+      calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, multiplier_maximum, calibration_parameters.multiplier_cap_decay);
+    }
+  } else {
+    calibration_instance.learning_rate_multiplier = max(calibration_instance.learning_rate_multiplier * (1.f - calibration_parameters.multiplier_change), multiplier_minimum);
+    calibration_instance.learning_rate_cap = ewma(calibration_instance.learning_rate_cap, multiplier_maximum, calibration_parameters.multiplier_cap_decay);
   }
+
   
   // Periodically run checks then move on.
   if (calibration_instance.count % calibration_stability_check_period == 0){
-    calibration_instance.stable = calibration_instance.learning_rate_multiplier <= multiplier_stable_threshold;
-    calibration_instance.resistance_excited = calibration_instance.resistance_excitation_fraction > excitation_threshold;
-    calibration_instance.inductance_excited = calibration_instance.inductance_excitation_fraction > excitation_threshold;
+    calibration_instance.stable = calibration_instance.learning_rate_multiplier < calibration_parameters.multiplier_stable_threshold;
+    calibration_instance.resistance_excited = calibration_instance.resistance_excitation_fraction > calibration_parameters.excitation_threshold;
+    calibration_instance.inductance_excited = calibration_instance.inductance_excitation_fraction > calibration_parameters.excitation_threshold;
     calibration_instance.consistent = (
       calibration_instance.resistance_excited and
       calibration_instance.inductance_excited and
       (calibration_instance.inductance_saliency < 0.5f * calibration_instance.inductance) and
       (faster_abs((calibration_instance.saliency_angle / 2) - ((2 * calibration_instance.hysteresis_angle) / 2)) < eight_circle)
     );
-    if (advance_when_stable and calibration_instance.stable) {
+    if (calibration_parameters.advance_when_stable and calibration_instance.stable) {
       return true;
     }
   }

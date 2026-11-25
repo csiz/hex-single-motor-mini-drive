@@ -85,6 +85,18 @@ Calibration Procedures
 
 </div>
 
+Calibration Parameters
+----------------------
+<div class="card tight">
+  <div>${calibration_parameters_buttons}</div>
+  <h3>Active Calibration Parameters</h3>
+  <pre>${active_calibration_parameters_table}</pre>
+</div>
+
+<div class="card tight">
+  <h3>Calibration Parameters</h3>
+  <div>${Object.values(calibration_parameters_input)}</div>
+</div>
 
 Motor Control Parameters
 ------------------------
@@ -214,19 +226,21 @@ async function connect_motor_controller(options = {}) {
       onmessage: (message) => {
         if (motor_uri != active_port.value) return;
         
-        if (message.message_code == MessageCode.READOUT) {
-          data.value = motor_controller.data;
-          // TODO: circular definition
-        // } else if (message.message_code == MessageCode.CALIBRATION) {
-        //   show_active_calibration();
-        // } else if (message.message_code == MessageCode.CONTROL_PARAMETERS) {
-        //   show_active_control_parameters();
-        } else if (message.message_code == MessageCode.CALIBRATION_INSTANCE) {
-          calibration_series.value = [...motor_controller.calibration_series.values()];
-        } else {
-          // ... nothing to do really
-        }
+        switch (message.message_code) {
+          case MessageCode.READOUT:
+            data.value = motor_controller.data;
+            break;
+          case MessageCode.CALIBRATION_INSTANCE:
+            calibration_series.value = [...motor_controller.calibration_series.values()];
+            break;
 
+          case MessageCode.CALIBRATION_PARAMETERS:
+            // show_active_calibration_parameters();
+            break;
+          case MessageCode.CONTROL_PARAMETERS:
+            // show_active_control_parameters();
+            break;
+        }
       },
       onready: (motor_controller) => {
         set_status(html`<pre>Connected, waiting for your commands.</pre>`, motor_uri);
@@ -1361,9 +1375,13 @@ const update_calibration_data = (new_value) => {
 
 const calibration_buttons = !motor_controller ? html`<p>Not connected to motor!</p>` : Inputs.button(
   [
-    ["Run calibration", async function(){
+    ["Run calibration chirp", async function(){
       if (!motor_controller) return;
-      await motor_controller.send_command({message_code: MessageCode.RUN_CALIBRATION});
+      await motor_controller.send_command({message_code: MessageCode.RUN_CALIBRATION_CHIRP});
+    }],
+    ["Run calibration static", async function(){
+      if (!motor_controller) return;
+      await motor_controller.send_command({message_code: MessageCode.RUN_CALIBRATION_STATIC});
     }],
     ["Upload to Driver", async function(){
       if (!motor_controller) return;
@@ -1406,6 +1424,7 @@ const calibration_series_resistance_plot = plot_lines({
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
 });
+
 
 const calibration_series_inductance_plot = plot_lines({
   subtitle: "Calibration Series - Optimizing resistance & inductance",
@@ -1457,17 +1476,210 @@ const calibration_series_stats_plot = plot_lines({
 });
 
 
+const calibration_series_static_resistance_plot = plot_lines({
+  subtitle: "Calibration Series - Optimizing resistance & inductance",
+  description: "Calibration optimization results for each phase at various probing frequencies.",
+  width: 1200, height: 300,
+  x: "target_pwm",
+  x_label: "Probing PWM",
+  y_label: "Calibration Parameters",
+  channels: [
+    {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
+    {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[4]},
+    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
+    {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
+  ],
+  default_draw: draw_circles_of_size(function(d) { return 2; }),
+});
+
 const calibration_series_plots = {
   calibration_series_resistance_plot,
   calibration_series_inductance_plot,
   calibration_series_angles_plot,
   calibration_series_stats_plot,
+  calibration_series_static_resistance_plot,
 };
 
 autosave_inputs(calibration_series_plots);
 ```
 
+```js
+// Calibration Parameters
+// -------------------
 
+function stringify_active_calibration_parameters() {
+  return `motor_controller.calibration_parameters = ${JSON.stringify(motor_controller?.calibration_parameters, null, 2)}`;
+}
+
+let active_calibration_parameters_table =  Mutable(stringify_active_calibration_parameters());
+
+const calibration_parameters_input = Object.fromEntries(
+  [
+    ["current_variance", {
+      label: "Current Variance",
+      description: "The measurement noise for the resistance current sensing, values under this threshold are likely 0."
+    }],
+    ["inductance_variance", {
+      label: "Inductance Variance",
+      description: "We want our measurement error to be above this noise variance to count as a signal."
+    }],
+    ["voltage_variance", {
+      label: "Voltage Variance",
+      description: "Expected baseline variance of our voltage measurements."
+    }],
+    ["hysteresis_variance", {
+      label: "Hysteresis Variance",
+      description: "Minimum square of the inductance excitation to consider it significant."
+    }],
+    ["multiplier_stable_threshold", {
+      label: "Multiplier Stable Threshold",
+      description: "Threshold for stable multiplier."
+    }],
+    ["multiplier_change", {
+      label: "Multiplier Change",
+      description: "Change rate for the multiplier."
+    }],
+    ["multiplier_cap_decay", {
+      label: "Multiplier Cap Decay",
+      description: "Decay rate for the multiplier cap."
+    }],
+    ["excitation_threshold", {
+      label: "Excitation Threshold",
+      description: "Threshold for excitation."
+    }],
+    ["current_offset_maximum", {
+      label: "Current Offset Maximum",
+      description: "Maximum allowable current offset to adjust the current sensing bias from 0."
+    }],
+    ["zero_current_ki", {
+      label: "Zero Current KI", 
+      description: "Integral gain for the zero current observer; helps in accurately estimating the zero current offset for each motor phase."
+    }],
+    ["resistance_ki", {
+      label: "Phase Resistance KI",
+      description: "Integral gain for phase resistance estimation. Helps in accurately estimating the resistance of each motor phase in star configuration."
+    }],
+    ["inductance_ki", {
+      label: "Phase Inductance KI",
+      description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
+    }],
+    ["inductance_saliency_ki", {
+      label: "Inductance Saliency KI",
+      description: "Integral gain for the inductance saliency observer; helps in accurately estimating the saliency in the inductance measurement."
+    }],
+    ["saliency_angle_ki", {
+      label: "Saliency Angle KI",
+      description: "Integral gain for saliency angle estimation. To be explained later..."
+    }],
+    ["hysteresis_loss_ki", {
+      label: "Hysteresis Loss KI",
+      description: "Integral gain for hysteresis loss."
+    }],
+    ["hysteresis_angle_ki", {
+      label: "Hysteresis Loss Angle KI",
+      description: "Integral gain for hysteresis loss angle."
+    }],
+    ["eddy_resistance_ki", {
+      label: "Eddy Resistance KI",
+      description: "Integral gain for eddy resistance."
+    }],
+    ["motor_constant_ki", {
+      label: "Motor Constant KI", 
+      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
+    }],
+    ["stats_ki", {
+      label: "Stats KI",
+      description: "Calibration statistics integral gain."
+    }],
+    ["instance_duration", {
+      label: "Instance Duration",
+      description: "Maximum duration of a calibration instance. Calibration usually finishes early when parameters stabilize."
+    }],
+    ["remember_intermediate", {
+      label: "Remember Intermediate",
+      description: "Remember intermediate calibration results."
+    }],
+    ["advance_when_stable", {
+      label: "Advance When Stable",
+      description: "Advance calibration when parameters are stable."
+    }],
+    ["target_pwm_base", {
+      label: "Target PWM Base",
+      description: "Base PWM for calibration."
+    }],
+    ["target_pwm_increment", {
+      label: "Target PWM Increment",
+      description: "Increment for PWM during calibration."
+    }],
+    ["target_pwm_max", {
+      label: "Target PWM Max",
+      description: "Maximum PWM for calibration."
+    }],
+    ["speed_base", {
+      label: "Speed Base",
+      description: "Base speed (angular frequency) for the calibration probe."
+    }],
+    ["speed_multiplier", {
+      label: "Speed Multiplier",
+      description: "Multiplier for the calibration speed, by default it's set to 2^(1/12) so we create a musical scale. That is 12 semitones per octave. And we span a few octaves for the whole calibration sweep."
+    }],
+    ["speed_max", {
+      label: "Speed Max",
+      description: "Maximum speed for calibration."
+    }],
+    ["nominal_speed_inverse", {
+      label: "Nominal Speed Inverse",
+      description: "Because our parameters depend on the angle of excitation we must scale the gradients down when the speed is low so we can average the gradients over a whole rotation. For speed of computation we need the inverse of the nominal speed. At nominal speed the gradient learning rate multiplier is 1."
+    }],
+  ].map(([key, {label, description}]) => {
+
+    let parameter_input = Inputs.number([], {
+      label,
+      value: motor_controller?.calibration_parameters?.[key],
+    });
+
+    d3.select(parameter_input).style("width", "100%").style("margin", "1em 0em 1em 0em")
+      .select("div").style("width", "50em")
+        .append("span").text(description).style("margin", "0em 1em 0em 1em").style("width", "100em");
+
+    return [key, parameter_input];
+  })
+);
+
+function show_active_calibration_parameters() {
+  active_calibration_parameters_table.value = stringify_active_calibration_parameters();
+  Object.entries(calibration_parameters_input).forEach(([key, input]) => {
+    input.value = motor_controller?.calibration_parameters?.[key];
+  });
+}
+
+let calibration_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
+  [
+    ["Upload to Driver", wait_previous(async function(value){
+      const calibration_parameters = Object.fromEntries(Object.entries(calibration_parameters_input).map(([key, input]) => [key, input.value]));
+      await motor_controller.upload_calibration_parameters(calibration_parameters);
+      show_active_calibration_parameters();
+      unsaved_changes();
+      return value;
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_calibration_parameters();
+      show_active_calibration_parameters();
+      return value;
+    })],
+    ["Reset to Defaults", wait_previous(async function(value){
+      await motor_controller.reset_calibration_parameters();
+      show_active_calibration_parameters();
+      unsaved_changes();
+      return value;
+    })],
+  ],
+  {
+    label: "Calibration Parameters",
+    value: motor_controller?.calibration_parameters ?? {},
+  },
+);
+```
 
 ```js
 // Control Parameters
@@ -1639,42 +1851,6 @@ const control_parameters_input = Object.fromEntries(
     ["emf_speed_constant_confirmed_threshold", {
       label: "EMF Speed Constant Confirmed Threshold",
       description: "Threshold for confirming the EMF speed constant estimation."
-    }],
-    ["zero_current_ki", {
-      label: "Zero Current KI", 
-      description: "Integral gain for the zero current observer; helps in accurately estimating the zero current offset for each motor phase."
-    }],
-    ["resistance_ki", {
-      label: "Phase Resistance KI",
-      description: "Integral gain for phase resistance estimation. Helps in accurately estimating the resistance of each motor phase in star configuration."
-    }],
-    ["inductance_ki", {
-      label: "Phase Inductance KI",
-      description: "Integral gain for phase inductance estimation. Helps in accurately estimating the inductance of each motor phase in star configuration."
-    }],
-    ["inductance_saliency_ki", {
-      label: "Inductance Saliency KI",
-      description: "Integral gain for the inductance saliency observer; helps in accurately estimating the saliency in the inductance measurement."
-    }],
-    ["saliency_angle_ki", {
-      label: "Saliency Angle KI",
-      description: "Integral gain for saliency angle estimation. To be explained later..."
-    }],
-    ["hysteresis_loss_ki", {
-      label: "Hysteresis Loss KI",
-      description: "Integral gain for hysteresis loss."
-    }],
-    ["hysteresis_angle_ki", {
-      label: "Hysteresis Loss Angle KI",
-      description: "Integral gain for hysteresis loss angle."
-    }],
-    ["eddy_resistance_ki", {
-      label: "Eddy Resistance KI",
-      description: "Integral gain for eddy resistance."
-    }],
-    ["motor_constant_ki", {
-      label: "Motor Constant KI", 
-      description: "Integral gain for the motor constant observer; the relation between speed and EMF magnitude."
     }],
   ].map(([key, {label, description}]) => {
 

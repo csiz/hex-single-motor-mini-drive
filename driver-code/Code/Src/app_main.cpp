@@ -4,6 +4,7 @@
 #include "shared_data.hpp"
 #include "interrupts.hpp"
 #include "io.hpp"
+#include "stm32g4xx.h"
 #include "usb_com.hpp"
 #include "parameters_store.hpp"
 #include "math_utils.hpp"
@@ -78,7 +79,8 @@ enum struct ControlMode : uint8_t {
   IDLE,
   DRIVE_SCHEDULE,
   SEEK_ANGLE,
-  CALIBRATE
+  CALIBRATE_CHIRP,
+  CALIBRATE_STATIC
 };
 
 ControlMode control_mode = ControlMode::DRIVE_SCHEDULE;
@@ -110,15 +112,25 @@ static inline void control_mode_drive_schedule(hex_mini_drive::DriveSchedule con
 }
 
 
-static inline void control_mode_calibrate(hex_mini_drive::Calibration const& active_calibration){
+static inline void control_mode_calibrate_chirp(hex_mini_drive::Calibration const& active_calibration){
   control_mode_idle();
   calibration_instance = init_calibration_instance(
     make_calibration_instance(active_calibration), 
-    calibration_target_base, 
-    calibration_speed_base
+    calibration_parameters.target_pwm_base, 
+    calibration_parameters.speed_base
   );
   start_calibration_series();
-  control_mode = ControlMode::CALIBRATE;
+  control_mode = ControlMode::CALIBRATE_CHIRP;
+}
+
+static inline void control_mode_calibrate_static(hex_mini_drive::Calibration const& active_calibration){
+  control_mode_idle();
+  calibration_instance = init_calibration_instance(
+    make_calibration_instance(active_calibration),
+    calibration_parameters.target_pwm_base,
+    0.0f
+  );
+  control_mode = ControlMode::CALIBRATE_STATIC;
 }
 
 
@@ -223,7 +235,10 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       stream_state = false;
 
       // Pre-emptively send the current calibration instance if calibrating.
-      if (control_mode == ControlMode::CALIBRATE) queue_message(hex_mini_drive::Message{
+      if (
+        control_mode == ControlMode::CALIBRATE_CHIRP or
+        control_mode == ControlMode::CALIBRATE_STATIC
+      ) queue_message(hex_mini_drive::Message{
         .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
         .message_data = calibration_instance
       });
@@ -305,11 +320,29 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       });
       return;
 
-    case RUN_CALIBRATION: {
-      // Run calibration routine initialized with the currently active calibration parameters.
-      control_mode_calibrate(calibration);
+
+    case GET_CALIBRATION_PARAMETERS:
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION_PARAMETERS,
+        .message_data = calibration_parameters
+      });
       return;
-    }
+    
+    case SET_CALIBRATION_PARAMETERS:
+      calibration_parameters = std::get<CalibrationParameters>(message.message_data);
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION_PARAMETERS,
+        .message_data = calibration_parameters
+      });
+      return;
+    
+    case RESET_CALIBRATION_PARAMETERS:
+      calibration_parameters = default_calibration_parameters;
+      queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::CALIBRATION_PARAMETERS,
+        .message_data = calibration_parameters
+      });
+      return;
 
     case GET_CONTROL_PARAMETERS:
       queue_message(hex_mini_drive::Message{
@@ -336,7 +369,7 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
 
     case SAVE_SETTINGS_TO_FLASH:
       if(active_pwm == 0.0f){
-        save_settings_to_flash(calibration, control_parameters);
+        save_settings_to_flash(calibration, calibration_parameters, control_parameters);
 
         calibration = get_calibration();
         control_parameters = get_control_parameters();
@@ -345,14 +378,27 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
           .message_code = hex_mini_drive::MessageCode::SETTINGS_SAVED_TO_FLASH,
           .message_data = {}
         });
-        return;
       }
+      return;
+
+    
+    case RUN_CALIBRATION_CHIRP: {
+      control_mode_calibrate_chirp(calibration);
+      return;
+    }
+
+    case RUN_CALIBRATION_STATIC: {
+      // Run calibration routine initialized with the currently active calibration parameters.
+      control_mode_calibrate_static(calibration);
+      return;
+    }
 
     // We shouldn't receive these messages; the driver only sends them.
     case VERSION:
     case SETTINGS_SAVED_TO_FLASH:
     case CALIBRATION:
     case CALIBRATION_INSTANCE:
+    case CALIBRATION_PARAMETERS:
     case CONTROL_PARAMETERS:
     case READOUT:
     case INFO:
@@ -369,32 +415,31 @@ static inline void finish_calibration_series(){
   });
 
   const bool zero_speed = calibration_instance.target_speed == 0.f;
-  
-  // Go the the base frequency or multiply along an octave until the max frequency.
-  calibration_instance.target_speed = (zero_speed ? calibration_speed_base : 
-    (calibration_instance.target_speed * calibration_speed_multiplier)
-  );
 
-  if (faster_abs(calibration_instance.target_speed) > calibration_speed_max) {
-    // Increment target pwm if we reach the end of the speed scanning.
-    calibration_instance.target_speed = calibration_speed_base;
-    calibration_instance.target_pwm += calibration_target_increment;
-
+  if (zero_speed){
+    calibration_instance.target_pwm += calibration_parameters.target_pwm_increment;
     // Finish calibration mode and return to idle when we have scanned through all target PWM values.
-    if (calibration_instance.target_pwm > calibration_target_max) {
-      if (continuous_calibration) {
-        // Restart calibrating from the base speed and first target.
-        calibration_instance.target_speed = calibration_speed_base;
-        calibration_instance.target_pwm = calibration_target_base;
-      } else {
+    if (calibration_instance.target_pwm > calibration_parameters.target_pwm_max) {
+      return control_mode_idle();
+    }
+  } else {
+    // Multiply speed so we go through a whole octave scale.
+    calibration_instance.target_speed *= calibration_parameters.speed_multiplier;
+
+    if (faster_abs(calibration_instance.target_speed) > calibration_parameters.speed_max) {
+      // Increment target pwm if we reach the end of the speed scanning.
+      calibration_instance.target_speed = calibration_parameters.speed_base;
+      calibration_instance.target_pwm += calibration_parameters.target_pwm_increment;
+
+      // Finish calibration mode and return to idle when we have scanned through all target PWM values.
+      if (calibration_instance.target_pwm > calibration_parameters.target_pwm_max) {
         return control_mode_idle();
       }
     }
   }
-
   
   // We have another series to run if we've reach this spot, set it up and go!
-  if (remember_intermediate) {
+  if (calibration_parameters.remember_intermediate) {
     calibration_instance.count = 0; // Reset the series count and the learning rates.
     calibration_instance.learning_rate_multiplier = 1.f;
   } else {
@@ -445,8 +490,11 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
       break;
     }
     // Run calibration routine.
-    case ControlMode::CALIBRATE: {
-      // ! Only calibrate if we're in calibration mode.
+    case ControlMode::CALIBRATE_CHIRP: {
+      if (calibrate_from_readout(readout)) finish_calibration_series();
+      break;
+    }
+    case ControlMode::CALIBRATE_STATIC: {
       if (calibrate_from_readout(readout)) finish_calibration_series();
       break;
     }
@@ -460,7 +508,7 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
   const bool emf_detected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
 
   // Only track the zero offset while there is no noticeable current being measured.
-  if (not emf_detected and readout.current_magnitude < 2 * control_parameters.current_offset_maximum) {
+  if (not emf_detected and readout.current_magnitude < 2 * calibration_parameters.current_offset_maximum) {
     const auto currents = abc_transform(
       {readout.x_current, readout.y_current}, 
       readout.zero_current
@@ -468,16 +516,16 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
     // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
     calibration.u_current_zero = clip_to(
-      -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-      calibration.u_current_zero + std::get<0>(currents) * control_parameters.zero_current_ki
+      -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
+      calibration.u_current_zero + std::get<0>(currents) * calibration_parameters.zero_current_ki
     );
     calibration.v_current_zero = clip_to(
-      -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-      calibration.v_current_zero + std::get<1>(currents) * control_parameters.zero_current_ki
+      -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
+      calibration.v_current_zero + std::get<1>(currents) * calibration_parameters.zero_current_ki
     );
     calibration.w_current_zero = clip_to(
-      -control_parameters.current_offset_maximum, control_parameters.current_offset_maximum, 
-      calibration.w_current_zero + std::get<2>(currents) * control_parameters.zero_current_ki
+      -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
+      calibration.w_current_zero + std::get<2>(currents) * calibration_parameters.zero_current_ki
     );
   }
 
@@ -607,7 +655,10 @@ void app_tick() {
         .message_data = info
       });
 
-      if (control_mode == ControlMode::CALIBRATE) queue_message(hex_mini_drive::Message{
+      if (
+        control_mode == ControlMode::CALIBRATE_CHIRP or
+        control_mode == ControlMode::CALIBRATE_STATIC
+      ) queue_message(hex_mini_drive::Message{
         .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
         .message_data = calibration_instance
       });

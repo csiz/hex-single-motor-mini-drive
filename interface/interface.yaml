@@ -78,9 +78,21 @@ message_codes:
   CALIBRATION_INSTANCE:
     message_code: 0x4044
     type: CalibrationInstance
-  
-  RUN_CALIBRATION:
+
+  CALIBRATION_PARAMETERS:
     message_code: 0x4045
+    type: CalibrationParameters
+  
+  SET_CALIBRATION_PARAMETERS:
+    message_code: 0x4046
+    type: CalibrationParameters
+    returns: CALIBRATION_PARAMETERS
+  GET_CALIBRATION_PARAMETERS:
+    message_code: 0x4047
+    returns: CALIBRATION_PARAMETERS
+  RESET_CALIBRATION_PARAMETERS:
+    message_code: 0x4048
+    returns: CALIBRATION_PARAMETERS
 
   CONTROL_PARAMETERS:
     message_code: 0x4049
@@ -100,6 +112,14 @@ message_codes:
     message_code: 0x4080  
   SETTINGS_SAVED_TO_FLASH:
     message_code: 0x4081
+
+    
+  RUN_CALIBRATION_CHIRP:
+    message_code: 0x4090
+
+  RUN_CALIBRATION_STATIC:
+    message_code: 0x4091
+
   
   UNIT_TEST_OUTPUT:
     message_code: 0x5040
@@ -434,6 +454,26 @@ definitions:
         type: float32
         doc: The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
 
+      u_pwm_offset:
+        type: float32
+        doc: U phase PWM value when the MOSFET starts conducting linearly.
+
+      v_pwm_offset:
+        type: float32
+        doc: V phase PWM value when the MOSFET starts conducting linearly.
+
+      w_pwm_offset:
+        type: float32
+        doc: W phase PWM value when the MOSFET starts conducting linearly.
+
+      temperature_coefficient:
+        type: float32
+        doc: Temperature coefficient for the motor.
+
+      temperature_timescale:
+        type: float32
+        doc: Timescale for temperature changes.
+
 
   CalibrationInstance:
     doc: Instance of the calibration process for a specific pwm, speed and drive configuration.
@@ -448,6 +488,12 @@ definitions:
       target_speed:
         type: float32
         doc: Target speed for this calibration instance.
+      holding_pwm:
+        type: float32
+        doc: Holding PWM value.
+      holding_angle:
+        type: int32
+        doc: Holding angle.
       stable:
         type: uint8
         doc: Whether the calibration is stable.
@@ -642,6 +688,126 @@ definitions:
         type: uint32
         doc: Time in pwm periods to drive the motor before stopping.
 
+  CalibrationParameters:
+    doc: Parameters for motor calibration.
+
+    struct:
+      current_variance:
+        type: float32
+        doc: The measurement noise for the resistance current sensing, values under this threshold are likely 0.
+      inductance_variance:
+        type: float32
+        doc: We want our measurement error to be above this noise variance to count as a signal.
+      voltage_variance:
+        type: float32
+        doc: Expected baseline variance of our voltage measurements.
+      hysteresis_variance:
+        type: float32
+        doc: Minimum square of the inductance excitation to consider it significant.
+
+      multiplier_stable_threshold:
+        type: float32
+        doc: Threshold for stable multiplier.
+      multiplier_change:
+        type: float32
+        doc: Change rate for the multiplier.
+      multiplier_cap_decay:
+        type: float32
+        doc: Decay rate for the multiplier cap.
+      excitation_threshold:
+        type: float32
+        doc: Threshold for excitation.
+      
+      current_offset_maximum:
+        type: float32
+        doc: Maximum allowable current offset to adjust the current sensing bias from 0.
+
+      zero_current_ki:
+        type: float32
+        doc: Integral gain for the zero current adjustment.
+ 
+      resistance_ki:
+        type: float32
+        doc: Integral gain for the phase resistance observer.
+
+      inductance_ki:
+        type: float32
+        doc: Integral gain for the phase inductance observer.
+
+      inductance_saliency_ki:
+        type: float32
+        doc: Integral gain for the inductance saliency observer.
+
+      saliency_angle_ki:
+        type: float32
+        doc: Integral gain for the saliency angle observer.
+      
+      hysteresis_loss_ki:
+        type: float32
+        doc: Iron loss factor integral gain.
+      hysteresis_angle_ki:
+        type: float32
+        doc: Iron loss angle integral gain.
+
+      eddy_resistance_ki:
+        type: float32
+        doc: Eddy current integral gain.
+
+      motor_constant_ki:
+        type: float32
+        doc: Motor constant integral gain.
+
+      stats_ki:
+        type: float32
+        doc: Calibration statistics integral gain.
+
+      instance_duration:
+        type: uint16
+        doc: Maximum duration of a calibration instance. Calibration usually finishes early when parameters stabilize.
+      
+      remember_intermediate:
+        type: uint8
+        doc: Remember intermediate calibration results.
+      
+      advance_when_stable:
+        type: uint8
+        doc: Advance calibration when parameters are stable.
+
+      target_pwm_base:
+        type: float32
+        doc: Base PWM for calibration.
+      
+      target_pwm_increment:
+        type: float32
+        doc: Increment for PWM during calibration.
+      
+      target_pwm_max:
+        type: float32
+        doc: Maximum PWM for calibration.
+
+      speed_base:
+        type: float32
+        doc: Base speed (angular frequency) for the calibration probe.
+
+      speed_multiplier:
+        type: float32
+        doc: |
+          Multiplier for the calibration speed, by default it's set to an 2^(1/12) so we create a musical scale.
+          That is 12 semitones per octave. And we span a few octaves for the whole calibration sweep.
+
+      speed_max:
+        type: float32
+        doc: Maximum speed for calibration.
+      
+      nominal_speed_inverse:
+        type: float32
+        doc: |
+          Because our parameters depend on the angle of excitation we must scale the gradients down when the speed
+          is low so we can average the gradients over a whole rotation. For speed of computation we need the inverse
+          of the nominal speed. At nominal speed the gradient learning rate multiplier is 1.
+
+
+
   ControlParameters:
     doc: |
       Parameters used in the motor control loop; for detailed descriptions check the
@@ -728,25 +894,6 @@ definitions:
         type: float32
         doc: Integral gain for the influence of the saliency angle on the rotor_angle.
 
-      current_measurement_minimum:
-        type: int32
-        doc: The measurement noise for the current sensing, values under this threshold are likely 0.
-
-      voltage_measurement_variance:
-        type: float32
-        doc: We want our measurement error to be above this noise variance to count as a signal.
-
-      resistance_current_minimum:
-        type: int32
-        doc: The measurement noise for the resistance current sensing, values under this threshold are likely 0.
-
-      inductance_excitation_minimum_square:
-        type: float32
-        doc: Minimum square of the inductance excitation to consider it significant.
-
-      current_offset_maximum:
-        type: float32
-        doc: Maximum allowable current offset to adjust the current sensing bias from 0.
 
       emf_min_angular_speed:
         type: float32
@@ -763,7 +910,6 @@ definitions:
           the drive voltage) we need to re-enable calibration in order to isolate differing
           resistance or inductance from the observed EMF measurements. We use a counter for
           each inconsistent reading and this threshold determines when we must act.
-
 
       torque_control_ki:
         type: float32
@@ -817,37 +963,4 @@ definitions:
         type: float32
         doc: Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
              
-      zero_current_ki:
-        type: float32
-        doc: Integral gain for the zero current adjustment.
- 
-      resistance_ki:
-        type: float32
-        doc: Integral gain for the phase resistance observer.
-
-      inductance_ki:
-        type: float32
-        doc: Integral gain for the phase inductance observer.
-
-      inductance_saliency_ki:
-        type: float32
-        doc: Integral gain for the inductance saliency observer.
-
-      saliency_angle_ki:
-        type: float32
-        doc: Integral gain for the saliency angle observer.
       
-      hysteresis_loss_ki:
-        type: float32
-        doc: Iron loss factor integral gain.
-      hysteresis_angle_ki:
-        type: float32
-        doc: Iron loss angle integral gain.
-
-      eddy_resistance_ki:
-        type: float32
-        doc: Eddy current integral gain.
-
-      motor_constant_ki:
-        type: float32
-        doc: Motor constant integral gain.

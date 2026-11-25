@@ -7,6 +7,8 @@ import {
   parse_calibration,
   parse_calibration_instance,
   make_calibration,
+  parse_calibration_parameters,
+  make_calibration_parameters,
   parse_control_parameters,
   make_control_parameters,
 } from "./interface.js";
@@ -77,6 +79,7 @@ export class MotorController {
     this.info = {};
     this.calibration = {};
     this.calibration_instance = {};
+    this.calibration_parameters = {};
     this.control_parameters = {};
 
     this.data = [];
@@ -228,32 +231,52 @@ export class MotorController {
     let message = bare_message;
     
     // Intercept motor parameters and forward all other messages.
-    if (message_code == MessageCode.CALIBRATION){
-      message = parse_calibration(bare_message);
-      this.calibration = message;
-    } else if (message_code == MessageCode.CALIBRATION_INSTANCE) {
-      message = parse_calibration_instance(bare_message);
-      this.calibration_instance = message;
-      const {target_speed, target_pwm} = message;
-      this.calibration_series.set(`{speed: ${target_speed}, pwm: ${target_pwm}}`, message);
-    } else if (message_code == MessageCode.CONTROL_PARAMETERS) {
-      message = parse_control_parameters(bare_message);
-      this.control_parameters = message;
-    } else if (message_code == MessageCode.READOUT) {
-      // Add the calibration data to the bare message and parse it all together. 
-      // This way we can also track how the calibration parameters change over time. And if
-      // transmission order is preserved, we should receive the new calibration data just ahead
-      // of the corresponding readout.
-      message = parse_readout({...this.calibration_instance, ...this.info, ...bare_message}, last_message);
-      // Store readout data up to some maximum size. Allows us to easily plot and analyse data samples.
-      this.data = capped_push(this.data, message, max_data_length);
-    } else if (message_code == MessageCode.UNIT_TEST_OUTPUT) {
-      message = parse_unit_test_output(bare_message);
-    } else if (message_code == MessageCode.INFO) {
-      message = parse_info(bare_message);
-      this.info = message;
-    } else if (message_code == MessageCode.VERSION) {
-      message = parse_version(bare_message);
+    switch(message_code){
+      case MessageCode.CALIBRATION: {
+        message = parse_calibration(bare_message);
+        this.calibration = message;
+        break;
+      }
+      case MessageCode.CALIBRATION_INSTANCE: {
+        message = parse_calibration_instance(bare_message);
+        this.calibration_instance = message;
+        const {target_speed, target_pwm} = message;
+        this.calibration_series.set(`{speed: ${target_speed}, pwm: ${target_pwm}}`, message);
+        break;
+      }
+      case MessageCode.CALIBRATION_PARAMETERS: {
+        message = parse_calibration_parameters(bare_message);
+        this.calibration_parameters = message;
+        break;
+      }
+      case MessageCode.CONTROL_PARAMETERS: {
+        message = parse_control_parameters(bare_message);
+        this.control_parameters = message;
+        break;
+      }
+      case MessageCode.READOUT: {
+        // Add the calibration data to the bare message and parse it all together. 
+        // This way we can also track how the calibration parameters change over time. And if
+        // transmission order is preserved, we should receive the new calibration data just ahead
+        // of the corresponding readout.
+        message = parse_readout({...this.calibration_instance, ...this.info, ...bare_message}, last_message);
+        // Store readout data up to some maximum size. Allows us to easily plot and analyse data samples.
+        this.data = capped_push(this.data, message, max_data_length);
+        break;
+      }
+      case MessageCode.UNIT_TEST_OUTPUT: {
+        message = parse_unit_test_output(bare_message);
+        break;
+      }
+      case MessageCode.INFO: {
+        message = parse_info(bare_message);
+        this.info = message;
+        break;
+      }
+      case MessageCode.VERSION: {
+        message = parse_version(bare_message);
+        break;
+      }
     }
 
     // Stream all replies through the `onmessage` callback.
@@ -316,6 +339,23 @@ export class MotorController {
 
   reset_calibration(){
     this.send_command(MessageCode.RESET_CALIBRATION);
+  }
+
+  load_calibration_parameters(){
+    this.send_command(MessageCode.GET_CALIBRATION_PARAMETERS);
+  }
+
+  upload_calibration_parameters(calibration_parameters){
+    if(!calibration_parameters) return;
+
+    this.send_command({
+      ...make_calibration_parameters(calibration_parameters),
+      message_code: MessageCode.SET_CALIBRATION_PARAMETERS,
+    });
+  }
+
+  reset_calibration_parameters(){
+    this.send_command(MessageCode.RESET_CALIBRATION_PARAMETERS);
   }
 
   load_control_parameters(){

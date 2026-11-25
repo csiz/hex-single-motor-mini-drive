@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.190.0";
+constexpr char const* VERSION_STRING = "0.200.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -512,6 +512,16 @@ struct Calibration {
   float eddy_resistance;
   // The motor constant (although it may not be constant) that relates the EMF voltage to the angular speed.
   float motor_constant;
+  // U phase PWM value when the MOSFET starts conducting linearly.
+  float u_pwm_offset;
+  // V phase PWM value when the MOSFET starts conducting linearly.
+  float v_pwm_offset;
+  // W phase PWM value when the MOSFET starts conducting linearly.
+  float w_pwm_offset;
+  // Temperature coefficient for the motor.
+  float temperature_coefficient;
+  // Timescale for temperature changes.
+  float temperature_timescale;
 };
 
 static inline void write_Calibration(uint8_t * buffer, Calibration const& value) {
@@ -533,6 +543,16 @@ static inline void write_Calibration(uint8_t * buffer, Calibration const& value)
   write_float32(buffer + offset, value.eddy_resistance);;
   offset += 4;
   write_float32(buffer + offset, value.motor_constant);;
+  offset += 4;
+  write_float32(buffer + offset, value.u_pwm_offset);;
+  offset += 4;
+  write_float32(buffer + offset, value.v_pwm_offset);;
+  offset += 4;
+  write_float32(buffer + offset, value.w_pwm_offset);;
+  offset += 4;
+  write_float32(buffer + offset, value.temperature_coefficient);;
+  offset += 4;
+  write_float32(buffer + offset, value.temperature_timescale);;
   offset += 4;
 }
 static inline Calibration read_Calibration(uint8_t const* buffer) {
@@ -558,6 +578,16 @@ static inline Calibration read_Calibration(uint8_t const* buffer) {
   offset += 4;
   result.motor_constant = read_float32(buffer + offset);
   offset += 4;
+  result.u_pwm_offset = read_float32(buffer + offset);
+  offset += 4;
+  result.v_pwm_offset = read_float32(buffer + offset);
+  offset += 4;
+  result.w_pwm_offset = read_float32(buffer + offset);
+  offset += 4;
+  result.temperature_coefficient = read_float32(buffer + offset);
+  offset += 4;
+  result.temperature_timescale = read_float32(buffer + offset);
+  offset += 4;
   return result;
 }
 // Instance of the calibration process for a specific pwm, speed and drive configuration.
@@ -568,6 +598,10 @@ struct CalibrationInstance {
   float target_pwm;
   // Target speed for this calibration instance.
   float target_speed;
+  // Holding PWM value.
+  float holding_pwm;
+  // Holding angle.
+  int32_t holding_angle;
   // Whether the calibration is stable.
   uint8_t stable;
   // Whether the calibration values make sense with each other (angles align and magnitudes are reasonable).
@@ -627,6 +661,10 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   write_float32(buffer + offset, value.target_pwm);;
   offset += 4;
   write_float32(buffer + offset, value.target_speed);;
+  offset += 4;
+  write_float32(buffer + offset, value.holding_pwm);;
+  offset += 4;
+  write_int32(buffer + offset, value.holding_angle);;
   offset += 4;
   write_uint8(buffer + offset, value.stable);;
   offset += 1;
@@ -689,6 +727,10 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   result.target_pwm = read_float32(buffer + offset);
   offset += 4;
   result.target_speed = read_float32(buffer + offset);
+  offset += 4;
+  result.holding_pwm = read_float32(buffer + offset);
+  offset += 4;
+  result.holding_angle = read_int32(buffer + offset);
   offset += 4;
   result.stable = read_uint8(buffer + offset);
   offset += 1;
@@ -998,6 +1040,197 @@ static inline SetStateSeekAngle read_SetStateSeekAngle(uint8_t const* buffer) {
   offset += 4;
   return result;
 }
+// Parameters for motor calibration.
+struct CalibrationParameters {
+  // The measurement noise for the resistance current sensing, values under this threshold are likely 0.
+  float current_variance;
+  // We want our measurement error to be above this noise variance to count as a signal.
+  float inductance_variance;
+  // Expected baseline variance of our voltage measurements.
+  float voltage_variance;
+  // Minimum square of the inductance excitation to consider it significant.
+  float hysteresis_variance;
+  // Threshold for stable multiplier.
+  float multiplier_stable_threshold;
+  // Change rate for the multiplier.
+  float multiplier_change;
+  // Decay rate for the multiplier cap.
+  float multiplier_cap_decay;
+  // Threshold for excitation.
+  float excitation_threshold;
+  // Maximum allowable current offset to adjust the current sensing bias from 0.
+  float current_offset_maximum;
+  // Integral gain for the zero current adjustment.
+  float zero_current_ki;
+  // Integral gain for the phase resistance observer.
+  float resistance_ki;
+  // Integral gain for the phase inductance observer.
+  float inductance_ki;
+  // Integral gain for the inductance saliency observer.
+  float inductance_saliency_ki;
+  // Integral gain for the saliency angle observer.
+  float saliency_angle_ki;
+  // Iron loss factor integral gain.
+  float hysteresis_loss_ki;
+  // Iron loss angle integral gain.
+  float hysteresis_angle_ki;
+  // Eddy current integral gain.
+  float eddy_resistance_ki;
+  // Motor constant integral gain.
+  float motor_constant_ki;
+  // Calibration statistics integral gain.
+  float stats_ki;
+  // Maximum duration of a calibration instance. Calibration usually finishes early when parameters stabilize.
+  uint16_t instance_duration;
+  // Remember intermediate calibration results.
+  uint8_t remember_intermediate;
+  // Advance calibration when parameters are stable.
+  uint8_t advance_when_stable;
+  // Base PWM for calibration.
+  float target_pwm_base;
+  // Increment for PWM during calibration.
+  float target_pwm_increment;
+  // Maximum PWM for calibration.
+  float target_pwm_max;
+  // Base speed (angular frequency) for the calibration probe.
+  float speed_base;
+  // Multiplier for the calibration speed, by default it's set to an 2^(1/12) so we create a musical scale.
+  // That is 12 semitones per octave. And we span a few octaves for the whole calibration sweep.
+  float speed_multiplier;
+  // Maximum speed for calibration.
+  float speed_max;
+  // Because our parameters depend on the angle of excitation we must scale the gradients down when the speed
+  // is low so we can average the gradients over a whole rotation. For speed of computation we need the inverse
+  // of the nominal speed. At nominal speed the gradient learning rate multiplier is 1.
+  float nominal_speed_inverse;
+};
+
+static inline void write_CalibrationParameters(uint8_t * buffer, CalibrationParameters const& value) {
+  size_t offset = 0;
+  write_float32(buffer + offset, value.current_variance);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_variance);;
+  offset += 4;
+  write_float32(buffer + offset, value.voltage_variance);;
+  offset += 4;
+  write_float32(buffer + offset, value.hysteresis_variance);;
+  offset += 4;
+  write_float32(buffer + offset, value.multiplier_stable_threshold);;
+  offset += 4;
+  write_float32(buffer + offset, value.multiplier_change);;
+  offset += 4;
+  write_float32(buffer + offset, value.multiplier_cap_decay);;
+  offset += 4;
+  write_float32(buffer + offset, value.excitation_threshold);;
+  offset += 4;
+  write_float32(buffer + offset, value.current_offset_maximum);;
+  offset += 4;
+  write_float32(buffer + offset, value.zero_current_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.resistance_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.inductance_saliency_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.saliency_angle_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.hysteresis_loss_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.hysteresis_angle_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.eddy_resistance_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.motor_constant_ki);;
+  offset += 4;
+  write_float32(buffer + offset, value.stats_ki);;
+  offset += 4;
+  write_uint16(buffer + offset, value.instance_duration);;
+  offset += 2;
+  write_uint8(buffer + offset, value.remember_intermediate);;
+  offset += 1;
+  write_uint8(buffer + offset, value.advance_when_stable);;
+  offset += 1;
+  write_float32(buffer + offset, value.target_pwm_base);;
+  offset += 4;
+  write_float32(buffer + offset, value.target_pwm_increment);;
+  offset += 4;
+  write_float32(buffer + offset, value.target_pwm_max);;
+  offset += 4;
+  write_float32(buffer + offset, value.speed_base);;
+  offset += 4;
+  write_float32(buffer + offset, value.speed_multiplier);;
+  offset += 4;
+  write_float32(buffer + offset, value.speed_max);;
+  offset += 4;
+  write_float32(buffer + offset, value.nominal_speed_inverse);;
+  offset += 4;
+}
+static inline CalibrationParameters read_CalibrationParameters(uint8_t const* buffer) {
+  size_t offset = 0;
+  
+  CalibrationParameters result;
+  
+  result.current_variance = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_variance = read_float32(buffer + offset);
+  offset += 4;
+  result.voltage_variance = read_float32(buffer + offset);
+  offset += 4;
+  result.hysteresis_variance = read_float32(buffer + offset);
+  offset += 4;
+  result.multiplier_stable_threshold = read_float32(buffer + offset);
+  offset += 4;
+  result.multiplier_change = read_float32(buffer + offset);
+  offset += 4;
+  result.multiplier_cap_decay = read_float32(buffer + offset);
+  offset += 4;
+  result.excitation_threshold = read_float32(buffer + offset);
+  offset += 4;
+  result.current_offset_maximum = read_float32(buffer + offset);
+  offset += 4;
+  result.zero_current_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.resistance_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.inductance_saliency_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.saliency_angle_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.hysteresis_loss_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.hysteresis_angle_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.eddy_resistance_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.motor_constant_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.stats_ki = read_float32(buffer + offset);
+  offset += 4;
+  result.instance_duration = read_uint16(buffer + offset);
+  offset += 2;
+  result.remember_intermediate = read_uint8(buffer + offset);
+  offset += 1;
+  result.advance_when_stable = read_uint8(buffer + offset);
+  offset += 1;
+  result.target_pwm_base = read_float32(buffer + offset);
+  offset += 4;
+  result.target_pwm_increment = read_float32(buffer + offset);
+  offset += 4;
+  result.target_pwm_max = read_float32(buffer + offset);
+  offset += 4;
+  result.speed_base = read_float32(buffer + offset);
+  offset += 4;
+  result.speed_multiplier = read_float32(buffer + offset);
+  offset += 4;
+  result.speed_max = read_float32(buffer + offset);
+  offset += 4;
+  result.nominal_speed_inverse = read_float32(buffer + offset);
+  offset += 4;
+  return result;
+}
 // Parameters used in the motor control loop; for detailed descriptions check the
 // motor monitor page. It's useful to modify the values and inspect the changes to
 // the respective variables in the readout while driving a physical motor.
@@ -1042,16 +1275,6 @@ struct ControlParameters {
   float lead_angle_control_ki;
   // Integral gain for the influence of the saliency angle on the rotor_angle.
   float angle_from_saliency_ki;
-  // The measurement noise for the current sensing, values under this threshold are likely 0.
-  int32_t current_measurement_minimum;
-  // We want our measurement error to be above this noise variance to count as a signal.
-  float voltage_measurement_variance;
-  // The measurement noise for the resistance current sensing, values under this threshold are likely 0.
-  int32_t resistance_current_minimum;
-  // Minimum square of the inductance excitation to consider it significant.
-  float inductance_excitation_minimum_square;
-  // Maximum allowable current offset to adjust the current sensing bias from 0.
-  float current_offset_maximum;
   // Minimum detectable angular speed for EMF detection. This value also determines
   // the maximum reliable angular speed variance. It also determines how fast we probe
   // for EMF when HFI is disabled and we must rely on spinning the motor to generate a
@@ -1088,24 +1311,6 @@ struct ControlParameters {
   float emf_angle_suspected_threshold;
   // Threshold for the emf constant when we are confident that we have correctly identified the emf signal.
   float emf_speed_constant_confirmed_threshold;
-  // Integral gain for the zero current adjustment.
-  float zero_current_ki;
-  // Integral gain for the phase resistance observer.
-  float resistance_ki;
-  // Integral gain for the phase inductance observer.
-  float inductance_ki;
-  // Integral gain for the inductance saliency observer.
-  float inductance_saliency_ki;
-  // Integral gain for the saliency angle observer.
-  float saliency_angle_ki;
-  // Iron loss factor integral gain.
-  float hysteresis_loss_ki;
-  // Iron loss angle integral gain.
-  float hysteresis_angle_ki;
-  // Eddy current integral gain.
-  float eddy_resistance_ki;
-  // Motor constant integral gain.
-  float motor_constant_ki;
 };
 
 static inline void write_ControlParameters(uint8_t * buffer, ControlParameters const& value) {
@@ -1146,16 +1351,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   offset += 4;
   write_float32(buffer + offset, value.angle_from_saliency_ki);;
   offset += 4;
-  write_int32(buffer + offset, value.current_measurement_minimum);;
-  offset += 4;
-  write_float32(buffer + offset, value.voltage_measurement_variance);;
-  offset += 4;
-  write_int32(buffer + offset, value.resistance_current_minimum);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_excitation_minimum_square);;
-  offset += 4;
-  write_float32(buffer + offset, value.current_offset_maximum);;
-  offset += 4;
   write_float32(buffer + offset, value.emf_min_angular_speed);;
   offset += 4;
   write_int32(buffer + offset, value.emf_uncertainty_threshold);;
@@ -1185,24 +1380,6 @@ static inline void write_ControlParameters(uint8_t * buffer, ControlParameters c
   write_float32(buffer + offset, value.emf_angle_suspected_threshold);;
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant_confirmed_threshold);;
-  offset += 4;
-  write_float32(buffer + offset, value.zero_current_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.resistance_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.inductance_saliency_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.saliency_angle_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.hysteresis_loss_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.hysteresis_angle_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.eddy_resistance_ki);;
-  offset += 4;
-  write_float32(buffer + offset, value.motor_constant_ki);;
   offset += 4;
 }
 static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
@@ -1246,16 +1423,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.angle_from_saliency_ki = read_float32(buffer + offset);
   offset += 4;
-  result.current_measurement_minimum = read_int32(buffer + offset);
-  offset += 4;
-  result.voltage_measurement_variance = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance_current_minimum = read_int32(buffer + offset);
-  offset += 4;
-  result.inductance_excitation_minimum_square = read_float32(buffer + offset);
-  offset += 4;
-  result.current_offset_maximum = read_float32(buffer + offset);
-  offset += 4;
   result.emf_min_angular_speed = read_float32(buffer + offset);
   offset += 4;
   result.emf_uncertainty_threshold = read_int32(buffer + offset);
@@ -1286,24 +1453,6 @@ static inline ControlParameters read_ControlParameters(uint8_t const* buffer) {
   offset += 4;
   result.emf_speed_constant_confirmed_threshold = read_float32(buffer + offset);
   offset += 4;
-  result.zero_current_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.resistance_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.inductance_saliency_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.saliency_angle_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.hysteresis_loss_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.hysteresis_angle_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.eddy_resistance_ki = read_float32(buffer + offset);
-  offset += 4;
-  result.motor_constant_ki = read_float32(buffer + offset);
-  offset += 4;
   return result;
 }
 // Message Codes
@@ -1327,13 +1476,18 @@ enum MessageCode : uint16_t {
   SET_CALIBRATION = 16450,
   RESET_CALIBRATION = 16451,
   CALIBRATION_INSTANCE = 16452,
-  RUN_CALIBRATION = 16453,
+  CALIBRATION_PARAMETERS = 16453,
+  SET_CALIBRATION_PARAMETERS = 16454,
+  GET_CALIBRATION_PARAMETERS = 16455,
+  RESET_CALIBRATION_PARAMETERS = 16456,
   CONTROL_PARAMETERS = 16457,
   SET_CONTROL_PARAMETERS = 16458,
   GET_CONTROL_PARAMETERS = 16459,
   RESET_CONTROL_PARAMETERS = 16460,
   SAVE_SETTINGS_TO_FLASH = 16512,
   SETTINGS_SAVED_TO_FLASH = 16513,
+  RUN_CALIBRATION_CHIRP = 16528,
+  RUN_CALIBRATION_STATIC = 16529,
   UNIT_TEST_OUTPUT = 20544,
 };
 
@@ -1351,6 +1505,7 @@ struct Message {
     SetStateSeekAngle,
     Calibration,
     CalibrationInstance,
+    CalibrationParameters,
     ControlParameters,
     UnitTestOutput,
     std::monostate
@@ -1373,18 +1528,23 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::SET_DRIVE_SCHEDULE: return 194;
     case MessageCode::SET_STATE_DRIVE_6_SECTOR: return 34;
     case MessageCode::SET_STATE_SEEK_ANGLE: return 22;
-    case MessageCode::CALIBRATION: return 38;
+    case MessageCode::CALIBRATION: return 58;
     case MessageCode::GET_CALIBRATION: return 2;
-    case MessageCode::SET_CALIBRATION: return 38;
+    case MessageCode::SET_CALIBRATION: return 58;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 102;
-    case MessageCode::RUN_CALIBRATION: return 2;
-    case MessageCode::CONTROL_PARAMETERS: return 186;
-    case MessageCode::SET_CONTROL_PARAMETERS: return 186;
+    case MessageCode::CALIBRATION_INSTANCE: return 110;
+    case MessageCode::CALIBRATION_PARAMETERS: return 110;
+    case MessageCode::SET_CALIBRATION_PARAMETERS: return 110;
+    case MessageCode::GET_CALIBRATION_PARAMETERS: return 2;
+    case MessageCode::RESET_CALIBRATION_PARAMETERS: return 2;
+    case MessageCode::CONTROL_PARAMETERS: return 130;
+    case MessageCode::SET_CONTROL_PARAMETERS: return 130;
     case MessageCode::GET_CONTROL_PARAMETERS: return 2;
     case MessageCode::RESET_CONTROL_PARAMETERS: return 2;
     case MessageCode::SAVE_SETTINGS_TO_FLASH: return 2;
     case MessageCode::SETTINGS_SAVED_TO_FLASH: return 2;
+    case MessageCode::RUN_CALIBRATION_CHIRP: return 2;
+    case MessageCode::RUN_CALIBRATION_STATIC: return 2;
     case MessageCode::UNIT_TEST_OUTPUT: return 250;
   }
   return 0; // Unknown message code
@@ -1470,9 +1630,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION));
-      if (max_size < 2 + 36) return 0;
+      if (max_size < 2 + 56) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 38;
+      return 58;
     }
     case MessageCode::GET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CALIBRATION));
@@ -1480,9 +1640,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CALIBRATION));
-      if (max_size < 2 + 36) return 0;
+      if (max_size < 2 + 56) return 0;
       write_Calibration(buffer + 2, std::get<Calibration>(message.message_data));
-      return 38;
+      return 58;
     }
     case MessageCode::RESET_CALIBRATION: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CALIBRATION));
@@ -1490,25 +1650,41 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 100) return 0;
+      if (max_size < 2 + 108) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 102;
+      return 110;
     }
-    case MessageCode::RUN_CALIBRATION: {
-      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION));
+    case MessageCode::CALIBRATION_PARAMETERS: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_PARAMETERS));
+      if (max_size < 2 + 108) return 0;
+      write_CalibrationParameters(buffer + 2, std::get<CalibrationParameters>(message.message_data));
+      return 110;
+    }
+    case MessageCode::SET_CALIBRATION_PARAMETERS: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CALIBRATION_PARAMETERS));
+      if (max_size < 2 + 108) return 0;
+      write_CalibrationParameters(buffer + 2, std::get<CalibrationParameters>(message.message_data));
+      return 110;
+    }
+    case MessageCode::GET_CALIBRATION_PARAMETERS: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CALIBRATION_PARAMETERS));
+      return 2;
+    }
+    case MessageCode::RESET_CALIBRATION_PARAMETERS: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RESET_CALIBRATION_PARAMETERS));
       return 2;
     }
     case MessageCode::CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CONTROL_PARAMETERS));
-      if (max_size < 2 + 184) return 0;
+      if (max_size < 2 + 128) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 186;
+      return 130;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SET_CONTROL_PARAMETERS));
-      if (max_size < 2 + 184) return 0;
+      if (max_size < 2 + 128) return 0;
       write_ControlParameters(buffer + 2, std::get<ControlParameters>(message.message_data));
-      return 186;
+      return 130;
     }
     case MessageCode::GET_CONTROL_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::GET_CONTROL_PARAMETERS));
@@ -1524,6 +1700,14 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::SETTINGS_SAVED_TO_FLASH: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::SETTINGS_SAVED_TO_FLASH));
+      return 2;
+    }
+    case MessageCode::RUN_CALIBRATION_CHIRP: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION_CHIRP));
+      return 2;
+    }
+    case MessageCode::RUN_CALIBRATION_STATIC: {
+      write_uint16(buffer, static_cast<uint16_t>(MessageCode::RUN_CALIBRATION_STATIC));
       return 2;
     }
     case MessageCode::UNIT_TEST_OUTPUT: {
@@ -1615,7 +1799,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION: {
-      if (size != 2 + 36) return false;
+      if (size != 2 + 56) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }
@@ -1625,7 +1809,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SET_CALIBRATION: {
-      if (size != 2 + 36) return false;
+      if (size != 2 + 56) return false;
       message.message_data = read_Calibration(buffer + 2);
       return true;
     }
@@ -1635,22 +1819,37 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 100) return false;
+      if (size != 2 + 108) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }
-    case MessageCode::RUN_CALIBRATION: {
+    case MessageCode::CALIBRATION_PARAMETERS: {
+      if (size != 2 + 108) return false;
+      message.message_data = read_CalibrationParameters(buffer + 2);
+      return true;
+    }
+    case MessageCode::SET_CALIBRATION_PARAMETERS: {
+      if (size != 2 + 108) return false;
+      message.message_data = read_CalibrationParameters(buffer + 2);
+      return true;
+    }
+    case MessageCode::GET_CALIBRATION_PARAMETERS: {
+      if (size != 2) return false;
+      message.message_data = std::monostate{};
+      return true;
+    }
+    case MessageCode::RESET_CALIBRATION_PARAMETERS: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;
     }
     case MessageCode::CONTROL_PARAMETERS: {
-      if (size != 2 + 184) return false;
+      if (size != 2 + 128) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
     case MessageCode::SET_CONTROL_PARAMETERS: {
-      if (size != 2 + 184) return false;
+      if (size != 2 + 128) return false;
       message.message_data = read_ControlParameters(buffer + 2);
       return true;
     }
@@ -1670,6 +1869,16 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::SETTINGS_SAVED_TO_FLASH: {
+      if (size != 2) return false;
+      message.message_data = std::monostate{};
+      return true;
+    }
+    case MessageCode::RUN_CALIBRATION_CHIRP: {
+      if (size != 2) return false;
+      message.message_data = std::monostate{};
+      return true;
+    }
+    case MessageCode::RUN_CALIBRATION_STATIC: {
       if (size != 2) return false;
       message.message_data = std::monostate{};
       return true;
