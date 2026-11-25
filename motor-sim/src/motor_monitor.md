@@ -235,15 +235,17 @@ async function connect_motor_controller(options = {}) {
             break;
 
           case MessageCode.CALIBRATION_PARAMETERS:
-            // show_active_calibration_parameters();
+            show_calibration_parameters(motor_controller.calibration_parameters);
             break;
           case MessageCode.CONTROL_PARAMETERS:
-            // show_active_control_parameters();
+            show_control_parameters(motor_controller.control_parameters);
             break;
         }
       },
       onready: (motor_controller) => {
         set_status(html`<pre>Connected, waiting for your commands.</pre>`, motor_uri);
+        show_calibration_parameters(motor_controller.calibration_parameters);
+        show_control_parameters(motor_controller.control_parameters);
       },
       onerror: (error) => {
         set_error(error, motor_uri);
@@ -281,6 +283,7 @@ async function disconnect_motor_controller(show_status = true){
     }
   }
 }
+
 
 ```
 
@@ -756,6 +759,51 @@ d3.select(shared_seek_buttons).selectAll("button").style("height", "4em");
 
 
 invalidation.then(stop_command_loop);
+
+
+
+let calibration_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
+  [
+    ["Upload to Driver", wait_previous(async function(value){
+      const parameters = Object.fromEntries(Object.entries(calibration_parameters_input).map(([key, input]) => [key, input.value]));
+      await motor_controller.upload_calibration_parameters(parameters);
+      unsaved_changes();
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_calibration_parameters();
+    })],
+    ["Reset to Defaults", wait_previous(async function(value){
+      await motor_controller.reset_calibration_parameters();
+      unsaved_changes();
+    })],
+  ],
+  {
+    label: "Calibration Parameters",
+  },
+);
+
+
+let control_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
+  [
+    ["Upload to Driver", wait_previous(async function(value){
+      const control_parameters = Object.fromEntries(Object.entries(control_parameters_input).map(([key, input]) => [key, input.value]));
+      await motor_controller.upload_control_parameters(control_parameters);
+      unsaved_changes();
+      return value;
+    })],
+    ["Reload from Driver", wait_previous(async function(value){
+      await motor_controller.load_control_parameters();
+      return value;
+    })],
+    ["Reset to Defaults", wait_previous(async function(value){
+      await motor_controller.reset_control_parameters();
+      unsaved_changes();
+    })],
+  ],
+  {
+    label: "Control Parameters",
+  },
+);
 ```
 
 
@@ -1507,11 +1555,11 @@ autosave_inputs(calibration_series_plots);
 // Calibration Parameters
 // -------------------
 
-function stringify_active_calibration_parameters() {
-  return `motor_controller.calibration_parameters = ${JSON.stringify(motor_controller?.calibration_parameters, null, 2)}`;
+function stringify_calibration_parameters(parameters) {
+  return `motor_controller.calibration_parameters = ${JSON.stringify(parameters, null, 2)}`;
 }
 
-let active_calibration_parameters_table =  Mutable(stringify_active_calibration_parameters());
+let active_calibration_parameters_table =  Mutable("...");
 
 const calibration_parameters_input = Object.fromEntries(
   [
@@ -1635,7 +1683,7 @@ const calibration_parameters_input = Object.fromEntries(
 
     let parameter_input = Inputs.number([], {
       label,
-      value: motor_controller?.calibration_parameters?.[key],
+      value: undefined,
     });
 
     d3.select(parameter_input).style("width", "100%").style("margin", "1em 0em 1em 0em")
@@ -1646,50 +1694,25 @@ const calibration_parameters_input = Object.fromEntries(
   })
 );
 
-function show_active_calibration_parameters() {
-  active_calibration_parameters_table.value = stringify_active_calibration_parameters();
+function show_calibration_parameters(parameters) {
+  active_calibration_parameters_table.value = stringify_calibration_parameters(parameters);
   Object.entries(calibration_parameters_input).forEach(([key, input]) => {
-    input.value = motor_controller?.calibration_parameters?.[key];
+    input.value = parameters?.[key];
   });
 }
 
-let calibration_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
-  [
-    ["Upload to Driver", wait_previous(async function(value){
-      const calibration_parameters = Object.fromEntries(Object.entries(calibration_parameters_input).map(([key, input]) => [key, input.value]));
-      await motor_controller.upload_calibration_parameters(calibration_parameters);
-      show_active_calibration_parameters();
-      unsaved_changes();
-      return value;
-    })],
-    ["Reload from Driver", wait_previous(async function(value){
-      await motor_controller.load_calibration_parameters();
-      show_active_calibration_parameters();
-      return value;
-    })],
-    ["Reset to Defaults", wait_previous(async function(value){
-      await motor_controller.reset_calibration_parameters();
-      show_active_calibration_parameters();
-      unsaved_changes();
-      return value;
-    })],
-  ],
-  {
-    label: "Calibration Parameters",
-    value: motor_controller?.calibration_parameters ?? {},
-  },
-);
+
 ```
 
 ```js
 // Control Parameters
 // -------------------
 
-function stringify_active_control_parameters() {
-  return `motor_controller.control_parameters = ${JSON.stringify(motor_controller?.control_parameters, null, 2)}`;
+function stringify_control_parameters(parameters) {
+  return `motor_controller.control_parameters = ${JSON.stringify(parameters, null, 2)}`;
 }
 
-let active_control_parameters_table =  Mutable(stringify_active_control_parameters());
+let active_control_parameters_table =  Mutable("...");
 
 const control_parameters_input = Object.fromEntries(
   [
@@ -1765,26 +1788,6 @@ const control_parameters_input = Object.fromEntries(
       label: "Angle from Saliency KI",
       description: "Integral gain for the angle estimated from the saliency effect. Controls how fast we adjust the PWM to compensate for the saliency angle."
     }],
-    ["current_measurement_minimum", {
-      label: "Current Measurement Minimum",
-      description: "Minimum current measurement value. Helps in filtering out spurious low current readings."
-    }],
-    ["voltage_measurement_variance", {
-      label: "Voltage Measurement Variance",
-      description: "Variance of the voltage measurement noise. Helps in filtering and estimating the true voltage accurately."
-    }],
-    ["resistance_current_minimum", {
-      label: "Resistance Current Minimum",
-      description: "Minimum current for resistance measurement. Helps in ensuring accurate resistance estimation."
-    }],
-    ["inductance_excitation_minimum_square", {
-      label: "Inductance Excitation Minimum Square",
-      description: "Minimum squared excitation current for inductance measurement. Ensures accurate inductance estimation."
-    }],
-    ["current_offset_maximum", {
-      label: "Current Offset Maximum",
-      description: "Maximum allowable current offset. Helps in filtering out systematic measurement errors."
-    }],
     ["emf_min_angular_speed", {
       label: "EMF Minimum Angular Speed",
       description: `Minimum detectable angular speed for EMF detection. This value also determines
@@ -1856,7 +1859,7 @@ const control_parameters_input = Object.fromEntries(
 
     let parameter_input = Inputs.number([], {
       label,
-      value: motor_controller?.control_parameters?.[key],
+      value: undefined,
     });
 
     d3.select(parameter_input).style("width", "100%").style("margin", "1em 0em 1em 0em")
@@ -1867,40 +1870,12 @@ const control_parameters_input = Object.fromEntries(
   })
 );
 
-function show_active_control_parameters() {
-  active_control_parameters_table.value = stringify_active_control_parameters();
+function show_control_parameters(parameters) {
+  active_control_parameters_table.value = stringify_control_parameters(parameters);
   Object.entries(control_parameters_input).forEach(([key, input]) => {
-    input.value = motor_controller?.control_parameters?.[key];
+    input.value = parameters?.[key];
   });
 }
-
-let control_parameters_buttons = !motor_controller ? html`<p>Motor controller not connected.</p>` : Inputs.button(
-  [
-    ["Upload to Driver", wait_previous(async function(value){
-      const control_parameters = Object.fromEntries(Object.entries(control_parameters_input).map(([key, input]) => [key, input.value]));
-      await motor_controller.upload_control_parameters(control_parameters);
-      show_active_control_parameters();
-      unsaved_changes();
-      return value;
-    })],
-    ["Reload from Driver", wait_previous(async function(value){
-      await motor_controller.load_control_parameters();
-      show_active_control_parameters();
-      return value;
-    })],
-    ["Reset to Defaults", wait_previous(async function(value){
-      await motor_controller.reset_control_parameters();
-      show_active_control_parameters();
-      unsaved_changes();
-      return value;
-    })],
-  ],
-  {
-    label: "Control Parameters",
-    value: motor_controller?.control_parameters ?? {},
-  },
-);
-
 ```
 
 ```js

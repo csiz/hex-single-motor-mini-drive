@@ -123,6 +123,7 @@ export class MotorController {
     this.get_version();
     this.get_info();
     this.load_calibration();
+    this.load_calibration_parameters();
     this.load_control_parameters();
     this.onready(this);
     console.info(`Motor controller is ready: ${this.motor_uri}`);
