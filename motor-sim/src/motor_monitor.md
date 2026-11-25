@@ -1537,7 +1537,7 @@ const calibration_series_static_resistance_plot = plot_lines({
     {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
   ],
-  default_draw: draw_circles_of_size(function(d) { return 2; }),
+  default_draw: draw_circles_of_size(function(d) { return 1 + 2 * Math.sqrt((d.holding_angle + Math.PI)/Math.PI); }),
 });
 
 const calibration_series_plots = {

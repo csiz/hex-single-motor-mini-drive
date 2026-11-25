@@ -45,7 +45,9 @@ MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 // Default drive state to use when no command is available.
 hex_mini_drive::DriveState default_drive_state = breaking_drive_state;
 
+size_t drive_states_queued = 0;
 
+size_t drive_duration_remaining = 0;
 
 // Critical functions!! 23KHz PWM cycle
 // ====================================
@@ -498,9 +500,24 @@ void ADC1_2_IRQHandler(void){
 
 
     // Check if there is a command from the main loop.
-    const bool drive_state_available = drive_state_queue.read_available();
+    const bool drive_states_available = drive_state_queue.read_available();
 
-    auto & drive_state = drive_state_available ? drive_state_queue.modify() : default_drive_state;
+    const size_t drive_states_done = (
+        drive_states_available > drive_states_queued ? drive_states_queued :
+        drive_states_queued and not drive_duration_remaining ? 1 : 0
+    );
+    drive_state_queue.mark_read(drive_states_done);
+    drive_states_queued = drive_states_available - drive_states_done;
+
+    auto const& drive_state = drive_states_queued ? drive_state_queue.peek() : default_drive_state;
+
+    if (drive_duration_remaining) {
+        drive_duration_remaining -= 1;
+    } else {
+        drive_duration_remaining = drive_state.duration;
+        readout.active_angle = drive_state.angle_value;
+    }
+
 
     // Drive in closed loop control relative to the rotor angle and targetting a max torque and speed.
     if (drive_state.closed_loop) {
@@ -559,22 +576,10 @@ void ADC1_2_IRQHandler(void){
         // }
     // Drive in open loop control.
     } else {
-        // Drive the inductors around a circle at the specified PWM and speed. And apply the initial offset.
-        readout.active_angle = readout.active_angle + static_cast<int32_t>(drive_state.target_speed) + drive_state.angle_value;
-        // Zero out the offset so we don't apply it again in the next control cycle.
-        drive_state.angle_value = 0;
+        // Drive the inductors around a circle at the specified PWM and speed.
+        readout.active_angle = readout.active_angle + static_cast<int32_t>(drive_state.target_speed);
         // Copy the commanded PWM value from the drive command to our readout state.
         readout.active_pwm = clip_to(0, live_max_pwm, drive_state.target_value);
-    }
-
-    if (drive_state_available) {
-        // Count down execution time or discard the top drive state when we finish its duration.
-        if (drive_state.duration) drive_state.duration -= 1;
-        else drive_state_queue.mark_read(1);
-    } else {
-        // Set the active_angle to the rotor angle while there's no drive command.
-        // TODO: hmm, this makes stuff jump
-        // readout.active_angle = angle;
     }
 
     readout.probing_angle += drive_state.probing_speed_modulation;

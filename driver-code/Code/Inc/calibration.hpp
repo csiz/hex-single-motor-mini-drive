@@ -32,12 +32,14 @@ static inline hex_mini_drive::CalibrationInstance make_calibration_instance(hex_
 static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   hex_mini_drive::CalibrationInstance const& active_calibration,
   float target_pwm,
-  float target_speed
+  float target_speed,
+  int32_t holding_angle
 ) {
   return hex_mini_drive::CalibrationInstance {
     .count = 0,
     .target_pwm = target_pwm,
     .target_speed = target_speed,
+    .holding_angle = holding_angle,
     .stable = false,
     .consistent = false,
     .resistance_excited = false,
@@ -76,6 +78,7 @@ static inline void start_calibration_series() {
     .closed_loop = false,
     .duration = calibration_parameters.instance_duration,
     .target_value = calibration_instance.target_pwm,
+    .angle_value = calibration_instance.holding_angle,
     .target_speed = calibration_instance.target_speed,
     .probing_factor = 0,
     .probing_factor_modulation = 0,

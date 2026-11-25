@@ -241,8 +241,8 @@ export class MotorController {
       case MessageCode.CALIBRATION_INSTANCE: {
         message = parse_calibration_instance(bare_message);
         this.calibration_instance = message;
-        const {target_speed, target_pwm} = message;
-        this.calibration_series.set(`{speed: ${target_speed}, pwm: ${target_pwm}}`, message);
+        const {target_speed, target_pwm, holding_angle} = message;
+        this.calibration_series.set(`{speed: ${target_speed}, pwm: ${target_pwm}, angle: ${holding_angle}}`, message);
         break;
       }
       case MessageCode.CALIBRATION_PARAMETERS: {
