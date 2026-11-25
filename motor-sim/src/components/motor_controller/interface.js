@@ -78,6 +78,10 @@ export function parse_readout(bare_readout, previous_readout) {
   const emf_speed_constant = bare_readout.emf_speed_constant;
   const emf_speed_constant_stdev = Math.sqrt(bare_readout.emf_speed_constant_variance);
 
+  const drive_voltage_angle = angle_units_to_radians(bare_readout.drive_voltage_angle);
+  const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
+  const drive_voltage_magnitude = bare_readout.drive_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
+  
   const current_angle = angle_units_to_radians(bare_readout.current_angle);
   const current_angle_offset = normalize_radians(current_angle - predicted_angle);
   const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
@@ -131,10 +135,6 @@ export function parse_readout(bare_readout, previous_readout) {
   const v_pwm = (v_drive_voltage - min_drive_voltage) / vcc_voltage * PWM_BASE;
   const w_pwm = (w_drive_voltage - min_drive_voltage) / vcc_voltage * PWM_BASE;
 
-
-  const drive_voltage_angle = Math.atan2(y_drive_voltage, x_drive_voltage);
-  const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
-  const drive_voltage_magnitude = Math.sqrt(square(x_drive_voltage) + square(y_drive_voltage));
 
   const emf_voltage_angle_offset = normalize_radians(emf_voltage_angle - predicted_angle);
 

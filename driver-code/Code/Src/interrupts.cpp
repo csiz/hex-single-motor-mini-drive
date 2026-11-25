@@ -181,6 +181,8 @@ void ADC1_2_IRQHandler(void){
     // And transform the drive voltages too.
     const auto [x_drive_voltage, y_drive_voltage] = dq0_transform(drive_voltages);
 
+    set_cordic(x_drive_voltage, y_drive_voltage);
+
     // Cast the angle speed to angle units per pwm cycle.
     const int32_t angle_traversed = readout.angular_speed;
 
@@ -189,6 +191,7 @@ void ADC1_2_IRQHandler(void){
     // the rotor is exactly the angular speed.
     const int32_t predicted_angle = readout.angle + angle_traversed;
 
+    const auto [drive_voltage_angle, drive_voltage_magnitude] = get_cordic();
 
     // Current angle calculation
     // -------------------------
@@ -643,6 +646,8 @@ void ADC1_2_IRQHandler(void){
     readout.emf_speed_constant = emf_speed_constant;
     readout.emf_speed_constant_variance = emf_speed_constant_variance;
 
+    readout.drive_voltage_angle = drive_voltage_angle;
+    readout.drive_voltage_magnitude = drive_voltage_magnitude;
     readout.current_angle = current_angle;
     readout.current_magnitude = current_magnitude;
     readout.current_angular_speed = current_angular_speed;

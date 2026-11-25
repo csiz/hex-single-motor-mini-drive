@@ -330,6 +330,13 @@ definitions:
         type: float32
         doc: Variance of the instantaneous emf speed constant; used to determine if the estimate is reliable.
 
+      drive_voltage_angle:
+        type: int32
+        doc: Instantaneous angle of the driving PWM signal applied to the motor.
+      drive_voltage_magnitude:
+        type: float32
+        doc: Instantaneous magnitude of the drive voltage.
+        
       current_angle:
         type: int32
         doc: Angle of the current vector.
@@ -379,7 +386,7 @@ definitions:
       probing_angle:
         type: int32
         doc: Phase of the probing signal modulation.
-      
+
 
   StreamReadouts:
     doc: |

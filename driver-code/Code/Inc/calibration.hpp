@@ -264,9 +264,7 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
   // 
   // The error is evolving during the optimization, we want to store the end-ish value after we've optimized our parameters.
 
-  const float drive_voltage = readout.vcc_voltage * readout.active_pwm * active_pwm_to_voltage_conversion;
-
-  calibration_instance.avg_drive_voltage += (drive_voltage - calibration_instance.avg_drive_voltage) * calibration_parameters.stats_ki;
+  calibration_instance.avg_drive_voltage += (readout.drive_voltage_magnitude - calibration_instance.avg_drive_voltage) * calibration_parameters.stats_ki;
   calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_parameters.stats_ki;
   calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_parameters.stats_ki;
   
