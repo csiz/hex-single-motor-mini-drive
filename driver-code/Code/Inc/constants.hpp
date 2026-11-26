@@ -376,6 +376,9 @@ constexpr float hysteresis_stdev = current_measurement_stdev * current_diff_meas
 // The noise of our applied voltage is a few units from the maximum we can use.
 constexpr float voltage_output_stdev = 4.f * nominal_vcc_voltage * half_pwm_base_inverse;
 
+constexpr float voltage_output_stdev_inverse = 1.0f / voltage_output_stdev;
+
+constexpr float voltage_error_to_angle_units_scaling = radians_to_angle_units * voltage_output_stdev_inverse;
 
 // We also need the squares.
 constexpr float default_current_variance = square(current_measurement_stdev);
@@ -444,9 +447,9 @@ const hex_mini_drive::CalibrationParameters default_calibration_parameters = {
     .resistance_ki = std::pow(2, -10),
     .inductance_ki = std::pow(2, -11),
     .inductance_saliency_ki = std::pow(2, -11),
-    .saliency_angle_ki = std::pow(2, -11),
+    .saliency_angle_ki = std::pow(2, -7),
     .hysteresis_loss_ki = std::pow(2, -15),
-    .hysteresis_angle_ki = std::pow(2, -15),
+    .hysteresis_angle_ki = std::pow(2, -9),
     .eddy_resistance_ki = 0,
     .motor_constant_ki = std::pow(2, -10),
     .stats_ki = std::pow(2, -8),
