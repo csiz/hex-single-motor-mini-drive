@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.202.0";
+constexpr char const* VERSION_STRING = "0.203.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -616,16 +616,18 @@ struct CalibrationInstance {
   int32_t holding_angle;
   // Whether the calibration is stable.
   uint8_t stable;
-  // Whether the calibration values make sense with each other (angles align and magnitudes are reasonable).
-  uint8_t consistent;
   // Whether resistance was excited.
   uint8_t resistance_excited;
   // Whether inductance was excited.
   uint8_t inductance_excited;
+  // Whether hysteresis was excited.
+  uint8_t hysteresis_excited;
   // Drive voltage used during this calibration instance.
   float avg_drive_voltage;
   // Current magnitude during this calibration instance.
   float avg_current_magnitude;
+  // Average current speed.
+  float avg_current_speed;
   // Average squared error during this calibration instance.
   float avg_square_error;
   // Dot product of gradients.
@@ -638,6 +640,8 @@ struct CalibrationInstance {
   float resistance_excitation_fraction;
   // Fraction of data points where current change was high enough to measure inductance.
   float inductance_excitation_fraction;
+  // Fraction of data points where hysteresis was excited.
+  float hysteresis_excitation_fraction;
   // Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
   float resistance_sensitivity;
   // Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
@@ -680,15 +684,17 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_uint8(buffer + offset, value.stable);;
   offset += 1;
-  write_uint8(buffer + offset, value.consistent);;
-  offset += 1;
   write_uint8(buffer + offset, value.resistance_excited);;
   offset += 1;
   write_uint8(buffer + offset, value.inductance_excited);;
   offset += 1;
+  write_uint8(buffer + offset, value.hysteresis_excited);;
+  offset += 1;
   write_float32(buffer + offset, value.avg_drive_voltage);;
   offset += 4;
   write_float32(buffer + offset, value.avg_current_magnitude);;
+  offset += 4;
+  write_float32(buffer + offset, value.avg_current_speed);;
   offset += 4;
   write_float32(buffer + offset, value.avg_square_error);;
   offset += 4;
@@ -701,6 +707,8 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   write_float32(buffer + offset, value.resistance_excitation_fraction);;
   offset += 4;
   write_float32(buffer + offset, value.inductance_excitation_fraction);;
+  offset += 4;
+  write_float32(buffer + offset, value.hysteresis_excitation_fraction);;
   offset += 4;
   write_float32(buffer + offset, value.resistance_sensitivity);;
   offset += 4;
@@ -746,15 +754,17 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.stable = read_uint8(buffer + offset);
   offset += 1;
-  result.consistent = read_uint8(buffer + offset);
-  offset += 1;
   result.resistance_excited = read_uint8(buffer + offset);
   offset += 1;
   result.inductance_excited = read_uint8(buffer + offset);
   offset += 1;
+  result.hysteresis_excited = read_uint8(buffer + offset);
+  offset += 1;
   result.avg_drive_voltage = read_float32(buffer + offset);
   offset += 4;
   result.avg_current_magnitude = read_float32(buffer + offset);
+  offset += 4;
+  result.avg_current_speed = read_float32(buffer + offset);
   offset += 4;
   result.avg_square_error = read_float32(buffer + offset);
   offset += 4;
@@ -767,6 +777,8 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   result.resistance_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
   result.inductance_excitation_fraction = read_float32(buffer + offset);
+  offset += 4;
+  result.hysteresis_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
   result.resistance_sensitivity = read_float32(buffer + offset);
   offset += 4;
@@ -1544,7 +1556,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::GET_CALIBRATION: return 2;
     case MessageCode::SET_CALIBRATION: return 58;
     case MessageCode::RESET_CALIBRATION: return 2;
-    case MessageCode::CALIBRATION_INSTANCE: return 110;
+    case MessageCode::CALIBRATION_INSTANCE: return 118;
     case MessageCode::CALIBRATION_PARAMETERS: return 110;
     case MessageCode::SET_CALIBRATION_PARAMETERS: return 110;
     case MessageCode::GET_CALIBRATION_PARAMETERS: return 2;
@@ -1662,9 +1674,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::CALIBRATION_INSTANCE: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_INSTANCE));
-      if (max_size < 2 + 108) return 0;
+      if (max_size < 2 + 116) return 0;
       write_CalibrationInstance(buffer + 2, std::get<CalibrationInstance>(message.message_data));
-      return 110;
+      return 118;
     }
     case MessageCode::CALIBRATION_PARAMETERS: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::CALIBRATION_PARAMETERS));
@@ -1831,7 +1843,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::CALIBRATION_INSTANCE: {
-      if (size != 2 + 108) return false;
+      if (size != 2 + 116) return false;
       message.message_data = read_CalibrationInstance(buffer + 2);
       return true;
     }

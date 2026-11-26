@@ -366,12 +366,12 @@ constexpr float min_speed_constant_sq = square(min_speed_constant);
 constexpr float current_measurement_stdev = 8 * adc_to_current_units;
 
 // The difference between current measurements is noisier.
-constexpr float current_diff_measurement_stdev = 12 * adc_to_current_units;
+constexpr float current_diff_measurement_stdev = 16 * adc_to_current_units;
 
 // Precomputed conversion for inductance noise. Units of voltage per current (difference) per time step.
 constexpr float inductance_measurement_stdev = current_diff_measurement_stdev * current_diff_to_voltage_units;
 
-constexpr float hysteresis_stdev = current_measurement_stdev * current_diff_measurement_stdev * hysteresis_conversion;
+constexpr float hysteresis_stdev = 16 * current_measurement_stdev * current_diff_measurement_stdev * hysteresis_conversion;
 
 // The noise of our applied voltage is a few units from the maximum we can use.
 constexpr float voltage_output_stdev = 4.f * nominal_vcc_voltage * half_pwm_base_inverse;

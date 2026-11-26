@@ -41,17 +41,19 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .target_speed = target_speed,
     .holding_angle = holding_angle,
     .stable = false,
-    .consistent = false,
     .resistance_excited = false,
     .inductance_excited = false,
+    .hysteresis_excited = false,
     .avg_drive_voltage = 0.f,
     .avg_current_magnitude = 0.f,
+    .avg_current_speed = 0.f,
     .avg_square_error = 0.f,
     .gradients_dot = 0.f,
     .learning_rate_multiplier = 1.f,
     .learning_rate_cap = multiplier_maximum,
     .resistance_excitation_fraction = 0.f,
     .inductance_excitation_fraction = 0.f,
+    .hysteresis_excitation_fraction = 0.f,
     .resistance_sensitivity = calibration_parameters.current_variance,
     .inductance_sensitivity = calibration_parameters.inductance_variance,
     .hysteresis_loss_sensitivity = calibration_parameters.hysteresis_variance,
@@ -256,6 +258,7 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   const float square_inductance = square(x_inductance) + square(y_inductance);
 
+  const float square_hysteresis = square(hysteresis_scaling);
 
   // Store stats
   // -----------
@@ -264,6 +267,7 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   calibration_instance.avg_drive_voltage += (readout.drive_voltage_magnitude - calibration_instance.avg_drive_voltage) * calibration_parameters.stats_ki;
   calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_parameters.stats_ki;
+  calibration_instance.avg_current_speed += (readout.current_angular_speed - calibration_instance.avg_current_speed) * calibration_parameters.stats_ki;
   calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_parameters.stats_ki;
   
   // Gradients & Parameter Updates
@@ -284,6 +288,9 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
   const bool inductance_excited = square_inductance >  calibration_parameters.inductance_variance;
   calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_parameters.stats_ki;
   
+  const bool hysteresis_excited = square_hysteresis > calibration_parameters.hysteresis_variance;
+  calibration_instance.hysteresis_excitation_fraction += (hysteresis_excited - calibration_instance.hysteresis_excitation_fraction) * calibration_parameters.stats_ki;
+
   // Keep track of total unexplained variance.
   float gradients_dot = 0.0f;
 
@@ -365,9 +372,20 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
     // This usually happens when the motor is being super noisy and has to be held down, so it's clearly an error from emf,
     // but I do not know how to combine the calibration terms to extract a meaningful value from them in that case.
 
-    const float square_current_cross_inductance = square(hysteresis_scaling);
+    // Compute the dot product between the new gradients and the previous gradients for inductance contributions.
+    gradients_dot += (
+      inductance_gradient * calibration_instance.inductance_gradient +
+      inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient * (calibration_instance.inductance_saliency != 0.0f)
+    ) * square_inductance;
 
-    calibration_instance.hysteresis_loss_sensitivity = square_current_cross_inductance +  calibration_parameters.hysteresis_variance;
+    // Update inductance related gradients.
+    calibration_instance.inductance_gradient = inductance_gradient;
+    calibration_instance.inductance_saliency_gradient = inductance_saliency_gradient;
+  }
+
+  if (hysteresis_excited) {
+
+    calibration_instance.hysteresis_loss_sensitivity = square_hysteresis +  calibration_parameters.hysteresis_variance;
     
     const float hysteresis_loss_scaling = 1.f / calibration_instance.hysteresis_loss_sensitivity;
 
@@ -398,20 +416,11 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
     // Aggregate checks
     // ----------------
 
-    // Compute the dot product between the new gradients and the previous gradients for inductance contributions.
+    // Compute the dot product for hysteresis loss.
     gradients_dot += (
-      (
-        inductance_gradient * calibration_instance.inductance_gradient +
-        inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient * (calibration_instance.inductance_saliency != 0.0f)
-      ) * square_inductance +
-      (
-        hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f)
-      ) * square_current_cross_inductance
-    );
+      hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * (calibration_instance.hysteresis_loss != 0.0f)
+    ) * square_hysteresis;
 
-    // Update inductance related gradients.
-    calibration_instance.inductance_gradient = inductance_gradient;
-    calibration_instance.inductance_saliency_gradient = inductance_saliency_gradient;
     calibration_instance.hysteresis_loss_gradient = hysteresis_loss_gradient;
   }
 
@@ -444,12 +453,7 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
     calibration_instance.stable = calibration_instance.learning_rate_multiplier < calibration_parameters.multiplier_stable_threshold;
     calibration_instance.resistance_excited = calibration_instance.resistance_excitation_fraction > calibration_parameters.excitation_threshold;
     calibration_instance.inductance_excited = calibration_instance.inductance_excitation_fraction > calibration_parameters.excitation_threshold;
-    calibration_instance.consistent = (
-      calibration_instance.resistance_excited and
-      calibration_instance.inductance_excited and
-      (calibration_instance.inductance_saliency < 0.5f * calibration_instance.inductance) and
-      (faster_abs((calibration_instance.saliency_angle / 2) - ((2 * calibration_instance.hysteresis_angle) / 2)) < eight_circle)
-    );
+    calibration_instance.hysteresis_excited = calibration_instance.hysteresis_excitation_fraction > calibration_parameters.excitation_threshold;
     if (calibration_parameters.advance_when_stable and calibration_instance.stable) {
       return true;
     }

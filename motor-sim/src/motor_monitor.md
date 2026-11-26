@@ -1516,7 +1516,11 @@ const calibration_series_stats_plot = plot_lines({
   x_label: "Probing Frequency",
   y_label: "Value",
   channels: [
+    {y: "resistance_excitation_fraction", label: "Resistance Excited", color: colors_categories[3]},
+    {y: "inductance_excitation_fraction", label: "Inductance Excited", color: colors_categories[4]},
+    {y: "hysteresis_excitation_fraction", label: "Hysteresis Excited", color: colors_categories[5]},
     {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[4]},
+    {y: "avg_current_speed", label: "Avg Current Speed", color: colors_categories[5]},
     {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
   ],

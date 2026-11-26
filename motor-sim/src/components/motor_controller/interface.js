@@ -370,6 +370,7 @@ export function parse_calibration_instance(bare_calibration_instance){
     target_speed: speed_units_to_rotations_per_millisecond(bare_calibration_instance.target_speed),
     avg_drive_voltage: bare_calibration_instance.avg_drive_voltage / VOLTAGE_UNITS_PER_VOLT,
     avg_current_magnitude: bare_calibration_instance.avg_current_magnitude / CURRENT_UNITS_PER_AMP,
+    avg_current_speed: speed_units_to_rotations_per_millisecond(bare_calibration_instance.avg_current_speed),
     avg_error: Math.sqrt(bare_calibration_instance.avg_square_error) / VOLTAGE_UNITS_PER_VOLT,
     holding_angle: angle_units_to_radians(bare_calibration_instance.holding_angle),
     hysteresis_loss: bare_calibration_instance.hysteresis_loss,

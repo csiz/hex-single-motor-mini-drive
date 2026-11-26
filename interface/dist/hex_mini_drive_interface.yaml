@@ -504,21 +504,24 @@ definitions:
       stable:
         type: uint8
         doc: Whether the calibration is stable.
-      consistent:
-        type: uint8
-        doc: Whether the calibration values make sense with each other (angles align and magnitudes are reasonable).
       resistance_excited:
         type: uint8
         doc: Whether resistance was excited.
       inductance_excited:
         type: uint8
         doc: Whether inductance was excited.
+      hysteresis_excited:
+        type: uint8
+        doc: Whether hysteresis was excited.
       avg_drive_voltage:
         type: float32
         doc: Drive voltage used during this calibration instance.
       avg_current_magnitude:
         type: float32
         doc: Current magnitude during this calibration instance.
+      avg_current_speed:
+        type: float32
+        doc: Average current speed.
       avg_square_error:
         type: float32
         doc: Average squared error during this calibration instance.
@@ -537,7 +540,10 @@ definitions:
       inductance_excitation_fraction:
         type: float32
         doc: Fraction of data points where current change was high enough to measure inductance.
-        
+      hysteresis_excitation_fraction:
+        type: float32
+        doc: Fraction of data points where hysteresis was excited.
+
       resistance_sensitivity:
         type: float32
         doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
