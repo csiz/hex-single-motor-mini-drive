@@ -203,12 +203,9 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float x_inductance_saliency_voltage = x_inductance_saliency * calibration_instance.inductance_saliency;
   const float y_inductance_saliency_voltage = y_inductance_saliency * calibration_instance.inductance_saliency;
 
-  const float x_inductance_base_voltage = x_inductance * calibration_instance.inductance;
-  const float y_inductance_base_voltage = y_inductance * calibration_instance.inductance;
+  const float x_inductance_voltage = x_inductance * calibration_instance.inductance;
+  const float y_inductance_voltage = y_inductance * calibration_instance.inductance;
 
-  const float x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
-  const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
-  
   // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
   const int32_t hysteresis_angle_thing = -calibration_instance.hysteresis_angle + readout.current_angle + readout.current_diff_angle;
   const float sin_hysteresis_loss = get_sin(hysteresis_angle_thing);
@@ -224,7 +221,7 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float y_hysteresis_loss = sin_hysteresis_loss * hysteresis_scaling;
 
   const float x_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * x_hysteresis_loss;
-  
+
   const float y_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * y_hysteresis_loss;
 
   // Calibrate without EMF!!!
@@ -237,14 +234,16 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
   const float x_voltage_error = (
-    x_inductance_voltage + 
     x_resistive_voltage + 
+    x_inductance_voltage + 
+    x_inductance_saliency_voltage +
     x_hysteresis_loss_voltage + 
     -readout.x_drive_voltage
   );
   const float y_voltage_error = (
-    y_inductance_voltage + 
     y_resistive_voltage + 
+    y_inductance_voltage + 
+    y_inductance_saliency_voltage +
     y_hysteresis_loss_voltage + 
     -readout.y_drive_voltage
   );

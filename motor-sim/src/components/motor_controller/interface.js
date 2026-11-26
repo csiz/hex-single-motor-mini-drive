@@ -168,12 +168,9 @@ export function parse_readout(bare_readout, previous_readout) {
   const x_inductance_saliency_voltage = bare_readout.inductance_saliency * x_inductance_saliency;
   const y_inductance_saliency_voltage = bare_readout.inductance_saliency * y_inductance_saliency;
 
-  const x_inductance_base_voltage = x_inductance * bare_readout.inductance;
-  const y_inductance_base_voltage = y_inductance * bare_readout.inductance;
+  const x_inductance_voltage = x_inductance * bare_readout.inductance;
+  const y_inductance_voltage = y_inductance * bare_readout.inductance;
 
-  const x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
-  const y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
-  
 
   // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
   const hysteresis_angle_thing = normalize_radians(-bare_readout.hysteresis_angle + current_angle + current_diff_angle);
@@ -202,8 +199,20 @@ export function parse_readout(bare_readout, previous_readout) {
   // Especially because the resistance voltage and EMF voltage are covarying quantities.
   // Inductance and the saliency bias are also highly sensitive to any lag in the EMF estimation.
 
-  const x_voltage_error = x_inductance_voltage + x_resistive_voltage + x_hysteresis_loss_voltage - x_drive_voltage;
-  const y_voltage_error = y_inductance_voltage + y_resistive_voltage + y_hysteresis_loss_voltage - y_drive_voltage;
+  const x_voltage_error = (
+    x_resistive_voltage + 
+    x_inductance_voltage + 
+    x_inductance_saliency_voltage +
+    x_hysteresis_loss_voltage +
+    -x_drive_voltage
+  );
+  const y_voltage_error = (
+    y_resistive_voltage + 
+    y_inductance_voltage + 
+    y_inductance_saliency_voltage +
+    y_hysteresis_loss_voltage +
+    -y_drive_voltage
+  );
 
 
   // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
@@ -282,10 +291,10 @@ export function parse_readout(bare_readout, previous_readout) {
     // Calibration deduced voltages
     x_resistive_voltage,
     y_resistive_voltage,
+    x_inductance_voltage,
+    y_inductance_voltage,
     x_inductance_saliency_voltage,
     y_inductance_saliency_voltage,
-    x_inductance_base_voltage,
-    y_inductance_base_voltage,
     x_hysteresis_loss_voltage,
     y_hysteresis_loss_voltage,
     x_voltage_error,

@@ -280,15 +280,24 @@ void ADC1_2_IRQHandler(void){
     const float x_inductance_saliency = -inductance_magnitude * cos_saliency;
     const float y_inductance_saliency = -inductance_magnitude * sin_saliency;
 
-    const float x_inductance_base_voltage = x_inductance * calibration.inductance;
-    const float y_inductance_base_voltage = y_inductance * calibration.inductance;
+    const float x_inductance_saliency_voltage = x_inductance_saliency * calibration.inductance_saliency;
+    const float y_inductance_saliency_voltage = y_inductance_saliency * calibration.inductance_saliency;
 
-    const float x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency;
-    const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency;
+    const float x_inductance_voltage = x_inductance * calibration.inductance;
+    const float y_inductance_voltage = y_inductance * calibration.inductance;
 
-    const float measured_x_emf_voltage = x_inductance_voltage + x_resistive_voltage - x_drive_voltage;
-    const float measured_y_emf_voltage = y_inductance_voltage + y_resistive_voltage - y_drive_voltage;
-
+    const float measured_x_emf_voltage = (
+        x_resistive_voltage +
+        x_inductance_voltage + 
+        x_inductance_saliency_voltage +
+        -x_drive_voltage
+    );
+    const float measured_y_emf_voltage = (
+        y_resistive_voltage +
+        y_inductance_voltage + 
+        y_inductance_saliency_voltage +
+        - y_drive_voltage
+    );
     const float x_emf_voltage_error = measured_x_emf_voltage - predicted_x_emf_voltage;
     const float y_emf_voltage_error = measured_y_emf_voltage - predicted_y_emf_voltage;
 
