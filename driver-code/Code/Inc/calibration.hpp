@@ -189,19 +189,14 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
   // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
+  const int32_t saliency_angle_thing = calibration_instance.saliency_angle - readout.current_diff_angle;
+  const float sin_saliency = get_sin(saliency_angle_thing);
+  const float cos_saliency = get_cos(saliency_angle_thing);
 
-  const float sin_saliency = get_sin(calibration_instance.saliency_angle);
-  const float cos_saliency = get_cos(calibration_instance.saliency_angle);
-
-  const float x_inductance_saliency = (
-    -x_inductance * cos_saliency 
-    -y_inductance * sin_saliency
-  );
+  const float inductance_magnitude = readout.current_diff_magnitude * current_diff_to_voltage_units;
   
-  const float y_inductance_saliency = (
-    -x_inductance * sin_saliency
-    +y_inductance * cos_saliency
-  );
+  const float x_inductance_saliency = -inductance_magnitude * cos_saliency;
+  const float y_inductance_saliency = -inductance_magnitude * sin_saliency;
 
   const float x_inductance_saliency_voltage = x_inductance_saliency * calibration_instance.inductance_saliency;
   const float y_inductance_saliency_voltage = y_inductance_saliency * calibration_instance.inductance_saliency;

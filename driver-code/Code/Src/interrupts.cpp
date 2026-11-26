@@ -271,25 +271,20 @@ void ADC1_2_IRQHandler(void){
 
     // Ignore the saliency_angle_offset in the tight loop and assume it is 0. The saliency
     // effect depends on the rotor position!
-    const int32_t saliency_angle = 2*predicted_angle;
+    const int32_t saliency_angle_thing = 2 * predicted_angle - readout.current_diff_angle;
+    const float sin_saliency = get_sin(saliency_angle_thing);
+    const float cos_saliency = get_cos(saliency_angle_thing);
 
-    const float cos_saliency = get_cos(saliency_angle);
-    const float sin_saliency = get_sin(saliency_angle);
-
-    const float x_inductance_saliency_voltage = calibration.inductance_saliency * (
-        -x_inductance * cos_saliency 
-        -y_inductance * sin_saliency
-    );
-    const float y_inductance_saliency_voltage = calibration.inductance_saliency * (
-        -x_inductance * sin_saliency
-        +y_inductance * cos_saliency
-    );
+    const float inductance_magnitude = readout.current_diff_magnitude * current_diff_to_voltage_units;
+    
+    const float x_inductance_saliency = -inductance_magnitude * cos_saliency;
+    const float y_inductance_saliency = -inductance_magnitude * sin_saliency;
 
     const float x_inductance_base_voltage = x_inductance * calibration.inductance;
     const float y_inductance_base_voltage = y_inductance * calibration.inductance;
 
-    const float x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency_voltage;
-    const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency_voltage;
+    const float x_inductance_voltage = x_inductance_base_voltage + x_inductance_saliency;
+    const float y_inductance_voltage = y_inductance_base_voltage + y_inductance_saliency;
 
     const float measured_x_emf_voltage = x_inductance_voltage + x_resistive_voltage - x_drive_voltage;
     const float measured_y_emf_voltage = y_inductance_voltage + y_resistive_voltage - y_drive_voltage;

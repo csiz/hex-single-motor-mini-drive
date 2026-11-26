@@ -155,19 +155,15 @@ export function parse_readout(bare_readout, previous_readout) {
 
   // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
   // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
+  const saliency_angle_thing = normalize_radians(bare_readout.saliency_angle - current_diff_angle);
 
-  const sin_saliency = Math.sin(bare_readout.saliency_angle);
-  const cos_saliency = Math.cos(bare_readout.saliency_angle);
+  const sin_saliency = Math.sin(saliency_angle_thing);
+  const cos_saliency = Math.cos(saliency_angle_thing);
 
-  const x_inductance_saliency = (
-      -x_inductance * cos_saliency 
-      -y_inductance * sin_saliency
-  );
+  const inductance_magnitude = current_diff_magnitude * pwm_cycles_per_second;
+  const x_inductance_saliency = -inductance_magnitude * cos_saliency;
   
-  const y_inductance_saliency = (
-    -x_inductance * sin_saliency
-    +y_inductance * cos_saliency
-  );
+  const y_inductance_saliency = -inductance_magnitude * sin_saliency;
 
   const x_inductance_saliency_voltage = bare_readout.inductance_saliency * x_inductance_saliency;
   const y_inductance_saliency_voltage = bare_readout.inductance_saliency * y_inductance_saliency;
