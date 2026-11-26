@@ -286,23 +286,23 @@ void ADC1_2_IRQHandler(void){
     const float x_inductance_voltage = x_inductance * calibration.inductance;
     const float y_inductance_voltage = y_inductance * calibration.inductance;
 
-    const float measured_x_emf_voltage = (
+    const float x_voltage_error = (
         x_resistive_voltage +
         x_inductance_voltage + 
         x_inductance_saliency_voltage +
-        -x_drive_voltage
+        -x_drive_voltage +
+        -predicted_x_emf_voltage
     );
-    const float measured_y_emf_voltage = (
+    const float y_voltage_error = (
         y_resistive_voltage +
         y_inductance_voltage + 
         y_inductance_saliency_voltage +
-        - y_drive_voltage
+        -y_drive_voltage +
+        -predicted_y_emf_voltage
     );
-    const float x_emf_voltage_error = measured_x_emf_voltage - predicted_x_emf_voltage;
-    const float y_emf_voltage_error = measured_y_emf_voltage - predicted_y_emf_voltage;
 
-    const float x_emf_voltage = predicted_x_emf_voltage + x_emf_voltage_error * control_parameters.loop_fast_ki;
-    const float y_emf_voltage = predicted_y_emf_voltage + y_emf_voltage_error * control_parameters.loop_fast_ki;
+    const float x_emf_voltage = predicted_x_emf_voltage + x_voltage_error * control_parameters.loop_fast_ki;
+    const float y_emf_voltage = predicted_y_emf_voltage + y_voltage_error * control_parameters.loop_fast_ki;
 
     // Send the emf values to the CORDIC asap.
     set_cordic(x_emf_voltage, y_emf_voltage);
@@ -328,15 +328,15 @@ void ADC1_2_IRQHandler(void){
     const float emf_voltage_angular_speed = readout.emf_voltage_angular_speed + emf_speed_error * control_parameters.loop_fast_ki;
     
     // For the emf voltage variance we add the errors in the frame before rotating.
-    const float instant_emf_voltage_variance = (
-        square(x_emf_voltage_error) +
-        square(y_emf_voltage_error)
+    const float instant_voltage_error_variance = (
+        square(x_voltage_error) +
+        square(y_voltage_error)
     );
 
     // Use the worst of the instantaneous variance or the filtered variance to track the worst case variance.
     const float emf_magnitude_variance = (
         readout.emf_magnitude_variance +
-        (instant_emf_voltage_variance - readout.emf_magnitude_variance) * control_parameters.loop_fast_ki
+        (instant_voltage_error_variance - readout.emf_magnitude_variance) * control_parameters.loop_fast_ki
     );
 
 
@@ -586,8 +586,6 @@ void ADC1_2_IRQHandler(void){
         readout.active_pwm = clip_to(0, live_max_pwm, drive_state.target_value);
     }
 
-    readout.probing_angle += drive_state.probing_speed_modulation;
-
     
     // Calculate and store desired motor pwm;
     motor_outputs = compute_motor_outputs(readout.active_angle, readout.active_pwm);
@@ -617,9 +615,6 @@ void ADC1_2_IRQHandler(void){
 
     
     // TODO: we need complete nan checks; preferably in the main loop.
-    if (std::isnan(readout.emf_voltage_magnitude)) {
-        readout.emf_voltage_magnitude = 0.f;
-    }
 
     // Write the latest readout data
     // -----------------------------
@@ -643,7 +638,6 @@ void ADC1_2_IRQHandler(void){
     readout.angle = angle;
     readout.predicted_angle = predicted_angle;
     readout.angular_speed = angular_speed;
-    readout.acceleration = 0; // TODO
 
     readout.vcc_voltage = vcc_voltage;
     readout.emf_voltage_angle = emf_voltage_angle;

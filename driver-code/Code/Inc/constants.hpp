@@ -493,7 +493,7 @@ const hex_mini_drive::ControlParameters default_control_parameters = {
     .angle_from_hall_ki = std::pow(2, -4),
     .lead_angle_control_ki = std::pow(2, -8),
     .angle_from_saliency_ki = std::pow(2, -4),
-
+    .angle_from_hysteresis_ki = std::pow(2, -4),
 
     .emf_min_angular_speed = 25.f * angle_base / static_cast<float>(pwm_cycles_per_second),
     .emf_uncertainty_threshold = 256,

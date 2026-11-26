@@ -1792,6 +1792,10 @@ const control_parameters_input = Object.fromEntries(
       label: "Angle from Saliency KI",
       description: "Integral gain for the angle estimated from the saliency effect. Controls how fast we adjust the PWM to compensate for the saliency angle."
     }],
+    ["angle_from_hysteresis_ki", {
+      label: "Angle from Hysteresis KI",
+      description: "Integral gain for angle from hysteresis."
+    }],
     ["emf_min_angular_speed", {
       label: "EMF Minimum Angular Speed",
       description: `Minimum detectable angular speed for EMF detection. This value also determines

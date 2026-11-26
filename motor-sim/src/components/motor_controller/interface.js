@@ -103,9 +103,6 @@ export function parse_readout(bare_readout, previous_readout) {
 
   const active_angle = angle_units_to_radians(bare_readout.active_angle);
 
-  const probing_angle = angle_units_to_radians(bare_readout.probing_angle);
-
-
   // Additional computations
   // -----------------------
 
@@ -285,7 +282,6 @@ export function parse_readout(bare_readout, previous_readout) {
     emf_stable_magnitude,
     active_pwm,
     active_angle,
-    probing_angle,
 
 
     // Calibration deduced voltages

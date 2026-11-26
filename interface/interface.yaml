@@ -282,10 +282,6 @@ definitions:
         type: float32
         doc: Best estimate for the rotor magnetic angular speed.
         
-      acceleration:
-        type: float32
-        doc: Estimate of angular acceleration.
-      
       vcc_voltage:
         type: float32
         doc: Instantaneous VCC voltage readout (ADC value); from resistance divider.
@@ -383,11 +379,8 @@ definitions:
       active_angle:
         type: int32
         doc: Current angle of the driving PWM signal applied to the motor.
-      probing_angle:
-        type: int32
-        doc: Phase of the probing signal modulation.
 
-
+        
   StreamReadouts:
     doc: |
       Continuously send readouts of the motor driver internal state.
@@ -613,31 +606,7 @@ definitions:
       target_speed:
         type: float32
         doc: Open loop rotation speed, or maximum (abs) velocity for closed loop control.
-      probing_factor:
-        type: float32
-        doc: |
-          Extra probing signal; changes the pwm duty cycle as: 
-            pwm = target_value * (1 - probing_factor * cos(probing_factor_modulation * time + probing_offset))
-      probing_factor_modulation:
-        type: float32
-        doc: Modulation speed for the probing_factor.
-      probing_speed_modulation:
-        type: float32
-        doc: |
-          Modulation speed for the target speed, this allows us to combine a fast spinning small
-          amplitude probing signal with slow spinning high magnitude holding command. For this
-          approximaton we obtain the modulated angle and magnitude of the drive vector with fewer
-          operations in the tight loop. The formula used is:
-            speed = target_speed - probing_speed_modulation * probing_factor * cos(probing_factor_modulation * time + probing_offset)
-          For circular probing signals use:
-            probing_speed_modulation = probing_factor_modulation
-          For fixed angle oscillating probing signals use:
-            probing_speed_modulation = 0
-      probing_offset:
-        type: int32
-        doc: |
-          Initial phase offset for the probing signal, at 0 offset we start the probing the probing
-          signal anti-aligned with the holding signal.
+        
           
   DriveSchedule:
     doc: Set a series of driver states to be executed by the motor in sequence.
@@ -907,6 +876,9 @@ definitions:
         type: float32
         doc: Integral gain for the influence of the saliency angle on the rotor_angle.
 
+      angle_from_hysteresis_ki:
+        type: float32
+        doc: Iron loss angle influence.
 
       emf_min_angular_speed:
         type: float32

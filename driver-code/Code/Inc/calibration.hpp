@@ -82,10 +82,6 @@ static inline void start_calibration_series() {
     .target_value = calibration_instance.target_pwm,
     .angle_value = calibration_instance.holding_angle,
     .target_speed = calibration_instance.target_speed,
-    .probing_factor = 0,
-    .probing_factor_modulation = 0,
-    .probing_speed_modulation = 0,
-    .probing_offset = 0,
   });
 }
 
@@ -221,7 +217,6 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
   const float y_hysteresis_loss = sin_hysteresis_loss * hysteresis_scaling;
 
   const float x_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * x_hysteresis_loss;
-
   const float y_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * y_hysteresis_loss;
 
   // Calibrate without EMF!!!
@@ -359,7 +354,7 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
       -inductance_saliency_gradient * calibration_parameters.inductance_saliency_ki * learning_rate_multiplier
     );
 
-    // If we're normal condition, then just gradient descent the angle too.
+    // Saliency angle update.
     const float saliency_angle_gradient = -(
       (x_voltage_error - x_inductance_saliency_voltage) * -sin_saliency +
       (y_voltage_error - y_inductance_saliency_voltage) * cos_saliency
