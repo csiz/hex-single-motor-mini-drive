@@ -78,17 +78,14 @@ export function parse_readout(bare_readout, previous_readout) {
   const emf_speed_constant = bare_readout.emf_speed_constant;
   const emf_speed_constant_stdev = Math.sqrt(bare_readout.emf_speed_constant_variance);
 
-  const drive_voltage_angle = angle_units_to_radians(bare_readout.drive_voltage_angle);
+  const drive_voltage_angle = Math.atan2(y_drive_voltage, x_drive_voltage);
   const drive_voltage_angle_offset = normalize_radians(drive_voltage_angle - predicted_angle);
-  const drive_voltage_magnitude = bare_readout.drive_voltage_magnitude / VOLTAGE_UNITS_PER_VOLT;
-  
-  const current_angle = angle_units_to_radians(bare_readout.current_angle);
+  const drive_voltage_magnitude = Math.sqrt(square(x_drive_voltage) + square(y_drive_voltage));
+  const current_angle = Math.atan2(y_current, x_current);
   const current_angle_offset = normalize_radians(current_angle - predicted_angle);
-  const current_magnitude = bare_readout.current_magnitude / CURRENT_UNITS_PER_AMP;
-  const current_angular_speed = speed_units_to_rotations_per_millisecond(bare_readout.current_angular_speed);
-  const current_magnitude_diff = bare_readout.current_magnitude_diff / CURRENT_UNITS_PER_AMP;
-  const current_diff_angle = angle_units_to_radians(bare_readout.current_diff_angle);
-  const current_diff_magnitude = bare_readout.current_diff_magnitude / CURRENT_UNITS_PER_AMP;
+  const current_magnitude = Math.sqrt(square(x_current) + square(y_current));
+  const current_diff_angle = Math.atan2(y_current_diff, x_current_diff);
+  const current_diff_magnitude = Math.sqrt(square(x_current_diff) + square(y_current_diff));
 
   const live_max_pwm = bare_readout.live_max_pwm;
 
@@ -102,6 +99,17 @@ export function parse_readout(bare_readout, previous_readout) {
   const active_pwm = bare_readout.active_pwm;
 
   const active_angle = angle_units_to_radians(bare_readout.active_angle);
+  const resistance = bare_readout.resistance;
+  const resistance_gradient = bare_readout.resistance_gradient;
+  const inductance = bare_readout.inductance;
+  const inductance_gradient = bare_readout.inductance_gradient;
+  const inductance_saliency = bare_readout.inductance_saliency;
+  const inductance_saliency_gradient = bare_readout.inductance_saliency_gradient;
+  const hysteresis_loss = bare_readout.hysteresis_loss;
+  const hysteresis_loss_gradient = bare_readout.hysteresis_loss_gradient;
+
+  const saliency_angle = angle_units_to_radians(bare_readout.saliency_angle);
+  const hysteresis_angle = angle_units_to_radians(bare_readout.hysteresis_angle);
 
   // Additional computations
   // -----------------------
@@ -143,8 +151,8 @@ export function parse_readout(bare_readout, previous_readout) {
 
 
   // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-  const x_resistive_voltage = x_current * bare_readout.resistance;
-  const y_resistive_voltage = y_current * bare_readout.resistance;
+  const x_resistive_voltage = x_current * resistance;
+  const y_resistive_voltage = y_current * resistance;
 
   // And the current diffs for calculating inductance.
   const x_inductance = x_current_diff * pwm_cycles_per_second;
@@ -152,7 +160,7 @@ export function parse_readout(bare_readout, previous_readout) {
 
   // Note: The saliency effect is due to the iron between magnets so it occurs twice per 
   // electrical revolution, once for each pole. Thus we must use the doubled rotor angle.
-  const saliency_angle_thing = normalize_radians(bare_readout.saliency_angle - current_diff_angle);
+  const saliency_angle_thing = normalize_radians(saliency_angle - current_diff_angle);
 
   const sin_saliency = Math.sin(saliency_angle_thing);
   const cos_saliency = Math.cos(saliency_angle_thing);
@@ -162,15 +170,15 @@ export function parse_readout(bare_readout, previous_readout) {
   
   const y_inductance_saliency = -inductance_magnitude * sin_saliency;
 
-  const x_inductance_saliency_voltage = bare_readout.inductance_saliency * x_inductance_saliency;
-  const y_inductance_saliency_voltage = bare_readout.inductance_saliency * y_inductance_saliency;
+  const x_inductance_saliency_voltage = inductance_saliency * x_inductance_saliency;
+  const y_inductance_saliency_voltage = inductance_saliency * y_inductance_saliency;
 
-  const x_inductance_voltage = x_inductance * bare_readout.inductance;
-  const y_inductance_voltage = y_inductance * bare_readout.inductance;
+  const x_inductance_voltage = x_inductance * inductance;
+  const y_inductance_voltage = y_inductance * inductance;
 
 
   // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
-  const hysteresis_angle_thing = normalize_radians(-bare_readout.hysteresis_angle + current_angle + current_diff_angle);
+  const hysteresis_angle_thing = normalize_radians(-hysteresis_angle + current_angle + current_diff_angle);
   const sin_hysteresis_loss = Math.sin(hysteresis_angle_thing);
   const cos_hysteresis_loss = Math.cos(hysteresis_angle_thing);
 
@@ -182,9 +190,9 @@ export function parse_readout(bare_readout, previous_readout) {
   const x_hysteresis_loss = cos_hysteresis_loss * hysteresis_scaling;
   const y_hysteresis_loss = sin_hysteresis_loss * hysteresis_scaling;
 
-  const x_hysteresis_loss_voltage = bare_readout.hysteresis_loss * x_hysteresis_loss;
+  const x_hysteresis_loss_voltage = hysteresis_loss * x_hysteresis_loss;
   
-  const y_hysteresis_loss_voltage = bare_readout.hysteresis_loss * y_hysteresis_loss;
+  const y_hysteresis_loss_voltage = hysteresis_loss * y_hysteresis_loss;
 
 
   // Calibrate without EMF!!!
@@ -268,8 +276,6 @@ export function parse_readout(bare_readout, previous_readout) {
     x_emf_voltage, y_emf_voltage,
     current_angle, current_angle_offset,
     current_magnitude,
-    current_angular_speed,
-    current_magnitude_diff,
     current_diff_angle,
     current_diff_magnitude,
     live_max_pwm,
@@ -296,6 +302,17 @@ export function parse_readout(bare_readout, previous_readout) {
     x_voltage_error,
     y_voltage_error,
     voltage_error,
+
+    resistance,
+    resistance_gradient,
+    inductance,
+    inductance_gradient,
+    inductance_saliency,
+    inductance_saliency_gradient,
+    hysteresis_loss,
+    hysteresis_loss_gradient,
+    saliency_angle,
+    hysteresis_angle,
   };
 }
 
@@ -373,15 +390,14 @@ export function parse_calibration_instance(bare_calibration_instance){
   return {
     ...bare_calibration_instance,
     target_speed: speed_units_to_rotations_per_millisecond(bare_calibration_instance.target_speed),
-    avg_drive_voltage: bare_calibration_instance.avg_drive_voltage / VOLTAGE_UNITS_PER_VOLT,
-    avg_current_magnitude: bare_calibration_instance.avg_current_magnitude / CURRENT_UNITS_PER_AMP,
-    avg_current_speed: speed_units_to_rotations_per_millisecond(bare_calibration_instance.avg_current_speed),
+    avg_voltage: Math.sqrt(bare_calibration_instance.avg_square_voltage) / VOLTAGE_UNITS_PER_VOLT,
+    avg_current: Math.sqrt(bare_calibration_instance.avg_square_current) / CURRENT_UNITS_PER_AMP,
     avg_error: Math.sqrt(bare_calibration_instance.avg_square_error) / VOLTAGE_UNITS_PER_VOLT,
     holding_angle: angle_units_to_radians(bare_calibration_instance.holding_angle),
     hysteresis_loss: bare_calibration_instance.hysteresis_loss,
+    gradients_dot: Math.sign(bare_calibration_instance.gradients_dot) * Math.sqrt(Math.abs(bare_calibration_instance.gradients_dot)) / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
     hysteresis_angle: angle_units_to_radians(bare_calibration_instance.hysteresis_angle),
-    gradients_dot: Math.sign(bare_calibration_instance.gradients_dot) * Math.sqrt(Math.abs(bare_calibration_instance.gradients_dot)) / VOLTAGE_UNITS_PER_VOLT,
   }
 }
 

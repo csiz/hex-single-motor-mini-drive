@@ -1280,9 +1280,6 @@ const plot_motor_values = plot_lines({
   channels: [
     {y: "readout_number_diff", label: "Readout Number Diff", color: colors_categories[0]},
     {y: "rotations", label: "Rotations", color: colors_categories[1]},
-    {y: "resistance_sensitivity", label: "Resistance Sensitivity", color: colors_categories[2]},
-    {y: "inductance_sensitivity", label: "Inductance Sensitivity", color: colors_categories[3]},
-    {y: "hysteresis_loss_sensitivity", label: "Hysteresis Loss Sensitivity", color: colors_categories[6]},
     {y: "learning_rate_multiplier", label: "Learning Rate Multiplier", color: colors_categories[9]},
   ],
   curve,

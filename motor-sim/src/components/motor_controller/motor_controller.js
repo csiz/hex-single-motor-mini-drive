@@ -260,7 +260,8 @@ export class MotorController {
         // This way we can also track how the calibration parameters change over time. And if
         // transmission order is preserved, we should receive the new calibration data just ahead
         // of the corresponding readout.
-        message = parse_readout({...this.calibration_instance, ...this.info, ...bare_message}, last_message);
+
+        message = parse_readout({...this.info, ...bare_message}, last_message);
         // Store readout data up to some maximum size. Allows us to easily plot and analyse data samples.
         this.data = capped_push(this.data, message, max_data_length);
         break;

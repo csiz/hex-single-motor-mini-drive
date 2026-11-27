@@ -22,9 +22,6 @@ extern hex_mini_drive::Info info;
 // Calibration factors.
 extern hex_mini_drive::Calibration calibration;
 
-// Current calibration result.
-extern hex_mini_drive::CalibrationInstance calibration_instance;
-
 // Calibration parameters in use.
 extern hex_mini_drive::CalibrationParameters calibration_parameters;
 
@@ -46,13 +43,3 @@ bool set_angle_adjustment(int32_t const& adjustment);
 // Get the temperature sensor reading.
 float get_temperature();
 
-
-
-static inline hex_mini_drive::CalibrationInstance make_calibration_instance(hex_mini_drive::Calibration const& calibration){
-  return hex_mini_drive::CalibrationInstance{
-    .resistance = calibration.resistance,
-    .inductance = calibration.inductance,
-    .inductance_saliency = calibration.inductance_saliency,
-    .hysteresis_loss = calibration.hysteresis_loss
-  };
-}

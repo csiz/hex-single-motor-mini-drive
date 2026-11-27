@@ -65,6 +65,7 @@ constexpr float max_drive_current_inverse = 1.f / max_drive_current;
 // Inverse for fast math.
 constexpr float max_drive_power_inverse = 1.f / max_drive_power;
 
+constexpr float max_drive_current_square = square(max_drive_current);
 
 // Unit definitions
 // ----------------
@@ -334,7 +335,9 @@ constexpr float current_diff_to_voltage_units = pwm_cycles_per_second *
     hex_mini_drive::VOLTAGE_UNITS_PER_VOLT / hex_mini_drive::CURRENT_UNITS_PER_AMP;
 
 // Conversion factor to hysteresis effect; hysteresis is Ohm*Henri and we multiply with current and current_diff units and want voltage.
-constexpr float hysteresis_conversion = current_diff_to_voltage_units * voltage_mul_current_to_power * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+constexpr float hysteresis_conversion = voltage_mul_current_to_power * hex_mini_drive::VOLTAGE_UNITS_PER_VOLT;
+
+constexpr float hysteresis_conversion_square = square(hysteresis_conversion);
 
 // Conversion factor from speed units to voltage units prefix for motor constant.
 constexpr float emf_motor_constant_conversion = hex_mini_drive::VOLTAGE_UNITS_PER_VOLT * speed_units_to_radians_per_second;
@@ -371,7 +374,7 @@ constexpr float current_diff_measurement_stdev = 16 * adc_to_current_units;
 // Precomputed conversion for inductance noise. Units of voltage per current (difference) per time step.
 constexpr float inductance_measurement_stdev = current_diff_measurement_stdev * current_diff_to_voltage_units;
 
-constexpr float hysteresis_stdev = 16 * current_measurement_stdev * current_diff_measurement_stdev * hysteresis_conversion;
+constexpr float hysteresis_stdev = 16 * current_measurement_stdev * inductance_measurement_stdev * hysteresis_conversion;
 
 // The noise of our applied voltage is a few units from the maximum we can use.
 constexpr float voltage_output_stdev = 4.f * nominal_vcc_voltage * half_pwm_base_inverse;

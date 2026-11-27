@@ -21,8 +21,6 @@ hex_mini_drive::Calibration calibration = get_calibration();
 
 hex_mini_drive::CalibrationParameters calibration_parameters = get_calibration_parameters();
 
-hex_mini_drive::CalibrationInstance calibration_instance = make_calibration_instance(calibration);
-
 hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 
 CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};

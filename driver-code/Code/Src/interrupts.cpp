@@ -23,7 +23,12 @@
 // For our sanity we also want to keep the loop state condensed into as few variables as possible.
 
 // Electrical and position state
-hex_mini_drive::Readout readout = {};
+hex_mini_drive::Readout readout = {
+    .resistance = calibration.resistance,
+    .inductance = calibration.inductance,
+    .inductance_saliency = calibration.inductance_saliency,
+    .hysteresis_loss = calibration.hysteresis_loss,
+};
 
 
 // Additional state
@@ -219,11 +224,6 @@ void ADC1_2_IRQHandler(void){
 
     const int32_t current_angle_offset = current_angle - predicted_angle;
 
-    // Instantaneous current angular speed is the change in current angle per timestep.
-    const float current_angular_speed = current_angle - readout.current_angle;
-
-    const float current_magnitude_diff = current_magnitude - readout.current_magnitude;
-
 
     // We can't calibrate this one because we have to do it for steady state while also changing the frequency.
     // Obviously, we can't really get a "steady state" while changing frequency, I mean we can barely call it
@@ -254,8 +254,8 @@ void ADC1_2_IRQHandler(void){
     const float predicted_y_emf_voltage = readout.emf_voltage_magnitude * sin_emf;
 
     // Calculate the resistive voltage drop across the coil and MOSFET resistance.
-    const float x_resistive_voltage = x_current * calibration_instance.resistance;
-    const float y_resistive_voltage = y_current * calibration_instance.resistance;
+    const float x_resistive_voltage = x_current * readout.resistance;
+    const float y_resistive_voltage = y_current * readout.resistance;
 
     // Calculate the differential of the currents; this will be the real measurement of our model's prediction.
     const float x_current_diff = x_current - readout.x_current;
@@ -271,37 +271,37 @@ void ADC1_2_IRQHandler(void){
 
     // Ignore the saliency_angle_offset in the tight loop and assume it is 0. The saliency
     // effect depends on the rotor position!
-    const int32_t saliency_angle_thing = calibration_instance.saliency_angle - current_diff_angle;
+    const int32_t saliency_angle_thing = readout.saliency_angle - current_diff_angle;
     const float sin_saliency = get_sin(saliency_angle_thing);
     const float cos_saliency = get_cos(saliency_angle_thing);
 
-    const float inductance_magnitude = readout.current_diff_magnitude * current_diff_to_voltage_units;
+    const float inductance_magnitude = current_diff_magnitude * current_diff_to_voltage_units;
     
     const float x_inductance_saliency = -inductance_magnitude * cos_saliency;
     const float y_inductance_saliency = -inductance_magnitude * sin_saliency;
 
-    const float x_inductance_saliency_voltage = x_inductance_saliency * calibration_instance.inductance_saliency;
-    const float y_inductance_saliency_voltage = y_inductance_saliency * calibration_instance.inductance_saliency;
+    const float x_inductance_saliency_voltage = x_inductance_saliency * readout.inductance_saliency;
+    const float y_inductance_saliency_voltage = y_inductance_saliency * readout.inductance_saliency;
 
-    const float x_inductance_voltage = x_inductance * calibration_instance.inductance;
-    const float y_inductance_voltage = y_inductance * calibration_instance.inductance;
+    const float x_inductance_voltage = x_inductance * readout.inductance;
+    const float y_inductance_voltage = y_inductance * readout.inductance;
 
     // Hysteresis is the cross product between current and inductance vectors, which simplifies to the sum of angles.
-    const int32_t hysteresis_angle_thing = -calibration_instance.hysteresis_angle + current_angle + current_diff_angle;
+    const int32_t hysteresis_angle_thing = -readout.hysteresis_angle + current_angle + current_diff_angle;
     const float sin_hysteresis_loss = get_sin(hysteresis_angle_thing);
     const float cos_hysteresis_loss = get_cos(hysteresis_angle_thing);
 
     const float hysteresis_scaling = (
         current_magnitude * 
-        current_diff_magnitude * 
+        inductance_magnitude * 
         hysteresis_conversion
     );
     
     const float x_hysteresis_loss = cos_hysteresis_loss * hysteresis_scaling;
     const float y_hysteresis_loss = sin_hysteresis_loss * hysteresis_scaling;
 
-    const float x_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * x_hysteresis_loss;
-    const float y_hysteresis_loss_voltage = calibration_instance.hysteresis_loss * y_hysteresis_loss;
+    const float x_hysteresis_loss_voltage = readout.hysteresis_loss * x_hysteresis_loss;
+    const float y_hysteresis_loss_voltage = readout.hysteresis_loss * y_hysteresis_loss;
 
 
     const float x_voltage_error = (
@@ -351,11 +351,11 @@ void ADC1_2_IRQHandler(void){
     // Defining the loss as the square(x_voltage_error) + square(y_voltage_error) we get the derivative gradients with 
     // respect to each of the parameters we're tracking. We only care about the sign so we should be careful to skip updates when 
     // there isn't enough energy in the error to warrant an update.
-    const float square_voltage_error = square(x_voltage_error) + square(y_voltage_error);
+    // const float square_voltage_error = square(x_voltage_error) + square(y_voltage_error);
 
-    const float square_current = square(readout.current_magnitude);
+    const float square_current = square(current_magnitude);
 
-    const float square_inductance = square(x_inductance) + square(y_inductance);
+    const float square_inductance = square(inductance_magnitude);
 
     const float square_hysteresis = square(hysteresis_scaling);
 
@@ -636,52 +636,23 @@ void ADC1_2_IRQHandler(void){
     // Calibration?
     // -----------
 
+    
     // Because our best source of voltage information is the drive_voltage we also need to make sure
     // we are driving with enough power to get any information.
 
     const float drive_voltage_square = square(drive_voltage_magnitude);
 
-    // Stop calibration updates when we are undervoltage or overcurrent, we won't get accurate readings.
-    const bool undervoltage = vcc_voltage < control_parameters.vcc_undervoltage;
-    const bool overcurrent = current_magnitude > max_drive_current;
-
     // The rest of the calibration can only be done if we're actively driving the motor phases as that
-    // is our only source of reference scale for the phase voltages. In any case, idle driving isn't an
-    // error so we continue the calibration, we just ignore this readout.
+    // is our only source of reference scale for the phase voltages.
     const bool actively_driving = drive_voltage_square >= calibration_parameters.voltage_variance;
 
-    const bool calibrating = actively_driving and not undervoltage and not overcurrent;
+    const float base_scaling = static_cast<float>(actively_driving);
 
-    calibration_instance.avg_drive_voltage += (readout.drive_voltage_magnitude - calibration_instance.avg_drive_voltage) * calibration_parameters.stats_ki;
-    calibration_instance.avg_current_magnitude += (readout.current_magnitude - calibration_instance.avg_current_magnitude) * calibration_parameters.stats_ki;
-    calibration_instance.avg_current_speed += (readout.current_angular_speed - calibration_instance.avg_current_speed) * calibration_parameters.stats_ki;
-    // The error is evolving during the optimization, we want to store the end-ish value after we've optimized our parameters.
-    calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_parameters.stats_ki;
-  
-    
-    // Count how often we see enough current to meaningfully calibrate resistance (we still have to do it, but we mark it as uncertain).
-    const bool resistance_excited = calibrating and (square_current >  calibration_parameters.current_variance);
-    calibration_instance.resistance_excited = resistance_excited;
-    calibration_instance.resistance_excitation_fraction += (resistance_excited - calibration_instance.resistance_excitation_fraction) * calibration_parameters.stats_ki;
-
-    // Also track inductance excitation.
-    const bool inductance_excited = calibrating and (square_inductance >  calibration_parameters.inductance_variance);
-    calibration_instance.inductance_excited = inductance_excited;
-    calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_parameters.stats_ki;
-    
-    const bool hysteresis_excited = calibrating and (square_hysteresis > calibration_parameters.hysteresis_variance);
-    calibration_instance.hysteresis_excited = hysteresis_excited;
-    calibration_instance.hysteresis_excitation_fraction += (hysteresis_excited - calibration_instance.hysteresis_excitation_fraction) * calibration_parameters.stats_ki;
-
-    // Keep track of total unexplained variance.
-    float gradients_dot = 0.0f;
-
-    calibration_instance.resistance_sensitivity = square_current + calibration_parameters.current_variance;
-    const float resistance_scaling = static_cast<float>(resistance_excited) / calibration_instance.resistance_sensitivity;
-    
+    const float resistance_sensitivity = square_current + calibration_parameters.current_variance;
+    const float resistance_scaling = base_scaling / resistance_sensitivity;
     
     const float resistance_gradient = ewma(
-    calibration_instance.resistance_gradient,
+    readout.resistance_gradient,
     resistance_scaling * (
         x_voltage_error * readout.x_current +
         y_voltage_error * readout.y_current
@@ -689,31 +660,25 @@ void ADC1_2_IRQHandler(void){
     calibration_parameters.stats_ki
     );
 
-    gradients_dot += resistance_gradient * calibration_instance.resistance_gradient * square_current;
-
-    // Can now update the stored resistance gradient.
-    calibration_instance.resistance_gradient = resistance_gradient;
-
-
-    calibration_instance.inductance_sensitivity = square_inductance + calibration_parameters.inductance_variance;
-    const float inductance_scaling = static_cast<float>(inductance_excited) / calibration_instance.inductance_sensitivity;
+    const float inductance_sensitivity = square_inductance + calibration_parameters.inductance_variance;
+    const float inductance_scaling = base_scaling / inductance_sensitivity;
     
     const float inductance_gradient = ewma(
-    calibration_instance.inductance_gradient,
-    inductance_scaling * (
-        x_voltage_error * x_inductance +
-        y_voltage_error * y_inductance
-    ),
-    calibration_parameters.stats_ki
+        readout.inductance_gradient,
+        inductance_scaling * (
+            x_voltage_error * x_inductance +
+            y_voltage_error * y_inductance
+        ),
+        calibration_parameters.stats_ki
     );
 
     const float inductance_saliency_gradient = ewma(
-    calibration_instance.inductance_saliency_gradient,
-    inductance_scaling * (
-        x_voltage_error * x_inductance_saliency +
-        y_voltage_error * y_inductance_saliency
-    ),
-    calibration_parameters.stats_ki
+        readout.inductance_saliency_gradient,
+        inductance_scaling * (
+            x_voltage_error * x_inductance_saliency +
+            y_voltage_error * y_inductance_saliency
+        ),
+        calibration_parameters.stats_ki
     );
 
     // Saliency angle update.
@@ -721,30 +686,18 @@ void ADC1_2_IRQHandler(void){
         (x_voltage_error - x_inductance_saliency_voltage) * -sin_saliency +
         (y_voltage_error - y_inductance_saliency_voltage) * cos_saliency
     ) * voltage_error_to_angle_units_scaling;
-
-    calibration_instance.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * calibration_parameters.saliency_angle_ki);
-    
+  
     // Note that if inductance_saliency is greater than inductance, total inductance can go negative, whatever that means.
     // This usually happens when the motor is being super noisy and has to be held down, so it's clearly an error from emf,
     // but I do not know how to combine the calibration terms to extract a meaningful value from them in that case.
 
-    // Compute the dot product between the new gradients and the previous gradients for inductance contributions.
-    gradients_dot += (
-        inductance_gradient * calibration_instance.inductance_gradient +
-        inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient
-    ) * square_inductance;
 
-    // Update inductance related gradients.
-    calibration_instance.inductance_gradient = inductance_gradient;
-    calibration_instance.inductance_saliency_gradient = inductance_saliency_gradient;
-
-    calibration_instance.hysteresis_loss_sensitivity = square_hysteresis + calibration_parameters.hysteresis_variance;
-    
-    const float hysteresis_loss_scaling = static_cast<float>(hysteresis_excited)/ calibration_instance.hysteresis_loss_sensitivity;
+    const float hysteresis_loss_sensitivity = square_hysteresis + calibration_parameters.hysteresis_variance;
+    const float hysteresis_loss_scaling = base_scaling / hysteresis_loss_sensitivity;
 
     // And gradients for micro rotor vibrations.
     const float hysteresis_loss_gradient = ewma(
-        calibration_instance.hysteresis_loss_gradient,
+        readout.hysteresis_loss_gradient,
         hysteresis_loss_scaling * (
             x_voltage_error * x_hysteresis_loss + 
             y_voltage_error * y_hysteresis_loss
@@ -758,24 +711,22 @@ void ADC1_2_IRQHandler(void){
         (y_voltage_error - y_hysteresis_loss_voltage) * cos_hysteresis_loss
     ) * voltage_error_to_angle_units_scaling;
 
-    calibration_instance.hysteresis_angle -= static_cast<int32_t>(hysteresis_angle_gradient * calibration_parameters.hysteresis_angle_ki);
 
-    // Compute the dot product for hysteresis loss.
-    gradients_dot += (
-        hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient
-    ) * square_hysteresis;
-
-    calibration_instance.hysteresis_loss_gradient = hysteresis_loss_gradient;
-
-    calibration_instance.gradients_dot = ewma(calibration_instance.gradients_dot, gradients_dot, calibration_parameters.stats_ki);
-
-
+    readout.resistance_gradient = resistance_gradient;
+    readout.inductance_gradient = inductance_gradient;
+    readout.inductance_saliency_gradient = inductance_saliency_gradient;
+    readout.hysteresis_loss_gradient = hysteresis_loss_gradient;
+    
     // Update calibration parameters.
-    calibration_instance.resistance -= resistance_gradient * calibration_parameters.resistance_ki * learning_rate_multiplier;
-    calibration_instance.inductance -= inductance_gradient * calibration_parameters.inductance_ki * learning_rate_multiplier;
-    calibration_instance.inductance_saliency -= inductance_saliency_gradient * calibration_parameters.inductance_saliency_ki * learning_rate_multiplier;
-    calibration_instance.hysteresis_loss -= hysteresis_loss_gradient * calibration_parameters.hysteresis_loss_ki * learning_rate_multiplier;
+    readout.resistance -= resistance_gradient * calibration_parameters.resistance_ki * learning_rate_multiplier;
+    readout.inductance -= inductance_gradient * calibration_parameters.inductance_ki * learning_rate_multiplier;
+    readout.inductance_saliency -= inductance_saliency_gradient * calibration_parameters.inductance_saliency_ki * learning_rate_multiplier;
+    readout.hysteresis_loss -= hysteresis_loss_gradient * calibration_parameters.hysteresis_loss_ki * learning_rate_multiplier;
+    // Note we don't scale the angle updates by the variable learning_rate_multiplier.
+    readout.saliency_angle -= static_cast<int32_t>(saliency_angle_gradient * calibration_parameters.saliency_angle_ki);
+    readout.hysteresis_angle -= static_cast<int32_t>(hysteresis_angle_gradient * calibration_parameters.hysteresis_angle_ki);
 
+    
     // End of cycle
     // ------------
 
@@ -803,6 +754,8 @@ void ADC1_2_IRQHandler(void){
     readout.zero_current = zero_current;
     readout.x_current_diff = x_current_diff;
     readout.y_current_diff = y_current_diff;
+    readout.x_voltage_error = x_voltage_error;
+    readout.y_voltage_error = y_voltage_error;
     
     readout.rotations = rotations;
     readout.angle = angle;
@@ -818,15 +771,6 @@ void ADC1_2_IRQHandler(void){
 
     readout.emf_speed_constant = emf_speed_constant;
     readout.emf_speed_constant_variance = emf_speed_constant_variance;
-
-    readout.drive_voltage_angle = drive_voltage_angle;
-    readout.drive_voltage_magnitude = drive_voltage_magnitude;
-    readout.current_angle = current_angle;
-    readout.current_magnitude = current_magnitude;
-    readout.current_angular_speed = current_angular_speed;
-    readout.current_magnitude_diff = current_magnitude_diff;
-    readout.current_diff_angle = current_diff_angle;
-    readout.current_diff_magnitude = current_diff_magnitude;
 
     readout.live_max_pwm = live_max_pwm;
     readout.total_power_average = total_power_average;

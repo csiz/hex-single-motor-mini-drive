@@ -9,13 +9,23 @@
 // Calibration state
 // -----------------
 
+// Current calibration result.
+extern hex_mini_drive::CalibrationInstance calibration_instance;
+
 
 constexpr uint32_t calibration_stability_check_period = 128;
 constexpr float multiplier_minimum = 0.000'1f;
 constexpr float multiplier_maximum = 10.f;
 
 
-
+static inline hex_mini_drive::CalibrationInstance make_calibration_instance(hex_mini_drive::Calibration const& calibration){
+  return hex_mini_drive::CalibrationInstance{
+    .resistance = calibration.resistance,
+    .inductance = calibration.inductance,
+    .inductance_saliency = calibration.inductance_saliency,
+    .hysteresis_loss = calibration.hysteresis_loss
+  };
+}
 
 static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   hex_mini_drive::CalibrationInstance const& active_calibration,
@@ -32,9 +42,8 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .resistance_excited = false,
     .inductance_excited = false,
     .hysteresis_excited = false,
-    .avg_drive_voltage = 0.f,
-    .avg_current_magnitude = 0.f,
-    .avg_current_speed = 0.f,
+    .avg_square_voltage = 0.f,
+    .avg_square_current = 0.f,
     .avg_square_error = 0.f,
     .gradients_dot = 0.f,
     .learning_rate_multiplier = 1.f,
@@ -42,19 +51,6 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
     .resistance_excitation_fraction = 0.f,
     .inductance_excitation_fraction = 0.f,
     .hysteresis_excitation_fraction = 0.f,
-    .resistance_sensitivity = calibration_parameters.current_variance,
-    .inductance_sensitivity = calibration_parameters.inductance_variance,
-    .hysteresis_loss_sensitivity = calibration_parameters.hysteresis_variance,
-    .resistance = active_calibration.resistance,
-    .resistance_gradient = 0.f,
-    .inductance = active_calibration.inductance,
-    .inductance_gradient = 0.f,
-    .inductance_saliency = active_calibration.inductance_saliency,
-    .inductance_saliency_gradient = 0.f,
-    .saliency_angle = active_calibration.saliency_angle,
-    .hysteresis_loss = active_calibration.hysteresis_loss,
-    .hysteresis_loss_gradient = 0.f,
-    .hysteresis_angle = active_calibration.hysteresis_angle,
   };
 }
 
@@ -106,7 +102,8 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   // Stop calibration updates when we are undervoltage or overcurrent, we won't get accurate readings.
   const bool undervoltage = readout.vcc_voltage < control_parameters.vcc_undervoltage;
-  const bool overcurrent = readout.current_magnitude > max_drive_current;
+  const float square_current = square(readout.x_current) + square(readout.y_current);
+  const bool overcurrent = square_current > max_drive_current_square;
 
   // Abort the calibration instance if we triggered the stop conditions.
   if (undervoltage or overcurrent) {
@@ -129,18 +126,71 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
     (zero_speed ? 1.0f : (faster_abs(calibration_instance.target_speed) * calibration_parameters.nominal_speed_inverse))
   );
 
-  if(not std::isfinite(calibration_instance.resistance) or calibration_instance.resistance < minimum_resistance) {
-    calibration_instance.resistance = minimum_resistance;
-  }
-  if(not std::isfinite(calibration_instance.inductance) or calibration_instance.inductance < minimum_inductance) {
-    calibration_instance.inductance = minimum_inductance;
-  }
-  if(not std::isfinite(calibration_instance.inductance_saliency) or calibration_instance.inductance_saliency < minimum_inductance_saliency) {
-    calibration_instance.inductance_saliency = minimum_inductance_saliency;
-  }
-  if(not std::isfinite(calibration_instance.hysteresis_loss) or calibration_instance.hysteresis_loss < minimum_hysteresis_loss) {
-    calibration_instance.hysteresis_loss = minimum_hysteresis_loss;
-  }
+  // TODO: what to do about the checks, we can't edit the interrupt readout.
+  // if(not std::isfinite(calibration_instance.resistance) or calibration_instance.resistance < minimum_resistance) {
+  //   calibration_instance.resistance = minimum_resistance;
+  // }
+  // if(not std::isfinite(calibration_instance.inductance) or calibration_instance.inductance < minimum_inductance) {
+  //   calibration_instance.inductance = minimum_inductance;
+  // }
+  // if(not std::isfinite(calibration_instance.inductance_saliency) or calibration_instance.inductance_saliency < minimum_inductance_saliency) {
+  //   calibration_instance.inductance_saliency = minimum_inductance_saliency;
+  // }
+  // if(not std::isfinite(calibration_instance.hysteresis_loss) or calibration_instance.hysteresis_loss < minimum_hysteresis_loss) {
+  //   calibration_instance.hysteresis_loss = minimum_hysteresis_loss;
+  // }
+
+  const float drive_voltage_square = square(readout.x_drive_voltage) + square(readout.y_drive_voltage);
+  const float square_voltage_error = square(readout.x_voltage_error) + square(readout.y_voltage_error);
+
+  calibration_instance.avg_square_voltage += (drive_voltage_square - calibration_instance.avg_square_voltage) * calibration_parameters.stats_ki;
+  calibration_instance.avg_square_current += (square_current - calibration_instance.avg_square_current) * calibration_parameters.stats_ki;
+  // The error is evolving during the optimization, we want to store the end-ish value after we've optimized our parameters.
+  calibration_instance.avg_square_error += (square_voltage_error - calibration_instance.avg_square_error) * calibration_parameters.stats_ki;
+
+
+  // Count how often we see enough current to meaningfully calibrate resistance (we still have to do it, but we mark it as uncertain).
+  const bool resistance_excited = square_current > calibration_parameters.current_variance;
+  calibration_instance.resistance_excited = resistance_excited;
+  calibration_instance.resistance_excitation_fraction += (resistance_excited - calibration_instance.resistance_excitation_fraction) * calibration_parameters.stats_ki;
+
+  const float square_inductance = (square(readout.x_current_diff) + square(readout.y_current_diff)) * square(current_diff_to_voltage_units);
+
+  // Also track inductance excitation.
+  const bool inductance_excited = square_inductance > calibration_parameters.inductance_variance;
+  calibration_instance.inductance_excited = inductance_excited;
+  calibration_instance.inductance_excitation_fraction += (inductance_excited - calibration_instance.inductance_excitation_fraction) * calibration_parameters.stats_ki;
+  
+  const float square_hysteresis = square_current * square_inductance * hysteresis_conversion_square;
+
+  const bool hysteresis_excited = square_hysteresis > calibration_parameters.hysteresis_variance;
+  calibration_instance.hysteresis_excited = hysteresis_excited;
+  calibration_instance.hysteresis_excitation_fraction += (hysteresis_excited - calibration_instance.hysteresis_excitation_fraction) * calibration_parameters.stats_ki;
+
+  // Keep track of total unexplained variance.
+  const float gradients_dot = (
+    square_current * resistance_excited * readout.resistance_gradient * calibration_instance.resistance_gradient +
+    square_inductance * inductance_excited * (
+      readout.inductance_gradient * calibration_instance.inductance_gradient +
+      readout.inductance_saliency_gradient * calibration_instance.inductance_saliency_gradient
+    ) +
+    hysteresis_excited * readout.hysteresis_loss_gradient * calibration_instance.hysteresis_loss_gradient * square_hysteresis
+  );
+
+  calibration_instance.gradients_dot = ewma(calibration_instance.gradients_dot, gradients_dot, calibration_parameters.stats_ki);
+
+  calibration_instance.resistance = readout.resistance;
+  calibration_instance.resistance_gradient = readout.resistance_gradient;
+  calibration_instance.inductance = readout.inductance;
+  calibration_instance.inductance_gradient = readout.inductance_gradient;
+  calibration_instance.inductance_saliency = readout.inductance_saliency;
+  calibration_instance.inductance_saliency_gradient = readout.inductance_saliency_gradient;
+  calibration_instance.hysteresis_loss = readout.hysteresis_loss;
+  calibration_instance.hysteresis_loss_gradient = readout.hysteresis_loss_gradient;
+  calibration_instance.saliency_angle = readout.saliency_angle;
+  calibration_instance.hysteresis_angle = readout.hysteresis_angle;
+  
+
 
   // Check for stability
   // -------------------

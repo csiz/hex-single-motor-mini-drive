@@ -15,7 +15,7 @@
 
 namespace hex_mini_drive {
 
-constexpr char const* VERSION_STRING = "0.208.0";
+constexpr char const* VERSION_STRING = "0.212.0";
 
 // Basic Type Serialization Functions
 // ----------------------------------
@@ -115,7 +115,7 @@ static inline float read_float32(uint8_t const* buffer) {
 
 constexpr uint32_t VERSION_STRING_SIZE = 64;
 
-constexpr uint32_t HISTORY_SIZE = 144;
+constexpr uint32_t HISTORY_SIZE = 120;
 
 constexpr uint32_t MAX_MESSAGE_SIZE = 256;
 
@@ -210,6 +210,10 @@ struct Readout {
   float x_current_diff;
   // Difference in y current compared to the previous readout.
   float y_current_diff;
+  // Error in x voltage.
+  float x_voltage_error;
+  // Error in y voltage.
+  float y_voltage_error;
   // Integrated number of EMF deduced rotor angle rotations since startup.
   int32_t rotations;
   // Best estimate for the rotor magnetic angle.
@@ -244,22 +248,26 @@ struct Readout {
   float emf_speed_constant;
   // Variance of the instantaneous emf speed constant; used to determine if the estimate is reliable.
   float emf_speed_constant_variance;
-  // Instantaneous angle of the driving PWM signal applied to the motor.
-  int32_t drive_voltage_angle;
-  // Instantaneous magnitude of the drive voltage.
-  float drive_voltage_magnitude;
-  // Angle of the current vector.
-  int32_t current_angle;
-  // Magnitude of the current vector.
-  float current_magnitude;
-  // Angular speed of the current vector.
-  float current_angular_speed;
-  // Change in current magnitude.
-  float current_magnitude_diff;
-  // Angle of the current change vector (inductance).
-  int32_t current_diff_angle;
-  // Magnitude of the current change vector (inductance).
-  float current_diff_magnitude;
+  // Measured phase resistance.
+  float resistance;
+  // Gradient of resistance.
+  float resistance_gradient;
+  // Measured inductance value for each phase.
+  float inductance;
+  // Gradient of inductance.
+  float inductance_gradient;
+  // Measured inductance saliency bias.
+  float inductance_saliency;
+  // Gradient of inductance saliency.
+  float inductance_saliency_gradient;
+  // Saliency angle for the inductance saliency effect.
+  int32_t saliency_angle;
+  // Iron loss coefficient.
+  float hysteresis_loss;
+  // Gradient of iron loss.
+  float hysteresis_loss_gradient;
+  // Angle for the iron loss effect.
+  int32_t hysteresis_angle;
   // Current maximum PWM allowed by the driver.
   float live_max_pwm;
   // Long duration average of the total power; used to limit the maximum power draw.
@@ -298,6 +306,10 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.y_current_diff);;
   offset += 4;
+  write_float32(buffer + offset, value.x_voltage_error);;
+  offset += 4;
+  write_float32(buffer + offset, value.y_voltage_error);;
+  offset += 4;
   write_int32(buffer + offset, value.rotations);;
   offset += 4;
   write_int32(buffer + offset, value.angle);;
@@ -322,21 +334,25 @@ static inline void write_Readout(uint8_t * buffer, Readout const& value) {
   offset += 4;
   write_float32(buffer + offset, value.emf_speed_constant_variance);;
   offset += 4;
-  write_int32(buffer + offset, value.drive_voltage_angle);;
+  write_float32(buffer + offset, value.resistance);;
   offset += 4;
-  write_float32(buffer + offset, value.drive_voltage_magnitude);;
+  write_float32(buffer + offset, value.resistance_gradient);;
   offset += 4;
-  write_int32(buffer + offset, value.current_angle);;
+  write_float32(buffer + offset, value.inductance);;
   offset += 4;
-  write_float32(buffer + offset, value.current_magnitude);;
+  write_float32(buffer + offset, value.inductance_gradient);;
   offset += 4;
-  write_float32(buffer + offset, value.current_angular_speed);;
+  write_float32(buffer + offset, value.inductance_saliency);;
   offset += 4;
-  write_float32(buffer + offset, value.current_magnitude_diff);;
+  write_float32(buffer + offset, value.inductance_saliency_gradient);;
   offset += 4;
-  write_int32(buffer + offset, value.current_diff_angle);;
+  write_int32(buffer + offset, value.saliency_angle);;
   offset += 4;
-  write_float32(buffer + offset, value.current_diff_magnitude);;
+  write_float32(buffer + offset, value.hysteresis_loss);;
+  offset += 4;
+  write_float32(buffer + offset, value.hysteresis_loss_gradient);;
+  offset += 4;
+  write_int32(buffer + offset, value.hysteresis_angle);;
   offset += 4;
   write_float32(buffer + offset, value.live_max_pwm);;
   offset += 4;
@@ -378,6 +394,10 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.y_current_diff = read_float32(buffer + offset);
   offset += 4;
+  result.x_voltage_error = read_float32(buffer + offset);
+  offset += 4;
+  result.y_voltage_error = read_float32(buffer + offset);
+  offset += 4;
   result.rotations = read_int32(buffer + offset);
   offset += 4;
   result.angle = read_int32(buffer + offset);
@@ -402,21 +422,25 @@ static inline Readout read_Readout(uint8_t const* buffer) {
   offset += 4;
   result.emf_speed_constant_variance = read_float32(buffer + offset);
   offset += 4;
-  result.drive_voltage_angle = read_int32(buffer + offset);
+  result.resistance = read_float32(buffer + offset);
   offset += 4;
-  result.drive_voltage_magnitude = read_float32(buffer + offset);
+  result.resistance_gradient = read_float32(buffer + offset);
   offset += 4;
-  result.current_angle = read_int32(buffer + offset);
+  result.inductance = read_float32(buffer + offset);
   offset += 4;
-  result.current_magnitude = read_float32(buffer + offset);
+  result.inductance_gradient = read_float32(buffer + offset);
   offset += 4;
-  result.current_angular_speed = read_float32(buffer + offset);
+  result.inductance_saliency = read_float32(buffer + offset);
   offset += 4;
-  result.current_magnitude_diff = read_float32(buffer + offset);
+  result.inductance_saliency_gradient = read_float32(buffer + offset);
   offset += 4;
-  result.current_diff_angle = read_int32(buffer + offset);
+  result.saliency_angle = read_int32(buffer + offset);
   offset += 4;
-  result.current_diff_magnitude = read_float32(buffer + offset);
+  result.hysteresis_loss = read_float32(buffer + offset);
+  offset += 4;
+  result.hysteresis_loss_gradient = read_float32(buffer + offset);
+  offset += 4;
+  result.hysteresis_angle = read_int32(buffer + offset);
   offset += 4;
   result.live_max_pwm = read_float32(buffer + offset);
   offset += 4;
@@ -610,12 +634,10 @@ struct CalibrationInstance {
   uint8_t inductance_excited;
   // Whether hysteresis was excited.
   uint8_t hysteresis_excited;
-  // Drive voltage used during this calibration instance.
-  float avg_drive_voltage;
-  // Current magnitude during this calibration instance.
-  float avg_current_magnitude;
-  // Average current speed.
-  float avg_current_speed;
+  // Drive voltage squared used during this calibration instance.
+  float avg_square_voltage;
+  // Current magnitude squared during this calibration instance.
+  float avg_square_current;
   // Average squared error during this calibration instance.
   float avg_square_error;
   // Dot product of gradients.
@@ -631,11 +653,13 @@ struct CalibrationInstance {
   // Fraction of data points where hysteresis was excited.
   float hysteresis_excitation_fraction;
   // Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
-  float resistance_sensitivity;
-  // Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
-  float inductance_sensitivity;
+  float resistance_learning_rate;
+  // Multiplier for the phase inductance, used to adjust the effective inductance in calculations.
+  float inductance_learning_rate;
+  // Multiplier for the inductance saliency.
+  float inductance_saliency_learning_rate;
   // Multiplier for the iron loss.
-  float hysteresis_loss_sensitivity;
+  float hysteresis_loss_learning_rate;
   // Measured phase resistance.
   float resistance;
   // Gradient of resistance.
@@ -678,11 +702,9 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 1;
   write_uint8(buffer + offset, value.hysteresis_excited);;
   offset += 1;
-  write_float32(buffer + offset, value.avg_drive_voltage);;
+  write_float32(buffer + offset, value.avg_square_voltage);;
   offset += 4;
-  write_float32(buffer + offset, value.avg_current_magnitude);;
-  offset += 4;
-  write_float32(buffer + offset, value.avg_current_speed);;
+  write_float32(buffer + offset, value.avg_square_current);;
   offset += 4;
   write_float32(buffer + offset, value.avg_square_error);;
   offset += 4;
@@ -698,11 +720,13 @@ static inline void write_CalibrationInstance(uint8_t * buffer, CalibrationInstan
   offset += 4;
   write_float32(buffer + offset, value.hysteresis_excitation_fraction);;
   offset += 4;
-  write_float32(buffer + offset, value.resistance_sensitivity);;
+  write_float32(buffer + offset, value.resistance_learning_rate);;
   offset += 4;
-  write_float32(buffer + offset, value.inductance_sensitivity);;
+  write_float32(buffer + offset, value.inductance_learning_rate);;
   offset += 4;
-  write_float32(buffer + offset, value.hysteresis_loss_sensitivity);;
+  write_float32(buffer + offset, value.inductance_saliency_learning_rate);;
+  offset += 4;
+  write_float32(buffer + offset, value.hysteresis_loss_learning_rate);;
   offset += 4;
   write_float32(buffer + offset, value.resistance);;
   offset += 4;
@@ -748,11 +772,9 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 1;
   result.hysteresis_excited = read_uint8(buffer + offset);
   offset += 1;
-  result.avg_drive_voltage = read_float32(buffer + offset);
+  result.avg_square_voltage = read_float32(buffer + offset);
   offset += 4;
-  result.avg_current_magnitude = read_float32(buffer + offset);
-  offset += 4;
-  result.avg_current_speed = read_float32(buffer + offset);
+  result.avg_square_current = read_float32(buffer + offset);
   offset += 4;
   result.avg_square_error = read_float32(buffer + offset);
   offset += 4;
@@ -768,11 +790,13 @@ static inline CalibrationInstance read_CalibrationInstance(uint8_t const* buffer
   offset += 4;
   result.hysteresis_excitation_fraction = read_float32(buffer + offset);
   offset += 4;
-  result.resistance_sensitivity = read_float32(buffer + offset);
+  result.resistance_learning_rate = read_float32(buffer + offset);
   offset += 4;
-  result.inductance_sensitivity = read_float32(buffer + offset);
+  result.inductance_learning_rate = read_float32(buffer + offset);
   offset += 4;
-  result.hysteresis_loss_sensitivity = read_float32(buffer + offset);
+  result.inductance_saliency_learning_rate = read_float32(buffer + offset);
+  offset += 4;
+  result.hysteresis_loss_learning_rate = read_float32(buffer + offset);
   offset += 4;
   result.resistance = read_float32(buffer + offset);
   offset += 4;
@@ -1501,7 +1525,7 @@ constexpr size_t message_size(MessageCode code) {
     case MessageCode::NULL_MESSAGE_CODE: return 2;
     case MessageCode::GET_VERSION: return 2;
     case MessageCode::VERSION: return 66;
-    case MessageCode::READOUT: return 142;
+    case MessageCode::READOUT: return 158;
     case MessageCode::INFO: return 18;
     case MessageCode::STREAM_READOUTS: return 6;
     case MessageCode::GET_READOUTS_SNAPSHOT: return 6;
@@ -1554,9 +1578,9 @@ static inline size_t write_message(uint8_t * buffer, const size_t max_size, Mess
     }
     case MessageCode::READOUT: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::READOUT));
-      if (max_size < 2 + 140) return 0;
+      if (max_size < 2 + 156) return 0;
       write_Readout(buffer + 2, std::get<Readout>(message.message_data));
-      return 142;
+      return 158;
     }
     case MessageCode::INFO: {
       write_uint16(buffer, static_cast<uint16_t>(MessageCode::INFO));
@@ -1728,7 +1752,7 @@ static inline bool read_message(Message & message, uint8_t const* buffer, size_t
       return true;
     }
     case MessageCode::READOUT: {
-      if (size != 2 + 140) return false;
+      if (size != 2 + 156) return false;
       message.message_data = read_Readout(buffer + 2);
       return true;
     }

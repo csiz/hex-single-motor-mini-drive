@@ -135,7 +135,7 @@ definitions:
   HISTORY_SIZE:
     doc: Number of contiguous readouts to store in the history buffer for a snapshot.
     type: uint32
-    const: 144
+    const: 120
 
   MAX_MESSAGE_SIZE:
     doc: Maximum size of a message in bytes; used to allocate buffers for the messages.
@@ -265,6 +265,14 @@ definitions:
       y_current_diff:
         type: float32
         doc: Difference in y current compared to the previous readout.
+      
+      x_voltage_error:
+        type: float32
+        doc: Error in x voltage.
+      
+      y_voltage_error:
+        type: float32
+        doc: Error in y voltage.
 
       rotations:
         type: int32
@@ -326,36 +334,36 @@ definitions:
         type: float32
         doc: Variance of the instantaneous emf speed constant; used to determine if the estimate is reliable.
 
-      drive_voltage_angle:
+      resistance:
+        type: float32
+        doc: Measured phase resistance.
+      resistance_gradient:
+        type: float32
+        doc: Gradient of resistance.
+      inductance:
+        type: float32
+        doc: Measured inductance value for each phase.
+      inductance_gradient:
+        type: float32
+        doc: Gradient of inductance.
+      inductance_saliency:
+        type: float32
+        doc: Measured inductance saliency bias.
+      inductance_saliency_gradient:
+        type: float32
+        doc: Gradient of inductance saliency.
+      saliency_angle:
         type: int32
-        doc: Instantaneous angle of the driving PWM signal applied to the motor.
-      drive_voltage_magnitude:
+        doc: Saliency angle for the inductance saliency effect.
+      hysteresis_loss:
         type: float32
-        doc: Instantaneous magnitude of the drive voltage.
-        
-      current_angle:
+        doc: Iron loss coefficient.
+      hysteresis_loss_gradient:
+        type: float32
+        doc: Gradient of iron loss.
+      hysteresis_angle:
         type: int32
-        doc: Angle of the current vector.
-
-      current_magnitude:
-        type: float32
-        doc: Magnitude of the current vector.
-
-      current_angular_speed:
-        type: float32
-        doc: Angular speed of the current vector.
-      
-      current_magnitude_diff:
-        type: float32
-        doc: Change in current magnitude.
-
-      current_diff_angle:
-        type: int32
-        doc: Angle of the current change vector (inductance).
-      
-      current_diff_magnitude:
-        type: float32
-        doc: Magnitude of the current change vector (inductance).
+        doc: Angle for the iron loss effect.
 
       live_max_pwm:
         type: float32
@@ -506,15 +514,12 @@ definitions:
       hysteresis_excited:
         type: uint8
         doc: Whether hysteresis was excited.
-      avg_drive_voltage:
+      avg_square_voltage:
         type: float32
-        doc: Drive voltage used during this calibration instance.
-      avg_current_magnitude:
+        doc: Drive voltage squared used during this calibration instance.
+      avg_square_current:
         type: float32
-        doc: Current magnitude during this calibration instance.
-      avg_current_speed:
-        type: float32
-        doc: Average current speed.
+        doc: Current magnitude squared during this calibration instance.
       avg_square_error:
         type: float32
         doc: Average squared error during this calibration instance.
@@ -537,13 +542,16 @@ definitions:
         type: float32
         doc: Fraction of data points where hysteresis was excited.
 
-      resistance_sensitivity:
+      resistance_learning_rate:
         type: float32
         doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
-      inductance_sensitivity:
+      inductance_learning_rate:
         type: float32
-        doc: Multiplier for the X phase inductance, used to adjust the effective inductance in calculations.
-      hysteresis_loss_sensitivity:
+        doc: Multiplier for the phase inductance, used to adjust the effective inductance in calculations.
+      inductance_saliency_learning_rate:
+        type: float32
+        doc: Multiplier for the inductance saliency.
+      hysteresis_loss_learning_rate:
         type: float32
         doc: Multiplier for the iron loss.
 

@@ -235,15 +235,6 @@ static inline void handle_message(hex_mini_drive::Message const& message) {
       );
       // We should also stop the continuous streaming behaviour.
       stream_state = false;
-
-      // Pre-emptively send the current calibration instance if calibrating.
-      if (
-        control_mode == ControlMode::CALIBRATE_CHIRP or
-        control_mode == ControlMode::CALIBRATE_STATIC
-      ) queue_message(hex_mini_drive::Message{
-        .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
-        .message_data = calibration_instance
-      });
       return;
     }
 
@@ -516,7 +507,7 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
   const bool emf_detected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
 
   // Only track the zero offset while there is no noticeable current being measured.
-  if (not emf_detected and readout.current_magnitude < 2 * calibration_parameters.current_offset_maximum) {
+  if (not emf_detected and control_mode == ControlMode::IDLE) {
     const auto currents = abc_transform(
       {readout.x_current, readout.y_current}, 
       readout.zero_current
@@ -661,14 +652,6 @@ void app_tick() {
       queue_message(hex_mini_drive::Message{
         .message_code = hex_mini_drive::MessageCode::INFO,
         .message_data = info
-      });
-
-      if (
-        control_mode == ControlMode::CALIBRATE_CHIRP or
-        control_mode == ControlMode::CALIBRATE_STATIC
-      ) queue_message(hex_mini_drive::Message{
-        .message_code = hex_mini_drive::MessageCode::CALIBRATION_INSTANCE,
-        .message_data = calibration_instance
       });
     }
 
