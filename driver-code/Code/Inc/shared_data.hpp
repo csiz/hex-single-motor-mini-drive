@@ -37,6 +37,10 @@ extern CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> read
 // command! The break command will also lead to the interrupt loop freeing up space in the command queue.
 extern CircularQueue<hex_mini_drive::DriveState, hex_mini_drive::DRIVE_SCHEDULE_SIZE + 1> drive_state_queue;
 
+// Default drive state to use when no command is available.
+extern hex_mini_drive::DriveState default_drive_state;
+
+
 // Set an external angle adjustment for the motor control loop. Returns true if the adjustment was successfully set, false otherwise.
 bool set_angle_adjustment(int32_t const& adjustment);
 

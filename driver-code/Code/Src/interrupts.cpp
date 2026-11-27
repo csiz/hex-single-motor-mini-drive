@@ -47,9 +47,6 @@ MotorOutputs motor_outputs = breaking_motor_outputs;
 // Our outputs are delayed 1 cycle; store the previous outputs here before we use them.
 MotorOutputs previous_motor_outputs = breaking_motor_outputs;
 
-// Default drive state to use when no command is available.
-hex_mini_drive::DriveState default_drive_state = breaking_drive_state;
-
 size_t drive_states_queued = 0;
 
 size_t drive_duration_remaining = 0;
@@ -532,13 +529,16 @@ void ADC1_2_IRQHandler(void){
 
 
     // Check if there is a command from the main loop.
-    const bool drive_states_available = drive_state_queue.read_available();
+    const size_t drive_states_available = drive_state_queue.read_available();
 
     const size_t drive_states_done = (
         drive_states_available > drive_states_queued ? drive_states_queued :
         drive_states_queued and not drive_duration_remaining ? 1 : 0
     );
-    drive_state_queue.mark_read(drive_states_done);
+    if (drive_states_done) {
+        drive_state_queue.mark_read(drive_states_done);
+        drive_duration_remaining = 0;
+    }
     drive_states_queued = drive_states_available - drive_states_done;
 
     auto const& drive_state = drive_states_queued ? drive_state_queue.peek() : default_drive_state;

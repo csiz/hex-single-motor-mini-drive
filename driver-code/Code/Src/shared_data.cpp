@@ -1,5 +1,6 @@
 #include "shared_data.hpp"
 
+#include "constants.hpp"
 
 // Interrupt Data Interface
 // ------------------------
@@ -26,6 +27,8 @@ hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 CircularQueue<hex_mini_drive::Readout, hex_mini_drive::HISTORY_SIZE> readout_history_queue = {};
 
 CircularQueue<hex_mini_drive::DriveState, hex_mini_drive::DRIVE_SCHEDULE_SIZE + 1> drive_state_queue = {};
+
+hex_mini_drive::DriveState default_drive_state = breaking_drive_state;
 
 bool set_angle_adjustment(int32_t const& adjustment){
     if (external_angle_adjustment) return false;

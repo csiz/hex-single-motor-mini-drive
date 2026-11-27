@@ -72,6 +72,8 @@ uint32_t stream_state = 0;
 uint32_t readouts_to_send = 0;
 
 
+
+
 // Main loop control modes
 // -----------------------
 
@@ -79,26 +81,27 @@ enum struct ControlMode : uint8_t {
   IDLE,
   DRIVE_SCHEDULE,
   SEEK_ANGLE,
-  CALIBRATE_CHIRP,
-  CALIBRATE_STATIC
+  CALIBRATE,
 };
 
 ControlMode control_mode = ControlMode::DRIVE_SCHEDULE;
 
 // Switch to idle control mode and cancel any ongoing mode.
 static inline void control_mode_idle(){
-  drive_state_queue.mark_all_read();
+  while(drive_state_queue.write_available() < 1) {/* block until space */};
+  drive_state_queue.write(default_drive_state);
   control_mode = ControlMode::IDLE;
 }
 
 static inline void control_mode_drive_state(hex_mini_drive::DriveState const& drive_state) {
-  control_mode_idle();
+  while(drive_state_queue.write_available() < 1) {/* block until space */};
   drive_state_queue.write(drive_state);
   control_mode = ControlMode::DRIVE_SCHEDULE;
 }
 
 static inline void control_mode_drive_schedule(hex_mini_drive::DriveSchedule const& drive_schedule) {
-  control_mode_idle();
+  while(drive_state_queue.write_available() < hex_mini_drive::DRIVE_SCHEDULE_SIZE) {/* block until space */};
+
   size_t i = 0;
   for (; i < hex_mini_drive::DRIVE_SCHEDULE_SIZE; i++) {
     auto const& drive_state = drive_schedule[i];
@@ -112,23 +115,34 @@ static inline void control_mode_drive_schedule(hex_mini_drive::DriveSchedule con
 }
 
 
+static inline void start_calibration_series() {
+  while(drive_state_queue.write_available() < 1) {/* block until space */};
+
+  drive_state_queue.write(hex_mini_drive::DriveState{
+    .motor_flags = ENABLE_ALL_OUTPUTS,
+    .closed_loop = false,
+    .duration = calibration_parameters.instance_duration,
+    .target_value = calibration_instance.target_pwm,
+    .target_speed = calibration_instance.target_speed,
+  });
+}
+
 static inline void control_mode_calibrate_chirp(hex_mini_drive::Calibration const& active_calibration){
-  control_mode_idle();
   calibration_instance = init_calibration_instance(
     calibration_parameters.target_pwm_base, 
     calibration_parameters.speed_base
   );
   start_calibration_series();
-  control_mode = ControlMode::CALIBRATE_CHIRP;
+  control_mode = ControlMode::CALIBRATE;
 }
 
 static inline void control_mode_calibrate_static(hex_mini_drive::Calibration const& active_calibration){
-  control_mode_idle();
   calibration_instance = init_calibration_instance(
     calibration_parameters.target_pwm_base,
     0.0f
   );
-  control_mode = ControlMode::CALIBRATE_STATIC;
+  start_calibration_series();
+  control_mode = ControlMode::CALIBRATE;
 }
 
 
@@ -455,11 +469,37 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   // Update control
   // --------------
-  
+
+  const bool emf_detected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
+
   // Keep track of the control mode and send drive_state commands to the interrupt loop if required.
   switch(control_mode) {
     // Do nothing while in IDLE mode.
-    case ControlMode::IDLE: break;
+    case ControlMode::IDLE: {
+      // Only track the zero offset while there is no noticeable current being measured.
+      if (not emf_detected) {
+        const auto currents = abc_transform(
+          {readout.x_current, readout.y_current}, 
+          readout.zero_current
+        );
+
+        // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
+        calibration.u_current_zero = clip_to(
+          -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
+          calibration.u_current_zero + std::get<0>(currents) * calibration_parameters.zero_current_ki
+        );
+        calibration.v_current_zero = clip_to(
+          -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
+          calibration.v_current_zero + std::get<1>(currents) * calibration_parameters.zero_current_ki
+        );
+        calibration.w_current_zero = clip_to(
+          -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
+          calibration.w_current_zero + std::get<2>(currents) * calibration_parameters.zero_current_ki
+        );
+      }
+      break;
+    } 
+    
     // Switch back to idle when the drive schedule has completed.
     case ControlMode::DRIVE_SCHEDULE: {
       if (not drive_state_queue.read_available()) control_mode = ControlMode::IDLE;
@@ -471,11 +511,7 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
       break;
     }
     // Run calibration routine.
-    case ControlMode::CALIBRATE_CHIRP: {
-      if (calibrate_from_readout(readout)) finish_calibration_series();
-      break;
-    }
-    case ControlMode::CALIBRATE_STATIC: {
+    case ControlMode::CALIBRATE: {
       if (calibrate_from_readout(readout)) finish_calibration_series();
       break;
     }
@@ -486,29 +522,8 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
 
   // Track the zero current offsets in the main loop.
 
-  const bool emf_detected = square(readout.emf_voltage_magnitude) > readout.emf_magnitude_variance;
 
-  // Only track the zero offset while there is no noticeable current being measured.
-  if (not emf_detected and control_mode == ControlMode::IDLE) {
-    const auto currents = abc_transform(
-      {readout.x_current, readout.y_current}, 
-      readout.zero_current
-    );
-
-    // Finally if there's nothing unusual going on, we can update the zero offset for the currents.
-    calibration.u_current_zero = clip_to(
-      -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
-      calibration.u_current_zero + std::get<0>(currents) * calibration_parameters.zero_current_ki
-    );
-    calibration.v_current_zero = clip_to(
-      -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
-      calibration.v_current_zero + std::get<1>(currents) * calibration_parameters.zero_current_ki
-    );
-    calibration.w_current_zero = clip_to(
-      -calibration_parameters.current_offset_maximum, calibration_parameters.current_offset_maximum, 
-      calibration.w_current_zero + std::get<2>(currents) * calibration_parameters.zero_current_ki
-    );
-  }
+  
 
 }
 
@@ -604,6 +619,9 @@ void app_tick() {
   const size_t readouts_available = readout_history_queue.read_available();
 
   info.average_buffer_fill_rate += (readouts_available - info.average_buffer_fill_rate) * 0.01f;
+
+  // TODO: we only need to process the latest readout and discard the rest.
+  // ... unless we want to send a continous history of readouts.
 
   size_t i = 0;
   for (; i < readouts_available; i++) {

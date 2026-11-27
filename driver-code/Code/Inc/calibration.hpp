@@ -5,19 +5,15 @@
 #include "sine_tables.hpp"
 #include <cmath>
 
-
 // Calibration state
 // -----------------
-
-// Current calibration result.
-extern hex_mini_drive::CalibrationInstance calibration_instance;
-
 
 constexpr uint32_t calibration_stability_check_period = 128;
 constexpr float multiplier_minimum = 0.000'1f;
 constexpr float multiplier_maximum = 10.f;
 
-
+// Current calibration result.
+extern hex_mini_drive::CalibrationInstance calibration_instance;
 
 static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   float target_pwm,
@@ -43,21 +39,6 @@ static inline hex_mini_drive::CalibrationInstance init_calibration_instance(
   };
 }
 
-
-static inline void start_calibration_series() {
-  // Clear the schedule of any pending states.
-  if (drive_state_queue.read_available()) drive_state_queue.mark_all_read();
-
-  drive_state_queue.write(hex_mini_drive::DriveState{
-    .motor_flags = ENABLE_ALL_OUTPUTS,
-    .closed_loop = false,
-    .duration = calibration_parameters.instance_duration,
-    .target_value = calibration_instance.target_pwm,
-    .target_speed = calibration_instance.target_speed,
-  });
-}
-
-
 // Update calibration from readout and return whether the series should end.
 static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout) {
   // Calibration checks
@@ -75,17 +56,8 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   // Check when we naturally finish the current calibration series by seeing when the drive state has finished.
   if (not drive_state_queue.read_available()) {
-    // Check if we've actually started.
-    if (calibration_instance.count == 0) {
-      // Hmm, we haven't started this series yet; restart it.
-      start_calibration_series();
-      // Skip this readout since we just queued a new state.
-    } else {
-      // We started so now that drive_state is done, we are naturally ending, without reaching stability.
-      return true;
-    }
-    // In either case we skip this readout.
-    return false;
+    // End of the drive command, so we finish without stablizing.
+    return true;
   }
 
   // Stop calibration updates when we are undervoltage or overcurrent, we won't get accurate readings.
@@ -95,13 +67,13 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
 
   // Abort the calibration instance if we triggered the stop conditions.
   if (undervoltage or overcurrent) {
-    // We already have stats, abort calibration instance.
     if (calibration_instance.count) {
-      drive_state_queue.mark_all_read();
+      // We already have stats, abort calibration instance.
       return true;
+    } else {
+      // We don't have stats, wait until the condition settles, hopefully.
+      return false;
     }
-    // In either case we skip this readout from calibration.
-    return false;
   }
 
   const bool zero_speed = calibration_instance.target_speed == 0.0f;
