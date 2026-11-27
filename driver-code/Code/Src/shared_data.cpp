@@ -13,9 +13,15 @@ int32_t external_angle_adjustment = 0;
 // Average out temperature reading for the main loop to calculate.
 float temperature_reading = 0.f;
 
+float learning_rate_multiplier = 1.f;
+
 hex_mini_drive::Info info = {/* all default to 0 */};
 
 hex_mini_drive::Calibration calibration = get_calibration();
+
+hex_mini_drive::CalibrationParameters calibration_parameters = get_calibration_parameters();
+
+hex_mini_drive::CalibrationInstance calibration_instance = make_calibration_instance(calibration);
 
 hex_mini_drive::ControlParameters control_parameters = get_control_parameters();
 

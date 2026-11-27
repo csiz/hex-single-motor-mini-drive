@@ -5,6 +5,8 @@
 #include "parameters_store.hpp"
 #include "circular_buffer.hpp"
 
+// Control data
+// ------------
 
 // Average out temperature reading for the main loop to calculate.
 extern float temperature_reading;
@@ -12,15 +14,19 @@ extern float temperature_reading;
 // Angle adjustment from the main loop.
 extern int32_t external_angle_adjustment;
 
-
-// Control data
-// ------------
+extern float learning_rate_multiplier;
 
 // Runtime information.
 extern hex_mini_drive::Info info;
 
 // Calibration factors.
 extern hex_mini_drive::Calibration calibration;
+
+// Current calibration result.
+extern hex_mini_drive::CalibrationInstance calibration_instance;
+
+// Calibration parameters in use.
+extern hex_mini_drive::CalibrationParameters calibration_parameters;
 
 // Interrupt loop control parameters.
 extern hex_mini_drive::ControlParameters control_parameters;
@@ -39,3 +45,14 @@ bool set_angle_adjustment(int32_t const& adjustment);
 
 // Get the temperature sensor reading.
 float get_temperature();
+
+
+
+static inline hex_mini_drive::CalibrationInstance make_calibration_instance(hex_mini_drive::Calibration const& calibration){
+  return hex_mini_drive::CalibrationInstance{
+    .resistance = calibration.resistance,
+    .inductance = calibration.inductance,
+    .inductance_saliency = calibration.inductance_saliency,
+    .hysteresis_loss = calibration.hysteresis_loss
+  };
+}
