@@ -115,10 +115,8 @@ static inline void control_mode_drive_schedule(hex_mini_drive::DriveSchedule con
 static inline void control_mode_calibrate_chirp(hex_mini_drive::Calibration const& active_calibration){
   control_mode_idle();
   calibration_instance = init_calibration_instance(
-    make_calibration_instance(active_calibration), 
     calibration_parameters.target_pwm_base, 
-    calibration_parameters.speed_base,
-    0
+    calibration_parameters.speed_base
   );
   start_calibration_series();
   control_mode = ControlMode::CALIBRATE_CHIRP;
@@ -127,10 +125,8 @@ static inline void control_mode_calibrate_chirp(hex_mini_drive::Calibration cons
 static inline void control_mode_calibrate_static(hex_mini_drive::Calibration const& active_calibration){
   control_mode_idle();
   calibration_instance = init_calibration_instance(
-    make_calibration_instance(active_calibration),
     calibration_parameters.target_pwm_base,
-    0.0f,
-    0
+    0.0f
   );
   control_mode = ControlMode::CALIBRATE_STATIC;
 }
@@ -413,12 +409,7 @@ static inline void finish_calibration_series(){
     calibration_instance.target_pwm += calibration_parameters.target_pwm_increment;
     // Finish calibration mode and return to idle when we have scanned through all target PWM values.
     if (calibration_instance.target_pwm > calibration_parameters.target_pwm_max) {
-      calibration_instance.target_pwm = calibration_parameters.target_pwm_base;
-      calibration_instance.holding_angle += third_circle;
-
-      if (calibration_instance.holding_angle >= 0 and calibration_instance.holding_angle < third_circle) {
-        return control_mode_idle();
-      }
+      return control_mode_idle();
     }
   } else {
     // Multiply speed so we go through a whole octave scale.
@@ -435,20 +426,11 @@ static inline void finish_calibration_series(){
       }
     }
   }
-  
-  // We have another series to run if we've reach this spot, set it up and go!
-  if (calibration_parameters.remember_intermediate) {
-    calibration_instance.count = 0; // Reset the series count and the learning rates.
-    calibration_instance.learning_rate_multiplier = 1.f;
-  } else {
-    calibration_instance = init_calibration_instance(
-      // Carry over the current calibration otherwise default to active calibration.
-      make_calibration_instance(calibration), 
-      calibration_instance.target_pwm, 
-      calibration_instance.target_speed,
-      calibration_instance.holding_angle
-    );
-  }
+
+  calibration_instance = init_calibration_instance(
+    calibration_instance.target_pwm, 
+    calibration_instance.target_speed
+  );
 
   start_calibration_series();
 }

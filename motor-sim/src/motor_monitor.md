@@ -1516,9 +1516,8 @@ const calibration_series_stats_plot = plot_lines({
     {y: "resistance_excitation_fraction", label: "Resistance Excited", color: colors_categories[3]},
     {y: "inductance_excitation_fraction", label: "Inductance Excited", color: colors_categories[4]},
     {y: "hysteresis_excitation_fraction", label: "Hysteresis Excited", color: colors_categories[5]},
-    {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[4]},
-    {y: "avg_current_speed", label: "Avg Current Speed", color: colors_categories[5]},
-    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
+    {y: "avg_current", label: "Avg Current", color: colors_categories[4]},
+    {y: "avg_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
   ],
   default_draw: draw_circles_of_size(function(d) { return 2 * Math.sqrt(d.target_pwm / 64.0); }),
@@ -1534,11 +1533,11 @@ const calibration_series_static_resistance_plot = plot_lines({
   y_label: "Calibration Parameters",
   channels: [
     {y: "resistance", label: "Phase Resistance", color: colors_categories[0]},
-    {y: "avg_current_magnitude", label: "Avg Current", color: colors_categories[4]},
-    {y: "avg_drive_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
+    {y: "avg_current", label: "Avg Current", color: colors_categories[4]},
+    {y: "avg_voltage", label: "Avg Drive Voltage", color: colors_categories[5]},
     {y: "avg_error", label: "Avg Error", color: colors_categories[6]},
   ],
-  default_draw: draw_circles_of_size(function(d) { return 1 + 2 * Math.sqrt((d.holding_angle + Math.PI)/Math.PI); }),
+  default_draw: draw_circles_of_size(function(d) { return 2; }),
 });
 
 const calibration_series_plots = {

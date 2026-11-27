@@ -393,8 +393,6 @@ export function parse_calibration_instance(bare_calibration_instance){
     avg_voltage: Math.sqrt(bare_calibration_instance.avg_square_voltage) / VOLTAGE_UNITS_PER_VOLT,
     avg_current: Math.sqrt(bare_calibration_instance.avg_square_current) / CURRENT_UNITS_PER_AMP,
     avg_error: Math.sqrt(bare_calibration_instance.avg_square_error) / VOLTAGE_UNITS_PER_VOLT,
-    holding_angle: angle_units_to_radians(bare_calibration_instance.holding_angle),
-    hysteresis_loss: bare_calibration_instance.hysteresis_loss,
     gradients_dot: Math.sign(bare_calibration_instance.gradients_dot) * Math.sqrt(Math.abs(bare_calibration_instance.gradients_dot)) / VOLTAGE_UNITS_PER_VOLT,
     saliency_angle: angle_units_to_radians(bare_calibration_instance.saliency_angle),
     hysteresis_angle: angle_units_to_radians(bare_calibration_instance.hysteresis_angle),

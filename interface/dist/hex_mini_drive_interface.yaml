@@ -496,12 +496,6 @@ definitions:
       target_speed:
         type: float32
         doc: Target speed for this calibration instance.
-      holding_pwm:
-        type: float32
-        doc: Holding PWM value.
-      holding_angle:
-        type: int32
-        doc: Holding angle.
       stable:
         type: uint8
         doc: Whether the calibration is stable.
@@ -542,46 +536,21 @@ definitions:
         type: float32
         doc: Fraction of data points where hysteresis was excited.
 
-      resistance_learning_rate:
-        type: float32
-        doc: Multiplier for the phase resistance, used to adjust the effective resistance in calculations.
-      inductance_learning_rate:
-        type: float32
-        doc: Multiplier for the phase inductance, used to adjust the effective inductance in calculations.
-      inductance_saliency_learning_rate:
-        type: float32
-        doc: Multiplier for the inductance saliency.
-      hysteresis_loss_learning_rate:
-        type: float32
-        doc: Multiplier for the iron loss.
-
       resistance:
         type: float32
         doc: Measured phase resistance.
-      resistance_gradient:
-        type: float32
-        doc: Gradient of resistance.
       inductance:
         type: float32
         doc: Measured inductance value for each phase.
-      inductance_gradient:
-        type: float32
-        doc: Gradient of inductance.
       inductance_saliency:
         type: float32
         doc: Measured inductance saliency bias.
-      inductance_saliency_gradient:
-        type: float32
-        doc: Gradient of inductance saliency.
       saliency_angle:
         type: int32
         doc: Saliency angle for the inductance saliency effect.
       hysteresis_loss:
         type: float32
         doc: Iron loss coefficient.
-      hysteresis_loss_gradient:
-        type: float32
-        doc: Gradient of iron loss.
       hysteresis_angle:
         type: int32
         doc: Angle for the iron loss effect.
