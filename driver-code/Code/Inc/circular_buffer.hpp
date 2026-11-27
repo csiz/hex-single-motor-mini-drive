@@ -218,6 +218,10 @@ class CircularQueue{
   T const& peek() {
     return data[read_index];
   }
+
+  T const& peek_at_offset(size_t offset) {
+    return data[(read_index + offset) % N];
+  }
   
   /* Modify the active read element. */
   T & modify() {

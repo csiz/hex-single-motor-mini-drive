@@ -8,7 +8,7 @@
 // Calibration state
 // -----------------
 
-constexpr uint32_t calibration_stability_check_period = 128;
+constexpr uint32_t calibration_stability_check_period = 64;
 constexpr float multiplier_minimum = 0.000'1f;
 constexpr float multiplier_maximum = 10.f;
 
@@ -53,12 +53,6 @@ static inline bool calibrate_from_readout(hex_mini_drive::Readout const& readout
   // of EMF. Instead we will only calibrate when commanded and the driver is realatively certain the
   // motor is in a stopped state. We then run the calibration at various frequencies and check the
   // response assuming the motor is stationary and not generating any EMF voltage.
-
-  // Check when we naturally finish the current calibration series by seeing when the drive state has finished.
-  if (not drive_state_queue.read_available()) {
-    // End of the drive command, so we finish without stablizing.
-    return true;
-  }
 
   // Stop calibration updates when we are undervoltage or overcurrent, we won't get accurate readings.
   const bool undervoltage = readout.vcc_voltage < control_parameters.vcc_undervoltage;

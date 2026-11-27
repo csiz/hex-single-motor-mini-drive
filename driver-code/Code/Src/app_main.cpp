@@ -512,7 +512,12 @@ static inline void process_readout(hex_mini_drive::Readout const& readout) {
     }
     // Run calibration routine.
     case ControlMode::CALIBRATE: {
-      if (calibrate_from_readout(readout)) finish_calibration_series();
+      if (
+        not drive_state_queue.read_available() or 
+        calibrate_from_readout(readout)
+      ) {
+        finish_calibration_series();
+      }
       break;
     }
   }
@@ -620,58 +625,53 @@ void app_tick() {
 
   info.average_buffer_fill_rate += (readouts_available - info.average_buffer_fill_rate) * 0.01f;
 
-  // TODO: we only need to process the latest readout and discard the rest.
-  // ... unless we want to send a continous history of readouts.
+  // TODO: Adjust readout?
+  // --------------
+  // Adjust readout to reflect the direction and offset settings from the user.
 
-  size_t i = 0;
-  for (; i < readouts_available; i++) {
-    // TODO: Adjust readout?
-    // --------------
-    // Adjust readout to reflect the direction and offset settings from the user.
 
-    auto const& readout = readout_history_queue.peek();
+  if (readouts_to_send) {
+    // We need to keep consecutive readouts in memory while we send them out.
 
-    // First, check whether we need to send; sometimes we need to block in which case we can
-    // postpone processing until unblocked.
-    const bool need_to_send = stream_state or readouts_to_send;
+    for (size_t i = 0; i < readouts_to_send; i++) {
+      auto const& readout = readout_history_queue.peek();
 
-    const bool queue_success = need_to_send ? queue_message(hex_mini_drive::Message{
-      .message_code = hex_mini_drive::MessageCode::READOUT,
-      .message_data = readout
-    }) : false;
-
-    // If we're taking a readout snapshot, use a FIFO strategy for as long as we can
-    // to send consecutive readouts to the USB host.
-    if (readouts_to_send) {
-      if (queue_success) readouts_to_send--;
-      else break;
+      if (queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::READOUT,
+        .message_data = readout
+      })) {
+        readouts_to_send -= 1;
+        readout_history_queue.mark_read(1);
+      } else if (readouts_available == hex_mini_drive::HISTORY_SIZE and i == 0){
+        // Post process for the safety limits, but otherwise skip sending despite the request.
+        process_readout(readout);
+        readout_history_queue.mark_read(1);
+      } else {
+        // Stop processing readouts until we send all requested ones.
+        break;
+      }
     }
+  } else if (readouts_available) {
+    // Otherwise, we only need to process the latest readout.
+    
+    auto const& readout = readout_history_queue.peek_at_offset(readouts_available - 1);
 
     if (stream_state) {
-      // Also queue up info and calibration with each message.
+      // Also queue up info with each readout.
       queue_message(hex_mini_drive::Message{
+        .message_code = hex_mini_drive::MessageCode::READOUT,
+        .message_data = readout
+      }) and queue_message(hex_mini_drive::Message{
         .message_code = hex_mini_drive::MessageCode::INFO,
         .message_data = info
       });
     }
 
-    // Now that we're done with message queueing we can post-process for before we discard.
-
     // Post process for calibration, safety limits and advanced control.
     process_readout(readout);
 
-    // All done with this readout, mark it to free up space.
-    readout_history_queue.mark_read(1);
-  }
-
-  // If the history is full but we're not sending anything then process at least 1 readout to keep the system responsive.
-  if (readouts_available == hex_mini_drive::HISTORY_SIZE and i == 0) {
-    // Post process for the safety limits, but otherwise skip sending despite the request.
-    process_readout(readout_history_queue.peek());
-
-    // Discard the oldest readout, we always want to keep some space for the interrupt
-    // loop to write the latest readout for the safety limits update!
-    readout_history_queue.mark_read(1);
+    // Mark all readouts as read after only processing the latest.
+    readout_history_queue.mark_read(readouts_available);
   }
 }
 
